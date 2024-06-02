@@ -1,0 +1,6 @@
+cd ~/lotw/
+rm list.json
+node bin/js/getdir.js ./ > /dev/shm/LOTWLISTOUT
+mv /dev/shm/LOTWLISTOUT list.json
+
+

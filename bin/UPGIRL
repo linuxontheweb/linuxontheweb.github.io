@@ -1,0 +1,5 @@
+# git status
+cd ~/girl
+git add .
+git commit -m 'Nada Surfed there'
+git push -u origin main

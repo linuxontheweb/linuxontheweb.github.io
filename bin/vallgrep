@@ -1,0 +1,25 @@
+#!/bin/bash
+BASE=~/lotw/
+if [[ ! $1 ]]; then
+	echo "Nothing to do!";
+
+elif [[ $2 ]]; then
+	echo 'Partial matching mode...';
+	grep --color=auto -n $1 \
+		$BASE/apps/* \
+		$BASE/mods/sys/* \
+		$BASE/mods/coms/* \
+		$BASE/mods/util/* \
+		2>/dev/null
+	
+else
+	echo 'Exact matching mode';
+	grep --color=auto -n '\<'$1'\>' \
+		$BASE/sys/* \
+		$BASE/apps/* \
+		$BASE/mods/sys/* \
+		$BASE/mods/coms/* \
+		$BASE/mods/util/* \
+		2>/dev/null
+
+fi;

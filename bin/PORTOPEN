@@ -1,0 +1,1 @@
+sudo /sbin/iptables -I INPUT -p tcp --dport $1 -j ACCEPT && echo Port $1 is open || echo Port: $1 could not be opened

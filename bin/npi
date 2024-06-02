@@ -1,0 +1,6 @@
+# Keeps home folder clean of annoying node things
+# Put in .bashrc: 
+# export NODE_PATH=~/.node/node_modules
+
+npm install $@ --prefix ~/.node
+

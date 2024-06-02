@@ -1,0 +1,32 @@
+
+# If not running interactively, don't do anything
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+
+HISTCONTROL=ignoreboth
+HISTSIZE=1000
+HISTFILESIZE=2000
+
+shopt -s checkwinsize
+shopt -s histappend
+
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias ll='ls -l'
+alias la='ls -A'
+alias l='ls -CF'
+alias nano='nano -x'
+alias c='clear'
+PS1='\w$ '
+PATH=$PATH:~/bin:~/lotw/bin
+
+# To install node packages, use
+# npm install $@ --prefix ~/.node
+export NODE_PATH=~/.node/node_modules
+
+export NVM_DIR="$HOME/.config/nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
+[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"  # This loads nvm bash_completion
+
