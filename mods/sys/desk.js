@@ -3238,7 +3238,13 @@ const make_new_icon = async(winarg, type) => {//«
 	if (type == FOLDER_APP) make_folder_icon(winarg);
 	else if (type == "Text") {
 		let val = await WDGAPI.popinarea("Input text");
-		if (!val) return;
+//log("VAL", val);
+//		if (!val) return;
+		if (!val) {
+val = "";
+cwarn("Creating empty file");
+		}
+
 		if (CG._dis != "none") return;
 		CG.on();
 		make_new_text_file(winarg, val, "txt");

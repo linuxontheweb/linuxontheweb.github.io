@@ -44,8 +44,6 @@ const FS_PREF=DEF_BRANCH_NAME;
 const FS_TYPE= "fs";
 const MOUNT_TYPE= "mnt";
 
-if (!localStorage.nextNodeId) localStorage.nextNodeId="1";
-
 //»
 
 //User«
@@ -377,8 +375,6 @@ export const globals = {//«
 	FS_PREF,
 	FS_TYPE,
 	MOUNT_TYPE,
-
-	nextNodeId: parseInt(localStorage.nextNodeId),
 
 	USERNAME,
 	CURRENT_USER,

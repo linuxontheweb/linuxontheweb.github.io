@@ -741,6 +741,7 @@ export const coms = {//«
 //_clearstorage: com_clearstorage,
 _purge: com_purge,
 _blobs: com_blobs,
+_clearstorage: com_clearstorage,
 wc: com_wc,
 grep: com_grep,
 dl: com_dl,

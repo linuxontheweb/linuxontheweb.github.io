@@ -1,4 +1,11 @@
-
+/*Broken:
+1) Make a file with the 'touch' command
+2) Use the '_blobs' command to verify there is no saved blob
+3) Put something in that file with vim (this bug doesn't happen with shell redirects)
+4) Verify that it has a saved blob with the '_blobs' command
+5) Refresh the page
+6) Verify that is no longer has a saved blob with the '_blobs' command
+*/
 //Notes«
 //Issues«
 /*@JEPOIKLMJYH: I don't understand why this was giving errors on backspaces
@@ -81,7 +88,7 @@ const ALLOW_REDIRECT_CLOBBER = true;
 
 const FS_COMS=[//«
 	"_purge",
-//	"_clearstorage",
+	"_clearstorage",
 	"_blobs",
 	"wc",
 	"grep",
@@ -321,7 +328,6 @@ const write_to_redir=async(term, str, redir, env)=>{//«
 	if (node && node.write_locked()){
 		return {err:`${fname}: the file is "write locked" (${node.write_locked()})`};
 	}
-
 	let patharr = fullpath.split("/");
 	patharr.pop();
 	let parpath = patharr.join("/");

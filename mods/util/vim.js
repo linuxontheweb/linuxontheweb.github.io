@@ -1410,7 +1410,7 @@ const try_save = (if_saveas)=>{//«
 	render({}, 110);
 };//»
 const edit_save = async(if_nostat)=>{//«
-let write_err = "";
+	let write_err = "";
 const write_cb_func = async(ret)=>{//«
 	if (ret) {
 		let {node} = ret;
@@ -1468,7 +1468,9 @@ cerr(e);
 		if (!edit_fobj) {
 			rv = await fsapi.saveFsByPath(usepath, val, opts);
 		}
-		else rv = await edit_fobj.setValue(val, opts);
+		else {
+			rv = await edit_fobj.setValue(val, opts);
+		}
 		return write_cb_func(rv);
 	}
 cerr(`WHAT EDIT_FTYPE: ${edit_ftype}!?!?!??!`);

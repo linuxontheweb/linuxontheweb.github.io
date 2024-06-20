@@ -447,6 +447,15 @@ const Node = function(arg){
 		}
 	}//»
 	if (arg.treeroot) return;
+	this.getRealBlobId=async()=>{//«
+		let bid = get_blob_id();
+		this.blobId = bid;
+		if (!await db.setNodeValue(this.id, bid)) {
+cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
+			return;
+		}
+		return true;
+	};//»
 	this.getValue = async opts=>{//«
 		if (!okget()) return;
 		return getBlob(this, opts);
@@ -459,8 +468,13 @@ cerr("Unknown value", val);
 			return;
 		}
 		opts.node = this;
-		let ent = await this.entry;
-		if (!ent) return;
+//		let ent = await this.entry;
+//		if (!ent) return;
+		if (this.blobId===NULL_BLOB_FS_TYPE){//«
+			if (!await this.getRealBlobId()){
+				return;
+			}
+		}//»
 		let rv = await write_blob(await this.entry, blob, opts);
 		rv.node = this;
 		return rv;
@@ -1412,9 +1426,9 @@ const writeNewFile=(path, val, opts = {})=>{//«
 	return writeFile(path, val, opts)
 };//»
 const saveFsByPath=async(path, val, opts={})=>{//«
+
 if (globals.read_only) return;
 
-let wasnull=false;
 let blob;
 let node = await pathToNode(path);
 if (!node) {
@@ -1429,22 +1443,20 @@ if (!node) {
 	node.appName = capi.extToApp(ext);
 }
 
-let nid = node.id;
-let bid = node.blobId;
-if (bid===NULL_BLOB_FS_TYPE){
-	wasnull=true;
-	bid = get_blob_id();
-	node.blobId = bid;
-}
-
-let fent = await node.entry;
-
-if (wasnull) {//«
-	if (!await db.setNodeValue(nid, bid)) {
-cerr(`${path}(id=${nid}): Could not set the new node value (blobId=${bid})`);
-		return;
+if (node.blobId===NULL_BLOB_FS_TYPE){//«
+	if (!await node.getRealBlobId()){
+cerr(`saveFsByPath(${path}): could not get a real blob id!?!?!`);
+return;
 	}
 }//»
+/*«
+	let bid = get_blob_id();
+	node.blobId = bid;
+	if (!await db.setNodeValue(node.id, bid)) {
+cerr(`${path}(id=${node.id}): Could not set the new node value (blobId=${bid})`);
+		return;
+	}
+»*/
 
 if (opts.getEntry) {
 	return node;
@@ -1456,7 +1468,7 @@ log(val);
 	return;
 }
 opts.node = node;
-let rv = await write_blob(fent, blob, opts);
+let rv = await write_blob(await node.entry, blob, opts);
 
 node.size = rv.size;
 if (opts.retObj) {
