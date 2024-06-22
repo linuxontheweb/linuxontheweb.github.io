@@ -5,5 +5,5 @@ rm list.json
 node bin/js/getdir.js ./ > /dev/shm/LOTWLISTOUT
 mv /dev/shm/LOTWLISTOUT list.json
 git add .
-git commit -m '?'
+git commit -m "I'm crushing your head!"
 git push -u origin main
