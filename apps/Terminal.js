@@ -111,18 +111,19 @@ const FS_COMS=[//«
 const TEST_COMS=[
 	"test"
 ];
+/*
 const YT_COMS=[
 	"ytsrch",
 	"ytthing",
 	"ytvid",
 	"ytdl"
 ];
-
+*/
 const ALL_LIBS = {
 	audio:["midiup"],
 	fs: FS_COMS,
 //	test: TEST_COMS,
-	yt: YT_COMS
+//	yt: YT_COMS
 };
 
 const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
@@ -595,6 +596,7 @@ const com_parse = async(args, o)=>{//«
 		return {err: "Invalid JSON in file"};
 	}
 };//»
+
 const com_hi = async(args, o)=>{//«
 	const {term, opts} = o;
 	if (term.ssh_server) return {out: "Ready to serve"};
@@ -1249,13 +1251,13 @@ Long options may be given an argument like this:
 const shell_commands={//«
 //pokerruns: com_pokerruns,
 //pokerhands: com_pokerhands,
-termlines: com_termlines,
+//termlines: com_termlines,
 parse: com_parse,
-hi: com_hi,
-ssh: com_ssh,
-imap: com_imap,
-smtp: com_smtp,
-meta: com_meta,
+//hi: com_hi,
+//ssh: com_ssh,
+//imap: com_imap,
+//smtp: com_smtp,
+//meta: com_meta,
 getch: com_getch,
 read: com_read,
 true: com_true,
