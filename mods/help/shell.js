@@ -34,7 +34,8 @@ cat: `Prints the contents of the given files`,
 rm: `Removes the given files or symbolic links. Directories must use the 'rmdir' command.`,
 env: `Prints the shell's environment variables to standard output`,
 symln:`Creates a symbolic link to a possibly non-existent target`,
-ln:`Creates a hard link to a file`
+ln:`Creates a hard link to a file`,
+msleep: `Sleep for the specified number of milliseconds`
 
 };//»
 
