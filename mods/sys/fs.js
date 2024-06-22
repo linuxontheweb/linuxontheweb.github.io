@@ -2353,7 +2353,6 @@ cerr("Unknown obj.perm field:", obj);
 this.check_fs_dir_perm=check_fs_dir_perm;
 //»
 
-
 const add_lock_funcs=kid=>{//«
 	let lock = {};
 	kid.unlockFile =()=>{
@@ -2365,7 +2364,10 @@ const add_lock_funcs=kid=>{//«
 			par = par.par;
 		}
 	};
-	kid.lockFile =() =>{
+	kid.lockFile = async () =>{
+		if (kid.blobId === NULL_BLOB_FS_TYPE){
+			await kid.getRealBlobId();
+		}
 		LOCKED_BLOBS[kid.blobId] = kid.blobId;
 		let par = kid.par;
 		while (par){
