@@ -120,7 +120,7 @@ const YT_COMS=[
 ];
 */
 const ALL_LIBS = {
-	audio:["midiup"],
+//	audio:["midiup"],
 	fs: FS_COMS,
 //	test: TEST_COMS,
 //	yt: YT_COMS
@@ -1207,12 +1207,12 @@ Long options may be given an argument like this:
 	ls: {//«
 		s: {
 			a: 1,
-			l: 1,
+//			l: 1,
 //			r: 1,
 			R: 1
 		},
 		l: {
-			long: 1,
+//			long: 1,
 			all: 1,
 			recursive: 1
 		}

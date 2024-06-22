@@ -580,13 +580,13 @@ const terr=(arg)=>{
 };
 	const {make_icon_if_new} = term.Desk;
 	if (!args.length) {
-		return {err: "ln: missing file operand"};
+		return {err: "symln: missing file operand"};
 	}
 	let target = args.shift();
-	if (!args.length) return {err: "ln: missing link name"};
+	if (!args.length) return {err: "symln: missing link name"};
 
 	let path = args.shift();
-	if (args.length) return {err: "ln: too many arguments"};
+	if (args.length) return {err: "symln: too many arguments"};
 	let fullpath = normPath(path, term.cur_dir);
 	let node = await fsapi.pathToNode(fullpath, true);
 	if (node) return {err: `${path}: Already exists`};
