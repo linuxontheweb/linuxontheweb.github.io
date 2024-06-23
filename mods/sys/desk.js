@@ -3258,6 +3258,7 @@ cwarn("Creating empty file");
 	make_new_text_file(winarg, val, "txt");
 };//»
 const make_new_icon = async(winarg, type) => {//«
+	if (globals.read_only) return;
 	if (type == FOLDER_APP) make_folder_icon(winarg);
 	else if (type == "Text") make_text_icon(winarg);
 };
@@ -5479,10 +5480,10 @@ const open_text_editor = () => {//«
 	return true;
 };//»
 const make_file = () => {//«
-	if (!CWIN){
+	if (!CWIN || CWIN.appName != FOLDER_APP){
 		make_new_icon(desk, "Text");
 	}
-	else if (CWIN.appName == FOLDER_APP) {
+	else {
 		make_new_icon(CWIN, "Text");
 	}
 };//»
@@ -6099,10 +6100,11 @@ const CUR = new Cursor();
 //Folders«
 
 const make_folder = () => {//«
-	if (!CWIN){
+
+	if (!CWIN || CWIN.appName != FOLDER_APP){
 		make_new_icon(desk, FOLDER_APP);
 	}
-	else if (CWIN.appName == FOLDER_APP) {
+	else {
 		make_new_icon(CWIN, FOLDER_APP);
 	}
 };//»
