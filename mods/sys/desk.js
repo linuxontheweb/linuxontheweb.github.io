@@ -271,7 +271,8 @@ let keysym_map, keysym_funcs;
 let std_keysym_map={
 	f_A:{"n":"fullscreen_window"},
 //	f_CA:{"n":"open_root_folder"},
-	f_CA:{"n":"make_folder"},
+	d_CA:{"n":"make_folder"},
+	f_CA:{"n":"make_file"},
 	"`_A":{"n":"window_cycle"},
 	x_A:{"n":"close_window"},
 	m_A:{"n":"maximize_window"},
@@ -612,9 +613,9 @@ const open_help=()=>{open_app("Help");}
 const DESK_CONTEXT_MENU=[
 
 	"New",[
-		"Folder",
+		"Folder::Ctrl+Alt+d",
 		()=>{make_new_icon(desk, FOLDER_APP)},
-		"Text File",
+		"Text File::Ctrl+Alt+f",
 		()=>{make_new_icon(desk, "Text")}
 	],
 	"Explorer::Alt+e",open_home_folder,
@@ -5477,6 +5478,14 @@ const open_text_editor = () => {//«
 	open_app(TEXT_EDITOR_APP, {force: true});
 	return true;
 };//»
+const make_file = () => {//«
+	if (!CWIN){
+		make_new_icon(desk, "Text");
+	}
+	else if (CWIN.appName == FOLDER_APP) {
+		make_new_icon(CWIN, "Text");
+	}
+};//»
 
 const raise_app_if_open=(appname)=>{//«
 	for (let w of workspaces.flat()){
@@ -6089,7 +6098,7 @@ const CUR = new Cursor();
 //»
 //Folders«
 
-const make_folder=()=>{//«
+const make_folder = () => {//«
 	if (!CWIN){
 		make_new_icon(desk, FOLDER_APP);
 	}
@@ -8316,6 +8325,7 @@ focus_desktop:()=>{let w=CWIN;if(w&&(w.is_fullscreen||w.is_maxed))return;CWIN&&C
 //},
 toggle_tiling_mode,
 make_folder,
+make_file,
 toggle_taskbar,
 toggle_fullscreen,
 open_terminal,
