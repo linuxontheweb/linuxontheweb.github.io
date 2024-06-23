@@ -102,7 +102,8 @@ const{
 	WRITING_APPS,
 
 	ABOUT_STR,
-//	BACKGROUND_IMAGE_URL,
+	BACKGROUND_IMAGE_URL,
+	BACKGROUND_GRADIENT,
 //	DESK_GRADIENT,
 	ALWAYS_PREVENT,
 	KC
@@ -156,7 +157,7 @@ let fs, fsapi;
 let pathToNode;
 const NOOP=()=>{}
 //Flags/Modes«
-
+let dev_mode;
 let debug_localstorage=false;
 let show_desktop_during_win_cycle = true;
 let win_cycle_wins_hidden = false;
@@ -230,8 +231,7 @@ let CPR;
 let CWIN;
 let taskbar;
 const desk = mkdv();
-//const desk_coldiv=mkdv();
-//const desk_imgdiv=mkdv();
+const desk_imgdiv=mkdv();
 const start_button=mkdv();
 const workspace_num_div=mkdv();
 const workspace_switcher_div=mkdv();
@@ -269,22 +269,22 @@ Desk.api=api;
 let win_overflow={top:0,bottom:1,left:0,right:0};
 let keysym_map, keysym_funcs;
 let std_keysym_map={
-	"f_A":{"n":"fullscreen_window"},
-//	"f_CA":{"n":"open_root_folder"},
-	"f_CA":{"n":"make_folder"},
+	f_A:{"n":"fullscreen_window"},
+//	f_CA:{"n":"open_root_folder"},
+	f_CA:{"n":"make_folder"},
 	"`_A":{"n":"window_cycle"},
-	"x_A":{"n":"close_window"},
-	"m_A":{"n":"maximize_window"},
-	"d_A":{"n":"toggle_desktop"},
-	"l_CA":{"n":"toggle_layout_mode"},
-	"w_CA":{"n":"toggle_win_chrome"},
-	"n_A":{"n":"minimize_window"},
+	x_A:{"n":"close_window"},
+	m_A:{"n":"maximize_window"},
+	d_A:{"n":"toggle_desktop"},
+	l_CA:{"n":"toggle_layout_mode"},
+	w_CA:{"n":"toggle_win_chrome"},
+	n_A:{"n":"minimize_window"},
 //	"f_CAS":{"n":"toggle_fullscreen"},
 	"b_A":{"n":"toggle_taskbar"},
 	t_A:{n:"open_terminal"},
 	e_A:{n:"open_explorer"},
 	h_A:{n:"open_help"},
-	NUMLOCK_:{n:"open_audio"}
+//	NUMLOCK_:{n:"open_audio"}
 };
 
 //»
@@ -329,7 +329,7 @@ let APP_TEXT_COL = "#ccc";
 
 const TASKBAR_HGT = 26;
 const TASK_BAR_COL_RGB="8,8,8";
-//let DEF_DESK_GRADIENT = "linear-gradient(135deg,#000 0%,#003 50%,#006 75%,#000077 87%,#33c 100%)";
+//const  DEF_DESK_GRADIENT = "linear-gradient(135deg,#000 0%,#003 50%,#006 75%,#000077 87%,#33c 100%)";
 //let DEF_DESK_GRADIENT = DESK_GRADIENT;
 const TASKBAR_BG_COL=`rgb(${TASK_BAR_COL_RGB})`;
 //const TASKBAR_BOR=`1px solid rgba(0,0,0,0.75)`;
@@ -673,12 +673,9 @@ const fit_desktop = ()=>{//«
 	desk._w= _w;
 	desk._h = _h;
 	desk.style.backgroundSize = str;
-//	desk_coldiv._w= _w;
-//	desk_coldiv._h = _h;
-//	desk_coldiv.style.backgroundSize = str;
-//	desk_imgdiv._w= _w;
-//	desk_imgdiv._h = _h;
-//	desk_imgdiv.style.backgroundSize = str;
+	desk_imgdiv._w= _w;
+	desk_imgdiv._h = _h;
+	desk_imgdiv.style.backgroundSize = str;
 	CG._w= _w;
 	CG._h = _h;
 	get_desk_grid();
@@ -693,26 +690,23 @@ const set_desk_styles = () => {//«
 	desk.style.backgroundSize = winw() + " " + winh();
 //»
 
-//Color and image layers currently disabled«
-//	desk_coldiv._pos= "absolute";//Color layer (solid or gradient)«
-//	desk_coldiv._loc(0, 0);
-//	desk_coldiv._w= winw()+1;
-//	desk_coldiv._h = winh()+1;
-//	desk_coldiv._z= DESK_Z - 3;
-//	desk_coldiv.style.backgroundSize = winw() + " " + winh();
-//	desk_coldiv.id="bg_color_div";
-//»
-//	desk_imgdiv._pos= "absolute";//Image layer«
-//	desk_imgdiv._loc(0, 0);
-//	desk_imgdiv._w= winw();
-//	desk_imgdiv._h = winh();
-//	desk_imgdiv._z= DESK_Z - 2;
-//	desk_imgdiv.style.backgroundSize = winw() + " " + winh();
-//	desk_imgdiv.style.backgroundRepeat="no-repeat";
-//	desk_imgdiv.style.backgroundPosition="center";
-//	if (!qObj.nobgimg) desk_imgdiv.style.backgroundImage=`url("${BACKGROUND_IMAGE_URL}")`;
-//	desk_imgdiv._op = DEF_BG_IMG_OP;
-//	desk_imgdiv.id="bg_image_div";
+//Need a separate image layer for fine-grained opacity«
+
+	desk_imgdiv._pos= "absolute";//Image layer«
+	desk_imgdiv._loc(0, 0);
+	desk_imgdiv._w= winw();
+	desk_imgdiv._h = winh();
+	desk_imgdiv._z= DESK_Z - 2;
+	desk_imgdiv.style.backgroundSize = winw() + " " + winh();
+	desk_imgdiv.style.backgroundRepeat="no-repeat";
+	desk_imgdiv.style.backgroundPosition="center";
+	desk_imgdiv._op = DEF_BG_IMG_OP;
+	desk_imgdiv.id="bg_image_div";
+
+	if (!qObj.nobgimg) desk_imgdiv.style.backgroundImage=`url("${BACKGROUND_IMAGE_URL}")`;
+//	if (!dev_mode&&!qObj.bgcol) body.style.backgroundImage = DEF_DESK_GRADIENT;
+//	if (!qObj.bgcol) body.style.backgroundImage = DEF_DESK_GRADIENT;
+
 //»
 //»
 
@@ -811,10 +805,7 @@ e.preventDefault();
 	desk._add(tiling_underlay);
 	desk._add(CG);
 	body._add(desk);
-
-//Currently disabled
-//	body._add(desk_coldiv);
-//	body._add(desk_imgdiv);
+	body._add(desk_imgdiv);
 
 }
 //»
@@ -1162,18 +1153,15 @@ const make_desktop = () => {//«
 	let bgcol = qObj.bgcol;
 	if (bgcol) {
 		if (bgcol.match(/^[a-f0-9]+$/i) && (bgcol.length==3 || bgcol.length==6)){
-//			desk_coldiv._bgcol= `#${bgcol}`;
 			body._bgcol= `#${bgcol}`;
 		}
 		else {
-//			desk_coldiv._bgcol= `${bgcol}`;
 			body._bgcol= `${bgcol}`;
 		}
 	}
-
-//	else {
-//		desk_coldiv.style.backgroundImage=DESK_GRADIENT;
-//	}
+	else {
+		body.style.backgroundImage=BACKGROUND_GRADIENT;
+	}
 
 }//»
 
@@ -1478,6 +1466,14 @@ this.toggleSwitcher=()=>{
 //»
 
 //Listeners«
+bar.onmousedown=e=>{
+	if (CWIN) {
+		CWIN.off();
+		CWIN = null;
+		CUR.todesk();
+	}
+//log(e);
+};
 bar.oncontextmenu=e=>{//«
 	e.preventDefault();
 	e.stopPropagation();
@@ -1531,6 +1527,7 @@ st.onclick=(e)=>{//«
 	st._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
 	setTimeout(()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;doit();},200);
 };//»
+
 //»
 
 //Init«
@@ -2790,7 +2787,8 @@ const open_icon = async(icn, opts={}) => {//«
 	if (!(!icn.win || force || (e && e.ctrlKey))) {//«
 		let w = icn.win;
 		if (w.workspace_num !== current_workspace_num){
-			if (!switch_win_to_workspace(w, current_workspace_num)) return;
+			switch_to_workspace(w.workspace_num);
+			w.on();
 			if (w.taskbar_button) w.taskbar_button._dis="flex";
 			else w.winElem._dis="block";
 		}
@@ -3027,7 +3025,10 @@ const save_icon_editing = async() => {//«
 	let val = CEDICN.name;
 	let holdname = val;
 	let checkit = CEDICN._namearea.value.trim().replace(RE_SP_PL, " ").replace(RE_SP_G, "\u00A0");
-	if (!checkit) return abort("Not creating the icon");
+	if (!checkit){
+		if (ifnew) return abort("Not creating the icon");
+		return doend();
+	}
 	let checkithold = checkit;
 	let ext = CEDICN.ext;
 	if (ext) {
@@ -3075,7 +3076,10 @@ cerr("Unsupported type:" + rtype);
 	let srcnode = await pathToNode(srcpath);
 	let srctype = srcnode.type;
 	if (srctype!==FS_TYPE) return doend();
-	if (await fsapi.comMv([srcpath, destpath])) return doend(checkithold);
+	if (await fsapi.comMv([srcpath, destpath])) {
+		return doend(checkithold);
+	}
+	poperr("There was an error with renaming the icon. Please check the console.");
 	doend();
 }//»
 const init_icon_editing = icn => {//«
@@ -3205,6 +3209,7 @@ const make_folder_icon = async(winarg) => {//«
 	if (winarg===desk){
 		usewin = desk;
 		usepath = DESK_PATH;
+		if (windows_showing) toggle_show_windows();
 	}
 	else{
 		usewin = winarg.main;
@@ -3234,21 +3239,26 @@ const make_folder_icon = async(winarg) => {//«
 	}, 0);
 }
 //»
-const make_new_icon = async(winarg, type) => {//«
-	if (type == FOLDER_APP) make_folder_icon(winarg);
-	else if (type == "Text") {
-		let val = await WDGAPI.popinarea("Input text");
-//log("VAL", val);
-//		if (!val) return;
-		if (!val) {
+const make_text_icon=async winarg=>{//«
+	let val = await WDGAPI.popinarea("Input text");
+if (val===false){//Pressed cancel button
+return;
+}
+	if (!val) {
 val = "";
 cwarn("Creating empty file");
-		}
-
-		if (CG._dis != "none") return;
-		CG.on();
-		make_new_text_file(winarg, val, "txt");
 	}
+
+	if (CG._dis != "none") return;
+	CG.on();
+	if (winarg===desk&&windows_showing){
+		toggle_show_windows();
+	}
+	make_new_text_file(winarg, val, "txt");
+};//»
+const make_new_icon = async(winarg, type) => {//«
+	if (type == FOLDER_APP) make_folder_icon(winarg);
+	else if (type == "Text") make_text_icon(winarg);
 };
 this.make_new_icon = make_new_icon;
 //»
@@ -8158,7 +8168,7 @@ if (!qObj["no-switcher"]) {
 //		return;
 //	}
 	if (kstr=="l_CAS") return console.clear();
-//	if (kstr=="t_CAS") return keysym_funcs.test_function();
+	if (kstr=="t_CAS") return keysym_funcs.toggle_tiling_mode();
 	if (kstr=="e_CAS") taskbar.toggle_expert_mode();
 //	if (kstr=="t_CAS") return keysym_funcs.open_app("util.Titles");
 	if (kstr=="k_CAS") {
@@ -8299,12 +8309,13 @@ const setsyskeys=()=>{//«
 keysym_funcs = {
 
 focus_desktop:()=>{let w=CWIN;if(w&&(w.is_fullscreen||w.is_maxed))return;CWIN&&CWIN.off();CUR.todesk();},
-test_function:async()=>{
+//test_function:async()=>{
 //let win = await api.openApp("dev.Launcher", {force: true});
-if (!globals.dev_mode) return popup("The test function requires expert mode!");
-toggle_tiling_mode();
-},
-make_folder: make_folder,
+//if (!globals.dev_mode) return popup("The test function requires expert mode!");
+//toggle_tiling_mode();
+//},
+toggle_tiling_mode,
+make_folder,
 toggle_taskbar,
 toggle_fullscreen,
 open_terminal,
@@ -8639,7 +8650,7 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	pathToNode = fsapi.pathToNode;
 	let winorig = window.location.origin;
 	if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) globals.is_local = true;
-	globals.dev_mode = globals.is_local||qObj.expert||false;
+	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;
 	if (!await fs.api.init()) return;
 	if (!await fs.mk_user_dirs()) return;
 	if ('BroadcastChannel' in window) {//«

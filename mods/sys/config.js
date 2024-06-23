@@ -62,6 +62,9 @@ const MAX_TEXTAREA_BYTES = 10000;
 const DEF_EDITOR_MOD_NAME = "util.vim";
 const DEF_PAGER_MOD_NAME = "util.less";
 
+const BACKGROUND_IMAGE_URL = "/www/lotw256.png";
+const BACKGROUND_GRADIENT = "linear-gradient(135deg,#000 0%,#003 50%,#006 75%,#000077 87%, #993 100%)";
+
 //»
 
 //Apps/Extensions«
@@ -375,6 +378,9 @@ export const globals = {//«
 	FS_PREF,
 	FS_TYPE,
 	MOUNT_TYPE,
+
+	BACKGROUND_IMAGE_URL,
+	BACKGROUND_GRADIENT,
 
 	USERNAME,
 	CURRENT_USER,

@@ -3,10 +3,6 @@ body{
 	overflow:hidden;
 	overscroll-behavior-x: none;
 	background-color: #272727;
-	background-repeat:no-repeat;
-	background-position: center center;
-	background-image: url(/www/lotw256.png);
-	background-blend-mode: soft-light;
 	color: #ccc;
 }
 .scroller::-webkit-scrollbar{width:0.5em;background-color:#bbb;}

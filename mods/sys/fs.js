@@ -1040,6 +1040,7 @@ for (let arg of args){//«
 	}
 
 	let srcret = await pathToNode(path, true);
+
 	if (!srcret) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${com}: no such entry: ${path}`});
@@ -1072,6 +1073,9 @@ for (let arg of args){//«
 	else if (com==="cp"&&isfolder){
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `cp: ${path}: not (currently) copying directories`});
+	}
+	else if (isfolder && path == globals.desk_path){
+		mvarr.push({ERR:`${com}: not modifying the working desktop path: ${path}`});
 	}
 	else mvarr.push([path, srcret]);
 
