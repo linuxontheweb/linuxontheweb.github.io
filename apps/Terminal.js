@@ -596,7 +596,16 @@ const com_parse = async(args, o)=>{//«
 		return {err: "Invalid JSON in file"};
 	}
 };//»
-
+const com_curcol = async(args, o)=>{
+	const {term, opts, stdin} = o;
+	let which = args.shift();
+	if (which=="white"){
+		term.cur_white();
+	}
+	else if (which=="blue"){
+		term.cur_blue();
+	}
+};
 const com_hi = async(args, o)=>{//«
 	const {term, opts} = o;
 	if (term.ssh_server) return {out: "Ready to serve"};
@@ -1252,6 +1261,7 @@ const shell_commands={//«
 //pokerruns: com_pokerruns,
 //pokerhands: com_pokerhands,
 //termlines: com_termlines,
+curcol: com_curcol, 
 parse: com_parse,
 //hi: com_hi,
 //ssh: com_ssh,
@@ -2236,9 +2246,9 @@ let FF = "monospace";
 //let FW = "600";
 let FW = "500";
 let CURBG = "#00f";
+let CURFG = "#fff";
 let CURBG_SSH_MODE = "#C00";
 let CURBG_BLURRED = "#444";
-let CURFG = "#fff";
 let OVERLAYOP = "0.66";
 let TCOL = "#e3e3e3";
 
@@ -3155,7 +3165,7 @@ if (num2 > w) {
 				}
 				else usech = ch;
 				if (!usech.length) usech = " ";
-				let sty = `background-color:${usebg}`;
+				let sty = `background-color:${usebg};color:${CURFG}`;
 				arr[usex] = pre+`<span id="${CURSOR_ID}" style="${sty}">${usech}</span>`;
 			}
 		}//»
@@ -5146,6 +5156,14 @@ this.try_kill=()=>{//«
 	}
 }//»
 this.toggle_paste = toggle_paste;
+this.cur_white=()=>{
+CURBG = "#ddd";
+CURFG = "#000";
+}
+this.cur_blue=()=>{
+CURBG = "#00f";
+CURFG = "#fff";
+}
 this.execute = (s)=>{
 	if (cur_shell){
 cwarn("Sleeping");
