@@ -871,7 +871,7 @@ const quit=()=>{//«
 	if (edit_fobj) {
 		edit_fobj.unlockFile();
 	}
-	if (reload_win) delete reload_win.__locked;
+	if (reload_win) delete reload_win.owned_by;
 	modequit();
 };//»
 
@@ -5693,7 +5693,7 @@ cwarn("NO edit_fobj!!!");
 //FJUSOP
 	reload_win.reload((new_win)=>{
 		reload_win = new_win;
-		reload_win.__locked = true;
+		reload_win.owned_by = topwin;
 		topwin.on();
 	});
 }
@@ -5869,7 +5869,7 @@ pretty = modret.getmod().js;
 }
 let opts;
 ({opts, symbols, text_input_func, reload_win}=o);
-if (reload_win) reload_win.__locked = true;
+if (reload_win) reload_win.owned_by = topwin;
 if (symbols){
 SYMBOL_WORDS=symbols.map(w=>w.split(/\s+/)[0]);
 }

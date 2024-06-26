@@ -177,8 +177,13 @@ eval'd in this vim instance.
 		let win = document.getElementById(`win_${winid}`);
 		if (!win) return {err: `No toplevel window with id: ${winid}`};
 		reload_win = win._winObj;
-if (term.topwin === reload_win){
-return {err: "Cannot use own window for reloading!"}
+if (!reload_win._fs_url){
+return {err: "That does not look like a local development application!!"}
+}
+if (reload_win.owned_by) {
+cwarn("Here is the owning window");
+log(reload_win.owned_by);
+	return {err: `The window is already owned! (check console)`}
 }
 	}
 	let path = args.shift();

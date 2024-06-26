@@ -5,15 +5,17 @@ REASONABLY DEBUGGED, THEN DON'T FUCKING WORRY ABOUT THIS SHITTY ADVANCED FEATURE
 Very, very stupid hacks because of the idea of using vim to edit local
 javascript files that are used for local app developement. There is a hotkey in
 vim for reloading the app windows that are under development. First of all, vim
-"owns" the app window by putting a "__locked" member on it, so the window
+"owns" the app window by putting a "owned_by" member on it, so the window
 cannot be closed (via mouse or desktop shortcut) or reloaded via the desktop's
 Alt+r shortcut. Also, the window now has a reload method on it, which is passed
 a callback (from vim.js @FJUSOP) that is called back with the new window object
 (so that vim can have a handle to the new one, since the old one is lost). When
-vim exits cleanly, it deletes the "__locked" member, so that the window can
+vim exits cleanly, it deletes the "owned_by" member, so that the window can
 once more be independently closed/reloaded. The app window needs to be raised
 to the top of the stack (as CWIN) in order to be reloaded, and then vim's terminal
 window needs to be raised right after reloading.
+
+How about an owned_by property?
 
 »*/
 //Notes«
@@ -3673,11 +3675,8 @@ fs_url = arg.fsUrl;
 		doclose(true, if_dev_reload);
 	};
 	close.onclick=()=>{
-if (this.__locked){
-poperr("The window is locked!");
-return;
-}
-		if (this._savecb) this._savecb();
+		if (check_cwin_owned()) return;
+//		if (this._savecb) this._savecb();
 		this.forceKill();
 	}
 	this.keyKill = () => {
@@ -3865,6 +3864,7 @@ Object.defineProperty(this, "title", {//«
 	this.img_div = img_div;
 	if (arg.APPARGS) this.nosave = true;
 	else this.nosave = null;
+	this.owned_by = undefined;
 
 //»
 //Methods«
@@ -3903,6 +3903,7 @@ this.setWinArgs=args=>{//«
 	};//»
 	this.on = (which, if_no_zup) => {//«
 		if (this.killed) {
+cwarn("This window has been killed. Who is calling the 'on' method?");
 			return;
 		}
 		if (!windows_showing) toggle_show_windows();
@@ -3926,7 +3927,6 @@ this.setWinArgs=args=>{//«
 //			CUR.set(2);
 			CUR.on();
 		}
-		CWIN = this;
 		this.winElem._dis= "block";
 		if (if_no_zup){}
 		else if (this.winElem._z && this.winElem._z < 10000000) this.up();
@@ -3951,8 +3951,8 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		}
 		if (this.isScrollable) this.main.focus();
 		if (this.is_minimized) this.taskbar_button.onmousedown();
-		if (CWIN.child_win) CWIN.child_win.on();
-
+		if (this.child_win) this.child_win.on();
+		CWIN = this;
 	};
 	//»
 	this.off = () => {//«
@@ -3973,7 +3973,7 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		this.winElem.style.boxShadow = "";
 		if (this.app && this.app.onblur) this.app.onblur();
 		if (this.isScrollable) this.main.blur();
-		if (this == CWIN) CWIN = null;
+		if (this === CWIN) CWIN = null;
 		if (this.is_minimized) {
 			this.taskbar_button.onmouseup();
 			this.winElem._dis="none";
@@ -4381,11 +4381,8 @@ for (let icn of icons) {
 ICONS = OK;
 };//»
 this.reload=(cb)=>{
-//log("CALLRELOAD", this);
-this.on();
-//log("????",CWIN===this);
+if (CWIN !== this) this.on();
 win_reload(cb);
-//cb&&cb();
 };
 
 //»
@@ -5419,6 +5416,15 @@ const switch_win_to_workspace = (w, num) => {//«
 	w.workspace_num = num;
 	return true;
 };//»
+const check_cwin_owned=()=>{//«
+	if (CWIN && CWIN.owned_by){
+cwarn("Here is the owning window");
+log(CWIN.owned_by);
+		poperr("The window is owned! (check console)");
+		return true;
+	}
+	return false;
+};//»
 
 //»
 //File/App«
@@ -5433,6 +5439,9 @@ const make_app = arg => {//«
 	win.viewOnly = arg.viewOnly;
 	let mainwin = win.main;
 	let fs_url = arg.FS_URL;
+	if (fs_url){
+		win._fs_url = fs_url
+	}
 	let cb = arg.CB||(()=>{});
 	let scrpath;
 	let winapp = win.appName;
@@ -5467,8 +5476,6 @@ const make_app = arg => {//«
 		try {
 //			if (!arg.main) console.log(" ");
 			if (fs_url){
-//log("WINAPP", winapp);
-				win._fs_url = fs_url
 				win.app = new NS.apps[winapp](win, Desk);
 			}
 			else {
@@ -5523,6 +5530,7 @@ win.main.innerHTML="<center><h1>BLUR</h1></center>";
 	if (!NS.apps[winapp]) return make_it();
 	win.app = new NS.apps[winapp](win, Desk);
 	loadit();
+
 }//»
 const open_text_editor = () => {//«
 	open_app(TEXT_EDITOR_APP, {force: true});
@@ -8286,10 +8294,7 @@ maxed/fullscreened wins).
 */
 		if (!(cobj.overrides && cobj.overrides[kstr])){
 			if (kstr==="r_A") {
-if (CWIN && CWIN.__locked){
-poperr("The window is locked!");
-return;
-}
+				if (check_cwin_owned()) return;
 				return win_reload();
 			}
 			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();
@@ -8415,10 +8420,7 @@ reset: ()=>{return handle_ESC();},
 toggle_desktop: ()=>{return toggle_show_windows();},
 close_window: ()=>{
 	if (!CWIN) return;
-	if (CWIN.__locked){
-poperr("The window is locked!");
-return;
-	}
+	if (check_cwin_owned()) return;
 	CWIN.close();
 },
 fullscreen_window: ()=>{CWIN&&CWIN.fullscreen()},
