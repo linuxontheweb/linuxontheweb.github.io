@@ -1,10 +1,11 @@
-//const PORT = 8080;
-const HOST="0.0.0.0";
-//const HOST = "localhost";
+//const HOST="0.0.0.0";
+const HOST = "localhost";
 //const PORT = 4443;
-const PORT = 8081;
+const PORT = 8080;
+//const PORT = 8081;
 //let secure = false;
-let secure = true;
+//let secure = true;
+let secure = false;
 let imap;
 let smtp;
 
@@ -177,7 +178,6 @@ let server;
 if (secure) server = https.createServer(HTTPS_OPTIONS, handler).listen(PORT, HOST);
 else {
 	server = http.createServer(handler).listen(PORT, HOST);
-//log(server);
 }
 const wss = new WebSocketServer({ server });
 wss.on('connection',ws=>{

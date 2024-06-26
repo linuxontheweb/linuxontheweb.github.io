@@ -376,7 +376,7 @@ let is_root = false;
 let app_cb;
 
 let text_input_func;
-
+let reload_win;
 let hold_overrides;
 
 let yank_buffer;
@@ -871,6 +871,7 @@ const quit=()=>{//«
 	if (edit_fobj) {
 		edit_fobj.unlockFile();
 	}
+	if (reload_win) delete reload_win.__locked;
 	modequit();
 };//»
 
@@ -4346,6 +4347,7 @@ const prepend_space=(ch)=>{//«
 	let real_selbot = realy(selbot);
 	open_all_sel_folds();
 	for (let i=seltop,iter=0; i<= selbot; i++,iter++) {
+		real_line_colors[real_seltop+iter]=undefined;
 		let ln = lines[i];
 		ln.splice(usex,0,ch);
 		actions.push(new Action(usex, real_seltop+iter, ch, tm, {prependSpace: true, selTop: real_seltop, selBot: real_selbot}));
@@ -4372,6 +4374,7 @@ const delete_first_space=()=>{//«
 	let use_ch = open_all_sel_folds({checkVisual: true, usex});
 	if (!use_ch) return;
 	for (let i=seltop,iter=0; i<= selbot; i++,iter++) {
+		real_line_colors[real_seltop+iter]=undefined;
 		lines[i].splice(usex, 1);
 		actions.push(new Action(usex, real_seltop+iter, use_ch, tm, {prependSpace: true, selTop: real_seltop, selBot: real_selbot, neg: true}));
 	}
@@ -5676,6 +5679,24 @@ u_AS: undo_all,
 r_AS: redo_all,
 "]_C":scroll_right,
 "[_C":scroll_left,
+r_CAS:async()=>{
+//cwarn("THIS DOESN'T WORK! IT WOULD BE NICE, HEY???");
+//return;
+	if (!reload_win) return;
+	if (!edit_fobj) {
+cwarn("NO edit_fobj!!!");
+		return;
+	}
+	if (dirty_flag) {
+		await edit_save();
+	}
+//FJUSOP
+	reload_win.reload((new_win)=>{
+		reload_win = new_win;
+		reload_win.__locked = true;
+		topwin.on();
+	});
+}
 };//»
 const LEFTRIGHT_FUNCS={//«
 	LEFT_: left,
@@ -5847,7 +5868,8 @@ let modret = await capi.getMod("util.pretty");
 pretty = modret.getmod().js;
 }
 let opts;
-({opts, symbols, text_input_func}=o);
+({opts, symbols, text_input_func, reload_win}=o);
+if (reload_win) reload_win.__locked = true;
 if (symbols){
 SYMBOL_WORDS=symbols.map(w=>w.split(/\s+/)[0]);
 }

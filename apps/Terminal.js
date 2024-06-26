@@ -1243,6 +1243,7 @@ Long options may be given an argument like this:
 //			'meta-com-win': 3,
 //			'meta-com-args': 3,
 			"text-input-win": 3,
+			"reload-win": 3,
 			symbols: 3,
 			'keylog-file': 3,
 			'num-keylog-steps':3
@@ -4980,7 +4981,6 @@ this.onsave=()=>{//«
 }//»
 
 this.onkill = (if_dev_reload)=>{//«
-
 	execute_kill_funcs();
 	if (this.cur_edit_node) this.cur_edit_node.unlockFile();
 	if (this.ssh_server) this.ssh_server.close();

@@ -169,6 +169,18 @@ eval'd in this vim instance.
 		text_input_func = win._winObj.app.ontextinput;
 		if (!(text_input_func instanceof Function)) return {err: `The window's app object does not have an ontextinput method (${winid})`};
 	}
+	let reload_win;
+	if (opts["reload-win"]){
+		let winid = opts["reload-win"];
+		if (!winid) return {err: "No window id"};
+		if (!winid.match(/^[0-9]+$/)) return {err:"Invalid window id"};
+		let win = document.getElementById(`win_${winid}`);
+		if (!win) return {err: `No toplevel window with id: ${winid}`};
+		reload_win = win._winObj;
+if (term.topwin === reload_win){
+return {err: "Cannot use own window for reloading!"}
+}
+	}
 	let path = args.shift();
 	if (path) {//«
 		fullpath = normPath(path, term.cur_dir);
@@ -265,7 +277,8 @@ cerr("HOWDIDUGETHERE!?!?");
 		command_str,
 		opts,
 		symbols,
-		text_input_func
+		text_input_func,
+		reload_win
 //«
 //		meta_app,
 //		meta_com_term,
