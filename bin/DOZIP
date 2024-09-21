@@ -30,6 +30,8 @@ zip -y -r $DATENUM lotw/ -x \*.sw[nop] -x \*/.git/\* -x \*/nano
 cp $DATENUM.zip usb/
 cp $DATENUM.zip ssd/
 
+ln $DATENUM.zip 0CUR.zip
+
 #cp $DATENUM.zip unt/
 #cp $DATENUM.zip Downloads/ || rm Downloads/$DATENUM.zip
 #cp $DATENUM.zip CUR.zip
