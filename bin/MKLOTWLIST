@@ -1,0 +1,5 @@
+cd ~/lotw
+echo "Generating list.json..."
+rm list.json
+node bin/js/getdir.js ./ > /dev/shm/LOTWLISTOUT
+mv /dev/shm/LOTWLISTOUT list.json

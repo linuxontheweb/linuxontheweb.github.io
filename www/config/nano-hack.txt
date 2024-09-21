@@ -1,0 +1,98 @@
+Build requirements
+
+$ sudo apt-get install zlib1g-dev libncurses-dev
+
+
+*** HOW TO MAKE NANO VERY UNANNOYING ***
+
+$ apt-get source nano
+
+$ cd nano-X.X/lib
+$ make
+$ cd ../src
+
+
+######   To get rid of the top line (titlebar):   ######
+
+***   File nano.c:   ***
+
+	in void window_init (else branch):
+
+		comment out: int toprows = (!ISSET(EMPTY_LINE) ? 1 : (LINES < 6) ? 1 : 2);
+		replace with: int toprows = 0
+
+		comment out: topwin = newwin(toprows, COLS, 0, 0);
+		replace with: topwin = NULL
+
+
+######   To get rid of reverse video on the bottom line and help screen:   ######
+
+***   File prompt.c:   ***
+
+	in void draw_the_promptbar:
+		comment out the wattron and wattroff lines
+
+	in int do_yesno_prompt:
+		comment out the wattron and wattroff lines
+
+
+***   File winio.c:   ***
+
+	in void statusline:
+		comment out wattron and wattroff lines
+
+
+	in void post_one_key:
+		comment out wattron and wattroff lines
+
+
+######   To get rid of the brackets in the bottom status messages:   ######
+
+***   File winio.c:   ***
+
+	in void statusline: 
+		change: bracketed = (start_col > 1);
+		to: bracketed = false
+
+
+
+######   To have a vim-like cursor position report at the bottom right:    ######
+
+***   File winio.c:   ***
+
+	First, copy and paste the entire void statusline function, and rename the new one: statusline_right
+	In this new function (statusline_right):
+		replace: start_col = (COLS - breadth(message)) / 2;
+		with: start_col = (COLS - breadth(message));
+
+	in void report_cursor_position(void)
+		replace:
+			statusline(HUSH,
+					_("line %zd/%zd (%d%%), col %zu/%zu (%d%%), char %zu/%zu (%d%%)"),
+					openfile->current->lineno, openfile->filebot->lineno, linepct,
+					column, fullwidth, colpct, sum, openfile->totsize, charpct);
+		with: 
+			statusline_right(HUSH,_("%zd,%zu %d%%"),openfile->current->lineno, column, linepct);
+
+
+
+$ make
+
+
+Invoke with options:
+	-x --nohelp (turn off bottom two lines)
+	-U --quickblank (blank out status line after next keystroke)
+	-c --constantshow (report the cursor position in a vim-like way)
+	-T 4 (make tabs take up 4 spaces)
+
+$ ./nano -xUc -T 4
+
+
+Cutting/Copying/Pasting:
+	Alt+a: Set/Unset the "mark"
+	Alt+^ (Alt+Shift+6): Copy (entire line or between the mark and cursor if the mark is set)
+	Ctrl+k: Cut (entire line or between the mark and cursor if the mark is set)
+	Ctrl+u: Paste
+
+
+

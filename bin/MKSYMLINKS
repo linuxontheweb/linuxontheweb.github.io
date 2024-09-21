@@ -1,0 +1,16 @@
+MYPROJECT=~/lotw
+
+ln -s $MYPROJECT/apps/ ~/apps
+ln -s $MYPROJECT/bin/ ~/bin
+ln -s $MYPROJECT/www/config/ ~/cfg
+ln -s $MYPROJECT/mods/sys/config.js ~/config.js
+ln -s $MYPROJECT/www/docs/ ~/docs
+ln -s $MYPROJECT/mods/sys/desk.js ~/dsk.js
+ln -s $MYPROJECT/apps/Folder.js ~/fold.js
+ln -s $MYPROJECT/mods/sys/fs.js ~/fs.js
+ln -s $MYPROJECT/mods/ ~/mods
+ln -s $MYPROJECT/mods/util/dev/nano.js ~/nano.js
+ln -s $MYPROJECT/apps/Terminal.js ~/term.js
+ln -s $MYPROJECT/mods/sys/util.js ~/util.js
+
+

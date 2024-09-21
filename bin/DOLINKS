@@ -1,0 +1,11 @@
+cd ~/
+ln -s lotw/mods mods
+ln -s lotw/apps apps
+ln -s lotw/mods/sys/desk.js dsk.js
+ln -s lotw/mods/sys/config.js config.js
+ln -s lotw/apps/Folder.js fold.js
+ln -s lotw/mods/sys/fs.js fs.js
+ln -s lotw/mods/coms/fs.js lfs.js
+ln -s lotw/apps/Terminal.js term.js
+ln -s lotw/mods/sys/util.js util.js
+ln -s lotw/mods/util/vim.js vim.js

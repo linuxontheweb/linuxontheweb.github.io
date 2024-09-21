@@ -1,0 +1,11 @@
+9/18/2024: The entire development environment has been moved from a "chroot
+jail" in ChromeOS developer mode (aka crouton) into a non-standard subfolder of
+/usr/local within the underlying Linux system (gentoo). This is
+/usr/local/home, and the project root is /usr/local/home/lotw.  In the "home
+directory," there are symlinks to certain files that are under constant
+development. This "home directory" is not recognized by the underlying system
+as such, and so configuration files like .bashrc and .vimrc go into the
+official home directory at /home/chronos/user.
+
+The package manager is Chromebrew (command lines like "crew install vim" should
+get things working fairly nicely).

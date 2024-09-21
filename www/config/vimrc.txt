@@ -1,0 +1,63 @@
+
+set foldmethod=marker
+set foldmarker=«,»
+set foldlevelstart=0
+set nowrap
+set tabstop=4
+set shiftwidth=4
+set encoding=utf-8
+
+syntax on
+
+if &term == "linux"
+  set t_ve+=[?17;0;16c
+endif
+
+execute "set <M-f>=\ef"
+nnoremap <M-f> a//«<enter><enter>//»<esc>
+inoremap <M-f> //«<enter><enter>//»
+
+
+execute "set <M-o>=\eo"
+nnoremap <M-o> a//«<esc>
+inoremap <M-o> //«
+
+execute "set <M-c>=\ec"
+nnoremap <M-c> a//»<esc>
+inoremap <M-c> //»
+
+imap <C-o> <esc>:w
+nmap <C-o> :w
+
+imap <C-j> <esc>gwipi
+nmap <C-j> gwip
+
+imap <C-e> <esc>$i<right>
+imap <C-a> <esc>0i
+imap <C-x> <esc>:q<enter>
+imap <C-u> <esc>pi
+nmap <S-k> viW K
+nmap <C-x> :q<enter>
+nmap <enter> za
+nmap <space> i
+nmap <C-a> 0i
+nmap <C-e> $a
+nmap f :echo expand('%:p')<enter>
+
+" To get all the color scheme choices
+" From https://github.com/flazz/vim-colorschemes:
+" mkdir ~/.vim
+" git clone https://github.com/flazz/vim-colorschemes.git ~/.vim
+" Or just put desert.vim into ~/.vim/colors/
+colorscheme desert
+"hi Comment ctermfg=red
+"hi Folded ctermfg=blue ctermbg=NONE
+
+" npm install js-beautify
+vmap <C-p> :w! /dev/shm/JSBEAUTIFYIN<enter>:!DOBEAUTIFY /dev/shm/JSBEAUTIFYIN /dev/shm/JSBEAUTIFYOUT<enter>:r /dev/shm/JSBEAUTIFYOUT<enter>kdd
+
+"vmap <C-l> J:s/ \?\([-:{};=+><(),]\) \?/\1/g<enter>
+"vmap <S-l> :s/ \?\([-:{};=+><(),]\) \?/\1/g<enter>
+"vmap <C-m> :s/\/\/\({{{\\|}}}\)//<enter>
+"vmap <C-f> :s/function \([a-zA-Z][a-zA-Z0-9_]*\)\(([a-zA-Z0-9_, ]*)\) *{/const \1=\2=>{/<enter>
+

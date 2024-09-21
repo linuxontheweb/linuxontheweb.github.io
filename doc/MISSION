@@ -1,0 +1,98 @@
+The Vision
+
+The Linux on the Web (LOTW) system exists to enable the usage of "worldly
+objects," as they are represented within digital systems, by way of either a)
+manual command-line workflows, or b) highly networked automated environments.
+Although LOTW loads up in modern browsers like any website (i.e. via URL), it should
+not, perhaps, be classified *as* a website because it does not include anything
+that can be seen as "end-user content." It might be better understood as a
+stateful and very functional "New Tab."
+
+Individual researchers may use the system in highly experimental ways, and
+online communities of these researchers may band together by way of suggesting
+standard approaches to defining certain objects, possibly giving rise to
+internationally agreed-upon formats and protocols.
+
+
+Basic Concepts
+
+Computer programs are typically known to the operating system as "processes",
+such that each process is granted its own working address space in the
+computer's random-access memory (RAM). Should a process attempt to access
+another's memory, then the OS must terminate it, assuming it to be malicious.
+Various methods for inter-process communication (IPC) exist to facilitate
+well-regulated exchanges between the various programs that may be running at
+any given time on a machine. 
+
+The data structures (objects) that are in use by a given program exist within
+that program's address space, and the problem of sharing these structures is a
+non-trivial one, which may have considerable impact on how a programmer may
+decide to design the codebase. A program that had once been quite simple to
+understand may eventually become hopelessly convoluted when the IPC mechanisms
+have been fully worked out.
+
+LOTW trivially enables the sharing of arbitrarily complex data structures between
+individual "programs," which are actually well-isolated modules that all co-exist
+within the process address space of a browser tab.
+
+Javascript (technically known as ECMAScript) is a high-level programming
+language that has a special status among all other languages because it has
+"grown up" as the programming language of the world-wide web (HTML is a
+*markup* language rather than a *programming* language). As such, it is closely
+associated with the graphical document object model (DOM) as well as the many
+APIs (Fetch, Canvas, Web Audio, etc) that are offered by the various browser
+vendors. There is, furthermore, a singularly "asynchronous" character to
+Javascript which allows it to be highly responsive to user-generated input
+events, as well as for the updating of the visible portions of the DOM.
+
+
+Getting Started
+
+Javascript's high-level nature makes it an ideal candidate for researchers within
+domains other than computer science. To get a sense for the ease of the 
+developmental workflow within LOTW, consider the following steps:
+
+1) In your favorite text editor, create a new text file called MyExample.js
+within the "apps" subdirectory of the LOTW root directory.
+
+2) Input the following code into the editor:
+
+export const app = function(){
+
+	class MyObject{
+	}
+	let obj1 = new MyObject();
+	console.log(obj1);
+
+}
+
+3) Save the file.
+
+4) Open the browser's console via the Ctrl+Shift+j keyboard shortcut.
+
+5) In the LOTW system, open a terminal (via the "Begin" menu or Alt+t shortcut)
+and enter: "app MyExample" (if you saved MyExample.js within a subdirectory of
+the apps subdirectory, you will need to invoke it like this: "app path.to.MyExample").
+
+6) If all goes well, an instance of MyObject should be showing in the console.
+
+
+Next Steps
+
+LOTW has many features for the integration of independent modules (programs)
+within the larger system, in order to respond to keyboard input as well as
+"desktop" windowing events. There is also constant progress towards the
+development of a rich command-line experience, so that objects may, for
+example, be inserted within Unix-style pipelines, which might look something
+like: 
+
+mycommand --myoption=foo | somefilter arg1 arg2 | anotherfilter > /path/to/output_file.json
+
+The vertical bars (|) here create a chain of three commands (a pipeline), while
+the angle bracket (>) enables "redirection," so that the standard output may be
+written to a file (which may possibly be within an online file storage system
+like Google Drive).
+
+For the kinds of programs that are fairly simple and depend only on symbolic
+reasoning (rather than graphics-aided interactions), the command-line interface
+may be the best choice.

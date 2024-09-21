@@ -1,0 +1,9 @@
+# git status
+cd /usr/local/home/lotw
+echo "Generating list.json..."
+rm list.json
+node bin/js/getdir.js ./ > /dev/shm/LOTWLISTOUT
+mv /dev/shm/LOTWLISTOUT list.json
+git add .
+git commit -m "I'm crushing your head!"
+git push -u origin main

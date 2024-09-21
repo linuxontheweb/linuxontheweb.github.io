@@ -1,0 +1,4 @@
+#ignore dotfiles
+.*
+#keep .gitignore
+!.gitignore
