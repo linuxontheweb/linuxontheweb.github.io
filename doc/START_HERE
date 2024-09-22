@@ -94,3 +94,6 @@ Then you put it into a folder that is in your $PATH.
 
 	export NODE_PATH=~/.node/node_modules
 
+
+
+
