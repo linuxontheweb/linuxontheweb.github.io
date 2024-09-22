@@ -1,0 +1,96 @@
+Shared link to "lotw" folder on Google Drive:
+https://drive.google.com/drive/folders/1uhfaUmyHtsFCzDxMfI_VQrN8okLtJ_Na?usp=drive_link
+
+A. After buying a new chromebook:
+
+1) Put it in developer mode by typing: esc + refresh (F3) + power and 
+accepting the risks.
+
+2) Install Chromebrew from: https://github.com/chromebrew/chromebrew
+
+3) Create /usr/local/home 
+	$ cd /usr/local && mkdir home
+
+4) Make symlink from to /home/chronos/user/.bashrc from /usr/local/home.bashrc
+	$ cd /usr/local/home && ln -s /home/chronos/user/.bashrc .bashrc
+
+5) Edit the .bashrc file and put the following line at the top:
+	export HOME=/usr/local/home
+
+6) Near the bottom, put:
+	PATH=$PATH:~/bin:~/lotw/bin
+
+7) For a plain, simple prompt, put:
+	PS1='\w\$ '
+
+8) Set up aliases like:
+	alias nano='nano -x -U -T 4'
+	alias c='clear'
+
+9) Source the .bashrc file:
+	. .bashrc
+
+	
+B. Workflow to create a github repo on a new chromebook
+
+1) Go to github.com
+Create github account: <USER>
+
+2) If you want your repo to be statically served at the address:
+https://<USER>.github.io, then create a public repo named
+<USER>.github.io. (Otherwise, name it anything you want.)
+This repo name is <REPO>.
+
+3) Install the gh command:
+	crew install github_cli
+
+4) Run these commands
+
+	gh auth login
+	git config --global user.email "whatever12345@gmail.com"
+	git config --global user.name "Slermerish Yooblex Jankister"
+	cd ~/yourproject
+	git init
+	git branch -m main
+	git remote add origin https://github.com/<USER>/<REPO>.git
+
+So a static site repo will look like
+
+	git remote add origin https://github.com/cooluser/cooluser.github.io.git
+
+Otherwise, it will just be:
+
+	git remote add origin https://github.com/myname/coolrepo.git
+
+6) The following commands can be put into a script to automate the syncing of the
+remote repo with the local project. 
+
+	cd ~/yourproject 
+	git add . 
+	git commit -m "Blark" 
+	git push -u origin main
+
+7) For Node.js, check to see whether nodebrew is installed. If not, get it from: 
+https://github.com/hokaccha/nodebrew. Another option is nvm, node version manager:
+https://github.com/nvm-sh/nvm.
+
+Create a ~/.node folder so that the Node.js packaging system will not clutter your
+home directory.
+
+	mkdir ~/.node
+
+Create a frontend script (called 'npi' or something) for npm like this:
+
+	echo 'npm install $@ --prefix ~/.node' > npi
+	chmod +x npi
+
+Use it like so:
+
+	./npi some_node_package
+
+Then you put it into a folder that is in your $PATH.
+
+8) Edit ~/.bashrc and add the following line:
+
+	export NODE_PATH=~/.node/node_modules
+
