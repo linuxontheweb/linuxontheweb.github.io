@@ -105,7 +105,7 @@ else if (which=="smtp"){//«
 	if (!args.to) return no(res, "smtp requires a 'to' field");
 	let dat = await get_post_data(req);
 	let obj = {to: args.to, text: dat.toString()};
-	if (args.from) obj.from = args.from;
+//	if (args.from) obj.from = args.from;
 	if (args.subject) obj.subject = args.subject;
 	let rv = await smtp.sendMail(obj);
 	if (!rv) return no(res, "smtp returned an empty respose");

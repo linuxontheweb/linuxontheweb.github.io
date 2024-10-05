@@ -8232,7 +8232,7 @@ if (!qObj["no-switcher"]) {
 	if (kstr == "d_CAS") {
 		if (cwin) {
 log(cwin);
-let r = cwin.getBoundingClientRect();
+let r = cwin.winElem.getBoundingClientRect();
 log(`[${r.width}, ${r.height}, ${r.left}, ${r.top}]`);
 		}
 //		PREV_DEF_ALL_KEYS = !PREV_DEF_ALL_KEYS;

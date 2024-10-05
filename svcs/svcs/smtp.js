@@ -10,13 +10,22 @@ let mailOptions = {
 const nodemailer = require("nodemailer");
 
 const log = (...args)=>{console.log(...args)};
+
+const USER = process.env.EMAIL_USER;
+const PASS = process.env.EMAIL_PASSWORD;
+
+if (!(USER && PASS)){
+log("EMAIL_USER && EMAIL_PASSWORD NOT IN THE ENVIRONMENT!?!?!?");
+return;
+}
+
 const transporter = nodemailer.createTransport({
 	host: "smtp.mail.yahoo.com",
 	port: 465,
 	secure: true, // true for 465, false for other ports
 	auth: {
-		user: process.env.EMAIL_USER,
-		pass: process.env.EMAIL_PASSWORD
+		user: USER,
+		pass: PASS
 	},
 	tls: {
 	// do not fail on invalid certs
@@ -27,6 +36,7 @@ const transporter = nodemailer.createTransport({
 //log(`User: ${process.env.EMAIL_USER}`);
 //log(`Pass: ${process.env.EMAIL_PASSWORD}`);
 const sendMail = async(opts={})=>{
+	opts.from = USER;
 	const send=()=>{
 		return new Promise((Y,N)=>{
 			transporter.sendMail(opts, (error, info) => {
@@ -41,7 +51,7 @@ const sendMail = async(opts={})=>{
 		});
 	};
 //log(opts);
-	if (!(opts.from && opts.to && opts.text && opts.subject)) return {error: "Missing one of: from, to, subject or text"};
+	if (!(opts.to && opts.text && opts.subject)) return {error: "Missing one of: to, subject or text"};
 	return await send();
 }
 

@@ -1,3 +1,15 @@
+/*Setting environment variables (10/5/2024):
+
+Normally this is done through .bashrc files, using export. But I don't want to mess with
+the complexity of machine-reading text files. Right now, the ENV variable is set here, which
+forces us to manually set all environment vars on the command line. I want ENV
+to be a global variable (which I just added into config.js as globals.TERM_ENV).
+
+Now to set persistent vars to ENV, just save them to ~/.env, e.g.:
+VAR1=Something
+BLAH=What in the hell
+
+*/
 /*Making a data file«
 const com_mkdat = async(args, o)=>{
 	const {term, opts, stdin} = o;
@@ -118,7 +130,21 @@ const DEL_COMS=[
 import { util, api as capi } from "util";
 import { globals } from "config";
 const{strnum, isarr, isstr, isnum, isobj, make, kc, log, jlog, cwarn, cerr}=util;
-const{KC, DEF_PAGER_MOD_NAME, NS, TEXT_EDITOR_APP, LINK_APP, FOLDER_APP, FS_TYPE, MOUNT_TYPE, SHM_TYPE, fs, isMobile, shell_libs, dev_mode}=globals;
+const {
+	KC,
+	DEF_PAGER_MOD_NAME,
+	NS,
+	TEXT_EDITOR_APP,
+	LINK_APP,
+	FOLDER_APP,
+	FS_TYPE,
+	MOUNT_TYPE,
+	SHM_TYPE,
+	fs,
+	isMobile,
+	shell_libs,
+	dev_mode
+} = globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
 const {poperr} = widgets;
@@ -602,6 +628,26 @@ const get_libs = async()=>{//«
 	return all;
 };//»
 
+const lines_to_paras = lns => {//«
+	let paras = [];
+	let curln = "";
+	for (let ln of lns){
+		if (ln.match(/^\s*$/)){
+			if (curln) {
+				paras.push(curln);
+				curln = "";
+			}
+			paras.push("");
+			continue;
+		}
+		if (ln.match(/-\s*$/)) ln = ln.replace(/-\s+$/,"-");
+		else ln = ln.replace(/\s*$/," ");
+		curln = curln + ln;
+	}
+	if (curln) paras.push(curln);
+	return paras;
+}//»
+
 //»
 
 //Builtin commands«
@@ -615,9 +661,13 @@ const com_ = async(args, o)=>{
 */
 
 const com_smtp = async(args, o)=>{//«
-	const {term, stdin} = o;
-	let from = term.ENV.EMAIL_FROM;
-	if (!from) return {err: "No EMAIL_FROM in the environment!"}
+// smtp   email_text_file_path   to   Subject goes here...
+// echo   Here is the email text...  |  smtp   to   Subject goes here...
+	const {term, stdin, opts} = o;
+//	let from = term.ENV.EMAIL_FROM;
+//	if (!from) return {err: "No EMAIL_FROM in the environment!"}
+	let to_paras = opts["to-paras"]||opts.p;
+//cwarn("PARAS", to_paras);
 	let txt;
 	if (stdin) {
 		txt = stdin.join("\n");
@@ -630,16 +680,23 @@ const com_smtp = async(args, o)=>{//«
 		txt = await node.text;
 	}
 	if (!txt.match(/[a-z]/i)) return {err: "No lower ascii alphabetic characters were found in the message"};
-log(txt);
+	if (to_paras) {
+		txt = lines_to_paras(txt.split("\n")).join("\n");
+	}
 	let to = await args.shift();
 	if (!to) return {err:"No one to send to"}
 	if (!to.match(/^\w+@\w+\.[a-z]+$/i)) return {err: "Bad looking email address"};
 
 	let sub = args.join(" ");
 	if (!sub) return {err: "No subject given"}
-
-	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
-	if (!(rv&&rv.text)) {
+cwarn("TO",to);
+cwarn("SUB",sub);
+cwarn(`TEXT: ${txt.length} chars`);
+//log(txt);
+//return;
+//	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
+	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
+	if (!(rv&&rv.ok&&rv.text)) {
 log(rv);
 		return {err: "An unknown response was received from smtp service"}
 	}
@@ -1406,7 +1463,11 @@ email:{
 	read:{l:{prompt:3}},
 	ytsrch:{s:{v:1, c:1, p:1},l:{video:1,channel:1,playlist:1}},
 	ytthing:{l:{list:1,items:1,channel:1}},
-	ytdl:{s:{p:3, n:1},l:{port:3,name:1}}
+	ytdl:{s:{p:3, n:1},l:{port:3,name:1}},
+	smtp:{
+		s:{p:1},
+		l:{"to-paras":1}
+	}
 
 };//»
 
@@ -2315,8 +2376,7 @@ const CURSOR_ID = `cursor_${winid}`;
 this.cursor_id = CURSOR_ID;
 this.mainWin = main;
 
-const ENV = {
-}
+const ENV = globals.TERM_ENV;
 
 //Editor mode constants for the renderer (copy/pasted from vim.js)«
 //XKIUO
@@ -2631,6 +2691,7 @@ main.appendChild(areadiv);
 //»
 
 //Util«
+
 
 const get_line_from_pager=async(arr, name)=>{//«
 
@@ -3036,24 +3097,9 @@ const get_buffer = (if_str)=>{//«
 		else ret.push(ln);
 	}
 
-	if (actor && actor.parSel){//Paragraph select mode
+	if (actor && (PARAGRAPH_SELECT_MODE || actor.parSel)){//Paragraph select mode
 		if (if_str) ret = ret.split("\n");
-		let paras = [];
-		let curln = "";
-		for (let ln of ret){
-			if (ln.match(/^\s*$/)){
-				if (curln) {
-					paras.push(curln);
-					curln = "";
-				}
-				paras.push("");
-				continue;
-			}
-			if (ln.match(/-\s*$/)) ln = ln.replace(/-\s+$/,"-");
-			else ln = ln.replace(/\s*$/," ");
-			curln = curln + ln;
-		}
-		if (curln) paras.push(curln);
+		ret = lines_to_paras(ret);
 		if (if_str) ret = paras.join("\n");
 		else ret = paras;
 	}
