@@ -23,6 +23,7 @@ fi
 
 cd ~/
 
+#rm lotw/lotw.zip 2>/dev/null
 zip -y -r $DATENUM lotw/ -x \*.sw[nop] -x \*/.git/\* -x \*/nano
 
 #zip -y -r $DATENUM lotw/ -x \*.sw[nop] -x \*/.git/\* -x lotw/www/examples/games -x lotw/www/examples/sounds
@@ -30,8 +31,8 @@ zip -y -r $DATENUM lotw/ -x \*.sw[nop] -x \*/.git/\* -x \*/nano
 cp $DATENUM.zip usb/
 cp $DATENUM.zip ssd/
 
-rm 0CUR.zip
-ln $DATENUM.zip 0CUR.zip
+#rm 0CUR.zip
+#ln $DATENUM.zip 0CUR.zip
 
 #cp $DATENUM.zip unt/
 #cp $DATENUM.zip Downloads/ || rm Downloads/$DATENUM.zip

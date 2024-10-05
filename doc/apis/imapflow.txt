@@ -6,40 +6,60 @@ new ImapFlow(options)//«
 //Options
 
 {
+
 	host: "Hostname of the IMAP server",
+
 	port: <Number: Port number for the IMAP server>
+
 	secure: <Boolean Should the connection be established over TLS. If false 
 				then connection is upgraded to TLS using STARTTLS extension 
 				before authentication>,
+
 	servername: "Servername for SNI (or when host is set to an IP address)",
+
 	disableCompression: <Boolean if true then client does not try to use 
 							COMPRESS=DEFLATE extension>,
+
 	auth:{
 		user: "username",
 		pass: "password",
 		accessToken: "OAuth2 Access Token, if using OAuth2 authentications"
 	}
+
 	clientInfo: <IdInfoObject>,
-	disableAutoIdle: <Boolean if true then IDLE is not started automatically. Useful if you only need to perform specific tasks over the connection>,
+
+	disableAutoIdle: <Boolean if true then IDLE is not started automatically. 
+						Useful if you only need to perform specific tasks over the connection>,
+
 	tls: {
+
 		rejectUnauthorized: <Boolean if false then client accepts self-signed and expired certificates from the server>,
+
 		minVersion: "latest Node.js defaults to 'TLSv1.2', for older mail servers 
 						you might need to use something else, eg 'TLSv1'"
+
 		minDHSize: <Number: Minimum size of the DH parameter in bits to accept 
 						a TLS connection (1024)>
 	},
+
 	logger: 	<Custom logger instance with debug(obj), info(obj), warn(obj) and 
 					error(obj) methods. If not provided then ImapFlow logs to 
 					console using pino format>
+
 	logRaw: 	<Boolean If true then log data read from and written to socket 
 					encoded in base64>,
+
 	emitLogs: 	<Boolean If true then in addition of sending data to logger, 
 					ImapFlow emits 'log' events with the same data>,
+
 	verifyOnly: <Boolean If true then logs out automatically after successful 
 					authentication>,
+
 	proxy: 		<Boolean Optional proxy URL. Supports HTTP CONNECT (http://, https://) and SOCKS (socks://, socks4://, socks5://) proxies>,
+
 	qresync: 	<Boolean If true, then enables QRESYNC support. 
 					EXPUNGE notifications will include uid property instead of seq>,
+
 }
 
 //»
@@ -47,10 +67,15 @@ new ImapFlow(options)//«
 Members//«
 
 authenticated :String|Boolean//«
-Currently authenticated user or false if mailbox is not open or true if connection was authenticated by PREAUTH
+
+Currently authenticated user or false if mailbox is not open or true if
+connection was authenticated by PREAUTH
+
 //»
 capabilities :Map.<string, (boolean|number)>//«
-Active IMAP capabilities. Value is either true for togglabe capabilities (eg. UIDPLUS) or a number for capabilities with a value (eg. APPENDLIMIT)
+
+Active IMAP capabilities. Value is either true for togglabe capabilities (eg.
+UIDPLUS) or a number for capabilities with a value (eg. APPENDLIMIT)
 
 //»
 emitLogs :Boolean//«
@@ -114,16 +139,21 @@ let mailbox = await client.mailboxOpen('INBOX');
 await client.idle();
 //»
 (async) logout() → {Promise.<void>}//«
-Graceful connection close by sending logout command to server. TCP connection is closed once command is finished.
+
+Graceful connection close by sending logout command to server. TCP connection
+is closed once command is finished.
 
 EXAMPLE
 let client = new ImapFlow({...});
 await client.connect();
 ...
 await client.logout();
+
 //»
 (async) connect() → {Promise.<void>}//«
-Initiates a connection against IMAP server. Throws if anything goes wrong. This is something you have to call before you can run any IMAP commands
+
+Initiates a connection against IMAP server. Throws if anything goes wrong. This
+is something you have to call before you can run any IMAP commands
 
 THROWS:
 Will throw an error if connection or authentication fails
@@ -131,6 +161,7 @@ Will throw an error if connection or authentication fails
 EXAMPLE
 let client = new ImapFlow({...});
 await client.connect();
+
 //»
 
 (async) getMailboxLock(path, optionsopt) → {Promise.<MailboxLockObject>}//«
@@ -150,10 +181,13 @@ options	Object	<optional>
 optional options
 
 PROPERTIES
+
 Name	Type	Attributes	Default	Description
 readOnly	Boolean	<optional>
 false	
-If true then opens mailbox in read-only mode. You can still try to perform write operations but these would probably fail.
+
+If true then opens mailbox in read-only mode. You can still try to perform
+write operations but these would probably fail.
 
 THROWS:
 Will throw an error if mailbox does not exist or can not be opened
@@ -168,6 +202,7 @@ try {
 }
 //»
 (async) getQuota(pathopt) → {Promise.<(QuotaResponse|Boolean)>}//«
+
 Returns current quota
 
 PARAMETERS:
@@ -178,9 +213,11 @@ Optional mailbox path if you want to check quota for specific folder
 EXAMPLE
 let quota = await client.getQuota();
 console.log(quota.storage.used, quota.storage.available)
+
 //»
 
 (async, generator) fetch(range, query, optionsopt)//«
+
 Fetch messages from currently opened mailbox
 
 PARAMETERS:
@@ -191,6 +228,7 @@ range	SequenceString |	Range of messages to fetch //«
 		SearchObject		
 //»
 query	FetchQueryObject				Fetch query
+
 options	Object				<optional>	(See Table below)//«
 
 Description Table//«
@@ -208,11 +246,13 @@ changedSince	BigInt	<optional>	If set then only messages with a higher modseq
 //»
 
 EXAMPLE//«
+
 let mailbox = await client.mailboxOpen('INBOX');
 // fetch UID for all messages in a mailbox
 for await (let msg of client.fetch('1:*', {uid: true})){
     console.log(msg.uid);
 }
+
 //»
 
 //»
@@ -236,10 +276,12 @@ uid		Boolean	<optional>	If true then uses UID number instead
 							of sequence number for seq
 
 EXAMPLE//«
+
 let mailbox = await client.mailboxOpen('INBOX');
 // fetch UID for all messages in a mailbox
 let lastMsg = await client.fetchOne('*', {uid: true})
 console.log(lastMsg.uid);
+
 //»
 
 //»
@@ -320,7 +362,10 @@ let status = await client.status('INBOX', {unseen: true});
 console.log(status.unseen);
 //»
 (async) download(range, partopt, optionsopt) → {Promise.<DownloadObject>}//«
-Download either full rfc822 formated message or a specific bodystructure part as a Stream. Bodystructure parts are decoded so the resulting stream is a binary file. Text content is automatically converted to UTF-8 charset.
+
+Download either full rfc822 formated message or a specific bodystructure part
+as a Stream. Bodystructure parts are decoded so the resulting stream is a
+binary file. Text content is automatically converted to UTF-8 charset.
 
 PARAMETERS:
 Name	Type	Attributes	Description
@@ -328,7 +373,9 @@ range	SequenceString
 UID or sequence number for the message to fetch
 
 part	String	<optional>
-If not set then downloads entire rfc822 formatted message, otherwise downloads specific bodystructure part
+
+If not set then downloads entire rfc822 formatted message, otherwise downloads
+specific bodystructure part
 
 options	Object	<optional>
 PROPERTIES
@@ -348,8 +395,10 @@ let mailbox = await client.mailboxOpen('INBOX');
 // download body part nr '1.2' from latest message
 let {meta, content} = await client.download('*', '1.2');
 content.pipe(fs.createWriteStream(meta.filename));
+
 //»
 (async) append(path, content, flagsopt, idateopt) → {Promise.<AppendResponseObject>}//«
+
 Appends a new message to a mailbox
 
 PARAMETERS:
@@ -369,6 +418,7 @@ internal date to be set for the message
 
 EXAMPLE
 await client.append('INBOX', rawMessageBuffer, ['\\Seen'], new Date(2000, 1, 1));
+
 //»
 
 (async) mailboxClose() → {Promise.<Boolean>}//«
@@ -459,15 +509,20 @@ console.log(info.newPath);
 // "INBOX.Important stuff ❗️" // assumes "INBOX." as namespace prefix
 //»
 (async) mailboxSubscribe(path) → {Promise.<Boolean>}//«
+
 Subscribes to a mailbox
 
 PARAMETERS:
 Name	Type	Description
 path	string | array	
-Path for the mailbox to subscribe to. Unicode is allowed. If value is an array then it is joined using current delimiter symbols. Namespace prefix is added automatically if required.
+
+Path for the mailbox to subscribe to. Unicode is allowed. If value is an array
+then it is joined using current delimiter symbols. Namespace prefix is added
+automatically if required.
 
 EXAMPLE
 await client.mailboxSubscribe('Important stuff ❗️');
+
 //»
 (async) mailboxUnsubscribe(path) → {Promise.<Boolean>}//«
 Unsubscribes from a mailbox
@@ -475,7 +530,10 @@ Unsubscribes from a mailbox
 PARAMETERS:
 Name	Type	Description
 path	string | array	
-Path for the mailbox to unsubscribe from. Unicode is allowed. If value is an array then it is joined using current delimiter symbols. Namespace prefix is added automatically if required.
+
+Path for the mailbox to unsubscribe from. Unicode is allowed. If value is an
+array then it is joined using current delimiter symbols. Namespace prefix is
+added automatically if required.
 
 EXAMPLE
 await client.mailboxUnsubscribe('Important stuff ❗️');
@@ -754,68 +812,152 @@ IMAP search query options. By default all conditions must match. In case of or
 query term at least one condition must match.
 
 PROPERTIES:
+
 Name		Type			Description
+---------------------------------------
+
 seq			SequenceString	message ordering sequence range
+
 answered	Boolean			Messages with (value is true) or without (value 
 								is false) \Answered flag
-deleted		Boolean			Messages with (value is true) or without (value 
-								is false) \Deleted flag
-draft		Boolean			Messages with (value is true) or without (value 
-								is false) \Draft flag
-flagged		Boolean			Messages with (value is true) or without (value is 
-								false) \Flagged flag
-seen	Boolean				Messages with (value is true) or without (value 
-								is false) \Seen flag
+
+deleted		Boolean			Messages with ... \Deleted flag
+
+draft		Boolean			Messages with ... \Draft flag
+
+flagged		Boolean			Messages with ... \Flagged flag
+
+seen	Boolean				Messages with ... \Seen flag
+
 all		Boolean				If true matches all messages
+
 new		Boolean				If true matches messages that have the \Recent flag 
 								set but not the \Seen flag
+
 old		Boolean				If true matches messages that do not have the 
 								\Recent flag set
+
 recent	Boolean				If true matches messages that have the \Recent 
 								flag set
+
 from	String				Matches From: address field
+
 to		String				Matches To: address field
+
 cc		String				Matches Cc: address field
+
 bcc		String				Matches Bcc: address field
+
 body	String				Matches message body
+
 subject	String				Matches message subject
+
 larger	Number				Matches messages larger than value
+
 smaller	Number				Matches messages smaller than value
+
 uid		SequenceString		UID sequence range
+
 modseq	BigInt				Matches messages with modseq higher than value
+
 emailId	String				unique email ID. Only used if server supports 
 								OBJECTID or X-GM-EXT-1 extensions
-threadId String				unique thread ID. Only used if server supports OBJECTID or X-GM-EXT-1 extensions
+
+threadId String				unique thread ID. Only used if server supports 
+								OBJECTID or X-GM-EXT-1 extensions
+
 before	Date | string		Matches messages received before date
+
 on		Date | string		Matches messages received on date (ignores time)
+
 since	Date | string		Matches messages received after date
+
 sentBefore	Date | string	Matches messages sent before date
+
 sentOn	Date | string		Matches messages sent on date (ignores time)
+
 sentSince	Date | string	Matches messages sent after date
+
 keyword		String			Matches messages that have the custom flag set
+
 unKeyword	String			Matches messages that do not have the custom flag set
+
 header	Object.<string,		Matches messages with header key set if value is true  
 			(Boolean|		(NB! not supported by all servers) or messages where 
 			String)>		header partially matches a string value
+
 or	Array.<SearchObject>	An array of 2 or more SearchObject objects. At least 
-								on of these must match
+								one of these must match
 
 //»
 DownloadObject :Object//«
 
 PROPERTIES:
 Name		Type			Description
+---------------------------------------
+
 meta		Object			(See table below)
+
 content		ReadableStream	Streamed content
 
 Table for content metadata
+--------------------------
+
 Name		Type		Description
+-----------------------------------
+
 contentType	String		Content-Type of the streamed file. If part was not 
 							set then this value is "message/rfc822"
+
 charset		String		Charset of the body part. Text parts are automaticaly 
 							converted to UTF-8, attachments are kept as is
+
 disposition	String		Content-Disposition of the streamed file
+
 filename	String		Filename of the streamed body part
+
+//»
+FetchQueryObject :Object//«
+
+Name		Type		Description
+
+uid			Boolean		if true then include UID in the response
+
+flags		Boolean		if true then include flags Set in the response
+
+bodyStructure Boolean	if true then include parsed BODYSTRUCTURE object 
+							in the response
+
+envelope	Boolean		if true then include parsed ENVELOPE object in the response
+
+internalDate Boolean	if true then include internal date value in the response
+
+size		Boolean		if true then include message size in the response
+
+source		boolean 	if true then include full message in the response
+			 | Object	
+			  (see table 
+				  below)
+
+Name		Type		Description
+
+start		Number		include full message in the response starting from 
+							start byte
+
+maxLength	Number		include full message in the response, up to maxLength bytes
+
+threadId	String		if true then include thread ID in the response (only if 
+							server supports either OBJECTID or X-GM-EXT-1 extensions)
+
+labels		Boolean		if true then include GMail labels in the response (only 
+							if server supports X-GM-EXT-1 extension)
+
+headers		boolean | 	if true then includes full headers of the message 
+			Array.			in the response. If the value is an array of header 
+			<string>		keys then includes only headers listed in the array
+
+bodyParts	Array.		An array of BODYPART identifiers to include in the response
+			 <string>	
 
 //»
 FetchMessageObject :Object//«
@@ -823,55 +965,42 @@ FetchMessageObject :Object//«
 Fetched message data
 
 Name		Type		Description
+
 seq			Number		message sequence number. Always included in the response
+
 uid			Number		message UID number. Always included in the response
+
 source		Buffer		message source for the requested byte range
+
 modseq		BigInt		message Modseq number. Always included if the server 
 							supports CONDSTORE extension
+
 emailId		String		unique email ID. Always included if server supports 
 							OBJECTID or X-GM-EXT-1 extensions
+
 threadid	String		unique thread ID. Only present if server supports 
 							OBJECTID or X-GM-EXT-1 extension
+
 labels		Set.<string> a Set of labels. Only present if server supports 
 							X-GM-EXT-1 extension
+
 size		Number		message size
+
 flags		Set.<string> a set of message flags
+
 bodyParts	Map.		a Map of message body parts where key is requested part 
 			 <string, 		identifier and value is a Buffer
 				Buffer>	
+
 headers		Buffer		Requested header lines as Buffer
+
 internalDate Date		message internal date
+
 envelope		MessageEnvelopeObject		message envelope
+
 bodyStructure 	MessageStructureObject	message body structure
 
 
-//»
-FetchQueryObject :Object//«
-Name		Type		Description
-uid			Boolean		if true then include UID in the response
-flags		Boolean		if true then include flags Set in the response
-bodyStructure Boolean	if true then include parsed BODYSTRUCTURE object 
-							in the response
-envelope	Boolean		if true then include parsed ENVELOPE object in the response
-internalDate Boolean	if true then include internal date value in the response
-size		Boolean		if true then include message size in the response
-source		boolean 	if true then include full message in the response
-			 | Object	
-			  (see table 
-				  below)
-Name		Type		Description
-start		Number		include full message in the response starting from 
-							start byte
-maxLength	Number		include full message in the response, up to maxLength bytes
-threadId	String		if true then include thread ID in the response (only if 
-							server supports either OBJECTID or X-GM-EXT-1 extensions)
-labels		Boolean		if true then include GMail labels in the response (only 
-							if server supports X-GM-EXT-1 extension)
-headers		boolean | 	if true then includes full headers of the message 
-			Array.			in the response. If the value is an array of header 
-			<string>		keys then includes only headers listed in the array
-bodyParts	Array.		An array of BODYPART identifiers to include in the response
-			 <string>	
 //»
 
 AppendResponseObject :Object//«
@@ -1089,57 +1218,87 @@ new full mailbox path
 //»
 
 MessageAddressObject :Object//«
+
 Parsed email address entry
 
 PROPERTIES:
 Name	Type	Attributes	Description
+---------------------------------------
+
 name	String	<optional>
 name of the address object (unicode)
 
 address	String	<optional>
 email address
+
 //»
 MessageEnvelopeObject :Object//«
 Parsed IMAP ENVELOPE object
 
+MAO => MessageAddressObject
+
 PROPERTIES:
 Name		Type		Description
+-----------------------------------
+
+from		Array.		Array of addresses from the From: header
+			<MAO>	
+
+to			Array.		Array of addresses from the To: header
+			<MAO>	
+
 date		Date		header date
 
 subject		String		message subject (unicode)
+
 messageId	String		Message ID of the message
+
 inReplyTo	String		Message ID from In-Reply-To header
-from	Array.			Array of addresses from the From: header
-		<MessageAddressObject>	
-sender	Array.			Array of addresses from the Sender: header
-		<MessageAddressObject>	
-replyTo	Array.			Array of addresses from the Reply-To: header
-		<MessageAddressObject>	
-to		Array.			Array of addresses from the To: header
-	<MessageAddressObject>	
-cc		Array.			Array of addresses from the Cc: header
-	<MessageAddressObject>	
-bcc		Array.			Array of addresses from the Bcc: header
-		<MessageAddressObject>	
+
+
+replyTo		Array.		Array of addresses from the Reply-To: header
+			<MAO>	
+
+sender		Array.		Array of addresses from the Sender: header
+			<MAO>	
+
+cc			Array.		Array of addresses from the Cc: header
+			<MAO>	
+
+bcc			Array.		Array of addresses from the Bcc: header
+			<MAO>	
+
 //»
 MessageStructureObject :Object//«
 Parsed IMAP BODYSTRUCTURE object
 
 PROPERTIES:
+
 Name		Type		Description
+-----------------------------------
+
 part		String		Body part number. This value can be used to later fetch the 
 						contents of this part of the message
+
 type		String		Content-Type of this node
+
 parameters	Object		Additional parameters for Content-Type, eg "charset"
+
 id			String		Content-ID
+
 encoding	String		Transfer encoding
+
 size		Number		Expected size of the node
+
 envelope	Message		message envelope of embedded RFC822 message
-			 Envelope
-			 Object	
+			Envelope
+			Object	
+
 disposition	String		Content disposition
+
 disposition Object		Additional parameters for Content-Disposition
- Parameters	
+Parameters	
+
 childNodes	Array.		An array of child nodes if this is a multipart node. Not present for normal nodes
 			<MessageStructureObject>		
 //»

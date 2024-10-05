@@ -614,6 +614,52 @@ const com_ = async(args, o)=>{
 };
 */
 
+const com_smtp = async(args, o)=>{//«
+	const {term, stdin} = o;
+	let from = term.ENV.EMAIL_FROM;
+	if (!from) return {err: "No EMAIL_FROM in the environment!"}
+	let txt;
+	if (stdin) {
+		txt = stdin.join("\n");
+	}
+	else {
+		let path = await args.shift();
+		if (!path) return {err:"No file to send"};
+		let node = await path.toNode(term);
+		if (!node) return {err: `${path}: not found`};
+		txt = await node.text;
+	}
+	if (!txt.match(/[a-z]/i)) return {err: "No lower ascii alphabetic characters were found in the message"};
+log(txt);
+	let to = await args.shift();
+	if (!to) return {err:"No one to send to"}
+	if (!to.match(/^\w+@\w+\.[a-z]+$/i)) return {err: "Bad looking email address"};
+
+	let sub = args.join(" ");
+	if (!sub) return {err: "No subject given"}
+
+	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
+	if (!(rv&&rv.text)) {
+log(rv);
+		return {err: "An unknown response was received from smtp service"}
+	}
+	txt = await rv.text();
+cwarn(txt);
+	if (rv.ok) return txt;
+	return {err: txt.split("\n")[0]};
+
+};//»
+const com_imap = async(args, o)=>{//«
+
+	let rv = await fetch(`/_imap`);
+	let out = await rv.text();
+	if (!rv.ok) {
+		let val = out.split("\n")[0];
+		return {err: out};
+	}
+	return {out};
+
+};//»
 const com_email = async(args, o)=>{//«
 
 /*
@@ -1216,51 +1262,6 @@ term.refresh({noCursor: true});
 await hang();
 
 };//»
-const com_smtp = async(args, o)=>{//«
-	const {term, stdin} = o;
-	let from = term.ENV.EMAIL_FROM;
-	if (!from) return {err: "No EMAIL_FROM in the environment!"}
-	let txt;
-	if (stdin) {
-		txt = stdin.join("\n");
-	}
-	else {
-		let path = await args.shift();
-		if (!path) return {err:"No file to send"};
-		let node = await path.toNode(term);
-		if (!node) return {err: `${path}: not found`};
-		txt = await node.text;
-	}
-	if (!txt.match(/[a-z]/i)) return {err: "No lower ascii alphabetic characters were found in the message"};
-log(txt);
-	let to = await args.shift();
-	if (!to) return {err:"No one to send to"}
-	if (!to.match(/^\w+@\w+\.[a-z]+$/i)) return {err: "Bad looking email address"};
-
-	let sub = args.join(" ");
-	if (!sub) return {err: "No subject given"}
-
-	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
-	if (!(rv&&rv.text)) {
-log(rv);
-		return {err: "An unknown response was received from smtp service"}
-	}
-	txt = await rv.text();
-cwarn(txt);
-	if (rv.ok) return txt;
-	return {err: txt.split("\n")[0]};
-
-};//»
-const com_imap = async(args, o)=>{//«
-
-	let rv = await fetch(`/_imap`);
-	if (!rv.ok) {
-		let txt = await rv.text();
-		let val = txt.split("\n")[0];
-		return {err: val};
-	}
-
-};//»
 const com_meta = async(args, o)=>{//«
 	let {term}=o;
 	let {cwd} = term;
@@ -1434,13 +1435,13 @@ appicon:com_appicon,
 open:com_open,
 msleep: com_msleep,
 email: com_email,
+imap: com_imap,
+smtp: com_smtp,
 //pokerruns: com_pokerruns,
 //pokerhands: com_pokerhands,
 //termlines: com_termlines,
 //hi: com_hi,
 //ssh: com_ssh,
-//imap: com_imap,
-//smtp: com_smtp,
 //meta: com_meta,
 };
 if (dev_mode){

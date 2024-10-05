@@ -123,7 +123,7 @@ else if (which=="imap"){//«
 	if (!rv) return no(res, "imap returned an empty respose");
 	if (rv.error) return no(res, rv.error+"");
 	if (!rv.message) return no(res, "imap returned an unknown respose");
-log(rv);
+//log(rv);
 	ok(res);
 	res.end(JSON.stringify(rv.message));
 }//»

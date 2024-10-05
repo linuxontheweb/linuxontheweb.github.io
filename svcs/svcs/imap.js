@@ -61,7 +61,8 @@ finally {
 try{
 	await client.logout();
 }catch(e){
-
+log("Caught client.logout() error!");
+log(e);
 }
 
 });

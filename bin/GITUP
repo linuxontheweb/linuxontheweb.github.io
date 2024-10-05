@@ -1,11 +1,11 @@
 # git status
 cd /usr/local/home/lotw
-if [[ ! -f ../0CUR.zip ]]; then
-    echo "~/0CUR.zip not found. Aborthing!"
-    exit;
-fi;
-echo "Copying the current zip file..."
-cp ../0CUR.zip lotw.zip
+#if [[ ! -f ../0CUR.zip ]]; then
+#    echo "~/0CUR.zip not found. Aborthing!"
+#    exit;
+#fi;
+#echo "Copying the current zip file..."
+#cp ../0CUR.zip lotw.zip
 echo "Generating list.json..."
 rm list.json
 node bin/js/getdir.js ./ > /dev/shm/LOTWLISTOUT
