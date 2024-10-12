@@ -5772,6 +5772,7 @@ const win_reload = (cbarg) => { //«
 	}
 	let win = CWIN;
 	if (!win) return;
+	if (win.app.ondevreload) return win.app.ondevreload();
 	let {is_fullscreen, fsholdw, fsholdh, fsholdx, fsholdy, bor_hold} = win;
 	let {is_maxed, maxholdw, maxholdh, maxholdx, maxholdy} = win; 
 	let winCb=(win)=>{//«

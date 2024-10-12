@@ -273,6 +273,7 @@ throw new Error(`WUT NO ROOTID RETURNED AFTER ADDING ROOT NODE (${path}) ?!?!?`)
 	root.id = rootid;
 	return true;
 }//»
+
 this.createNode=async(name, type, parId, value)=>{//«
 
 if (type===DIRECTORY_FS_TYPE||type===NULL_BLOB_FS_TYPE||type==LINK_FS_TYPE||(type===FILE_FS_TYPE && Number.isFinite(value))||type==IDB_DATA_TYPE) {
@@ -351,6 +352,7 @@ return true;
 };//»
 
 this.dropDatabase = () => {//«
+throw new Error("Comment me out to use dropDatabase()!");
 	return new Promise((Y,N)=>{
 		db.close();
 		const req = window.indexedDB.deleteDatabase(DBNAME);
@@ -492,6 +494,7 @@ cerr("This is a data node, but opts.text was specified in getValue!");
 try{
 return JSON.stringify(this.data);
 }catch(e){}
+cerr(e);
 return this.data.toString();
 }
 			return this.data;
@@ -507,8 +510,9 @@ cerr(`Expected an object with a 'type' field! (for inline data storage)`);
 if (this.data.type !== val.type){
 cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
 }
+//log("db.setNodeData", this.id, val);
 			if (!await db.setNodeData(this.id, val)) {
-cerr("Could not set node data", node);
+cerr("Could not set node data", this);
 				return;
 			}
 			this.data = val;
@@ -784,7 +788,7 @@ cerr("Cannot construct a full path!");
 };//»
 let _ = String.prototype;
 _.toNode=toNode;
-_.toParNodeAndName=async function(opts={}){
+_.toParNodeAndName=async function(opts={}){//«
 	let s = this+"";
 	if (s.match(/^\x2f/)){}
 	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
@@ -798,7 +802,7 @@ cerr(`${parpath}: Not a directory!`);
 		return;
 	}
 	return [parnode, fname, s];
-}
+}//»
 _.toText = async function(opts = {}) {
 	let node = await this.toNode(opts);
 	if (!node) return;
@@ -1612,7 +1616,14 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	if (is_shm = parobj.type==SHM_TYPE){
 	}
 	else {
-		if (opts.data) id = await db.createNode(name, IDB_DATA_TYPE, parid, opts.data);
+		if (opts.data) {
+			let val = opts.data;
+			if (!(isobj(val) && isstr(val.type))){
+cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)`);
+				return;
+			}
+			id = await db.createNode(name, IDB_DATA_TYPE, parid, val);
+		}
 		else id = await db.createNode(name, NULL_BLOB_FS_TYPE, parid);
 		if (!id) return cerr("ADBNYURL");
 	}
@@ -1630,14 +1641,14 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	return kid;
 
 };//»
-const mkFile = async path => {//«
+const mkFile = async (path, opts) => {//«
 	if (!(path && path.match(/^\x2f/))){
 cerr("Need a full path");
 		return;
 	}
 	let arr = await path.toParNodeAndName(path);
 	if (!arr) return;
-	return touchFile(arr[0], arr[1]);
+	return touchFile(arr[0], arr[1], opts);
 };//»
 
 const write_blob = async(fent, blob, opts={}) => {//«

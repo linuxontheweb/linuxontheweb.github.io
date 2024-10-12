@@ -19,6 +19,7 @@ const https = require('https');
 const http = require('http');
 
 const log=(...args)=>{console.log(...args);};
+const cwarn=(...args)=>{console.warn(...args);};
 
 let ws_server, ws_client;
 
@@ -73,7 +74,7 @@ const text_mime = ()=>{return EXT_TO_MIME.txt}
 
 const svc_handler = async(which, args, req, res) => {//«
 
-if (which=="host"){
+if (which=="host"){//«
 	if (req.method == "GET"){
 		if (args.dir){
 			res.end(`dir ${args.dir}`);
@@ -96,7 +97,7 @@ catch(e){
 	no(res, `Write error: ${e.message}`);
 }
 	}
-}
+}//»
 else if (which=="smtp"){//«
 	if (req.method !== "POST") return no(res, "smtp requires a post body");
 	if (!smtp) {
@@ -118,14 +119,36 @@ else if (which=="imap"){//«
 	if (!imap) {
 		imap = require('./svcs/imap.js');
 	}
-	let rv;
-	rv = await imap.getMail();
+	let op = args.op;
+	if (!op){
+		no(res, "no operation was given (need an 'op' argument!)");
+		return;
+	}
+	let func = imap[op];
+	if (!func){
+		no(res, `the function: ${op} does not exist in the imap module`);
+		return;
+	}
+	let rv = await func(args);
 	if (!rv) return no(res, "imap returned an empty respose");
 	if (rv.error) return no(res, rv.error+"");
-	if (!rv.message) return no(res, "imap returned an unknown respose");
-//log(rv);
-	ok(res);
-	res.end(JSON.stringify(rv.message));
+	let succ = rv.success;
+	if (succ){
+		ok(res);
+		if (succ === true) return res.end("OK");
+		if (typeof succ === "string") return res.end(succ);
+		if (typeof succ === "object") return res.end(JSON.stringify(succ));
+cwarn("Converting the return value to a string");
+		res.end(succ+"");
+		return;
+	}
+	no(res, "There was an unknown value (not 'success' or 'error') returned (check the console)");
+log(rv);
+
+//	if (!rv.message) return no(res, "imap returned an unknown respose");
+//	ok(res);
+//	res.end(JSON.stringify(rv.message));
+//	res.end(rv.message);
 }//»
 else no(res, `Bad service: ${which}`);
 

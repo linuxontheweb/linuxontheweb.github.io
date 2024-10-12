@@ -1,3 +1,62 @@
+/*
+10/11/24: Just getting back into the whole command module loading/reloading thing.
+Up to now, it has been quite a complex thing juggling different variables like
+ALL_LIBS, globals.shell_libs, NS.libs, and NS.coms.
+
+Now, ALL_LIBS is the NS.libs object. This is an object like:
+NS.libs={
+	lib1: [com11, com12,...],
+	lib2: [com21, com22, ...]
+}
+
+...where these are lists of command names (string). These commands will *not* be imported
+in case they are already defined within the active shell commands.
+
+Upon successfully importing a command library, each library's exported command functions
+and options (both are objects) are put onto NS.coms, like:
+NS.coms={
+	lib1: {coms: lib1funcs, opts: lib1opts}
+}
+
+ADD_COMS is an array that includes all command libraries to be imported upon terminal
+initialization.
+
+DEL_COMS is used by developers to remove all of the commands from the active
+commands (but not if a particular command WASN'T ACTUALLY IMPORTED by the
+library, e.g. see @CJIUKLEH). Their command options are likewise removed from
+the active command options.
+
+
+
+In terms of status updates, how about just NOT putting the terminal in fullscreen,
+and using the bottom status bar???
+
+
+Now... back to email (see me in mail.js...)!!!
+
+*/
+/*
+
+10/10/24: Want a hotkey that toggles the ondevreload method, rather than using the
+hardcoded variable (USE_ONDEVRELOAD). Done @VMUIRPOIUYT.
+
+Want a dedicated 1-line status bar at the bottom of the screen in "normal" CLI mode
+to allow a place for status messages of long(-ish) term commands processes, that might,
+i.e. be downloading a large file or connecting to some service. This is good for commands
+(like ffmpeg) that are frequently updating their progress. In standard Linux systems,
+the stderr stream is normally used for this kind of updating, but these are not actually
+*errors*, so it doesn't really make any sense to do this.
+
+10/9/24: Updated the entire command importing machinery, and added a ondevreload method
+(depending on the truth of the global USE_ONDEVRELOAD variable), which, if it
+exists, is called by the desktop's win_reload method (instead of reloading the
+actual application window). Using the ALL_LIBS method allows the shell to
+"know" that it must do an implicit import of a given command library
+(@QKIUTOPLK), because all of the commands are initialized as the (string) names
+of the library (@MYKLJDHFK) rather than with the function bodies (they are
+initialized as "true builtins" @FWPORUITJ).
+
+*/
 /*Setting environment variables (10/5/2024):
 
 Normally this is done through .bashrc files, using export. But I don't want to mess with
@@ -108,12 +167,16 @@ that all of the normal piping and redirections should work.
 »*/
 //»
 
+let USE_ONDEVRELOAD = true;
+//let USE_ONDEVRELOAD = false;
+
 //Development mod deleting«
+
 
 const DEL_MODS=[
 //	"util.less",
-	"util.vim",
-	"util.email",
+//	"util.vim",
+//	"util.email",
 //	"webmparser"
 //	"pager"
 ];
@@ -121,7 +184,11 @@ const DEL_COMS=[
 //"audio"
 //	"yt",
 //	"test",
-	"fs",
+//	"fs",
+	"mail"
+];
+const ADD_COMS=[
+	"mail"
 ];
 //»
 
@@ -130,10 +197,11 @@ const DEL_COMS=[
 import { util, api as capi } from "util";
 import { globals } from "config";
 const{strnum, isarr, isstr, isnum, isobj, make, kc, log, jlog, cwarn, cerr}=util;
+const NS = LOTW;
 const {
 	KC,
 	DEF_PAGER_MOD_NAME,
-	NS,
+//	NS,
 	TEXT_EDITOR_APP,
 	LINK_APP,
 	FOLDER_APP,
@@ -142,13 +210,13 @@ const {
 	SHM_TYPE,
 	fs,
 	isMobile,
-	shell_libs,
+//	shell_libs,
 	dev_mode
 } = globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
 const {poperr} = widgets;
-const {normPath}=capi;
+const {normPath, linesToParas, isBool}=capi;
 const {pathToNode}=fsapi;
 
 const HISTORY_FOLDER = `${globals.HOME_PATH}/.history`;
@@ -192,12 +260,11 @@ const FS_COMS=[//«
 	"ln",
 	"vim",
 	"touch",
-//"gunttt"
 //	"mount",
 //	"unmount",
 ];//»
 
-/*
+/*«
 const TEST_COMS=[
 	"test"
 ];
@@ -207,14 +274,19 @@ const YT_COMS=[
 	"ytvid",
 	"ytdl"
 ];
-*/
-const ALL_LIBS = {
+»*/
+const PRELOAD_LIBS = {fs: FS_COMS};
+//const ALL_LIBS = {
 //	audio:["midiup"],
-	fs: FS_COMS,
+//	fs: FS_COMS,
 //	test: TEST_COMS,
 //	yt: YT_COMS
-};
-
+//};
+const ALL_LIBS = NS.libs;
+for (let k in PRELOAD_LIBS){
+	ALL_LIBS[k] = PRELOAD_LIBS[k];
+}
+//log(ALL_LIBS);
 const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 
 //Maximum length of a line entered into the terminal (including lines in scripts)
@@ -628,6 +700,120 @@ const get_libs = async()=>{//«
 	return all;
 };//»
 
+const import_coms = async libname => {//«
+
+	let modpath = libname.replace(/\./g,"/");
+	let v = (Math.random()+"").slice(2,9);
+	let imp = await import(`/coms/${modpath}.js?v=${v}`);
+
+	let coms = imp.coms;
+	let sh_coms = globals.shell_commands;
+	let all = Object.keys(coms);
+	let ok_coms = [];
+	for (let com of all){
+		if (typeof sh_coms[com] === "function") {
+cwarn(`The command ${com} already exists!`);
+			continue;
+		}
+		sh_coms[com] = coms[com];
+		ok_coms.push(com);
+	}
+	ALL_LIBS[libname] = ok_coms;
+cwarn(`Added: ${ok_coms.length} commands from '${libname}'`);
+	let opts = imp.opts;
+	let sh_opts = globals.shell_command_options;
+	all = Object.keys(opts);
+	for (let opt of all){
+		if (sh_opts[opt]){
+cwarn(`The option ${opt} already exists!`);
+			continue;
+		}
+		sh_opts[opt] = opts[opt];
+	}
+	NS.coms[libname] = {coms, opts};
+
+//	NS.libs[libname] = {coms, opts};
+
+}//»
+const do_imports = async(arr, err_cb) => {//«
+	if (!err_cb) err_cb = ()=>{};
+	for (let arg of arr){
+//		if (ALL_LIBS[arg] || NS.libs[arg]) {
+//		if (ALL_LIBS[arg] || shell_libs[arg]) {
+		if (ALL_LIBS[arg]) {
+			err_cb(`${arg}: Already loaded`);
+			continue;
+		}   
+		try{
+			await import_coms(arg);
+		}catch(e){
+			err_cb(`${arg}: Error importing the module`);
+cerr(e);
+		}
+	}
+};//»
+
+const delete_coms = arr => {//«
+	let sh_coms = globals.shell_commands;
+	let sh_opts = globals.shell_command_options;
+	for (let libname of arr){
+
+if (!ALL_LIBS[libname]){
+cwarn(`The command library: ${libname} is not loaded`);
+continue;
+}
+
+		let lib = NS.coms[libname];
+		if (!lib){
+cwarn(`The command library: ${libname} was in ALL_LIBS, but not in NS.coms!?!?!`);
+			continue;
+		}
+		let coms = lib.coms;
+		let all = Object.keys(coms);
+		let num_deleted = 0;
+		for (let com of all){
+//CJIUKLEH
+			if (sh_coms[com] !== coms[com]){
+cwarn(`The command ${com} is not owned by lib: ${libname}!!`);
+				continue;
+			}
+			delete sh_coms[com];
+			num_deleted++;
+		}
+cwarn(`Deleted: ${num_deleted} commands from '${libname}'`);
+		let opts = lib.opts;
+		all = Object.keys(opts);
+		for (let opt of all){
+			if (sh_opts[opt] !== opts[opt]){
+cwarn(`The option ${opt} is not owned by lib: ${libname}!!`);
+				continue;
+			}
+			delete sh_opts[opt];
+		}
+		delete ALL_LIBS[libname];
+		delete NS.coms[libname];
+	}
+};//»
+const delete_mods=(arr)=>{//«
+	for (let m of arr){
+		let scr = document.getElementById(`script_mods.${m}`);
+		if (scr) {
+			scr._del();
+		}
+else{
+cwarn(`The module ${m} was not loaded!`);
+continue;
+}
+		delete NS.mods[m];
+cwarn(`Deleted module: ${m}`);
+	}
+}//»
+const delete_mods_and_coms=()=>{//«
+	delete_mods(DEL_MODS);
+	delete_coms(DEL_COMS);
+};//»
+
+/*
 const lines_to_paras = lns => {//«
 	let paras = [];
 	let curln = "";
@@ -647,7 +833,7 @@ const lines_to_paras = lns => {//«
 	if (curln) paras.push(curln);
 	return paras;
 }//»
-
+*/
 //»
 
 //Builtin commands«
@@ -660,6 +846,7 @@ const com_ = async(args, o)=>{
 };
 */
 
+/*
 const com_smtp = async(args, o)=>{//«
 // smtp   email_text_file_path   to   Subject goes here...
 // echo   Here is the email text...  |  smtp   to   Subject goes here...
@@ -707,10 +894,13 @@ cwarn(txt);
 
 };//»
 const com_imap = async(args, o)=>{//«
-
-	let rv = await fetch(`/_imap`);
+	let which = args.shift();
+	let url = '/_imap';
+	if (which) url += `?seq=${which}`;
+	let rv = await fetch(url);
 	let out = await rv.text();
 	if (!rv.ok) {
+log(out);
 		let val = out.split("\n")[0];
 		return {err: out};
 	}
@@ -719,32 +909,74 @@ const com_imap = async(args, o)=>{//«
 };//»
 const com_email = async(args, o)=>{//«
 
-/*
 
-l:{adduser:3,deluser:3,setuser:3}
+//l:{adduser:3,deluser:3,setuser:3}
 
-For adduser, deluser, and curuser options (and other administration tasks), we can send
-this information into init, which can take care of the users/curuser file (and the
-table adding/deleting if needed), and then return before invoking init_new_screen/set_screen.
+//For adduser, deluser, and curuser options (and other administration tasks), we can send
+//this information into init, which can take care of the users/curuser file (and the
+//table adding/deleting if needed), and then return before invoking init_new_screen/set_screen.
 
-adduser: add to the users file and make the tables
-deluser: rm from the users file and delete the tables (after a prompt screen)
-setuser: write the given user email to the curuser file, and use this user for the next session. 
-This must be checked against available users who were added with adduser.
+//adduser: add to the users file and make the tables
+//deluser: rm from the users file and delete the tables (after a prompt screen)
+//setuser: write the given user email to the curuser file, and use this user for the next session. 
+//This must be checked against available users who were added with adduser.
 
-*/
+
+	let address = args.shift();//«
+	let err;
+	if (!address) err="No address given";
+	else{
+		address = address.toLowerCase();
+		let arr = address.split("@");
+		if (!(arr.length==2 && arr[0] && arr[1])) err="Invalid address code #1";
+		else{
+			let user = arr[0];
+			if (!user.match(/^[a-z]([-_a-z0-9]*[a-z0-9])?$/)) err = "Invalid address code #2";
+			if (user.match(/[-_][-_]/)) err = "Invalid address code #6";
+
+			let domain = arr[1];
+			let domain_arr = domain.split(".");
+			if (domain_arr.length < 2) err = "Invalid address code #3";
+			else{
+				let tld = domain_arr.pop();
+				if (!tld.match(/^[a-z]{2,}$/)) err = "Invalid address code #4";
+				else{
+					for (let dom of domain_arr){
+						if (!dom.match(/^[a-z]([-_a-z0-9]*[a-z0-9])?$/)){
+							err = "Invalid address code #5";
+						}
+						if (dom.match(/[-_][-_]/)) err = "Invalid address code #7";
+						if (err) break;
+					}
+				}
+			}
+		}
+	}//»
+	if (err) return {err};
 
 	const {term, opts, stdin, command_str} = o;
+
+	let add = opts.add || opts.a;
+	let del = opts.del || opts.d;
+
+	if (add && del) return {err: "The 'add' and 'del' options were both specified!"}
+
+	let op;
+	if (add) op="add";
+	else if (del) op="del";
+
     if (!await capi.loadMod("util.email")) {
         return {err: "Could not load the email module"};
     }
     let email = new NS.mods["util.email"](term);
-    let rv = await email.init({command: command_str});
+    let rv = await email.init(address,{command_str, op});
     if (isstr(rv)){
         return {err: rv};
     }
 
 };//»
+*/
+
 const com_termlines=(args,o)=>{//«
 	const {term, opts, stdin} = o;
 	let idstr = args.shift();
@@ -1114,10 +1346,12 @@ const com_lib = async(args, o)=>{//«
 	if (got){
 		return {out: Object.keys(got)};
 	}
+	let orig = lib;
 	lib = lib.replace(/\./g,"/");
 	let path = `/coms/${lib}.js`;
 	try{
 		const coms = (await import(path)).coms;
+		NS.coms[orig] = coms;
 		return {out: Object.keys(coms)};
 	}catch(e){
 cerr(e);
@@ -1128,31 +1362,7 @@ const com_import=async(args, opts)=>{//«
 	let {term}=opts;
 	let err = [];
 	const terr=(arg)=>{err.push(arg);};
-	for (let arg of args){
-		if (ALL_LIBS[arg] || NS.coms[arg]) {
-			terr(`${arg}: Already loaded`);
-			continue;
-		}   
-		try{
-			let modpath = arg.replace(/\./g,"/");
-			const coms = (await import(`/coms/${modpath}.js`)).coms;
-			NS.coms[arg] = coms;
-			let iter=0;
-			for (let com in coms){
-				if (shell_commands[com]){
-					terr(`${com}: already exists`);
-					continue;
-				}   
-				shell_commands[com] = coms[com];
-				iter++;
-			}
-			terr(`imported ${iter} commands from '${arg}'`);
-			BUILTINS = shell_commands._keys;
-		}catch(e){
-			terr(`${arg}: Error importing the module`);
-cerr(e);
-		}
-	}
+	await do_imports(args, terr);
 	return {err};
 };//»
 
@@ -1410,14 +1620,6 @@ Long options may be given an argument like this:
 ~$ dosomething --like-this="Right here" to_some.json
 
 */
-//	ssh:{//«
-//		s:{c:1, s:1, x:1, i: 1},
-//		l:{client: 1, server: 1}
-//	},//»
-email:{
-//	s:{a:1,d:1},
-	l:{adduser:3,deluser:3,setuser:3}
-},
 	ls: {//«
 		s: {
 			a: 1,
@@ -1431,6 +1633,11 @@ email:{
 			recursive: 1
 		}
 	},//»
+	read:{l:{prompt:3}},
+
+
+/*«
+
 	rm: {//«
 		s:{
 			r:1, R:1
@@ -1460,17 +1667,27 @@ email:{
 	},//»
 	less:{l:{parsel:1}},
 	dl:{s:{n:3,},l:{name:2}},
-	read:{l:{prompt:3}},
-	ytsrch:{s:{v:1, c:1, p:1},l:{video:1,channel:1,playlist:1}},
-	ytthing:{l:{list:1,items:1,channel:1}},
-	ytdl:{s:{p:3, n:1},l:{port:3,name:1}},
+
+//	ssh:{//«
+//		s:{c:1, s:1, x:1, i: 1},
+//		l:{client: 1, server: 1}
+//	},//»
+//	ytsrch:{s:{v:1, c:1, p:1},l:{video:1,channel:1,playlist:1}},
+//	ytthing:{l:{list:1,items:1,channel:1}},
+//	ytdl:{s:{p:3, n:1},l:{port:3,name:1}},
+	email:{
+		s:{a:1,d:1},
+		l:{add:1,del:1},
+	},
 	smtp:{
 		s:{p:1},
 		l:{"to-paras":1}
 	}
+»*/
 
 };//»
 
+//FWPORUITJ
 const shell_commands={//«
 curcol: com_curcol, 
 parse: com_parse,
@@ -1495,9 +1712,9 @@ app:com_app,
 appicon:com_appicon,
 open:com_open,
 msleep: com_msleep,
-email: com_email,
-imap: com_imap,
-smtp: com_smtp,
+//email: com_email,
+//imap: com_imap,
+//smtp: com_smtp,
 //pokerruns: com_pokerruns,
 //pokerhands: com_pokerhands,
 //termlines: com_termlines,
@@ -1512,24 +1729,42 @@ shell_commands.test = com_test;
 }
 
 
-for (let coms in NS.coms){
-	for (let com in coms){
-		if (!shell_commands[com]){
-			shell_commands[com] = coms[com];
-			continue;
-		}
-	}
-}
+//for (let coms in NS.coms){
+//	for (let com in coms){
+//		if (!shell_commands[com]){
+//			shell_commands[com] = coms[com];
+//			continue;
+//		}
+//	}
+//}
+
 //»
 
 //Init«
-for (let k in ALL_LIBS){
-	let arr = ALL_LIBS[k];
-	for (let com of arr) shell_commands[com]=k;
+
+//MYKLJDHFK
+for (let k in PRELOAD_LIBS){
+
+	let arr = PRELOAD_LIBS[k];
+	for (let com of arr) {
+if (shell_commands[com]){
+cwarn(`The shell command: ${com} already exists (also defined in PRELOAD_LIBS: ${k})`);
+continue;
+}
+		shell_commands[com]=k;
+	}
 
 }
 
-let BUILTINS = shell_commands._keys;
+const active_commands = globals.shell_commands || shell_commands;
+if (!globals.shell_commands) globals.shell_commands = shell_commands;
+//const active_commands = globals.shell_commands ? (globals.shell_commands) :
+
+//let BUILTINS = active_commands._keys;
+
+const active_options = globals.shell_command_options || command_options;
+if (!globals.shell_command_options) globals.shell_command_options = command_options;
+
 
 //»
 
@@ -2124,25 +2359,23 @@ q 1Aq 2q 3B q 4Cq       5Dq 6
 					}
 				}
 				let usecomword = alias||comword;
-				let com = shell_commands[usecomword];
-
-//If we have a string rather than a function, do the command library importing routine
-				if (isstr(com)){//«
-					let lib = shell_libs[com];
-					if (!lib){
-						try{
-							let r = (Math.random()+"").slice(12);
-							lib = (await import(`/coms/${com}.js?v=${r}`)).coms;
-							if (can()) return;
-						}catch(e){
-							if (can()) return;
+				let com = active_commands[usecomword];
+//If we have a string rather than a function, do the command library importing routine.
+//The string is always the name of the library (rather than the command)
+//This happens when: 
+//1) libraries are defined in PRELOAD_LIBS, and 
+//2) this is the first invocation of a command from one of those libraries.
+				if (isstr(com)){//QKIUTOPLK«
+					try{
+						await import_coms(com);//com is the library name
+						if (can()) return;
+					}catch(e){
+						if (can()) return;
 cerr(e);
-							terr(`sh: command library: '${com}' could not be loaded`);
-							return ++add_rows;
-						}
-						shell_libs[com] = lib;
+						terr(`sh: command library: '${com}' could not be loaded`);
+						return ++add_rows;
 					}
-					let gotcom = lib[usecomword];
+					let gotcom = active_commands[usecomword];
 					if (!(gotcom instanceof Function)){
 						terr(`sh: '${usecomword}' is invalid or missing in command library: '${com}'`);
 						return ++add_rows;
@@ -2187,7 +2420,7 @@ cerr(e);
 
 //Look for the command's options
 				let opts;
-				let gotopts = command_options[usecomword];
+				let gotopts = active_options[usecomword];
 
 //Parse the options and fail if there is an error message
 				rv = get_options(arr, usecomword, gotopts);
@@ -2366,6 +2599,7 @@ const {main, Desk} = Win;
 const topwin = Win;
 const winid = topwin.id;
 const termobj = this;
+const Term = this;
 //this.appClass = "cli";
 let appclass = "cli";
 
@@ -2692,6 +2926,25 @@ main.appendChild(areadiv);
 
 //Util«
 
+const do_delete_mods = () => {//«
+	delete_mods();
+/*
+	let s="";
+	if (DEL_MODS.length) s+=`Deleting mods: ${DEL_MODS.join(",")}`;
+	if (DEL_COMS.length) {
+		if (s) s+="\n";
+		s+=`Deleting coms: ${DEL_COMS.join(",")}`;
+	}
+	if (s){
+		delete_mods();
+		if (this.reInit) {
+			this.reInit.addMessage=s;
+		}
+		cwarn(`${s}`);
+//		else do_overlay(s);
+	}
+*/
+}//»
 
 const get_line_from_pager=async(arr, name)=>{//«
 
@@ -3037,34 +3290,6 @@ const focus_or_copy=()=>{//«
 	else do_clipboard_copy();
 };//»
 
-const delete_mods=()=>{//«
-	for (let m of DEL_MODS){
-		let scr = document.getElementById(`script_mods.${m}`);
-		if (scr) scr._del();
-		delete NS.mods[m];
-		NS.mods[m]=undefined;
-	}
-	for (let m of DEL_COMS){
-		delete shell_libs[m];
-	}
-};//»
-const do_delete_mods = () => {//«
-	let s="";
-	if (DEL_MODS.length) s+=`Deleted mods: ${DEL_MODS.join(",")}`;
-	if (DEL_COMS.length) {
-		if (s) s+="\n";
-		s+=`Deleted coms: ${DEL_COMS.join(",")}`;
-	}
-	if (s){
-		delete_mods();
-		if (this.reInit) {
-			this.reInit.addMessage=s;
-			cwarn(`${s}`);
-		}
-		else do_overlay(s);
-	}
-}//»
-
 const get_homedir=()=>{//«
 	if (root_state) return "/";
 	return globals.HOME_PATH;
@@ -3099,7 +3324,7 @@ const get_buffer = (if_str)=>{//«
 
 	if (actor && (PARAGRAPH_SELECT_MODE || actor.parSel)){//Paragraph select mode
 		if (if_str) ret = ret.split("\n");
-		ret = lines_to_paras(ret);
+		ret = linesToParas(ret);
 		if (if_str) ret = paras.join("\n");
 		else ret = paras;
 	}
@@ -4446,11 +4671,12 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 	let nogood = null;
 	if (!(!got_path && (tokpos==1||(tokpos>1 && com_completers.includes(tok0))))) return do_get_dir_contents(use_dir, tok, tok0, arr_pos);
 	if (tokpos==1) {
-		contents = await get_command_arr(use_dir, BUILTINS, tok)
+//		contents = await get_command_arr(use_dir, BUILTINS, tok)
+		contents = await get_command_arr(use_dir, Object.keys(active_commands), tok)
 	}
 	else {
 		if (tok0 == "help"){
-			contents = await get_command_arr(use_dir, BUILTINS, tok)
+			contents = await get_command_arr(use_dir, Object.keys(active_commands), tok)
 		}
 		else if (tok0 == "lib" || tok0 == "import"){
 			contents = await get_command_arr(use_dir, await capi.getList("/site/coms/"), tok)
@@ -5073,7 +5299,7 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	}//»
 	else if (sym == "l_A"){
 //	else if (sym=="l_A") log(line_colors);
-		do_delete_mods();
+//		do_delete_mods();
 	}
 	else if (sym == "g_CAS"){
 		save_special_command();
@@ -5083,6 +5309,14 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	}
 	else if (sym=="s_CAS"){
 		select_from_history(HISTORY_PATH_SPECIAL);
+	}
+	else if (sym=="r_CAS"){
+
+//VMUIRPOIUYT
+if (Term.ondevreload) delete Term.ondevreload;
+else Term.ondevreload = ondevreload;
+log(`ondevreload == ${!!Term.ondevreload}`);
+
 	}
 };
 //»
@@ -5185,7 +5419,9 @@ const init = async(appargs={})=>{
 	resize();
 	let {reInit} = appargs;
 	if (!reInit) reInit = {};
-	let {termBuffer, addMessage, commandStr, histories} = reInit;
+	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
+	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
+cwarn("USE_ONDEVRELOAD", USE_ONDEVRELOAD);
 //	let gotbuf = reInit.termBuffer;
 	if (termBuffer) history = termBuffer;
 	else {
@@ -5215,10 +5451,14 @@ const init = async(appargs={})=>{
 	this.shell = shell;
 	set_prompt();
 	render();
+	await do_imports(ADD_COMS, cwarn);
 	if (commandStr) {
 		for (let c of commandStr) handle_letter_press(c); 
 		handle_enter();
 	};
+
+	if (USE_ONDEVRELOAD) Term.ondevreload = ondevreload;
+
 };
 
 //»
@@ -5227,7 +5467,6 @@ const init = async(appargs={})=>{
 let read_line_cb;
 let read_line_prompt_len;
 let getch_cb;
-
 this.getch = async(promptarg)=>{//«
 	if (promptarg){
 		for (let ch of promptarg) handle_letter_press(ch);
@@ -5276,6 +5515,24 @@ this.onsave=()=>{//«
 //	if (editor) editor.save();
 	if (actor && actor.save) actor.save();
 }//»
+const ondevreload = async() => {//«
+cwarn("Deleting coms...", DEL_COMS);
+//log(DEL_COMS);
+	delete_coms(DEL_COMS);
+/*«
+	for (let m of DEL_COMS){
+		let lib = shell_libs[m];
+		if (!lib) {
+cwarn(`The command library: ${m} does not exist!`)
+			continue;
+		}
+		lib.delComs();
+		delete shell_libs[m];
+		delete ALL_LIBS[m];
+	}
+»*/
+	await do_imports(ADD_COMS, cerr);
+};//»
 
 this.onkill = (if_dev_reload)=>{//«
 	execute_kill_funcs();
@@ -5288,12 +5545,14 @@ this.onkill = (if_dev_reload)=>{//«
 
 	this.reInit={
 		termBuffer: history,
+		useOnDevReload: !!Term.ondevreload
 	};
 //	let actor = editor||pager;
 	if (actor) {
 		this.reInit.commandStr = actor.command_str;
 	}
-	do_delete_mods();
+//	do_delete_mods();
+	delete_mods_and_coms();
 	save_history();
 
 }//»

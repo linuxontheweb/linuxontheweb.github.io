@@ -279,6 +279,25 @@ a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
 while(i<L && a1.charAt(i)=== a2.charAt(i)) i++;
 return a1.substring(0, i);
 }
+const linesToParas = lns => {//«
+	let paras = [];
+	let curln = "";
+	for (let ln of lns){
+		if (ln.match(/^\s*$/)){
+			if (curln) {
+				paras.push(curln);
+				curln = "";
+			}
+			paras.push("");
+			continue;
+		}
+		if (ln.match(/-\s*$/)) ln = ln.replace(/-\s+$/,"-");
+		else ln = ln.replace(/\s*$/," ");
+		curln = curln + ln;
+	}
+	if (curln) paras.push(curln);
+	return paras;
+}//»
 return {
 //This turns an arbitrarily deep folder of folders and '.js' files into a list of dotted names
 getList: async(path)=>{//«
@@ -307,6 +326,7 @@ getList: async(path)=>{//«
 lowToHigh:(a,b)=>{if (a<b) return -1; else if (a>b) return 1; return 0;},
 highToLow:(a,b)=>{if (a<b) return 1; else if (a>b) return -1; return 0;},
 dist,
+linesToParas,
 //detectClick,
 //detectSwipe,
 sharedStart,

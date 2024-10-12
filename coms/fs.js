@@ -14,6 +14,10 @@ const {pathToNode}=fsapi;
 //Var«
 //To allow writing of files even if there is an external lock on it, change this to true
 const allow_write_locked = false;
+
+const shell_commands = globals.shell_commands;
+const command_options = globals.shell_command_options;
+
 //»
 
 //Funcs«
@@ -785,4 +789,37 @@ touch:com_touch,
 //unmount: com_unmount,
 }//»
 
+export const opts = {
+
+	rm: {//«
+		s:{
+			r:1, R:1
+		},
+		l:{
+			recursive: 1
+		}
+	},//»
+	vim:{//«
+		l: {
+			parsel: 1,
+			nosave: 1,
+			one: 1,
+			insert: 1,
+			enterquit: 1,
+			"convert-markers": 1,
+			"text-input-win": 3,
+			"reload-win": 3,
+			symbols: 3,
+			'keylog-file': 3,
+			'num-keylog-steps':3,
+//			"is-meta-app": 1,
+//			'switch-lns-win': 3,
+//			'meta-com-win': 3,
+//			'meta-com-args': 3,
+		}
+	},//»
+	less:{l:{parsel:1}},
+	dl:{s:{n:3,},l:{name:2}}
+
+}
 

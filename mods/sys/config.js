@@ -7,7 +7,13 @@
 
 //window.__OS_NS__="_OS_";
 const api={};
-const NS = {apps:{}, mods:{}, api, coms:{}};
+
+/*
+libs holds the "newable" command library functions (with addComs and delComs members)
+coms holds the literal objects that map command names to their functions
+*/
+
+const NS = {apps:{}, mods:{}, api, libs:{}, coms: {}};
 window.LOTW = NS;
 //window[__OS_NS__]= NS;
 
@@ -431,6 +437,7 @@ export const globals = {//«
 	MAX_TEXTAREA_BYTES,
 
 	ALWAYS_PREVENT,
+	dbs:{},//database handles
 	mods: {},
 	apps: {},
 	shell_libs: {},

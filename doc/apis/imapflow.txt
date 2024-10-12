@@ -55,7 +55,8 @@ new ImapFlow(options)//«
 	verifyOnly: <Boolean If true then logs out automatically after successful 
 					authentication>,
 
-	proxy: 		<Boolean Optional proxy URL. Supports HTTP CONNECT (http://, https://) and SOCKS (socks://, socks4://, socks5://) proxies>,
+	proxy: 		<Boolean Optional proxy URL. Supports HTTP CONNECT (http://, https://) 
+					and SOCKS (socks://, socks4://, socks5://) proxies>,
 
 	qresync: 	<Boolean If true, then enables QRESYNC support. 
 					EXPUNGE notifications will include uid property instead of seq>,
@@ -119,7 +120,9 @@ Module version
 Methods//«
 
 (async) noop() → {Promise.<void>}//«
+
 Performs a no-op call against server
+
 //»
 close()//«
 Closes TCP connection without notifying the server.
@@ -131,7 +134,12 @@ await client.connect();
 client.close();
 //»
 (async) idle() → {Promise.<Boolean>}//«
-Starts listening for new or deleted messages from the currently opened mailbox. Only required if ImapFlow#disableAutoIdle is set to true otherwise IDLE is started by default on connection inactivity. NB! If idle() is called manually then it does not return until IDLE is finished which means you would have to call some other command out of scope.
+
+Starts listening for new or deleted messages from the currently opened mailbox.
+Only required if ImapFlow#disableAutoIdle is set to true otherwise IDLE is
+started by default on connection inactivity. NB! If idle() is called manually
+then it does not return until IDLE is finished which means you would have to
+call some other command out of scope.
 
 EXAMPLE
 let mailbox = await client.mailboxOpen('INBOX');
@@ -174,8 +182,7 @@ you try to call multiple fetch or store commands.
 
 PARAMETERS:
 Name	Type	Attributes	Description
-path	string | array		
-Path for the mailbox to open
+path	string | array		Path for the mailbox to open
 
 options	Object	<optional>
 optional options
@@ -216,32 +223,37 @@ console.log(quota.storage.used, quota.storage.available)
 
 //»
 
-(async, generator) fetch(range, query, optionsopt)//«
+(async) fetch(range, query, optionsopt)//«
 
-Fetch messages from currently opened mailbox
+Fetch messages from currently opened mailbox.
 
 PARAMETERS:
 
 Name	Type				Description
-range	SequenceString |	Range of messages to fetch //«
+---------------------------------------
+
+range	SequenceString |	Range or search parameters of messages to fetch 
 		Array.<Number> | 
 		SearchObject		
-//»
-query	FetchQueryObject				Fetch query
 
-options	Object				<optional>	(See Table below)//«
+query	FetchQueryObject	Fetch query (what parts/fields to include in the message response)
 
-Description Table//«
+options	Object				(See Table below)//«
+
+Description Table
+
 PROPERTIES
-Name			Type	Attributes	Description
-uid				Boolean	<optional>  If true then uses UID numbers 
-									instead of sequence numbers for range
 
-changedSince	BigInt	<optional>	If set then only messages with a higher modseq 
-									value are returned. Ignored if server does 
-									not support CONDSTORE extension.
+Name			Type	Description
+-----------------------------------
 
-//»
+uid				Boolean	If true then uses UID numbers 
+						instead of sequence numbers for range
+
+changedSince	BigInt	If set then only messages with a higher modseq 
+						value are returned. Ignored if server does 
+						not support CONDSTORE extension.
+
 
 //»
 
@@ -285,82 +297,6 @@ console.log(lastMsg.uid);
 //»
 
 //»
-(async) list() → {Promise.<Array.<ListResponse>>}//«
-Lists available mailboxes as an Array
-
-EXAMPLE
-let list = await client.list();
-list.forEach(mailbox=>console.log(mailbox.path));
-//»
-(async) listTree() → {Promise.<ListTreeResponse>}//«
-Lists available mailboxes as a tree structured object
-
-EXAMPLE
-let tree = await client.listTree();
-tree.folders.forEach(mailbox=>console.log(mailbox.path));
-//»
-(async) search(query, optionsopt) → {Promise.<Array.<Number>>}//«
-Search messages from currently opened mailbox
-
-PARAMETERS:
-Name	Type	Attributes	Description
-query	SearchObject		
-Query to filter the messages
-
-options	Object	<optional>
-PROPERTIES
-Name	Type	Attributes	Description
-uid	Boolean	<optional>
-If true then returns UID numbers instead of sequence numbers
-
-EXAMPLE
-let mailbox = await client.mailboxOpen('INBOX');
-// find all unseen messages
-let list = await client.search({seen: false});
-// use OR modifier (array of 2 or more search queries)
-let list = await client.search({
-  seen: false,
-  or: [
-    {flagged: true},
-    {from: 'andris'},
-    {subject: 'test'}
-  ]});
-//»
-(async) status(path, query) → {Promise.<StatusObject>}//«
-Requests the status of the indicated mailbox. Only requested status values will be returned.
-
-PARAMETERS:
-Name	Type	Description
-path	String	
-mailbox path to check for
-
-query	Object	
-defines requested status items
-
-PROPERTIES
-Name	Type	Description
-messages	Boolean	
-if true request count of messages
-
-recent	Boolean	
-if true request count of messages with \Recent tag
-
-uidNext	Boolean	
-if true request predicted next UID
-
-uidValidity	Boolean	
-if true request mailbox UIDVALIDITY value
-
-unseen	Boolean	
-if true request count of unseen messages
-
-highestModseq	Boolean	
-if true request last known modseq value
-
-EXAMPLE
-let status = await client.status('INBOX', {unseen: true});
-console.log(status.unseen);
-//»
 (async) download(range, partopt, optionsopt) → {Promise.<DownloadObject>}//«
 
 Download either full rfc822 formated message or a specific bodystructure part
@@ -397,6 +333,68 @@ let {meta, content} = await client.download('*', '1.2');
 content.pipe(fs.createWriteStream(meta.filename));
 
 //»
+(async) search(query, optionsopt) → {Promise.<Array.<Number>>}//«
+Search messages from currently opened mailbox
+
+PARAMETERS:
+Name	Type	Attributes	Description
+query	SearchObject		
+Query to filter the messages
+
+options	Object	<optional>
+PROPERTIES
+Name	Type	Attributes	Description
+uid	Boolean	<optional>
+If true then returns UID numbers instead of sequence numbers
+
+EXAMPLE
+let mailbox = await client.mailboxOpen('INBOX');
+// find all unseen messages
+let list = await client.search({seen: false});
+// use OR modifier (array of 2 or more search queries)
+let list = await client.search({
+  seen: false,
+  or: [
+    {flagged: true},
+    {from: 'andris'},
+    {subject: 'test'}
+  ]});
+//»
+(async) status(path, query) → {Promise.<StatusObject>}//«
+
+Requests the status of the indicated mailbox. Only requested status values will be returned.
+
+PARAMETERS:
+
+Name	Type	Description
+---------------------------
+
+path	String	mailbox path to check for
+
+query	Object	defines requested status items
+
+		PROPERTIES
+
+		Name			Type		Description
+		---------------------------------------
+
+		messages		Boolean		if true request count of messages
+
+		unseen			Boolean		if true request count of unseen messages
+
+		recent			Boolean		if true request count of messages with \Recent tag
+
+		uidNext			Boolean		if true request predicted next UID
+
+		uidValidity		Boolean		if true request mailbox UIDVALIDITY value
+
+		highestModseq	Boolean		if true request last known modseq value
+
+EXAMPLE
+let status = await client.status('INBOX', {unseen: true});
+console.log(status.unseen);
+
+//»
 (async) append(path, content, flagsopt, idateopt) → {Promise.<AppendResponseObject>}//«
 
 Appends a new message to a mailbox
@@ -420,126 +418,27 @@ EXAMPLE
 await client.append('INBOX', rawMessageBuffer, ['\\Seen'], new Date(2000, 1, 1));
 
 //»
+(async) list() → {Promise.<Array.<ListResponse>>}//«
 
-(async) mailboxClose() → {Promise.<Boolean>}//«
-Closes a previously opened mailbox
-
-EXAMPLE
-let mailbox = await client.mailboxOpen('INBOX');
-await client.mailboxClose();
-//»
-(async) mailboxCreate(path) → {Promise.<MailboxCreateResponse>}//«
-Creates a new mailbox folder and sets up subscription for the created mailbox. Throws on error.
-
-PARAMETERS:
-Name	Type	Description
-path	string | array	
-Full mailbox path. Unicode is allowed. If value is an array then it is joined using current delimiter symbols. Namespace prefix is added automatically if required.
-
-THROWS:
-Will throw an error if mailbox can not be created
+Lists available mailboxes as an Array
 
 EXAMPLE
-let info = await client.mailboxCreate(['parent', 'child']);
-console.log(info.path);
-// "INBOX.parent.child" // assumes "INBOX." as namespace prefix and "." as delimiter
-//»
-(async) mailboxDelete(path) → {Promise.<MailboxDeleteResponse>}//«
-Deletes a mailbox. Throws on error.
-
-PARAMETERS:
-Name	Type	Description
-path	string | array	
-Path for the mailbox to delete. Unicode is allowed. If value is an array then it is joined using current delimiter symbols. Namespace prefix is added automatically if required.
-
-THROWS:
-Will throw an error if mailbox does not exist or can not be deleted
-
-EXAMPLE
-let info = await client.mailboxDelete('Important stuff ❗️');
-console.log(info.path);
-// "INBOX.Important stuff ❗️" // assumes "INBOX." as namespace prefix
-//»
-(async) mailboxOpen(path, optionsopt) → {Promise.<MailboxObject>}//«
-
-Opens a mailbox to access messages. You can perform message operations only
-against an opened mailbox. Using getMailboxLock() instead of mailboxOpen() is
-preferred. Both do the same thing but next getMailboxLock() call is not
-executed until previous one is released.
-
-PARAMETERS:
-Name	Type	Attributes	Description
-path	string | array		
-Path for the mailbox to open
-
-options	Object	<optional>
-optional options
-
-PROPERTIES
-Name	Type	Attributes	Default	Description
-readOnly	Boolean	<optional>
-false	
-If true then opens mailbox in read-only mode. You can still try to perform write operations but these would probably fail.
-
-THROWS:
-Will throw an error if mailbox does not exist or can not be opened
-
-EXAMPLE
-let mailbox = await client.mailboxOpen('Important stuff ❗️');
-console.log(mailbox.exists);
-// 125
-//»
-(async) mailboxRename(path, newPath) → {Promise.<MailboxRenameResponse>}//«
-Renames a mailbox. Throws on error.
-
-PARAMETERS:
-Name	Type	Description
-path	string | array	
-Path for the mailbox to rename. Unicode is allowed. If value is an array then it is joined using current delimiter symbols. Namespace prefix is added automatically if required.
-
-newPath	string | array	
-New path for the mailbox
-
-THROWS:
-Will throw an error if mailbox does not exist or can not be renamed
-
-EXAMPLE
-let info = await client.mailboxRename('parent.child', 'Important stuff ❗️');
-console.log(info.newPath);
-// "INBOX.Important stuff ❗️" // assumes "INBOX." as namespace prefix
-//»
-(async) mailboxSubscribe(path) → {Promise.<Boolean>}//«
-
-Subscribes to a mailbox
-
-PARAMETERS:
-Name	Type	Description
-path	string | array	
-
-Path for the mailbox to subscribe to. Unicode is allowed. If value is an array
-then it is joined using current delimiter symbols. Namespace prefix is added
-automatically if required.
-
-EXAMPLE
-await client.mailboxSubscribe('Important stuff ❗️');
+let list = await client.list();
+list.forEach(mailbox=>console.log(mailbox.path));
 
 //»
-(async) mailboxUnsubscribe(path) → {Promise.<Boolean>}//«
-Unsubscribes from a mailbox
+(async) listTree() → {Promise.<ListTreeResponse>}//«
 
-PARAMETERS:
-Name	Type	Description
-path	string | array	
-
-Path for the mailbox to unsubscribe from. Unicode is allowed. If value is an
-array then it is joined using current delimiter symbols. Namespace prefix is
-added automatically if required.
+Lists available mailboxes as a tree structured object
 
 EXAMPLE
-await client.mailboxUnsubscribe('Important stuff ❗️');
+let tree = await client.listTree();
+tree.folders.forEach(mailbox=>console.log(mailbox.path));
+
 //»
 
 (async) messageCopy(range, destination, optionsopt) → {Promise.<CopyResponseObject>}//«
+
 Copies messages from current mailbox to destination mailbox
 
 PARAMETERS:
@@ -561,17 +460,18 @@ await client.mailboxOpen('INBOX');
 // copy all messages to a mailbox called "Backup" (must exist)
 let result = await client.messageCopy('1:*', 'Backup');
 console.log('Copied %s messages', result.uidMap.size);
-//»
-(async) messageDelete(range, optionsopt) → {Promise.<Boolean>}//«
 
-Delete messages from currently opened mailbox. Method does not indicate info
-about deleted messages, instead you should be using ImapFlow#expunge event for
-this
+//»
+(async) messageMove(range, destination, optionsopt) → {Promise.<CopyResponseObject>}//«
+Moves messages from current mailbox to destination mailbox
 
 PARAMETERS:
 Name	Type	Attributes	Description
 range	SequenceString | Array.<Number> | SearchObject		
-Range to filter the messages
+Range of messages to move
+
+destination	String		
+Mailbox path to move the messages to
 
 options	Object	<optional>
 PROPERTIES
@@ -580,12 +480,36 @@ uid	Boolean	<optional>
 If true then uses UID SequenceString instead of sequence numbers
 
 EXAMPLE
+await client.mailboxOpen('INBOX');
+// move all messages to a mailbox called "Trash" (must exist)
+let result = await client.messageMove('1:*', 'Trash');
+console.log('Moved %s messages', result.uidMap.size);
+//»
+(async) messageDelete(range, optionsopt) → {Promise.<Boolean>}//«
+
+Delete messages from currently opened mailbox. Method does not indicate info
+about deleted messages, instead you should be using ImapFlow#expunge event for
+this
+
+PARAMETERS:
+Name	Type												Description
+range	SequenceString | Array.<Number> | SearchObject		Range to filter the messages
+
+options	Object	
+PROPERTIES
+Name	Type	Description
+uid		Boolean	If true then uses UID SequenceString instead of sequence numbers
+
+EXAMPLE
 let mailbox = await client.mailboxOpen('INBOX');
 // delete all seen messages
 
 await client.messageDelete({seen: true});
+
 //»
+
 (async) messageFlagsAdd(range, Array, optionsopt) → {Promise.<Boolean>}//«
+
 Adds flags for a message or message range
 
 PARAMETERS:
@@ -603,7 +527,8 @@ uid	Boolean	<optional>
 If true then uses UID SequenceString instead of sequence numbers
 
 unchangedSince	BigInt	<optional>
-If set then only messages with a lower or equal modseq value are updated. Ignored if server does not support CONDSTORE extension.
+If set then only messages with a lower or equal modseq value are updated. 
+Ignored if server does not support CONDSTORE extension.
 
 useLabels	Boolean	<optional>
 false	
@@ -612,9 +537,40 @@ If true then update Gmail labels instead of message flags
 EXAMPLE
 let mailbox = await client.mailboxOpen('INBOX');
 // mark all unseen messages as seen (and keep other flags as is)
-await client.messageFlagsAdd({seen: false}, ['\Seen]);
+await client.messageFlagsAdd({seen: false}, ['\Seen']);
+
+//»
+(async) messageFlagsSet(range, Array, optionsopt) → {Promise.<Boolean>}//«
+
+Sets flags for a message or message range
+
+PARAMETERS:
+Name	Type											Description
+range	SequenceString | Array.<Number> | SearchObject	Range to filter the messages
+
+Array	Array.<string>	of flags to set. Only flags that are permitted to set are used, 
+						other flags are ignored
+
+options	Object	<optional>
+PROPERTIES
+Name	Type	Attributes	Default	Description
+uid	Boolean	<optional>
+If true then uses UID SequenceString instead of sequence numbers
+
+unchangedSince	BigInt	<optional>
+If set then only messages with a lower or equal modseq value are updated. Ignored if server does not support CONDSTORE extension.
+
+useLabels	Boolean	<optional>
+false	
+If true then update Gmail labels instead of message flags
+
+EXAMPLE
+let mailbox = await client.mailboxOpen('INBOX');
+// mark all unseen messages as seen (and remove other flags)
+await client.messageFlagsSet({seen: false}, ['\Seen]);
 //»
 (async) messageFlagsRemove(range, Array, optionsopt) → {Promise.<Boolean>}//«
+
 Remove specific flags from a message or message range
 
 PARAMETERS:
@@ -641,59 +597,142 @@ If true then update Gmail labels instead of message flags
 EXAMPLE
 let mailbox = await client.mailboxOpen('INBOX');
 // mark all seen messages as unseen by removing \\Seen flag
-await client.messageFlagsRemove({seen: true}, ['\Seen]);
+await client.messageFlagsRemove({seen: true}, ['\Seen']);
 //»
-(async) messageFlagsSet(range, Array, optionsopt) → {Promise.<Boolean>}//«
-Sets flags for a message or message range
 
-PARAMETERS:
-Name	Type	Attributes	Description
-range	SequenceString | Array.<Number> | SearchObject		
-Range to filter the messages
+(async) mailboxClose() → {Promise.<Boolean>}//«
 
-Array	Array.<string>		
-of flags to set. Only flags that are permitted to set are used, other flags are ignored
-
-options	Object	<optional>
-PROPERTIES
-Name	Type	Attributes	Default	Description
-uid	Boolean	<optional>
-If true then uses UID SequenceString instead of sequence numbers
-
-unchangedSince	BigInt	<optional>
-If set then only messages with a lower or equal modseq value are updated. Ignored if server does not support CONDSTORE extension.
-
-useLabels	Boolean	<optional>
-false	
-If true then update Gmail labels instead of message flags
+Closes a previously opened mailbox
 
 EXAMPLE
 let mailbox = await client.mailboxOpen('INBOX');
-// mark all unseen messages as seen (and remove other flags)
-await client.messageFlagsSet({seen: false}, ['\Seen]);
+await client.mailboxClose();
+
 //»
-(async) messageMove(range, destination, optionsopt) → {Promise.<CopyResponseObject>}//«
-Moves messages from current mailbox to destination mailbox
+(async) mailboxCreate(path) → {Promise.<MailboxCreateResponse>}//«
+
+Creates a new mailbox folder and sets up subscription for the created mailbox. Throws on error.
+
+PARAMETERS:
+
+Name	Type			Description
+---------------------------
+
+path	string | array	Full mailbox path. Unicode is allowed. If value is an array then 
+						it is joined using current delimiter symbols. Namespace prefix is 
+						added automatically if required.
+
+THROWS:
+Will throw an error if mailbox can not be created
+
+EXAMPLE
+
+let info = await client.mailboxCreate(['parent', 'child']);
+console.log(info.path);
+// "INBOX.parent.child" // assumes "INBOX." as namespace prefix and "." as delimiter
+
+//»
+(async) mailboxDelete(path) → {Promise.<MailboxDeleteResponse>}//«
+
+Deletes a mailbox. Throws on error.
+
+PARAMETERS:
+Name	Type			Description
+path	string | array	Path for the mailbox to delete. Unicode is allowed. If value is 
+						an array then it is joined using current delimiter symbols. 
+						Namespace prefix is added automatically if required.
+
+THROWS:
+
+Will throw an error if mailbox does not exist or can not be deleted
+
+EXAMPLE
+let info = await client.mailboxDelete('Important stuff ❗️');
+console.log(info.path);
+// "INBOX.Important stuff ❗️" // assumes "INBOX." as namespace prefix
+
+//»
+(async) mailboxOpen(path, optionsopt) → {Promise.<MailboxObject>}//«
+
+Opens a mailbox to access messages. You can perform message operations only
+against an opened mailbox. Using getMailboxLock() instead of mailboxOpen() is
+preferred. Both do the same thing but next getMailboxLock() call is not
+executed until previous one is released.
 
 PARAMETERS:
 Name	Type	Attributes	Description
-range	SequenceString | Array.<Number> | SearchObject		
-Range of messages to move
-
-destination	String		
-Mailbox path to move the messages to
+path	string | array		Path for the mailbox to open
 
 options	Object	<optional>
+optional options
+
 PROPERTIES
-Name	Type	Attributes	Description
-uid	Boolean	<optional>
-If true then uses UID SequenceString instead of sequence numbers
+Name		Type	Attributes	Default	Description
+readOnly	Boolean	<optional> 	false	If true then opens mailbox in read-only mode. 
+										You can still try to perform write operations but 
+										these would probably fail.
+
+THROWS:
+Will throw an error if mailbox does not exist or can not be opened
 
 EXAMPLE
-await client.mailboxOpen('INBOX');
-// move all messages to a mailbox called "Trash" (must exist)
-let result = await client.messageMove('1:*', 'Trash');
-console.log('Moved %s messages', result.uidMap.size);
+let mailbox = await client.mailboxOpen('Important stuff ❗️');
+console.log(mailbox.exists);
+// 125
+
+//»
+(async) mailboxRename(path, newPath) → {Promise.<MailboxRenameResponse>}//«
+
+Renames a mailbox. Throws on error.
+
+PARAMETERS:
+Name	Type			Description
+path	string | array	Path for the mailbox to rename. Unicode is allowed. If value is 
+						an array then it is joined using current delimiter symbols. 
+						Namespace prefix is added automatically if required.
+
+newPath	string | array	
+New path for the mailbox
+
+THROWS:
+Will throw an error if mailbox does not exist or can not be renamed
+
+EXAMPLE
+let info = await client.mailboxRename('parent.child', 'Important stuff ❗️');
+console.log(info.newPath);
+// "INBOX.Important stuff ❗️" // assumes "INBOX." as namespace prefix
+
+//»
+(async) mailboxSubscribe(path) → {Promise.<Boolean>}//«
+
+Subscribes to a mailbox
+
+PARAMETERS:
+Name	Type	Description
+path	string | array	
+
+Path for the mailbox to subscribe to. Unicode is allowed. If value is an array
+then it is joined using current delimiter symbols. Namespace prefix is added
+automatically if required.
+
+EXAMPLE
+await client.mailboxSubscribe('Important stuff ❗️');
+
+//»
+(async) mailboxUnsubscribe(path) → {Promise.<Boolean>}//«
+
+Unsubscribes from a mailbox
+
+PARAMETERS:
+Name	Type	Description
+path	string | array	
+
+Path for the mailbox to unsubscribe from. Unicode is allowed. If value is an
+array then it is joined using current delimiter symbols. Namespace prefix is
+added automatically if required.
+
+EXAMPLE
+await client.mailboxUnsubscribe('Important stuff ❗️');
 //»
 
 //»
@@ -708,10 +747,15 @@ client.on('log', entry => {
 });
 //»
 close//«
-Connection close event. NB! ImapFlow does not handle reconncts automatically. So whenever a 'close' event occurs you must create a new connection yourself.
+
+Connection close event. NB! ImapFlow does not handle reconncts automatically.
+So whenever a 'close' event occurs you must create a new connection yourself.
+
 //»
 error :Error//«
-Error event. In most cases getting an error event also means that connection is closed and pending operations should return with a failure.
+
+Error event. In most cases getting an error event also means that connection is
+closed and pending operations should return with a failure.
 
 EXAMPLE
 client.on('error', err=>{
@@ -720,6 +764,7 @@ client.on('error', err=>{
 //»
 
 exists :Object//«
+
 Message count in currently opened mailbox changed
 
 PROPERTIES:
@@ -806,6 +851,18 @@ client.on('mailboxOpen', mailbox => {
 
 //Global«
  
+SequenceString :String//«
+
+Sequence range string. Separate different values with commas, number ranges
+with colons and use '*' as the placeholder for the newest message in mailbox
+
+EXAMPLE
+"1:*" // for all messages
+"1,2,3" // for messages 1, 2 and 3
+"1,2,4:6" // for messages 1,2,4,5,6
+"*" // for the newest message
+
+//»
 SearchObject :Object//«
 
 IMAP search query options. By default all conditions must match. In case of or
@@ -818,63 +875,55 @@ Name		Type			Description
 
 seq			SequenceString	message ordering sequence range
 
-answered	Boolean			Messages with (value is true) or without (value 
-								is false) \Answered flag
+uid			SequenceString	UID sequence range
 
-deleted		Boolean			Messages with ... \Deleted flag
+answered	Boolean			Messages with (value is true) or without (value is false)
+										 \Answered flag
 
-draft		Boolean			Messages with ... \Draft flag
+deleted		Boolean			Messages ... \Deleted flag
 
-flagged		Boolean			Messages with ... \Flagged flag
+draft		Boolean			Messages ... \Draft flag
 
-seen	Boolean				Messages with ... \Seen flag
+flagged		Boolean			Messages ... \Flagged flag
 
-all		Boolean				If true matches all messages
+seen		Boolean			Messages ... \Seen flag
 
-new		Boolean				If true matches messages that have the \Recent flag 
-								set but not the \Seen flag
+all			Boolean			If true matches all messages
 
-old		Boolean				If true matches messages that do not have the 
-								\Recent flag set
+new			Boolean			If true matches messages that have the \Recent flag 
+							set but not the \Seen flag
 
-recent	Boolean				If true matches messages that have the \Recent 
-								flag set
+old			Boolean			If true matches messages that do not have the 
+							\Recent flag set
 
-from	String				Matches From: address field
+recent		Boolean			If true matches messages that have the \Recent 
+							flag set
 
-to		String				Matches To: address field
+from		String			Matches From: address field
 
-cc		String				Matches Cc: address field
+to			String			Matches To: address field
 
-bcc		String				Matches Bcc: address field
+cc			String			Matches Cc: address field
 
-body	String				Matches message body
+bcc			String			Matches Bcc: address field
 
-subject	String				Matches message subject
+body		String			Matches message body
 
-larger	Number				Matches messages larger than value
+subject		String			Matches message subject
 
-smaller	Number				Matches messages smaller than value
+larger		Number			Matches messages larger than value
 
-uid		SequenceString		UID sequence range
+smaller		Number			Matches messages smaller than value
 
-modseq	BigInt				Matches messages with modseq higher than value
+before		Date | string	Matches messages received before date
 
-emailId	String				unique email ID. Only used if server supports 
-								OBJECTID or X-GM-EXT-1 extensions
+on			Date | string	Matches messages received on date (ignores time)
 
-threadId String				unique thread ID. Only used if server supports 
-								OBJECTID or X-GM-EXT-1 extensions
-
-before	Date | string		Matches messages received before date
-
-on		Date | string		Matches messages received on date (ignores time)
-
-since	Date | string		Matches messages received after date
+since		Date | string	Matches messages received after date
 
 sentBefore	Date | string	Matches messages sent before date
 
-sentOn	Date | string		Matches messages sent on date (ignores time)
+sentOn		Date | string	Matches messages sent on date (ignores time)
 
 sentSince	Date | string	Matches messages sent after date
 
@@ -888,6 +937,242 @@ header	Object.<string,		Matches messages with header key set if value is true
 
 or	Array.<SearchObject>	An array of 2 or more SearchObject objects. At least 
 								one of these must match
+
+modseq	BigInt				Matches messages with modseq higher than value
+
+emailId	String				unique email ID. Only used if server supports 
+								OBJECTID or X-GM-EXT-1 extensions
+
+threadId String				unique thread ID. Only used if server supports 
+								OBJECTID or X-GM-EXT-1 extensions
+
+//»
+FetchQueryObject :Object//«
+
+Name		Type		Description
+
+uid			Boolean		if true then include UID in the response
+
+flags		Boolean		if true then include flags Set in the response
+
+bodyStructure Boolean	if true then include parsed BODYSTRUCTURE object 
+							in the response
+
+envelope	Boolean		if true then include parsed ENVELOPE object in the response
+
+internalDate Boolean	if true then include internal date value in the response
+
+size		Boolean		if true then include message size in the response
+
+headers		boolean | 	if true then includes full headers of the message 
+			Array.			in the response. If the value is an array of header 
+			<string>		keys then includes only headers listed in the array
+
+bodyParts	Array.		An array of BODYPART identifiers to include in the response
+			 <string>	
+
+threadId	String		if true then include thread ID in the response (only if 
+							server supports either OBJECTID or X-GM-EXT-1 extensions)
+
+labels		Boolean		if true then include GMail labels in the response (only 
+							if server supports X-GM-EXT-1 extension)
+
+
+source		boolean 	if true then include full message in the response
+			 | Object	
+			  (see table below)
+
+Name		Type		Description
+-----------------------------------
+
+start		Number		include full message in the response starting from 
+							start byte
+
+maxLength	Number		include full message in the response, up to maxLength bytes
+
+//»
+
+AppendResponseObject :Object//«
+
+PROPERTIES:
+
+Name	Type		Description
+-------------------------------
+
+path	String		full mailbox path where the message was uploaded to
+
+uidValidity	BigInt	mailbox UIDVALIDITY if server has UIDPLUS extension enabled
+
+uid		Number		UID of the uploaded message if server has UIDPLUS extension 
+						enabled
+
+seq		Number		sequence number of the uploaded message if path is currently 
+						selected mailbox
+
+//»
+CopyResponseObject :Object//«
+
+PROPERTIES:
+
+Name	Type		Description
+-------------------------------
+
+path	String		path of source mailbox
+
+destination	String	path of destination mailbox
+
+uidValidity	BigInt	destination mailbox UIDVALIDITY if server has UIDPLUS extension enabled
+
+uidMap	Map.<number, Map of UID values (if server has UIDPLUS extension enabled) 
+			number>	 where key is UID in source mailbox and value is the UID for 
+					 the same message in destination mailbox
+
+//»
+ListResponse :Object//«
+
+Name		Type	Description
+-------------------------------
+
+path		String	mailbox path
+
+name		String	mailbox name (last part of path after delimiter)
+
+delimiter	String	mailbox path delimiter, usually "." or "/"
+
+flags		Set.	a set of flags for this mailbox
+			 <string>	
+
+specialUse	String	one of special-use flags (if applicable): 
+					"\All", "\Archive", "\Drafts", "\Flagged", "\Junk", 
+					"\Sent", "\Trash". Additionally INBOX has non-standard 
+					"\Inbox" flag set
+
+listed		Boolean	true if mailbox was found from the output of LIST command
+
+subscribed	Boolean	true if mailbox was found from the output of LSUB command
+
+//»
+ListTreeResponse :Object//«
+
+Name	Type		Description
+-------------------------------
+
+root	Boolean		If true then this is root node without any additional properties 
+					besides folders
+
+path	String		mailbox path
+
+name	String		mailbox name (last part of path after delimiter)
+
+delimiter String	mailbox path delimiter, usually "." or "/"
+
+flags	array		list of flags for this mailbox
+
+specialUse String	one of special-use flags (if applicable): "\All", "\Archive", 
+					"\Drafts", "\Flagged", "\Junk", "\Sent", "\Trash". 
+					Additionally INBOX has non-standard "\Inbox" flag set
+
+listed	Boolean		true if mailbox was found from the output of LIST command
+
+subscribed Boolean	true if mailbox was found from the output of LSUB command
+
+disabled   Boolean	If true then this mailbox can not be selected in the UI
+
+folders	Array.		An array of subfolders
+		<ListTreeResponse>	
+
+//»
+QuotaResponse :Object//«
+PROPERTIES:
+
+Name	Type	Attributes	Default	Description
+-----------------------------------------------
+
+path	String		INBOX	mailbox path this quota applies to
+
+storage	Object	<optional>	Storage quota if provided by server
+
+PROPERTIES
+Name	Type	Attributes	Description
+used	Number	<optional>
+used storage in bytes
+
+limit	Number	<optional>
+total storage available
+
+messages	Object	<optional>
+Message count quota if provided by server
+
+PROPERTIES
+Name	Type	Attributes	Description
+used	Number	<optional>
+stored messages
+
+limit	Number	<optional>
+maximum messages allowed
+
+//»
+StatusObject :Object//«
+
+PROPERTIES:
+
+Name		Type		Description
+-----------------------------------
+
+path		String		full mailbox path that was checked
+
+messages 	Number		Count of messages
+
+unseen		Number		Count of unseen messages
+
+recent		Number		Count of messages with \Recent tag
+
+uidNext		Number		Predicted next UID
+
+uidValidity	BigInt		Mailbox UIDVALIDITY value
+
+highestModseq BigInt	Last known modseq value (if CONDSTORE extension is enabled)
+
+//»
+FetchMessageObject :Object//«
+
+Fetched message data
+
+Name		Type		Description
+
+seq			Number		message sequence number. Always included in the response
+
+uid			Number		message UID number. Always included in the response
+
+source		Buffer		message source for the requested byte range
+
+modseq		BigInt		message Modseq number. Always included if the server 
+							supports CONDSTORE extension
+
+size		Number		message size
+
+flags		Set.<string> a set of message flags
+
+bodyParts	Map.		a Map of message body parts where key is requested part 
+			 <string, 		identifier and value is a Buffer
+				Buffer>	
+
+headers		Buffer		Requested header lines as Buffer
+
+internalDate Date		message internal date
+
+envelope	MessageEnvelopeObject		message envelope
+
+bodyStructure 	MessageStructureObject	message body structure
+
+emailId		String		unique email ID. Always included if server supports 
+							OBJECTID or X-GM-EXT-1 extensions
+
+threadid	String		unique thread ID. Only present if server supports 
+							OBJECTID or X-GM-EXT-1 extension
+
+labels		Set.<string> a Set of labels. Only present if server supports 
+							X-GM-EXT-1 extension
 
 //»
 DownloadObject :Object//«
@@ -916,231 +1201,6 @@ disposition	String		Content-Disposition of the streamed file
 
 filename	String		Filename of the streamed body part
 
-//»
-FetchQueryObject :Object//«
-
-Name		Type		Description
-
-uid			Boolean		if true then include UID in the response
-
-flags		Boolean		if true then include flags Set in the response
-
-bodyStructure Boolean	if true then include parsed BODYSTRUCTURE object 
-							in the response
-
-envelope	Boolean		if true then include parsed ENVELOPE object in the response
-
-internalDate Boolean	if true then include internal date value in the response
-
-size		Boolean		if true then include message size in the response
-
-source		boolean 	if true then include full message in the response
-			 | Object	
-			  (see table 
-				  below)
-
-Name		Type		Description
-
-start		Number		include full message in the response starting from 
-							start byte
-
-maxLength	Number		include full message in the response, up to maxLength bytes
-
-threadId	String		if true then include thread ID in the response (only if 
-							server supports either OBJECTID or X-GM-EXT-1 extensions)
-
-labels		Boolean		if true then include GMail labels in the response (only 
-							if server supports X-GM-EXT-1 extension)
-
-headers		boolean | 	if true then includes full headers of the message 
-			Array.			in the response. If the value is an array of header 
-			<string>		keys then includes only headers listed in the array
-
-bodyParts	Array.		An array of BODYPART identifiers to include in the response
-			 <string>	
-
-//»
-FetchMessageObject :Object//«
-
-Fetched message data
-
-Name		Type		Description
-
-seq			Number		message sequence number. Always included in the response
-
-uid			Number		message UID number. Always included in the response
-
-source		Buffer		message source for the requested byte range
-
-modseq		BigInt		message Modseq number. Always included if the server 
-							supports CONDSTORE extension
-
-emailId		String		unique email ID. Always included if server supports 
-							OBJECTID or X-GM-EXT-1 extensions
-
-threadid	String		unique thread ID. Only present if server supports 
-							OBJECTID or X-GM-EXT-1 extension
-
-labels		Set.<string> a Set of labels. Only present if server supports 
-							X-GM-EXT-1 extension
-
-size		Number		message size
-
-flags		Set.<string> a set of message flags
-
-bodyParts	Map.		a Map of message body parts where key is requested part 
-			 <string, 		identifier and value is a Buffer
-				Buffer>	
-
-headers		Buffer		Requested header lines as Buffer
-
-internalDate Date		message internal date
-
-envelope		MessageEnvelopeObject		message envelope
-
-bodyStructure 	MessageStructureObject	message body structure
-
-
-//»
-
-AppendResponseObject :Object//«
-PROPERTIES:
-Name	Type		Description
-path	String		full mailbox path where the message was uploaded to
-
-uidValidity	BigInt	mailbox UIDVALIDITY if server has UIDPLUS extension enabled
-
-uid		Number		UID of the uploaded message if server has UIDPLUS extension 
-						enabled
-
-seq		Number		sequence number of the uploaded message if path is currently 
-						selected mailbox
-
-//»
-CopyResponseObject :Object//«
-PROPERTIES:
-Name	Type		Description
-path	String		path of source mailbox
-
-destination	String	path of destination mailbox
-
-uidValidity	BigInt	destination mailbox UIDVALIDITY if server has UIDPLUS extension enabled
-
-uidMap	Map.<number, Map of UID values (if server has UIDPLUS extension enabled) 
-			number>	 where key is UID in source mailbox and value is the UID for 
-					 the same message in destination mailbox
-
-//»
-ListResponse :Object//«
-Name		Type	Description
-path		String	mailbox path
-name		String	mailbox name (last part of path after delimiter)
-delimiter	String	mailbox path delimiter, usually "." or "/"
-flags		Set.	a set of flags for this mailbox
-			 <string>	
-specialUse	String	one of special-use flags (if applicable): 
-					"\All", "\Archive", "\Drafts", "\Flagged", "\Junk", 
-					"\Sent", "\Trash". Additionally INBOX has non-standard 
-					"\Inbox" flag set
-listed		Boolean	true if mailbox was found from the output of LIST command
-subscribed	Boolean	true if mailbox was found from the output of LSUB command
-//»
-ListTreeResponse :Object//«
-
-Name	Type		Description
-root	Boolean		If true then this is root node without any additional properties 
-					besides folders
-path	String		mailbox path
-name	String		mailbox name (last part of path after delimiter)
-delimiter String	mailbox path delimiter, usually "." or "/"
-flags	array		list of flags for this mailbox
-specialUse String	one of special-use flags (if applicable): "\All", "\Archive", 
-					"\Drafts", "\Flagged", "\Junk", "\Sent", "\Trash". 
-					Additionally INBOX has non-standard "\Inbox" flag set
-listed	Boolean		true if mailbox was found from the output of LIST command
-subscribed Boolean	true if mailbox was found from the output of LSUB command
-disabled   Boolean	If true then this mailbox can not be selected in the UI
-folders	Array.		An array of subfolders
-		 <ListTreeResponse>	
-
-//»
-QuotaResponse :Object//«
-PROPERTIES:
-Name	Type	Attributes	Default	Description
-path	String		INBOX	
-mailbox path this quota applies to
-
-storage	Object	<optional>
-Storage quota if provided by server
-
-PROPERTIES
-Name	Type	Attributes	Description
-used	Number	<optional>
-used storage in bytes
-
-limit	Number	<optional>
-total storage available
-
-messages	Object	<optional>
-Message count quota if provided by server
-
-PROPERTIES
-Name	Type	Attributes	Description
-used	Number	<optional>
-stored messages
-
-limit	Number	<optional>
-maximum messages allowed
-
-//»
-StatusObject :Object//«
-
-PROPERTIES:
-Name		Type		Description
-path		String		full mailbox path that was checked
-messages 	Number		Count of messages
-recent		Number		Count of messages with \Recent tag
-uidNext		Number		Predicted next UID
-uidValidity	BigInt		Mailbox UIDVALIDITY value
-unseen		Number		Count of unseen messages
-highestModseq BigInt	Last known modseq value (if CONDSTORE extension is enabled)
-
-
-//»
-
-IdInfoObject :Object//«
-Client and server identification object, where key is one of RFC2971 defined data fields (but not limited to).
-
-PROPERTIES:
-Name	Type	Attributes	Description
-name	String	<optional>
-Name of the program
-
-version	String	<optional>
-Version number of the program
-
-os	String	<optional>
-Name of the operating system
-
-vendor	String	<optional>
-Vendor of the client/server
-
-'support-url'	String	<optional>
-URL to contact for support
-
-date	Date	<optional>
-Date program was released
-//»
-SequenceString :String//«
-
-Sequence range string. Separate different values with commas, number ranges
-with colons and use '*' as the placeholder for the newest message in mailbox
-
-EXAMPLE
-"1:*" // for all messages
-"1,2,3" // for messages 1, 2 and 3
-"1,2,4:6" // for messages 1,2,4,5,6
-"*" // for the newest message
 //»
 
 MailboxObject :Object//«
@@ -1222,17 +1282,16 @@ MessageAddressObject :Object//«
 Parsed email address entry
 
 PROPERTIES:
-Name	Type	Attributes	Description
+Name	Type	Description
 ---------------------------------------
 
-name	String	<optional>
-name of the address object (unicode)
+name	String	name of the address object (unicode)
 
-address	String	<optional>
-email address
+address	String	email address
 
 //»
 MessageEnvelopeObject :Object//«
+
 Parsed IMAP ENVELOPE object
 
 MAO => MessageAddressObject
@@ -1255,7 +1314,6 @@ messageId	String		Message ID of the message
 
 inReplyTo	String		Message ID from In-Reply-To header
 
-
 replyTo		Array.		Array of addresses from the Reply-To: header
 			<MAO>	
 
@@ -1270,7 +1328,11 @@ bcc			Array.		Array of addresses from the Bcc: header
 
 //»
 MessageStructureObject :Object//«
+
 Parsed IMAP BODYSTRUCTURE object
+
+MEO => MessageEnvelopeObject
+MSO => MessageStructureObject
 
 PROPERTIES:
 
@@ -1290,17 +1352,38 @@ encoding	String		Transfer encoding
 
 size		Number		Expected size of the node
 
-envelope	Message		message envelope of embedded RFC822 message
-			Envelope
-			Object	
+envelope	MEO			message envelope of embedded RFC822 message
 
 disposition	String		Content disposition
 
 disposition Object		Additional parameters for Content-Disposition
 Parameters	
 
-childNodes	Array.		An array of child nodes if this is a multipart node. Not present for normal nodes
-			<MessageStructureObject>		
+childNodes	Array.<MSO>	An array of child nodes if this is a multipart node. 
+						Not present for normal nodes
+//»
+
+IdInfoObject :Object//«
+
+Client and server identification object, where key is one of RFC2971 defined data 
+fields (but not limited to).
+
+PROPERTIES:
+Name	Type	Description
+---------------------------------------
+
+name	String	Name of the program
+
+version	String	Version number of the program
+
+os		String	Name of the operating system
+
+vendor	String	Vendor of the client/server
+
+date	Date	Date program was released
+
+'support-url'	String	URL to contact for support
+
 //»
 
 //»
@@ -1378,5 +1461,4 @@ main().catch(err => console.error(err));
 //»
 
 //»
-
 

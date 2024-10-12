@@ -35,6 +35,7 @@ const transporter = nodemailer.createTransport({
 
 //log(`User: ${process.env.EMAIL_USER}`);
 //log(`Pass: ${process.env.EMAIL_PASSWORD}`);
+const getUser = ()=>{return USER;}
 const sendMail = async(opts={})=>{
 	opts.from = USER;
 	const send=()=>{
@@ -56,6 +57,7 @@ const sendMail = async(opts={})=>{
 }
 
 module.exports={
-sendMail
+sendMail,
+getUser
 };
 
