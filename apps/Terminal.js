@@ -1,187 +1,71 @@
-/*
-10/11/24: Just getting back into the whole command module loading/reloading thing.
-Up to now, it has been quite a complex thing juggling different variables like
-ALL_LIBS, globals.shell_libs, NS.libs, and NS.coms.
-
-Now, ALL_LIBS is the NS.libs object. This is an object like:
-NS.libs={
-	lib1: [com11, com12,...],
-	lib2: [com21, com22, ...]
-}
-
-...where these are lists of command names (string). These commands will *not* be imported
-in case they are already defined within the active shell commands.
-
-Upon successfully importing a command library, each library's exported command functions
-and options (both are objects) are put onto NS.coms, like:
-NS.coms={
-	lib1: {coms: lib1funcs, opts: lib1opts}
-}
-
-ADD_COMS is an array that includes all command libraries to be imported upon terminal
-initialization.
-
-DEL_COMS is used by developers to remove all of the commands from the active
-commands (but not if a particular command WASN'T ACTUALLY IMPORTED by the
-library, e.g. see @CJIUKLEH). Their command options are likewise removed from
-the active command options.
-
-
-
-In terms of status updates, how about just NOT putting the terminal in fullscreen,
-and using the bottom status bar???
-
-
-Now... back to email (see me in mail.js...)!!!
+//Old terminal development notes are stored in doc/dev/TERMINAL
+/*Incorrect way to create success/error/warning colors @WOPIUTHSDKL.
+Instead, we need to do it @DJKUIOJED
 
 */
-/*
+/*TODO:Update rest of the command libraries with the new response and return mechanism«
 
-10/10/24: Want a hotkey that toggles the ondevreload method, rather than using the
-hardcoded variable (USE_ONDEVRELOAD). Done @VMUIRPOIUYT.
+const com_what=(args, opts, _)=>{
 
-Want a dedicated 1-line status bar at the bottom of the screen in "normal" CLI mode
-to allow a place for status messages of long(-ish) term commands processes, that might,
-i.e. be downloading a large file or connecting to some service. This is good for commands
-(like ffmpeg) that are frequently updating their progress. In standard Linux systems,
-the stderr stream is normally used for this kind of updating, but these are not actually
-*errors*, so it doesn't really make any sense to do this.
+const {term, out, err, suc} = _;
+...
+err("Error message in red here");
+return E_ERR;
+...
+suc("Success message in green here");
+return E_SUC;
+...
+//Standard output for the terminal (or pipes/redirects)
+out(some_lines, {colors: opt_colors});
+return E_SUC;
 
-10/9/24: Updated the entire command importing machinery, and added a ondevreload method
-(depending on the truth of the global USE_ONDEVRELOAD variable), which, if it
-exists, is called by the desktop's win_reload method (instead of reloading the
-actual application window). Using the ALL_LIBS method allows the shell to
-"know" that it must do an implicit import of a given command library
-(@QKIUTOPLK), because all of the commands are initialized as the (string) names
-of the library (@MYKLJDHFK) rather than with the function bodies (they are
-initialized as "true builtins" @FWPORUITJ).
-
-*/
-/*Setting environment variables (10/5/2024):
-
-Normally this is done through .bashrc files, using export. But I don't want to mess with
-the complexity of machine-reading text files. Right now, the ENV variable is set here, which
-forces us to manually set all environment vars on the command line. I want ENV
-to be a global variable (which I just added into config.js as globals.TERM_ENV).
-
-Now to set persistent vars to ENV, just save them to ~/.env, e.g.:
-VAR1=Something
-BLAH=What in the hell
-
-*/
-/*Making a data file«
-const com_mkdat = async(args, o)=>{
-	const {term, opts, stdin} = o;
-	let f = args.shift();
-	if (!f) return;
-	let arr = await f.toParNodeAndName(term);
-	if (!arr) return {err: `Not found: ${f}`};
-	let par = arr[0];
-	let name = arr[1];
-	let fullpath = arr[2];
-	let kid = await fullpath.toNode();
-//Updating
-	if (kid) {
-if (!kid.data) return {err: "Not a data node!"}
-if (!await kid.setValue({type: "harko99998", FROYNKMISCH: 4321.8765})) return {err: "Could not set value"};
-log(kid);
-log(kid.data);
-return;
-	}
-//Creating data node
-	kid = await fsapi.writeDataFile(fullpath, {value: 1, type: "number"});
 };
+
 »*/
-/*Notes (September 2024)«
-9/6/2024:
-Made a global variable, "appclass".
+/*10/16/24: I've been getting into edge cases of expected shell behaviour, such as
+whether to treat a non-existent command as a simple command failure or to exit the
+current command line (which is what I was doing). Here, "barf" doesn't exist as a command:
 
-Got rid of all things dealing with "ssh" (which is just a stupid amount of complexity
-for the real world benefit that is received).
+$ barf ||  echo This will never be seen
 
-9/5/2024:
+Now (@EOPIUYTLM), we are sending an error response and setting lastcomcode to E_ERR.
 
-@XOPIUYTK
-Looking at the editor/pager specific functions like init_edit_mode and init_pager_mode,
-as well as modequit, in order to see how this can be improved and generalized to allow
-for more novel applications. Want a generic workflow for entering and leaving different
-application screens. The newly invoked application needs to get a handle on the 
-terminal's current lines array. Then, upon quitting, it needs to give this back to
-the terminal. We need the ability to do abitrarily deep recursions of applications
-calling applications as submodes, calling applications as submodes...
-
-Now after revamping everything:
-It looks like the way we are switching the terminal's onescape handler back and forth
-is the only thing that (almost certainly) won't allow use to do arbitrary recursion,
-and we are going to need to need to attach it to the various screen_state objects.
-
-And now it looks good for doing our crazy recursion idea.
-
-Took out @SKLIOPMN, because this is a trivial function that unnecessarily complicates
-the logic with application specific purposes.
-
-Updated on 9/4/2024:
-
-@SURMPLRK: The algorithm has been improved because the max_cols was being
-initialized to stupidly high values, given normal terminal widths, causing
-fmt_ls to be recursively called waaaay too many times.  
-
-Also @JSOJPRI, which now has a while(true) loop, that *looks like* it *should*
-always break...
-»*/
-
-//Notes (Old)«
-/*Broken (now fixed)://«
-1) Make a file with the 'touch' command
-2) Use the '_blobs' command to verify there is no saved blob
-3) Put something in that file with vim (this bug doesn't happen with shell redirects)
-4) Verify that it has a saved blob with the '_blobs' command
-5) Refresh the page
-6) Verify that is no longer has a saved blob with the '_blobs' command
-//»*/
-//Issues«
-/*@JEPOIKLMJYH: I don't understand why this was giving errors on backspaces
-after pressing the up key in order to scroll back in history, but now it isn't!!
 */
-//»
-/*"Importing" command libraries via com_import is [NO LONGER] a deprecated solution.«
-Instead, use the ALL_LIBS object, which stores the names of all of the 
-commands, under an array that is keyed by the name of the given command
-library in coms/, but just without the ending '.js'. This is a very
-robust, quick&dirty solution to a problem that is made more complex with
-something like an "import" command.
+/*10/15/24: Getting command output streams to "just work".«
+
+-There are 3 streams: out, err, suc
+-Only the out stream will be sent through pipes and redirects (there should be a shell option)
+to merge/flatten all streams into the out stream.
+-The out stream can be arbitrarily colorized
+-The err stream will be colored red
+-The suc stream will be colored green
+
+These are the names of the callbacks that are given in the "_" (3rd) argument to the
+called commands (@SKIOPRHJT).
+
+Commands should only return an error code @CKLOPUTIK.
+
+Now need to update all commands so that they call the output functions (out, err, suc)
+and return *either* E_SUC or E_ERR.
+
+Want to give hints to the respective response callbacks (like @MDKLIOUTYH) whether
+the terminal should do scroll_into_view and refresh. If we are in a tight loop, such
+as in com_ls, we might want to save on the cpu cycles, when it comes to very long
+(possibly recursive) listings.
+
 »*/
-/*Websockets are used in a kind of ssh mechanism.«
 
-The 'ssh' command allows for 1 'server' terminal and 1 'client' terminal to
-connect to the Node.js backend via websockets. The server terminal should have
-all relevant environment variables set before executing the 'ssh --server' command, 
-which locks the terminal.
-
-"ssh immediate mode" means that the client sends everything after the prompt
-to the ssh server. This is set via 'ssh -i'. While in immediate mode, it
-can be terminated via Ctrl+c. Otherwise, any arguments to the ssh command
-are interpreted as a command to be passed along to the server. This means
-that all of the normal piping and redirections should work.
-
-»*/
-//»
-
-let USE_ONDEVRELOAD = true;
-//let USE_ONDEVRELOAD = false;
+//let USE_ONDEVRELOAD = true;
+let USE_ONDEVRELOAD = false;
 
 //Development mod deleting«
-
 
 const DEL_MODS=[
 //	"util.less",
 //	"util.vim",
-//	"util.email",
-//	"webmparser"
-//	"pager"
 ];
 const DEL_COMS=[
-//"audio"
+//	"audio"
 //	"yt",
 //	"test",
 //	"fs",
@@ -211,6 +95,7 @@ const {
 	fs,
 	isMobile,
 //	shell_libs,
+	SHELL_ERROR_CODES,
 	dev_mode
 } = globals;
 const fsapi = fs.api;
@@ -224,6 +109,7 @@ const HISTORY_PATH = `${HISTORY_FOLDER}/shell.txt`;
 const HISTORY_PATH_SPECIAL = `${HISTORY_FOLDER}/shell_special.txt`;
 const LEFT_KEYCODE = KC.LEFT;
 
+const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 
 //»
 
@@ -296,8 +182,7 @@ const MAX_LINE_LEN = 256;
 //const allow_write_locked = false;
 
 const NOOP=()=>{return TERM_ERR;};
-const TERM_OK = 0;
-const TERM_ERR = 1;
+//const TERM_ERR = 1;
 
 const DIRECTORY_TYPE = "d";
 const LINK_TYPE = "l";
@@ -634,48 +519,6 @@ cerr(e);
 	return err;
 }//»
 
-const get_file_lines_from_args=async(args, term)=>{//«
-	let err = [];
-	let out = [];
-	const fullterr=(arg)=>{
-		err.push(`${fullpath}: ${arg}`);
-		return TERM_ERR;
-	};
-	let fullpath;
-	while (args.length) {
-		fullpath = normPath(args.shift(), term.cur_dir);
-		let node = await fsapi.pathToNode(fullpath);
-		if (!node) {
-			fullterr(`No such file or directory`);
-			continue;
-		}
-		let typ = node.type;
-		if (typ==FS_TYPE) {
-			if (!node.blobId) {
-				continue;
-			}
-		}
-		else if (typ==MOUNT_TYPE){
-		}
-		else{
-	cwarn(`Skipping: ${fullpath} (type=${typ})`);
-			continue;
-		}
-
-		if (node.appName === FOLDER_APP) {
-			fullterr(`Is a directory`);
-			continue;
-		}
-		let val = await node.text;
-		if (!isstr(val)) {
-			fullterr("An unexpected value was returned");
-			continue;
-		}
-		let arr = val.split("\n");
-		for (let ln of arr) out.push(ln);
-	}
-	return {err, out};
-};//»
 const get_libs = async()=>{//«
 	let coms = await "/site/coms".toNode();
 	let all = [];
@@ -738,8 +581,6 @@ cwarn(`The option ${opt} already exists!`);
 const do_imports = async(arr, err_cb) => {//«
 	if (!err_cb) err_cb = ()=>{};
 	for (let arg of arr){
-//		if (ALL_LIBS[arg] || NS.libs[arg]) {
-//		if (ALL_LIBS[arg] || shell_libs[arg]) {
 		if (ALL_LIBS[arg]) {
 			err_cb(`${arg}: Already loaded`);
 			continue;
@@ -808,10 +649,6 @@ continue;
 cwarn(`Deleted module: ${m}`);
 	}
 }//»
-const delete_mods_and_coms=()=>{//«
-	delete_mods(DEL_MODS);
-	delete_coms(DEL_COMS);
-};//»
 
 /*
 const lines_to_paras = lns => {//«
@@ -841,219 +678,67 @@ const lines_to_paras = lns => {//«
 //Command functions«
 
 /*
-const com_ = async(args, o)=>{
-	const {term, opts, stdin} = o;
+
+//All vars in env: redir,script_out,stdin,inpipe,term,add_rows,env,opts,command_str
+const com_ = async(args, opts, _)=>{
+	const {term, stdin, out, err, suc} = _;
 };
+
 */
 
-/*
-const com_smtp = async(args, o)=>{//«
-// smtp   email_text_file_path   to   Subject goes here...
-// echo   Here is the email text...  |  smtp   to   Subject goes here...
-	const {term, stdin, opts} = o;
-//	let from = term.ENV.EMAIL_FROM;
-//	if (!from) return {err: "No EMAIL_FROM in the environment!"}
-	let to_paras = opts["to-paras"]||opts.p;
-//cwarn("PARAS", to_paras);
-	let txt;
-	if (stdin) {
-		txt = stdin.join("\n");
-	}
-	else {
-		let path = await args.shift();
-		if (!path) return {err:"No file to send"};
-		let node = await path.toNode(term);
-		if (!node) return {err: `${path}: not found`};
-		txt = await node.text;
-	}
-	if (!txt.match(/[a-z]/i)) return {err: "No lower ascii alphabetic characters were found in the message"};
-	if (to_paras) {
-		txt = lines_to_paras(txt.split("\n")).join("\n");
-	}
-	let to = await args.shift();
-	if (!to) return {err:"No one to send to"}
-	if (!to.match(/^\w+@\w+\.[a-z]+$/i)) return {err: "Bad looking email address"};
+const com_test = async(args,opts, _)=>{//«
 
-	let sub = args.join(" ");
-	if (!sub) return {err: "No subject given"}
-cwarn("TO",to);
-cwarn("SUB",sub);
-cwarn(`TEXT: ${txt.length} chars`);
-//log(txt);
-//return;
-//	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
-	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
-	if (!(rv&&rv.ok&&rv.text)) {
-log(rv);
-		return {err: "An unknown response was received from smtp service"}
-	}
-	txt = await rv.text();
-cwarn(txt);
-	if (rv.ok) return txt;
-	return {err: txt.split("\n")[0]};
+const {term, stdin, out, err, suc, wrn} = _;
+const {stat} = term;
+//stat("Sleep in...");
+wrn("Here is out 111 (in the time of the place which is in the thing that is where in the place of the thing in the placeeeeeeeeeeeeeeee.........................)");
+await sleep(500);
+suc("OKAY WEE WOOOO!!!!");
+await sleep(500);
+err("OOOOOOOOOO NOOOOOOOOO");
+await sleep(500);
+out("Here is out 222");
 
+//stat("Done!");
+//return {err: "ERROR!!!"};
+//return {ok: ["OKKKKKKKKKKKK...", "Place in the roy spotzleeeee", "Flung benottzle"]};
+return E_SUC;
 };//»
-const com_imap = async(args, o)=>{//«
-	let which = args.shift();
-	let url = '/_imap';
-	if (which) url += `?seq=${which}`;
-	let rv = await fetch(url);
-	let out = await rv.text();
-	if (!rv.ok) {
-log(out);
-		let val = out.split("\n")[0];
-		return {err: out};
-	}
-	return {out};
-
-};//»
-const com_email = async(args, o)=>{//«
-
-
-//l:{adduser:3,deluser:3,setuser:3}
-
-//For adduser, deluser, and curuser options (and other administration tasks), we can send
-//this information into init, which can take care of the users/curuser file (and the
-//table adding/deleting if needed), and then return before invoking init_new_screen/set_screen.
-
-//adduser: add to the users file and make the tables
-//deluser: rm from the users file and delete the tables (after a prompt screen)
-//setuser: write the given user email to the curuser file, and use this user for the next session. 
-//This must be checked against available users who were added with adduser.
-
-
-	let address = args.shift();//«
-	let err;
-	if (!address) err="No address given";
-	else{
-		address = address.toLowerCase();
-		let arr = address.split("@");
-		if (!(arr.length==2 && arr[0] && arr[1])) err="Invalid address code #1";
-		else{
-			let user = arr[0];
-			if (!user.match(/^[a-z]([-_a-z0-9]*[a-z0-9])?$/)) err = "Invalid address code #2";
-			if (user.match(/[-_][-_]/)) err = "Invalid address code #6";
-
-			let domain = arr[1];
-			let domain_arr = domain.split(".");
-			if (domain_arr.length < 2) err = "Invalid address code #3";
-			else{
-				let tld = domain_arr.pop();
-				if (!tld.match(/^[a-z]{2,}$/)) err = "Invalid address code #4";
-				else{
-					for (let dom of domain_arr){
-						if (!dom.match(/^[a-z]([-_a-z0-9]*[a-z0-9])?$/)){
-							err = "Invalid address code #5";
-						}
-						if (dom.match(/[-_][-_]/)) err = "Invalid address code #7";
-						if (err) break;
-					}
-				}
-			}
-		}
-	}//»
-	if (err) return {err};
-
-	const {term, opts, stdin, command_str} = o;
-
-	let add = opts.add || opts.a;
-	let del = opts.del || opts.d;
-
-	if (add && del) return {err: "The 'add' and 'del' options were both specified!"}
-
-	let op;
-	if (add) op="add";
-	else if (del) op="del";
-
-    if (!await capi.loadMod("util.email")) {
-        return {err: "Could not load the email module"};
-    }
-    let email = new NS.mods["util.email"](term);
-    let rv = await email.init(address,{command_str, op});
-    if (isstr(rv)){
-        return {err: rv};
-    }
-
-};//»
-*/
-
-const com_termlines=(args,o)=>{//«
-	const {term, opts, stdin} = o;
-	let idstr = args.shift();
-	if (!idstr) return {err:"No winid given"}
-	let id = idstr.ppi();
-	if (isNaN(id)) return {err:"Invalid id: want a positive integer"}
-	let win = document.getElementById(`win_${id}`);
-	if (!win) return {err:"No window with that id"};
-	if (win._winObj.appName!=="Terminal") return {err:"Not a terminal"};
-	return {out: win._winObj.app.lines};
-//	return win._winObj.app.lines;
-};//»
-const com_test = async(args, o)=>{//«
-	const {term, opts, stdin} = o;
-//let re = /THIS/y;
-let arr = [
-" ",
-" ",
-" ",
-" ",
-"T","H","I","S",
-" ",
-" ",
-" ",
-" ",
-"T","H","I","S",
-" ",
-" ",
-" ",
-" ",
-" ",
-" ",
-" ",
-" ",
-"T","H","I","S"
-];
-let re = new RegExp("THIS","y");
-//let ln = "    THIS    THIS    THIS    ";
-let ln = arr.join("")
-
-log(re, ln);
-let pos=0;
-while(pos < ln.length){
-re.lastIndex = pos;
-let rv = re.exec(ln);
-if (rv){
-log(pos, rv);
-}
-pos++;
-}
-
-};//»
-const com_parse = async(args, o)=>{//«
-	const {term, opts, stdin} = o;
+const com_parse = async(args,opts, _)=>{//«
+	const {term, stdin, out, err} = _;
 	if (stdin){//«
 		try{
-			return {out: JSON.parse(stdin)};
+			out(JSON.parse(stdin));
+			return E_SUC;
 		}
 		catch(e){
-			return {err: "Invalid JSON in stdin"};
+			err("Invalid JSON in stdin");
+			return E_ERR;
 		}
 	}//»
 	let f = args.shift();
 	if (!f) return;
 	let node = await f.toNode(term);
-	if (!node) return {err: `Not found: ${f}`};
+	if (!node) {
+		err(`Not found: ${f}`);
+		return E_ERR;
+	}
 	let txt = await node.text;
-	if (!txt) return {err: `No text in: ${f}`};
+	if (!txt) {
+		err(`No text in: ${f}`);
+		return E_ERR;
+	}
 	try{
-		return {out: JSON.parse(txt)};
+		out(JSON.parse(txt));
+		return E_SUC;
 	}
 	catch(e){
-		return {err: "Invalid JSON in file"};
+		err("Invalid JSON in file");
+		return E_ERR;
 	}
 };//»
-const com_curcol = async(args, o)=>{//«
-	const {term, opts, stdin} = o;
+const com_curcol = async(args,opts, _)=>{//«
+	const {term, stdin} = _;
 	let which = args.shift();
 	if (which=="white"){
 		term.cur_white();
@@ -1061,20 +746,27 @@ const com_curcol = async(args, o)=>{//«
 	else if (which=="blue"){
 		term.cur_blue();
 	}
+	else{
+		_.err(`Missing or invalid arg`);
+		return E_ERR;
+	}
+	return E_SUC;
 };//»
-const com_getch = async(args, opts)=>{//«
-	const {term} = opts;
+const com_getch = async(args, opts, _)=>{//«
+	const {term} = _;
 	let err=[];
 	let use_prompt = "";
 	let ch = await term.getch(use_prompt);
-	return {out: `Got: ${ch}`};
+	_.out(`Got: ${ch}`);
+	return E_SUC;
 };//»
-const com_read = async(args, o)=>{//«
-	const {term, opts} = o;
+const com_read = async(args,opts, _)=>{//«
+	const {term} = _;
 	let err=[];
 	let use_prompt = opts.prompt;
 	if (use_prompt && use_prompt.length > term.w - 3){
-		return {err:`The prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`};
+		_.err(`The prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
+		return E_ERR;
 	}
 	let ln = await term.read_line(use_prompt);
 	let vals = ln.trim().split(/ +/);
@@ -1093,46 +785,24 @@ const com_read = async(args, o)=>{//«
 		if (!useval) useval = "";
 		term.ENV[arg] = useval;
 	}
-	return {err};
+	if (err.length)_.err(err);
+	return E_SUC;
 };//»
-const com_export = async(args, opts)=>{return {err: add_to_env(args, opts.term.ENV, {if_export: true})};};
-const com_hist=(args, opts)=>{return {out: opts.term.get_history()};};
-const com_clear=(args, opts)=>{opts.term.clear();};
-const com_pwd=(args, opts)=>{return {out: opts.term.cur_dir};};
-const com_echo = async (args, opts) => {return {out: args.join(" ").split("\n")};};
-const com_help = async(args, opts)=>{//«
-	let help = globals.shell_help;
-	if (!help){
-		try{
-			help = (await import("shell_help")).help_text;
-		}catch(e){
-			return {err: "Could not load the help module"};
-		}
-		globals.shell_help = help;
-	}
-	let out = [];
-	let nargs = args.length;
-	if (!args.length) args = ["help"];
-	while (args.length){
-		if (out.length) out.push("");
-		let which = args.shift();
-		if (nargs > 1) out.push(`${which}:`);
-		let txt = help[which];
-		if (!txt) out.push("not found");
-		else out.push(...txt.split("\n"));
-	}
-	return {out, pretty: true};
+const com_export = async (args, opts, _) => {//«
+		_.err(add_to_env(args, _.term.ENV, {
+			if_export: true
+		}));
+		return E_SUC;
 };//»
-const com_ls = async (args, o) => {//«
-	const send_out=s=>{
-		if (inpipe) out.push(s);
-		else out.push(...term.fmt(s));
-	};
+const com_hist=(args,opts,_)=>{_.out(_.term.get_history());return E_SUC;};
+const com_clear=(args,opts,_)=>{_.term.clear();return E_SUC;};
+const com_pwd=(args,opts,_)=>{_.out(_.term.cur_dir);return E_SUC;};
+const com_echo=async(args,opts,_)=>{_.out(args.join(" ").split("\n"));return E_SUC;};
+const com_ls = async (args,opts, _) => {//«
 	if (!args.length) args.push("./");
-	let err = [];
-	let out = [];
 	let colors = [];
-	let {inpipe, term, add_rows, opts={}} = o;
+//	let {inpipe, term, add_rows, out, err} = _;
+	let {inpipe, term, out, err} = _;
 	let nargs = args.length;
 	let dir_was_last = false;
 	let all = opts.all||opts.a;
@@ -1156,18 +826,18 @@ const com_ls = async (args, o) => {//«
 		if (recur) recur_dirs = [];
 		if (!node) {
 			dir_was_last = false;
-			err.push(`${regpath}: No such file or directory`);
+			err(`${regpath}: No such file or directory`);
 			return;
 		}
 		if (node.appName !== FOLDER_APP) {
 			if (wants_dir) {
-				err.push(`${regpath}: Not a directory`);
+				err(`${regpath}: Not a directory`);
 				return;
 			}
 			if (dir_was_last) out.push("");
 			dir_was_last = false;
 			if (node.appName==LINK_APP){
-				send_out(`${node.name} -> ${node.symLink}`);
+				out(`${node.name} -> ${node.symLink}`);
 				return;
 			}
 			let sz = "?";
@@ -1176,7 +846,7 @@ const com_ls = async (args, o) => {//«
 				if (file) sz = file.size;
 			}
 			else if (Number.isFinite(node.size)) sz = node.size;
-			send_out(`${node.name} ${sz}`);
+			out(`${node.name} ${sz}`);
 			return;
 		}
 		if (!node.done) await fsapi.popDir(node);
@@ -1186,8 +856,8 @@ const com_ls = async (args, o) => {//«
 		let names=[];
 		let lens = [];
 		let types = [];
-		if (out.length && nargs > 1 || recur) out.push("");
-		if (nargs > 1 || recur) send_out(`${path}:`);
+		if (out.length && nargs > 1 || recur) out("");
+		if (nargs > 1 || recur) out(`${path}:`);
 		let s = "";
 		let dir_arr = [];
 		for (let nm of arr){
@@ -1207,7 +877,7 @@ const com_ls = async (args, o) => {//«
 		}
 		dir_arr = dir_arr.sort();
 		if (inpipe) {
-			out.push(...dir_arr);
+			out(...dir_arr);
 		}
 		else {//«
 			for (let nm of dir_arr){
@@ -1228,8 +898,8 @@ const com_ls = async (args, o) => {//«
 			let name_lens = [];
 			for (let nm of dir_arr) name_lens.push(nm.length);
 			let ret = [];
-			term.fmt_ls(dir_arr, name_lens, ret, types, colors, out.length+err.length+add_rows);
-			out.push(...ret);
+			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
+			out(ret, {colors, didFmt: true});
 		}//»
 		if (recur) {
 			for (let dir of recur_dirs) await do_path(dir);
@@ -1238,14 +908,17 @@ const com_ls = async (args, o) => {//«
 	while (args.length) {
 		await do_path(args.shift());
 	}
-	return {err, out, didFmt: true, colors};
+	return E_SUC;
 };
 //»
-const com_cd = async (args, opts) => {//«
-	const e=s=>{return {err: [s]}}
+const com_cd = async (args, opts, _) => {//«
+	const e=s=>{
+		_.err(s);
+		return E_ERR;
+	};
 	let res;
 	let got_dir, dir_str, dirobj;
-	let {term}=opts;
+	let {term}=_;
 	const cd_end = () => {
 		if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
 		term.cur_dir = got_dir;
@@ -1254,24 +927,29 @@ const com_cd = async (args, opts) => {//«
 	if (!args.length) {
 		got_dir = term.get_homedir();
 		cd_end();
-		return TERM_OK;
+		return E_SUC;
 	}
 	let saypath = args[0];
 	let regpath = normPath(saypath, term.cur_dir);
 	let ret = await fsapi.pathToNode(regpath);
 	if (!ret) {
-		return e(`${saypath}: No such file or directory`);
+		_.err(`${saypath}: No such file or directory`);
+		return E_ERR;
 	}
 	if (ret.appName != FOLDER_APP) {
-		return e(`${saypath}: Not a directory`);
+		_.err(`${saypath}: Not a directory`);
+		return E_ERR;
 	}
 	got_dir = regpath;
 	cd_end();
-
+	return E_SUC;
 };//»
-const com_env = async (args, opts) => {//«
-	if (args.length) return {err:"Arguments are not supported"};
-	let {term}=opts; 
+const com_env = async (args, opts, _) => {//«
+	if (args.length) {
+		_.err("Arguments are not supported");
+		return E_ERR;
+	}
+	let {term}=_; 
 	let env = term.ENV;
 	let keys = env._keys;
 	let out = [];
@@ -1279,18 +957,17 @@ const com_env = async (args, opts) => {//«
 		let val = env[key];
 		out.push(`${key}=${val}`);
 	}
-	return {out};
+	_.out(out);
+	return E_SUC;
 };//»
-const com_app = async (args, opts) => {//«
-	let {term}=opts; 
+const com_app = async (args, opts, _) => {//«
+	let {term}=_; 
 	let err = [];
-	const terr=(arg)=>{
-		err.push(arg);
-	};
 	let list;
 	if (!args.length) {
 		list = await capi.getList("/site/apps/");
-		return {out: list};
+		_.out(list);
+		return E_SUC;
 	}
 	for (let appname of args){
 		if (list && !list.includes(appname)) {
@@ -1299,52 +976,73 @@ const com_app = async (args, opts) => {//«
 		}
 		term.Desk.api.openApp(appname);
 	}
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
 };//»
-const com_appicon=async(args, opts)=>{//«
-	if (!args.length) return {out: await capi.getList("/site/apps/")};
-	return {out: JSON.stringify({app: args.shift()})};
+const com_appicon=async(args, opts, _)=>{//«
+	if (args.length){
+		_.out(JSON.stringify({app: args.shift()}));
+	}
+	else {
+		_.out(await capi.getList("/site/apps/"));
+	}
+	return E_SUC;
 };//»
-const com_open = async (args, opts) => {//«
-	let {term}=opts; 
+const com_open = async (args, opts, _) => {//«
+	let {term}=_; 
 	let err = [];
-	const terr=(arg)=>{err.push(arg);};
 	if (!args.length) {
-		terr(`open: missing operand`);
-		return {err};
+		_.err(`open: missing operand`);
+		return E_ERR;
 	}
 	for (let path of args) {
 		let fullpath = normPath(path, term.cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
-			terr(`${path}: No such file or directory`);
+			err.push(`${path}: No such file or directory`);
 			continue;
 		}
 		term.Desk.open_file_by_path(node.fullpath);
 	}
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
+
 };//»
-const com_epoch=()=>{return {out:Math.round((new Date).getTime()/1000)+""};};
-const com_true=()=>{return {code: 0, out: "I'm true"};};
-const com_false=()=>{return {code: 1, out: "I'm false"};};
-const com_msleep = async(args, opts)=>{//«
+const com_epoch = (args, opts, _) => {//«
+_.out(Math.round((new Date).getTime()/ 1000)+"");
+return E_SUC;
+};//»
+const com_true=(args, opts, _)=>{//«
+_.suc("I'm true");
+return E_SUC;
+};//»
+const com_false = (args, opts, _) => {//«
+_.err("I'm false");
+return E_ERR;
+};//»
+const com_msleep = async(args, opts, _)=>{//«
 	let ms = parseInt(args.shift());
 	if (!Number.isFinite(ms)) ms = 0;
 	await sleep(ms);
+	return E_SUC;
 };//»
-const com_libs = async (args, o) => {//«
-	return {
-		out: await capi.getList("/site/coms/")
-	};
+const com_libs = async (args, opts, _) => {//«
+	_.out(await capi.getList("/site/coms/"));
+	return E_SUC;
 };//»
-const com_lib = async(args, o)=>{//«
-	const {term, opts, stdin} = o;
+const com_lib = async(args,opts, _)=>{//«
+	const {term, stdin, err, out} = _;
 	let lib = args.shift();
-	if (!lib) return {err: "no lib given!"};
+	if (!lib) {
+		err("no lib given!");
+		return E_ERR;
+	}
 	let hold = lib;
 	let got = ALL_LIBS[lib] || NS.coms[lib];
 	if (got){
-		return {out: Object.keys(got)};
+		if (!isarr(got)) got = Object.keys(got);
+		out(got);
+		return E_SUC;
 	}
 	let orig = lib;
 	lib = lib.replace(/\./g,"/");
@@ -1352,21 +1050,78 @@ const com_lib = async(args, o)=>{//«
 	try{
 		const coms = (await import(path)).coms;
 		NS.coms[orig] = coms;
-		return {out: Object.keys(coms)};
+		out(Object.keys(coms));
+		return E_SUC;
 	}catch(e){
 cerr(e);
-		return {err: `The library: '${hold}' could not be loaded!`};
+		err(`The library: '${hold}' could not be loaded!`);
+		return E_ERR;
 	}
 };//»
-const com_import=async(args, opts)=>{//«
-	let {term}=opts;
+const com_import=async(args, opts, _)=>{//«
+	let {term}=_;
 	let err = [];
 	const terr=(arg)=>{err.push(arg);};
+if (opts.delete || opts.d){
+delete_coms(args);
+return E_SUC;
+}
 	await do_imports(args, terr);
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
+//	return {err};
 };//»
 
 /*
+const com_help = async(args, opts, _)=>{//«
+	let help = globals.shell_help;
+	const {err, out}=_;
+	if (!help){
+		try{
+			help = (await import("shell_help")).help_text;
+		}catch(e){
+			err("Could not load the help module");
+			return E_ERR;
+		}
+		globals.shell_help = help;
+	}
+	let out = [];
+	let nargs = args.length;
+	if (!args.length) args = ["help"];
+	while (args.length){
+		if (out.length) out.push("");
+		let which = args.shift();
+		if (nargs > 1) out.push(`${which}:`);
+		let txt = help[which];
+		if (!txt) out.push("not found");
+		else out.push(...txt.split("\n"));
+	}
+	return {out, pretty: true};
+};//»
+const com_termlines=(args,opts, _)=>{//«
+	const {term, stdin, out, err} = _;
+	let idstr = args.shift();
+	if (!idstr) {
+		err("No winid given");
+		return E_ERR;
+	}
+	let id = idstr.ppi();
+	if (isNaN(id)) {
+		err("Invalid id: want a positive integer");
+		return E_ERR;
+	}
+	let win = document.getElementById(`win_${id}`);
+	if (!win) {
+		err("No window with that id");
+		return E_ERR;
+	}
+	if (win._winObj.appName!=="Terminal") {
+		err("Not a terminal");
+		return E_ERR;
+	}
+	out( win._winObj.app.lines);
+	return E_SUC;
+};//»
 const com_hi = async(args, o)=>{//«
 	const {term, opts} = o;
 	if (term.ssh_server) return {out: "Ready to serve"};
@@ -1634,7 +1389,7 @@ Long options may be given an argument like this:
 		}
 	},//»
 	read:{l:{prompt:3}},
-
+	import:{s:{d:1},l:{delete: 1}}
 
 /*«
 
@@ -1697,7 +1452,7 @@ true: com_true,
 false: com_false,
 epoch: com_epoch,
 hist: com_hist,
-help: com_help,
+//help: com_help,
 import: com_import,
 libs: com_libs,
 lib: com_lib,
@@ -1722,11 +1477,6 @@ msleep: com_msleep,
 //ssh: com_ssh,
 //meta: com_meta,
 };
-if (dev_mode){
-
-shell_commands.test = com_test;
-//log();
-}
 
 
 //for (let coms in NS.coms){
@@ -1759,6 +1509,11 @@ continue;
 const active_commands = globals.shell_commands || shell_commands;
 if (!globals.shell_commands) globals.shell_commands = shell_commands;
 //const active_commands = globals.shell_commands ? (globals.shell_commands) :
+if (dev_mode){
+
+active_commands.test = com_test;
+
+}
 
 //let BUILTINS = active_commands._keys;
 
@@ -1775,6 +1530,7 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 const Shell = function(term){
 
 //Var«
+const shell = this;
 
 /*Very dumbhack to implement cancellations of hanging commands, e.g. that might do fetching,«
 so that no output from a cancelled command is sent to the terminal, although
@@ -1965,6 +1721,12 @@ const shell_tokify = line_arr => {//«
 			let ch = arr[j];
 			let ch1 = arr[j+1];
 			if (ch==" " &&ch1=="#") break;
+			if (ch=="#"&&j==0) break;
+			if (ch==" " &&ch1==" "){
+				arr.splice(j, 1);
+				j--;
+				continue;
+			}
 			if (shell_metas.includes(ch)) {//«
 				if (word) ret.push(mkword(word.join("")));
 				if (ch == "\t" || ch == " ") {
@@ -2061,58 +1823,58 @@ const shell_tokify = line_arr => {//«
 		}
 		word = null;
 	}
-//	add_to_pipe();
-//	if (!pipe[pipe.length-1].length){
-//		return "Unterminated pipeline";
-//	}
-//	return pipe;
 	return ret;
 };//»
 
 //»
 
-//Instead of trying to create a theoretically beautiful shell.execute algorithm, I 
-/*«wanted to instead provide explicit commentary on the one that should hopefully "just work"
+/*Instead of trying to create a theoretically beautiful shell.execute algorithm, I//«
+wanted to instead provide explicit commentary on the one that should hopefully "just work"
 
 Support for: 
+- Comment stripping #THIS IS INVISIBLE TO THE SHELL
 - parsing long and short options
 - single quote escaping via '$': echo $'1\n2\n3'
 - escaping spaces: touch some\ file.txt
 - environment variable setting and substitution
-- redirects: '>', '>>'
-- pipelines
+- redirects: '>', '>>' (currently for the "out" stream only)
+- pipelines (currently for the "out" stream only)
 - file globbing
 - curly brace expansion: touch file{1..10}.txt
 - backquote command substitution
 
 Bottom line:
-For anything that doesn't quite work, try to get it to work without creating too much confusion
-in the code or breaking any functionality that is more worthy
+
+For anything that doesn't quite work, try to get it to work without creating
+too much confusion in the code or breaking any functionality that is more
+worthy
 
 »*/
 
 this.execute=async(command_str, opts={})=>{//«
+
 const terr=(arg, if_script)=>{//«
+
 if (script_out){
 	script_out.push(arg);
 }
-//else if (ssh_err){
-//	ssh_err.push(arg);
-//}
 else {
-	term.response(arg);
+	term.response(arg, {isErr: true});
 	if (!if_script) term.response_end();
 }
 };//»
+const can=()=>{//«
+//Cancel test function
+	return started_time < this.cancelled_time;
+};//»
 
+//Init/Var«
 //WIMNNUYDKL
 let started_time = (new Date).getTime();
-let no_response_end;
-//Cancel test function
-const can=()=>{return started_time < this.cancelled_time;};
 
 //let {script_out, ssh_out, ssh_err, env, addRows}=opts;
-let {script_out, env, addRows}=opts;
+//let {script_out, env, addRows}=opts;
+let {script_out, env}=opts;
 let rv;
 
 //Where does the output go?
@@ -2122,15 +1884,18 @@ let redir;
 // cat somefile.txt | these | might | use | the | stdin | array
 let stdin;
 
-//This tells all commands with color output (currently just ls) the number of rows to add to the objects
-//that at used in response() to add to line_colors[]
-let add_rows = addRows || 0;
+//MJUEYSKDH
+//This tells all commands with color output (currently just ls) the number 
+//of rows to add to the objects that are used in response() to add to line_colors[]
+//let add_rows = addRows || 0;
 
 //Refuse and enter command that seems too long for our taste
 if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} ...': line length > MAX_LINE_LEN(${MAX_LINE_LEN})`, script_out);
 
 command_str = command_str.replace(/^ +/,"");
+//»
 
+//Parser«
 //Only for creating newlines in single quotes: $'1\n2' and escaping spaces outside of quotes
 let arr = shell_escapes([command_str]);
 
@@ -2139,6 +1904,7 @@ arr = shell_quote_strings(arr);
 if (isstr(arr)) return terr(term.fmt(arr), script_out);
 
 /*
+Comments are stripped
 This creates word objects and '$' objects.
 It also creates '>' and '>>' redirections as well as pipelines.
 All unsupported tokens (redirects like '<' and control like ';') cause failure
@@ -2199,7 +1965,9 @@ for (let tok of all3){
 }
 if (orlist.length) statements.push({orlist});
 
-for (let state of statements) {
+//»
+
+for (let state of statements) {//«
 
 	let lastandcode;
 //Loop until one returns true
@@ -2219,6 +1987,8 @@ for (let state of statements) {
 			let lastcomcode;
 
 			while (pipe.length) {//«
+
+//Preparatory (substitutions, setting env vars, etc.)«
 				let arr = pipe.shift().com;
 				let args=[];
 
@@ -2258,7 +2028,9 @@ file0.txt file1.txt file2.txt file3.txt
 						val = outstr;
 						if (typ=="\x60") {
 							let out=[];
-							add_rows = await this.execute(val, {script_out: out, env, addRows: add_rows});
+//DJUYEKLMI
+//							add_rows = await this.execute(val, {script_out: out, env, addRows: add_rows});
+							await this.execute(val, {script_out: out, env});
 							if (can()) return;
 							if (isstr(out)) val = out;
 							else if (isarr(out)&&out.length) val = out.join(" ");
@@ -2338,9 +2110,11 @@ q 1Aq 2q 3B q 4Cq       5Dq 6
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
 				rv = add_to_env(arr, env, {term});
-				add_rows+=rv.length;
+//				add_rows+=rv.length;
 				term.response(rv);
 				if (arr[0]==" ") arr.shift();
+
+//»
 
 //Get the command. Immediately return if not found.
 				let comword = arr.shift();
@@ -2373,35 +2147,38 @@ q 1Aq 2q 3B q 4Cq       5Dq 6
 						if (can()) return;
 cerr(e);
 						terr(`sh: command library: '${com}' could not be loaded`);
-						return ++add_rows;
+						return;
 					}
 					let gotcom = active_commands[usecomword];
 					if (!(gotcom instanceof Function)){
 						terr(`sh: '${usecomword}' is invalid or missing in command library: '${com}'`);
-						return ++add_rows;
+						return;
 					}
 					com = gotcom;
 				}//»
-
 //Not found!
 				if (!com) {//«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
 					if (CONTROL_WORDS.includes(comword)){
 						terr(`sh: control structures are not implemented`, script_out);
-						return ++add_rows;
+						return;
 					}
+
 //It doesn't look like a file.
+//EOPIUYTLM
 					if (!comword.match(/\x2f/)) {
-						terr(`sh: ${comword}: command not found`, script_out);
-						return ++add_rows;
+						term.response(`sh: ${comword}: command not found`, {isErr: true});
+						lastcomcode = E_ERR;
+						continue;
 					}
 
 //Try to execute a "shell script"
 					let rv = await execute_file(comword, term.cur_dir, env);
 					if (can()) return;
 					if (isstr(rv)) {
-						terr(rv, script_out);
-						return ++add_rows;
+						term.response(rv, {isErr: true});
+						lastcomcode = E_ERR;
+						continue;
 					}
 
 //Collect the stdin (used as optional input for the next command) for pipelines
@@ -2412,7 +2189,7 @@ cerr(e);
 						}
 						else{
 							term.response(rv);
-							term.response_end();
+//							term.response_end();
 						}
 					}
 					continue;
@@ -2425,78 +2202,148 @@ cerr(e);
 //Parse the options and fail if there is an error message
 				rv = get_options(arr, usecomword, gotopts);
 				if (rv[1]&&rv[1][0]) {
-					add_rows++;
 					term.response(rv[1][0]);
 					continue;
 				}
 				opts = rv[0];
 
+//Command response callbacks«
+
+//Everything that gets sent to redirects and pipes must be collected
+//By default, only the 'out' stream will be collected.
+let save_lns;
+if (inpipe || script_out || (redir && redir.length)){
+	save_lns = [];
+}
+
+const out_cb=(lns, opts={})=>{//«
+
+if (can()) return;
+
+if (isstr(lns)) lns=[lns];
+else if (!isarr(lns)){
+log(lns);
+throw new Error("Invalid value in out_cb");
+}
+
+if (save_lns) return save_lns.push(...lns);
+
+//MDKLIOUTYH
+term.response(lns, opts);
+term.scroll_into_view();
+term.refresh();
+
+};//»
+const err_cb=(lns)=>{//«
+if (can()) return;
+if (isstr(lns)) lns=[lns];
+else if (!isarr(lns)){
+log(lns);
+throw new Error("Invalid value in err_cb");
+}
+term.response(lns, {isErr: true});
+term.scroll_into_view();
+term.refresh();
+
+};//»
+const suc_cb=(lns)=>{//«
+if (can()) return;
+if (isstr(lns)) lns=[lns];
+else if (!isarr(lns)){
+log(lns);
+throw new Error("Invalid value in suc_cb");
+}
+term.response(lns, {isSuc: true});
+term.scroll_into_view();
+term.refresh();
+};//»
+const wrn_cb=(lns)=>{//«
+if (can()) return;
+if (isstr(lns)) lns=[lns];
+else if (!isarr(lns)){
+log(lns);
+throw new Error("Invalid value in suc_cb");
+}
+term.response(lns, {isWrn: true});
+term.scroll_into_view();
+term.refresh();
+};//»
+
+//»
+
+//SKIOPRHJT
 //Run command
-				rv = await com(arr, {redir, script_out, stdin, inpipe, term, add_rows, env, opts, command_str});
+
+				let code = await com(arr, opts, {
+					redir,
+					script_out,
+					stdin,
+					inpipe,
+					term,
+//					add_rows,
+					env,
+					opts,
+					command_str,
+					out: out_cb,
+					err: err_cb,
+					suc: suc_cb,
+					wrn: wrn_cb
+				});
+
 				if (can()) return;
-				if (!rv) rv = {};
-				if (isstr(rv)) rv = {out: rv};
-				let {out, err, colors, didFmt, pretty, code, noEnd} = rv;
-				no_response_end = noEnd;
-				let invalid = !Number.isFinite(code);
-				if (err && err.length) {
-//					if (term.ssh_server){}
-//					else {
+
+if (!Number.isFinite(code)) {
+log(code);
+	throw new Error(`Invalid return value from: '${usecomword}'`);
+}
+//				if (!rv) rv = {};
+//				if (isstr(rv)) rv = {out: rv};
+
+//CKLOPUTIK
+//				let {out, ok, err, colors, didFmt, pretty, code} = rv;
+
+//				let {code} = rv;
+
+//				let invalid = !Number.isFinite(code);
+
+/*
+				if (err && err.length) {//«
 					if (isstr(err)) err = [err];
 					add_rows+=err.length;
 					if (invalid) code = 1;
-					term.response(err);
-//					}
+					term.response(err, {isErr: true});
 				}
 				else if (invalid) code = 0;
-				lastcomcode = code;
-				if (out) {//«
-					if (isstr(out)) out=[out];
-					if (redir&&redir.length){
-						if (isarr(out)) out = out.join("\n");
-						let {err} = await write_to_redir(term, out, redir, env);
-						if (can()) return;
-						if (err) {
-							add_rows++;
-							term.response(err);
-						}
-						stdin = [];
-					}
-//Set the stdin for the next command
-					else if (inpipe) {
-						stdin = out;
-					}
-//					else if (!(script_out||ssh_out)){
-					else if (!script_out){
-//Print the output
-						term.response(out,{didFmt, colors, pretty});
-					}
-					else{
-					}
+//»
+				if (ok && ok.length) {//«
+					if (isstr(ok)) ok = [ok];
+					add_rows+=ok.length;
+					term.response(ok, {isOK: true});
 				}//»
-				else stdin = null;
-
-//If we are expecting to collect the output of a script or command substitition, collect the output
-
-				if (!inpipe) {
-if (script_out) {
-	script_out.push(...out);
-}
-/*
-if (ssh_out){
-	if (redir && term.ssh_server){
-cwarn("SKIPPING OUTPUT WITH REDIR IN TERM.SSH_SERVER...");
-	}
-	else if (out && out.length) ssh_out.push(...out);
-}
-if (ssh_err){
-	if (err && err.length) ssh_err.push(...err);
-}
 */
-				}
 
+				lastcomcode = code;
+
+if (redir&&redir.length){
+	let {err} = await write_to_redir(term, save_lns.join("\n"), redir, env);
+	if (can()) return;
+	if (err) {
+		term.response(err);
+	}
+	save_lns = [];
+}
+
+if (inpipe) stdin = save_lns;
+else if (script_out) script_out.push(...save_lns);
+
+/*
+				if (!inpipe) {
+					if (script_out) script_out.push(...save_lns);
+				}
+*/
 
 			}//»
+	
 			lastpipecode = lastcomcode;
 			if (lastpipecode > 0) break;
 
@@ -2507,21 +2354,17 @@ if (ssh_err){
 
 	}//»
 
-}
+}//»
 
 //In a script, refresh rather than returning to the prompt
-
-//if (script_out||ssh_out) {
 if (script_out) {
-//	if (!term.ssh_server) term.refresh();
 	term.refresh();
-//	return {out: script_out, addRows: add_rows};
-	return add_rows;
+	return;
+//	return add_rows;
 }
 
-
 //Command line input returns to prompt
-if (!no_response_end) term.response_end();
+term.response_end();
 
 }//»
 
@@ -2595,7 +2438,7 @@ export const app = function(Win) {
 const TABSIZE = 4;
 const TABSIZE_MIN_1 = TABSIZE-1;
 
-const {main, Desk} = Win;
+const {main, Desk, status_bar} = Win;
 const topwin = Win;
 const winid = topwin.id;
 const termobj = this;
@@ -2705,7 +2548,7 @@ let DO_EXTRACT_PROMPT = true;
 const MAX_OVERLAY_LENGTH = 42;
 let overlay_timer = null;
 let TERMINAL_IS_LOCKED = false;
-let buffer_scroll_num = null;
+//let buffer_scroll_num = null;
 let buffer_hold;
 let line_height;
 
@@ -2750,7 +2593,6 @@ let ls_padding = 2;
 let await_next_tab = null;
 
 let cur_prompt_line = 0;
-let line_continue_flag = false;
 let cur_scroll_command;
 let prompt_str;
 let prompt_len;
@@ -2926,25 +2768,9 @@ main.appendChild(areadiv);
 
 //Util«
 
-const do_delete_mods = () => {//«
-	delete_mods();
-/*
-	let s="";
-	if (DEL_MODS.length) s+=`Deleting mods: ${DEL_MODS.join(",")}`;
-	if (DEL_COMS.length) {
-		if (s) s+="\n";
-		s+=`Deleting coms: ${DEL_COMS.join(",")}`;
-	}
-	if (s){
-		delete_mods();
-		if (this.reInit) {
-			this.reInit.addMessage=s;
-		}
-		cwarn(`${s}`);
-//		else do_overlay(s);
-	}
-*/
-}//»
+const stat=mess=>{
+	status_bar.innerText = mess;
+};
 
 const get_line_from_pager=async(arr, name)=>{//«
 
@@ -3046,14 +2872,15 @@ const wrap_line = (str)=>{//«
 	return out;
 };//»
 
-const fmt_ls=(arr, lens, ret, types, color_ret, start_from, col_arg)=>{//«
+const fmt_ls=(arr, lens, ret, types, color_ret, col_arg)=>{//«
+//const fmt_ls=(arr, lens, ret, types, color_ret, start_from, col_arg)=>{
 
 /*_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
 here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
 efficiently) is an outstanding issue...*/
 
 	let pad = ls_padding;
-	if (!start_from) start_from=0;
+//	if (!start_from) start_from=0;
 	if (col_arg == 1) {//«
 		for (let i=0; i < arr.length; i++) {
 			if (w >= arr[i].length) ret.push(arr[i]);
@@ -3129,7 +2956,8 @@ efficiently) is an outstanding issue...*/
 		min_wid = min_col_wid(i, num_cols);
 		tot_wid += min_wid;
 		if (tot_wid > w) {
-			fmt_ls(arr, lens, ret, types, color_ret, start_from, (num_cols - 1));
+//			fmt_ls(arr, lens, ret, types, color_ret, start_from, (num_cols - 1));
+			fmt_ls(arr, lens, ret, types, color_ret, (num_cols - 1));
 			return;
 		}
 		col_wids.push(min_wid);
@@ -3157,13 +2985,12 @@ efficiently) is an outstanding issue...*/
 			xpos=0;
 		}
 		let nm = arr[i];
-//		let str = arr[i] + " ".rep(col_wids[col_num] - arr[i].length);
 		let str = nm + " ".rep(col_wids[col_num] - nm.length);
 		matrix[row_num][col_num] = str;
 		if (color_ret) {
-			let use_row_num = row_num+start_from;
+//			let use_row_num = row_num+start_from;
+			let use_row_num = row_num;
 			if (!color_ret[use_row_num]) color_ret[use_row_num] = {};
-//			let uselen = arr[i].length;
 			let uselen = nm.length;
 			if (arr[i].match(/\/$/)) uselen--;
 			if (color) color_ret[use_row_num][xpos] = [uselen, color];
@@ -3504,11 +3331,11 @@ const render = (opts={})=>{
 	if (opts.noCursor){}
 	else if (!TERMINAL_IS_LOCKED) docursor = true;
 	let usescroll = scroll_num;
-	let is_buf_scroll = false;
-	if (buffer_scroll_num!==null) {
-		usescroll = buffer_scroll_num;
-		is_buf_scroll = true;
-	}
+//	let is_buf_scroll = false;
+//	if (buffer_scroll_num!==null) {
+//		usescroll = buffer_scroll_num;
+//		is_buf_scroll = true;
+//	}
 	let scry=usescroll;
 	let slicefrom = scry;
 	let sliceto = scry + nrows;
@@ -3632,7 +3459,8 @@ if (num2 > w) {
 		}//»
 
 
-		if (!(is_pager||is_buf_scroll||stat_input_type||is_scrolling)) {//«
+		if (!(is_pager||stat_input_type||is_scrolling)) {//«
+//		if (!(is_pager||is_buf_scroll||stat_input_type||is_scrolling)) {
 			if (docursor && i==y) {
 				let usebg;
 				if (!topwin_focused) usebg = CURBG_BLURRED;
@@ -3864,16 +3692,8 @@ log(wrapdiv);
 	wrapdiv._over="hidden";
 };//»
 const clear_table=()=>{//«
-//const clear_table=(if_keep_buf)=>{
-//	if (if_keep_buf) {
-//		buf_lines = buf_lines.concat(lines.slice(0, scroll_num));
-//		lines =  lines.slice(scroll_num);
-//		line_colors =  line_colors.slice(scroll_num);
-//	}
-//	else {
 	lines = [];
 	line_colors = [];
-//	}
 	y=0;
 	scroll_num = 0;
 	render();
@@ -3924,6 +3744,7 @@ const scroll_into_view=(which)=>{//«
 	};//»
 	let did_scroll = false;
 	while (doscroll()) did_scroll = true;
+	y=lines.length - 1 - scroll_num;
 	return did_scroll;
 };
 this.scroll_into_view = scroll_into_view;
@@ -4132,7 +3953,7 @@ const get_prompt_str=()=>{//«
 };//»
 »*/
 
-const set_prompt=(opts={})=>{//«
+const set_prompt = (opts={}) => {//«
 	let if_nopush = opts.NOPUSH;
 	let if_noscroll = opts.NOSCROLL;
 	let use_str = get_prompt_str();
@@ -4156,17 +3977,10 @@ const set_prompt=(opts={})=>{//«
 	else {
 		len_min1 = lines.length-1;
 		line = plines.shift();
-		if (line_continue_flag) lines[len_min1] = lines[len_min1].concat(line);
-//		else if (if_force) {
-//			lines.push(line);
-//			len_min1++;
-//		}
+		if (!lines[len_min1][0]) lines[len_min1] = line;
 		else {
-			if (!lines[len_min1][0]) lines[len_min1] = line;
-			else {
-				lines.push(line);
-				len_min1++;
-			}
+			lines.push(line);
+			len_min1++;
 		}
 		if (use_col) line_colors[len_min1] = {'0': [line.length, use_col]};
 		while(plines.length) {
@@ -4184,7 +3998,6 @@ const set_prompt=(opts={})=>{//«
 	if (prompt_len==1 && lines[len_min1][0]==="") prompt_len=0;
 	x=prompt_len;
 	y=lines.length - 1 - scroll_num;
-	line_continue_flag = false;
 };
 //»
 const insert_cur_scroll = () => {//«
@@ -4284,22 +4097,49 @@ log("STDOUT");
 log(out);
 return;
 	}
-
-	let {didFmt, colors, pretty} = opts;
+	let {didFmt, colors, pretty, isErr, isSuc, isWrn} = opts;
+//WOPIUTHSDKL
+	let use_color;
+	if (isErr) use_color = "#f99";
+	else if (isSuc) use_color = "#7f7";
+	else if (isWrn) use_color = "#ff7";
 	if (colors) {
-		for (let i=0; i < colors.length; i++) line_colors[scroll_num + y + i] = colors[i];
+		if (!didFmt){
+			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
+			Win._fatal(e);
+			throw e;
+		}
+		if (colors.length !== out.length){
+log("response lines",out);
+log("response colors",colors);
+			let e = new Error(`The output array and colors array are not equal length!`);
+			Win._fatal(e);
+			throw e;
+		}
 	}
+	else colors = [];
+
+
 	if (lines.length && !lines[lines.length-1].length) lines.pop();
-	for (let ln of out){
+
+	let len = out.length;
+	for (let i=0, curnum = lines.length; i < len; i++){
+		let ln = out[i];
+		let col = colors[i];
 		if (didFmt){
-			lines.push(ln.split(""));
+			lines[curnum] = ln.split("");
+			line_colors[curnum] = col;
+			curnum++;
 			continue;
 		}
 		let arr;
 		if (pretty) arr = fmt2(ln);
 		else arr = fmt(ln);
 		for (let l of arr){
-			lines.push(l.split(""));
+			lines[curnum] = l.split("");
+			if (use_color) line_colors[curnum] = {0: [l.length, use_color]};
+			else line_colors[curnum] = col;
+			curnum++;
 		}
 	}
 };
@@ -4418,7 +4258,9 @@ const handle_line_str=(str, from_scroll, uselen, if_no_render)=>{//«
 	x = curx;
 	if (x==w) {
 		y++;
-		if (!lines[y+scroll_num]) lines.push([]);
+		if (!lines[y+scroll_num]) {
+			lines.push([]);
+		}
 		x=0;
 		scroll_into_view();
 	}
@@ -4692,7 +4534,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 };
 this.handle_tab = handle_tab;
 //»
-
+/*
 const handle_buffer_scroll=(if_up)=>{//«
 	if (buffer_scroll_num===null) {
 		buffer_scroll_num = scroll_num;
@@ -4724,6 +4566,7 @@ const handle_buffer_scroll=(if_up)=>{//«
 	buffer_scroll_num = n;
 	render();
 };//»
+*/
 const handle_arrow=(code, mod, sym)=>{//«
 
 	if (mod == "") {//«
@@ -5199,7 +5042,13 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 				getch_cb(e.key);
 				getch_cb = null;
 			}
-			else return;
+			else {
+				if (sym=="ENTER_"){
+					getch_cb(getch_def_ch);
+					getch_def_ch = undefined;
+				}
+				return;
+			}
 		}
 		else if (read_line_cb){
 			if (ispress || OK_READLINE_SYMS.includes(sym)){
@@ -5226,19 +5075,21 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 		if (code == 75 && alt) return;
 		else {
 			if (cy() > 1 && !lines[cy()-1]) set_prompt();
-			else lines[cy()] = [null];
+			else {
+				lines[cy()] = [null];
+			}
 		}
 	}//»
 
 	let ret = null;
  	if (ispress) {//«
 		num_ctrl_d = 0;
-		if (buffer_scroll_num!==null){
-			buffer_scroll_num = null;
-			x = hold_x;
-			y = hold_y;
-			render();
-		}
+//		if (buffer_scroll_num!==null){
+//			buffer_scroll_num = null;
+//			x = hold_x;
+//			y = hold_y;
+//			render();
+//		}
 		if (cur_scroll_command) insert_cur_scroll();
 		if (code == 0) return;
 		else if (code == 1 || code == 2) code = 32;
@@ -5251,12 +5102,12 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	}//»
 	if (sym == "d_C") return do_ctrl_D();
 	num_ctrl_d = 0;
-	if (buffer_scroll_num!==null){
-		buffer_scroll_num = null;
-		x = hold_x;
-		y = hold_y;
-		render();
-	}
+//	if (buffer_scroll_num!==null){
+//		buffer_scroll_num = null;
+//		x = hold_x;
+//		y = hold_y;
+//		render();
+//	}
 	if (code >= 37 && code <= 40) handle_arrow(code, mod, sym);
 	else if (sym == "HOME_"|| sym == "END_") handle_page(sym);
 	else if (code == KC['DEL']) handle_delete(mod);
@@ -5298,8 +5149,6 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 		render();
 	}//»
 	else if (sym == "l_A"){
-//	else if (sym=="l_A") log(line_colors);
-//		do_delete_mods();
 	}
 	else if (sym == "g_CAS"){
 		save_special_command();
@@ -5311,12 +5160,16 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 		select_from_history(HISTORY_PATH_SPECIAL);
 	}
 	else if (sym=="r_CAS"){
-
+if (!dev_mode){
+cwarn("Not dev_mode");
+return;
+}
 //VMUIRPOIUYT
 if (Term.ondevreload) delete Term.ondevreload;
 else Term.ondevreload = ondevreload;
-log(`ondevreload == ${!!Term.ondevreload}`);
-
+//log(`ondevreload == ${!!Term.ondevreload}`);
+//cwarn("Reload the terminal:", !Term.ondevreload);
+do_overlay(`Reload terminal: ${!Term.ondevreload}`);
 	}
 };
 //»
@@ -5421,7 +5274,7 @@ const init = async(appargs={})=>{
 	if (!reInit) reInit = {};
 	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
-cwarn("USE_ONDEVRELOAD", USE_ONDEVRELOAD);
+cwarn("Reload the terminal:", !USE_ONDEVRELOAD);
 //	let gotbuf = reInit.termBuffer;
 	if (termBuffer) history = termBuffer;
 	else {
@@ -5435,6 +5288,9 @@ cwarn("USE_ONDEVRELOAD", USE_ONDEVRELOAD);
 		}
 	}
 	let init_prompt = `System shell\x20(${winid.replace("_","#")})`;
+	if(dev_mode){
+init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+	}
 	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
 	let env_file_path = `${this.cur_dir}/.env`; 
 	let env_lines = await env_file_path.toLines();
@@ -5464,14 +5320,18 @@ cwarn("USE_ONDEVRELOAD", USE_ONDEVRELOAD);
 //»
 //Obj/CB«
 
+//Var«
 let read_line_cb;
 let read_line_prompt_len;
-let getch_cb;
-this.getch = async(promptarg)=>{//«
+let getch_cb, getch_def_ch;
+//»
+this.stat = stat;
+this.getch = async(promptarg, def_ch)=>{//«
 	if (promptarg){
 		for (let ch of promptarg) handle_letter_press(ch);
 	}
 	return new Promise((Y,N)=>{
+		getch_def_ch = def_ch;
 		getch_cb = Y;
 	});
 };//»
@@ -5499,14 +5359,10 @@ this.onappinit = init;
 const onescape = () => {//«
 	textarea&&textarea.focus();
 	if (check_scrolling()) return true;
-	let dorender=false;
-	if (buffer_scroll_num !== null) {
-		buffer_scroll_num = null;
-		x = hold_x;
-		y = hold_y;
-		dorender = true;
+	if (status_bar.innerText){
+		status_bar.innerText = "";
+		return true;
 	}
-	if (dorender) return true;
 	return false;
 }
 this.onescape = onescape;
@@ -5516,29 +5372,18 @@ this.onsave=()=>{//«
 	if (actor && actor.save) actor.save();
 }//»
 const ondevreload = async() => {//«
-cwarn("Deleting coms...", DEL_COMS);
+//cwarn("Deleting coms...", DEL_COMS);
 //log(DEL_COMS);
+//stat("");
+	do_overlay("ondevreload: start");
 	delete_coms(DEL_COMS);
-/*«
-	for (let m of DEL_COMS){
-		let lib = shell_libs[m];
-		if (!lib) {
-cwarn(`The command library: ${m} does not exist!`)
-			continue;
-		}
-		lib.delComs();
-		delete shell_libs[m];
-		delete ALL_LIBS[m];
-	}
-»*/
 	await do_imports(ADD_COMS, cerr);
+do_overlay("ondevreload: done");
 };//»
 
 this.onkill = (if_dev_reload)=>{//«
 	execute_kill_funcs();
 	if (this.cur_edit_node) this.cur_edit_node.unlockFile();
-//	if (this.ssh_server) this.ssh_server.close();
-//	else if (this.ssh_client) this.ssh_client.close();
 	if (!if_dev_reload) {
 		return save_history();
 	}
@@ -5551,8 +5396,13 @@ this.onkill = (if_dev_reload)=>{//«
 	if (actor) {
 		this.reInit.commandStr = actor.command_str;
 	}
-//	do_delete_mods();
-	delete_mods_and_coms();
+
+	delete_mods(DEL_MODS);
+	delete_coms(DEL_COMS);
+
+	delete globals.shell_commands;
+	delete globals.shell_command_options;
+
 	save_history();
 
 }//»

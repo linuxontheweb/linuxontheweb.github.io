@@ -72,7 +72,8 @@ remote repo with the local project.
 
 7) For Node.js, check to see whether nodebrew is installed. If not, get it from: 
 https://github.com/hokaccha/nodebrew. Another option is nvm, node version manager:
-https://github.com/nvm-sh/nvm.
+https://github.com/nvm-sh/nvm. These projects are used to handle automatic updates
+of your Node.js installation.
 
 Create a ~/.node folder so that the Node.js packaging system will not clutter your
 home directory.

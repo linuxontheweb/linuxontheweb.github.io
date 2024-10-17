@@ -1476,7 +1476,6 @@ log("Saved",ret.size);
 		}
 	}
 	let rv;
-//	if (edit_ftype==FS_TYPE) {
 	if (VALIDATE_JSON_ON_SAVE && usepath.match(/\.(json|app)$/i) && val.length < MAX_LEN_TO_VALIDATE_JSON){
 		try{
 			JSON.parse(val);
@@ -1490,11 +1489,14 @@ cerr(e);
 		rv = await fsapi.saveFsByPath(usepath, val, opts);
 	}
 	else {
+		let par = edit_fobj.par;
+		if (par.type === FS_TYPE && !await fsapi.checkDirPerm(par)){
+			stat_err("Permission denied");
+			return;
+		}
 		rv = await edit_fobj.setValue(val, opts);
 	}
 	return write_cb_func(rv);
-//	}
-//cerr(`WHAT EDIT_FTYPE: ${edit_ftype}!?!?!??!`);
 }
 //»
 const save_as = async name=>{//«

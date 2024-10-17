@@ -1,14 +1,28 @@
+//TODO: Everything past @GSJKELSIU needs to be updated with the new response and
+//return code (E_SUC or E_ERR) convention
 //Imports«
 
 import { util, api as capi } from "util";
 import { globals } from "config";
 const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
-const{NS, TEXT_EDITOR_APP, LINK_APP, FOLDER_APP, FS_TYPE, MOUNT_TYPE, SHM_TYPE, fs,DEF_EDITOR_MOD_NAME, DEF_PAGER_MOD_NAME}=globals;
+const {
+	fs,
+	NS,
+	TEXT_EDITOR_APP,
+	LINK_APP,
+	FOLDER_APP,
+	FS_TYPE,
+	MOUNT_TYPE,
+	SHM_TYPE,
+	DEF_EDITOR_MOD_NAME,
+	DEF_PAGER_MOD_NAME,
+	SHELL_ERROR_CODES,
+} = globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
 const {normPath}=capi;
 const {pathToNode}=fsapi;
-
+const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //»
 
 //Var«
@@ -45,7 +59,7 @@ const get_file_lines_from_args=async(args, term)=>{//«
 		else if (typ==MOUNT_TYPE||typ==SHM_TYPE){
 		}
 		else{
-	cwarn(`Skipping: ${fullpath} (type=${typ})`);
+cwarn(`Skipping: ${fullpath} (type=${typ})`);
 			continue;
 		}
 
@@ -53,8 +67,8 @@ const get_file_lines_from_args=async(args, term)=>{//«
 			fullterr(`Is a directory`);
 			continue;
 		}
-		let val = await node.text;
-//log(val);
+//		let val = await node.text;
+		let val = await node.getValue({text: true});
 		if (!isstr(val)) {
 			fullterr("An unexpected value was returned");
 			continue;
@@ -69,8 +83,8 @@ const get_file_lines_from_args=async(args, term)=>{//«
 
 //Commands«
 
-const com_less = async (args, o) => {//«
-	let {term, opts, stdin}=o; 
+const com_less = async (args,opts, _) => {//«
+	let {term, stdin}=_; 
 //	if (term.ssh_server) return {out: "No 'less' in ssh_server mode!"}
 	let err = [];
 	const terr=(arg)=>{err.push(arg);};
@@ -109,11 +123,11 @@ const com_less = async (args, o) => {//«
 	}
 	let less = new NS.mods[DEF_PAGER_MOD_NAME](term);
 	await less.init(arr, name, {opts});
-
+	return E_SUC;
 };//»
-const com_vim = async (args, o) => {//«
+const com_vim = async (args,opts, _) => {//«
 	const terr=(arg)=>{return {err: arg};}
-	let {term, command_str, opts}=o; 
+	let {term, command_str}=_; 
 //	if (term.ssh_server) return {out: `No 'vim' in "ssh server" mode!`}
 
 /*«Old
@@ -302,9 +316,26 @@ cerr("HOWDIDUGETHERE!?!?");
 	if (isstr(mess)){
 		return terr(mess);
 	}
-};//»
+	return E_SUC;
 
-const com_purge = async(args, opts)=>{//«
+};//»
+const com_cat = async (args,opts, _) => {//«
+	let fullpath;
+	let {term, stdin, err, out}=_;
+	if (!args.length) {
+		if (!stdin) {
+			err("cat: no stdin was received");
+			return E_ERR;
+		}
+		out(stdin);
+		return E_SUC;
+	}
+	let rv = await get_file_lines_from_args(args, term);
+	if (rv.err && rv.err.length) err(rv.err);
+	if (rv.out && rv.out.length) out(rv.out);
+	return E_SUC;
+};//»
+const com_purge = async(args,opts, _)=>{//«
 	let err=[];
 	let dir = await fsapi.getBlobDir();
 	for (let arg of args){
@@ -324,22 +355,23 @@ const com_purge = async(args, opts)=>{//«
 			err.push(`${arg}: ${e.message}`);
 		}
 	}
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
 };//»
-const com_blobs = async(args, opts)=>{//«
+const com_blobs = async(args,opts, _)=>{//«
 	let out = [];
 	let nargs = args.length;
-	let cur_dir = opts.term.cur_dir;
+	let cur_dir = _.term.cur_dir;
 	if (nargs){
 		for (let arg of args){
 			if (nargs > 1) out.push(`${arg}:`);
 			if (arg.match(/^[0-9]+$/)) arg = parseInt(arg);
 			else{
-let got = await fsapi.pathToNode(normPath(arg, cur_dir));
-if (got && Number.isFinite(got.blobId)) out.push(got.blobId+"");
-else out.push("?");
-if (nargs > 1) out.push("");
-continue;
+				let got = await fsapi.pathToNode(normPath(arg, cur_dir));
+				if (got && Number.isFinite(got.blobId)) out.push(got.blobId+"");
+				else out.push("?");
+				if (nargs > 1) out.push("");
+				continue;
 			}
 			let rows = await fsapi.getNodesByBlobId(arg);
 			if (!rows.length) out.push("-");
@@ -375,29 +407,19 @@ continue;
 		out.push(`Entries: ${num}`);
 		out.push(`Size: ${tot}`);
 	}
-	return {out};
+	if (out.length)  _.out(out);
+	return E_SUC;
 };//»
-const com_cat = async (args, opts) => {//«
-	let fullpath;
-	let out=[];
-	let err=[];
-	let {term, stdin}=opts;
-	if (!args.length) {
-		if (!stdin) return {err: "cat: no stdin was received"};
-		return {out: stdin};
-	}
-	return await get_file_lines_from_args(args, term);
-};//»
-const com_touch = async (args, opts) => {//«
-let {term}=opts; 
+const com_touch = async (args,opts, _) => {//«
+let {term}=_; 
 let err=[];
 const terr=s=>{
 err.push(s);
 };
 	const {make_icon_if_new} = term.Desk;
 	if (!args.length) {
-		terr("touch: missing file operand");
-		return {err};
+		_.err("touch: missing file operand");
+		return E_ERR;
 	}
 	while (args.length) {
 		let path = args.shift();
@@ -411,27 +433,28 @@ err.push(s);
 		let parpath = arr.join("/");
 		let parnode = await fsapi.pathToNode(parpath);
 		if (!(parnode && parnode.appName === FOLDER_APP)) {
-			terr(`${parpath}: Not a directory`);
+			err.push(`${parpath}: Not a directory`);
 			continue; 
 		}
 
 		let OK_TYPES = [FS_TYPE, SHM_TYPE];
 		if (!OK_TYPES.includes(parnode.type)) {
-			terr(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
+			err.push(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
 			continue; 
 		}
 		if (!await fsapi.checkDirPerm(parnode)) {
- 			terr(`${path}: Permission denied`);
+ 			err.push(`${path}: Permission denied`);
 			continue;
 		}
 		let newnode = await fsapi.touchFile(parnode, fname);
-		if (!newnode) terr(`${fullpath}: The file could not be created`);
+		if (!newnode) err.push(`${fullpath}: The file could not be created`);
 		else make_icon_if_new(newnode);
 	}
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
 };//»
-const com_mkdir = async (args, opts) => {//«
-	let {term}=opts; 
+const com_mkdir = async (args,opts, _) => {//«
+	let {term}=_; 
 	const {make_icon_if_new} = term.Desk;
 	let out = [];
 	let err = [];
@@ -439,74 +462,77 @@ const com_mkdir = async (args, opts) => {//«
 		err.push(arg);
 	};
 	if (!args.length) {
-		terr("mkdir: missing operand");
-		return {err};
+		_.err("mkdir: missing operand");
+		return E_ERR;
 	}
 	while (args.length) {
 		let path = args.shift();
 		let fullpath = normPath(path, term.cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
 		if (node) {
-			terr(`${fullpath}: The file or directory exists`);
+			err.push(`${fullpath}: The file or directory exists`);
 			continue;
 		}
 		let arr = fullpath.split("/");
 		let fname = arr.pop();
 		let parpath = arr.join("/");
 		if (!parpath) {
-			terr(`${fullpath}: permission denied`);
+			err.push(`${fullpath}: permission denied`);
 			continue;
 		}
 		let parnode = await fsapi.pathToNode(parpath);
 		if (!(parnode && parnode.appName === FOLDER_APP)) {
-			terr(`${parpath}: Not a directory`);
+			err.push(`${parpath}: Not a directory`);
 			continue; 
 		}
 		let OK_TYPES = [FS_TYPE, SHM_TYPE];
 		if (!OK_TYPES.includes(parnode.type)) {
-			terr(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
+			err.push(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
 			continue; 
 		}
 		if (!await fsapi.checkDirPerm(parnode)) {
-			terr(`${fullpath}: permission denied`);
+			err.push(`${fullpath}: permission denied`);
 			continue;
 		}
 		let newdir = await fsapi.mkDir(parnode, fname);
-		if (!newdir) terr(`${fullpath}: The directory could not be created`);
+		if (!newdir) err.push(`${fullpath}: The directory could not be created`);
 		else make_icon_if_new(newdir);
 	}
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
 };//»
-const com_rmdir = async (args, opts) => {//«
-let {term}=opts; 
+const com_rmdir = async (args,opts, _) => {//«
+
+	let {term}=_; 
 	let err = [];
 	const terr=(arg)=>{
 		err.push(arg);
 	};
 	if (!args.length) {
-		terr("rmdir: missing operand");
-		return {err};
+		_.err("rmdir: missing operand");
+		return E_ERR;
 	}
 	await fsapi.doFsRm(args, terr, {CWD: term.cur_dir, FULLDIRS: false});
-	return {err};
-};//»
-const com_rm = async (args, o) => {//«
-	let {term, opts, env}=o; 
+	if (err.length) _.err(err);
+	return E_SUC;
 
-//log(env);
-//return;
+};//»
+const com_rm = async (args,opts, _) => {//«
+	let {term, env}=_; 
+
 	let err = [];
 	const terr=(arg)=>{
 		err.push(arg);
 	};
 	if (!args.length) {
-		terr("rm: missing operand");
-		return {err};
+		_.err("rm: missing operand");
+		return E_ERR;
 	}
 	let is_recur = opts.recursive || opts.R || opts.r;
 	if (is_recur) {
 		if (!(isstr(env.NUCLEAR_OPTION) && env.NUCLEAR_OPTION.match(/^i am crazy$/i))) {
-			return {err: "rm: recursive removal not currently enabled"}
+			_.err("rm: recursive removal not currently enabled");
+			return E_ERR;
 		}
 	}
 	let okargs=[];
@@ -525,180 +551,208 @@ const com_rm = async (args, o) => {//«
 		okargs.push(node.fullpath);
 	}
 	await fsapi.doFsRm(okargs, terr, {CWD: cwd, FULLDIRS: is_recur});
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
 };//»
-const com_mv = async (args, opts) => {//«
-let {term}=opts; 
+const com_mv = async (args,opts, _) => {//«
+	let {term}=_; 
 	let err = [];
 	const terr=(arg)=>{
 		if (!arg) return;
 		err.push(arg);
 	};
 	let com;
-	let if_cp = opts.if_cp;
+	let if_cp = _.if_cp;
 	if (if_cp) com="cp";
 	else com="mv";
 	if (!args.length) {
-		terr(`${com}: missing operand`);
-		return {err};
+		_.err(`${com}: missing operand`);
+		return E_ERR;
 	}
 	await fsapi.comMv(args, {if_cp, exports: {cberr: terr, werr: terr, cur_dir: term.cur_dir, termobj: term}});
-	return {err};
+	if (err.length) _.err(err);
+	return E_SUC;
 };//»
-const com_cp = (args, opts) => {//«
-	return com_mv(args, {if_cp: true, term: opts.term});
+const com_cp = (args,opts, _) => {//«
+	_.if_cp = true;
+	return com_mv(args, opts, _);
 };//»
 
-const com_ln = async (args, opts) => {//«
-	let {term}=opts; 
-	let {cur_dir} = term;
+const com_ln = async (args,opts, _) => {//«
+	let {term, err}=_; 
+	let {cur_dir,} = term;
 	const {make_icon_if_new} = term.Desk;
 	if (!args.length) {
-		return {err: "ln: missing file operand"};
+		err("ln: missing file operand");
+		return E_ERR;
 	}
 	let target = args.shift();
-	if (!args.length) return {err: "ln: missing link name"};
+	if (!args.length) {
+		err("ln: missing link name");
+		return E_ERR;
+	}
 	let target_node = await fsapi.pathToNode(normPath(target, cur_dir));
 	if (!target_node) {
-		return {err: "The target does not exist"};
+		err("The target does not exist");
+		return E_ERR;
 	}
 	if (target_node.type != FS_TYPE || target_node.appName === FOLDER_APP){
-		return {err: "The link cannot be created"};
+		err("The link cannot be created");
+		return E_ERR;
 	}
 	let blobid = target_node.blobId;
 	if (!Number.isFinite(blobid)) {
-		if (target_node.data) return {err: "The target node is a data node"};
-		return {err: "The target node does not have an associated blob in the blob store"};
+		if (target_node.data) {
+			err("The target node is a data node");
+			return E_ERR;
+		}
+		err("The target node does not have an associated blob in the blob store");
+		return E_ERR;
 	}
 
 	if (!await fsapi.checkDirPerm(target_node.par)) {
-		return {err: `${target_node.par.fullpath}: Permission denied`};
+		err(`${target_node.par.fullpath}: Permission denied`);
+		return E_ERR;
 	}
 
 	let path = args.shift();
-	if (args.length) return {err: "ln: too many arguments"};
+	if (args.length) {
+		err("ln: too many arguments");
+		return E_ERR;
+	}
 	let fullpath = normPath(path, cur_dir);
 	let node = await fsapi.pathToNode(fullpath, true);
-	if (node) return {err: `${path}: Already exists`};
-
+	if (node) {
+		err(`${path}: Already exists`);
+		return E_ERR;
+	}
 	let arr = fullpath.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
 	let parnode = await fsapi.pathToNode(parpath);
 
 	if (!(parnode && parnode.appName === FOLDER_APP)) {
-		return {err: `${parpath}: Not a directory`};
+		err(`${parpath}: Not a directory`);
+		return E_ERR;
 	}
 	if (parnode.type !== FS_TYPE) {
-		return {err: `${fullpath}: The parent directory is not of type '${FS_TYPE}'`};
+		err(`${fullpath}: The parent directory is not of type '${FS_TYPE}'`);
+		return E_ERR;
 	}
 	if (!await fsapi.checkDirPerm(parnode)) {
-		return {err: `${path}: Permission denied`};
+		err(`${path}: Permission denied`);
+		return E_ERR;
 	}
 	let newnode = await fsapi.makeHardLink(parnode, fname, blobid);
 	if (!newnode) {
-		return {err: `${path}: The link could not be created`};
+		err(`${path}: The link could not be created`);
+		return E_ERR;
 	}
-
+	_.suc(`${fname} -> blobId(${blobid})`);
+	return E_SUC;
 };//»
-const com_symln = async (args, opts) => {//«
-let {term}=opts; 
-let err = [];
-const terr=(arg)=>{
-	err.push(arg);
-};
+const com_symln = async (args,opts, _) => {//«
+	let {term, err}=_; 
 	const {make_icon_if_new} = term.Desk;
 	if (!args.length) {
-		return {err: "symln: missing file operand"};
+		err("symln: missing file operand");
+		return E_ERR;
 	}
 	let target = args.shift();
-	if (!args.length) return {err: "symln: missing link name"};
-
+	if (!args.length) {
+		err("symln: missing link name");
+		return E_ERR;
+	}
 	let path = args.shift();
-	if (args.length) return {err: "symln: too many arguments"};
+	if (args.length) {
+		err("symln: too many arguments");
+		return E_ERR;
+	}
 	let fullpath = normPath(path, term.cur_dir);
 	let node = await fsapi.pathToNode(fullpath, true);
-	if (node) return {err: `${path}: Already exists`};
-	
+	if (node) {
+		err(`${path}: Already exists`);
+		return E_ERR;
+	}
 	let arr = fullpath.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
 	let parnode = await fsapi.pathToNode(parpath);
 	if (!(parnode && parnode.appName === FOLDER_APP)) {
-		return {err: `${parpath}: Not a directory`};
+		err(`${parpath}: Not a directory`);
+		return E_ERR;
 	}
 	if (parnode.type !== FS_TYPE) {
-		return {err: `${fullpath}: The parent directory is not of type '${FS_TYPE}'`};
+		err(`${fullpath}: The parent directory is not of type '${FS_TYPE}'`);
+		return E_ERR;
 	}
 	if (!await fsapi.checkDirPerm(parnode)) {
-		return {err: `${path}: Permission denied`};
+		err(`${path}: Permission denied`);
+		return E_ERR;
 	}
 	let newnode = await fsapi.makeLink(parnode, fname, target, normPath(target, term.cur_dir));
 	if (!newnode) {
-		return {err: `${path}: The link could not be created`};
+		err(`${path}: The link could not be created`);
+		return E_ERR;
 	}
-	return {err: `${fname} -> ${target}`}
+	_.suc(`${fname} -> ${target}`);
+	return E_SUC;
 };//»
-const com_grep = async(args, opts)=>{//«
+const com_grep = async(args,opts, _)=>{//«
 
 	let inarr;
-	let err;
+//	let err;
 	let re;
 	let out = [];
-	let {term, stdin}=opts; 
+	let {term, stdin, err}=_; 
 	let patstr = args.shift();
 	if (!patstr) {
-		return {err:"a pattern is required"};
-		return;
+		err("a pattern is required");
+		return E_ERR;
 	}
 
 	try {
 		re = new RegExp(patstr);
 	}
 	catch(e) {
-		return {err:"Invalid pattern: " + patstr};
+		err("Invalid pattern: " + patstr);
+		return E_ERR;
 	}
 
 	if (!args.length) {
-		if (!stdin) return {err: "grep: no stdin was received"};
+		if (!stdin) {
+			err("grep: no stdin was received");
+			return E_ERR;
+		}
 		inarr = stdin;
 	}
 	else {
 		let rv = await get_file_lines_from_args(args, term);
 		inarr = rv.out;
-		err = rv.err;
+		if (rv.err && rv.err.length) _.err(rv.err);
 	}
-
-/*«
-for (let ln of ret) {
-	if (marr=re.exec(ln)) {
-		if (nonmatching) continue;
-		gotret = true;
-		if (is_matching) outarr.push(marr[0]);
-		else outarr.push(ln);
-	}
-	else if (nonmatching) outarr.push(ln);
-}
-»*/
 	for (let ln of inarr){
 		if (re.test(ln)) out.push(ln);
 	}
-	return {out, err};
+	if (out.length) _.out(out);
+	return E_SUC;
 
 };//»
-const com_wc = async(args, opts)=>{//«
+const com_wc = async(args,opts, _)=>{//«
 
-	let {term, stdin}=opts; 
+	let {term, stdin}=_; 
 	let inarr;
-	let err;
 	if (!args.length) {
-		if (!stdin) return {err: "wc: no stdin was received"};
+		if (!stdin) {
+			_.err("wc: no stdin was received");
+			return E_ERR;
+		}
 		inarr = stdin;
 	}
 	else {
 		let rv = await get_file_lines_from_args(args, term);
 		inarr = rv.out;
-		err = rv.err;
+		if (rv.err && rv.err.length) _.err(rv.err);
 	}
 	let lines = inarr.length;
 	let words = 0;
@@ -709,12 +763,14 @@ const com_wc = async(args, opts)=>{//«
 		if (word_arr.length===1 && word_arr[0]==="") continue;
 		words+=word_arr.length;
 	}
-	return {out: `${lines} ${words} ${chars+lines}`, err};
+	_.out(`${lines} ${words} ${chars+lines}`);
+	return E_SUC;
 };//»
-const com_dl=async(args, o)=>{//«
-	let {term, stdin, env, opts}=o; 
+const com_dl=async(args,opts, _)=>{//«
+	let {term, stdin, env}=_; 
 	if (!args.length && !stdin) {
-		return {err: "dl: missing file operand"};
+		_.err("dl: missing file operand");
+		return E_ERR;
 	}
 	let val;
 	let name;
@@ -726,27 +782,39 @@ const com_dl=async(args, o)=>{//«
 		let path = args.shift();
 		let fullpath = normPath(path, term.cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
-		if (!node) return {err:`${fullpath}: the file could not be found`};
+		if (!node) {
+			_.err(`${fullpath}: the file could not be found`);
+			return E_ERR;
+		}
 		val = await node.buffer;
 		name = node.name;
 	}
 	capi.download(new Blob([val]), name);
+	return E_SUC;
 };//»
-const com_clearstorage = async(args, opts)=>{//«
 
-	let {term}=opts; 
-	if (globals.read_only) return {err:"Read only"};
+const com_clearstorage = async(args,opts, _)=>{//«
+
+	let {term}=_; 
+	if (globals.read_only) {
+		_.err("Read only");
+		return E_ERR;
+	}
     let ret = await widgets.popyesno(`Clear EVERYTHING in storage?`,{reverse: true});
-	if (!ret) return {err:"Not clearing"};
+	if (!ret) {
+		_.err("Not clearing");
+		return E_ERR;
+	}
     await fsapi.clearStorage();
 	term.Desk.clear_desk_icons();
-	return {err:"Please resfresh the page"};
+	_.suc("Please resfresh the page");
+	return E_SUC;
 
 };//»
 
 /*
-const com_unmount = async (args, opts) => {//«
-	let {term}=opts; 
+const com_unmount = async (args,opts, _) => {//«
+	let {term}=_; 
 	const terr=(arg)=>{return {err: arg};};
     let mntdir = fs.root.kids.mnt;
     let mntkids = mntdir.kids
@@ -755,8 +823,8 @@ const com_unmount = async (args, opts) => {//«
 	if (!mntkids[name]) return terr(`${name}: Not mounted`);
 	delete mntkids[name];
 };//»
-const com_mount = async (args, opts) => {//«
-	let {term}=opts; 
+const com_mount = async (args,opts, _) => {//«
+	let {term}=_; 
 	const terr=(arg)=>{return {err: arg};};
 	let rv = await fsapi.mountDir(args.shift());//In a multiline comment!!!
 	if (isstr(rv)) return terr(rv);

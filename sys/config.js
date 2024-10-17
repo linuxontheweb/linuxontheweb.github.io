@@ -83,6 +83,11 @@ const APPDATA_PATH="/var/appdata";
 const BACKGROUND_IMAGE_URL = "/www/lotw256.png";
 const BACKGROUND_GRADIENT = "linear-gradient(135deg,#000 0%,#003 50%,#006 75%,#000077 87%, #993 100%)";
 
+const SHELL_ERROR_CODES={
+	E_SUC: 0,
+	E_ERR: 1
+};
+
 //»
 
 //Apps/Extensions«
@@ -405,7 +410,10 @@ export const globals = {//«
 
 	USERNAME,
 	CURRENT_USER,
+
 	TERM_ENV,
+	SHELL_ERROR_CODES,
+
 	HOME_PATH,
 	DESK_PATH,
 	APPDATA_PATH,

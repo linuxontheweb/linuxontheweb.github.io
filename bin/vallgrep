@@ -7,7 +7,7 @@ elif [[ $2 ]]; then
 	echo 'Partial matching mode...';
 	grep --color=auto -n $1 \
 		$BASE/apps/* \
-		$BASE/mods/sys/* \
+		$BASE/sys/* \
 		$BASE/mods/util/* \
 		$BASE/coms/* \
 		2>/dev/null
@@ -16,7 +16,7 @@ else
 	echo 'Exact matching mode';
 	grep --color=auto -n '\<'$1'\>' \
 		$BASE/apps/* \
-		$BASE/mods/sys/* \
+		$BASE/sys/* \
 		$BASE/mods/util/* \
 		$BASE/coms/* \
 		2>/dev/null

@@ -1,3 +1,21 @@
+
+/*10/13/24:ETIMEDOUT«
+Error: read ETIMEDOUT
+    at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+  errno: -110,
+  code: 'ETIMEDOUT',
+  syscall: 'read'
+}
+/usr/local/home/lotw/node/svcs/imap.js:321
+                throw new Error(`Unhandled error: ${err.code}`);
+                ^
+
+Error: Unhandled error: ETIMEDOUT
+    at process.<anonymous> (/usr/local/home/lotw/node/svcs/imap.js:321:9)
+    at process.emit (node:events:520:28)
+    at process._fatalException (node:internal/process/execution:191:25)
+
+»*/
 /*
 
 Since we can't really figure out how to limit the fetch to a single body part, we are
@@ -173,7 +191,8 @@ let cur_mailbox;
 
 //»
 
-const client = new ImapFlow({//«
+let client;
+const client_opts = {
 	host: 'imap.mail.yahoo.com',
 	port: 993,
 	secure: true,
@@ -182,7 +201,9 @@ const client = new ImapFlow({//«
         user: USER,
         pass: process.env.EMAIL_PASSWORD
 	}
-});//»
+};
+
+//const client = new ImapFlow(client_opts);
 
 const OK=rv=>{//«
 	if (!rv) rv = true;
@@ -214,9 +235,11 @@ const verify = async()=>{//«
 	if (is_connected) return USER;
 	try{
 log("verifying...");
+		client = new ImapFlow(client_opts);
 		await client.connect();
 		is_connected = true;
 		await client.logout();
+		client = null;
 		is_connected = false;
 log(`OK: ${USER}`);
 		return OK(USER);
@@ -230,6 +253,7 @@ const connect = async() => {//«
 	if (is_connected) return ERR("already connected");
 	try{
 log("connecting...");
+		client = new ImapFlow(client_opts);
 		await client.connect();
 		is_connected = true;
 //		return OK();
@@ -244,6 +268,7 @@ const logout = async() => {//«
 	if (!is_connected) return ERR("not connected");
 	try{
 		await client.logout();
+		client = null;
 		is_connected = false;
 		return OK();
 	}catch(e){
@@ -307,6 +332,7 @@ const connected = () => {return OK(is_connected+"");};
 
 client.on('close',()=>{//«
 
+client = null;
 is_connected = false;
 log("connection closed");
 

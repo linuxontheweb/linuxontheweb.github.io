@@ -1,6 +1,12 @@
-/*
 
-10/11/24 Creating indices/indexes @TROIPMJHG:
+/*10/13/24: Deleting users«
+
+1) Delete the given object store (if it exists)
+2) Remove the address from CURUSER_FILE (if it is the address to delete)
+3) Remove the address from USERS_FILE
+
+»*/
+/*10/11/24 Creating indices/indexes @TROIPMJHG:«
 
 The Unix timestamp in seconds doesn't make any sense as an index!  Maybe we
 should index the "daystamp" instead (timestamp/86400)
@@ -11,7 +17,7 @@ What about setting the partnames (FetchQueryObject.source.bodyParts) as BODY[TEX
 or TEXT??? Or: BODY[1.1] (instead of BODY[1])? Then we do:
 FetchQueryObject = {source:{bodyParts:["BODY[TEXT]"]}} !?!?
 
-*/
+»*/
 /*Google allows app passwords also (like Yahoo):«
 https://stackoverflow.com/questions/72480275/is-there-a-work-around-google-disabling-less-secure-apps?rq=1
 
@@ -78,8 +84,14 @@ import { util, api as capi } from "util";
 const {linesToParas}=capi;
 import { globals } from "config";
 const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
-const{fs, APPDATA_PATH}=globals;
+const {
+	fs,
+	APPDATA_PATH,
+	SHELL_ERROR_CODES
+} = globals;
 const {mkDir, mkFile} = fs.api;
+const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
+
 //»
 
 //Var«
@@ -93,6 +105,7 @@ const MAILDATA_PATH = `${APPDATA_PATH}/mail`;
 
 const DBVERS_FILE = `${MAILDATA_PATH}/db_vers`;
 const CURUSER_FILE = `${MAILDATA_PATH}/cur_user`;
+const USERS_FILE = `${MAILDATA_PATH}/users`;
 
 //»
 
@@ -129,7 +142,7 @@ cwarn("onupgradeneeded...");
 //TROIPMJHG
 			let store = e.target.result.createObjectStore(TABLE_NAME, {autoIncrement: true});
 			store.createIndex("from", "from", {unique: false});
-			store.createIndex("time", "time", {unique: false});
+//			store.createIndex("time", "time", {unique: false});
 //The value of the Message-ID header
 			store.createIndex("messId", "messId", {unique: true});
 
@@ -220,59 +233,195 @@ cwarn("BLOCKED");
 		};
 	});
 };//»
-this.getStore=()=>{
-	return get_store();
-};
+this.getStore=()=>{return get_store();};
+
 }//»
 
-const com_smtp = async(args, o)=>{//«
-// smtp   email_text_file_path   to   Subject goes here...
-// echo   Here is the email text...  |  smtp   to   Subject goes here...
-	const {term, stdin, opts} = o;
-//	let from = term.ENV.EMAIL_FROM;
-//	if (!from) return {err: "No EMAIL_FROM in the environment!"}
-	let to_paras = opts["to-paras"]||opts.p;
-//cwarn("PARAS", to_paras);
-	let txt;
-	if (stdin) {
-		txt = stdin.join("\n");
-	}
-	else {
-		let path = await args.shift();
-		if (!path) return {err:"No file to send"};
-		let node = await path.toNode(term);
-		if (!node) return {err: `${path}: not found`};
-		txt = await node.text;
-	}
-	if (!txt.match(/[a-z]/i)) return {err: "No lower ascii alphabetic characters were found in the message"};
-	if (to_paras) {
-		txt = linesToParas(txt.split("\n")).join("\n");
-	}
-	let to = await args.shift();
-	if (!to) return {err:"No one to send to"}
-	if (!to.match(/^\w+@\w+\.[a-z]+$/i)) return {err: "Bad looking email address"};
+const not_true_to_err = (val, funcname)=>{//«
+	if (val===true) return;
+	if (isstr(val)) return {err: val};
+	if (!funcname) funcname = "?";
+cwarn("Unknown value:", val);
+	return {err: `Unknown response from ${funcname} (see console warning)`};
+};
+const nt2e = not_true_to_err;
+//»
 
-	let sub = args.join(" ");
-	if (!sub) return {err: "No subject given"}
-cwarn("TO",to);
-cwarn("SUB",sub);
-cwarn(`TEXT: ${txt.length} chars`);
-//log(txt);
-//return;
-//	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
-	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
-	if (!(rv&&rv.ok&&rv.text)) {
-log(rv);
-		return {err: "An unknown response was received from smtp service"}
+const del_object_store = async (storename) => {//«
+
+//Get the current database version...
+let dbvers_node = await DBVERS_FILE.toNode();
+if (!dbvers_node) return `Could not get DBVERS_FILE (${DBVERS_FILE})`;
+
+let db_vers_data = await dbvers_node.getValue();
+if (!(db_vers_data && isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+	return `Invalid or missing data returned from DBVERS_FILE (${DBVERS_FILE})`;
+}
+let db_vers = db_vers_data.value;
+
+let db = new DB(db_vers+"", storename);
+//Since we have not incremented anything, onupgradeneeded SHOULD NOT be called
+if (!await db.init()){
+	return "Could not initialize the db for verifying if the object store exists";
+}
+let gotstore = db.getStore();
+if (!gotstore){
+	return `The store for '${storename}' does not exist`;
+}
+
+db.close();
+db_vers++;
+db = new DB(db_vers+"", storename);
+//onupgradeneeded SHOULD be called here
+if (!await db.init(true)){
+	return "Could not initialize the db for deleting";
+}
+db.close();
+
+if (!await dbvers_node.setDataValue(db_vers)){
+	return "Could not set the new db version's value";
+}
+
+return true;
+
+}//»
+const create_object_store = async (storename) => {//«
+
+let gotstore;
+let db;
+
+//Get the current database version...«
+let dbvers_node = await DBVERS_FILE.toNode();
+if (!dbvers_node){
+log("Making DBVERS_FILE...");
+	dbvers_node = await mkFile(DBVERS_FILE,{data: {type: "number", value: 0}});
+	if (!dbvers_node) return `Could not get DBVERS_FILE (${DBVERS_FILE})`;
+}
+let db_vers_data = await dbvers_node.getValue();
+if (!(db_vers_data && isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+	return `Invalid or missing data returned from DBVERS_FILE (${DBVERS_FILE})`;
+}
+let db_vers = db_vers_data.value;
+
+log("db_vers", db_vers);
+//»
+//Let's see if there is already an objectStore named storename, under a non-zero version//«
+if (db_vers > 0){
+//Since we have not incremented anything, onupgradeneeded SHOULD NOT be called
+	db = new DB(db_vers+"", storename);
+	if (!await db.init()){
+		return "Could not initialize the db for verifying if the object store already exists";
 	}
-	txt = await rv.text();
-cwarn(txt);
-	if (rv.ok) return txt;
-	return {err: txt.split("\n")[0]};
+	gotstore = db.getStore();
+	if (gotstore){
+cwarn(`The store for '${storename}' already exists`);
+	}
+
+}//»
+//Make the object store//«
+if (!gotstore) {
+	if (db) db.close();
+	db_vers++;
+	db = new DB(db_vers+"", storename);
+//onupgradeneeded SHOULD be called here
+	if (!await db.init()){
+		return "Could not initialize the db for adding";
+	}
+}
+db.close();
+//»
+//Update the new db version in DBVERS_FILE«
+
+if (!await dbvers_node.setDataValue(db_vers)){
+	return "Could not set the new db version's value";
+}
+
+//»
+
+return true;
+
+}//»
+const get_curuser_data = async(if_create)=>{//«
+
+	let curuser_node = await CURUSER_FILE.toNode();
+	if (!curuser_node) {
+		if (!if_create) return `CURUSER_FILE not found (${CURUSER_FILE})`;
+		curuser_node = await mkFile(CURUSER_FILE,{data: {type: "string", value: " "}});
+		if (!curuser_node) return `Could not create the CURUSER_FILE (${CURUSER_FILE})`;
+	}
+	let curuser_data = await curuser_node.getValue();
+	if (!(curuser_data && isobj(curuser_data) && curuser_data.type == "string")){
+		return `Invalid or missing data returned from CURUSER_FILE (${CURUSER_FILE})`;
+	}
+	return [curuser_data, curuser_node];
+
+};//»
+const get_users_data = async(if_create)=>{//«
+
+	let users_node = await USERS_FILE.toNode();
+	if (!users_node){
+		if (!if_create) return `Could not get the USERS_FILE (${USERS_FILE})`;
+log("Making USERS_FILE", USERS_FILE);
+		users_node = await mkFile(USERS_FILE,{data: {type: "stringarray", value: []}});
+		if (!users_node) return `Could not create the USERS_FILE (${USERS_FILE})`;
+	}
+	let users_data = await users_node.getValue();
+	if (!(users_data && isobj(users_data) && users_data.type == "stringarray")){
+		return `Invalid or missing data returned from USERS_FILE (${USERS_FILE})`;
+	}
+
+	return [users_data, users_node];
+
+};//»
+const set_users_array = async(data, node)=>{//«
+	if (!await node.setDataValue(data.value)){
+		return "Could not set the value of the user's node";
+	}
+	return true;
+};//»
+
+const create_or_append_users = async username => {//«
+
+	let rv = await get_users_data(true);
+	if (isstr(rv)) return rv;
+	let users_data = rv[0];
+	let users_node = rv[1];
+	let users = users_data.value;
+	if (!isarr(users)){
+log(users);
+		return "Unknown value returned from get_users_array (see console)";
+	}
+
+	if (users.includes(username)) {
+		return `${username}: already in the users array`;
+	}
+	users.push(username);
+	return set_users_array(users_data, users_node)
+
+};//»
+const create_cur_user = async username => {//«
+
+//Checking/Making/Updating CURUSER_FILE. Return if it is the same as the verified user
+
+let rv = await get_curuser_data(true);
+if (isstr(rv)) return curuser_data;
+let curuser_data = rv[0];
+let curuser_node = rv[1];
+
+if (username == curuser_data.value) {
+	return `${username}: already the current user`;
+}
+
+log("Setting curuser to", username);
+if (!await curuser_node.setDataValue(username)){
+	return "Could not set the current user's value";
+}
+
+return create_or_append_users(username);
 
 };//»
 
-const imap_fetch=async arg=>{//«
+const imap_fetch=async (arg, _, if_arr)=>{//«
 	let url = `/_imap?op=${arg}`;
 	let rv = await fetch(url);
 	let out = await rv.text();
@@ -280,117 +429,141 @@ const imap_fetch=async arg=>{//«
 		let val = out.split("\n")[0];
 		return {err: val};
 	}
-	return {out: out.split("\n")};
+	if (if_arr) return {out: out.split("\n")};
+	return {out};
 };//»
 
-const com_imapcon=async(args, o)=>{//«
-	return imap_fetch(`connect`);
+const com_imapcon=async(args, opts, _)=>{//«
+	return imap_fetch(`connect`, _);
 };//»
-const com_imapdis=async(args, o)=>{//«
-	return imap_fetch(`logout`);
+const com_imapdis=async(args, opts, _)=>{//«
+	return imap_fetch(`logout`,_);
 };//»
-const com_imapbox=async(args, o)=>{//«
+const com_imapbox=async(args, opts, _)=>{//«
 	let which = args.shift();
 	let url;
 	if (!which) url = "whichbox";
 	else url = `openbox&box=${which}`;
-	return imap_fetch(url);
+	return imap_fetch(url,_);
 };//»
-const com_imapiscon=async(args, o)=>{//«
-	return imap_fetch(`connected`);
+const com_imapiscon=async(args, opts, _)=>{//«
+	let rv = await imap_fetch(`connected`);
+	if (rv.err || rv.out !== "true"){
+		_.err(rv.err || rv.out);
+		return E_ERR;
+	}
+	_.suc("true");
+	return E_SUC;
 };//»
-const com_imapstat=async(args, o)=>{//«
-	return imap_fetch(`status`);
+const com_imapstat=async(args, opts, _)=>{//«
+	return imap_fetch(`status`,_);
 };//»
-const com_imapsetuser=async(args,o)=>{//«
 
+const com_imapadduser=async(args,opts, _)=>{//«
+
+const {term}=_;
+const {stat} = term;
+
+stat(`Verifying credentials from imap service...`);
 let rv = await imap_fetch(`verify`);
-if (rv.err) return rv;
+if (rv.err) {
+//	return rv;
+	_.err(rv.err);
+	return E_ERR;
+}
 
 let addr = rv.out.toLowerCase();
-log("Have address", addr);
+stat(`User: ${addr} OK!`);
 let in_table_name = `in:${addr}`;
-let gotstore;
-let db;
 
-if (!await mkDir(APPDATA_PATH,"mail")){
-	return {err:`Could not create the mail data directory: ${MAILDATA_PATH}`};
+if (!await mkDir(MAILDATA_PATH)){
+	_.err(`Could not create the mail data directory: ${MAILDATA_PATH}`);
+	return E_ERR;
 }
 
-//Checking/Making CURUSER_FILE. Return if it is the same as the verified user«
-
-let curuser_node = await CURUSER_FILE.toNode();
-if (!curuser_node){
-log("Making CURUSER_FILE", CURUSER_FILE);
-	curuser_node = await mkFile(CURUSER_FILE,{data: {type: "string", value: ""}});
-	if (!curuser_node) return {err:`Could not create the CURUSER_FILE (${CURUSER_FILE})`};
-}
-let curuser_data = await curuser_node.getValue();
-if (!(curuser_data && isobj(curuser_data) && curuser_data.type == "string")){
-	return {err:`Invalid or missing data returned from CURUSER_FILE (${CURUSER_FILE})`};
+let err;
+rv = await create_cur_user(addr);
+err = nt2e(rv, "create_cur_user");
+if (err) {
+	_.err(err.err);
+	return E_ERR
 }
 
-if (addr == curuser_data.value) return {err: `${addr}: already the current user`};
-
-//return {err: "SHOULD NOT GET HERE!?!?!?!?"}
-log("Setting curuser to", addr);
-
-//»
-//Get the current database version...«
-let dbvers_node = await DBVERS_FILE.toNode();
-if (!dbvers_node){
-log("Making DBVERS_FILE...");
-	dbvers_node = await mkFile(DBVERS_FILE,{data: {type: "number", value: 0}});
-	if (!dbvers_node) return {err:`Could not get DBVERS_FILE (${DBVERS_FILE})`};
+rv = await create_object_store(in_table_name);
+err = nt2e(rv, "create_object_store");
+if (err) {
+	_.err(err.err);
+	return E_ERR
 }
-let db_vers_data = await dbvers_node.getValue();
-if (!(db_vers_data && isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
-	return {err:`Invalid or missing data returned from DBVERS_FILE (${DBVERS_FILE})`};
-}
-let db_vers = db_vers_data.value;
-log("db_vers", db_vers);
-//»
 
-//Let's see if there is already an objectStore named in_table_name, under a non-zero version//«
-if (db_vers > 0){
-//Since we have not incremented anything, onupgradeneeded SHOULD NOT be called
-	db = new DB(db_vers+"", in_table_name);
-	if (!await db.init()){
-		return {err:"Could not initialize the db for verifying if the object store already exists"};
+_.suc(`Current imap user set to: ${addr}`);
+return E_SUC;
+};//»
+const com_imapdeluser=async(args,opts, _)=>{//«
+
+const {term}=_;
+const err=(mess)=>{
+	_.err(mess);
+	return E_ERR;
+};
+let addr = args.shift();
+if (!addr) return err("No address arg given");
+
+addr = addr.toLowerCase();
+
+let in_table_name = `in:${addr}`;
+
+let rv = await get_users_data();
+if (isstr(rv)) return err(rv);
+let users_data = rv[0];
+let users_node = rv[1];
+
+let users = users_data.value;
+if (!isarr(users)) {
+log(users);
+	return err("Unknown value in the users data file (see console)");
+}
+
+let ind = users.indexOf(addr);
+if (ind < 0) return err(`${addr}: not in the users array`);
+
+rv = await term.getch(`Drop user: '${addr}'? [y/N]`, "N");
+if (rv==="y"||rv==="Y"){}
+else {
+	_.suc("Not dropping the user");
+	return E_SUC;
+}
+
+users.splice(ind, 1);
+
+rv = await set_users_array(users_data, users_node);
+if (isstr(rv)) return err(rv);
+
+rv = await del_object_store(in_table_name);
+rv = nt2e(rv, "del_object_store");
+if (rv) return err(rv.err);
+
+rv = await get_curuser_data();
+if (isstr(rv)) return err(rv);
+
+let curuser_data = rv[0];
+let curuser_node = rv[1];
+
+if (addr == curuser_data.value) {
+	if (!await curuser_node.setDataValue(" ")){
+		return err("Could not set the current user's value to a single space");
 	}
-	gotstore = db.getStore();
-	if (gotstore){
-cwarn(`The store for address ${addr} already exists`);
-	}
-
-}//»
-//Make the object store for this address//«
-if (!gotstore) {
-	if (db) db.close();
-	db_vers++;
-	db = new DB(db_vers+"", in_table_name);
-//onupgradeneeded SHOULD be called here
-	if (!await db.init()){
-		return {err:"Could not initialize the db for adding"};
-	}
-}
-//»
-//Cleanup (update all values stored under MAILDATA_PATH)«
-db.close();
-
-if (!await dbvers_node.setValue({type:"number", value: db_vers})){
-	return {err:"Could not set the new db version's value"}
 }
 
-if (!await curuser_node.setValue({type:"string", value: addr})){
-	return {err:"Could not set the current user's value"}
-}
-//»
 
-return {out: `Set current imap user to: ${addr}`};
+_.suc(`imap user ${addr} deleted`);
+return E_SUC;
 
 };//»
-const com_imapdropdb=async()=>{//«
+
+const com_imapdropdb=async(args, opts, _)=>{//«
+	const {term} = _;
+
 	const do_drop=()=>{//«
 		return new Promise((Y,N)=>{
 			const req = window.indexedDB.deleteDatabase(DBNAME);
@@ -407,20 +580,105 @@ cwarn("BLOCKED");
 			};
 		});
 	};//»
-	if (!await do_drop()) return {err: `Dropping database (${DBNAME}) failed!`}
-	return {out: "Drop OK"}
+
+let rv = await term.getch(`Drop database: '${DBNAME}'? [y/N]`, "N");
+if (!rv) rv = "N";
+if (rv==="y"||rv==="Y"){
+	if (!await do_drop()) {
+		_.err(`Dropping database (${DBNAME}) failed!`);
+		return E_ERR;
+	}
+	_.suc("Drop OK");
+	return E_SUC;
+}
+_.err(`Not dropping the database (got ${rv})`);
+return E_ERR;
+
 };//»
-const com_imapgetseq=async(args, o)=>{//«
+const com_imapgetseq=async(args, opts, _)=>{//«
 	let seq = args.shift();
-	if (!(seq && (seq.match(/^\d+$/) || seq === "*"))) return {err: "Invalid or no 'seq' arg!"}
-	return imap_fetch(`getseq&seq=${seq}`);
+	if (!(seq && (seq.match(/^\d+$/) || seq === "*"))) {
+		_.err("Invalid or no 'seq' arg!");
+		return E_ERR;
+	}
+	return imap_fetch(`getseq&seq=${seq}`, _, true);
+};//»
+
+const com_smtp = async(args, opts, _)=>{//«
+// smtp   email_text_file_path   to   Subject goes here...
+// echo   Here is the email text...  |  smtp   to   Subject goes here...
+	const {term, stdin, err} = _;
+//	let from = term.ENV.EMAIL_FROM;
+//	if (!from) return {err: "No EMAIL_FROM in the environment!"}
+	let to_paras = opts["to-paras"]||opts.p;
+//cwarn("PARAS", to_paras);
+	let txt;
+	if (stdin) {
+		txt = stdin.join("\n");
+	}
+	else {
+		let path = await args.shift();
+		if (!path) {
+			err("No file to send");
+			return E_ERR;
+		}
+		let node = await path.toNode(term);
+		if (!node) {
+			err(`${path}: not found`);
+			return E_ERR;
+		}
+		txt = await node.text;
+	}
+	if (!txt.match(/[a-z]/i)) {
+		err("No lower ascii alphabetic characters were found in the message");
+		return E_ERR;
+	}
+	if (to_paras) {
+		txt = linesToParas(txt.split("\n")).join("\n");
+	}
+	let to = await args.shift();
+	if (!to) {
+		err("No one to send to");
+		return E_ERR;
+	}
+	if (!to.match(/^\w+@\w+\.[a-z]+$/i)) {
+		err("Bad looking email address");
+		return E_ERR;
+	}
+	let sub = args.join(" ");
+	if (!sub) {
+		err("No subject given");
+		return E_ERR;
+	}
+cwarn("TO",to);
+cwarn("SUB",sub);
+cwarn(`TEXT: ${txt.length} chars`);
+//log(txt);
+//return;
+//	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&from=${encodeURIComponent(from)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
+	let rv = await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(sub)}`, {method:"POST", body: txt});
+	if (!(rv&&rv.ok&&rv.text)) {
+log(rv);
+		err("An unknown response was received from smtp service");
+		return E_ERR;
+	}
+	txt = await rv.text();
+//cwarn(txt);
+	if (rv.ok) {
+		_.out(txt.split("\n"));
+//		return txt;
+		return E_SUC;
+	}
+	_.err(txt.split("\n")[0]);
+	return E_ERR;
 };//»
 
 export const coms = {//«
 
 smtp: com_smtp,
 
-imapsetuser: com_imapsetuser,
+imapadduser: com_imapadduser,
+imapdeluser: com_imapdeluser,
 imapcon: com_imapcon,
 imapdis : com_imapdis,
 imapbox: com_imapbox,
@@ -442,7 +700,9 @@ export const opts = {//«
 	}
 };//»
 
-/*
+
+
+/*«Old
 
 this.init = (address, o={})=>{//«
 
@@ -568,8 +828,7 @@ log(db);
 
 }//»
 
-
-const com_email = async(args, o)=>{//«
+const com_email = async(args, opts, _)=>{//«
 
 
 //l:{adduser:3,deluser:3,setuser:3}
@@ -637,5 +896,7 @@ const com_email = async(args, o)=>{//«
 
 };//»
 
-*/
+»*/
+
+
 

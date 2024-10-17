@@ -1,0 +1,203 @@
+
+/*10/14/24: Color output/*«
+
+Properly colorizing terminal output is OFFICIALLY a vexation.  To get the 'ls'
+command to properly colorize its output (@WKIUTYUIP), I am using an add_rows
+variable that is tracked by shell.execute starting @MJUEYSKDH.  Also,
+shell.execute is called with an addRows option (@DJUYEKLMI), which is only for
+backquote execution. I'm not quite sure anymore what is going on here, and it
+all seems quite hackish. Perhaps we should just get rid of all add_rows/addRows
+things, and let everything just get colored wonkishly in case of...(backquote
+execution)???.  Also, addPrompts was inserted in lib mail.js because of using
+term.getch in coms/mail.js, which gets sent to Term.response (@LKMDNHYTRG).  I
+started adding color yesterday to the 'err' response, and to the new 'ok'
+response. It's all starting to bite me on the a** once again.
+
+»*/
+/*10/13/24: Updated command calling conventions and created 'stdok' responses«
+
+Updated the command calling convention (@SKIOPRHJT) from:
+	com(args, {opts, term, stdin, etc...})
+to:
+	com(args, opts, {term, stdin, etc...})
+
+The callee is expected to use this notation:
+
+const mycommand = async(args, opts, _)=>{
+	const {term, stdin} = _;
+};
+
+Now how about having a 'stdok' stream, rather than using 'stdout' for "good" reponses?
+Then, we can different colors for stdok (green) and stderr (red) on the terminal.
+stdout is the only response that might get redirected into a file. These others are
+simply informational for the interactive user, and do not make sense as true "output".
+
+»*/
+/*10/11/24: Just getting back into the whole command module loading/reloading thing.«
+Up to now, it has been quite a complex thing juggling different variables like
+ALL_LIBS, globals.shell_libs, NS.libs, and NS.coms.
+
+Now, ALL_LIBS is the NS.libs object. This is an object like:
+NS.libs={
+	lib1: [com11, com12,...],
+	lib2: [com21, com22, ...]
+}
+
+...where these are lists of command names (string). These commands will *not* be imported
+in case they are already defined within the active shell commands.
+
+Upon successfully importing a command library, each library's exported command functions
+and options (both are objects) are put onto NS.coms, like:
+NS.coms={
+	lib1: {coms: lib1funcs, opts: lib1opts}
+}
+
+ADD_COMS is an array that includes all command libraries to be imported upon terminal
+initialization.
+
+DEL_COMS is used by developers to remove all of the commands from the active
+commands (but not if a particular command WASN'T ACTUALLY IMPORTED by the
+library, e.g. see @CJIUKLEH). Their command options are likewise removed from
+the active command options.
+
+
+
+In terms of status updates, how about just NOT putting the terminal in fullscreen,
+and using the bottom status bar???
+
+
+Now... back to email (see me in mail.js...)!!!
+
+»*/
+/*10/10/24: Want a hotkey that toggles the ondevreload method, rather than using the«
+hardcoded variable (USE_ONDEVRELOAD). Done @VMUIRPOIUYT.
+
+Want a dedicated 1-line status bar at the bottom of the screen in "normal" CLI mode
+to allow a place for status messages of long(-ish) term commands processes, that might,
+i.e. be downloading a large file or connecting to some service. This is good for commands
+(like ffmpeg) that are frequently updating their progress. In standard Linux systems,
+the stderr stream is normally used for this kind of updating, but these are not actually
+*errors*, so it doesn't really make any sense to do this.
+
+
+»*/
+/*10/9/24: Updated the entire command importing machinery, and added a ondevreload method«
+(depending on the truth of the global USE_ONDEVRELOAD variable), which, if it
+exists, is called by the desktop's win_reload method (instead of reloading the
+actual application window). Using the ALL_LIBS method allows the shell to
+"know" that it must do an implicit import of a given command library
+(@QKIUTOPLK), because all of the commands are initialized as the (string) names
+of the library (@MYKLJDHFK) rather than with the function bodies (they are
+initialized as "true builtins" @FWPORUITJ).
+»*/
+/*10/5/24: Setting environment variables«
+
+Normally this is done through .bashrc files, using export. But I don't want to mess with
+the complexity of machine-reading text files. Right now, the ENV variable is set here, which
+forces us to manually set all environment vars on the command line. I want ENV
+to be a global variable (which I just added into config.js as globals.TERM_ENV).
+
+Now to set persistent vars to ENV, just save them to ~/.env, e.g.:
+VAR1=Something
+BLAH=What in the hell
+
+»*/
+
+//Notes (Old)«
+
+/*Making data files (Sept/Oct 2024)«
+const com_mkdat = async(args, o)=>{
+	const {term, opts, stdin} = o;
+	let f = args.shift();
+	if (!f) return;
+	let arr = await f.toParNodeAndName(term);
+	if (!arr) return {err: `Not found: ${f}`};
+	let par = arr[0];
+	let name = arr[1];
+	let fullpath = arr[2];
+	let kid = await fullpath.toNode();
+//Updating
+	if (kid) {
+if (!kid.data) return {err: "Not a data node!"}
+if (!await kid.setValue({type: "harko99998", FROYNKMISCH: 4321.8765})) return {err: "Could not set value"};
+log(kid);
+log(kid.data);
+return;
+	}
+//Creating data node
+	kid = await fsapi.writeDataFile(fullpath, {value: 1, type: "number"});
+};
+»*/
+/*Notes (September 2024)«
+9/6/2024:
+Made a global variable, "appclass".
+
+Got rid of all things dealing with "ssh" (which is just a stupid amount of complexity
+for the real world benefit that is received).
+
+9/5/2024:
+
+@XOPIUYTK
+Looking at the editor/pager specific functions like init_edit_mode and init_pager_mode,
+as well as modequit, in order to see how this can be improved and generalized to allow
+for more novel applications. Want a generic workflow for entering and leaving different
+application screens. The newly invoked application needs to get a handle on the 
+terminal's current lines array. Then, upon quitting, it needs to give this back to
+the terminal. We need the ability to do abitrarily deep recursions of applications
+calling applications as submodes, calling applications as submodes...
+
+Now after revamping everything:
+It looks like the way we are switching the terminal's onescape handler back and forth
+is the only thing that (almost certainly) won't allow use to do arbitrary recursion,
+and we are going to need to need to attach it to the various screen_state objects.
+
+And now it looks good for doing our crazy recursion idea.
+
+Took out @SKLIOPMN, because this is a trivial function that unnecessarily complicates
+the logic with application specific purposes.
+
+Updated on 9/4/2024:
+
+@SURMPLRK: The algorithm has been improved because the max_cols was being
+initialized to stupidly high values, given normal terminal widths, causing
+fmt_ls to be recursively called waaaay too many times.  
+
+Also @JSOJPRI, which now has a while(true) loop, that *looks like* it *should*
+always break...
+»*/
+/*Broken (now fixed)://«
+1) Make a file with the 'touch' command
+2) Use the '_blobs' command to verify there is no saved blob
+3) Put something in that file with vim (this bug doesn't happen with shell redirects)
+4) Verify that it has a saved blob with the '_blobs' command
+5) Refresh the page
+6) Verify that is no longer has a saved blob with the '_blobs' command
+//»*/
+//Issues«
+/*@JEPOIKLMJYH: I don't understand why this was giving errors on backspaces
+after pressing the up key in order to scroll back in history, but now it isn't!!
+*/
+//»
+/*"Importing" command libraries via com_import is [NO LONGER] a deprecated solution.«
+Instead, use the ALL_LIBS object, which stores the names of all of the 
+commands, under an array that is keyed by the name of the given command
+library in coms/, but just without the ending '.js'. This is a very
+robust, quick&dirty solution to a problem that is made more complex with
+something like an "import" command.
+»*/
+/*Websockets are *NOT* used in a kind of ssh mechanism.«
+
+DUMB/COMPLEX IDEA BELOW!!!!
+The 'ssh' command allows for 1 'server' terminal and 1 'client' terminal to
+connect to the Node.js backend via websockets. The server terminal should have
+all relevant environment variables set before executing the 'ssh --server' command, 
+which locks the terminal.
+
+"ssh immediate mode" means that the client sends everything after the prompt
+to the ssh server. This is set via 'ssh -i'. While in immediate mode, it
+can be terminated via Ctrl+c. Otherwise, any arguments to the ssh command
+are interpreted as a command to be passed along to the server. This means
+that all of the normal piping and redirections should work.
+
+»*/
+//»

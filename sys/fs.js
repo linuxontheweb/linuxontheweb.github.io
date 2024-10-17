@@ -489,17 +489,45 @@ cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
 	this.getValue = async opts=>{//«
 		if (!okget()) return;
 		if (this.blobId == IDB_DATA_TYPE) {
-if (opts && opts.text) {
-cerr("This is a data node, but opts.text was specified in getValue!");
-try{
-return JSON.stringify(this.data);
-}catch(e){}
+			if (opts && opts.text) {
+cwarn("This is a data node, but opts.text was specified in getValue!");
+				try{
+					return JSON.stringify(this.data);
+				}catch(e){
 cerr(e);
-return this.data.toString();
-}
-			return this.data;
+				}
+				return this.data.toString();
+			}
+			let dat = this.data;
+			return dat;
 		}
 		return getBlob(this, opts);
+	};//»
+	this.getDataType = () => {
+		if (this.blobId !== IDB_DATA_TYPE) return;
+		return this.data.type;
+	};
+	this.getDataValue = () => {
+		if (this.blobId !== IDB_DATA_TYPE) return;
+		return this.data.value;
+	};
+	this.setDataValue=async(val)=>{//«
+		if (this.blobId != IDB_DATA_TYPE){
+cerr("Cannot set data value on non-data node");
+			return;
+		}
+		let dat = this.data;
+		if (!dat){
+cerr("Data not found");
+log(this);
+			return;
+		}
+		dat.value = val;
+		if (!await db.setNodeData(this.id, this.data)) {
+cerr("Could not set node data");
+			return;
+		}
+		return true;
 	};//»
 	this.setValue = async (val, opts={})=>{//«
 		if (this.blobId == IDB_DATA_TYPE){
@@ -507,10 +535,9 @@ return this.data.toString();
 cerr(`Expected an object with a 'type' field! (for inline data storage)`);
 				return;
 			}
-if (this.data.type !== val.type){
+			if (this.data.type !== val.type){
 cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
-}
-//log("db.setNodeData", this.id, val);
+			}
 			if (!await db.setNodeData(this.id, val)) {
 cerr("Could not set node data", this);
 				return;
@@ -1680,7 +1707,7 @@ const mkDir=async(parpatharg, name, opts={})=>{//«
 	let parpath;
 	if (isobj(parpatharg)) parpath = parpatharg.fullpath;
 	else parpath = parpatharg;
-	if (name===null){
+	if (name===null||name===undefined){
 		let arr = parpath.split("/");
 		name = arr.pop();
 		parpath = arr.join("/");
@@ -1805,9 +1832,7 @@ const mountDir = async (name) => {//«
 */
 
 const init = async()=>{//«
-//	if (!await db.init(root, DBNAME, DBSIZE, FS_PREF)) {
 	if (!await db.init(root, FS_PREF)) {
-//	if (!await db.init(root, DBNAME, DBSIZE, DEF_BRANCH_NAME)) {
 		throw new Error("Could not initialize the filesystem database");
 	}
 	rootId = root.id;
