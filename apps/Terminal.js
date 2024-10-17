@@ -71,9 +71,8 @@ const DEL_COMS=[
 //	"fs",
 	"mail"
 ];
-const ADD_COMS=[
-	"mail"
-];
+const ADD_COMS=[];
+
 //»
 
 //Imports«
@@ -111,6 +110,9 @@ const LEFT_KEYCODE = KC.LEFT;
 
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 
+if (dev_mode){
+	ADD_COMS.push("mail");
+}
 //»
 
 //Shell«
