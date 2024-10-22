@@ -499,6 +499,24 @@ if (err) {
 _.suc(`Current imap user set to: ${addr}`);
 return E_SUC;
 };//»
+const com_imapverify=async(args,opts, _)=>{//«
+
+const {term}=_;
+const {stat} = term;
+
+_.inf(`Verifying credentials from imap service...`);
+let rv = await imap_fetch(`verify`);
+if (rv.err) {
+	_.err(rv.err);
+	return E_ERR;
+}
+
+let addr = rv.out.toLowerCase();
+_.suc(`OK: ${addr}`);
+return E_SUC;
+
+};//»
+
 const com_imapdeluser=async(args,opts, _)=>{//«
 
 const {term}=_;
@@ -677,6 +695,7 @@ export const coms = {//«
 
 smtp: com_smtp,
 
+imapverify: com_imapverify,
 imapadduser: com_imapadduser,
 imapdeluser: com_imapdeluser,
 imapcon: com_imapcon,

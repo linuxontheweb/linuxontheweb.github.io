@@ -256,6 +256,7 @@ log("connecting...");
 		client = new ImapFlow(client_opts);
 		await client.connect();
 		is_connected = true;
+		client.on('close', close_cb);
 //		return OK();
 		return do_openbox("INBOX");
 	}
@@ -329,14 +330,13 @@ catch(e){
 
 };//»
 const connected = () => {return OK(is_connected+"");};
+const close_cb=()=>{
+	client = null;
+	is_connected = false;
+	log("connection closed");
+};
 
-client.on('close',()=>{//«
 
-client = null;
-is_connected = false;
-log("connection closed");
-
-});//»
 process.on('uncaughtException', (err) => {//«
 
 	if (err.code === "NoConnection" && err.command === 'IDLE'){

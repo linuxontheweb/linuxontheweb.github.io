@@ -1,8 +1,17 @@
-//Old terminal development notes are stored in doc/dev/TERMINAL
-/*Incorrect way to create success/error/warning colors @WOPIUTHSDKL.
-Instead, we need to do it @DJKUIOJED
-
+//Older terminal development notes are stored in doc/dev/TERMINAL
+/*10/18/24: There may be issues with parsing @IORTYUEWJ: There we are just looking for
+the shortest match (like for pipes). So when we do:
+	$ true|||false
+...we get...
+	I'm true
+...rather than...
+	syntax error near unexpected token `|'
+So we *MUST* check for the next token to ensure it is a valid "word-type" token
+rather than a metacharacter
 */
+//Notes«
+/*Incorrect way to create success/error/warning colors @WOPIUTHSDKL.
+Instead, we need to do it @DJKUIOJED*/
 /*TODO:Update rest of the command libraries with the new response and return mechanism«
 
 const com_what=(args, opts, _)=>{
@@ -54,26 +63,10 @@ as in com_ls, we might want to save on the cpu cycles, when it comes to very lon
 (possibly recursive) listings.
 
 »*/
-
-//let USE_ONDEVRELOAD = true;
-let USE_ONDEVRELOAD = false;
-
-//Development mod deleting«
-
-const DEL_MODS=[
-//	"util.less",
-//	"util.vim",
-];
-const DEL_COMS=[
-//	"audio"
-//	"yt",
-//	"test",
-//	"fs",
-	"mail"
-];
-const ADD_COMS=[];
-
 //»
+
+let USE_ONDEVRELOAD = true;
+//let USE_ONDEVRELOAD = false;
 
 //Imports«
 
@@ -110,8 +103,23 @@ const LEFT_KEYCODE = KC.LEFT;
 
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 
+
+const DEL_MODS=[
+//	"util.less",
+//	"util.vim",
+];
+const DEL_COMS=[
+//	"audio"
+//	"yt",
+//	"test",
+//	"fs",
+//	"mail"
+"esprima"
+];
+const ADD_COMS=[];
+
 if (dev_mode){
-	ADD_COMS.push("mail");
+	ADD_COMS.push("esprima");
 }
 //»
 
@@ -584,7 +592,7 @@ const do_imports = async(arr, err_cb) => {//«
 	if (!err_cb) err_cb = ()=>{};
 	for (let arg of arr){
 		if (ALL_LIBS[arg]) {
-			err_cb(`${arg}: Already loaded`);
+			cwarn(`${arg}: Already loaded`);
 			continue;
 		}   
 		try{
@@ -690,10 +698,10 @@ const com_ = async(args, opts, _)=>{
 
 const com_test = async(args,opts, _)=>{//«
 
-const {term, stdin, out, err, suc, wrn} = _;
+const {term, stdin, out, err, suc, wrn, inf} = _;
 const {stat} = term;
 //stat("Sleep in...");
-wrn("Here is out 111 (in the time of the place which is in the thing that is where in the place of the thing in the placeeeeeeeeeeeeeeee.........................)");
+inf("Here is out 111 (in the time of the place which is in the thing that is where in the place of the thing in the placeeeeeeeeeeeeeeee.........................)");
 await sleep(500);
 suc("OKAY WEE WOOOO!!!!");
 await sleep(500);
@@ -1700,13 +1708,11 @@ const shell_quote_strings = (line_arr) => {//«
 const shell_tokify = line_arr => {//«
 	let lnnum = 1;
 	let wordnum = 0;
-//	const badtok=(tok, num)=>{return `sh: unsupported token (${num}): '${tok}'`;};
 	const badtok=(tok, num)=>{return `sh: unsupported token: '${tok}'`;};
 	const mkword=(str)=>{return{t:"word",word:str,ln:lnnum,wn:(wordnum++)}};
 	const mkrop=(str)=>{return{t:"r_op",r_op:str,ln:lnnum}};
 	const mkcop=(str)=>{return{c:"c_op",c_op:str,ln:lnnum}};
 	const mkds=(str)=>{return{t:"ds",ds:"$",ln:lnnum}};
-//	const mknl=()=>{return{t:"c_op",c_op:"nl",nl:true,ln:lnnum};};
 	const add_to_pipe=()=>{//«
 		if (ret[0]===" ") ret.shift();
 		if (ret[ret.length-1]==" ") ret.pop();
@@ -1741,6 +1747,7 @@ const shell_tokify = line_arr => {//«
 					let next = arr[j + 1];
 					if (next && shell_metas.includes(next)) {//«
 						let comb = ch + next;
+//IORTYUEWJ
 						if (shell_c_op.includes(comb)) {
 							if (comb=="||"||comb=="&&"){
 								ret.push(mkcop(comb));
@@ -1750,10 +1757,14 @@ const shell_tokify = line_arr => {//«
 						}
 						else if (shell_r_op.includes(comb)) {
 							if (comb==">>") {
+								if (arr[j+2]===">") return badtok(">>>");
 								ret.push(mkrop(comb));
 								j++;
 							}
-							else return badtok(comb, 2);
+							else {
+								if (comb=="<<" && arr[j+2]==="<") comb = "<<<";
+								return badtok(comb, 2);
+							}
 						}
 						else {
 							if (ch===">"||ch==">>") ret.push(mkrop(ch));
@@ -1864,6 +1875,7 @@ else {
 	term.response(arg, {isErr: true});
 	if (!if_script) term.response_end();
 }
+
 };//»
 const can=()=>{//«
 //Cancel test function
@@ -1912,6 +1924,9 @@ It also creates '>' and '>>' redirections as well as pipelines.
 All unsupported tokens (redirects like '<' and control like ';') cause failure
 */
 let toks = shell_tokify(arr);
+if (isstr(toks)) return terr(term.fmt(toks), script_out);
+
+
 let com = [];
 let all = [];
 for (let tok of toks){
@@ -2118,10 +2133,11 @@ q 1Aq 2q 3B q 4Cq       5Dq 6
 
 //»
 
-//Get the command. Immediately return if not found.
+//Get the command. Immediately return to prompt if it is empty and we are not in a script.
 				let comword = arr.shift();
 				if (!comword) {
-					return terr("", script_out);
+					if (!script_out) term.response_end();
+					return;
 				}
 
 //Replace with an alias if we can
@@ -2264,9 +2280,20 @@ if (can()) return;
 if (isstr(lns)) lns=[lns];
 else if (!isarr(lns)){
 log(lns);
-throw new Error("Invalid value in suc_cb");
+throw new Error("Invalid value in wrn_cb");
 }
 term.response(lns, {isWrn: true});
+term.scroll_into_view();
+term.refresh();
+};//»
+const inf_cb=(lns)=>{//«
+if (can()) return;
+if (isstr(lns)) lns=[lns];
+else if (!isarr(lns)){
+log(lns);
+throw new Error("Invalid value in inf_cb");
+}
+term.response(lns, {isInf: true});
 term.scroll_into_view();
 term.refresh();
 };//»
@@ -2289,7 +2316,8 @@ term.refresh();
 					out: out_cb,
 					err: err_cb,
 					suc: suc_cb,
-					wrn: wrn_cb
+					wrn: wrn_cb,
+					inf: inf_cb,
 				});
 
 				if (can()) return;
@@ -3605,7 +3633,9 @@ if (num2 > w) {
 	if (min_height && h < min_height){
 		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${min_height}</span></center>`;
 	}
-	else tabdiv.innerHTML = outarr.join("\n");
+	else {
+		tabdiv.innerHTML = outarr.join("\n");
+	}
 };
 
 const generate_stat_html=()=>{//«
@@ -3891,70 +3921,12 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 const get_prompt_str=()=>{//«
 	let str;
 	let user = ENV.USER;
-//	if (this.ssh_immediate_mode && this.ssh_cwd) str = this.ssh_cwd.replace(/^\/+/, "/");
-//	else str = this.cur_dir.replace(/^\/+/, "/");
 	str = this.cur_dir.replace(/^\/+/, "/");
 	str = str+"$";
 	if ((new RegExp("^/home/"+user+"\\$$")).test(str)) str = "~$";
 	else if ((new RegExp("^/home/"+user+"/")).test(str)) str = str.replace(/^\/home\/[^\/]+\x2f/,"~/");
 	return str + " ";
 };//»
-
-/*Old complicated prompt crap«
-const get_prompt_str=()=>{//«
-	let goodch = ["u", "U", "h", "H", "d", "t", "w"];
-	let gotps = ENV.PS1;
-	let ds = "\$";
-	if (root_state) {
-		ds = "#"; 
-		gotps = "\\w" + ds;
-	}
-	else if (!gotps) gotps = "\\w" + ds;
-	cur_ps1 = gotps;
-	let arr = cur_ps1.split("");
-	let str = "";
-	for (let i=0; i < arr.length; i++) {
-		let c = arr[i];
-		let c1 = arr[i+1];
-		if (c == "\\" && c1 && goodch.includes(c1)) {
-			if (c1 == "w") {
-				if (this.ssh_immediate_mode && this.ssh_cwd){
-					str += this.ssh_cwd.replace(/^\/+/, "/");
-				}
-				else str += this.cur_dir.replace(/^\/+/, "/");
-			}
-			else if (c1 == "u" || c1 == "U") {
-				if (ENV.USER) {
-					if (c1 == "u") str += ENV.USER.toLowerCase();
-					else str += ENV.USER;
-				}
-				else str += "user";
-			}
-			else if (c1 == "h" || c1 == "H") {
-				if (ENV.HOSTNAME) {
-					if (c1 == "h") str += ENV.HOSTNAME.toLowerCase();
-					else  str += ENV.HOSTNAME;
-				}
-				else str += "home";
-			}
-			else if (c1 == "t") str += new Date().toTimeString().split(" ")[0];
-			else if (c1 == "d") str += cur_date_str();
-			i++;
-		}
-		else str += c;
-	}
-	cur_prompt = str;
-	if (ENV.USER) {
-		if ((new RegExp("^/home/"+ENV.USER+"\\$$")).test(cur_prompt)) {
-			cur_prompt = "~$";
-		}
-		else if ((new RegExp("^/home/"+ENV.USER+"/")).test(cur_prompt)) cur_prompt = cur_prompt.replace(/^\/home\/[^\/]+\x2f/,"~/");
-	}
-	cur_prompt=cur_prompt.replace(/ *$/, " ");
-	return cur_prompt.replace(/ /g, "\xa0");
-};//»
-»*/
-
 const set_prompt = (opts={}) => {//«
 	let if_nopush = opts.NOPUSH;
 	let if_noscroll = opts.NOSCROLL;
@@ -4090,7 +4062,6 @@ const response_end = () => {//«
 };
 this.response_end = response_end;
 //»
-
 const response = (out, opts={})=>{//«
 	if (isstr(out)) out = [out];
 	else if (!out) return;
@@ -4099,12 +4070,14 @@ log("STDOUT");
 log(out);
 return;
 	}
-	let {didFmt, colors, pretty, isErr, isSuc, isWrn} = opts;
+	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf} = opts;
 //WOPIUTHSDKL
 	let use_color;
 	if (isErr) use_color = "#f99";
 	else if (isSuc) use_color = "#7f7";
 	else if (isWrn) use_color = "#ff7";
+	else if (isInf) use_color = "#bbf";
+
 	if (colors) {
 		if (!didFmt){
 			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
@@ -5276,7 +5249,7 @@ const init = async(appargs={})=>{
 	if (!reInit) reInit = {};
 	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
-cwarn("Reload the terminal:", !USE_ONDEVRELOAD);
+//cwarn("Reload the terminal:", !USE_ONDEVRELOAD);
 //	let gotbuf = reInit.termBuffer;
 	if (termBuffer) history = termBuffer;
 	else {
@@ -5380,7 +5353,7 @@ const ondevreload = async() => {//«
 	do_overlay("ondevreload: start");
 	delete_coms(DEL_COMS);
 	await do_imports(ADD_COMS, cerr);
-do_overlay("ondevreload: done");
+	do_overlay("ondevreload: done");
 };//»
 
 this.onkill = (if_dev_reload)=>{//«
