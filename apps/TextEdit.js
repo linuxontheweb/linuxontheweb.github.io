@@ -1,7 +1,9 @@
 //Imports«
 
-import { util, api as capi } from "util";
-import { globals } from "config";
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 const{log,cwarn,cerr, make}=util;
 
 const{NS, MAX_TEXTAREA_BYTES}=globals;
@@ -137,7 +139,7 @@ node.lockFile();
 Win.node = node;
 
 }//»
-const open_new_window=()=>{Desk.open_app(Win.appName, {force: true})};
+const open_new_window=()=>{Desk.api.openApp(Win.appName, {force: true})};
 
 //OBJ/CB«
 
@@ -183,7 +185,7 @@ return;
 	Win.icon.node.unlockFile();
 }, 250);
 	}
-    let text = capi.bytesToStr(bytes);
+    let text = util.bytesToStr(bytes);
 	area.value = text;
 	if (view_only || opts.viewOnly) {
 		view_only = true;

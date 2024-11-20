@@ -28,15 +28,8 @@ zip -y -r $DATENUM lotw/ -x \*.sw[nop] -x \*/.git/\* -x \*/nano
 
 #zip -y -r $DATENUM lotw/ -x \*.sw[nop] -x \*/.git/\* -x lotw/www/examples/games -x lotw/www/examples/sounds
 
-cp $DATENUM.zip usb/
-cp $DATENUM.zip ssd/
-
-#rm 0CUR.zip
-#ln $DATENUM.zip 0CUR.zip
-
-#cp $DATENUM.zip unt/
-#cp $DATENUM.zip Downloads/ || rm Downloads/$DATENUM.zip
-#cp $DATENUM.zip CUR.zip
-#cp $DATENUM.zip jdrive/lotw/versions/2022/
+cp $DATENUM.zip usb/ 2>/dev/null && echo "Copied to 'usb'"
+cp $DATENUM.zip ssd/ 2>/dev/null && echo "Copied to 'ssd'"
+cp $DATENUM.zip unt/ 2>/dev/null && echo "Copied to 'unt'"
 
 

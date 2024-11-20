@@ -78,12 +78,13 @@ Kaspar Etter
 »*/
 //Imports«
 
-const NS = LOTW;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 
-import { util, api as capi } from "util";
-const {linesToParas}=capi;
-import { globals } from "config";
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+//const {linesToParas}=capi;
+const{isArr, isStr, isObj, log, jlog, cwarn, cerr, linesToParas}=util;
 const {
 	fs,
 	APPDATA_PATH,
@@ -239,7 +240,7 @@ this.getStore=()=>{return get_store();};
 
 const not_true_to_err = (val, funcname)=>{//«
 	if (val===true) return;
-	if (isstr(val)) return {err: val};
+	if (isStr(val)) return {err: val};
 	if (!funcname) funcname = "?";
 cwarn("Unknown value:", val);
 	return {err: `Unknown response from ${funcname} (see console warning)`};
@@ -254,7 +255,7 @@ let dbvers_node = await DBVERS_FILE.toNode();
 if (!dbvers_node) return `Could not get DBVERS_FILE (${DBVERS_FILE})`;
 
 let db_vers_data = await dbvers_node.getValue();
-if (!(db_vers_data && isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+if (!(db_vers_data && isObj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
 	return `Invalid or missing data returned from DBVERS_FILE (${DBVERS_FILE})`;
 }
 let db_vers = db_vers_data.value;
@@ -298,7 +299,7 @@ log("Making DBVERS_FILE...");
 	if (!dbvers_node) return `Could not get DBVERS_FILE (${DBVERS_FILE})`;
 }
 let db_vers_data = await dbvers_node.getValue();
-if (!(db_vers_data && isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+if (!(db_vers_data && isObj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
 	return `Invalid or missing data returned from DBVERS_FILE (${DBVERS_FILE})`;
 }
 let db_vers = db_vers_data.value;
@@ -350,7 +351,7 @@ const get_curuser_data = async(if_create)=>{//«
 		if (!curuser_node) return `Could not create the CURUSER_FILE (${CURUSER_FILE})`;
 	}
 	let curuser_data = await curuser_node.getValue();
-	if (!(curuser_data && isobj(curuser_data) && curuser_data.type == "string")){
+	if (!(curuser_data && isObj(curuser_data) && curuser_data.type == "string")){
 		return `Invalid or missing data returned from CURUSER_FILE (${CURUSER_FILE})`;
 	}
 	return [curuser_data, curuser_node];
@@ -366,7 +367,7 @@ log("Making USERS_FILE", USERS_FILE);
 		if (!users_node) return `Could not create the USERS_FILE (${USERS_FILE})`;
 	}
 	let users_data = await users_node.getValue();
-	if (!(users_data && isobj(users_data) && users_data.type == "stringarray")){
+	if (!(users_data && isObj(users_data) && users_data.type == "stringarray")){
 		return `Invalid or missing data returned from USERS_FILE (${USERS_FILE})`;
 	}
 
@@ -383,11 +384,11 @@ const set_users_array = async(data, node)=>{//«
 const create_or_append_users = async username => {//«
 
 	let rv = await get_users_data(true);
-	if (isstr(rv)) return rv;
+	if (isStr(rv)) return rv;
 	let users_data = rv[0];
 	let users_node = rv[1];
 	let users = users_data.value;
-	if (!isarr(users)){
+	if (!isArr(users)){
 log(users);
 		return "Unknown value returned from get_users_array (see console)";
 	}
@@ -404,7 +405,7 @@ const create_cur_user = async username => {//«
 //Checking/Making/Updating CURUSER_FILE. Return if it is the same as the verified user
 
 let rv = await get_curuser_data(true);
-if (isstr(rv)) return curuser_data;
+if (isStr(rv)) return curuser_data;
 let curuser_data = rv[0];
 let curuser_node = rv[1];
 
@@ -532,12 +533,12 @@ addr = addr.toLowerCase();
 let in_table_name = `in:${addr}`;
 
 let rv = await get_users_data();
-if (isstr(rv)) return err(rv);
+if (isStr(rv)) return err(rv);
 let users_data = rv[0];
 let users_node = rv[1];
 
 let users = users_data.value;
-if (!isarr(users)) {
+if (!isArr(users)) {
 log(users);
 	return err("Unknown value in the users data file (see console)");
 }
@@ -555,14 +556,14 @@ else {
 users.splice(ind, 1);
 
 rv = await set_users_array(users_data, users_node);
-if (isstr(rv)) return err(rv);
+if (isStr(rv)) return err(rv);
 
 rv = await del_object_store(in_table_name);
 rv = nt2e(rv, "del_object_store");
 if (rv) return err(rv.err);
 
 rv = await get_curuser_data();
-if (isstr(rv)) return err(rv);
+if (isStr(rv)) return err(rv);
 
 let curuser_data = rv[0];
 let curuser_node = rv[1];
@@ -730,7 +731,7 @@ this.command_str = o.command_str;
 
 return new Promise(async(Y,N)=>{
 
-	if (!(address&&isstr(address))){
+	if (!(address&&isStr(address))){
 		Y("init() called without a valid address!");
 		return;
 	}
@@ -751,7 +752,7 @@ log("Making DBVERS_FILE...");
 	}
 	let db_vers_data = await dbvers_node.getValue();
 	if (!db_vers_data) return Y(`Could not get the data from DBVERS_FILE (${DBVERS_FILE})`);
-	if (!(isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+	if (!(isObj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
 		return Y(`Invalid data returned from DBVERS_FILE (${DBVERS_FILE})`);
 	}
 	let db_vers = db_vers_data.value;
@@ -904,12 +905,12 @@ const com_email = async(args, opts, _)=>{//«
 	if (add) op="add";
 	else if (del) op="del";
 
-    if (!await capi.loadMod("util.email")) {
+    if (!await util.loadMod("util.email")) {
         return {err: "Could not load the email module"};
     }
     let email = new NS.mods["util.email"](term);
     let rv = await email.init(address,{command_str, op});
-    if (isstr(rv)){
+    if (isStr(rv)){
         return {err: rv};
     }
 

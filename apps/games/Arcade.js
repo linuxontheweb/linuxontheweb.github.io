@@ -1,8 +1,10 @@
 
-import { util, api as capi } from "util";
-import {globals} from "config";
-const {lowToHigh} = capi;
-const{ log, jlog, cwarn, cerr, isstr, isnum, make, mk, mkdv} = util;
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+//const {lowToHigh} = capi;
+const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv, lowToHigh} = util;
 const {NS} = globals;
 const {fs:fsapi, widgets: wdg} = NS.api;
 const {poperr} = wdg;
@@ -280,7 +282,7 @@ const init_js=async(jsarg, bytes, wasmarg, namearg)=>{//«
 		init_emulator(gotjs, bytes, wasmarg);
 		return;
 	}
-	let modret = await capi.getMod(jsarg);
+	let modret = await util.getMod(jsarg);
 	if (!modret) return poperr("Could not get the js mod: " + jsarg);
 	js_cache[jsarg] = modret;
 	init_emulator(modret, bytes, wasmarg, namearg);
@@ -292,7 +294,7 @@ const init_wasm=async(wasm, jsmod, bytes, namearg)=>{//«
 		init_emulator(gotjs, gotwasm);
 		return;
 	}
-	let wasmmod = await capi.getMod("util.wasm");
+	let wasmmod = await util.getMod("util.wasm");
 //log(wasmmod);
 	if (!wasmmod) return poperr("No wasm module!");
 //	let base_path = '/code/wasms/games/'+wasm+'.wasm';

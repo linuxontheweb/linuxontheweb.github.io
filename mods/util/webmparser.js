@@ -61,13 +61,15 @@ for (const codec of codecs) {
 »*/
 
 //Imports«
-import { util, api as capi } from "util";
-import { globals } from "config";
+//import { util, api as capi } from "util";
+//import { globals } from "config";
 
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 const{NS}=globals;
 const fsapi = NS.api.fs;
 const fs = fsapi;
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+const{strnum, isArr, isStr, isNum, isObj, log, jlog, cwarn, cerr}=util;
 const {pathToNode}=fsapi;
 const USECODEC = "vp9";
 //»
@@ -169,7 +171,7 @@ ebml_bytes = init_bytes.slice(0, rv[0]+rv[1])
 //New times -> Duration«
 
 rv = get_timing_of_webm_file(init_bytes);
-if (isstr(rv)) return cerr(rv);
+if (isStr(rv)) return cerr(rv);
 
 timecodescale = rv.timeCodeScale;
 timemult = timecodescale/NANOSECS_PER_SEC;
@@ -223,7 +225,7 @@ tracks_bytes = await fs.readFile(fullpath, {binary: true, start: c, end: c + tra
 
 rv = get_section_pos_of_webm_file([0x1c,0x53,0xbb,0x6b], init_bytes);
 if (!rv) return cerr("Could not get the Cues position from the file");
-if (isstr(rv)) return cerr(rv);
+if (isStr(rv)) return cerr(rv);
 
 let segment_start = rv.offset;
 c = segment_start + rv.value;
@@ -514,7 +516,7 @@ else {/*At least 3 clusters*/
 	let middle_data = await fs.readFile(fullpath, {binary: true, start: cues_arr[0].pos, end: last_cluster_start});
 
 	let rv = new_clusters_data(middle_data, start_time/timemult);
-	if (isstr(rv)) return cerr(rv);
+	if (isStr(rv)) return cerr(rv);
 	cluster_times = cluster_times.concat(rv.times)
 	cluster_sizes = cluster_sizes.concat(rv.sizes)
 
@@ -1466,7 +1468,7 @@ const get_timing_of_webm_file=(bytes)=>{//«
 	let a = bytes;
 	let rv = get_section_pos_of_webm_file([0x15,0x49,0xa9,0x66], bytes);
 	if (!rv) return "Could not get the Info position from the file";
-	if (isstr(rv)) return rv;
+	if (isStr(rv)) return rv;
 	let c = rv.offset + rv.value;
 	if (!(a[c] == 0x15 && a[c+1] == 0x49 && a[c+2]==0xa9 && a[c+3]==0x66)) return "Info ID not found";
 	rv = ebml_sz(a, c+4);
@@ -2227,14 +2229,14 @@ let util = globals.util;
 _ = util;
 let strnum = _.strnum;
 let isnotneg = _.isnotneg;
-let isnum = _.isnum;
-let ispos = function(arg) {return isnum(arg,true);}
-let isneg = function(arg) {return isnum(arg,false);}
+let isNum = _.isNum;
+let ispos = function(arg) {return isNum(arg,true);}
+let isneg = function(arg) {return isNum(arg,false);}
 let isid = _.isid;
-let isarr = _.isarr;
-let isobj = _.isobj;
+let isArr = _.isArr;
+let isObj = _.isObj;
 let isint = _.isint;
-let isstr = _.isstr;
+let isStr = _.isStr;
 let isnull = _.isnull;
 let make = _.make;
 let iseof=Core.api.isEOF;

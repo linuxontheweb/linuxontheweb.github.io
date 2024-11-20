@@ -1,10 +1,19 @@
-//TODO: Everything past @GSJKELSIU needs to be updated with the new response and
-//return code (E_SUC or E_ERR) convention
+
 //Imports«
 
-import { util, api as capi } from "util";
-import { globals } from "config";
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const {
+	isArr,
+	isStr,
+	log,
+	jlog,
+	cwarn,
+	cerr,
+	normPath
+} = util;
 const {
 	fs,
 	NS,
@@ -20,7 +29,6 @@ const {
 } = globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
-const {normPath}=capi;
 const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //»
@@ -69,7 +77,7 @@ cwarn(`Skipping: ${fullpath} (type=${typ})`);
 		}
 //		let val = await node.text;
 		let val = await node.getValue({text: true});
-		if (!isstr(val)) {
+		if (!isStr(val)) {
 			fullterr("An unexpected value was returned");
 			continue;
 		}
@@ -84,10 +92,10 @@ cwarn(`Skipping: ${fullpath} (type=${typ})`);
 //Commands«
 
 const com_less = async (args,opts, _) => {//«
-	let {term, stdin}=_; 
+	let {term, stdin, err, inpipe}=_; 
 //	if (term.ssh_server) return {out: "No 'less' in ssh_server mode!"}
-	let err = [];
-	const terr=(arg)=>{err.push(arg);};
+//	let err = [];
+//	const terr=(arg)=>{err.push(arg);};
 	let path = args.shift();
 	let arr;
 	let name;
@@ -106,59 +114,29 @@ const com_less = async (args,opts, _) => {//«
 		let fullpath = normPath(path, term.cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
-			terr(`${fullpath}: No such file or directory`);
-			return {err};
+			err(`${fullpath}: No such file or directory`);
+			return E_ERR;
 		}
 		if (node.appName === FOLDER_APP) {
-			terr(`${fullpath}: Is a directory`);
-			return {err};
+			err(`${fullpath}: Is a directory`);
+			return E_ERR;
 		}
 		let val = await node.getValue({text:true});
 		arr = val.split("\n");
 		name = node.name;
 	}
-	if (!await capi.loadMod(DEF_PAGER_MOD_NAME)) {
-		terr("Could not load the pager module");
-		return {err};
+	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+		err("Could not load the pager module");
+		return E_ERR;
 	}
 	let less = new NS.mods[DEF_PAGER_MOD_NAME](term);
 	await less.init(arr, name, {opts});
 	return E_SUC;
 };//»
 const com_vim = async (args,opts, _) => {//«
+//log(_);
 	const terr=(arg)=>{return {err: arg};}
-	let {term, command_str}=_; 
-//	if (term.ssh_server) return {out: `No 'vim' in "ssh server" mode!`}
-
-/*«Old
-//This is for testing windowed apps.«
-//This means that the file you are editing is
-//being used by the Meta app, which is only really launched by an app icon that
-//has a file arg (which would be the same file that is being edited here) and an
-//optional data_file arg for apps that need to call onloadfile.
-
-//»
-	let is_meta_app = opts["is-meta-app"];
-
-//This is for testing CLI commands«
-which is eval'd by com_meta in the terminal
-that has the window id given here.
-//»
-	let meta_com_win = opts["meta-com-win"];//The numerical window id
-	let meta_com_args = opts["meta-com-args"];//Arguments to pass to meta command
-	let meta_com_term;//The handle to the eval'ing terminal will go here
-
-//This is a terminal with a vim instance that is in "Waiting..." mode, in order//«
-to get its lines run through the external algorithm that will be coded and 
-eval'd in this vim instance.
-//»
-	let sw_lns_win = opts["switch-lns-win"];//Numerical window id of the "Waiting..." vim instance
-	let sw_lns_ed;//The handle to the editor (must have a switch_lines method)
-	let keylog_file = opts['keylog-file'];
-	let num_keylog_steps;
-
-»*/
-
+	let {stdin, term, command_str}=_; 
 	let val;
 	let node;
 	let parnode;
@@ -166,7 +144,6 @@ eval'd in this vim instance.
 	let typ;
 	let linkNode;
 	let symbols;
-//	let meta_com_win = opts["meta-com-win"];//The numerical window id
 	if (opts.symbols){//«
 		let rv = await opts.symbols.toText(term);
 		if (!rv) return terr(`${opts.symbols}: symbol file not found`);
@@ -177,36 +154,11 @@ eval'd in this vim instance.
 			if (s.match(/^\w/)) symbols.push(s);
 		}
 	}//»
-	let text_input_func;
-//If a window's app object defines an ontextinput method, vim will call it with its text
-	if (opts["text-input-win"]){
-		let winid = opts["text-input-win"];
-		if (!winid) return {err: "No window id"};
-		if (!winid.match(/^[0-9]+$/)) return {err:"Invalid window id"};
-		let win = document.getElementById(`win_${winid}`);
-		if (!win) return {err: `No toplevel window with id: ${winid}`};
-		text_input_func = win._winObj.app.ontextinput;
-		if (!(text_input_func instanceof Function)) return {err: `The window's app object does not have an ontextinput method (${winid})`};
+	if (stdin) {
+		val = stdin.join("\n");
 	}
-	let reload_win;
-	if (opts["reload-win"]){
-		let winid = opts["reload-win"];
-		if (!winid) return {err: "No window id"};
-		if (!winid.match(/^[0-9]+$/)) return {err:"Invalid window id"};
-		let win = document.getElementById(`win_${winid}`);
-		if (!win) return {err: `No toplevel window with id: ${winid}`};
-		reload_win = win._winObj;
-if (!reload_win._fs_url){
-return {err: "That does not look like a local development application!!"}
-}
-if (reload_win.owned_by) {
-cwarn("Here is the owning window");
-log(reload_win.owned_by);
-	return {err: `The window is already owned! (check console)`}
-}
-	}
-	let path = args.shift();
-	if (path) {//«
+	else if (args.length){//«
+		let path = args.shift();
 		fullpath = normPath(path, term.cur_dir);
 		node = await fsapi.pathToNode(fullpath);
 		if (!node){
@@ -226,7 +178,7 @@ log(reload_win.owned_by);
 			if (node.write_locked()) return terr(`${path}: Is locked by another application`);
 			if (node.appName === FOLDER_APP) return terr(`${fullpath}: Is a directory`);
 			val = await node.getValue({text:true});
-			if (!isstr(val)){
+			if (!isStr(val)){
 cwarn("Here are the contents...");
 log(val);
 				return terr(`${path}: Could not get the contents (see console)`);
@@ -234,87 +186,23 @@ log(val);
 		}
 	}//»
 	if (!val) val = "";
-	if (!await capi.loadMod(DEF_EDITOR_MOD_NAME)) return terr("Could not load the editor module");
+	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) return terr("Could not load the editor module");
 	let vim = new NS.mods[DEF_EDITOR_MOD_NAME](term);
 	if (node) typ = node.type;
 	else if (parnode) typ = parnode.type;
-
-//Old«
-/*Keylog«
-	let keylog_keys;
-	if (keylog_file){
-		let obj = await keylog_file.toJSON(term);
-log(obj);
-		if (!obj) return terr("Invalid or missing keylog file");
-		keylog_keys = obj.keys;
-		if (!isarr(keylog_keys)) return terr("The keylog is missing or not an array");
-		let w = obj.w;
-		let h = obj.h
-		if (!(Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0)) return terr("The width and height values of the keylog_file are bad");
-		if (!(term.w === obj.w && term.h === obj.h)){
-			return terr(`The terminal dimensions must be: ${w}x${h}`);
-		}
-		let num_keylog_steps_str = opts['num-keylog-steps'];
-		if (num_keylog_steps_str){
-			num_keylog_steps = num_keylog_steps_str.ppi();
-			if (isNaN(num_keylog_steps)) return terr(`Invalid argument for 'num-keylog-steps' (want a positive integer)`);
-		}
-//		if (!(keylog_keys && isarr(keylog_keys))) return terr("Invalid or missing keylog file");
-	}
-»*/
-/*Meta«
-	let meta_app;
-	if (is_meta_app){//«
-		let paths = globals.meta_paths;
-		if (!(fullpath && paths && (meta_app = paths[fullpath]))){
-			return terr("The meta app was not found");
-		}
-	}//»
-	else if (meta_com_win||sw_lns_win){//«
-		if (meta_com_win && !fullpath){
-			return terr("A file must be given");
-		}
-		let winid = meta_com_win||sw_lns_win;
-		if (!winid) return {err: "No window id"};
-		if (!winid.match(/^[0-9]+$/)) return {err:"Invalid window id"};
-		let win = document.getElementById(`win_${winid}`);
-		if (!win) return {err: `No toplevel window with id: ${winid}`};
-		let obj = win._winObj;
-		if (obj.appName !== "Terminal") return {err:"The window is not a terminal"};
-		if (obj.id === term.winid) return {err:"The window is the same"};
-		if (meta_com_win) meta_com_term = obj.app;
-		else if (sw_lns_win) {
-			if (!(obj.app.editor&&obj.app.editor.switch_lines)) return {err: "The terminal is not an editor with switch_lines"}
-			sw_lns_ed = obj.app.editor;
-		}
-		else{
-cerr("HOWDIDUGETHERE!?!?");
-		}
-	}//»
-»*/
-//»
-
 	let mess = await vim.init(val, fullpath, {//«
-		FOBJ: node,
-		TYPE: typ,
-		linkNode,
+		node,
+		type: typ,
+		is_stdin: !!stdin,
 		command_str,
 		opts,
 		symbols,
-		text_input_func,
-		reload_win
-//«
-//		meta_app,
-//		meta_com_term,
-//		meta_com_args,
-//		switch_lines_editor: sw_lns_ed,
-//		keylog_keys,
-//		keylog_file,
-//		num_keylog_steps
-//»
 	});//»
-	if (isstr(mess)){
+	if (isStr(mess)){
 		return terr(mess);
+	}
+	else if (_.inpipe||_.redir){
+		_.out(vim.get_lines({str:true}));
 	}
 	return E_SUC;
 
@@ -530,7 +418,7 @@ const com_rm = async (args,opts, _) => {//«
 	}
 	let is_recur = opts.recursive || opts.R || opts.r;
 	if (is_recur) {
-		if (!(isstr(env.NUCLEAR_OPTION) && env.NUCLEAR_OPTION.match(/^i am crazy$/i))) {
+		if (!(isStr(env.NUCLEAR_OPTION) && env.NUCLEAR_OPTION.match(/^i am crazy$/i))) {
 			_.err("rm: recursive removal not currently enabled");
 			return E_ERR;
 		}
@@ -789,7 +677,7 @@ const com_dl=async(args,opts, _)=>{//«
 		val = await node.buffer;
 		name = node.name;
 	}
-	capi.download(new Blob([val]), name);
+	util.download(new Blob([val]), name);
 	return E_SUC;
 };//»
 
@@ -827,7 +715,7 @@ const com_mount = async (args,opts, _) => {//«
 	let {term}=_; 
 	const terr=(arg)=>{return {err: arg};};
 	let rv = await fsapi.mountDir(args.shift());//In a multiline comment!!!
-	if (isstr(rv)) return terr(rv);
+	if (isStr(rv)) return terr(rv);
 	else if (rv!==true) return terr(`Unknown response: ${rv}`);
 }//»
 */
@@ -857,7 +745,7 @@ touch:com_touch,
 //unmount: com_unmount,
 }//»
 
-export const opts = {
+export const opts = {//«
 
 	rm: {//«
 		s:{
@@ -875,19 +763,14 @@ export const opts = {
 			insert: 1,
 			enterquit: 1,
 			"convert-markers": 1,
-			"text-input-win": 3,
 			"reload-win": 3,
 			symbols: 3,
 			'keylog-file': 3,
 			'num-keylog-steps':3,
-//			"is-meta-app": 1,
-//			'switch-lns-win': 3,
-//			'meta-com-win': 3,
-//			'meta-com-args': 3,
 		}
 	},//»
 	less:{l:{parsel:1}},
 	dl:{s:{n:3,},l:{name:2}}
 
-}
+}//»
 

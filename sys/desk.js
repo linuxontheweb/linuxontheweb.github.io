@@ -1,98 +1,58 @@
+/*«
 
-//Notes«
-/*THIS IS ALL VERY SHITTY, SO JUST SPEND TIME THINKING ABOUT IT AND GETTING IT«
-REASONABLY DEBUGGED, THEN DON'T FUCKING WORRY ABOUT THIS SHITTY ADVANCED FEATURE.
+10/31/24
 
-Very, very stupid hacks because of the idea of using vim to edit local
-javascript files that are used for local app developement. There is a hotkey in
-vim for reloading the app windows that are under development. First of all, vim
-"owns" the app window by putting a "owned_by" member on it, so the window
-cannot be closed (via mouse or desktop shortcut) or reloaded via the desktop's
-Alt+r shortcut. Also, the window now has a reload method on it, which is passed
-a callback (from vim.js @FJUSOP) that is called back with the new window object
-(so that vim can have a handle to the new one, since the old one is lost). When
-vim exits cleanly, it deletes the "owned_by" member, so that the window can
-once more be independently closed/reloaded. The app window needs to be raised
-to the top of the stack (as CWIN) in order to be reloaded, and then vim's terminal
-window needs to be raised right after reloading.
+@SJNMYEJK we create a "fake" icon (in open_file_by_path), in order to feed into
+open_icon_app (@WKIUTHJU), if it has a ".app" extension. The 'open' command
+does it this way. Now I want vim to be able to call open_icon_app with a fake
+icon that includes an object URL, created by URL.createObjectURL. After it does
+this, it will have a handle on the given Window object, and should be able to
+call reload on it with a new object URL. IMPORTANT: I WANT TO USE LOTW VIM TO
+DEVELOP A SHELL COMMAND LANGUAGE PARSING ENGINE.
 
-How about an owned_by property?
-
-»*/
-/*The concept of local application development://«
-
-1) We save to the local fs.
-	a) Create a url via URL.createObjectURL (portable), using the text of the file
-	b) Create a filesystem:// URL (Chrome only? Would Edge even allow this?)
-
-»*/
-/*Here's the situation: Whenever the icon cursor moves away from an icon«
-on the desktop, the icon's label should hide the overflow of the name, so that only
-one line is showing. Usually, the Window.on method will take care of this @VKUIOKL
-(i.e. when cycling through the window stack). But when we are opening a window, the
-newly created window is already occluding the desktop by the time this is called. So,
-we added in the test @FRUTIOP in open_file_by_path, for whenever the path refers
-to a folder window.
-»*/
-/*@HFYUIOTS: Don't understand why app.onfocus was called by desk_menu.kill_cb. That
-messes up menu functions that call popups which call window.on, which calls app.onfocus.
-*/
-/*Maybe change certain desktop keydown functions from, e.g. m_ to the keypress "m", so
-that toggling windows doesn't mean that the m press event gets sent to a window (like
-the Terminal).
-*/
-/*3 simple changes to enable a (hopefully) seamless icon accounting experience«
-(but it really currently only seems to apply to literally mv'ing icons between
-desktop/folders). The idea is that there can be an arbitrary number of icons
-for each node. These changes allows us to remove all icons from the display
-(except for the one that is being handled by the mouse and controlled by the
-gui) whenever an underlying node's location (parent directory) is being
-changed. This means that we can "talk" directly to each icon's DOM elements
-rather than, e.g. needing to search around for the parent folder windows and 
-querying them for the icon with the given name.
-
-1) In fs.js, added a .icons property to the Node constructor that points to an 
-	empty array.
-2) @CNJPLMYTY (at the end of the Icon constructor): We did node.icons.push(this)
-3) @WMKFTYIOP1 (in move_icon_by_path)://«
-	if (frompath !== topath){
-		while (node.icons.length) node.icons.pop().del();
-	}//»
-4) But 3 was WRONG because it failed to allow for the graceful removal of those//«
-icons that are being actively manipulated by the mouse user, causing them to
-disappear from the interface while the animation moves them to their
-destination folder. So, in fs.js, just before the move_icon_by_path function is
-called (@MDEROPI), we do this:
-
-	if (if_cp) {
-		gotfrom = null;
+let fake = {
+	winargs: opt.WINARGS,
+	name: fname,
+	path: (patharr.join("/")).regpath(true),
+	fullpath: () => {
+		return fullpath;
 	}
-	else if (gotfrom !== gotto){
-		let icons = fent.icons;
-		while (icons.length) {
-			let icn = icons.pop();
-			if (icn === fromicon) {
-				continue;
-			}
-			icn.del();
-		}
-	}
+};
 
-... where fent is just a dumb name for the node, and fromicon is whatever icon
-is being manipulated in the gui.
+But really, we just need to call open_app:
 
-So hopefully all relevant icons are being accounted for, and those
-icons that are no longer relevant are being gracefully removed.
-//»
-5) But 4 was wrong because gotfrom and gotto included icons that were just
-being renamed, so now have: @WMKFTYIOP2, just after all the non-moving icons
-have been renamed...
+open_app(appname, {
+	winArgs: icn.winargs,
+	appArgs: obj.args,
+	icon: icn,
+	fsUrl: fsUrl(`/blobs/${node.blobId}`),
+	winCb: win_cb
+});
 
-...but what about the case in which the icons don't have permission to be moved
-to wherever the user is trying to move them to?
+But instead of giving it an fsUrl, we want to give it a dataUrl, to work with
+purely in-memory strings of text.
+
+But *first*, the api.openApp interface needs to only take an opts object as
+the second arg. This is also defined as Desk.open_app.
+
+Need to make sure NOONE is calling Desk.open_app.
+
+Now we can call api.openApp(appname,{force, winArgs, appArgs, dataUrl: ...}).
+
+Let's get rid of the entire "fs_url/fsUrl" concept as a way to open an
+application window. Instead, we can do the same thing with a dataUrl concept.
+Then, it is just a matter of *where* we are getting the original Javascript
+text string.  It can be either from somewhere in the filesystem or from the
+lines of a text editor (or for that matter, from some other application's
+in-memory data structures). Either way, we are doing URL.createObjectURL with
+a new Blob([string_of_js_here]);
+
+In vim, there is a reload_win arg. Just need to clean up all of the old/crusty 
+mechanisms related to applications/windows/reloading...
+
+So once I get this stuff working, I can develop the shell parser in it...
 
 »*/
-//»
 
 //Imports«
 
@@ -142,6 +102,7 @@ const{
 
 const {
 	isStr,
+	isObj,
 	mkdv,
 	mksp,
 	mkbut,
@@ -2797,9 +2758,6 @@ const open_icon = async(icn, opts={}) => {//«
 	let win;
 	let app=icn.appName;
 
-//	let fullpath = (icn.path + "/" + icn.name).regpath();
-//	let gotext = icn.ext;
-//	if (gotext) fullpath = fullpath + "." + gotext;
 	let fullpath = icn.fullpath;
 	if (!icn.win){
 		OUTERLOOP: for (let wins of workspaces) {
@@ -3210,14 +3168,10 @@ const make_new_text_file = (winarg, val, ext, opts={})=>{//«
 		if (!parobj) return;
 		let rtype = parobj.type;
 		if (!(rtype==FS_TYPE||rtype==SHM_TYPE)){
-//		if (rtype != FS_TYPE) {
 			await popwait(`Cannot create a file of type: '${rtype}'`, "error");
 			Y();
 			return;
 		}
-//		let fake = {name: `${name}.${ext}`, baseName: name, ext: ext, fake: true};
-//		if (ext==="app") fake.appicon = val;
-//		let icn = new Icon(fake);
 		let icn = new Icon({name: `${name}.${ext}`, baseName: name, ext: ext, fake: true});
 		icn._savetext = val;
 		icn._editcb = Y;
@@ -3445,7 +3399,7 @@ const Window = function(arg){//«
 	let is_folder = app === FOLDER_APP;
 	let winid;
 	let marr;
-	let fs_url;
+//	let fs_url, data_url;
 
 	let usex, usey, usew, useh;
 	let winargs = arg.WINARGS||{};
@@ -3482,10 +3436,10 @@ const Window = function(arg){//«
 //		app = `local.${marr[1]}`;
 //	}
 //log("ARG", arg);
-	if (arg.fsUrl){
-fs_url = arg.fsUrl;
+//	if (arg.fsUrl){
+//fs_url = arg.fsUrl;
 //log("FSURL", fs_url);
-	}
+//	}
 
 //»
 
@@ -3902,15 +3856,21 @@ this.setWinArgs=args=>{//«
 		return ret;
 	};//»
 	this.on = (which, if_no_zup) => {//«
-		if (this.killed) {
-cwarn("This window has been killed. Who is calling the 'on' method?");
-			return;
-		}
+//		if (this.killed) {
+//cwarn("This window has been killed. Who is calling the 'on' method?");
+//			return;
+//		}
 		if (!windows_showing) toggle_show_windows();
 		if (CPR) return;
 		if (CWIN) {
 			if (this === CWIN) return;
 			CWIN&&CWIN.off();
+		}
+		if (this.workspace_num !== current_workspace_num) {
+			switch_win_to_workspace(this, current_workspace_num);
+			if (this.child_win){
+				switch_win_to_workspace(this.child_win, current_workspace_num);
+			}
 		}
 		if (is_folder && !this.is_minimized) {
 //VKUIOKL
@@ -3931,7 +3891,6 @@ cwarn("This window has been killed. Who is calling the 'on' method?");
 		if (if_no_zup){}
 		else if (this.winElem._z && this.winElem._z < 10000000) this.up();
 		
-		this.zhold = null;
 		if (!this.no_shadow) this.winElem.style.boxShadow = window_boxshadow;
 		document.activeElement.blur();
 		this.img_div._op= 0.75;
@@ -3997,9 +3956,6 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		if (!a.onkeypress) a.onkeypress = NOOP;
 		if (!a.get_context) a.get_context = ()=>{return [];}
 	//	check_win_visible(this);
-		this.check_visible();
-		this.status_bar.resize();
-		this.on();
 
 	};//»
 	this.check_visible=()=>{//«
@@ -4380,10 +4336,38 @@ for (let icn of icons) {
 }
 ICONS = OK;
 };//»
-this.reload=(cb)=>{
-if (CWIN !== this) this.on();
-win_reload(cb);
-};
+this.reload = (opts={})=>{//«
+	if (this.killed){
+		poperr("This window has been killed");
+		return;
+	}
+	if (this.app.actor && this.app.actor.ondevreload) return this.app.actor.ondevreload();
+	if (this.app.ondevreload) return this.app.ondevreload();
+	if (app.match(/^local\./)&&!opts.dataUrl){
+		return popup("'local' (development) applications cannot be independently reloaded!");
+	}
+	main.innerHTML=`<center><h2 style="background-color: #000; color: #aaa;">Reloading...</h2></center>`;
+	let scr = gbid(`script_${app}`);
+	if (scr) {
+		scr._del();
+	}
+	else{
+cwarn(`No script found for app: ${app}`);
+	}
+	delete LOTW.apps[app];
+
+	this.app.onkill&&this.app.onkill(true);
+	let arg = this.app.arg;
+//log(arg);
+	arg.APPARGS = {reInit: this.app.reInit};
+	arg.noShow = opts.noShow;
+	arg.dataUrl = opts.dataUrl;
+	return new Promise((Y,N)=>{
+		arg.CB = Y;
+		main.innerHTML="";
+		make_app(arg);
+	});
+};//»
 
 //»
 //Event listeners«
@@ -4609,7 +4593,7 @@ cwarn("No drop on main window");
 //Make app«
 
 	arg.topwin = this;
-	arg.FS_URL = fs_url;
+//	arg.FS_URL = fs_url;
 	if (arg.SAVER) {
 		this.bottompad = botpad;
 		this.saver = arg.SAVER;
@@ -4672,10 +4656,11 @@ const get_active_windows = () => {//«
 	let wins = [];
 	for (let i = 0; i < windows.length; i++) {
 		let w = windows[i];
-		if (w.killed) {
-			windows.splice(i, 1);
-			i--;
-		} else if (!w.is_minimized) wins.push(w);
+//		if (w.killed) {
+//			windows.splice(i, 1);
+//			i--;
+//		} else if (!w.is_minimized) wins.push(w);
+		if (!w.is_minimized) wins.push(w);
 	}
 	return wins;
 }//»
@@ -5420,7 +5405,7 @@ const check_cwin_owned=()=>{//«
 	if (CWIN && CWIN.owned_by){
 cwarn("Here is the owning window");
 log(CWIN.owned_by);
-		poperr("The window is owned! (check console)");
+		popup("The window is owned! (check console)");
 		return true;
 	}
 	return false;
@@ -5438,18 +5423,19 @@ const make_app = arg => {//«
 	let win = arg.topwin;
 	win.viewOnly = arg.viewOnly;
 	let mainwin = win.main;
-	let fs_url = arg.FS_URL;
-	if (fs_url){
-		win._fs_url = fs_url
+	let winapp = win.appName;
+	let no_show = arg.noShow;
+	let data_url = arg.dataUrl;
+	if (data_url) {
+		win._data_url = data_url
 	}
 	let cb = arg.CB||(()=>{});
 	let scrpath;
-	let winapp = win.appName;
-	if (fs_url) winapp = `local.${winapp}`;
 	let str, marr;
 	let script_path;
 //»
 	const barferror = e => {//«
+//		win.killed = true;
 		mainwin._pad= 10;
 		mainwin._bgcol= "#000";
 		mainwin._tcol= "#aaa";
@@ -5458,14 +5444,17 @@ const make_app = arg => {//«
 		mainwin._over="auto";
 		let mess = e.stack||`The script could not be loaded<br>(Url: ${script_path})`;
 		mainwin.innerHTML = `<br><div style='text-align:center;color:#f55;font-size:34;font-weight:bold;'>Error</div><br><pre style="font-size:18;"><b>${mess}</b></pre>`;
-		win.on();
+		if (!no_show) win.on();
 		cb(win);
 	};//»
 	win._fatal = barferror;
 	const loadit = async() => {//«
-//log("LOADIT");
-//		set_win_defs(win);
 		win.set_defs();
+		if (!no_show) {
+			win.check_visible();
+			win.status_bar.resize();
+			win.on();
+		}
 		if (winapp===FOLDER_APP) {
 			win.app.onappinit(arg.FULLPATH, arg.PREVPATHS);
 		}
@@ -5474,14 +5463,12 @@ const make_app = arg => {//«
 	};//»
 	const load_cb = async() => {//«
 		try {
-//			if (!arg.main) console.log(" ");
-			if (fs_url){
+			if (data_url){
 				win.app = new NS.apps[winapp](win, Desk);
 			}
 			else {
 				const { app } = await import(script_path);
 				NS.apps[winapp] = app;
-//				win.app = new app(appobj);
 				win.app = new app(win, Desk);
 			}
 			win.app.arg = arg;
@@ -5491,44 +5478,35 @@ const make_app = arg => {//«
 		}
 	};//»
 	const make_it = async () => {//«
-//log("MAKEIT");
 		let scr = make('script');
 		scr.onload = load_cb;
 		scr.onerror = e => {
 			barferror(e);
 		};
-		if (fs_url) script_path = fs_url;
+		if (data_url) script_path = data_url;
 		else {
 			scr.type = "module";
 			script_path = `/apps/${winapp.replace(/\./g, "/")}.js`;
-		}
-		if (globals.dev_mode) {
-			let v = (Math.random()+"").slice(2,9);
-			script_path += `?v=${v}`;
+			if (globals.dev_mode) {
+				let v = (Math.random()+"").slice(2,9);
+				script_path += `?v=${v}`;
+			}
 		}
 		scr.src = script_path;
 		scr.id = `script_${winapp}`;
 		document.head._add(scr);
 	};//»
 	if (winapp=="None"){//«
-//win.main._tcol="#fff";
-/*
-win.app.onfocus=()=>{
-win.main.innerHTML="<center><h1>FOCUS</h1></center>";
-};
-win.app.onblur=()=>{
-win.main.innerHTML="<center><h1>BLUR</h1></center>";
-};
-*/
-//		set_win_defs(win);
-
 		win.set_defs();
+		win.check_visible();
+		win.status_bar.resize();
+		win.on();
 		cb(win);
 		return;
 	}//»
-//	if (!NS.apps[win.appName]) return make_it();
 	if (!NS.apps[winapp]) return make_it();
 	win.app = new NS.apps[winapp](win, Desk);
+	win.app.arg = arg;
 	loadit();
 
 }//»
@@ -5563,7 +5541,8 @@ We only need fullpath in case of a "dev reloaded" window that has a path but is 
 This happens when reloading a folder window.
 */
 //log("OPEN", appname, opts);
-	let {force, winCb=NOOP, winArgs, appArgs={}, icon, fullpath, fsUrl} = opts;
+//	let {force, winCb=NOOP, winArgs, appArgs={}, icon, fullpath, fsUrl, dataUrl} = opts;
+	let {force, winCb=NOOP, winArgs, appArgs={}, icon, fullpath, dataUrl} = opts;
 	let usename, usepath, useext;
 	if (fullpath){
 		let arr = getNameExt(fullpath, false, true);
@@ -5581,7 +5560,7 @@ This happens when reloading a folder window.
 		WINARGS: winArgs,
 		name: usename || appname.split(".").pop(),
 		appName: appname,
-		fsUrl,
+		dataUrl,
 		APPARGS: appArgs
 	});
 	if (icon) {
@@ -5594,12 +5573,15 @@ This happens when reloading a folder window.
 		win.ext = useext;
 	}
 };
-this.open_app = (appname, force_open, winargs, appargs) => {
+api.openApp = (appname, opts={}) => {
+//this.open_app = (appname, force_open, winargs, appargs) => {
 	return new Promise((Y, N) => {
-		open_app(appname, {cb: Y, force: force_open, winArgs: winargs, appArgs: appargs});
+		opts.winCb=Y;
+//		open_app(appname, {cb: Y, force: force_open, winArgs: winargs, appArgs: appargs});
+		open_app(appname, opts);
 	});
 };
-api.openApp=this.open_app;
+//api.openApp=this.open_app;
 
 //»
 
@@ -5650,9 +5632,8 @@ const open_new_window = async (icn, cb, opts={}) => {//«
 
 	return win;
 }//»
-
+//WKIUTHJU
 const open_icon_app = async(icn, bytes, ext, useapp, force_open, win_cb) => {//«
-//log("OIA", win_cb);
 	if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
 	if (icn.appName=="Application") ext = "app";
 	if (!(!useapp && ext == "app")) return open_file(bytes, icn, useapp);
@@ -5670,7 +5651,7 @@ cerr(e.message);
 	if (!which) {
 		return poperr(`No ${ext} field in the JSON object!`);
 	}
-
+/*
 	if (which.match(/\.js$/)){
 		let path = normPath(which, icn.path);
 		let node = await pathToNode(path);
@@ -5679,12 +5660,11 @@ cerr(e.message);
 		if (!Number.isFinite(node.blobId)){
 			return poperr("The node does not have a backing blob! (invalid blobId)");
 		}
-//		which = fsUrl(`/blobs/${node.blobId}`);
-//log(node);
 		open_app(node.baseName, {winArgs: icn.winargs, appArgs: obj.args, icon: icn, fsUrl: fsUrl(`/blobs/${node.blobId}`), winCb: win_cb});
 	}
-//	open_app(which, {force: true, winArgs: icn.winargs, appArgs: obj.args, icon: icn});
 	else open_app(which, {winArgs: icn.winargs, appArgs: obj.args, icon: icn, winCb: win_cb});
+*/
+	open_app(which, {winArgs: icn.winargs, appArgs: obj.args, icon: icn, winCb: win_cb});
 }//»
 const open_file_by_path = async(patharg, cb, opt={}) => {//«
 	const err = (str) => {
@@ -5704,7 +5684,6 @@ const open_file_by_path = async(patharg, cb, opt={}) => {//«
 		if (!node.par) path="/";
 		else path = node.par.fullpath;
 		ok();
-//FRUTIOP
 		if (CUR.curElem.parentNode === desk) {
 			let icn = CUR.geticon();
 			if (icn) icn.hideName();
@@ -5716,6 +5695,7 @@ const open_file_by_path = async(patharg, cb, opt={}) => {//«
 	let patharr = fullpath.split("/");
 	if (!patharr[patharr.length - 1]) patharr.pop();
 	let fname = patharr.pop();
+//SJNMYEJK
 	let fake = {
 		winargs: opt.WINARGS,
 		name: fname,
@@ -5729,7 +5709,6 @@ const open_file_by_path = async(patharg, cb, opt={}) => {//«
 	if (ext) {
 		fake.name = arr[0];
 		fake.ext = ext;
-//		fake.appName = ext_to_app(ext);
 		fake.appName = extToApp(ext);
 	} 
 	else fake.appName = DEF_BIN_APP;
@@ -5765,6 +5744,7 @@ const open_file = (bytes, icn, useapp, cb) => {//«
 		win.app.onloadfile(bytes, {name, ext, viewOnly});
 	}, {altApp: useapp});
 }//»
+/*«
 const win_reload = (cbarg) => { //«
 	if (!globals.dev_mode) {
 		popup(`win_reload: "dev mode" is not enabled!`);
@@ -5824,7 +5804,7 @@ const win_reload = (cbarg) => { //«
 	open_icon(icn,{winCb});
 
 };//»
-
+»*/
 //»
 //Cursor«
 
@@ -7849,7 +7829,21 @@ const handle_ESC = (if_alt) => {//«
 	if (windows.layout_mode) return toggle_layout_mode();
 	if (windows_showing) toggle_show_windows();
 };//»
+
+//«Detect if all keys are up
+const KEYS_PRESSED={};
+//This fails if window focus changes between keydown and keyup events
+let last_keyup = Date.now();;
+//If there is a key down, return 0
+//Otherwise, return the ms since the last keyup event
+const all_keys_up=()=>{
+if (Object.keys(KEYS_PRESSED).length===0) return Date.now() - last_keyup;
+return 0;
+};
+api.allKeysUp=all_keys_up;
+//»
 const dokeydown = function(e) {//«
+	KEYS_PRESSED[e.key] = true;
 	const p = ()=>{e.preventDefault();};
 const check_input = ()=>{//«
 	if (cwin && !text_inactive) return true;
@@ -8230,6 +8224,7 @@ if (!qObj["no-switcher"]) {
 	if (kstr=="k_CAS") {
 		return (debug_keydown = !debug_keydown);
 	}
+/*
 	if (kstr == "d_CAS") {
 		if (cwin) {
 log(cwin);
@@ -8240,6 +8235,7 @@ log(`[${r.width}, ${r.height}, ${r.left}, ${r.top}]`);
 //		show_overlay(`Prevent default for all keys: ${PREV_DEF_ALL_KEYS}`);
 		return;
 	}
+*/
 //»
 
 //Send to the current window
@@ -8255,8 +8251,14 @@ maxed/fullscreened wins).
 */
 		if (!(cobj.overrides && cobj.overrides[kstr])){
 			if (kstr==="r_A") {
+				if (!globals.dev_mode) {
+cwarn(`win_reload: "dev mode" is not enabled!`);
+					return;
+				}
+				if (!CWIN) return;
 				if (check_cwin_owned()) return;
-				return win_reload();
+				CWIN.reload();
+				return;
 			}
 			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();
 			if (!(is_full||is_max)) {
@@ -8270,7 +8272,7 @@ maxed/fullscreened wins).
 				else if (kstr=="UP_CS") resize_window("D", true);
 			}
 		}
-		if (cwin.is_layout || cwin.is_minimized) return;
+		if (cwin.is_layout || cwin.is_minimized || cwin.killed) return;
 		if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
 		return;
 	}//»
@@ -8304,13 +8306,18 @@ const dokeypress = function(e) {//«
 		return;
 	}
 	let w = CWIN;
-	if (!w || w.movediv || w.is_minimized || w.popup) return;
+	if (!w || w.movediv || w.is_minimized || w.popup || w.killed) return;
 //	if (code >= 32 && code <= 126 && w.app.onkeypress) w.app.onkeypress(e.key, e, code, "");
+//if (w.killed){
+//return;
+//}
 	if (code >= 32 && code <= 126 && w.app.onkeypress) w.app.onkeypress(e);
 }
-this.keypress=dokeypress;
+//this.keypress=dokeypress;
 //»
 const dokeyup = function(e) {//«
+	delete KEYS_PRESSED[e.key];
+	last_keyup = Date.now();
 	if (CEDICN) return;
 	let w = CWIN;
 	let cpr = CPR;
@@ -8345,7 +8352,7 @@ const dokeyup = function(e) {//«
 	if (w.is_minimized||w.popup) return;
 	if (w.app.onkeyup) w.app.onkeyup(e, evt2Sym(e));
 }
-this.keyup=dokeyup;
+//this.keyup=dokeyup;
 //»
 
 const setsyskeys=()=>{//«
@@ -8381,7 +8388,7 @@ fullscreen_window: ()=>{CWIN&&CWIN.fullscreen()},
 minimize_window: ()=>{CWIN&&CWIN.minimize()},
 maximize_window: ()=>{CWIN&&CWIN.maximize();},
 popmacro:()=>{WDG.popmacro();return true;},
-reload_app_window:()=>{return win_reload(CWIN)},
+//reload_app_window:()=>{return win_reload(CWIN)},
 reload_desk_icons:reload_desk_icons_cb,
 open_explorer: open_home_folder,
 open_root_folder:()=>{
@@ -8688,80 +8695,5 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
   })();
 //»
 
-//»
-
-//Old/Unused«
-//Touch (Unused)«
-
-/*
-let TCH1;
-let TCH2;
-let TRIPLE_TOUCH_MS = 333;
-const init_touch_listeners=()=>{//«
-
-//Triple touch-click to toggle system fullscreen
-document.body.addEventListener('touchstart',e=>{//«
-	let t = e.touches[0];
-	t.timestamp = Date.now();
-	if (!TCH1) {
-		TCH1 = t;
-		return;
-	}
-	if (!TCH2){
-		if ((Date.now() - TCH1.timestamp) > TRIPLE_TOUCH_MS){
-			TCH1 = t;
-			return;
-		}
-		TCH2 = t;
-		return;
-	}
-	if ((Date.now() - TCH2.timestamp) > TRIPLE_TOUCH_MS){
-		TCH1 = t;
-		TCH2 = null;
-		return;
-	}
-	TCH1=TCH2=null;
-	toggle_fullscreen();
-});//»
-
-//Mobile way of cycling the windows
-capi.detectSwipe(document.body,dir=>{//«
-	if (!CWIN) return;
-	if (dir=="left"){
-		CWIN.close();
-		return;
-	}
-	if (dir !=="right") return;
-	let wins = get_active_windows();
-	if (wins.length<2) return;
-	let ind = wins.indexOf(CWIN);
-	ind++;
-	if (ind==wins.length) ind=0;
-	wins[ind].on();
-});//»
-
-desk.addEventListener('touchmove',e=>{//«
-e.preventDefault();
-});//»
-
-document.onfullscreenchange=e=>{//«
-	setTimeout(()=>{
-		fit_all_windows();
-	},1000);
-}//»
-screen.orientation.onchange=(e)=>{//«
-	setTimeout(()=>{
-		fit_all_windows();
-	},500);
-};//»
-detectClick(document.body, 666, ()=>{//«
-	toggle_show_windows();
-	if (windows_showing) fit_all_windows();
-});//»
-
-};//»
-*/
-
-//»
 //»
 

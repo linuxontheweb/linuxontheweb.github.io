@@ -1,6 +1,9 @@
-import { util, api as capi } from "util";
-import {globals} from "config";
-const{ log, jlog, cwarn, cerr, isstr, isnum, make, mk, mkdv} = util;
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv} = util;
 
 export const mod = function(Core) {
 

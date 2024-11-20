@@ -75,8 +75,8 @@ const DESK_PATH = `${HOME_PATH}/Desktop`;
 
 const MAX_TEXTAREA_BYTES = 10000;
 
-const DEF_EDITOR_MOD_NAME = "util.vim";
-const DEF_PAGER_MOD_NAME = "util.less";
+const DEF_EDITOR_MOD_NAME = "term.vim";
+const DEF_PAGER_MOD_NAME = "term.less";
 
 const APPDATA_PATH="/var/appdata";
 
@@ -410,7 +410,7 @@ export const globals = {//«
 
 	USERNAME,
 	CURRENT_USER,
-
+	EOF: {EOF: true},
 	TERM_ENV,
 	SHELL_ERROR_CODES,
 

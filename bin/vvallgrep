@@ -7,18 +7,28 @@ elif [[ $2 ]]; then
 	echo 'Partial matching mode...';
 	grep --color=auto -n $1 \
 		$BASE/apps/* \
+		$BASE/apps/*/* \
+		$BASE/apps/*/*/* \
 		$BASE/sys/* \
-		$BASE/mods/term/* \
+		$BASE/mods/* \
+		$BASE/mods/*/* \
+		$BASE/mods/*/* \
 		$BASE/coms/* \
+		$BASE/coms/*/* \
 		2>/dev/null
 	
 else
 	echo 'Exact matching mode';
 	grep --color=auto -n '\<'$1'\>' \
 		$BASE/apps/* \
+		$BASE/apps/*/* \
+		$BASE/apps/*/*/* \
 		$BASE/sys/* \
-		$BASE/mods/term/* \
+		$BASE/mods/* \
+		$BASE/mods/*/* \
+		$BASE/mods/*/* \
 		$BASE/coms/* \
+		$BASE/coms/*/* \
 		2>/dev/null
 
 fi;

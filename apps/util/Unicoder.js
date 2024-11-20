@@ -1,6 +1,8 @@
-import { util, api as capi } from "util";
-import { globals } from "config";
-const{mkdv, mksp,mk,strnum, isarr, isstr, isnum, isobj, make, KC, kc, log, jlog, cwarn, cerr}=util;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const{mkdv, mksp,mk,strNum, isArr, isStr, isNum, isObj, make, KC, kc, log, jlog, cwarn, cerr}=util;
 
 export const app = function(Win, Desk) {//«
 //log(Win);
@@ -555,7 +557,7 @@ for (let i=0; i < len; i+=2){
 let nm = CATEGORIES[i];
 let arr = CATEGORIES[i+1];
 if (!curcat){
-	if (isstr(nm)&&arr === null){
+	if (isStr(nm)&&arr === null){
 		curcat = nm;
 		let tr = mk('tr');
 		tr.tabIndex="-1";
@@ -582,7 +584,7 @@ if (!curcat){
 		categories[nm]=[];
 		toplevel.push(tr);
 	}
-	else if (isstr(nm)&&isarr(arr)){
+	else if (isStr(nm)&&isArr(arr)){
 		let tr = make_row(nm, arr);
 		toplevel.push(tr);
 		par_elem._add(tr);
@@ -593,7 +595,7 @@ log(nm,arr);
 	}
 }
 else if (nm===null&&arr===null) curcat = null;
-else if (isstr(nm)&&isarr(arr)){
+else if (isStr(nm)&&isArr(arr)){
 	let tr = make_row(nm, arr);
 	tr._dis= "none"
 	par_elem._add(tr);

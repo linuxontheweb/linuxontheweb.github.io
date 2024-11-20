@@ -44,3 +44,47 @@ invoked with Alt+f, add these lines:
 	nnoremap <M-f> a//«<enter><enter>//»<esc>
 	inoremap <M-f> //«<enter><enter>//»
 
+
+
+
+
+Advanced vim tricks:
+
+***************************************************
+
+Getting rid of blank lines between non-blank lines:
+
+:g/^ *$/d
+
+blah hoo
+[many spaces..]
+[many spaces..]
+[many spaces..]
+faaa fooo
+[many spaces..]
+[many spaces..]
+sloom
+
+...becomes:
+
+blah hoo
+faaa fooo
+sloom
+
+***************************************************
+
+Putting make whitespace separated words onto their own lines:
+:s/\s\+/\r/g
+
+  one   two  three   4444  
+
+...becomes
+
+one
+two
+three
+4444
+
+***************************************************
+
+

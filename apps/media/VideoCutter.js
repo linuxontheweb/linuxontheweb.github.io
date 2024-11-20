@@ -64,10 +64,14 @@ let SHOW_CLUSTER_MARKS_ON_INIT = true;
 
 //Imports«
 
-import { util, api as capi } from "util";
-import {globals} from "config";
-const {lowToHigh} = capi;
-const{ log, jlog, cwarn, cerr, isstr, isnum, make, mk, mkdv} = util;
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+
+//const {lowToHigh} = capi;
+const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv, lowToHigh} = util;
 const {NS} = globals;
 const {fs, widgets: wdg} = NS.api;
 
@@ -309,7 +313,7 @@ Main._add(img_div);
 //Util«
 
 const load_webm=async()=>{//«
-	webm_mod = await capi.getMod("webmparser");
+	webm_mod = await util.getMod("webmparser");
 	SEG_KIDS = webm_mod.WebmTags.kids["18538067"]
 	CLUSTER_KIDS = SEG_KIDS.kids["1f43b675"];
 	file_bytes = await node.bytes;
@@ -499,7 +503,7 @@ let CUESHASH={};
 let seg_off, tracks_pos, cues_pos;
 let b,c,rv;
 
-let mod = await capi.getMod("webmparser");
+let mod = await util.getMod("webmparser");
 webm_mod = mod;
 let {ebml_sz, dump_hex_lines, parse_section, parse_section_flat} = mod;
 
@@ -606,7 +610,7 @@ is_waiting = true;
 
 //Var«
 
-let mod = await capi.getMod("webmparser");
+let mod = await util.getMod("webmparser");
 webm_mod = mod;
 let {ebml_sz, dump_hex_lines, parse_section, parse_section_flat} = mod;
 
@@ -852,7 +856,7 @@ const try_render = async()=>{//«
 	is_waiting = true;
 	let nogood = false;
 	let rv = await wdg.popin(`Markers for to render it withem?`);
-	if (isstr(rv)) {
+	if (isStr(rv)) {
 		cur_output_file = await render_from_script(rv);
 if (cur_output_file) {
 cwarn("Output file");

@@ -14,13 +14,14 @@ the child_window...
 
 //Imports«
 
-import { util, api as capi } from "util";
-import { globals } from "config";
-
-const {getAppIcon}= capi;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+//const {getAppIcon}= capi;
 const{NS, FS_TYPE, FOLDER_APP}=globals;
 const{poperr} = globals.widgets;
-const{make,mkdv,mk,mksp,log,cwarn,cerr}=util;
+const{make,mkdv,mk,mksp,log,cwarn,cerr, getAppIcon}=util;
 const {fs}=NS.api;
 
 //»

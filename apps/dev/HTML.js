@@ -1,7 +1,9 @@
 
 
-import { util, api as capi } from "util";
-import { globals } from "config";
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 
 //export const app = function(arg) {
 export const app = function(Win, Desk) {
@@ -43,7 +45,7 @@ const init=()=>{//«
 this.onappinit=()=>{};
 
 this.onloadfile=bytes=>{//«
-	let text = capi.bytesToStr(bytes);
+	let text = util.bytesToStr(bytes);
 	let parser = new DOMParser();
 	let doc = parser.parseFromString(text, "text/html");
 	let tot=0;

@@ -1,78 +1,60 @@
 //Older terminal development notes are stored in doc/dev/TERMINAL
-/*10/18/24: There may be issues with parsing @IORTYUEWJ: There we are just looking for
-the shortest match (like for pipes). So when we do:
-	$ true|||false
-...we get...
-	I'm true
-...rather than...
-	syntax error near unexpected token `|'
-So we *MUST* check for the next token to ensure it is a valid "word-type" token
-rather than a metacharacter
-*/
-//Notes«
-/*Incorrect way to create success/error/warning colors @WOPIUTHSDKL.
-Instead, we need to do it @DJKUIOJED*/
-/*TODO:Update rest of the command libraries with the new response and return mechanism«
+/*Let's make a command that gets a binary file and replaces one sequence (1+) of bytes«
+with another sequence (1+). Let's call it "brep".
 
-const com_what=(args, opts, _)=>{
+While doing this, I just needed to allow for Uint8Array's in the terminal's logic,
+such as @KIUREUN. I'm not quite sure if the logic where there is concatenation
+going on really works or even makes much "real world" sense. Also, in the places
+where I make calls to write_to_redir, I had to check to see if the value was an
+Uint8Array (otherwise, it is treated as a bunch of text lines to be joined). Maybe
+I should do that checking stuff in the actual write_to_redir function call.
 
-const {term, out, err, suc} = _;
-...
-err("Error message in red here");
-return E_ERR;
-...
-suc("Success message in green here");
-return E_SUC;
-...
-//Standard output for the terminal (or pipes/redirects)
-out(some_lines, {colors: opt_colors});
-return E_SUC;
-
-};
+***NOW THIS MAKES SENSE***, WHEN I CONSIDER THE FACT THAT OUT_CB CAN BE CALLED
+ARBITRARY NUMBERS OF TIMES (RATHER THAN THE "OLD" WAY OF MAKING THE OUTPUT BE
+SIMPLY RETURNED AFTER THE COMMAND FINISHED). SO IF FOR SOME REASON YOU ARE
+REPEATEDLY CALLING THE "OUT" CB WITH BINARY DATA, THEN DOING THIS CONCATENATION
+MAKES SENSE. PERHAPS WE NEED A "BIN_OUT" METHOD, OR RATHER WE SHOULD (SOMEHOW)
+"DECLARE" OUR COMMAND (PIPELINE???) TO BE BINARY, SO THAT SENDING *ANY* TEXTUAL
+DATA WILL CAUSE AN ERROR.
 
 »*/
-/*10/16/24: I've been getting into edge cases of expected shell behaviour, such as
-whether to treat a non-existent command as a simple command failure or to exit the
-current command line (which is what I was doing). Here, "barf" doesn't exist as a command:
-
-$ barf ||  echo This will never be seen
-
-Now (@EOPIUYTLM), we are sending an error response and setting lastcomcode to E_ERR.
-
-*/
-/*10/15/24: Getting command output streams to "just work".«
-
--There are 3 streams: out, err, suc
--Only the out stream will be sent through pipes and redirects (there should be a shell option)
-to merge/flatten all streams into the out stream.
--The out stream can be arbitrarily colorized
--The err stream will be colored red
--The suc stream will be colored green
-
-These are the names of the callbacks that are given in the "_" (3rd) argument to the
-called commands (@SKIOPRHJT).
-
-Commands should only return an error code @CKLOPUTIK.
-
-Now need to update all commands so that they call the output functions (out, err, suc)
-and return *either* E_SUC or E_ERR.
-
-Want to give hints to the respective response callbacks (like @MDKLIOUTYH) whether
-the terminal should do scroll_into_view and refresh. If we are in a tight loop, such
-as in com_ls, we might want to save on the cpu cycles, when it comes to very long
-(possibly recursive) listings.
-
+/*11/14/24: I am mainly getting into the concept of the larger/"meta" structure«
+of this file, given my interest in restarting shell development over and over and
+over and over... . My main interest is to continue refactoring into more and more
+understandable (i.e. objective, rather than algorithmic) constructs.
 »*/
+//«Shell Options
+//let USE_ONDEVRELOAD = true;
+let DEBUG = false;
+//let DEBUG = true;
+let USE_ONDEVRELOAD = false;
+
+//let USE_DEVSHELL = true;
+let USE_DEVSHELL = false;
 //»
-
-let USE_ONDEVRELOAD = true;
-//let USE_ONDEVRELOAD = false;
-
 //Imports«
 
-import { util, api as capi } from "util";
-import { globals } from "config";
-const{strnum, isarr, isstr, isnum, isobj, make, kc, log, jlog, cwarn, cerr}=util;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const {
+	strNum,
+	isArr,
+	isStr,
+	isNum,
+	isObj,
+	make,
+	kc,
+	log,
+	jlog,
+	cwarn,
+	cerr,
+	normPath,
+	linesToParas,
+	isBool,
+	isEOF
+} = util;
 const NS = LOTW;
 const {
 	KC,
@@ -88,12 +70,12 @@ const {
 	isMobile,
 //	shell_libs,
 	SHELL_ERROR_CODES,
-	dev_mode
+	dev_mode,
+	EOF
 } = globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
 const {poperr} = widgets;
-const {normPath, linesToParas, isBool}=capi;
 const {pathToNode}=fsapi;
 
 const HISTORY_FOLDER = `${globals.HOME_PATH}/.history`;
@@ -103,10 +85,10 @@ const LEFT_KEYCODE = KC.LEFT;
 
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 
-
 const DEL_MODS=[
 //	"util.less",
-//	"util.vim",
+	"term.vim",
+//	"term.menu"
 ];
 const DEL_COMS=[
 //	"audio"
@@ -114,16 +96,15 @@ const DEL_COMS=[
 //	"test",
 //	"fs",
 //	"mail"
-"esprima"
+//"esprima",
+//"shell"
 ];
 const ADD_COMS=[];
 
 if (dev_mode){
-	ADD_COMS.push("esprima");
+//	ADD_COMS.push("shell");
 }
 //»
-
-//Shell«
 
 //Var«
 
@@ -131,7 +112,8 @@ const NO_SET_ENV_VARS = ["USER"];
 
 const ALIASES={
 	c: "clear",
-	la: "ls -a"
+	la: "ls -a",
+//	com2 : "frugg --gamnich 1 2 3"
 //	ai: "appicon"
 };
 
@@ -246,7 +228,7 @@ const get_options = (args, com, opts={}) => {//«
 	if (!lopts) lopts = {};
 	let lkeys = Object.keys(lopts);
 	for (let i = 0; i < args.length;) {
-		if (isobj(args[i])) {
+		if (isObj(args[i])) {
 			i++;
 			continue;
 		}
@@ -324,7 +306,7 @@ const get_options = (args, com, opts={}) => {//«
 	}
 	return [obj, err];
 }//»
-const add_to_env=(arr, env, opts)=>{//«
+const add_to_env = (arr, env, opts)=>{//«
 	let {term, if_export} = opts;
 	let marr;
 	let use;
@@ -349,7 +331,7 @@ const add_to_env=(arr, env, opts)=>{//«
 		}
 		which = marr[1];
 		if (NO_SET_ENV_VARS.includes(which)){
-			err.push(`${which}: cannot set the constant environment variable`);
+			err.push(`sh: ${which}: cannot set the constant environment variable`);
 			next();
 			continue;
 		}
@@ -366,169 +348,13 @@ const add_to_env=(arr, env, opts)=>{//«
 	return err;
 };//»
 const term_error=(term, arg)=>{//«
-//	if (isstr(arg)) arg = term.fmt2(arg);
+//	if (isStr(arg)) arg = term.fmt2(arg);
 	term.response(arg);
 };//»
 const term_out=(term, arg)=>{//«
-	if (isstr(arg)) arg = term.fmt(arg);
+	if (isStr(arg)) arg = term.fmt(arg);
 	term.response(arg);
 };//»
-const write_to_redir=async(term, str, redir, env)=>{//«
-	let op = redir.shift();
-	let fname = redir.shift();
-	if (!fname) return {err:`Missing operand to the redirection operator`};
-	let fullpath = normPath(fname, term.cur_dir);
-	let node = await fsapi.pathToNode(fullpath);
-	if (node) {
-		if (node.type == FS_TYPE && op===">" && !ALLOW_REDIRECT_CLOBBER) {
-			if (env.CLOBBER_OK==="true"){}
-			else return {err: `Not clobbering the file (ALLOW_REDIRECT_CLOBBER==${ALLOW_REDIRECT_CLOBBER})`};
-		}
-		if (node.write_locked()){
-			return {err:`${fname}: the file is "write locked" (${node.write_locked()})`};
-		}
-		if (node.data){
-			return {err:`${fname}: cannot write to the data file`};
-		}
-	}
-	let patharr = fullpath.split("/");
-	patharr.pop();
-	let parpath = patharr.join("/");
-	if (!parpath) return {err:`${fname}: Permission denied`};
-	let parnode = await fsapi.pathToNode(parpath);
-	let typ = parnode.type;
-	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: Invalid or unsupported path`};
-	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
-		return {err:`${fname}: Permission denied`};
-	}
-	if (!await fsapi.writeFile(fullpath, str, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
-	return {};
-};//»
-const curly_expansion = (word) => {//«
-	let marr;
-	let out = false;
-	if (marr = (word.match(/(.*){(\d+)\.\.(\d+)}(.*)/) ||word.match(/(.*){([a-z])\.\.([a-z])}(.*)/)||word.match(/(.*){([A-Z])\.\.([A-Z])}(.*)/))){
-		out = [];
-		let is_num;
-		let from, to;
-		if (marr[2].match(/\d/)){
-			is_num = true;
-			from = parseInt(marr[2]);
-			to = parseInt(marr[3]);
-		}
-		else {
-			from = marr[2].charCodeAt();
-			to = marr[3].charCodeAt();
-		}
-		let pre = marr[1];
-		let post = marr[4];
-		let inc;
-		if (from > to)inc=-1;
-		else inc = 1;
-		if (from <= to) {
-			for (let i = from; i <= to; i++){
-				let ch;
-				if (is_num) ch = i;
-				else ch = String.fromCharCode(i);
-				out.push(`${pre}${ch}${post}`);
-			}
-		}
-		else{
-			for (let i = from; i >= to; i--){
-				let ch;
-				if (is_num) ch = i;
-				else ch = String.fromCharCode(i);
-				out.push(`${pre}${ch}${post}`);
-			}
-		}
-
-	}
-	return out;
-}//»
-const all_expansions=async(arr, term)=>{//«
-	let {ENV, cur_dir} = term;
-	let err;
-	for (let i=0; i < arr.length; i++){
-		let word = arr[i].word;
-		if (!word) continue;
-		let marr;
-		let rv;
-		let use_cur_dir = cur_dir;
-		let say_path = "";
-		if (i>0 && arr[i-1].ds=="$") {
-			let got = ENV[word];
-			if (!got) arr.splice(i-1, 2);
-			else{
-				arr[i-1] = {t:"word",word: got};
-				arr.splice(i, 1);
-			}
-		}
-		else if (word.match(/[*?]/)||word.match(/\[[-0-9a-z]+\]/i)) {
-			if (word.match(/\x2f/)){
-				let path_arr = word.split("/");
-				if (word.match(/^\x2f/)) {
-					path_arr.shift();
-					word = path_arr.pop();
-					say_path = "/"+path_arr.join("/");
-					use_cur_dir = say_path;
-				}
-				else if (path_arr.length && path_arr[0]) {
-					word = path_arr.pop();
-					use_cur_dir = normPath(path_arr.join("/"), cur_dir);
-					say_path = path_arr.join("/");
-				}
-			}
-			let fpat = word.replace(/\*/g, ".*").replace(/\?/g, ".");
-			let re;
-			try{ 
-				re = new RegExp("^" + fpat + "$");
-			}
-			catch(e){
-				err = e.message;
-				continue;
-			}
-			let dir = await pathToNode(use_cur_dir);
-			if (!dir) continue;
-			if (!dir.done) await fsapi.popDir(dir);
-			let kids = dir.kids;
-			let keys = Object.keys(kids);
-			let did_splice = false;
-			for (let k of keys){
-				if (k=="."||k=="..") continue;
-				if (re.test(k)) {
-					if (!did_splice) {
-						arr.splice(i, 1);
-						i--;
-						did_splice = true;
-					}
-					if (say_path && !say_path.match(/\x2f$/)) say_path = `${say_path}/`;
-					arr.splice(i, 0, {t:"word", word: `${say_path}${k}`});
-					i++;
-				}
-			}
-		}
-		else if (rv = curly_expansion(word)){
-			const do_exp=(arr, out)=>{
-				for (let wrd of arr){
-					let rv = curly_expansion(wrd);
-					if (rv) do_exp(rv, out);
-					else out.push({t:"word", word: wrd});
-				}
-				return out;
-			};
-			try{
-				let all = do_exp(rv, []);
-				arr.splice(i, 1, ...all);
-				i+=all.length-1;
-			}catch(e){
-cerr(e);
-				err = `${e.message} (${word})`;
-			}
-		}
-	}
-	return err;
-}//»
-
 const get_libs = async()=>{//«
 	let coms = await "/site/coms".toNode();
 	let all = [];
@@ -573,7 +399,7 @@ cwarn(`The command ${com} already exists!`);
 	}
 	ALL_LIBS[libname] = ok_coms;
 cwarn(`Added: ${ok_coms.length} commands from '${libname}'`);
-	let opts = imp.opts;
+	let opts = imp.opts||{};
 	let sh_opts = globals.shell_command_options;
 	all = Object.keys(opts);
 	for (let opt of all){
@@ -660,27 +486,6 @@ cwarn(`Deleted module: ${m}`);
 	}
 }//»
 
-/*
-const lines_to_paras = lns => {//«
-	let paras = [];
-	let curln = "";
-	for (let ln of lns){
-		if (ln.match(/^\s*$/)){
-			if (curln) {
-				paras.push(curln);
-				curln = "";
-			}
-			paras.push("");
-			continue;
-		}
-		if (ln.match(/-\s*$/)) ln = ln.replace(/-\s+$/,"-");
-		else ln = ln.replace(/\s*$/," ");
-		curln = curln + ln;
-	}
-	if (curln) paras.push(curln);
-	return paras;
-}//»
-*/
 //»
 
 //Builtin commands«
@@ -689,13 +494,209 @@ const lines_to_paras = lns => {//«
 
 /*
 
-//All vars in env: redir,script_out,stdin,inpipe,term,add_rows,env,opts,command_str
+//All vars in env: redir,script_out,stdin,inpipe,term,env,opts,command_str
 const com_ = async(args, opts, _)=>{
 	const {term, stdin, out, err, suc} = _;
 };
 
 */
+const com_brep = async(args, opts, _)=>{
+/*
 
+Want a series of numbers for "from" and another series for "to". The only question is
+how we represent these series (i.e. aaa,bbb,ccc xxx,yyy,zzz):
+
+But I really just want to replace all 0xab with 0xc2 0xab and all 0xbb with 0xc2 0xbb.
+
+First, we will assume hex and then allow flags for decimal and octal.
+
+This is how we translated our file with non-utf8-encoded upper-ascii characters
+(in DASH.c) into utf8-encoded ones (in OUT.c):
+
+$ brep Desktop/DASH.c ab c2,ab | brep bb c2,bb > OUT.c
+
+We could also have done this without redirects (writing to an output file named as an
+argument, but it was more fun getting...)
+
+*/
+	const {term, stdin, out, err, suc} = _;
+	let bytes;
+	if (stdin){
+		if (!(stdin instanceof Uint8Array)){
+			err("Received stdin, but not a Uint8Array!");
+			return E_ERR;
+		}
+		bytes = stdin;
+	}
+	else {
+		let f = args.shift();
+		if (!f) {
+			err("No file arg given");
+			return E_ERR;
+		}
+		let node = await f.toNode(term);
+		if (!node){
+			err(`${f}: Not found`);
+			return E_ERR;
+		}
+		bytes = await node.bytes;
+	}
+	let s1 = args.shift();
+	let s2 = args.shift();
+	if (!(s1&&s2)){
+		err("Need two sequences of hex bytes, e.g.: aa,bb cc,dd,ee");
+		return E_ERR;
+	}
+	let seq1=[];
+	let seq2=[];
+	for (let s of s1.split(",")){
+		let n = parseInt(s, 16);
+		if (isNaN(n)||n<0||n>255){
+			err(`${s}: invalid hex number`);
+			return E_ERR;
+		}
+		seq1.push(n);
+	}
+	for (let s of s2.split(",")){
+		let n = parseInt(s, 16);
+		if (isNaN(n)||n<0||n>255){
+			err(`${s}: invalid hex number`);
+			return E_ERR;
+		}
+		seq2.push(n);
+	}
+
+	let seq1len = seq1.length;
+	let seq1len_min1 = seq1len-1;
+	let seq2len = seq2.length;
+
+	if (!(seq1len && seq2len)){
+		err("Could not determine both sequences!?!?");
+		return E_ERR;
+	}
+
+	let len = bytes.length;
+	let bout = new Uint8Array(len*10);
+	let i1=0;
+	let i2=0;
+	let seq1_0 = seq1[0];
+
+	WHILE_LOOP: while(true){//«
+		if (i1 >= len) break;
+		if (bytes[i1]===seq1_0){
+			if (seq1len > 1){
+				for (let i=i1+1, iter=1; i < i1+seq1len; i++){
+					if (bytes[i]!==seq1[iter]){
+						bout[i2]=bytes[i1];
+						i1++;
+						i2++;
+						continue WHILE_LOOP;
+					}
+					iter++;
+				}
+			}
+			bout.set(seq2, i2);
+		}
+		else{
+			bout[i2]=bytes[i1];
+			i1++;
+			i2++;
+			continue;
+		}
+		i1+=seq1len;
+		i2+=seq2len;
+	}//»
+
+	let bytes2 = bout.slice(0, i2);
+//log(bytes);
+//cwarn("BYTES2");
+//log(bytes2);
+out(bytes2);
+
+return E_SUC;
+};
+const com_math = async(args, opts, _)=>{//«
+	const {term, stdin, out, err, inf} = _;
+	if (!args.length) {
+		err("Nothing to do!");
+		return E_ERR;
+	}
+/*math-expression-evaluator npm package/ github repo«
+
+From: https://github.com/bugwheels94/math-expression-evaluator
+Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/master/dist/browser/math-expression-evaluator.min.js
+1) At top of the file, put: 
+	const exports={};
+2) Then unfold first curly to make:
+	!function(e,t){"object"==typeof exports...
+...become:
+	!function(e,t){
+		exports.Mexp = t;
+		"object"==typeof exports...
+3) At bottom of the file, put:
+	export const mod = new exports.Mexp();
+
+»*/
+	if (!await util.loadMod("util.math")) {
+		err("Could not load the math module");
+		return E_ERR;
+	}
+    let math = new NS.mods["util.math"]();
+	try{
+		let str = args.join(" ");
+		inf(`Evaluating: '${str}'`);
+		let rv = math.eval(str);
+		out(rv+"");
+		return E_SUC;
+	}catch(e){
+cerr(e);
+		err(e.message);
+		return E_ERR;
+	}
+};/*»*/
+
+const com_menu = async(args, opts, _)=>{//«
+const {term, stdin, out, err, suc} = _;
+if (!await util.loadMod("term.menu")) {
+	err("Could not load the editor module");
+	return E_ERR;
+}
+let menu = new NS.mods["term.menu"](term);
+let fakeobj = {
+    "BlahHartFunt": true,
+    "Fla": 1,
+    "Flar": "Something",
+	Grug: 2,
+	Bug: 3,
+	Graych:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
+	Qeug: {
+		_val: 99,
+		where: true,
+		href: "http://where.in.the.place"
+	},
+	Jug: false,
+	Mug: "Targ",
+	Zlllug: 5,
+	Hanug: 6,
+	Wug: 4040,
+	Vug: -1234,
+	Lrug: "Hanjjj",
+    "Jart": {
+        "Gump": false,
+        "Room": {
+            "Fleem": true,
+            "Geem": 12,
+            "Yeem": "Fuggerr"
+        },
+        "Chump": 24,
+        "Jump": "Haha hoho hehe"
+    }
+};
+let fakearr=[1,true,fakeobj,"Thrunxx", fakeobj];
+
+await menu.init(fakearr,{opts, command_str: _.command_str});
+return E_SUC;
+};//»
 const com_test = async(args,opts, _)=>{//«
 
 const {term, stdin, out, err, suc, wrn, inf} = _;
@@ -811,7 +812,6 @@ const com_echo=async(args,opts,_)=>{_.out(args.join(" ").split("\n"));return E_S
 const com_ls = async (args,opts, _) => {//«
 	if (!args.length) args.push("./");
 	let colors = [];
-//	let {inpipe, term, add_rows, out, err} = _;
 	let {inpipe, term, out, err} = _;
 	let nargs = args.length;
 	let dir_was_last = false;
@@ -822,7 +822,7 @@ const com_ls = async (args,opts, _) => {//«
 		let wants_dir;
 		let path;
 		let regpath;
-		if (isstr(node_or_path)){
+		if (isStr(node_or_path)){
 			path = node_or_path;
 			wants_dir = node_or_path.match(/\x2f$/);
 			regpath = normPath(node_or_path, term.cur_dir);
@@ -875,7 +875,9 @@ const com_ls = async (args,opts, _) => {//«
 				if (nm=="."||nm=="..") continue;
 				if (nm.match(/^\./)) continue;
 			}
-			if (inpipe) out.push(nm);
+			if (inpipe) {
+				out(nm);
+			}
 			dir_arr.push(nm);
 		}
 		if (recur){
@@ -971,22 +973,24 @@ const com_env = async (args, opts, _) => {//«
 	return E_SUC;
 };//»
 const com_app = async (args, opts, _) => {//«
-	let {term}=_; 
-	let err = [];
+	let {term, err}=_; 
+//	let err = [];
 	let list;
+//jlog(args);
 	if (!args.length) {
-		list = await capi.getList("/site/apps/");
+		list = await util.getList("/site/apps/");
 		_.out(list);
 		return E_SUC;
 	}
 	for (let appname of args){
+log("OPEN", appname);
 		if (list && !list.includes(appname)) {
-			err.push(`${appname}: app not found`);
+			err(`${appname}: app not found`);
 			continue;
 		}
 		term.Desk.api.openApp(appname);
 	}
-	if (err.length) _.err(err);
+//	if (err.length) _.err(err);
 	return E_SUC;
 };//»
 const com_appicon=async(args, opts, _)=>{//«
@@ -994,7 +998,7 @@ const com_appicon=async(args, opts, _)=>{//«
 		_.out(JSON.stringify({app: args.shift()}));
 	}
 	else {
-		_.out(await capi.getList("/site/apps/"));
+		_.out(await util.getList("/site/apps/"));
 	}
 	return E_SUC;
 };//»
@@ -1023,12 +1027,18 @@ _.out(Math.round((new Date).getTime()/ 1000)+"");
 return E_SUC;
 };//»
 const com_true=(args, opts, _)=>{//«
-_.suc("I'm true");
-return E_SUC;
+	let mess;
+	if (args.length) mess = args.join(" ");
+	else mess = "I'm true";
+	_.suc(`true: ${mess}`);
+	return E_SUC;
 };//»
 const com_false = (args, opts, _) => {//«
-_.err("I'm false");
-return E_ERR;
+	let mess;
+	if (args.length) mess = args.join(" ");
+	else mess = "I'm false";
+	_.err(`false: ${mess}`);
+	return E_ERR;
 };//»
 const com_msleep = async(args, opts, _)=>{//«
 	let ms = parseInt(args.shift());
@@ -1037,7 +1047,7 @@ const com_msleep = async(args, opts, _)=>{//«
 	return E_SUC;
 };//»
 const com_libs = async (args, opts, _) => {//«
-	_.out(await capi.getList("/site/coms/"));
+	_.out(await util.getList("/site/coms/"));
 	return E_SUC;
 };//»
 const com_lib = async(args,opts, _)=>{//«
@@ -1050,7 +1060,7 @@ const com_lib = async(args,opts, _)=>{//«
 	let hold = lib;
 	let got = ALL_LIBS[lib] || NS.coms[lib];
 	if (got){
-		if (!isarr(got)) got = Object.keys(got);
+		if (!isArr(got)) got = Object.keys(got);
 		out(got);
 		return E_SUC;
 	}
@@ -1454,6 +1464,10 @@ Long options may be given an argument like this:
 
 //FWPORUITJ
 const shell_commands={//«
+//win: com_win,
+brep: com_brep,
+math: com_math,
+menu: com_menu,
 curcol: com_curcol, 
 parse: com_parse,
 getch: com_getch,
@@ -1469,13 +1483,13 @@ lib: com_lib,
 export: com_export,
 pwd: com_pwd,
 clear: com_clear,
-cd:com_cd,
-ls:com_ls,
-echo:com_echo,
-env:com_env,
-app:com_app,
-appicon:com_appicon,
-open:com_open,
+cd: com_cd,
+ls: com_ls,
+echo: com_echo,
+env: com_env,
+app: com_app,
+appicon: com_appicon,
+open: com_open,
 msleep: com_msleep,
 //email: com_email,
 //imap: com_imap,
@@ -1535,60 +1549,8 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 //»
 
-//Shell object«
-
-const Shell = function(term){
-
-//Var«
-const shell = this;
-
-/*Very dumbhack to implement cancellations of hanging commands, e.g. that might do fetching,«
-so that no output from a cancelled command is sent to the terminal, although
-whatever the command might be doing to keep it busy is still happening, so it
-is up to the shell user to be aware of what is going on behind the scenes:
-
-In shell.execute("command --line -is here"), the first local variable that is
-set is started_time (@WIMNNUYDKL).
-
-There is a global cancelled_time that is set when we do a Ctrl+c when the shell is busy.
-
-Immediately after every 'await' in shell.execute(), we do the following check:
-
-if (started_time < cancelled_time) return;
-
-»*/
-this.cancelled_time = 0;
-
-//»
-//Funcs«
-
-const execute_file=async (comword, cur_dir, env)=>{//«
-
-	const e=s=>{
-		return `sh: ${comword}: ${s}`;
-	};
-	let node = await fsapi.pathToNode(normPath(comword, cur_dir));
-	if (!node) return e(`not found`);
-	let app = node.appName;
-	if (app===FOLDER_APP) return e("is a directory");
-	if (app!==TEXT_EDITOR_APP) return e("not a text file");
-	if (!comword.match(/\.sh$/i)){
-		return e(`only executing files with '.sh' extension`);
-	}
-	let text = await node.text;
-	if (!text) return e("no text returned");
-	let rv;
-	let lines = text.split("\n");
-	let out = [];
-	for (let ln of lines){
-		let com = ln.trim();
-		if (!com) continue;
-		await this.execute(com, {script_out: out, env});
-	}
-	return out;
-};//»
-
-//»
+//«Shell
+const Shell = (()=>{
 
 //Parse«
 
@@ -1633,7 +1595,7 @@ const shell_quote_strings = (line_arr) => {//«
 			let ch2 = arr[j + 1];
 			let ch3 = arr[j + 2];
 			if (!qtype && ((((ch == '"' || ch == "'" || ch == "\x60") || (ch == "<" && ch2 == "<" && ch3 && ch3 != "<" && (j == 0 || (j > 0 && chneg1 != "<"))))))) {
-				if (ch == "<") return "sh: heredocs are not implemented";
+				if (ch == "<") return "Heredocs are not implemented";
 				qtype = ch;
 				orig_line_num = i;
 				if (arr[j - 1] == "$") {
@@ -1697,7 +1659,7 @@ const shell_quote_strings = (line_arr) => {//«
 			}
 		}
 	}
-	if (qtype) return "Unterminated quote";
+	if (qtype) return "Unterminated quote: "+qtype;
 	else {
 		let line = line_arr[line_arr.length - 1];
 		let lasttok = line[line.length - 1];
@@ -1708,17 +1670,11 @@ const shell_quote_strings = (line_arr) => {//«
 const shell_tokify = line_arr => {//«
 	let lnnum = 1;
 	let wordnum = 0;
-	const badtok=(tok, num)=>{return `sh: unsupported token: '${tok}'`;};
+	const badtok=(tok, num)=>{return `unsupported token: '${tok}'`;};
 	const mkword=(str)=>{return{t:"word",word:str,ln:lnnum,wn:(wordnum++)}};
 	const mkrop=(str)=>{return{t:"r_op",r_op:str,ln:lnnum}};
 	const mkcop=(str)=>{return{c:"c_op",c_op:str,ln:lnnum}};
 	const mkds=(str)=>{return{t:"ds",ds:"$",ln:lnnum}};
-	const add_to_pipe=()=>{//«
-		if (ret[0]===" ") ret.shift();
-		if (ret[ret.length-1]==" ") ret.pop();
-		pipe.push(ret);
-		ret = [];
-	};//»
 	if (line_arr == null) return null;
 	let ret = [];
 	let pipe = [];
@@ -1769,14 +1725,12 @@ const shell_tokify = line_arr => {//«
 						else {
 							if (ch===">"||ch==">>") ret.push(mkrop(ch));
 							else if (ch=="|"||ch==";") ret.push(mkcop(ch));
-//							else if (ch=="|") add_to_pipe();
 							else return badtok(ch, 3);
 						}
 					}//»
 					else {
 						if (ch===">"||ch==">>") ret.push(mkrop(ch));
 						else if (ch=="|"||ch==";") ret.push(mkcop(ch));
-//						else if (ch=="|") add_to_pipe();
 						else return badtok(ch, 4);
 					}
 				}
@@ -1841,6 +1795,274 @@ const shell_tokify = line_arr => {//«
 
 //»
 
+const old_curly_expansion = (word) => {//«
+	let marr;
+	let out = false;
+	if (marr = (word.match(/(.*){(\d+)\.\.(\d+)}(.*)/) ||word.match(/(.*){([a-z])\.\.([a-z])}(.*)/)||word.match(/(.*){([A-Z])\.\.([A-Z])}(.*)/))){
+		out = [];
+		let is_num;
+		let from, to;
+		if (marr[2].match(/\d/)){
+			is_num = true;
+			from = parseInt(marr[2]);
+			to = parseInt(marr[3]);
+		}
+		else {
+			from = marr[2].charCodeAt();
+			to = marr[3].charCodeAt();
+		}
+		let pre = marr[1];
+		let post = marr[4];
+		let inc;
+		if (from > to)inc=-1;
+		else inc = 1;
+		if (from <= to) {
+			for (let i = from; i <= to; i++){
+				let ch;
+				if (is_num) ch = i;
+				else ch = String.fromCharCode(i);
+				out.push(`${pre}${ch}${post}`);
+			}
+		}
+		else{
+			for (let i = from; i >= to; i--){
+				let ch;
+				if (is_num) ch = i;
+				else ch = String.fromCharCode(i);
+				out.push(`${pre}${ch}${post}`);
+			}
+		}
+	}
+/*
+	else if (marr = word.match(/(.*?){(.*?)(,.*)*}(.*?)/)){
+let iter=0;
+let re = /(.*?){(.*?)(,.*)*}(.*?)/y;
+//	while(marr = word.match()){
+let rv;
+	while(rv = re.exec(word)){
+iter++;
+if (iter > 10) throw new Error("!?!?!?");
+log(rv);
+//log(re);
+//log(re.lastIndex);
+//re.lastIndex = re.index+2;
+	}
+	}
+*/
+	return out;
+}//»
+const all_expansions = async(arr, term, script_opts={})=>{//«
+	let {ENV, cur_dir} = term;
+	let {script_name, script_args} = script_opts;
+	let err;
+	for (let i=0; i < arr.length; i++){
+		let word = arr[i].word;
+		if (!word) continue;
+		let marr;
+		let rv;
+		let use_cur_dir = cur_dir;
+		let say_path = "";
+		if (word.match(/^~/)){//Tilde (home-path)«
+			let val;
+			if (word==="~") val = globals.HOME_PATH;
+			else if (word.match(/^~\x2f/)) val = globals.HOME_PATH+word.slice(1);
+			arr[i] = {t:"word", word: val};
+		}//»
+		else if (i>0 && arr[i-1].ds=="$") {//Variable subs«
+			let got;
+//FOPLIHGB
+			let marr;
+			if (marr = word.match(/^([0-9])/)){
+				let num = parseInt(marr[1]);
+				if (num===0){
+					if (script_name) got = script_name;
+					else got = "sh";
+				}
+				else{
+					if (script_args) got = script_args[num-1];
+				}
+			}
+			else got = ENV[word];
+			if (!got) {
+				arr.splice(i-1, 2);
+				i--;
+			}
+			else{
+				arr[i-1] = {t:"word",word: got};
+				arr.splice(i, 1);
+			}
+		}/*»*/
+		else if (word.match(/[*?]/)||word.match(/\[[-0-9a-z]+\]/i)) {//File glob«
+			if (word.match(/\x2f/)){
+				let path_arr = word.split("/");
+				if (word.match(/^\x2f/)) {
+					path_arr.shift();
+					word = path_arr.pop();
+					say_path = "/"+path_arr.join("/");
+					use_cur_dir = say_path;
+				}
+				else if (path_arr.length && path_arr[0]) {
+					word = path_arr.pop();
+					use_cur_dir = normPath(path_arr.join("/"), cur_dir);
+					say_path = path_arr.join("/");
+				}
+			}
+//SMKOIOPU
+			let is_dot_word = word[0]==".";
+			let fpat = word.replace(/\./g,"\\.").replace(/\*/g, ".*").replace(/\?/g, ".");
+//			let fpat = word.replace(/\*/g, ".*").replace(/\?/g, ".");
+			let re;
+			try{ 
+				re = new RegExp("^" + fpat + "$");
+			}
+			catch(e){
+				err = e.message;
+				continue;
+			}
+			let dir = await pathToNode(use_cur_dir);
+			if (!dir) continue;
+			if (!dir.done) await fsapi.popDir(dir);
+			let kids = dir.kids;
+			let keys = Object.keys(kids);
+			let did_splice = false;
+			for (let k of keys){
+//				if (k=="."||k=="..") continue;
+				if (k.match(/^\./)&&!is_dot_word) continue;
+				if (re.test(k)) {
+					if (!did_splice) {
+						arr.splice(i, 1, " ");
+//						i--;
+						did_splice = true;
+					}
+					if (say_path && !say_path.match(/\x2f$/)) say_path = `${say_path}/`;
+					arr.splice(i, 0, {t:"word", word: `${say_path}${k}`}, " ");
+					i+=2;
+				}
+			}
+		}//»
+		else if (rv = old_curly_expansion(word)){//«
+			const do_exp=(arr, out)=>{
+				for (let wrd of arr){
+					let rv = old_curly_expansion(wrd);
+					if (rv) do_exp(rv, out);
+					else out.push({t:"word", word: wrd});
+				}
+				return out;
+			};
+			try{
+				let all = do_exp(rv, []);
+				let did_splice = false;
+				for (let val of all){
+					if (!did_splice) {
+						arr.splice(i, 1, " ");
+						did_splice = true;
+					}
+					arr.splice(i, 0, val, " ");
+					i+=2;
+				}
+			}catch(e){
+cerr(e);
+				err = `${e.message} (${word})`;
+			}
+		}//»
+	}
+	return err;
+}//»
+const env_glob_brace_expansions = all_expansions;
+const write_to_redir=async(term, out, redir, env)=>{//«
+//let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
+
+	if (!(out instanceof Uint8Array || isStr(out))){
+		if (!isArr(out)) return {err: "The redirection output is not a String, Uint8Array or JS array!"}
+		if (out.length && !isStr(out[0])) return {err: "The redirection output does not seem to be an array of Strings!"};
+		out = out.join("\n");
+	}
+	let op = redir.shift();
+	let fname = redir.shift();
+	if (!fname) return {err:`Missing operand to the redirection operator`};
+	let fullpath = normPath(fname, term.cur_dir);
+	let node = await fsapi.pathToNode(fullpath);
+	if (node) {
+		if (node.type == FS_TYPE && op===">" && !ALLOW_REDIRECT_CLOBBER) {
+			if (env.CLOBBER_OK==="true"){}
+			else return {err: `Not clobbering the file (ALLOW_REDIRECT_CLOBBER==${ALLOW_REDIRECT_CLOBBER})`};
+		}
+		if (node.write_locked()){
+			return {err:`${fname}: the file is "write locked" (${node.write_locked()})`};
+		}
+		if (node.data){
+			return {err:`${fname}: cannot write to the data file`};
+		}
+	}
+	let patharr = fullpath.split("/");
+	patharr.pop();
+	let parpath = patharr.join("/");
+	if (!parpath) return {err:`${fname}: Permission denied`};
+	let parnode = await fsapi.pathToNode(parpath);
+	let typ = parnode.type;
+	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: Invalid or unsupported path`};
+	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+		return {err:`${fname}: Permission denied`};
+	}
+	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
+	return {};
+};//»
+
+return function(term){
+
+
+//Var«
+const shell = this;
+
+/*Very dumbhack to implement cancellations of hanging commands, e.g. that might do fetching,«
+so that no output from a cancelled command is sent to the terminal, although
+whatever the command might be doing to keep it busy is still happening, so it
+is up to the shell user to be aware of what is going on behind the scenes:
+
+In shell.execute("command --line -is here"), the first local variable that is
+set is started_time (@WIMNNUYDKL).
+
+There is a global cancelled_time that is set when we do a Ctrl+c when the shell is busy.
+
+Immediately after every 'await' in shell.execute(), we do the following check:
+
+if (started_time < cancelled_time) return;
+
+»*/
+this.cancelled_time = 0;
+
+//»
+const execute_file = async (comword, script_args, cur_dir, env)=>{//«
+
+	const e=s=>{
+		return `sh: ${comword}: ${s}`;
+	};
+	let node = await fsapi.pathToNode(normPath(comword, cur_dir));
+	if (!node) return e(`not found`);
+	let app = node.appName;
+	if (app===FOLDER_APP) return e("is a directory");
+	if (app!==TEXT_EDITOR_APP) return e("not a text file");
+	if (!comword.match(/\.sh$/i)){
+		return e(`only executing files with '.sh' extension`);
+	}
+	let text = await node.text;
+	if (!text) return e("no text returned");
+	let rv;
+	let lines = text.split("\n");
+	let out = [];
+	let last_code;
+	for (let ln of lines){
+		let com = ln.trim();
+		if (!com) continue;
+		let {code, isExit} = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
+		last_code = code;
+		if (isExit) break;
+	}
+//	return out;
+	return {code: last_code, out};
+};//»
+
+this.execute=async(command_str, opts={})=>{//«
 /*Instead of trying to create a theoretically beautiful shell.execute algorithm, I//«
 wanted to instead provide explicit commentary on the one that should hopefully "just work"
 
@@ -1864,8 +2086,6 @@ worthy
 
 »*/
 
-this.execute=async(command_str, opts={})=>{//«
-
 const terr=(arg, if_script)=>{//«
 
 if (script_out){
@@ -1884,11 +2104,10 @@ const can=()=>{//«
 
 //Init/Var«
 //WIMNNUYDKL
+
 let started_time = (new Date).getTime();
 
-//let {script_out, ssh_out, ssh_err, env, addRows}=opts;
-//let {script_out, env, addRows}=opts;
-let {script_out, env}=opts;
+let {script_out, script_args, script_name, env}=opts;
 let rv;
 
 //Where does the output go?
@@ -1898,11 +2117,6 @@ let redir;
 // cat somefile.txt | these | might | use | the | stdin | array
 let stdin;
 
-//MJUEYSKDH
-//This tells all commands with color output (currently just ls) the number 
-//of rows to add to the objects that are used in response() to add to line_colors[]
-//let add_rows = addRows || 0;
-
 //Refuse and enter command that seems too long for our taste
 if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} ...': line length > MAX_LINE_LEN(${MAX_LINE_LEN})`, script_out);
 
@@ -1910,51 +2124,82 @@ command_str = command_str.replace(/^ +/,"");
 //»
 
 //Parser«
+
+//Escaping/Quoting«
 //Only for creating newlines in single quotes: $'1\n2' and escaping spaces outside of quotes
 let arr = shell_escapes([command_str]);
 
 //Makes quote objects from single, double and backtick quotes. Fails if not terminated
 arr = shell_quote_strings(arr);
-if (isstr(arr)) return terr(term.fmt(arr), script_out);
+if (isStr(arr)) return terr(term.fmt(arr), script_out);
+//»
+//Tokenization«
 
-/*
-Comments are stripped
-This creates word objects and '$' objects.
-It also creates '>' and '>>' redirections as well as pipelines.
-All unsupported tokens (redirects like '<' and control like ';') cause failure
-*/
+//Comments are stripped
+//This creates word objects and '$' objects.
+//It also creates '>' and '>>' redirections.
+//All unsupported tokens (redirects like '<' and control like '&') cause failure
+
 let toks = shell_tokify(arr);
-if (isstr(toks)) return terr(term.fmt(toks), script_out);
-
-
+if (isStr(toks)) return terr(term.fmt(toks), script_out);
+//»
+//Collect commands with their arguments«
 let com = [];
-let all = [];
+let coms = [];
 for (let tok of toks){
 	if (tok.c_op){
-		all.push({com});
+		coms.push({com});
 		com = [];
-		all.push(tok);
+		coms.push(tok);
 	}
 	else{
 		com.push(tok);
 	}
 }
-if (com.length) all.push({com});
-
-let all2 = [];
+if (com.length) coms.push({com});
+//»
+//Collect pipelines with their subsequent logic operators (if any)«
+let pipes = [];
 let pipe = [];
-for (let tok of all){
+for (let tok of coms){
 	if (tok.c_op && tok.c_op != "|"){
-		all2.push({pipe});
+		if (tok.c_op==="&&"||tok.c_op==="||") {
+			pipes.push({pipe, type: tok.c_op});
+		}
+		else {
+			pipes.push({pipe}, tok);
+		}
 		pipe = [];
-		all2.push(tok);
 	}
 	else if (!tok.c_op){
 		pipe.push(tok);
 	}
 }
-if (pipe.length) all2.push({pipe});
+if (pipe.length) pipes.push({pipe});
+//»
+//Collect ';' separated lists of pipelines+logic operators (if any)«
+let statements=[];
+let statement=[];
+for (let tok of pipes){
+	let cop = tok.c_op;
+	if (cop) {
+		if (cop==="&"||cop===";"){
+			statements.push({statement, type: cop});
+			statement = [];
+		}
+		else{
+			return terr(term.fmt(`Unknown control operator: ${cop}`), script_out);
+		}
+	}
+	else{
+		statement.push(tok);
+	}
+}
+if (statement.length) statements.push({statement});
+//»
 
+/*BAD LOGIC«
+//NEUTYIOP
 let all3 = [];
 let andlist = [];
 for (let tok of all2){
@@ -1969,6 +2214,7 @@ for (let tok of all2){
 }
 if (andlist.length) all3.push({andlist});
 
+//WMJFOPUT
 let statements = [];
 let orlist = [];
 for (let tok of all3){
@@ -1981,271 +2227,301 @@ for (let tok of all3){
 	}
 }
 if (orlist.length) statements.push({orlist});
+»*/
 
 //»
 
-for (let state of statements) {//«
+let lastcomcode;
+STATEMENT_LOOP: for (let state of statements){//«A 'statement' is a list of boolean-separated pipelines.
 
-	let lastandcode;
-//Loop until one returns true
-	for (let oriter = 0; oriter < state.orlist.length; oriter++) {//«
-		let orlist = state.orlist[oriter];
+let loglist = state.statement;
+if (!loglist){
+	return terr(term.fmt(`Logic list not found!`), script_out);
+}
+LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
+	let pipe = loglist[i];
+	let pipelist = pipe.pipe;
+	if (!pipelist){
+		return terr(term.fmt(`Pipeline list not found!`), script_out);
+	}
 
-//Loop while every returns true
-		let lastpipecode;
+	let pipetype = pipe.type;
 
-		for (let anditer = 0; anditer < orlist.andlist.length; anditer++) {//«
+	while (pipelist.length) {//«
+		let arr = pipelist.shift().com;
+		let args=[];
 
-			let andlist = orlist.andlist[anditer];
+//Expansions/Redirections«
 
-			let pipe = andlist.pipe;
+//1) Environment variable substitution
+//2) File globbing '*', '?' and character ranges [a-zA-Z0-9]
+//3) Curly brace expansion:
+//
+//$ echo file{0..3}.txt
+//file0.txt file1.txt file2.txt file3.txt
+		rv = await all_expansions(arr, term, {script_name, script_args});
+		if (can()) return;
+		if (rv){
+			term.response(rv, {isErr: true});
+		}
+		let inpipe = pipelist.length;
 
-//Need the rv of every pipe (which is collected from the last command)
-			let lastcomcode;
-
-			while (pipe.length) {//«
-
-//Preparatory (substitutions, setting env vars, etc.)«
-				let arr = pipe.shift().com;
-				let args=[];
-
-/*
-1) Environment variable substitution
-2) File globbing '*', '?' and character ranges [a-zA-Z0-9]
-3) Curly brace expansion:
-
-$ echo file{0..3}.txt
-file0.txt file1.txt file2.txt file3.txt
-*/
-				rv = await all_expansions(arr, term);
-				if (can()) return;
-				term.response(rv);
-				let inpipe = pipe.length;
-
-/*
-- Turn quote objects into word objects
-- Single quotes that start with '$' look for internal escapes (currently only newline)
-- Backquotes are executed and replaced with the output
-*/
-				for (let i=0; i < arr.length; i++){//«
-					let tok = arr[i];
-					let typ = tok.t;
-					let val = tok[typ];
-					if (typ==="quote") { 
-						let typ = tok.quote_t;
-						let ds = tok['$'];
-						let outstr='';
-						for (let ch of val){
-							if (isobj(ch)&&ch.t=="esc"){
-								if (ch.esc=="n"&&typ=="'"&&ds) outstr+="\n";
-								else outstr+=ch.esc;
-							}
-							else outstr+=ch;
-						}
-						val = outstr;
-						if (typ=="\x60") {
-							let out=[];
+//BBBBBBBBB
+//- Turn quote objects into word objects
+//- Single quotes that start with '$' look for internal escapes (currently only newline)
+//- Backquotes are executed and replaced with the output
+		for (let i=0; i < arr.length; i++){//«
+			let tok = arr[i];
+			let typ = tok.t;
+			let val = tok[typ];
+			if (typ==="quote") { 
+				let typ = tok.quote_t;
+				let ds = tok['$'];
+				let outstr='';
+				for (let ch of val){
+					if (isObj(ch)&&ch.t=="esc"){
+						if (ch.esc=="n"&&typ=="'"&&ds) outstr+="\n";
+						else outstr+=ch.esc;
+					}
+					else outstr+=ch;
+				}
+				val = outstr;
+				if (typ=="\x60") {
+					let out=[];
 //DJUYEKLMI
-//							add_rows = await this.execute(val, {script_out: out, env, addRows: add_rows});
-							await this.execute(val, {script_out: out, env});
-							if (can()) return;
-							if (isstr(out)) val = out;
-							else if (isarr(out)&&out.length) val = out.join(" ");
-							else val = "";
-						}
-						arr[i]={t:"word", word: val, from_quote: true};
-					}
-				}//»
+					await this.execute(val, {script_out: out, env});
+					if (can()) return;
+					if (isStr(out)) val = out;
+					else if (isArr(out)&&out.length) val = out.join(" ");
+					else val = "";
+				}
+				arr[i]={t:"word", word: val};
+			}
+		}//»
 
-/*
-All sequences of non-whitespace separated quotes and words are concatenated:
-~$ echo "q 1"A"q 2""q 3"B   "q 4"C"q       5"D"q 6"
-q 1Aq 2q 3B q 4Cq       5Dq 6
-*/
-				for (let i=0; i < arr.length-1; i++){//«
-					let tok0 = arr[i];
-					let tok1 = arr[i+1];
-					let have_quote = tok0.from_quote || tok1.from_quote;
-					if (tok0.word && tok1.word && have_quote){
-						arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`, from_quote: true}
-						arr.splice(i+1, 1);
-						i--;
-					}
-				}//»
+//All sequences of non-whitespace separated quotes and words are concatenated:
+//~$ echo "q 1"A"q 2""q 3"B   "q 4"C"q       5"D"q 6"
+//q 1Aq 2q 3B q 4Cq       5Dq 6
+		for (let i=0; i < arr.length-1; i++){//«
+			let tok0 = arr[i];
+			let tok1 = arr[i+1];
+//XCFIUYO
+//			let have_quote = tok0.from_quote || tok1.from_quote;
+//			if (tok0.word && tok1.word && have_quote){
+			if (tok0.word && tok1.word){
+//				arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`, from_quote: true}
+				arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`};
+				arr.splice(i+1, 1);
+				i--;
+			}
+		}//»
 
 //Concatenate all sequences of escaped spaces and words
 // ~$ touch this\ is\ cool.txt
-				for (let i=0; i < arr.length-1; i++){//«
-					let tok0 = arr[i];
-					let tok1 = arr[i+1];
-					if (tok0.esc === " " || tok1.esc === " "){
-						arr[i] = {t: "word", word: `${tok0.word||" "}${tok1.word||" "}`, esc: tok1.esc}
-						arr.splice(i+1, 1);
-						i--;
-					}
-				}//»
+		for (let i=0; i < arr.length-1; i++){//«
+			let tok0 = arr[i];
+			let tok1 = arr[i+1];
+			if (tok0.esc === " " || tok1.esc === " "){
+				arr[i] = {t: "word", word: `${tok0.word||" "}${tok1.word||" "}`, esc: tok1.esc}
+				arr.splice(i+1, 1);
+				i--;
+			}
+		}//»
 
-/*
-- Create redirection objects
-- Objects are converted into strings ({t:"word", word: "blah"} -> "blah")
-- Replace tilde with home path
-*/
-				for (let i=0; i < arr.length; i++){//«
-					let tok = arr[i];
-					let typ = tok.t;
-					let val = tok[typ];
-					if (tok===" "){
-						continue;
-					}
-					if (typ==="r_op"){
-						let rop = tok.r_op;
-						if (!(rop==">"||rop==">>")) {
-							return terr(`sh: unsupported operator: '${tok.r_op}'`, script_out);
-						}
-						let tok2 = arr[i+1];
-						if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
-						if (tok2.t == "quote") tok2={t: "word", word: tok2.quote.join("")}
-						if (tok2==" ") {
-							i++;
-							tok2 = arr[i+1];
-						}
-						if (!(tok2 && tok2.t==="word")) return terr(`sh: invalid or missing redirection operand`, script_out);
-						arr.splice(i+1, 1);
-						val = null;
-						redir = [tok.r_op, tok2.word];
-					}
-					if (val) {
-						if (val.match(/^~/)){
-							if (val==="~") val = globals.HOME_PATH;
-							else if (val.match(/^~\x2f/)) val = globals.HOME_PATH+val.slice(1);
-						}
-						args.push(val);
-					}
-				}//»
+//- Create redirection objects
+//- Objects are converted into strings ({t:"word", word: "blah"} -> "blah")
+//- Replace tilde with home path
+		for (let i=0; i < arr.length; i++){//«
+			let tok = arr[i];
+			let typ = tok.t;
+			let val = tok[typ];
+			if (tok===" "){
+				continue;
+			}
+			if (typ==="r_op"){
+				let rop = tok.r_op;
+				if (!(rop==">"||rop==">>")) {
+					return terr(`sh: unsupported operator: '${tok.r_op}'`, script_out);
+				}
+				let tok2 = arr[i+1];
+				if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
+				if (tok2.t == "quote") tok2={t: "word", word: tok2.quote.join("")}
+				if (tok2==" ") {
+					i++;
+					tok2 = arr[i+1];
+				}
+				if (!(tok2 && tok2.t==="word")) return terr(`sh: invalid or missing redirection operand`, script_out);
+				arr.splice(i+1, 1);
+				val = null;
+				redir = [tok.r_op, tok2.word];
+			}
+			if (val) {
+				if (val.match(/^~/)){
+					if (val==="~") val = globals.HOME_PATH;
+					else if (val.match(/^~\x2f/)) val = globals.HOME_PATH+val.slice(1);
+				}
+				args.push(val);
+			}
+		}//»
 
-				arr = args;
+		arr = args;
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
-				rv = add_to_env(arr, env, {term});
-//				add_rows+=rv.length;
-				term.response(rv);
-				if (arr[0]==" ") arr.shift();
-
+		rv = add_to_env(arr, env, {term});
+		if (rv.length) term.response(rv, {isErr: true});
+		if (arr[0]==" ") arr.shift();
 //»
 
 //Get the command. Immediately return to prompt if it is empty and we are not in a script.
-				let comword = arr.shift();
-				if (!comword) {
-					if (!script_out) term.response_end();
-					return;
-				}
-
-//Replace with an alias if we can
-				let alias = ALIASES[comword];
-				if (alias){
+		let comword = arr.shift();
+		if (!comword) {
+//			if (!script_out) term.response_end();
+//			return;
+			continue;
+		}
+//Replace with an alias if we can«
+		let alias = ALIASES[comword];
+		if (alias){
 //This should allow aliases that expand with options...
-					let ar = alias.split(/\x20+/);
-					alias = ar.shift();
-					if (ar.length){
-						arr.unshift(...ar);
-					}
-				}
-				let usecomword = alias||comword;
-				let com = active_commands[usecomword];
+			let ar = alias.split(/\x20+/);
+			alias = ar.shift();
+			if (ar.length){
+				arr.unshift(...ar);
+			}
+		}/*»*/
+
+		let usecomword = alias||comword;
+		if (usecomword=="exit"){//«
+			let numstr = arr.shift();
+			let code;
+			if (numstr){
+				if (!numstr.match(/^-?[0-9]+$/)) term.response("sh: exit: numeric argument required", {isErr: true});
+				else code = parseInt(numstr);
+			}
+			else if (arr.length) term.response("sh: exit: too many arguments", {isErr: true});
+			if (script_name) return {code, isExit: true};
+			term.response("sh: not exiting the toplevel shell", {isWrn: true});
+			break STATEMENT_LOOP;
+		}//»
+		let com = active_commands[usecomword];
+		if (isStr(com)){//QKIUTOPLK«
 //If we have a string rather than a function, do the command library importing routine.
 //The string is always the name of the library (rather than the command)
 //This happens when: 
 //1) libraries are defined in PRELOAD_LIBS, and 
 //2) this is the first invocation of a command from one of those libraries.
-				if (isstr(com)){//QKIUTOPLK«
-					try{
-						await import_coms(com);//com is the library name
-						if (can()) return;
-					}catch(e){
-						if (can()) return;
+			try{
+				await import_coms(com);//com is the library name
+				if (can()) return;
+			}catch(e){
+				if (can()) return;
 cerr(e);
-						terr(`sh: command library: '${com}' could not be loaded`);
-						return;
-					}
-					let gotcom = active_commands[usecomword];
-					if (!(gotcom instanceof Function)){
-						terr(`sh: '${usecomword}' is invalid or missing in command library: '${com}'`);
-						return;
-					}
-					com = gotcom;
-				}//»
-//Not found!
-				if (!com) {//«
+				terr(`sh: command library: '${com}' could not be loaded`);
+				return;
+			}
+			let gotcom = active_commands[usecomword];
+			if (!(gotcom instanceof Function)){
+				terr(`sh: '${usecomword}' is invalid or missing in command library: '${com}'`);
+				return;
+			}
+			com = gotcom;
+		}//»
+
+		if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
-					if (CONTROL_WORDS.includes(comword)){
-						terr(`sh: control structures are not implemented`, script_out);
-						return;
-					}
+			if (CONTROL_WORDS.includes(comword)){
+				terr(`sh: control structures are not implemented`, script_out);
+				return;
+			}
 
 //It doesn't look like a file.
 //EOPIUYTLM
-					if (!comword.match(/\x2f/)) {
-						term.response(`sh: ${comword}: command not found`, {isErr: true});
-						lastcomcode = E_ERR;
-						continue;
-					}
+			if (!comword.match(/\x2f/)) {
+				term.response(`sh: ${comword}: command not found`, {isErr: true});
+				lastcomcode = E_ERR;
+				continue;
+			}
 
-//Try to execute a "shell script"
-					let rv = await execute_file(comword, term.cur_dir, env);
-					if (can()) return;
-					if (isstr(rv)) {
-						term.response(rv, {isErr: true});
-						lastcomcode = E_ERR;
-						continue;
-					}
-
+//XGJUIKM
+//Try to execute a "shell script" from file
+//			let rv = await execute_file(comword, arr, term.cur_dir, env);
+			let {out, code} = await execute_file(comword, arr, term.cur_dir, env);
+			if (can()) return;
+			if (isStr(out)) {
+				term.response(out, {isErr: true});
+				lastcomcode = E_ERR;
+				continue;
+			}
+			if (Number.isFinite(code)) lastcomcode = code;
+			if (redir&&redir.length){
+//				let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
+				let {err} = await write_to_redir(term, out, redir, env);
+				if (can()) return;
+				if (err) {
+					term.response(err);
+				}
+				if (inpipe) stdin = [];
+			}
+			else if (inpipe) {
 //Collect the stdin (used as optional input for the next command) for pipelines
-					if (inpipe) stdin = rv;
-					else {
-						if (script_out){
-							 if (rv && rv.length) script_out.push(...rv);
-						}
-						else{
-							term.response(rv);
-//							term.response_end();
-						}
-					}
-					continue;
-				}//»
+				stdin = out;
+			}
+			else {
+				if (script_out){
+					 if (out && out.length) script_out.push(...out);
+				}
+				else{
+					term.response(out);
+				}
+			}
+			continue;
+		}//»
 
 //Look for the command's options
-				let opts;
-				let gotopts = active_options[usecomword];
+		let opts;
+		let gotopts = active_options[usecomword];
 
 //Parse the options and fail if there is an error message
-				rv = get_options(arr, usecomword, gotopts);
-				if (rv[1]&&rv[1][0]) {
-					term.response(rv[1][0]);
-					continue;
-				}
-				opts = rv[0];
+		rv = get_options(arr, usecomword, gotopts);
+		if (rv[1]&&rv[1][0]) {
+			term.response(rv[1][0]);
+			continue;
+		}
+		opts = rv[0];
 
 //Command response callbacks«
 
-//Everything that gets sent to redirects and pipes must be collected
+//Everything that gets sent to redirects, pipes, and script output must be collected
 //By default, only the 'out' stream will be collected.
 let save_lns;
 if (inpipe || script_out || (redir && redir.length)){
-	save_lns = [];
+save_lns = [];
 }
 
-const out_cb=(lns, opts={})=>{//«
+const out_cb = (lns, opts={})=>{//«
 
 if (can()) return;
 
-if (isstr(lns)) lns=[lns];
-else if (!isarr(lns)){
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in out_cb");
 }
 
-if (save_lns) return save_lns.push(...lns);
-
+if (save_lns) {
+//KIUREUN
+	if (lns instanceof Uint8Array){
+		if (!save_lns.length) save_lns = lns;
+		else {
+			let hold = save_lns;
+			save_lns = new Uint8Array(hold.length + lns.length);
+			save_lns.set(hold, 0);
+			save_lns.set(lns, hold.length);
+		}
+		return save_lns;
+	}
+	return save_lns.push(...lns);
+}
 //MDKLIOUTYH
 term.response(lns, opts);
 term.scroll_into_view();
@@ -2254,8 +2530,8 @@ term.refresh();
 };//»
 const err_cb=(lns)=>{//«
 if (can()) return;
-if (isstr(lns)) lns=[lns];
-else if (!isarr(lns)){
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in err_cb");
 }
@@ -2266,8 +2542,8 @@ term.refresh();
 };//»
 const suc_cb=(lns)=>{//«
 if (can()) return;
-if (isstr(lns)) lns=[lns];
-else if (!isarr(lns)){
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in suc_cb");
 }
@@ -2277,8 +2553,8 @@ term.refresh();
 };//»
 const wrn_cb=(lns)=>{//«
 if (can()) return;
-if (isstr(lns)) lns=[lns];
-else if (!isarr(lns)){
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in wrn_cb");
 }
@@ -2288,8 +2564,8 @@ term.refresh();
 };//»
 const inf_cb=(lns)=>{//«
 if (can()) return;
-if (isstr(lns)) lns=[lns];
-else if (!isarr(lns)){
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in inf_cb");
 }
@@ -2303,94 +2579,87 @@ term.refresh();
 //SKIOPRHJT
 //Run command
 
-				let code = await com(arr, opts, {
-					redir,
-					script_out,
-					stdin,
-					inpipe,
-					term,
-//					add_rows,
-					env,
-					opts,
-					command_str,
-					out: out_cb,
-					err: err_cb,
-					suc: suc_cb,
-					wrn: wrn_cb,
-					inf: inf_cb,
-				});
+		let code = await com(arr, opts, {//«
+			redir,
+			script_out,
+			stdin,
+			inpipe,
+			term,
+			env,
+			opts,
+			command_str,
+			out: out_cb,
+			err: err_cb,
+			suc: suc_cb,
+			wrn: wrn_cb,
+			inf: inf_cb,
+		});//»
 
-				if (can()) return;
+		if (can()) return;
 
 if (!Number.isFinite(code)) {
 log(code);
-	throw new Error(`Invalid return value from: '${usecomword}'`);
-}
-//				if (!rv) rv = {};
-//				if (isstr(rv)) rv = {out: rv};
-
-//CKLOPUTIK
-//				let {out, ok, err, colors, didFmt, pretty, code} = rv;
-
-//				let {code} = rv;
-
-//				let invalid = !Number.isFinite(code);
-
-/*
-				if (err && err.length) {//«
-					if (isstr(err)) err = [err];
-					add_rows+=err.length;
-					if (invalid) code = 1;
-					term.response(err, {isErr: true});
-				}
-				else if (invalid) code = 0;
-//»
-				if (ok && ok.length) {//«
-					if (isstr(ok)) ok = [ok];
-					add_rows+=ok.length;
-					term.response(ok, {isOK: true});
-				}//»
-*/
-
-				lastcomcode = code;
-
-if (redir&&redir.length){
-	let {err} = await write_to_redir(term, save_lns.join("\n"), redir, env);
-	if (can()) return;
-	if (err) {
-		term.response(err);
-	}
-	save_lns = [];
+throw new Error(`Invalid return value from: '${usecomword}'`);
 }
 
-if (inpipe) stdin = save_lns;
-else if (script_out) script_out.push(...save_lns);
 
-/*
-				if (!inpipe) {
-					if (script_out) script_out.push(...save_lns);
-				}
-*/
+		lastcomcode = code;
 
-			}//»
-	
-			lastpipecode = lastcomcode;
-			if (lastpipecode > 0) break;
+		if (redir&&redir.length){
+//			let {err} = await write_to_redir(term, (save_lns instanceof Uint8Array) ? save_lns:save_lns.join("\n"), redir, env);
+			let {err} = await write_to_redir(term, save_lns, redir, env);
+			if (can()) return;
+			if (err) {
+				term.response(err);
+			}
+			save_lns = [];
+		}
 
-		}//»
-
-		lastandcode = lastpipecode;
-		if (lastandcode == 0) break;
+		if (inpipe) {
+			stdin = save_lns;
+		}
+		else if (script_out) script_out.push(...save_lns);
 
 	}//»
+
+//LEUIKJHX
+	if (lastcomcode===E_SUC){//SUCCESS«
+		if (pipetype=="||"){
+			for (let j=i+1; j < loglist.length; j++){
+				if (loglist[j].type=="&&"){
+					i=j;
+					continue LOGLIST_LOOP;
+				}
+			}
+			break LOGLIST_LOOP;
+		}
+//		else:
+//			1 pipetype=="&&" and we automatically go to the next one or:
+//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
+	}
+	else{//FAILURE
+		if (pipetype=="&&"){
+			for (let j=i+1; j < loglist.length; j++){
+				if (loglist[j].type=="||"){
+					i=j;
+					continue LOGLIST_LOOP;
+				}
+			}
+			break LOGLIST_LOOP;
+		}
+//		else:
+//			1 pipetype=="||" and we automatically go to the next one or:
+//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
+	}//»
+
+}//»
 
 }//»
 
 //In a script, refresh rather than returning to the prompt
 if (script_out) {
 	term.refresh();
-	return;
-//	return add_rows;
+	return {code: lastcomcode};
 }
 
 //Command line input returns to prompt
@@ -2399,10 +2668,281 @@ term.response_end();
 }//»
 
 };
+})();
+/*»*/
+
+//«DevShell
+const DevShell = (()=>{
+
+//«Var
+
+//Maybe quote these (depending on context)
+// *  ?  [  ]  ^  -  !  #  ~  =  %  {  ,  }
+const START_OPERATOR_CHARS=[ "|","&",";","<",">","(",")",];
+const OPERATOR_TOKS=[...START_OPERATOR_CHARS, '&&','||',';;',';&','>&','>>','>|','<&','<<','<>','<<-','<<<',];
+//Let's allow '<' and '<<<' (and maybe heredocs in scripts)
+const UNSUPPORTED_SCRIPT_OPERATOR_TOKS=[ '&',';;',';&','>&','>|','<&','<>'];
+const UNSUPPORTED_INTERACTIVE_OPERATOR_TOKS=[...UNSUPPORTED_SCRIPT_OPERATOR_TOKS,"<<","<<-"];
+
+const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
+
+const DECIMAL_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
+const DECIMAL_CHARS_0_to_9=["0", "1","2","3","4","5","6","7","8","9"];
+const HEX_CHARS=[ "a","A","b","B","c","C","d","D","e","E","f","F",...DECIMAL_CHARS_0_to_9 ];
+
+const START_NAME_CHARS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","_"];
+const ANY_NAME_CHARS = [...START_NAME_CHARS, ...DECIMAL_CHARS_0_to_9];
+
+const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
 
 //»
 
-//»
+class Oper{//«
+	#chars;
+	constructor(){
+		this.#chars="";
+	}
+	add(ch){
+		let str = this.#chars + ch;
+		if (OPERATOR_TOKS.includes(str)){
+			this.#chars = str;
+			return true;
+		}
+		return false;
+	}
+	get chars(){
+		return this.#chars;
+	}
+	get isRedir(){
+		return this.#chars[0]===">"|| this.#chars[0]==="<";
+	}
+
+}//»
+
+class Word{//«
+	#arr;
+	constructor(){
+		this.#arr=[];
+	}
+	add(val){
+		this.#arr.push(val);
+	}
+}//»
+
+//Return an array of Word's and Oper's
+//There might be a start_i and a stopping condition (an end quote or paren)
+
+//If 'typ' is undefined, we are in "free space"
+//Otherwise, it is one of:
+/*
+- ' (no escaping)
+- $'
+- "
+- $(
+- ` (DO NOT flat scan for the final '`'. Set off a tokenizer with a halt_on_bq flag)
+- ${
+*/
+const tokenize = (arr, start_i, typ) => {//«
+
+let tok = null;//The current token
+let out = [];//The array of tokens
+
+for (let i=start_i; i < arr.length; i++) {
+
+let ch=arr[i];
+let ch1=arr[i+1];
+
+/*«If the end of input is recognized, the current token (if any) shall be
+delimited.
+»*/
+
+/*«If the previous character was used as part of an operator and the current
+character is not quoted and can be used with the previous characters to form an
+operator, it shall be used as part of that (operator) token.
+»*/
+
+if (tok instanceof Oper && tok.add(ch)){
+	continue;
+}
+
+/*«If the previous character was used as part of an operator and the current
+character cannot be used with the previous characters to form an operator, the
+operator containing the previous character shall be delimited.
+»*/
+
+if (tok instanceof Oper){
+	out.push(tok);
+	tok = null;
+}
+
+/*«If the current character is an unquoted <backslash>, single-quote, or
+double-quote or is the first character of an unquoted <dollar-sign>
+single-quote sequence, it shall affect quoting for subsequent characters up to
+the end of the quoted text. The rules for quoting are as described in 2.2
+Quoting . During token recognition no substitutions shall be actually
+performed, and the result token shall contain exactly the characters that
+appear in the input unmodified, including any embedded or enclosing quotes or
+substitution operators, between the start and the end of the quoted text. The
+token shall not be delimited by the end of the quoted field.
+»*/
+if (ch==="\\") {
+/*
+
+By "escaping", we are just jumping over this character, and the either adding the next one to
+the current word or starting a new word.
+
+in free space:
+  -Escape if an operator, quote or ds+[ ' ( { START_NAME_CHARS SPECIAL_SYMBOLS DECIMAL_CHARS_1_to_9 ]
+  -Otherwise, skip this char
+type==='"':
+  -Escape if a '"'
+*/
+
+}
+else if (ch==="'") {
+//Scan for next "'" (no escapes)
+}
+else if (ch ==='"') {
+// tokenize(arr, i+1, '"')
+//	 - No "$'" will be done
+}
+else if(ch==="$" && ch1==="'"){
+//Flat scan for next "'" (with escapes)
+
+}
+/*«If the current character is an unquoted '$' or '`', the shell shall identify
+the start of any candidates for parameter expansion ( 2.6.2 Parameter Expansion
+), command substitution ( 2.6.3 Command Substitution ), or arithmetic expansion
+( 2.6.4 Arithmetic Expansion ) from their introductory unquoted character
+sequences: '$' or "${", "$(" or '`', and "$((", respectively. The shell shall
+read sufficient input to determine the end of the unit to be expanded (as
+explained in the cited sections). While processing the characters, if instances
+of expansions or quoting are found nested within the substitution, the shell
+shall recursively process them in the manner specified for the construct that
+is found. For "$(" and '`' only, if instances of io_here tokens are found
+nested within the substitution, they shall be parsed according to the rules of
+2.7.4 Here-Document ; if the terminating ')' or '`' of the substitution occurs
+before the NEWLINE token marking the start of the here-document, the behavior
+is unspecified. The characters found from the beginning of the substitution to
+its end, allowing for any recursion necessary to recognize embedded constructs,
+shall be included unmodified in the result token, including any embedded or
+enclosing substitution operators or quotes. The token shall not be delimited by
+the end of the substitution.
+»*/
+else if (ch==="$" && ch1==="(") {
+// tokenize(arr, i+2, '$(')
+
+}
+else if (ch==="$" && ch1==="{") {
+/*
+Scan forward for a valid parameter (or #parameter), and the following possible chars
+before doing: tokenize(arr, some_i, "${")
+
+:- := :? :+ - = ? + % %% # ##
+
+*/
+
+}
+else if (ch==="$" && START_NAME_CHARS.includes(ch[i+1])) {
+//Param sub: scan forward until non-ANY_NAME_CHARS
+}
+else if (ch==="$" && SPECIAL_SYMBOLS.includes(ch[i+1])) {
+//Symbol sub: Just grab this next char
+}
+else if (ch==="$" && DECIMAL_CHARS_1_to_9.includes(ch[i+1])) {
+//Arg sub: Just grab this next char
+}
+else if (ch==="`") {
+//Flat scan forward for the first unescaped "`"
+}
+/*«If the current character is not quoted and can be used as the first character
+of a new operator, the current token (if any) shall be delimited. The current
+character shall be used as the beginning of the next (operator) token.
+»*/
+else if (START_OPERATOR_CHARS.includes(ch)){
+	if (tok) {
+		toks.push(tok);
+	}
+	tok = new Oper();
+	if (!tok.add(ch)){
+throw new Error(`Could not start the operator tok with: '${ch}' !?!?!?`);
+	}
+}
+/*«If the current character is an unquoted <blank>, any token containing the
+previous character is delimited and the current character shall be discarded.
+»*/
+else if (ch===" " || ch==="\t"){
+	if (tok){
+		toks.push(tok);
+		tok = null;
+	}
+	continue;
+}
+/*«If the previous character was part of a word, the current character shall be
+appended to that word.
+»*/
+else if (tok instanceof Word){
+	tok.add(ch);
+}
+
+/*«If the current character is a '#', it and all subsequent characters up to, but
+excluding, the next <newline> shall be discarded as a comment. The <newline>
+that ends the line is not considered part of the comment.
+»*/
+else if (ch==="#"){
+//THis *would be* the start of a new word (since that is the default, else condition)
+	while (arr[i+1] && arr[i+1]!=="\n") i++;
+}
+
+//The current character is used as the start of a new word.
+	else{
+		tok = new Word();
+		tok.add(ch);
+	}
+}
+
+return out;
+
+};//»
+
+return function(term){
+
+this.cancelled_time = 0;
+
+this.execute = async(command_str, opts={})=>{
+
+const cancelled=()=>{//«
+//Cancel test function
+	return started_time < this.cancelled_time;
+};//»
+
+let started_time = (new Date).getTime();
+
+const { interactive } = opts;
+
+const sherr = mess => {//«
+	term.response(`sh: ${mess}`, {isErr: true});
+	if (!scriptName) term.response_end();
+};//»
+
+let tokens = tokenize(command_str.split(""), 0);
+if (isStr(tokens)) {
+	sherr(tokens);
+	return;
+}
+
+if (DEBUG){
+jlog(tokens);
+}
+//log(command_str);
+
+term.response_end();
+
+};
+
+};
+})();
+/*»*/
 
 //Terminal«
 
@@ -2619,6 +3159,7 @@ let last_mode;
 let root_state = null;
 let cur_shell = null;
 let shell = null;
+let dev_shell = null;
 let ls_padding = 2;
 let await_next_tab = null;
 
@@ -2678,7 +3219,7 @@ tabdiv._pos="absolute";
 tabdiv.onmousedown=(e)=>{downevt=e;};
 tabdiv.onmouseup=e=>{//«
 	if (!downevt) return;
-	let d = capi.dist(e.clientX,e.clientY,downevt.clientX, downevt.clientY);
+	let d = util.dist(e.clientX,e.clientY,downevt.clientX, downevt.clientY);
 	if (d < 10) return;
 	focus_or_copy();
 };//»
@@ -2798,13 +3339,11 @@ main.appendChild(areadiv);
 
 //Util«
 
-const stat=mess=>{
-	status_bar.innerText = mess;
-};
+const stat=mess=>{status_bar.innerText=mess;};
 
 const get_line_from_pager=async(arr, name)=>{//«
 
-	if (!await capi.loadMod(DEF_PAGER_MOD_NAME)) {
+	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		return poperr("Could not load the pager module");
 	}
 	let less = new NS.mods[DEF_PAGER_MOD_NAME](this);
@@ -2813,7 +3352,7 @@ const get_line_from_pager=async(arr, name)=>{//«
 }//»
 const select_from_history = async path => {//«
 	let arr = await path.toLines();
-	if (!isarr(arr) && arr.length) {
+	if (!isArr(arr) && arr.length) {
 cwarn("No history lines from", path);
 		return;
 	}
@@ -2830,6 +3369,11 @@ log("Not saving", s);
 	}
 	if (await fsapi.writeFile(HISTORY_PATH_SPECIAL, `${s}\n`, {append: true})) return do_overlay(`Saved special: ${s}`);
 	poperr(`Could not write to: ${HISTORY_PATH_SPECIAL}!`);
+};//»
+const write_to_history = async(str)=>{//«
+	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
+cwarn(`Could not write to history: ${HISTORY_PATH}`);
+	}
 };//»
 const save_history = async()=>{//«
 	if (!await fsapi.writeFile(HISTORY_PATH, history.join("\n")+"\n")){
@@ -2902,7 +3446,7 @@ const wrap_line = (str)=>{//«
 	return out;
 };//»
 
-const fmt_ls=(arr, lens, ret, types, color_ret, col_arg)=>{//«
+const fmt_ls = (arr, lens, ret, types, color_ret, col_arg)=>{//«
 //const fmt_ls=(arr, lens, ret, types, color_ret, start_from, col_arg)=>{
 
 /*_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
@@ -3283,7 +3827,7 @@ const do_overlay=(strarg)=>{//«
 	overlay.innerText = str;
 	if (overlay_timer) clearTimeout(overlay_timer);
 	else main.appendChild(overlay);
-	capi.center(overlay, main);
+	util.center(overlay, main);
 	overlay_timer = setTimeout(()=>{
 		overlay_timer = null;
 		overlay._del();
@@ -3341,6 +3885,7 @@ const render = (opts={})=>{
 	let symbol;
 	let line_select_mode;
 
+//WKKYTUHJ
 	if (actor) ({stat_input_type,stat_com_arr,stat_message,stat_message_type, line_select_mode}=actor);
 	if (!stat_input_type) stat_input_type="";
 //	if (editor) ({splice_mode, macro_mode,visual_block_mode,tab_lines,visual_line_mode,visual_mode,show_marks,seltop,selbot,selleft,selright,selmark,error_cursor, opts, num_lines, ry}=editor);
@@ -3753,6 +4298,7 @@ const shift_line=(x1, y1, x2, y2)=>{//«
 	return str_arr;
 };//»
 const line_break=()=>{//«
+	if (lines[lines.length-1] && !lines[lines.length-1].length) return;
 	lines.push([]);
 	y++;
 	scroll_into_view();
@@ -3893,7 +4439,7 @@ const get_command_arr=async (dir, arr, pattern)=>{//«
 const execute = async(str, if_init, halt_on_fail)=>{//«
 
 	ENV['USER'] = globals.CURRENT_USER;
-	cur_shell = shell;
+	cur_shell = this.shell;
 	let gotstr = str.trim();
 
 	str = str.replace(/\x7f/g, "");
@@ -3903,16 +4449,14 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 		env[k]=ENV[k];
 	}
 
-//	if (this.ssh_client && this.ssh_immediate_mode) this.ssh_client.send(JSON.stringify({com: str}));
-//	else shell.execute(str,{env});
-	shell.execute(str,{env});
+	cur_shell.execute(str,{env});
 
 	let ind = history.indexOf(gotstr);
 	if (ind >= 0) {
 		history.splice(ind, 1);
 	}
 	else{
-		await fsapi.writeFile(HISTORY_PATH, `${gotstr}\n`, {append: true});
+		write_to_history(gotstr);
 	}
 	history.push(gotstr);
 
@@ -3928,9 +4472,7 @@ const get_prompt_str=()=>{//«
 	return str + " ";
 };//»
 const set_prompt = (opts={}) => {//«
-	let if_nopush = opts.NOPUSH;
-	let if_noscroll = opts.NOSCROLL;
-	let use_str = get_prompt_str();
+	let use_str = opts.prompt || get_prompt_str();
 
 	topwin.title=use_str.replace(/..$/,"");
 	
@@ -3963,10 +4505,8 @@ const set_prompt = (opts={}) => {//«
 			len_min1++;
 			if (use_col) line_colors[len_min1] = {'0': [line.length, use_col]};
 		}
-		if (!if_noscroll) {
-			cur_prompt_line = len_min1;
-			scroll_into_view();
-		}
+		cur_prompt_line = len_min1;
+		scroll_into_view();
 	}
 	prompt_len = lines[len_min1].length;
 	if (prompt_len==1 && lines[len_min1][0]==="") prompt_len=0;
@@ -4020,7 +4560,7 @@ const get_dir_contents = async(dir, pattern, opts={})=>{//«
 				if (!kid) continue;
 			}
 			let useapp = kid.appName;
-			if (if_cd && useapp !== FOLDER_APP) continue;
+//			if (if_cd && useapp !== FOLDER_APP) continue;
 			let ret = [keys[i], useapp];
 			if (useapp == "Link") ret.push(kid.link);
 			if (pattern == "" || re.test(keys[i])) match_arr.push(ret);
@@ -4046,6 +4586,17 @@ const get_dir_contents = async(dir, pattern, opts={})=>{//«
 //»
 //Response«
 
+let do_continue = false;
+
+this.continue = (str) => {//«
+	do_continue = true;
+	set_prompt({prompt:"> "});
+	scroll_into_view();
+	sleeping = null;
+	bufpos = 0;
+	setTimeout(()=>{cur_shell = null;},10);
+	render();
+};//»
 const response_end = () => {//«
 	if (!did_init) return;
 
@@ -4053,6 +4604,7 @@ const response_end = () => {//«
 //	if (pager) return;
 	if (is_pager) return;
 
+	do_continue = false;
 	set_prompt();
 	scroll_into_view();
 	sleeping = null;
@@ -4063,20 +4615,22 @@ const response_end = () => {//«
 this.response_end = response_end;
 //»
 const response = (out, opts={})=>{//«
-	if (isstr(out)) out = [out];
+	if (isStr(out)) out = [out];
 	else if (!out) return;
-	else if (!isarr(out)){
+	else if (!isArr(out)){
 log("STDOUT");
 log(out);
 return;
 	}
+	else if (out instanceof Uint8Array) out = [`Uint8Array(${out.length})`];
+
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf} = opts;
 //WOPIUTHSDKL
 	let use_color;
 	if (isErr) use_color = "#f99";
 	else if (isSuc) use_color = "#7f7";
 	else if (isWrn) use_color = "#ff7";
-	else if (isInf) use_color = "#bbf";
+	else if (isInf) use_color = "#aaf";
 
 	if (colors) {
 		if (!didFmt){
@@ -4457,7 +5011,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 		}
 		let all=[];
 		for (let ar of ret) all.push(ar[0]);
-		let rem = capi.sharedStart(all).slice(s.length);
+		let rem = util.sharedStart(all).slice(s.length);
 		for (let ch of rem) handle_letter_press(ch);
 		await_next_tab = true;
 		return;
@@ -4481,7 +5035,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 			dir_str = dir_arr.join("/");
 			let use_cur = this.cur_dir;
 			if (dir_str.match(/^\x2f/)) use_cur = null;
-			new_dir_str = capi.getFullPath(dir_str, this.cur_dir);
+			new_dir_str = util.getFullPath(dir_str, this.cur_dir);
 		}
 		use_dir = new_dir_str;
 	}//»
@@ -4496,11 +5050,11 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 			contents = await get_command_arr(use_dir, Object.keys(active_commands), tok)
 		}
 		else if (tok0 == "lib" || tok0 == "import"){
-			contents = await get_command_arr(use_dir, await capi.getList("/site/coms/"), tok)
+			contents = await get_command_arr(use_dir, await util.getList("/site/coms/"), tok)
 		}
 		else if (tok0 == "app" || tok0 == "appicon"){
-//			contents = await get_command_arr(use_dir, await capi.getAppList(), tok)
-			contents = await get_command_arr(use_dir, await capi.getList("/site/apps/"), tok)
+//			contents = await get_command_arr(use_dir, await util.getAppList(), tok)
+			contents = await get_command_arr(use_dir, await util.getList("/site/apps/"), tok)
 		}
 
 	}
@@ -4509,39 +5063,6 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 };
 this.handle_tab = handle_tab;
 //»
-/*
-const handle_buffer_scroll=(if_up)=>{//«
-	if (buffer_scroll_num===null) {
-		buffer_scroll_num = scroll_num;
-		scroll_cursor_y = y;
-		hold_x = x;
-		hold_y = y;
-	}
-	let n = buffer_scroll_num;
-	if (if_up) {//«
-		if (n == 0) return;
-		let donum;
-		if (n - h > 0) {
-			donum = h;
-			n -= h;
-		}
-		else n = 0;
-		y=0;
-	}//»
-	else {//«
-		let donum = h;
-		if (n + donum >= lines.length) return;
-		n += donum;
-		if (n + h > lines.length) {
-			n = lines.length - h;
-			if (n < 0) n = 0;
-		}
-		y=0;
-	}//»
-	buffer_scroll_num = n;
-	render();
-};//»
-*/
 const handle_arrow=(code, mod, sym)=>{//«
 
 	if (mod == "") {//«
@@ -4558,15 +5079,6 @@ const handle_arrow=(code, mod, sym)=>{//«
 			let str = history[history.length - bufpos];
 			if (str) {
 				let diffy = scroll_num - cur_prompt_line;
-/*«
-				if (diffy > 0) {
-					y=0;
-					scroll_num -= diffy;
-					cur_prompt_line = scroll_num;
-					set_prompt({NOPUSH:1, NOSCROLL:1});
-				}
-				else y = cur_prompt_line;
-»*/
 				while (cur_prompt_line+1 != lines.length) { 
 if (!lines.length){
 console.error("COULDA BEEN INFINITE LOOP: "+(cur_prompt_line+1) +" != "+lines.length);
@@ -4594,15 +5106,6 @@ break;
 			else {
 				let str = history[history.length - bufpos];
 				if (str) {
-/*«
-					let diffy = scroll_num - cur_prompt_line;
-					if (diffy > 0) {
-						y=0;
-						scroll_num -= diffy;
-						cur_prompt_line = scroll_num;
-						set_prompt({NOPUSH:1, NOSCROLL:1});
-					}
-»*/
 					trim_lines();
 					handle_line_str(str.trim(), true);
 					com_scroll_mode = true;
@@ -4885,17 +5388,11 @@ const handle_enter = async(if_paste)=>{//«
 		bufpos = 0;
 		command_hold = null;
 		let str;
-		if (cur_shell) {//«
-//cwarn("Enter with cur_shell!!!");
-//			let ret = get_com_arr(1);
-//			if (str == null) return response_end();
-//			str = ret.join("");
-			return;
-		}//»
+		if (cur_shell) return;
 		else {//«
 			if (cur_scroll_command) str = insert_cur_scroll();
 			else str = get_com_arr().join("");
-			if (!str) {
+			if (!do_continue && !str) {
 				ENV['?']="0";
 				response_end();
 				return;
@@ -4904,7 +5401,9 @@ const handle_enter = async(if_paste)=>{//«
 		x=0;
 		y++;
 		lines.push([]);
-		if (!str || str.match(/^ +$/)) return response_end();
+		if (!do_continue && (!str || str.match(/^ +$/))) {
+			return response_end();
+		}
 		if (str) {
 			last_com_str = str;
 		}
@@ -5087,9 +5586,7 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	else if (sym == "HOME_"|| sym == "END_") handle_page(sym);
 	else if (code == KC['DEL']) handle_delete(mod);
 	else if (sym == "p_CAS") toggle_paste();
-	else if (sym == "TAB_") {
-		handle_tab();
-	}
+	else if (sym == "TAB_") handle_tab();
 	else if (sym == "BACK_")  handle_backspace();
 	else if (sym == "ENTER_") handle_enter();
 	else if (sym == "c_C") do_ctrl_C();
@@ -5146,15 +5643,31 @@ else Term.ondevreload = ondevreload;
 //cwarn("Reload the terminal:", !Term.ondevreload);
 do_overlay(`Reload terminal: ${!Term.ondevreload}`);
 	}
+else if (sym=="d_CAS"){
+DEBUG = !DEBUG;
+do_overlay(`Debug: ${DEBUG}`);
+
+}
+else if (sym=="s_CA"){
+if (!dev_mode){
+cwarn("Not dev_mode");
+return;
+}
+if (this.shell === shell){
+	this.shell = dev_shell;
+do_overlay("Using dev_shell");
+}
+else {
+	this.shell = shell;
+do_overlay("Using shell");
+}
+//log(this.shell);
+}
 };
 //»
 const handle=(sym, e, ispress, code, mod)=>{//«
 	let marr;
-//	this.locked = true;
 	if (this.locked) {
-//		if (sym=="c_C" && this.ssh_server) {
-//			this.ssh_server.close();
-//		}
 		return;
 	}
 	if (is_scrolling){
@@ -5200,25 +5713,16 @@ const handle=(sym, e, ispress, code, mod)=>{//«
 	else await_next_tab = null;
 	if (e&&sym=="o_C") e.preventDefault();
 
-//SKLIOPMN
-//	if (editor && sym=="s_CAS"){
-//		highlight_actor_bg = !highlight_actor_bg;
-//		do_overlay(`Line highlighting: ${highlight_actor_bg}`);
-//		render();
-//		return;
-//	}
-
 	if (actor){
-		actor.key_handler(sym, e, ispress, code);
+if (ispress){
+if (actor.onkeypress) actor.onkeypress(e, sym, code);
+}
+else{
+if (actor.onkeydown) actor.onkeydown(e ,sym, code);
+}
+//		actor.key_handler(sym, e, ispress, code);
 		return;
 	}
-/*
-	if (pager) {//«
-		pager.key_handler(sym, e, ispress, code);
-		return 
-	}//»
-	else if (editor) return editor.key_handler(sym, e, ispress, code);
-*/
 	if (ispress){}
 	else if (!sym) return;
 
@@ -5235,8 +5739,8 @@ const init = async(appargs={})=>{
 	this.cwd = this.cur_dir;
 	let gotfs = localStorage.Terminal_fs;
 	if (gotfs) {
-		let val = strnum(gotfs);
-		if (isnum(val,true)) gr_fs = val;
+		let val = strNum(gotfs);
+		if (isNum(val,true)) gr_fs = val;
 		else {
 			gr_fs = def_fs;
 			delete localStorage.Terminal_fs;
@@ -5258,13 +5762,14 @@ const init = async(appargs={})=>{
 		else {
 			arr.pop();
 			arr = arr.reverse();
-			arr = capi.uniq(arr);
+			arr = util.uniq(arr);
 			history = arr.reverse();
 		}
 	}
 	let init_prompt = `System shell\x20(${winid.replace("_","#")})`;
 	if(dev_mode){
 init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+init_prompt+=`\nDebug: ${DEBUG}`
 	}
 	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
 	let env_file_path = `${this.cur_dir}/.env`; 
@@ -5275,11 +5780,16 @@ init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
 	}
+	shell = new Shell(this);
+	dev_shell = new DevShell(this);
+	if (dev_mode && USE_DEVSHELL) {
+		this.shell = dev_shell;
+		init_prompt+=`\nDev shell: true`;
+	}
+	else this.shell = shell;
 	response(init_prompt.split("\n"));
 	did_init = true;
 	sleeping = false;
-	shell = new Shell(this);
-	this.shell = shell;
 	set_prompt();
 	render();
 	await do_imports(ADD_COMS, cwarn);
@@ -5311,6 +5821,10 @@ this.getch = async(promptarg, def_ch)=>{//«
 	});
 };//»
 this.read_line = async(promptarg)=>{//«
+	if (lines[lines.length-1]&&lines[lines.length-1].length){
+		line_break();
+		cur_prompt_line = y+scroll_num-1;
+	}
 	if (promptarg){
 		read_line_prompt_len = promptarg.length;
 		for (let ch of promptarg) handle_letter_press(ch);
@@ -5396,6 +5910,9 @@ this.onblur=()=>{//«
 this.onresize = resize;
 this.onkeydown=(e,sym,mod)=>{handle(sym,e,false,e.keyCode,mod);};
 this.onkeypress=(e)=>{handle(e.key,e,true,e.charCode,"");};
+this.onkeyup=(e,sym)=>{
+if (actor&&actor.onkeyup) actor.onkeyup(e, sym);
+};
 this.overrides = {//«
 	"UP_C": 1,
 	"DOWN_C": 1,
@@ -5456,54 +5973,10 @@ render();
 };//»
 this.clipboard_copy=(s)=>{do_clipboard_copy(null,s);};
 
-//Need to combine generalize these 4 functions as init_new_screen.
-
-
-
-/*
-
-We used to call set_lines (unnecessarily) from pager, just to empty out the
-line_colors. But we call this because we actually set a new empty array. We
-need to keep this for certain advanced use cases, such as toggling between
-pager formats, and dealing with row folding issues in vim.
-
-*/
-
 this.set_lines = (linesarg, colorsarg)=>{//«
 	lines = linesarg;
 	line_colors = colorsarg;
 };//»
-
-/*XOPIUYTK
-this.hold_lines = ()=>{//«
-//This is a completely wrong idea.
-	lines_hold = lines;
-	line_colors_hold = line_colors;
-};//»
-this.init_edit_mode=(ed, nstatlns)=>{//«
-	wrapdiv.appendChild(statdiv);
-	yhold=y;
-	xhold=x;
-	scrollnum_hold = scroll_num;
-	scroll_num=x=y=0;
-	editor = ed;
-	num_stat_lines=nstatlns;
-	generate_stat_html();
-	this.editor = editor;
-};//»
-this.init_pager_mode=(pg, nstatlns)=>{//«
-	wrapdiv.appendChild(statdiv);
-	yhold=y;
-	xhold=x;
-	scrollnum_hold = scroll_num;
-	scroll_num=x=y=0;
-	pager = pg;
-	num_stat_lines=nstatlns;
-	generate_stat_html();
-};//»
-*/
-
-//Pass our new onescape's into here???
 this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {//«
 
 	let screen = {actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines, onescape: termobj.onescape};
@@ -5543,31 +6016,6 @@ if (old_actor&&old_actor.cb) {
 }
 //render();
 };//»
-
-//This needs to be seriously updated
-
-/*
-this.modequit=(rv)=>{//«
-	statdiv._del();
-	tabdiv._x = 0;
-	let actor = editor||pager;
-	scroll_num = scrollnum_hold;
-	lines = lines_hold;
-	line_colors = line_colors_hold;
-	y = yhold;
-	x = xhold;
-	num_stat_lines = 0;
-	delete this.is_editing;
-	editor=pager=null;
-	if (actor&&actor.cb) {
-		actor.cb(rv);
-	}
-	delete this.editor;
-//	return arg;
-};
-//»
-*/
-
 
 //»
 this.wrap_line = wrap_line;
@@ -5628,6 +6076,9 @@ Object.defineProperty(this,"lines",{
 		}
 		return all;
 	}
+});
+Object.defineProperty(this,"actor",{
+	get:()=>actor
 });
 /*«Unused
 this.is_busy=()=>{return !!cur_shell;}

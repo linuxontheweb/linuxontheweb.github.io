@@ -1,0 +1,716 @@
+//DevShell object«
+
+const DevShell = function(term){
+
+const get_string=(which, arr, no_escape)=>{//«
+	let s='';
+	for (let i=0; i < arr.length; i++){
+		let ch = arr[i];
+		let next1 = arr[i+1];
+		if (!no_escape && !ch.escaped && ch=="\\"){/*«*/
+			if (i===arr.length-1) {
+				return null;
+			}
+			else{
+				let esc_ch = new String(next1);
+				esc_ch.escaped = true;
+				arr[i+1] = esc_ch;
+				arr.splice(i, 1);
+//				i--;
+				s+="\\"+next1;
+			}
+		}/*»*/
+		else if (which!="'" && !ch.escaped && (ch=="$"&&next1&&(next1=="("||next1=="{"))){
+//We have a substitution inside a double quote or substitution
+log("HAVE SUBTITUTION");
+			let find;
+			if (next1=="(") find = ")";
+			else find = "}";
+			let rv = get_string(find, arr.slice(2));
+			if (rv==null) return null;
+			s+="$"+next1+rv;
+			i+=1+rv.length;
+		}
+		else if (!ch.escaped&&ch=="("&&(which==")"||which=="}")){
+//We have a subshell inside of a substitution
+log("HAVE SUBSHELL");
+			let rv = get_string(")", arr.slice(1));
+			if (rv==null) return null;
+			s+="("+rv;
+			i+=rv.length;
+		}
+		else if (ch==which && (no_escape || !ch.escaped)){
+			s+=ch;
+			return s;
+		}
+		else s+=ch;
+	}
+	return null;
+};//»
+
+this.execute=async(command_str, opts={})=>{//«
+const sherr=(arg, if_script)=>{//«
+
+//if (script_out){
+//	script_out.push(arg);
+//}
+//else {
+	term.response("sh: "+arg, {isErr: true});
+	term.response_end();
+//	if (!if_script) term.response_end();
+//}
+
+};//»
+const unexp=(arg)=>{
+	term.response(`sh: syntax error near unexpected token: '${arg}'`, {isErr: true});
+	term.response_end();
+};
+
+log(`<${command_str}>`);
+
+//Tokenizer«
+
+/*«Token recognition
+
+The shell shall read its input in terms of lines. (For details about how the
+shell reads its input, see the description of sh .) The input lines can be of
+unlimited length. These lines shall be parsed using two major modes: ordinary
+token recognition and processing of here-documents.
+
+When an io_here token has been recognized by the grammar (see 2.10 Shell
+Grammar), one or more of the subsequent lines immediately following the next
+NEWLINE token form the body of a here-document and shall be parsed according to
+the rules of 2.7.4 Here-Document . Any non-NEWLINE tokens (including more
+io_here tokens) that are recognized while searching for the next NEWLINE token
+shall be saved for processing after the here-document has been parsed. If a
+saved token is an io_here token, the corresponding here-document shall start on
+the line immediately following the line containing the trailing delimiter of
+the previous here-document. If any saved token includes a <newline> character,
+the behavior is unspecified.
+
+When it is not processing an io_here, the shell shall break its input into
+tokens by applying the first applicable rule below to each character in turn in
+its input. At the start of input or after a previous token has just been
+delimited, the first or next token, respectively, shall start with the first
+character that has not already been included in a token and is not discarded
+according to the rules below. Once a token has started, zero or more characters
+from the input shall be appended to the token until the end of the token is
+delimited according to one of the rules below. When both the start and end of a
+token have been delimited, the characters forming the token shall be exactly
+those in the input between the two delimiters, including any quoting
+characters. If a rule below indicates that a token is delimited, and no
+characters have been included in the token, that empty token shall be
+discarded.
+/»*/
+
+let command_arr = command_str.split("");
+let toks = [];
+let cur_tok = null;
+let operator_chars=[//«
+"|",
+"&",
+";",
+"<",
+">",
+"(",
+")",
+];//»
+let operator_toks=[//«
+'&&',
+'||',
+';;',
+';&',
+'<<',
+'>>',
+'<&',
+'>&',
+'<>',
+'<<-',
+'>|',
+'<<<'
+];//»
+let prev_ch = false;
+//let quote = null;
+//let quote_stack = [];
+let expansion = null;
+let expansion_stack = [];
+for (let i=0; i < command_arr.length; i++) {
+
+let ch = command_arr[i];
+let next1 = command_arr[i+1];
+let next2 = command_arr[i+2];
+/*«EOF
+1. If the end of input is recognized, the current token (if any) shall be delimited.
+/»*/
+if (cur_tok && cur_tok.type=="op" && operator_chars.includes(ch)) {/*«*/
+/*«Add to previous operator character
+2. If the previous character was used as part of an operator and the current
+character is not quoted and can be used with the previous characters to form an
+operator, it shall be used as part of that (operator) token.
+»*/
+	if (!ch.escaped && operator_toks.includes(cur_tok.val+ch)){
+		cur_tok.val+=ch;
+	}
+/*«Delimit operator token
+3. If the previous character was used as part of an operator and the current
+character cannot be used with the previous characters to form an operator, the
+operator containing the previous character shall be delimited.
+»*/
+	else{
+		toks.push(cur_tok);
+		cur_tok = {type: "op", val: ch, spaceBefore: (prev_ch && prev_ch === " ")};
+	}
+}/*»*/
+else if (!ch.escaped && ch=="\\"){/*«*/
+
+/*«Start quoting with: \, ', ", or $'
+4. If the current character is an unquoted <backslash>, single-quote, or
+double-quote or is the first character of an unquoted <dollar-sign>
+single-quote sequence, it shall affect quoting for subsequent characters up to
+the end of the quoted text. The rules for quoting are as described in 2.2
+Quoting . During token recognition no substitutions shall be actually
+performed, and the result token shall contain exactly the characters that
+appear in the input unmodified, including any embedded or enclosing quotes or
+substitution operators, between the start and the end of the quoted text. The
+token shall not be delimited by the end of the quoted field.
+»*/
+/*«Backquotes and $, ${...}, $(...), and $((...))
+5. If the current character is an unquoted '$' or '`', the shell shall identify
+the start of any candidates for parameter expansion ( 2.6.2 Parameter Expansion
+), command substitution ( 2.6.3 Command Substitution ), or arithmetic expansion
+( 2.6.4 Arithmetic Expansion ) from their introductory unquoted character
+sequences: '$' or "${", "$(" or '`', and "$((", respectively. The shell shall
+read sufficient input to determine the end of the unit to be expanded (as
+explained in the cited sections). While processing the characters, if instances
+of expansions or quoting are found nested within the substitution, the shell
+shall recursively process them in the manner specified for the construct that
+is found. For "$(" and '`' only, if instances of io_here tokens are found
+nested within the substitution, they shall be parsed according to the rules of
+2.7.4 Here-Document ; if the terminating ')' or '`' of the substitution occurs
+before the NEWLINE token marking the start of the here-document, the behavior
+is unspecified. The characters found from the beginning of the substitution to
+its end, allowing for any recursion necessary to recognize embedded constructs,
+shall be included unmodified in the result token, including any embedded or
+enclosing substitution operators or quotes. The token shall not be delimited by
+the end of the substitution.
+»*/
+
+	if (i===command_arr.length-1) {
+cwarn("Line continuation...");
+		term.continue(command_str.slice(0, command_str.length-1));
+		return;
+	}
+	else{
+		let esc_ch = new String(next1);
+		esc_ch.escaped = true;
+		command_arr[i+1] = esc_ch;
+		command_arr.splice(i, 1);
+		i--;
+	}
+}/*»*/
+else if (!ch.escaped && (ch.match(/[\x22\x27\x60]/) || (ch==="$" && next1 && next1.match(/[\x27\x28\x7B]/)))){/*«*/
+	let ds;
+	let usech;
+	let find;
+	let slice_from;
+	if (ch==='$') {
+		ds='$';
+		usech = next1;
+		if (next1=="'") find="'";
+		else if (next1=="(") find=")";
+		else find="}";
+		slice_from = i+2;
+	}
+	else {
+		ds='';
+		usech = ch;
+		if (ch=="(") find = ")";
+		else find = ch;
+		slice_from = i+1;
+	}
+
+	let rv = get_string(find, command_arr.slice(slice_from), ch=="'");
+	if (rv===null){
+		term.continue(command_str+"\n");
+		return;
+	}
+	let str = ds+usech+rv;
+	if (cur_tok){
+		if (cur_tok.type=="op"){
+			toks.push(cur_tok);
+			cur_tok={type: "word", val: str};
+		}
+		else cur_tok.val+=str;
+	}
+	else{
+		cur_tok={type: "word", val: str};
+	}
+	i+=rv.length;
+	if (ch=="$") i++;
+}/*»*/
+else if (!ch.escaped && operator_chars.includes(ch)){/*«*/
+/*«If unquoted first operator char, delimit the current token (if any)
+6. If the current character is not quoted and can be used as the first
+character of a new operator, the current token (if any) shall be delimited. The
+current character shall be used as the beginning of the next (operator) token.
+»*/
+	if (cur_tok) toks.push(cur_tok);
+	cur_tok = {type: "op", val: ch, spaceBefore: (prev_ch && prev_ch === " ")};
+}/*»*/
+else if (!ch.escaped && (ch==" " || ch=="\t")){/*«*/
+/*«If unquoted blank, delimit previous token
+7. If the current character is an unquoted <blank>, any token containing the
+previous character is delimited and the current character shall be discarded.
+»*/
+	if (cur_tok){
+		toks.push(cur_tok);
+		cur_tok = null;
+	}
+}/*»*/
+else if (cur_tok && cur_tok.type=="word"){/*«*/
+/*«Add word char to previous word
+8. If the previous character was part of a word, the current character shall be
+appended to that word.
+»*/
+	cur_tok.val+=ch;
+}/*»*/
+else if (!ch.escaped && ch == "#" && (prev_ch===false || (!prev_ch.escaped && prev_ch==" "))){/*«*/
+/*«Ignore everything after unquoted # (up to the next newline)
+9. If the current character is a '#', it and all subsequent characters up to,
+but excluding, the next <newline> shall be discarded as a comment. The
+<newline> that ends the line is not considered part of the comment.
+»*/
+	if (cur_tok) {
+		toks.push(cur_tok);
+	}
+	break;
+}/*»*/
+else {/*«*/
+/*«Start new word with the current char.
+10. The current character is used as the start of a new word.
+»*/
+	if (cur_tok) toks.push(cur_tok);
+	cur_tok = {type: "word", val: ch};
+}/*»*/
+prev_ch = ch;
+
+}
+
+if (cur_tok) toks.push(cur_tok);
+
+//»
+//«Heredocs
+{
+
+const HEREDOC_PROMPT = "> ";
+const HEREDOC_PROMPT_LEN = HEREDOC_PROMPT.length;
+let didone = false;
+
+for (let i=0; i < toks.length; i++){
+	let tok = toks[i];
+	let next_tok = toks[i+1];
+	if (tok.type=="op"&&tok.val=="<<"){
+		if (!next_tok) return sherr("syntax error near unexpected token 'newline'");
+		if (next_tok.type=="op") return sherr(`syntax error near unexpected token '${next_tok.val}'`);
+		else {
+			let find = next_tok.val;
+			if (find.match("\n")){
+				return sherr(`unexpected newline inside of heredoc delimiter`);
+			}
+			let heredoc = [];
+			let line = await term.read_line(HEREDOC_PROMPT);
+			while(true){
+				if (didone) line = line.slice(HEREDOC_PROMPT_LEN)
+				didone=true;
+				if (line==find) {
+					break;
+				}
+				heredoc.push(line);
+				line = await term.read_line("> ");
+			}
+			toks.splice(i, 2, {type: "heredoc", val: heredoc});
+			i--;
+		}
+	}
+}
+
+}
+//»
+/*«Redirs*/
+const OK_REDIRS=[">","<",">>"];
+for (let i=0; i < toks.length; i++){
+	let tok = toks[i];
+	let val = tok.val;
+	let next_tok = toks[i+1];
+	if (tok.type==="op" && val.match(/[<>]/)){
+		if(tok.spaceBefore===false && i > 0){
+			let prev = toks[i-1].val;
+			if (prev.match(/^[0-9]+$/)) return sherr(`unsupported redirection operation: '${prev}${val}'`);
+		}
+		if (!OK_REDIRS.includes(val)) return sherr(`unsupported redirect operator '${val}'`);
+		if (!next_tok){
+			return sherr("syntax error near unexpected token 'newline'");
+		}
+		let typ = next_tok.type;
+		let nval = next_tok.val;
+		if (typ==="op") return sherr(`syntax error near unexpected token '${nval}'`);
+		if (typ==="heredoc") return sherr(`syntax error near unexpected token '<<'`);
+		if (typ!=="word") throw new Error(`Unknown token type: ${typ}`);
+		toks[i] = {type: "redir", val: [val, nval]};
+		toks.splice(i+1, 1);
+		i--;
+	}
+}
+/*»*/
+/*«Simple commands*/
+const RESERVED_WORDS=[/*«*/
+	"!",
+	"{",
+	"}",
+	"case",
+	"do",
+	"done",
+	"elif",
+	"else",
+	"esac",
+	"fi",
+	"for",
+	"if",
+	"in",
+	"then",
+	"until",
+	"while"
+];/*»*/
+
+for (let i=0; i < toks.length; i++){
+	let toki = toks[i];
+	let val = toki.val;
+	let simp;
+	if (toki.type==="word" && !RESERVED_WORDS.includes(val)){
+		simp = [toki];
+		if (i===toks.length-1){
+			toks.splice(i, 1, {type: "simple", val: simp});
+			break;
+		}
+		for (let j=i+1; j < toks.length; j++){
+			let tokj = toks[j];
+			let tokjtyp = tokj.type;
+			if (tokjtyp==="word"||tokjtyp==="redir"||tokjtyp==="heredoc"){
+				simp.push(tokj);
+				toks.splice(j, 1);
+				j--;
+			}
+			else{
+				toks.splice(i, 1, {type: "simple", val: simp});
+				simp = null;
+				break;
+			}
+		}
+	}
+	if (simp) toks[i] = {type: "simple", val: simp};
+}
+/*»*/
+/*«Pipes*/
+/*Allow pipelines and andors to have reserved words as the next thing instead of
+barfing on everything that isn't a simple commend.
+*/
+let pipes=[];
+for (let i=0; i < toks.length; i++){
+	let toki = toks[i];
+	if (toki.type==="simple"){//«
+		let pipe = [toki];
+		for (let j=i+1;j < toks.length;j+=2){
+			let tokj = toks[j];
+			let tokj1 = toks[j+1];
+			if (tokj.type==="op" && tokj.val==="|"){
+				if (!tokj1){
+					term.continue(command_str);
+					return;
+				}
+				if (tokj1.type!=="simple"){
+					unexp(tokj1.val);
+					return;
+				}
+				pipe.push(tokj1);
+				i+=2;
+			}
+			else{
+				break;
+			}
+		}
+		pipes.push({type: "pipe", val: pipe});
+	}//»
+	else {
+		pipes.push(toki);
+	}
+}
+/*»*/
+/*«And/Or's*/
+let andors=[];
+for (let i=0; i < pipes.length; i++){
+	let toki = pipes[i];
+	if (toki.type==="pipe"){//«
+		let andor = [toki];
+		for (let j=i+1;j < pipes.length;j+=2){
+			let tokj = pipes[j];
+			let tokj1 = pipes[j+1];
+			if (tokj.type==="op" && (tokj.val==="||"||tokj.val==="&&")){
+				if (!tokj1){
+					term.continue(command_str);
+					return;
+				}
+				if (tokj1.type!=="pipe"){
+					unexp(tokj1.val);
+					return;
+				}
+				tokj1.boolOp = tokj.val;
+				andor.push(tokj1);
+				i+=2;
+			}
+			else{
+				break;
+			}
+		}
+		andors.push({type: "andor", val: andor});
+	}//»
+	else {
+		andors.push(toki);
+	}
+}
+/*»*/
+
+//jlog(andors);
+//log(andors);
+let states=[];
+let state;
+for (let i=0; i < andors.length;i++){
+	let toki=andors[i];
+	if (toki.type==="andor"){
+		let toki1=andors[i+1];
+		if(!state) state=[toki];
+		else state.push(toki);
+		if (!toki1){
+			toki.stateOp=";";
+			states.push({type: "state", val: state});
+			state = undefined;
+			break;
+		}
+		if (toki1.type=="op"&&(toki1.val===";"||toki1.val==="&")){
+			toki.stateOp=toki1.val;
+			i++;
+		}
+		else {
+			if (state){
+				states.push({type: "state", val: state});
+				state = undefined;
+			}
+			states.push(toki);
+		}
+	}
+	else {
+		if (state){
+			states.push({type: "state", val: state});
+			state = undefined;
+		}
+		states.push(toki);
+	}
+}
+if (state){
+	states.push({type: "state", val: state});
+}
+jlog(states);
+log(states);
+
+//Old«
+/*«Statements*/
+/*
+
+
+let states=[];
+let state;
+for (let i=0; i < andors.length; i++){
+	let toki = andors[i];
+	if (toki.type==="word"){
+		states.push(toki);
+		continue;
+	}
+	if (toki.type==="andor"){
+		if (!state) state=[toki];
+		else state.push(toki);
+		state.push(toki);
+		let toki1 = andors[i+1];
+		if (!toki1){
+//			if (!toki.stateOp) toki.stateOp = ";";
+			states.push({type:"state", val: state});
+			state = null;
+			break;
+		}
+		if (toki1.type==="op"&&(toki1.val==="&"||toki1.val===";")){
+			toki.stateOp = toki1.val;
+			i++;
+		}
+	}
+	else if (toki.type==="op"){
+		return unexp(toki.val);
+	}
+}
+if (state) states.push({type: "state", val: state});
+log(states);
+
+
+
+
+
+let states=[];
+for (let i=0; i < andors.length; i++){
+	let toki = andors[i];
+	if (toki.type==="andor"){
+		let state = [toki];
+		let tokj = andors[i+1];
+		if (!tokj){
+			states.push({type: "state", val: state});
+			break;
+		}
+		if (tokj.type==="op"&&(tokj.val===";"||tokj.val==="&")){
+			toki.stateType = tokj.val;
+		}
+		else {
+			states.push({type: "state", val: state});
+			state = [];
+			states.push(tokj);
+		}
+	}
+	else {
+//		states.push(state);
+//		state = [];
+		states.push(toki);
+	}
+
+}
+
+
+
+let states=[];
+for (let i=0; i < andors.length; i++){
+	let toki = andors[i];
+	if (toki.type==="andor"){//«
+		let state = [toki];
+		for (let j=i+1;j < andors.length;j+=2){
+			let tokj = andors[j];
+			let tokj1 = andors[j+1];
+			if (tokj.type==="op" && (tokj.val===";"||tokj.val==="&")){
+				if (!tokj1){
+//					term.continue(command_str);
+//					return;
+					break;
+				}
+				if (tokj1.type!=="andor"){
+					unexp(tokj1.val);
+					return;
+				}
+				tokj1.stateOp = tokj.val;
+				state.push(tokj1);
+				i+=2;
+			}
+			else{
+				break;
+			}
+		}
+		states.push({type: "state", val: state});
+	}//»
+	else {
+		states.push(toki);
+	}
+}
+*/
+/*»*/
+/*«OLD
+
+
+
+let pipes=[];
+for (let i=0; i < toks.length; i++){
+	let toki = toks[i];
+	if (toki.type==="simple"){//«
+		let pipe = [toki];
+		for (let j=i+1; j < toks.length-1; j+=2){
+			let tokj = toks[j];
+			let tokj1 = toks[j+1];
+			if (tokj.type==="op"&&tokj.val==="|"){
+				if (!tokj1){
+					term.continue(command_str);
+					return;
+				}
+				let tokj1typ = tokj1.type;
+				if (tokj1typ==="simple"){
+					pipe.push(tokj1);
+					i+=2;
+				}
+				else if (tokj1typ==="op"){
+					unexp(tokj1.val);
+					return;
+				}
+				else{
+log(tokj1);
+throw new Error(`Unkown token type: '${tokj1typ}'`);
+				}
+			}
+		}
+		pipes.push({type: "pipe", val: pipe});
+	}//»
+	else {
+		pipes.push(toki);
+	}
+}
+
+
+
+
+for (let i=0; i < toks.length; i++){
+	let toki = toks[i];
+	if (toki.type==="simple"){
+		let pipe = [toki];
+		if (i===toks.length-1){
+			toks.splice(i, 1, {type: "pipe", val: pipe});
+			break;
+		}
+		for (let j=i+1; j < toks.length; j+=2){
+			let tokj = toks[j];
+			let tokj1 = toks[j+1];
+			if (tokj.type==="op"&&tokj.val==="|"){
+				if (!tokj1){
+					term.continue(command_str);
+					return;
+				}
+				let tokj1typ = tokj1.type;
+				if (tokj1typ==="simple"){
+					toks.splice(j, 2);
+					j-=2;
+//					i-=2;
+					pipe.push(tokj1);
+//jlog(pipe);
+				}
+				else if (tokj1typ==="op"){
+					unexp(tokj1.val);
+					return;
+				}
+				else{
+log(tokj1);
+throw new Error(`Unkown token type: '${tokj1typ}'`);
+				}
+			}
+		}
+		toks[i]={type: "pipe", val: pipe};
+	}
+}
+»*/
+//»
+//jlog(toks);
+term.break();
+term.response_end();
+
+};//»
+
+};
+
+//»

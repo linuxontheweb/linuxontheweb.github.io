@@ -1,9 +1,8 @@
 
 //Imports«
-import { util, api as capi } from "util";
-import { globals } from "config";
-
-const{strnum, isarr, isstr, isnum, isobj, make, log, jlog, cwarn, cerr}=util;
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const{strNum, isArr, isStr, log, jlog, cwarn, cerr}=util;
 //»
 
 export const mod = function(termobj) {
@@ -33,7 +32,6 @@ let line_select_mode;
 let x=0,y=0,scroll_num=0;
 
 let stat_message;
-let stat_cb;
 let stat_input_mode;
 let stat_com_arr;
 let num_stat_lines = 1;
@@ -71,7 +69,7 @@ const render = () => {//«
 const do_scroll_search=(if_start)=>{//«
 	var strlen = scroll_search_str.length;
 	if (scroll_search_dir==":"){//«
-		let num = strnum(scroll_search_str);
+		let num = strNum(scroll_search_str);
 		if (!okint(num)) {
 			quit();
 			return;
@@ -245,36 +243,15 @@ const onescape=()=>{//«
 	if(got) render();
 	return got;
 };//»
-this.stop_input=()=>{this.stat_input_type=false;less.this.stat_input_type=false;};
-this.set_stat_input_mode=arg=>{this.stat_input_type=arg;x=0;less.this.stat_input_type=arg;};
-this.set_stat_message=arg=>{stat_message=arg;less.stat_message=arg;};
-this.new_stat_com_arr=()=>{stat_com_arr=[];less.stat_com_arr=stat_com_arr;};
-this.key_handler=(sym, e, ispress, code)=>{//«
+this.onkeydown=(e, sym, code)=>{//«
 
-	if (ispress) {//«
-		if (!this.stat_input_type) {
-			if (sym==="q") quit();
-			return;
-		}
-		if (!(code >= 32 && code <= 126)) return;
-		if (stat_com_arr===true) {
-			stat_com_arr = [];
-			return;
-		}
-		stat_com_arr.splice(x, 0, String.fromCharCode(code));
-		x++;
-		render();
-		return;
-	}//»
-	else if (this.stat_input_type) {//«
+	if (this.stat_input_type) {//«
 		if (sym=="ENTER_") {//«
 			scroll_search_dir = this.stat_input_type;
 			this.stat_input_type = false;
 			if (stat_com_arr.length) {
 				scroll_lines_checked = [];
 				line_colors.splice(0,line_colors.length)
-//				line_colors = [];
-//				set_lines();
 				scroll_search_str = stat_com_arr.join("");
 				scroll_pattern_not_found = false;
 				do_scroll_search(true);
@@ -423,6 +400,22 @@ else if (sym=="ENTER_"){//«
 	}//»
 
 }//»
+this.onkeypress=(e, sym, code)=>{//«
+
+	if (!this.stat_input_type) {
+		if (sym==="q") quit();
+		return;
+	}
+	if (!(code >= 32 && code <= 126)) return;
+	if (stat_com_arr===true) {
+		stat_com_arr = [];
+		return;
+	}
+	stat_com_arr.splice(x, 0, String.fromCharCode(code));
+	x++;
+	render();
+
+}//»
 
 //»
 //defineProperty«
@@ -438,7 +431,6 @@ Object.defineProperty(this, "stat_message", {
 //»
 
 this.init = (linesarg, fname, o={})=>{//«
-
 
 let {opts}=o;
 this.command_str = o.command_str;
@@ -491,11 +483,11 @@ return new Promise((Y,N)=>{
 	}
 »*/
 	raw_lines=[];
-	if (isarr(linesarg)) {
+	if (isArr(linesarg)) {
 		let arr = linesarg;
 		for (let i = 0; i < arr.length; i++) raw_lines[i] = arr[i].split("");
 	}
-	else if (isstr(linesarg)) raw_lines = [linesarg.split("")];
+	else if (isStr(linesarg)) raw_lines = [linesarg.split("")];
 	else {
 cwarn("WHAT KINDA LINESARGGGGG");
 log(linesarg);
@@ -518,12 +510,12 @@ lines = [];
 			render();
 			return;
 		}
-		if (isarr(linesarg)) {
+		if (isArr(linesarg)) {
 			for (let i = 0; i < linesarg.length; i++) {
 				lines.push(linesarg[i].split(""));
 			}
 		}
-		else if (isstr(linesarg)) lines.push(linesarg.split(""));
+		else if (isStr(linesarg)) lines.push(linesarg.split(""));
 		else {
 cwarn("WHAT KINDA LINESARGGGGG????");
 log(linesarg);

@@ -1,5 +1,6 @@
-import { util, api as capi } from "util";
-const{isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+//import { util, api as capi } from "util";
+const util = LOTW.api.util;
+const{log, jlog, cwarn, cerr}=util;
 
 export const mod = function (){//«
 

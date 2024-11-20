@@ -26,9 +26,11 @@ const com_what = async(args, opts){
 
 */
 //«
-import { util, api as capi } from "util";
-import { globals } from "config";
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const{isStr, log, jlog, cwarn, cerr}=util;
 const{NS, fs}=globals;
 const fsapi = fs.api;
 const {normPath}=capi;
@@ -46,11 +48,11 @@ const TERM_ERR = 1;
 //Util«
 
 const term_error=(term, arg)=>{//«
-    if (isstr(arg)) arg = term.fmt2(arg);
+    if (isStr(arg)) arg = term.fmt2(arg);
     term.response({ERR: arg, NOEND: true});
 };//»
 const term_out=(term, arg)=>{//«
-    if (isstr(arg)) arg = term.fmt(arg);
+    if (isStr(arg)) arg = term.fmt(arg);
     term.response({SUCC: arg, NOEND: true});
 };//»
 
@@ -70,7 +72,7 @@ const validate_out_path = async(outpath)=>{//«
 
 const com_walt = async (args, opts) => {//«
     let {term}=opts; 
-	let walt = (await capi.getMod("util.walt")).Walt;
+	let walt = (await util.getMod("util.walt")).Walt;
 	let out;
 	if (!args.length) return {err:"Need a filename"};
 	let name = args.shift();
@@ -118,7 +120,7 @@ let werr = OUT;
 let woutarr = (arg)=>{
 log(arg.join("\n"));
 };
-let mod = await capi.getMod("wasmparser");
+let mod = await util.getMod("wasmparser");
 log(mod);
 let parser = new mod.parser(bytes, {termobj: term, wout, werr, woutarr});
 log(parser);
@@ -177,7 +179,7 @@ let outname = args.shift();
 if (!outname) return terr("No outname given");
 let out_path = normPath(outname, term.cur_dir);
 let okay_rv = await validate_out_path(out_path);
-if (isstr(okay_rv)) return terr(okay_rv);
+if (isStr(okay_rv)) return terr(okay_rv);
 outname = out_path.split("/").pop();
 
 let interval;
@@ -191,8 +193,8 @@ term.kill_register(()=>{//«
 		let blob = new Blob(recordedChunks, {
 			type: "video/webm"
 		});
-		let mod = await capi.getMod("webmparser");
-		let bytes = await capi.toBytes(blob);
+		let mod = await util.getMod("webmparser");
+		let bytes = await util.toBytes(blob);
 		let rv = await mod.coms.remux(term, bytes);
 		await fsapi.writeFile(out_path, rv);
 
@@ -200,7 +202,7 @@ term.kill_register(()=>{//«
 //		let rv = mod.coms.parse(term, bytes);
 //log(rv);
 //		fsapi.writeFile(out_path, blob);
-//		capi.download(blob, outname);
+//		util.download(blob, outname);
 		Y();
 	},500);
 });//»
@@ -234,7 +236,7 @@ return new Promise(async(Y,N)=>{
 const terr=(arg)=>{term_error(term, arg);Y();};
 
 term.kill_register(Y);
-let mod = await capi.getMod("webmparser");
+let mod = await util.getMod("webmparser");
 if (!args.length) return terr("Need a filename");
 let name = args.shift();
 let node = await pathToNode(normPath(name, term.cur_dir));
@@ -244,7 +246,7 @@ let outname = args.shift();
 if (!outname) return terr("No outname given");
 let outpath = normPath(outname, term.cur_dir);
 let okay_path = await validate_out_path(outpath);
-if (isstr(okay_path)) return terr(okay_path);
+if (isStr(okay_path)) return terr(okay_path);
 
 let bytes = await node.bytes;
 
@@ -282,7 +284,7 @@ const toint = (arr, if_cp) => {//«
 }//»
 	const terr=(arg)=>{term_error(term, arg);return TERM_ERR;};
 	const tout=(arg)=>{term_out(term, arg);return TERM_OK;};
-	let mod = await capi.getMod("webmparser");
+	let mod = await util.getMod("webmparser");
 	let tags = mod.WebmTags;
 	let segtags = tags.kids["18538067"];
 	let parse = mod.parse_section_flat;
@@ -339,7 +341,7 @@ while (args.length) {
 		else if (which.match(/^INFO:/)) info_bytes = bytes;
 		else if (which.match(/^TRACKS:/)) {
 			let gottracks = bytes._bytes;
-			let sum = await capi.sha1(gottracks);
+			let sum = await util.sha1(gottracks);
 			if (!cur_tracks_checksum) {
 				cur_tracks_checksum = sum;
 				tracks = gottracks;

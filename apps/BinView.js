@@ -1,5 +1,7 @@
-import { util, api as capi } from "util";
-import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+//import { util, api as capi } from "util";
+//import { globals } from "config";
 const{NS}=globals;
 const{log,cwarn,cerr, make, mkdv}=util;
 

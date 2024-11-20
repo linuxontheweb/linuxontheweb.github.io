@@ -1,9 +1,11 @@
 //Imports«
 
-import { util, api as capi } from "util";
-import { globals } from "config";
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 const { NS } =globals;
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+const{log, jlog, cwarn, cerr}=util;
 const fs = NS.api.fs;
 
 //»

@@ -1,9 +1,11 @@
 
 //YTEOPNBSKB <--dr_mario.nes Causes this error!
-import { util, api as capi } from "util";
-import {globals} from "config";
-const {lowToHigh} = capi;
-const{ log, jlog, cwarn, cerr, isstr, isnum, make, mk, mkdv} = util;
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+//const {lowToHigh} = capi;
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv, lowToHigh} = util;
 export const mod = function(Core) {
 
 

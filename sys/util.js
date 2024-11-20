@@ -7,11 +7,10 @@ const {//«
 	APPICONS,
 //	DEF_APP,
 	NS,
-	KC
+	KC,
+	EOF
 }=globals;
 //»
-
-//API«
 
 //Logging«
 const trace = (args,num) => {//«
@@ -252,9 +251,6 @@ const copyarea=mk('textarea');
 
 const gbid=id=>{return document.getElementById(id);};
 
-export const api = (()=>{
-
-
 const rand = (min,max)=>(Math.floor(Math.random()*(max-min+1))+min);
 const strToBuf=s=>{return blobToBuf(new Blob([s],{type:"text/plain"}));};
 const isStr=arg=>{return typeof arg==="string" || arg instanceof String;};
@@ -274,11 +270,11 @@ const blobToStr=b=>{return new Promise(async(Y,N)=>{Y(bufToStr(await blobToBuf(b
 const bytesToStr=bytearg=>{let bytes2str=(bytes)=>{let arr=[];for(let i=0;i<bytes.length;i++)arr[i]=String.fromCharCode(bytes[i]);return arr.join("");};if(bytearg instanceof ArrayBuffer){let tmp=new Uint8Array(bytearg);bytearg=tmp;}if(bytearg.buffer){try{var decoder=new TextDecoder('utf-8');var view=new DataView(bytearg.buffer);return decoder.decode(view);}catch(e){return bytes2str(bytearg);}}else if(typeof bytearg==="string")return bytearg;};
 const toStr=dat=>{if(typeof dat==="string" || dat instanceof String)return dat;if(dat instanceof ArrayBuffer || dat.buffer instanceof ArrayBuffer)return bytesToStr(dat);if(dat instanceof Blob)return blobToStr(dat);try{return dat.toString();}catch(e){}console.error("Unknown object in to capi.toStr");};
 const sharedStart=(array)=>{
-let A= array.concat().sort(), 
-a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
-while(i<L && a1.charAt(i)=== a2.charAt(i)) i++;
-return a1.substring(0, i);
-}
+	let A= array.concat().sort(), 
+	a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
+	while(i<L && a1.charAt(i)=== a2.charAt(i)) i++;
+	return a1.substring(0, i);
+};
 const linesToParas = lns => {//«
 	let paras = [];
 	let curln = "";
@@ -298,8 +294,10 @@ const linesToParas = lns => {//«
 	if (curln) paras.push(curln);
 	return paras;
 }//»
+export const util = (()=>{//«
+
 return {
-//This turns an arbitrarily deep folder of folders and '.js' files into a list of dotted names
+isEOF:arg=>arg===EOF,
 getList: async(path)=>{//«
 	if (globals.lists[path]) {
 		return globals.lists[path];
@@ -471,13 +469,13 @@ cwarn,
 cerr,
 kc,
 gbid:gbid,
-}
-})();
-
-//»
-
-export const util = (()=>{//«
-return {
+detectClick:()=>{
+cwarn("NO detectClick");
+},
+detectSwipe:()=>{
+cwarn("NO detectSwipe");
+},
+/*
 sleep:api.sleep,
 log:api.log,
 wrn:api.wrn,
@@ -517,14 +515,17 @@ clear:api.clear,
 //winh:api.winh,
 noprop:api.noprop,
 center:api.center
+*/
 }
 
 })();
+NS.api.util = util;
 //globals.util=util;
 //»
+NS.api.util = util;
 
-NS.api.util = api;
-globals.api.util = api;
+//NS.api.util = api;
+//globals.api.util = api;
 
 /*Old/Unused«
 

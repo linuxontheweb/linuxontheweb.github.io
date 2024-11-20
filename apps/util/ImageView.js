@@ -1,5 +1,7 @@
-import { util, api as capi } from "util";
-import { globals } from "config";
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 
 export const app = function(Win, Desk) {
 
@@ -65,7 +67,7 @@ const setimg=()=>{
     Main._add(img);
     let nm = kids[iter];
 	let kid = DIRKIDS[nm];
-    let url = capi.fsUrl(`/blobs/${kid.blobId}`);
+    let url = util.fsUrl(`/blobs/${kid.blobId}`);
     topwin.title=kid.baseName;
     img.src=url;
 };

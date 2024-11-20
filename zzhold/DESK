@@ -1,0 +1,74 @@
+//Old/Unused«
+//Touch (Unused)«
+
+/*
+let TCH1;
+let TCH2;
+let TRIPLE_TOUCH_MS = 333;
+const init_touch_listeners=()=>{//«
+
+//Triple touch-click to toggle system fullscreen
+document.body.addEventListener('touchstart',e=>{//«
+	let t = e.touches[0];
+	t.timestamp = Date.now();
+	if (!TCH1) {
+		TCH1 = t;
+		return;
+	}
+	if (!TCH2){
+		if ((Date.now() - TCH1.timestamp) > TRIPLE_TOUCH_MS){
+			TCH1 = t;
+			return;
+		}
+		TCH2 = t;
+		return;
+	}
+	if ((Date.now() - TCH2.timestamp) > TRIPLE_TOUCH_MS){
+		TCH1 = t;
+		TCH2 = null;
+		return;
+	}
+	TCH1=TCH2=null;
+	toggle_fullscreen();
+});//»
+
+//Mobile way of cycling the windows
+capi.detectSwipe(document.body,dir=>{//«
+	if (!CWIN) return;
+	if (dir=="left"){
+		CWIN.close();
+		return;
+	}
+	if (dir !=="right") return;
+	let wins = get_active_windows();
+	if (wins.length<2) return;
+	let ind = wins.indexOf(CWIN);
+	ind++;
+	if (ind==wins.length) ind=0;
+	wins[ind].on();
+});//»
+
+desk.addEventListener('touchmove',e=>{//«
+e.preventDefault();
+});//»
+
+document.onfullscreenchange=e=>{//«
+	setTimeout(()=>{
+		fit_all_windows();
+	},1000);
+}//»
+screen.orientation.onchange=(e)=>{//«
+	setTimeout(()=>{
+		fit_all_windows();
+	},500);
+};//»
+detectClick(document.body, 666, ()=>{//«
+	toggle_show_windows();
+	if (windows_showing) fit_all_windows();
+});//»
+
+};//»
+*/
+
+//»
+//»

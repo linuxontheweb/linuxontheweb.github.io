@@ -1,9 +1,11 @@
 //@GJSKEOMFKS <--- CHANGE IT TO if (isMobile){...}
 //Imports«
-import { util, api as capi } from "util";
-import {globals} from "config";
-const {detectClick, sharedStart, dist}=capi; 
-const{strnum, isarr, isstr, isnum, isobj, make, KC, kc, log, jlog, cwarn, cerr}=util;
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
+//const {detectClick, sharedStart, dist}=capi; 
+const{detectClick,sharedStart,dist,make,KC,kc,log,jlog,cwarn,cerr}=util;
 const {fs, FS_TYPE, NS, isMobile}=globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
@@ -429,7 +431,7 @@ const getkids = async(patharg)=>{//«
 				Main.scrollTop = 0;
 				getkids(`${kid.fullpath}/blah`);
 			};
-			capi.detectClick(d, 175, click_fn);
+			util.detectClick(d, 175, click_fn);
 //			d.addEventListener('touchend',click_fn);
 			d.addEventListener('click', click_fn);
 			d._fw="bold";
@@ -443,7 +445,7 @@ const getkids = async(patharg)=>{//«
 //				vid._del();
 				curdiv._stop();
 				d._tcol="#fff";
-				load_file({node: kid, url: capi.fsUrl(`/blobs/${kid.blobId}`), noGet: true});
+				load_file({node: kid, url: util.fsUrl(`/blobs/${kid.blobId}`), noGet: true});
 				box._w = 0;
 				curdiv = wrap;
 				listdiv._dis="none";
@@ -565,7 +567,7 @@ const setvid=()=>{//«
 	vid._del();
 	let nm = kids[iter];
 	let node = DIRKIDS[nm];
-	let url = capi.fsUrl(`/blobs/${node.blobId}`);
+	let url = util.fsUrl(`/blobs/${node.blobId}`);
 	topwin.title=yt_clean(node.baseName);
 	load_file({node, url, noGet: true});
 };//»

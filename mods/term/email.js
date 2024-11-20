@@ -1,5 +1,5 @@
 
-/*
+/*«
 
 Put a database in here and call db.close inside of quit() @DLKUITPEU
 For now, this is just for receiving, so we want these indexes:
@@ -25,7 +25,7 @@ The message objects will be:
 //	repTo: <string>, // backward pointer to message that was replied to
 }
 
-*/
+»*/
 /*«
 
 1) Create an option for the "email" command that takes an "adduser" argument in order to automatically
@@ -59,8 +59,10 @@ But what about the uid's? Maybe use those as the primary keys.
 
 //Imports«
 
-import { util, api as capi } from "util";
-import { globals } from "config";
+//import { util, api as capi } from "util";
+//import { globals } from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 
 const {fs, APPDATA_PATH} = globals;
 const MAILDATA_PATH = `${APPDATA_PATH}/mail`;
@@ -72,7 +74,7 @@ const CURUSER_FILE = `${MAILDATA_PATH}/curuser`;
 
 const {mkDir, mkFile} = fs.api;
 
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+const{isStr, isNum, isObj, log, jlog, cwarn, cerr}=util;
 
 //»
 
@@ -305,33 +307,30 @@ const unknown = (which) => {
 //»
 //Obj/CB«
 
-this.key_handler=(sym, e, ispress, code)=>{//«
+this.onkeypress=(e, sym, code)=>{//«
 
 /*In here we can put in stuff to invoke vim or less submodes (seeing if we can hack them
 both to serve our needs).
 */
 
 	let am = active_menu;
-	if (ispress) {//«
 
-if (am===MAIN_MENU){
-	if (sym==="1") set_screen(COMPOSE_MENU);
-	else if (sym==="6") set_screen(ADMINISTER_MENU);
-	else if (sym==="0") quit();
-	else unknown(sym);
-}
-else if (am===COMPOSE_MENU){
-	if (sym==="0") set_screen(MAIN_MENU);
-	else unknown(sym);
-}
-else if (am===ADMINISTER_MENU){
-	if (sym==="0") set_screen(MAIN_MENU);
-	else unknown(sym);
-}
+	if (am===MAIN_MENU){
+		if (sym==="1") set_screen(COMPOSE_MENU);
+		else if (sym==="6") set_screen(ADMINISTER_MENU);
+		else if (sym==="0") quit();
+		else unknown(sym);
+	}
+	else if (am===COMPOSE_MENU){
+		if (sym==="0") set_screen(MAIN_MENU);
+		else unknown(sym);
+	}
+	else if (am===ADMINISTER_MENU){
+		if (sym==="0") set_screen(MAIN_MENU);
+		else unknown(sym);
+	}
 
-		if (!(code >= 32 && code <= 126)) return;
-		return;
-	}//»
+	if (!(code >= 32 && code <= 126)) return;
 
 }//»
 
@@ -352,7 +351,7 @@ this.command_str = o.command_str;
 
 return new Promise(async(Y,N)=>{
 
-	if (!(address&&isstr(address))){
+	if (!(address&&isStr(address))){
 		Y("init() called without a valid address!");
 		return;
 	}
@@ -372,7 +371,7 @@ log("Making DBVERS_FILE...");
 	}
 	let db_vers_data = await dbvers_node.getValue();
 	if (!db_vers_data) return Y(`Could not get the data from DBVERS_FILE (${DBVERS_FILE})`);
-	if (!(isobj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+	if (!(isObj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
 		return Y(`Invalid data returned from DBVERS_FILE (${DBVERS_FILE})`);
 	}
 	let db_vers = db_vers_data.value;

@@ -1,0 +1,511 @@
+/*Ummm, like its 10/31/24, and I, like, um, pressed the 'l' key in "normal mode", and like
+some wonky shit appeared to happened. It turns out that I had toggled something called
+"line wrap mode", which put a '-- LINE WRAP --' at the bottom of the screen, and I 
+totally drew a blank as to what I was supposed to be looking at. What its supposed to
+do is to use the entire screen just to display the line that you are currently on, by
+doing hard wraps on it. Pressing enter only enters the changes that you made, and then
+brings you back into "normal mode". BUT WHEN YOU PUT TABS INTO THE LINE, AND ENTER THEM
+IN, THE UNDO FUNCTION IS SCREWED UP (it got fixed at TWKITUIYP, by changing the origsym
+from "TAB_" to "\t", which then goes into the Action object).
+*/
+/*Invoking vim and then quitting with Ctrl-x then makes Alt-x (for closing the terminal) not 
+work anymore.*/
+//Notes«
+
+/*«Horizontal scrolling
+Now we have: scroll_screen_to_cursor.
+
+Call: await check_cursor() in order to test if the cursor is visible on the screen.
+Using this together with Term.x_scroll_terminal can automatically scroll the cursor
+into view if it goes offscreen. It is important to realize that the cursor DOM object
+is regenerated during every render cycle, so it cannot be tracked through time. 
+So, the check_cursor function has to call document.getElementById during every 
+invocation. One may devise a setTimeout scheme...
+
+»*/
+
+//Want a hotkey to automatically line select a contiguous block of non-whitespace lines.
+//Now have: v_CAS: init_auto_visual_line_mode
+
+/*text_input_func is a function that will be called with the editor's string contents
+A window's application must define an ontextinput method. The window's id is given on 
+the CLI like this:
+~$ vim --on-text-input=<winid> somefile.js
+The function is currently called from test_function (t_CAS)
+*/
+/*
+New functions (that might be screwing things up with print_chars(ins=true)):
+insert_multiline_comment
+insert_line_comments
+*/
+
+/*EKLMJUINH: Trying to figure out how to allow for line appending in LINE_WRAP_MODE
+Solved with the SPACE_C keysym, handled @TSKJLDLJS.
+*/
+
+/*
+Want a way to hold onto the yank buffers that were cut and would be overwritten, in the
+case of another yank (or cut). We can use a way to "scroll back" in the history of the
+buffers, and select it as the current one (bringing it to the top of the stack).
+Solved by way of init_cut_buffer_mode
+*/
+
+//@NFUYWKJGH: Want to allow the removal of blocks at the same time as the insertion
+//of the newlines that were used as padding at the bottom of the file...
+
+/*Okay, Okay, Okay, Okay«
+
+For all of the visual deleting types, we call open_all_sel_folds. So when redoing
+these, we need to call open_folds_in_line_range() for the length of the
+change, like @QLKMNYUHY. The question is if this is also is necessary for
+undoing a positive, like @XKJMNHGY.
+
+»*/
+
+/*	!!!   VERY VERY IMPORTANT MESSAGES   !!!«
+
+1) Manifest lesson @UEJKMNUYJ: WHENEVER Y IS CHANGED, RY *****MUST***** BE UPDATED
+WITH SET_RY!!! FAILURE TO DO THIS CAN CAUSE MYRIAD SILENT STUPID BUGS!!! THIS
+ALSO GOES FOR CHANGING SCROLL_NUM!
+
+2) NEED TO ENSURE THAT ALL OF THE MODES @WKOIPUHN ARE ACTUALLY BEING SET RATHER THAN 
+JUST BEING SILENTLY COMPARED!!!!!
+
+»*/
+
+//TWO TALES OF VERY COVERT BUGS BASED ON 
+//CDKLOPOE: VERY HARD TO TRACE BUG CREPT IN HERE
+//XMJKUYHGT: A TALE OF DEALING WITH THE INNER DETAILS OF SCROLLING
+
+//ZMKLOPIJH: For every Action, there is an equal and opposite 'undos=[]' 
+//Otherwise, the state gets messed up, so check to make sure we're always emptying the undos
+/*Errors:
+*/
+/*Mode errors:
+MDOPILKL
+*/
+
+
+/*For do_uppercase, can we just do a lines-type delete for all types, but just
+change to upper case whatever is inside...
+*/
+//Block delete and undo/redo seems wonky...
+/*@IKLMDGTY: Here we are redoing a marker delete. Need to make sure that the
+other side of this operation in undo works...
+*/
+
+//@MKJHYNJ: Need to test if this needs to wrap?
+//@XJKUIOTL: Always need to set_ry() after switching back to the lines array!!!
+
+/*«Ctrl+p = tab completion
+
+As an optional argument for vim, we can pass in a "symbol file" that allows
+for a certain kind of symbol mode. 
+How about just doing a scroll screen?
+Now we have SYMBOL_MODE, which just uses all of the non-quote/comment tokens that
+are > MIN_WORD_LEN in length.
+By using a symbol file option, we can just parse that...
+
+»*/
+/*New Undo/Redo theory:«
+
+When we do a "special operation" (such as prepend_space), which happens
+on multiple lines, we can set a flag on the changes that signals that they can
+all be undone/redone at one shot. We just created Scroll_to_line_range(from, nlines)
+in order to allow us to *know for certain* that an entire block of lines is free 
+of folds.
+
+Want the undo and redo functions to be logical interfaces into the functions
+that handle the actual changes (invoking print_ch and enter in their
+'non-action' ways). These interfaces will contain the algorithms that determine
+whether/how many undos/redos should be done at a time. It is this kind
+of logical chaining of undos/redos that leads to so many errors.
+
+»*/
+/*Syntax highlighting is disabled:«
+
+There is nothing worse when vim incorrectly highlights everything as multi-line
+comments, and requires a procedure of opening all folds and paging down
+through the entire file.
+
+Syntax highlighting is actually a (very poor man's) debugger, but it has become
+so pervasive that one feels that something is fundamentally wrong with one's
+program when it isn't always highlighted in the way that one expects.
+
+The syntax subsystem should be more generic than the way it was done here (i.e.
+javascript/json only).
+
+»*/
+/*!!!   NEED TO RESET UNDO's FOR CERTAIN STATE CHANGING FUNCTIONS   !!!«
+
+WE JUST SEARCHED FOR EVERY ACTIONS.PUSH(...), AND THEN SET UNDOS=[], THERE!
+
+Need to find ALL of the state changers in order to set 'undos=[]' like in: 
+@EPOKMJUYT 
+@AMJKTUIEP
+Many of these are KEY_CHAR_FUNCS (@GMKOLIUYE), invoked @TNBHGJKSD
+Other state changes happen in "command mode", like Search_and_Replace.
+This is necessary to keep the undos/actions arrays consistent.
+
+@SPLOMGHYT: WE NEEDED TO CHECK FOR THE DEGENERATE CASE WHERE THERE IS NOTHING
+LEFT IN THE FILE, SO THAT THE LENS ARRAY IS NOT UNDEFINED AT THE FIRST SLOT.
+
+@WIJKFLPIT: It was WRONG TO INSERT THE YANK_BUFFER LIKE THAT!!!
+IS THERE ANYTHING ELSE THAT HAS ANYTHING LIKE THAT?????
+
+»*/
+/*Undo/Redo«
+UNTIL THIS *****STUPID***** PROGRAM CAN BE SUFFICIENTLY MATURE ENOUGH
+TO HANDLE FULLY AUTOMATED UNDO/REDO, DO NOT DO WHAT IS AT @GRELKMOPO
+
+THERE IS A FUNDAMENTAL PROBLEM HERE WITH THE CONCEPT OF SEQUENCES OF
+UNDO/REDOs THAT ARE ON DIFFERENT LINES, ESPECIALLY WHEN IT COMES TO
+UNDO/REDO'ing ENTERS AND BACKSPACES OF ENTERS!!!
+
+THE y's OF ENTERS ARE RECORDED FROM THE LINE THEY WERE ON WHEN
+THE ENTER KEY WAS PRESSED. SO, UNDO'ing THE ENTER REQUIRES GOING UP
+TO THAT LINE. NOW FIXED @WMKJUITOP!
+
+Start from a new file and do these simple steps:
+1) Enter
+2) Backspace
+3) Keep hitting 'u' to undo back to initial state
+4) Press 'r' and watch it complain @EDPOPLKIUK!
+
+Now do these steps:
+1) Type 'a'
+2) Hit backspace
+3) Type 'u' to try to get the 'a' back
+4) See there is no 'a'!
+
+»*/
+/*«
+
+I CANNOT HANDLE THE JARRING NATURE OF SCROLL_TO WHEN IT IS BEING INVOKED
+FROM UNDO, SUCH THAT THE INITIAL SCROLL_NUM WAS 0, AND THEN IT SCROLLS.
+UPDATED IT @VCJKLOPLF
+
+Now invalidating the syntax colors in real_line_colors[] for:
+- print_ch
+- del_ch
+
+Need to also invalidate colors for marker/block deleting
+
+Need to adjust real_line_colors[] every time we adjust lines[] (via splicing
+in or out in delete_lines or handle_paste).
+
+»*/
+/*FOLD_MARKERS_IN_TERM_WIDTH = false;«
+
+Only fold markers that are within the range of the width of the terminal
+are considered as legitimate. The point is that files are typically used
+EITHER to minimize the number of columns OR to minimize the number of rows.
+Source code is all about the former case and minified/production code
+is all about the latter.
+
+Whenever there are arbitrarily long lines embedded in a source code file,
+there is a chance that fold marker characters will be included somewhere in those
+lines. Also, it takes that much longer to scan very long lines for markers.
+
+»*/
+/*set_ry depends on the values in lens, which is set by set_line_lens.«
+
+The Achilles Heel: Undos/Redos depend the values of x and ry (real y).  If the
+cursor is not on the right line, scroll_to will be called, and undo (here) must
+be called again in order to continue.  But if the value of the global ry is
+actually not correct, the given undo logic may proceed on the incorrect line
+(if chg.y == ry), creating a corrupt/inconsistent file.
+
+	if (!(x==chg.x && ry == chg.y)) {
+		x = chg.x;
+		if (chg.y !== ry){
+			scroll_to(chg.y);
+			undos.push(chg);
+			render();
+			return;
+		}
+	}
+
+»*/
+/*«
+
+When a fold is sitting at the bottom, with a newline above it which is
+X'ed out, it can no longer be unfolded...
+
+@UROPLKMHGBGT: commented out null/empty byte noise
+
+@LBYROPMKHX: THIS IS WHAT I HAVE BEEN MISSING ALL MY LIFE, IN TERMS OF 
+STOPPING ALL THE SCREEN JANK!!!!!!
+
+SCROLL_TO DOESN'T WORK PROPERLY WHEN THERE IS A FOLDED ROW SITTING 
+ON THE BOTTOM OF THE FILE!!! IF THERE IS ANOTHER LINE BETWEEN THE FOLDED
+ROW AND THE BOTTOM OF THE FILE, THEN IT WORKS PROPERLY!!!
+
+at_screen_bottom: just means that y is at the bottom of the screen
+at_file_end: means being at the end of file (y+scroll_num === lines.length-1)
+
+@FGJKUYTEPOI: Why does up() screw up when we are at the top of the file?
+
+Want a way to allow other terminals to
+1) push the current state onto states
+2) get our lines
+3) transform our lines in whatever way
+4) give us back the lines so we can continue to edit them, possibly reverting
+to the previous state if need be.
+
+Seriously: handle_edit_input_enter DOES NOT MAKE ANY SENSE WHEN WE ARE
+TALKING ABOUT BEING IN VIS_LINE_MODE.
+
+»*/
+/*For some reason, this DOESN'T WORK as a way to CLOSE ALL FOLDS!!!«
+
+For example, when starting with a completely unfolded lines array, there are no
+folds that show up other than the top level folds!! Why exactly does the recursion
+that is happening NOT SHOW UP in the final results? The lines.splice @SJUNMRUIO 
+does NOT seem to be working as it OBVIOUSLY SHOULD!!!
+
+const close_folds = lns => {//«
+	let folds = [];
+	if (lns.length < 2) return;
+	for (let i=0; i < lns.length; i++){
+		let ln = lns[i];
+		if (ln && ln._fold){}
+		else if (have_open_fold_marker(ln)) {
+			let f =	_close_fold(lns, i);
+			if (f) folds.push(f);
+		}
+	}
+	for (let f of folds){
+		close_folds(f.slice(1, f.length-1));
+	}
+};//»
+close_folds(lines);
+
+»*/
+
+//»
+
+//Old«
+
+/*//«
+
+
+//const DEF_KEYLOG_PATH = `/home/me/.data/vim/keylog.json`;
+//let keylog_file;
+
+//const SAVE_KEYLOG = false;
+let KEY_LOG = [];
+const SAVE_KEYLOG = true;
+const NO_KEYLOGS = ["g_CAS", "r_AS","u_AS", "x_C", "s_C", "s_CS"];
+const save_keylogs=()=>{//«
+	if (auto_undo_redo_mode) return;
+	if (!SAVE_KEYLOG) return;
+	let usepath
+	if (keylog_file) usepath = capi.normPath(keylog_file, cur_dir);
+	else usepath = DEF_KEYLOG_PATH;
+	let obj = {
+		w: Term.w,
+		h: Term.h,
+		keys: KEY_LOG,
+	};
+	setTimeout(async()=>{
+cwarn(`Using keylog file: ${usepath}`);
+		let rv = await fsapi.saveFsByPath(usepath, JSON.stringify(obj));
+		log(rv.size);
+	},0);
+};//»
+const replay_keylog = (o) => {//«
+	if (!o.keylog_keys) return;
+	keylog_file = o.keylog_file;
+	let keys = o.keylog_keys;
+	let nsteps = o.num_keylog_steps;
+	if (!nsteps) nsteps = keys.length-1;
+cwarn(`Number of keys: ${keys.length} (${nsteps})`);
+	let show_n_prev = 10;
+	let show_from = nsteps - show_n_prev;
+	auto_undo_redo_mode = true;
+//return;
+	for (let i=0; i <= nsteps; i++){
+//if (i>10000){
+//cerr("WHAT IS INFINITE LOOP DOING HERE?");
+//return;
+//}
+		let k = keys[i];
+//log(i, k);
+//		if (i > show_from) log(i, k);
+		if (k.length===1){
+			let code = k.charCodeAt(k);
+			this.key_handler(k, null, true, code);
+		}
+		else{
+			if (k==="ESC") Term.onescape();
+			else this.key_handler(k);
+		}
+	}
+	auto_undo_redo_mode = false;
+	stat_message_type = null;
+	render();
+//log(x, cy(), ry);
+//	KEY_LOG = keys;
+};//»
+
+
+//»*/
+
+//Dumb/Advanced«
+
+/*«
+Keydowns
+w_CAS: init_line_switch_mode,
+e_CAS: try_line_switch,
+
+Init
+meta_app = o.meta_app;
+meta_com_term = o.meta_com_term;
+meta_com_args = o.meta_com_args||"";
+switch_lines_editor = o.switch_lines_editor;
+»*/
+
+/*Switching lines: a stupid old idea«
+
+These allow another vim instance to take our lines array and perform arbitrary
+algorithmic changes to it and give it back to us based on the js code that is
+in that other instance. This is useful because there are certain operations to
+perform that are difficult or impossible (such as arbitrary math opertations)
+with regular expressions.
+
+If we want our lines to be modified, we need to put ourselves in 
+"Waiting...(WINID)" mode, which happens through init_line_switch_mode (w_CAS).
+When the new lines are received, we 
+
+The modifying vim needs to pass '--switch-lns-win=WINID' on the command line,
+and then call try_line_switch (e_CAS), which gets the editor code and eval's
+it. The code being eval'd must call either abort or success with the lines.
+
+let switch_lines_editor;
+const init_line_switch_mode = ()=>{//«
+	let killed = false;
+	sescape(()=>{
+		killed = true;	
+		sleeping = false;
+		stat("Done");
+		delete this.switch_lines;
+	});
+	sleeping = true;
+	save_state();
+	let newlines = get_edit_lines({copy:true});
+	stat_warn(`Waiting... (${Term.numId})`);
+	this.switch_lines=()=>{//«
+		let tok = Math.random();
+		return {
+			lines : newlines,
+			tok: tok,
+			success: (tokarg, linesret) => {
+				if (killed) {
+					return;
+				}
+				delete this.switch_lines;
+				killed = true;
+				if (!(sleeping && tokarg === tok)){
+					sleeping = false;
+cwarn("Not accepting the newlines");
+					stat_warn("Not accepting the newlines");
+					xescape();
+					states.pop();
+					return;
+				}
+				fold_mode = false;
+				zlncols = [];
+				line_colors = [];
+				lines = linesret;
+				Term.set_lines(lines, line_colors);
+				x=0;y=0;scroll_num=0;
+				sleeping = false;
+				render();
+			},
+			abort: ()=>{
+				killed = true;
+				sleeping = false;
+				xescape();
+				states.pop();
+				delete this.switch_lines;
+				stat("Aborted");
+			}
+		}
+	};//»
+}//»
+const try_line_switch = ()=>{//«
+
+	if (!switch_lines_editor){
+		return stat_warn("No switch_lines_editor");
+	}
+	if (!switch_lines_editor.switch_lines){
+		return stat_warn("The switch lines editor is no longer waiting");
+	}
+
+	let o = switch_lines_editor.switch_lines();
+	let tok = o.tok;
+	let lns = o.lines;
+	let succ = o.success;
+	let abort = o.abort;
+
+	let arr = get_edit_save_arr();
+	try{
+		eval(arr[0]);
+	}catch(e){
+cerr(e);
+		stat_err(e.message);
+		return;
+	}
+	stat("Lines switched");
+
+}//»
+
+»*/
+
+/*Meta: executing the js code in the editor as a terminal command or an application«
+let meta_app, meta_com_term, meta_com_args;
+const execute_meta_command=()=>{//«
+	if (meta_com_term){
+		let s = `meta ${edit_fullpath}`;
+		if (meta_com_args) s+=` ${meta_com_args}`;
+		if (!meta_com_term.execute(s)) stat_warn("Could not execute the meta command");
+		else stat_render("OK");
+	}
+	else {
+		if (!(meta_app && !meta_app.killed)) return stat_warn("No active meta app");
+		meta_app.reload();		
+	}
+}//»
+»*/
+
+//»
+
+//»
+
+/*Got rid of all invocations of curln:«
+
+const curln = (if_arr, addy)=>{//«
+	let num = curnum();
+	if (!addy) addy = 0;
+	let ln = lines[y+scroll_num+addy];
+	if (!isarr(ln)) ln = [];
+	if (if_arr) return ln;
+	else {
+		return ln.join("");
+	}
+}//»
+
+..and replaced them with:
+curarr (to get the current line arr)
+curfold (to test whether the current line is a fold)
+curlen (to give the length of the current line)
+
+»*/
+/*!!!   VERY INSIDIOUS BUG BASED ON CALLS TO RENDER, IN THE MIDDLE OF AUTOMATED SCROLLING   !!!
+Here was the call stack:
+scroll_to->open_fold->syntax_multiline_comments->render->maybe_scroll->maybe_scrdown_one
+So then we just put no_render=true at the top of scroll_to, and then no_render=false
+at the bottom, just before the bottom:
+	if (doRender) render();
+*/

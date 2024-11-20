@@ -1,8 +1,7 @@
 //Imports«
 
-const NS = window._OS_;
-const {globals} = NS;
-const {log, cwarn, cerr} = NS.api.util;
+const {globals} = LOTW;
+const {log, cwarn, cerr} = LOTW.api.util;
 
 //»
 

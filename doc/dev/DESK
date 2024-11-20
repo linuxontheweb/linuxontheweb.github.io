@@ -1,0 +1,94 @@
+//Notes«
+/*THIS IS ALL VERY SHITTY, SO JUST SPEND TIME THINKING ABOUT IT AND GETTING IT«
+REASONABLY DEBUGGED, THEN DON'T FUCKING WORRY ABOUT THIS SHITTY ADVANCED FEATURE.
+
+Very, very stupid hacks because of the idea of using vim to edit local
+javascript files that are used for local app developement. There is a hotkey in
+vim for reloading the app windows that are under development. First of all, vim
+"owns" the app window by putting a "owned_by" member on it, so the window
+cannot be closed (via mouse or desktop shortcut) or reloaded via the desktop's
+Alt+r shortcut. Also, the window now has a reload method on it, which is passed
+a callback (from vim.js @FJUSOP) that is called back with the new window object
+(so that vim can have a handle to the new one, since the old one is lost). When
+vim exits cleanly, it deletes the "owned_by" member, so that the window can
+once more be independently closed/reloaded. The app window needs to be raised
+to the top of the stack (as CWIN) in order to be reloaded, and then vim's terminal
+window needs to be raised right after reloading.
+
+How about an owned_by property?
+
+»*/
+/*The concept of local application development://«
+
+1) We save to the local fs.
+	a) Create a url via URL.createObjectURL (portable), using the text of the file
+	b) Create a filesystem:// URL (Chrome only? Would Edge even allow this?)
+
+»*/
+/*Here's the situation: Whenever the icon cursor moves away from an icon«
+on the desktop, the icon's label should hide the overflow of the name, so that only
+one line is showing. Usually, the Window.on method will take care of this @VKUIOKL
+(i.e. when cycling through the window stack). But when we are opening a window, the
+newly created window is already occluding the desktop by the time this is called. So,
+we added in the test @FRUTIOP in open_file_by_path, for whenever the path refers
+to a folder window.
+»*/
+/*@HFYUIOTS: Don't understand why app.onfocus was called by desk_menu.kill_cb. That
+messes up menu functions that call popups which call window.on, which calls app.onfocus.
+*/
+/*Maybe change certain desktop keydown functions from, e.g. m_ to the keypress "m", so
+that toggling windows doesn't mean that the m press event gets sent to a window (like
+the Terminal).
+*/
+/*3 simple changes to enable a (hopefully) seamless icon accounting experience«
+(but it really currently only seems to apply to literally mv'ing icons between
+desktop/folders). The idea is that there can be an arbitrary number of icons
+for each node. These changes allows us to remove all icons from the display
+(except for the one that is being handled by the mouse and controlled by the
+gui) whenever an underlying node's location (parent directory) is being
+changed. This means that we can "talk" directly to each icon's DOM elements
+rather than, e.g. needing to search around for the parent folder windows and 
+querying them for the icon with the given name.
+
+1) In fs.js, added a .icons property to the Node constructor that points to an 
+	empty array.
+2) @CNJPLMYTY (at the end of the Icon constructor): We did node.icons.push(this)
+3) @WMKFTYIOP1 (in move_icon_by_path)://«
+	if (frompath !== topath){
+		while (node.icons.length) node.icons.pop().del();
+	}//»
+4) But 3 was WRONG because it failed to allow for the graceful removal of those//«
+icons that are being actively manipulated by the mouse user, causing them to
+disappear from the interface while the animation moves them to their
+destination folder. So, in fs.js, just before the move_icon_by_path function is
+called (@MDEROPI), we do this:
+
+	if (if_cp) {
+		gotfrom = null;
+	}
+	else if (gotfrom !== gotto){
+		let icons = fent.icons;
+		while (icons.length) {
+			let icn = icons.pop();
+			if (icn === fromicon) {
+				continue;
+			}
+			icn.del();
+		}
+	}
+
+... where fent is just a dumb name for the node, and fromicon is whatever icon
+is being manipulated in the gui.
+
+So hopefully all relevant icons are being accounted for, and those
+icons that are no longer relevant are being gracefully removed.
+//»
+5) But 4 was wrong because gotfrom and gotto included icons that were just
+being renamed, so now have: @WMKFTYIOP2, just after all the non-moving icons
+have been renamed...
+
+...but what about the case in which the icons don't have permission to be moved
+to wherever the user is trying to move them to?
+
+»*/
+//»

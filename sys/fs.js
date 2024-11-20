@@ -60,11 +60,28 @@ targets.
 
 //Imports«
 
-import { util, api as capi } from "./util.js";
-import { globals } from "./config.js";
+//import { util } from "./util.js";
+//import { globals } from "./config.js";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 
-const{log,cwarn,cerr,strnum,isarr,isobj,isnum,isint,isstr}=util;
-const{isEOF,isArr, getNameExt, getFullPath, normPath, toBlob}=capi;
+const {
+	log,
+	cwarn,
+	cerr,
+	strNum,
+	isArr,
+	isObj,
+	isNum,
+	isInt,
+	isStr,
+	isEOF,
+//	isArr,
+	getNameExt,
+	getFullPath,
+	normPath,
+	toBlob
+} = util;
 
 const sleep=()=>{return new Promise((Y,N)=>{});}
 
@@ -85,7 +102,7 @@ const {
 	ALL_EXTENSIONS_RE
 } = globals;
 
-const ispos = arg=>{return isnum(arg,true);}
+const ispos = arg=>{return isNum(arg,true);}
 
 //»
 
@@ -531,7 +548,7 @@ cerr("Could not set node data");
 	};//»
 	this.setValue = async (val, opts={})=>{//«
 		if (this.blobId == IDB_DATA_TYPE){
-			if (!(isobj(val) && isstr(val.type))){
+			if (!(isObj(val) && isStr(val.type))){
 cerr(`Expected an object with a 'type' field! (for inline data storage)`);
 				return;
 			}
@@ -851,7 +868,7 @@ _.toBlob=async function(opts={}){//«
 	if (opts.type) return new Blob([buf], {type: opts.type});
 	return new Blob([buf]);
 };//»
-_.toJSON=async function(opts={}){//«
+_.toJson=async function(opts={}){//«
 	let node = await this.toNode(opts);
 	if (!node) return;
 	let text = await node.text;
@@ -1391,11 +1408,11 @@ this.com_mv = com_mv;
 //»
 const copy_node=async(node, newName, toNode)=>{//«
 	let newpath = `${toNode.fullpath}/${newName}`;
-	if (capi.newPathIsBad(node.fullpath, newpath)) return;
+	if (util.newPathIsBad(node.fullpath, newpath)) return;
 	return saveFsByPath(newpath, await getBlob(node, {binary: true}));
 };//»
 const move_node = async(node, newName, toNode)=>{//«
-	if (capi.newPathIsBad(node.fullpath, `${toNode.fullpath}/${newName}`)) return;
+	if (util.newPathIsBad(node.fullpath, `${toNode.fullpath}/${newName}`)) return;
 	let id = node.id;
 	let par = node.par;
 	let parid = par.id;
@@ -1547,7 +1564,7 @@ const writeNewFile=(path, val, opts = {})=>{//«
 	return writeFile(path, val, opts)
 };//»
 const writeDataFile=(path, val, opts = {})=>{//«
-	if (!(isobj(val) && isstr(val.type))){
+	if (!(isObj(val) && isStr(val.type))){
 cerr(`${path}: Expected an object with a 'type' field! (for inline data storage)`);
 		return;
 	}
@@ -1567,9 +1584,9 @@ if (!node) {
 	let parobj = await pathToNode(parpath);
 	if (!parobj) return [null, `${parpath}: Bad parent path`];
 	node = await touchFile(parobj, fname, opts);
-	let ext = capi.getNameExt(fname)[1];
+	let ext = util.getNameExt(fname)[1];
 	node.ext = ext;
-	node.appName = capi.extToApp(ext);
+	node.appName = util.extToApp(ext);
 }
 else if (opts.data){
 return [null, "Use node.setValue instead of saveFsByPath!"]
@@ -1645,7 +1662,7 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	else {
 		if (opts.data) {
 			let val = opts.data;
-			if (!(isobj(val) && isstr(val.type))){
+			if (!(isObj(val) && isStr(val.type))){
 cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)`);
 				return;
 			}
@@ -1705,7 +1722,7 @@ const mkDir=async(parpatharg, name, opts={})=>{//«
 	if (globals.read_only)return;
 	let if_no_make_icon = opts.noMakeIcon; 
 	let parpath;
-	if (isobj(parpatharg)) parpath = parpatharg.fullpath;
+	if (isObj(parpatharg)) parpath = parpatharg.fullpath;
 	else parpath = parpatharg;
 	if (name===null||name===undefined){
 		let arr = parpath.split("/");
@@ -1769,7 +1786,7 @@ const makeLink=async(parobj, name, target, fullpath)=>{//«
 
 const checkDirPerm=async(path_or_obj,opts={})=>{//«
 	let obj;
-	if (isstr(path_or_obj)){
+	if (isStr(path_or_obj)){
 		obj = await pathToNode(path_or_obj);
 		if (!obj) return Y(false);
 	}
@@ -1906,8 +1923,8 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 		kid.appName=LINK_APP;
 	}
 	else {
-		kid.ext = capi.getNameExt(name)[1];
-		let app = capi.extToApp(name);
+		kid.ext = util.getNameExt(name)[1];
+		let app = util.extToApp(name);
 		kid.appName = app;
 		add_lock_funcs(kid);
 		kid.size = opts.size;
@@ -2107,7 +2124,7 @@ log(text);
 		while (arr.length && !arr[0]) arr.shift();
 
 		let sz_str = arr.shift();
-		let sz = strnum(sz_str);
+		let sz = strNum(sz_str);
 		let ctime;
 		let mtime = arr.shift();
 		let tm;
@@ -2252,7 +2269,7 @@ cerr(`Invalid directory path: ${arg}`);
 	cwd = arg;
 	return ret;
 };//»
-this.set_fsize=(arg)=>{if(!(isint(arg)&& ispos(arg)))return cerr("Need positive integer for fSize");fSize=arg;};
+this.set_fsize=(arg)=>{if(!(isInt(arg)&& ispos(arg)))return cerr("Need positive integer for fSize");fSize=arg;};
 this.set_ext=(arg)=>{if(!(arg&&arg.match(/^[a-z0-9]+$/)))return cerr("Invalid extension given:need /^[a-z0-9]+$/");ext=arg;};
 this.set_filename = (arg, if_force) => {//«
 return new Promise((Y,N)=>{
@@ -2416,7 +2433,7 @@ parts.shift();
 parts.shift();
 parts.shift();
 
-let url = capi.locUrl(fobj.root.port, parts.join("/"));
+let url = util.locUrl(fobj.root.port, parts.join("/"));
 let rv = await fetch(`${url}&getsize=1`);
 if (!rv.ok) return cb();
 let sz = parseInt(await rv.text());
@@ -2488,7 +2505,7 @@ const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
 				if (is_root) return true;
 				return false;
 			}
-			else if (isstr(perm)) {
+			else if (isStr(perm)) {
 				if (is_root) return true;
 //				let checkname = userarg || Core.get_username();
 				let checkname = userarg || globals.CURRENT_USER;
