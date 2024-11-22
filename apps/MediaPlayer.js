@@ -1,12 +1,20 @@
+/*Just using this as a looper, e.g. to take a nice White/Brown noise media file and
+reset the currentTime to zero when the ontimeupdate event shows it to be within 
+'end_secs_before_loop' seconds of the end. Otherwise, merely setting the loop 
+property to 'true' seems to cause a very annoying skip. IT IS DOING AN ANNOYING SKIP
+AFTER 20 or 30 LOOPS!!!
 
+Just fiddled with the dev.audio.Noise app to make it a fairly decent WebAudio
+(createBufferSource) brown noise with seemingly no skipping issues.
+
+*/
 //Imports«
 
-import { util, api as capi } from "util";
-import {globals} from "config";
-
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+const util = LOTW.api.util;
+const globals = LOTW.globals;
 const{isarr, isstr, isnum, isobj, make, log, jlog, cwarn, cerr}=util;
-const {NS} = globals;
-const {fs} = NS.api;
 
 //»
 
@@ -17,6 +25,9 @@ export const app = function(Win, Desk) {
 let url;
 let use_height_dim = true;
 let vid;
+let duration;
+let end_secs_before_loop = 1;
+let loop_after_secs;
 
 //»
 //DOM«
@@ -31,6 +42,19 @@ Main._bgcol="#040404";
 const make_video=()=>{//«
 vid = make('video');
 vid.src = url;
+vid.onloadedmetadata=e=>{
+duration = vid.duration;
+loop_after_secs = duration - end_secs_before_loop;
+vid.play();
+};
+vid.ontimeupdate=e=>{
+//log(e);
+if (vid.currentTime > loop_after_secs) {
+//cwarn("LOOP!");
+vid.currentTime = 0;
+}
+};
+//vid.loop = true;
 set_vid_dim();
 vid.style.cssText=`
 position: relative;

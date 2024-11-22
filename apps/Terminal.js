@@ -5766,7 +5766,7 @@ const init = async(appargs={})=>{
 			history = arr.reverse();
 		}
 	}
-	let init_prompt = `System shell\x20(${winid.replace("_","#")})`;
+	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`;
 	if(dev_mode){
 init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
 init_prompt+=`\nDebug: ${DEBUG}`

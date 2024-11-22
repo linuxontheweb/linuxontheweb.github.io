@@ -1,59 +1,7 @@
-/*«
-
-10/31/24
-
-@SJNMYEJK we create a "fake" icon (in open_file_by_path), in order to feed into
-open_icon_app (@WKIUTHJU), if it has a ".app" extension. The 'open' command
-does it this way. Now I want vim to be able to call open_icon_app with a fake
-icon that includes an object URL, created by URL.createObjectURL. After it does
-this, it will have a handle on the given Window object, and should be able to
-call reload on it with a new object URL. IMPORTANT: I WANT TO USE LOTW VIM TO
-DEVELOP A SHELL COMMAND LANGUAGE PARSING ENGINE.
-
-let fake = {
-	winargs: opt.WINARGS,
-	name: fname,
-	path: (patharr.join("/")).regpath(true),
-	fullpath: () => {
-		return fullpath;
-	}
-};
-
-But really, we just need to call open_app:
-
-open_app(appname, {
-	winArgs: icn.winargs,
-	appArgs: obj.args,
-	icon: icn,
-	fsUrl: fsUrl(`/blobs/${node.blobId}`),
-	winCb: win_cb
-});
-
-But instead of giving it an fsUrl, we want to give it a dataUrl, to work with
-purely in-memory strings of text.
-
-But *first*, the api.openApp interface needs to only take an opts object as
-the second arg. This is also defined as Desk.open_app.
-
-Need to make sure NOONE is calling Desk.open_app.
-
-Now we can call api.openApp(appname,{force, winArgs, appArgs, dataUrl: ...}).
-
-Let's get rid of the entire "fs_url/fsUrl" concept as a way to open an
-application window. Instead, we can do the same thing with a dataUrl concept.
-Then, it is just a matter of *where* we are getting the original Javascript
-text string.  It can be either from somewhere in the filesystem or from the
-lines of a text editor (or for that matter, from some other application's
-in-memory data structures). Either way, we are doing URL.createObjectURL with
-a new Blob([string_of_js_here]);
-
-In vim, there is a reload_win arg. Just need to clean up all of the old/crusty 
-mechanisms related to applications/windows/reloading...
-
-So once I get this stuff working, I can develop the shell parser in it...
-
+/*11/22/24« Want to update the logic in 'make_app' (@DIOLMTNY) to reflect modern 
+standards, namely replacing the callback logic with Promises. Then, go through all 
+of the ways that application windows are opened to use this new logic.
 »*/
-
 //Imports«
 
 const NS = LOTW;
@@ -4347,6 +4295,7 @@ this.reload = (opts={})=>{//«
 		return popup("'local' (development) applications cannot be independently reloaded!");
 	}
 	main.innerHTML=`<center><h2 style="background-color: #000; color: #aaa;">Reloading...</h2></center>`;
+	statdiv.innerHTML="";
 	let scr = gbid(`script_${app}`);
 	if (scr) {
 		scr._del();
@@ -4358,7 +4307,6 @@ cwarn(`No script found for app: ${app}`);
 
 	this.app.onkill&&this.app.onkill(true);
 	let arg = this.app.arg;
-//log(arg);
 	arg.APPARGS = {reInit: this.app.reInit};
 	arg.noShow = opts.noShow;
 	arg.dataUrl = opts.dataUrl;
@@ -4623,6 +4571,12 @@ cwarn("No drop on main window");
 
 }
 //»
+const win_reload = async () => {//«
+	if (!CWIN) return;
+	if (!await CWIN.reload()) return;
+	let bytes = CWIN._bytes;
+	if (bytes) CWIN.app.onloadfile(bytes);
+}//»
 const get_newwin_obj = (app) => {//«
 	let X = DEF_NEW_WIN_X;
 	let Y = DEF_NEW_WIN_Y;
@@ -5414,6 +5368,7 @@ log(CWIN.owned_by);
 //»
 //File/App«
 
+//DIOLMTNY
 const make_app = arg => {//«
 
 //Var«
@@ -5740,71 +5695,11 @@ const open_file = (bytes, icn, useapp, cb) => {//«
 	open_new_window(icn, win => {
 		cb&&cb(win);
 		if (!win) return;
+		win._bytes = bytes;
 		win.ext = icn.ext;
 		win.app.onloadfile(bytes, {name, ext, viewOnly});
 	}, {altApp: useapp});
 }//»
-/*«
-const win_reload = (cbarg) => { //«
-	if (!globals.dev_mode) {
-		popup(`win_reload: "dev mode" is not enabled!`);
-		return;
-	}
-	let win = CWIN;
-	if (!win) return;
-	if (win.app.ondevreload) return win.app.ondevreload();
-	let {is_fullscreen, fsholdw, fsholdh, fsholdx, fsholdy, bor_hold} = win;
-	let {is_maxed, maxholdw, maxholdh, maxholdx, maxholdy} = win; 
-	let winCb=(win)=>{//«
-		if (is_maxed){
-			win.is_maxed = true;
-			win.maxholdw=maxholdw; 
-			win.maxholdh=maxholdh; 
-			win.maxholdx=maxholdx; 
-			win.maxholdy=maxholdy;
-			if (!fsholdw) win.set_max_dims();
-		}
-		if (is_fullscreen){
-			win.is_fullscreen=true;
-			win.fsholdw=fsholdw; 
-			win.fsholdh=fsholdh; 
-			win.fsholdx=fsholdx; 
-			win.fsholdy=fsholdy;
-			win.bor_hold=bor_hold;
-			win.set_fullscreen_dims();
-		}
-		cbarg && cbarg(win);
-	};//»
-	let winargs = {
-		WINTITLEIMG: win.img_div.childNodes[0],
-		ID: win.id,
-		X: win.winElem._x,
-		Y: win.winElem._y,
-		WID: win.main._w,
-		HGT: win.main._h
-	};
-	let app = win.appName;
-	let fs_url = win._fs_url;
-	if (fs_url) app = `local.${app}`;
-	let scr = gbid(`script_${app}`);
-	if (scr) scr._del();
-	delete LOTW.apps[app];
-
-	let icn = win.icon;
-	if (icn && !icn.path) icn=null;
-	win.forceKill(true);
-	let appobj = win.appobj||{};
-	appobj.reInit = win.app.reInit;
-	CWIN&&CWIN.off();
-	if(!icn) {
-		open_app((win._fs_url || win.appName), {winCb, force: true, winArgs: winargs, appArgs: appobj, fullpath: win.fullpath});
-		return 
-	}
-	icn.winargs = winargs;
-	open_icon(icn,{winCb});
-
-};//»
-»*/
 //»
 //Cursor«
 
@@ -7007,7 +6902,7 @@ api.popin = (str, opts = {}) => {
 			TIT: opts.title,
 			WIN: opts.win,
 			PASSWORD: opts.password,
-//			CHOICES: opts.choices
+			enterOK: opts.enterOK
 		});
 	});
 }
@@ -7547,6 +7442,7 @@ cwarn("win.isScrollable test passed: WPMKIYTGH");
 		}
 	};//»
 	div.ok = ok_cb;
+	div.enterOK = arg.enterOK;
 	if (!no_buttons) okbutdiv.ael('click', ok_cb);
 	if (expires || timer) {
 		if (expires) {
@@ -7881,15 +7777,10 @@ const check_input = ()=>{//«
 //				return clickok();
 			}//»
 			else if ((kstr == 'ENTER_') || (kstr == "ESC_" && cpr.inactive)) {
-/*
-				if (macro_cb) {
-					Core.set_macro_update_cb(null);
-					Core.set_macros(null);
-				}
-*/
 				if (kstr=="ENTER_"){
 					if (!text_inactive && (act instanceof HTMLTextAreaElement) && !act._noinput) return;
 					e.preventDefault();
+					if (cpr.enterOK) return clickok();
 					if (act.type=="popup_button") return act.click();
 				}
 			}
@@ -8257,7 +8148,8 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 				}
 				if (!CWIN) return;
 				if (check_cwin_owned()) return;
-				CWIN.reload();
+//				CWIN.reload();
+				win_reload();
 				return;
 			}
 			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();

@@ -92,3 +92,115 @@ to wherever the user is trying to move them to?
 
 »*/
 //»
+/*10/31/24« 
+
+@SJNMYEJK we create a "fake" icon (in open_file_by_path), in order to feed into
+open_icon_app (@WKIUTHJU), if it has a ".app" extension. The 'open' command
+does it this way. Now I want vim to be able to call open_icon_app with a fake
+icon that includes an object URL, created by URL.createObjectURL. After it does
+this, it will have a handle on the given Window object, and should be able to
+call reload on it with a new object URL. IMPORTANT: I WANT TO USE LOTW VIM TO
+DEVELOP A SHELL COMMAND LANGUAGE PARSING ENGINE.
+
+let fake = {
+	winargs: opt.WINARGS,
+	name: fname,
+	path: (patharr.join("/")).regpath(true),
+	fullpath: () => {
+		return fullpath;
+	}
+};
+
+But really, we just need to call open_app:
+
+open_app(appname, {
+	winArgs: icn.winargs,
+	appArgs: obj.args,
+	icon: icn,
+	fsUrl: fsUrl(`/blobs/${node.blobId}`),
+	winCb: win_cb
+});
+
+But instead of giving it an fsUrl, we want to give it a dataUrl, to work with
+purely in-memory strings of text.
+
+But *first*, the api.openApp interface needs to only take an opts object as
+the second arg. This is also defined as Desk.open_app.
+
+Need to make sure NOONE is calling Desk.open_app.
+
+Now we can call api.openApp(appname,{force, winArgs, appArgs, dataUrl: ...}).
+
+Let's get rid of the entire "fs_url/fsUrl" concept as a way to open an
+application window. Instead, we can do the same thing with a dataUrl concept.
+Then, it is just a matter of *where* we are getting the original Javascript
+text string.  It can be either from somewhere in the filesystem or from the
+lines of a text editor (or for that matter, from some other application's
+in-memory data structures). Either way, we are doing URL.createObjectURL with
+a new Blob([string_of_js_here]);
+
+In vim, there is a reload_win arg. Just need to clean up all of the old/crusty 
+mechanisms related to applications/windows/reloading...
+
+So once I get this stuff working, I can develop the shell parser in it...
+
+»*/
+const win_reload = (cbarg) => { //«
+	if (!globals.dev_mode) {
+		popup(`win_reload: "dev mode" is not enabled!`);
+		return;
+	}
+	let win = CWIN;
+	if (!win) return;
+	if (win.app.ondevreload) return win.app.ondevreload();
+	let {is_fullscreen, fsholdw, fsholdh, fsholdx, fsholdy, bor_hold} = win;
+	let {is_maxed, maxholdw, maxholdh, maxholdx, maxholdy} = win; 
+	let winCb=(win)=>{//«
+		if (is_maxed){
+			win.is_maxed = true;
+			win.maxholdw=maxholdw; 
+			win.maxholdh=maxholdh; 
+			win.maxholdx=maxholdx; 
+			win.maxholdy=maxholdy;
+			if (!fsholdw) win.set_max_dims();
+		}
+		if (is_fullscreen){
+			win.is_fullscreen=true;
+			win.fsholdw=fsholdw; 
+			win.fsholdh=fsholdh; 
+			win.fsholdx=fsholdx; 
+			win.fsholdy=fsholdy;
+			win.bor_hold=bor_hold;
+			win.set_fullscreen_dims();
+		}
+		cbarg && cbarg(win);
+	};//»
+	let winargs = {
+		WINTITLEIMG: win.img_div.childNodes[0],
+		ID: win.id,
+		X: win.winElem._x,
+		Y: win.winElem._y,
+		WID: win.main._w,
+		HGT: win.main._h
+	};
+	let app = win.appName;
+	let fs_url = win._fs_url;
+	if (fs_url) app = `local.${app}`;
+	let scr = gbid(`script_${app}`);
+	if (scr) scr._del();
+	delete LOTW.apps[app];
+
+	let icn = win.icon;
+	if (icn && !icn.path) icn=null;
+	win.forceKill(true);
+	let appobj = win.appobj||{};
+	appobj.reInit = win.app.reInit;
+	CWIN&&CWIN.off();
+	if(!icn) {
+		open_app((win._fs_url || win.appName), {winCb, force: true, winArgs: winargs, appArgs: appobj, fullpath: win.fullpath});
+		return 
+	}
+	icn.winargs = winargs;
+	open_icon(icn,{winCb});
+
+};//»

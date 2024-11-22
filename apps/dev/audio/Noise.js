@@ -1,5 +1,5 @@
 
-const NS = window._OS_;
+const NS = LOTW;
 const {globals} = NS;
 const {log, cwarn, cerr} = NS.api.util;
 
@@ -49,7 +49,8 @@ const makeNoise = which => {//«
 		let last=0;
 		for (let i = 0; i < noise_buf_sz; i++) {
 			let rand = Math.random() * 2 - 1;
-			outbuf[i] = (last + (0.02 * rand)) / 1.02;
+//			outbuf[i] = (last + (0.02 * rand)) / 1.02;
+			outbuf[i] = (last + (0.01 * rand)) / 1.01;
 			last = outbuf[i];
 			outbuf[i] *= 3.5; // (roughly) compensate for gain
 		}

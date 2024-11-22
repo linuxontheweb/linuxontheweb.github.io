@@ -1,3 +1,8 @@
+Thursday 11/21/2024: Put _bytes onto the win, in open_file. Then, the new
+win_reload calls onloadfile with the bytes after doing await CWIN.reload. Did a
+major update to BinView. I added an enterOK option in widgets.popin, which
+dokeydown looks for in order to call clickok.
+
 
 10/16/2024: There is now a "data" file type that exists as an "inline" data «
 struture in the 'Nodes' object store of the 'Filesystem' indexedDB database.
