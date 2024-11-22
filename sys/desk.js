@@ -1,6 +1,27 @@
 /*11/22/24« Want to update the logic in 'make_app' (@DIOLMTNY) to reflect modern 
 standards, namely replacing the callback logic with Promises. Then, go through all 
 of the ways that application windows are opened to use this new logic.
+
+HAVING ALL SORTS OF PROBLEMS RENAMING ICONS TO DIFFERENT APPLICATIONS (PARTICULARLY TO
+THE DEFAULT BINVIEW APPLICATION), AND THEN OPENING THEM AFTER RENAMING THEM!!!
+
+@FKIOPIU: figured out how to point to the "real" "imgdiv". The one at
+wrapper.childNodes[0] could sometimes be the little thing at the top-left
+corner of the text icons. So when we rename (via the Terminal's 'mv' command)
+from a text icon to a DEF_BIN_APP icon, it still keeps the little thing at the
+top-left corner (e.g. "txt" or whatever the text extension is). So we just need
+to delete this dumb thing (created @YPOIKLJ) @LCUITYEP in Icon.rename!!! Took
+away the apparently superfluous logic @GJKLIUYT. This attempt to tag
+*everything* with '.iconElem' might be related to the algorithmic "paranoia" of
+making sure that the icon cursor can always select the icon in places like
+@FBVDGHJ.
+
+NEED TO FILTER ALL OF THIS NAMING/IMAGING/RENAMING/REIMAGING LOGIC THROUGH THE VERY 
+SAME METHODS (RATHER THAN DOING THE ONE THING IN THE MAIN BODY OF THE ICON LOGIC
+AND THE OTHER IN A RENAME METHOD)!!!! ALSO, IT IS CONFUSING TO HAVE AN ICON.setName
+method (which only changes the name in the icon's "namespan") AS WELL AS AN
+ICON.rename (which internally calls setName and does other stuff besides).
+
 »*/
 //Imports«
 
@@ -1573,6 +1594,7 @@ d.icon = this;
 let ext_div="";
 let usename=name;
 if (ext_text){
+//YPOIKLJ
 	ext_div = `<div class="iconext">${ext_text}</div>`;
 	if (ref){
 		let a = name.split(".");
@@ -1583,21 +1605,21 @@ if (ext_text){
 }
 let ch = getAppIcon(linkapp||app,{html:true});
 d.innerHTML=`<span class="iconw">${ext_div}<span class="iconi">${ch}</span></span><div class="iconl"><div class="iconn"></div></div>`;
-
 d._z=ICON_Z;
+
 let wrapper = d.childNodes[0];
 wrapper.draggable=true;
 wrapper.iconElem=d;
 
-let img = wrapper.childNodes[0];
-img.iconElem = d;
+//GJKLIUYT
+//let img = wrapper.childNodes[0];
+//img.iconElem = d;
 
 let label = d.childNodes[1];
 label._over="hidden";
 let namesp = label.childNodes[0];
 label.iconElem = d;
 label.title = name;
-
 
 //»
 
@@ -1906,9 +1928,10 @@ this.rename = namearg => {//«
 	if (icn.appName == FOLDER_APP) return;
 	if (icn.ext.toLowerCase() != oldext.toLowerCase()) {
 		delete icn.wrapper;
+//LCUITYEP
 		icn.imgdiv.innerHTML = "";
-//		let newapp = ext_to_app(icn.ext.toLowerCase());
 		let newapp = extToApp(icn.ext.toLowerCase());
+		if (!newapp) newapp = DEF_BIN_APP;
 		icn.appName = newapp;
 		set_app_img(icn.imgdiv, newapp);
 	}
@@ -2011,7 +2034,9 @@ this.set_node = (n)=>{
 this.node = node;
 this.iconElem = d;
 this.wrapper = wrapper;
-this.imgdiv = wrapper.childNodes[0];
+//FKIOPIU
+this.imgdiv = wrapper.childNodes[wrapper.children.length-1];
+//this.imgdiv = wrapper.childNodes[0];
 this.imgdiv.iconElem = d;
 this.name = name;
 this.ext = ext;
@@ -5989,11 +6014,10 @@ this.geticon = (fromwhere) => {//«
 	if (!this.ison()) return null;
 	let rect = curElem.getBoundingClientRect();
 	let elems = document.elementsFromPoint((rect.left+rect.right)/2,(rect.top+rect.bottom)/2);
-//log(elems);
 	let e0=elems[0];
 	if (e0===CUR||e0===CG) e0=elems[1];
-//log(e0);
 	if(!e0) return null;
+//FBVDGHJ
 	if (e0.iconElem) icn = e0.iconElem.icon;
 	else if (e0.className=="icon") icn = e0.icon;
 	else if(e0.parentNode&&e0.parentNode.className=="icon") icn = e0.parentNode.icon;
@@ -8439,7 +8463,10 @@ const check_rs_timer = () => {//«
 		CWIN.app.onresize();
 	}, RS_TIMEOUT);
 }//»
-const set_app_img=(div,app)=>{div.innerText = getAppIcon(app.split(".").pop());};
+const set_app_img = (div, app) => {
+	if (!app) app = DEF_BIN_APP;
+	div.innerText = getAppIcon(app.split(".").pop());
+};
 const make_cur_drag_img = () => {//«
 	let d = mkdv();
 	d.className = "dragimg";
