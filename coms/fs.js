@@ -135,8 +135,11 @@ const com_less = async (args,opts, _) => {//«
 };//»
 const com_vim = async (args,opts, _) => {//«
 //log(_);
-	const terr=(arg)=>{return {err: arg};}
 	let {stdin, term, command_str}=_; 
+	const terr = (arg) => {
+		_.err(arg);
+		return E_ERR;
+	}
 	let val;
 	let node;
 	let parnode;
