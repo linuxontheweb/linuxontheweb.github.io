@@ -114,7 +114,7 @@ Main.appendChild(areadiv);
 textarea.focus();
 //»
 
-const statbar = Win.status_bar;
+const statbar = Win.statusBar;
 statbar._w="100%";
 statbar._dis="flex";
 statbar.style.justifyContent="space-between";

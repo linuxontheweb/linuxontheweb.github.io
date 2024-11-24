@@ -25,7 +25,7 @@ let main = Win.main;
 let win = Win;
 let topwin = win;
 
-const statbar = topwin.status_bar;
+const statbar = topwin.statusBar;
 
 //»
 

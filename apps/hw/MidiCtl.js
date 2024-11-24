@@ -62,7 +62,7 @@ let midi_mod;
 
 //DOM«
 
-const {Main, Desk, status_bar} = Win;
+const {Main} = Win;
 Main._overy="auto";
 Main._overx="hidden";
 

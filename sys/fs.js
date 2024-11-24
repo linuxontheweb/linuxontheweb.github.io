@@ -31,32 +31,6 @@ We are giving a console warning if the type fields do not match upon updating.
 
 */
 //»
-//Old Issues«
-//@WMNJUGFNH Not removing blobs with 'rm' command
-/*@JEPOLMNYTH: When "copying" files from /mnt/ through the desktop interface 
-we needed to get the icon from the provided dom_objects, and the set the node
-property with the newly created node. Otherwise, any windows opened with this
-icon would think they were /mnt/ windows (and refuse to save the file) because
-the icon.fullpath would return the value from the old node.
-*/
-
-/*Early OCTOBER 2023:«
-Just switched this to the Origin Private File System format (instead of the old webkitRequestFileSystem way),
-which uses navigator.storage.getDirectory(). 
-Still need to implement command line append ">>", which would force us to do a writer.seek 
-@YTGEOPIUNMH. Otherwise, we have seek working in append_slice @EOPKIMNHKJ.
-
-The only other issue might be doing a truncate.
-
-Now, want to work on more possibilities for the ways that data is stored inline, inside the indexedDB.
-
-Per: https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle
-
-»*/
-/*_TODO_: Tilde expansion, allowing for arbitrary relative paths in Link«
-targets.
-»*/
-//»
 
 //Imports«
 
@@ -445,13 +419,31 @@ const bad_link_cbs = {};
 
 //»
 
-//Node«
+//Node
 
 const LOCKED_BLOBS = {};
-const Node = function(arg){
+class Node {//«
 
-	const {isDir, isLink} = arg;
-	const okget=()=>{//«
+constructor(arg){//«
+	this.isDir = arg.isDir;
+	this.isLink = arg.isLink;
+	this.isData = arg.isData;
+	this.isFile = arg.isFile;
+	for (let k of Object.keys(arg)){//«
+		this[k] = arg[k];
+		if (k=="name") this.setName(arg[k]);
+		if (k=="kids"){
+			this.kids["."]=this; 
+			this.kids[".."]=this.par;
+		}
+	}//»
+	this.writeLocked=()=>{
+		return LOCKED_BLOBS[this.blobId];
+	};
+	this.icons = [];
+}//»
+
+	okGet(){//«
 		if (this.type==MOUNT_TYPE||this.type==SHM_TYPE) return true;
 		let bid = this.blobId;
 		if (!bid || bid < FIRST_BLOB_ID) {
@@ -459,7 +451,7 @@ const Node = function(arg){
 		}
 		return true;
 	};//»
-	const okset=()=>{//«
+	okSet(){//«
 		if (this.type!==FS_TYPE) {
 			if (this.type==SHM_TYPE) return true;
 			return false;
@@ -469,9 +461,9 @@ const Node = function(arg){
 //		if (this.data) return false;
 		return true;
 	};//»
-	const setname=val=>{//«
+	setName(val){//«
 		this._name = val;
-		if (isDir||isLink){
+		if (this.isDir||this.isLink){
 			this.baseName = val;
 			return;
 		}
@@ -485,16 +477,7 @@ const Node = function(arg){
 			this.baseName = val;
 		}
 	};//»
-	for (let k of Object.keys(arg)){//«
-		this[k] = arg[k];
-		if (k=="name") setname(arg[k]);
-		if (k=="kids"){
-			this.kids["."]=this; 
-			this.kids[".."]=this.par;
-		}
-	}//»
-	if (arg.treeroot) return;
-	this.getRealBlobId=async()=>{//«
+	async getRealBlobId(){//«
 		let bid = get_blob_id();
 		this.blobId = bid;
 		if (!await db.setNodeBlobID(this.id, bid)) {
@@ -503,8 +486,8 @@ cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
 		}
 		return true;
 	};//»
-	this.getValue = async opts=>{//«
-		if (!okget()) return;
+	async getValue(opts={}){//«
+		if (!this.okGet()) return;
 		if (this.blobId == IDB_DATA_TYPE) {
 			if (opts && opts.text) {
 cwarn("This is a data node, but opts.text was specified in getValue!");
@@ -520,15 +503,15 @@ cerr(e);
 		}
 		return getBlob(this, opts);
 	};//»
-	this.getDataType = () => {
+	getDataType(){//«
 		if (this.blobId !== IDB_DATA_TYPE) return;
 		return this.data.type;
-	};
-	this.getDataValue = () => {
+	};//»
+	getDataValue(){//«
 		if (this.blobId !== IDB_DATA_TYPE) return;
 		return this.data.value;
-	};
-	this.setDataValue=async(val)=>{//«
+	};//»
+	async setDataValue(val){//«
 		if (this.blobId != IDB_DATA_TYPE){
 cerr("Cannot set data value on non-data node");
 			return;
@@ -546,7 +529,7 @@ cerr("Could not set node data");
 		}
 		return true;
 	};//»
-	this.setValue = async (val, opts={})=>{//«
+	async setValue(val, opts={}){//«
 		if (this.blobId == IDB_DATA_TYPE){
 			if (!(isObj(val) && isStr(val.type))){
 cerr(`Expected an object with a 'type' field! (for inline data storage)`);
@@ -562,7 +545,7 @@ cerr("Could not set node data", this);
 			this.data = val;
 			return true;
 		}
-		if (!okset()) return;
+		if (!this.okSet()) return;
 		let blob = toBlob(val);
 		if (!blob){
 cerr("Unknown value", val);
@@ -580,97 +563,105 @@ cerr("Could not getRealBlobId()!?!?!?");
 		rv.node = this;
 		return rv;
 	};//»
-	Object.defineProperty(this,"buffer",{get:()=>{if(!okget())return;return getBlob(this,{buffer:true});}});
-	Object.defineProperty(this,"bytes",{get:()=>{if(!okget())return;return getBlob(this,{bytes:true});}});
-	Object.defineProperty(this, "text", {//«
-		get: () => {
-			if (!okget()) return;
-			return getBlob(this, {
-				text: true
-			});
+
+get entry(){//«
+	return new Promise(async(Y,N)=>{
+		if (this._entry) return Y(this._entry);
+		if (!this.okGet()) return Y();
+		let id = this.blobId;
+		if (id === NULL_BLOB_FS_TYPE){
+			id = get_blob_id();
+			this.blobId = id;
 		}
-	});//»
-	if (isLink){//«
-		Object.defineProperty(this, "link", {
-			get: () => {
-				let symlink = this.symLink;
-				if (symlink.match(/^\x2f/)) return symlink;
-				return `${this.path}/${symlink}`;
-			}
-		});
-		Object.defineProperty(this, "ref", {
-			get: () => {return pathToNode(this.link);}
-		});
-	}//»
-	Object.defineProperty(this, "_file", {//«
-		get: () => {
-			if (!okget()) return;
-			return getBlob(this, {
-				getFileOnly: true
-			});
-		}
-	});//»
-	Object.defineProperty(this, "fullpath", {//«
-		get:()=>{
-			let str = this.name;
-			if (!str) return null;
-			let curobj = this;
-			let i = 0;
-			while (true) {
-				if (curobj && curobj.par) str = `${curobj.par.name}/${str}`;
-				else break;
-				curobj = curobj.par;
-				i++;
-			}
-			let arr = str.split("/");
-			while (!arr[0] && arr.length) {
-				arr.shift();
-				i++;
-			}
-			str = arr.join("/");
-			return ("/" + str).regpath();
-		}
-	});//»
-	Object.defineProperty(this, "entry", {//«
-		get: async() => {
-			if (this._entry) return this._entry;
-			if (!okget()) return;
-			let id = this.blobId;
-			if (id === NULL_BLOB_FS_TYPE){
-				id = get_blob_id();
-				this.blobId = id;
-			}
-			else if (this.type==SHM_TYPE) return;
-			else if (!Number.isFinite(id)) {
+		else if (this.type==SHM_TYPE) return Y();
+		else if (!Number.isFinite(id)) {
 cerr(`The node does not have a valid blobId: ${id}`);
 log(this);
-				return;
-			}
-			let ent = await get_blob_entry(id);
-			this._entry = ent;
-			return ent;
-		},
-		set: ent =>{
-cwarn("WHO SET ENTRY?", this, ent);
-			this._entry = ent;
+			return Y();
 		}
-	});//»
-	Object.defineProperty(this, "type", {get:()=>this.root._type});
-	Object.defineProperty(this, "name", {//«
-		set: setname,
-		get: ()=>this._name
-	});//»
-	Object.defineProperty(this, "path", {//«
-		get:()=>{
-			if (this._path) return this._path;
-			return this.par.fullpath;
-		}
-	});//»
-	this.write_locked=()=>{
-		return LOCKED_BLOBS[this.blobId];
-	};
-	this.icons = [];
+		let ent = await get_blob_entry(id);
+		this._entry = ent;
+		Y(ent);
+	});
 }//»
+set entry(ent){//«
+cwarn("WHO SET ENTRY?", this, ent);
+	this._entry = ent;
+}//»
+get buffer(){//«
+//	Object.defineProperty(this,"buffer",{get:()=>{if(!okget())return;return getBlob(this,{buffer:true});}});
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		buffer: true
+	});
+}//»
+get bytes(){//«
+//	Object.defineProperty(this,"bytes",{get:()=>{if(!okget())return;return getBlob(this,{bytes:true});}});
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		bytes: true
+	});
+}//»
+get text(){//«
+//	Object.defineProperty(this,"text",{get:()=>{if(!okget())return;return getBlob(this,{text:true});}});
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		text: true
+	});
+}//»
+get link(){//«
+//	if(isLink){Object.defineProperty(this,"link",{get:()=>{let symlink=this.symLink;if(symlink.match(/^\x2f/))return symlink;return `${this.path}/${symlink}`;}});Object.defineProperty(this,"ref",{get:()=>{return pathToNode(this.link);}});}
+	if (!this.isLink) return;
+	let symlink = this.symLink;
+	if (symlink.match(/^\x2f/)) return symlink;
+	return `${this.path}/${symlink}`;
+}//»
+get ref(){//«
+	if (!this.isLink) return;
+	return pathToNode(this.link);
+}//»
+get _file(){//«
+//	Object.defineProperty(this,"_file",{get:()=>{if(!okget())return;return getBlob(this,{getFileOnly:true});}});
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		getFileOnly: true
+	});
+}//»
+get fullpath(){//«
+//	Object.defineProperty(this,"fullpath",{get:()=>{let str=this.name;if(!str)return null;let curobj=this;let i=0;while(true){if(curobj && curobj.par)str=`${curobj.par.name}/${str}`;else break;curobj=curobj.par;i++;}let arr=str.split("/");while(!arr[0] && arr.length){arr.shift();i++;}str=arr.join("/");return("/"+str).regpath();}});
+	let str = this.name;
+	if (!str) return null;
+	let curobj = this;
+	let i = 0;
+	while (true) {
+		if (curobj && curobj.par) str = `${curobj.par.name}/${str}`;
+		else break;
+		curobj = curobj.par;
+		i++;
+	}
+	let arr = str.split("/");
+	while (!arr[0] && arr.length) {
+		arr.shift();
+		i++;
+	}
+	str = arr.join("/");
+	return ("/" + str).regpath();
+}//»
+//Object.defineProperty(this, "type", {get:()=>this.root._type});
+get type(){return this.root._type;}
+get name(){return this._name;}
+set name(name){//«
+//	Object.defineProperty(this,"name",{set:setname,get:()=>this._name});
+	return this.setName(name);
+}//»
+get path(){//«
+//	Object.defineProperty(this,"path",{get:()=>{if(this._path)return this._path;return this.par.fullpath;}});
+	if (this._path) return this._path;
+	return this.par.fullpath;
+}//»
+
+}//»
+
 //Filesystem ops«
 
 const getNodesByBlobId = async (blobId) =>{//«
@@ -982,7 +973,7 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 		}
 
 		if (!check_fs_dir_perm(obj.par, is_root)) errcb(`${path}: permission denied`);
-		else if (obj.write_locked()) errcb(`${path} is "write locked"`);
+		else if (obj.writeLocked()) errcb(`${path} is "write locked"`);
 		else return obj;
 		return;
 	}//»
@@ -1183,7 +1174,7 @@ for (let arg of args){//«
 		mvarr.push({ERR: `${com}: ${path}: cannot ${verb} from directory type: ${srctype}`});
 	}
 //No moving of files that are actively being edited
-	else if (com==="mv"&&srcret.write_locked()) {
+	else if (com==="mv"&&srcret.writeLocked()) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${com}: ${path} is "write locked"`});
 	}
@@ -1232,9 +1223,9 @@ for (let arr of mvarr) {//«
 	let fromicon = icon_obj[frompath];
 	let topath;
 	let todir;
-	let fent = arr[1];
-	let type = fent.type;
-	let app = fent.appName;
+	let node = arr[1];
+	let type = node.type;
+	let app = node.appName;
 	let gotfrom, gotto;
 	let savedirpath;
 	let savename;
@@ -1245,10 +1236,10 @@ for (let arr of mvarr) {//«
 
 	if (destret) {//«
 		if (destret.appName == FOLDER_APP) {
-			topath = topatharg.replace(/\/+$/, "") + "/" + fent.name;
+			topath = topatharg.replace(/\/+$/, "") + "/" + node.name;
 			savedirpath = destret.fullpath;
-			gotto = `${savedirpath}/${fent.name}`;
-			savename = fent.name;
+			gotto = `${savedirpath}/${node.name}`;
+			savename = node.name;
 		} else {
 			gotto = topath = topatharg;
 			savedirpath = destret.par.fullpath;
@@ -1315,9 +1306,9 @@ for (let arr of mvarr) {//«
 		}
 		if (Desk) Desk.make_icon_if_new(await pathToNode(newpath));
 		werr(`Created: ${newpath}`);
-		if (!fent.done) await popDir(fent);
+		if (!node.done) await popDir(node);
 		let arr = [];	
-		let kids=fent.kids;
+		let kids=node.kids;
 		for (let k in kids){
 			if (k=="."||k=="..") continue;
 			arr.push(kids[k].fullpath);
@@ -1336,7 +1327,7 @@ for (let arr of mvarr) {//«
 	}//»
 	if (type==MOUNT_TYPE){//«
 		let tofullpath = `${savedir.fullpath}/${savename}`;
-		let gotbuf = await fent.buffer;
+		let gotbuf = await node.buffer;
 		let newnode = await saveFsByPath(tofullpath, gotbuf);
 		if (!newnode) {
 			werr(`${tofullpath}: There was a problem saving to the file`);
@@ -1367,13 +1358,13 @@ for (let arr of mvarr) {//«
 			continue;
 		}
 		if (verb=="move"){
-			if (!await move_node(fent, savename, savedir)){
+			if (!await move_node(node, savename, savedir)){
 				werr(`Could not move from ${frompath} to ${topath}`);
 				continue;
 			}
 		}
 		else{
-			if (!(fent = await copy_node(fent, savename, savedir))){
+			if (!(node = await copy_node(node, savename, savedir))){
 				werr(`Could not copy from ${frompath} to ${topath}`);
 				continue;
 			}
@@ -1381,8 +1372,13 @@ for (let arr of mvarr) {//«
 		if (if_cp) {
 			gotfrom = null;
 		}
+//TUIMN
+		if (node.isFile) {
+cwarn("DELETE node.appName", node.appName);
+			delete node.appName;
+		}
 		await move_icon_by_path(gotfrom, gotto, app, {
-			node: fent,
+			node,
 			icon: fromicon,
 			win: towin
 		});
@@ -1586,6 +1582,7 @@ if (!node) {
 	node = await touchFile(parobj, fname, opts);
 	let ext = util.getNameExt(fname)[1];
 	node.ext = ext;
+//DHYUI
 	node.appName = util.extToApp(ext);
 }
 else if (opts.data){
@@ -1885,9 +1882,9 @@ cerr(e);
 //»
 
 const mk_dir_kid = (par, name, opts={}) => {//«
-
 	let is_dir = opts.isDir;
 	let is_link = opts.isLink;
+	let is_data = opts.isData;
 	let mod_time = opts.modTime;
 	let path = opts.path;
 	let fullpath = `${path}/${name}`;
@@ -1901,12 +1898,14 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 			name: name,
 			par: par,
 			root: par.root,
+			isData: is_data,
 			isDir: is_dir,
-			isLink: is_link
+			isLink: is_link,
+			isFile: !(is_data||is_dir||is_link)
 //			path: path
 		});
 	}
-
+//log(kid);
 	if (is_dir) {
 		kid.appName = FOLDER_APP;
 		if (par.par.treeroot == true) {
@@ -1922,7 +1921,11 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	else if (is_link) {
 		kid.appName=LINK_APP;
 	}
+	else if (is_data){
+//		kid.isData = true;
+	}
 	else {
+//		kid.isFile = true;
 		kid.ext = util.getNameExt(name)[1];
 		let app = util.extToApp(name);
 		kid.appName = app;
@@ -2651,60 +2654,4 @@ globals.api.fs=this.api;
 
 //»
 
-
-
-
-/*Old
-const write_blob = async(fent, blob, opts={}) => {//«
-	if (globals.read_only) return;
-	let{
-		append,
-		spliceStart,
-		spliceEnd,
-		node
-	} = opts;
-	let append_from;
-
-	let f, sz1, sz2;
-	let truncsz;
-	if (node){
-		f = await opts.node._file;
-	}
-	if (Number.isFinite(spliceStart) && spliceEnd){
-		let sz1;
-		let endblob = await get_data_from_fs_file(f, "blob", spliceEnd-1);
-		blob = new Blob([blob, endblob]);
-		sz1 = f.size;
-		sz2 = blob.size + spliceStart;
-		truncsz = sz2;
-	}
-	if (node && node.type==SHM_TYPE){
-		if (append&&node._blob){
-			blob = new Blob([node._blob, blob]);
-		}
-		node._blob = blob;
-		return {size: blob.size};
-	}
-	let writer = await fent.createWritable({keepExistingData: append || spliceStart});
-	if (append||spliceStart) {
-		if (spliceStart) writer.seek(spliceStart);
-		else writer.seek(f.size);
-	}
-	await writer.write(blob);
-
-	if (Number.isFinite(sz2)){
-		await writer.truncate(sz2);
-		await writer.close();
-		return {size: sz2, diff: sz2-sz1};
-	}
-//	if (append){
-//		await writer.truncate(sz1+blob.size);
-//	}
-	await writer.close();
-	return {size: blob.size};
-//	else return blob.size;
-
-}
-//»
-*/
 

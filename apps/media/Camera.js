@@ -145,7 +145,7 @@ const trysave = async()=>{//«
 vid.onloadedmetadata=()=>{//«
 	w = vid.videoWidth;
 	h = vid.videoHeight;
-	Win.status_bar.innerHTML=`Ready: ${w}x${h}`;
+	Win.statusBar.innerHTML=`Ready: ${w}x${h}`;
 	can.width = w;
 	can.height = h;
 	imw = w/4;

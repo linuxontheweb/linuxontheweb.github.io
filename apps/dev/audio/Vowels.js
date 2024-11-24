@@ -219,7 +219,7 @@ Main._dis="flex";
 Main.style.alignItems="center";
 Main.style.justifyContent="center";
 
-Win.status_bar.innerHTML="0-9 to change vowels | Space to play";
+Win.statusBar.innerHTML="0-9 to change vowels | Space to play";
 
 //»
 

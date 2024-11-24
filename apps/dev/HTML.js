@@ -59,7 +59,7 @@ this.onloadfile=bytes=>{//«
 		}
 	}
 	Main.innerHTML = doc.body.innerHTML;
-	Win.status_bar.innerHTML = `${tot} nodes deleted`;
+	Win.statusBar.innerHTML = `${tot} nodes deleted`;
 };//»
 
 this.onkeydown = function(e,s) {//«

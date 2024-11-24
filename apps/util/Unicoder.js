@@ -617,7 +617,7 @@ log(nm,add);
 
 make_table(side_tab);
 side_div.style.minWidth = side_tab.clientWidth+"px";
-Win.status_bar.innerHTML=`Arrows to navigate | Click to copy`;
+Win.statusBar.innerHTML=`Arrows to navigate | Click to copy`;
 /*
 let allnameslen = ALLNAMES.length;
 for (let i=0; i < allnameslen;i+=2) {

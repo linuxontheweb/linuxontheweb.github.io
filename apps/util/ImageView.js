@@ -15,7 +15,7 @@ const {fs}=NS.api;
 const{make}=util;
 const topwin = Win;
 const Main = topwin.main;
-const statbar = topwin.status_bar;
+const statbar = topwin.statusBar;
 const lines = [];
 
 const winid = topwin.id;

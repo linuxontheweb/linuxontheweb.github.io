@@ -509,7 +509,7 @@ const quit=()=>{//«
 	if (edit_fobj) {
 		edit_fobj.unlockFile();
 	}
-	if (reload_win) delete reload_win.owned_by;
+	if (reload_win) delete reload_win.ownedBy;
 	quit_new_screen(hold_screen_state);
 };//»
 
@@ -1168,7 +1168,7 @@ if (isStr(rv)) return err(rv);
 //MDOPILKL
 let gotkid = parobj.kids[fname];
 if (!gotkid) return save_ok(true);
-if (gotkid.write_locked()){
+if (gotkid.writeLocked()){
 	stat_message = `${fname}: the file is write locked`;
 	try_revert();
 	stat_message_type = STAT_ERROR;
@@ -1459,7 +1459,7 @@ return;
 
 const open_reload_win=async()=>{//«
 	if (reload_win){
-		delete reload_win.owned_by;
+		delete reload_win.ownedBy;
 		delete this.ondevreload;
 		reload_win = null;
 		stat("'reload_win' deleted");
@@ -1470,7 +1470,7 @@ if (!reload_win){
 stat_err("Could not get the window");
 return;
 }
-		reload_win.owned_by = topwin;
+		reload_win.ownedBy = topwin;
 		this.ondevreload=()=>{
 			if (!reload_win._data_url){
 cwarn("NO RELOAD_WIN._DATA_URL!!?");
@@ -5661,7 +5661,7 @@ Term.overrides = overs;
 edit_fobj = o.node;
 
 if (edit_fobj) {
-	if (edit_fobj.write_locked()) {
+	if (edit_fobj.writeLocked()) {
 //THROW("WE SHOULD NOT HAVE A WRITE_LOCKED FILE!!!");
 topwin._fatal(new Error("This is a 'write locked' file!"));
 	}

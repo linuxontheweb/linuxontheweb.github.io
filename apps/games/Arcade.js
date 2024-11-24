@@ -52,7 +52,7 @@ const topwin = Win;
 //const{make,mkdv,mk,mksp}=util;
 //const fsapi = NS.api.fs;
 
-let statbar = topwin.status_bar;
+let statbar = topwin.statusBar;
 const stat=(s)=>{statbar.innerHTML=s;};
 let did_init = false;
 let memory_interval;

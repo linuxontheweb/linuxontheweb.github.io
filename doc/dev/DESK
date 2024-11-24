@@ -744,3 +744,1232 @@ if (!node.fake) node.icons.push(this);
 };
 api.Icon = Icon;
 //»
+const Window = function(arg){//«
+
+//Var«
+
+	const thiswin = this;
+	let app = arg.appName;
+	let is_folder = app === FOLDER_APP;
+	let winid;
+	let marr;
+//	let fs_url, data_url;
+
+	let usex, usey, usew, useh;
+	let winargs = arg.WINARGS||{};
+	let defwinargs = get_newwin_obj();
+	if (isFin(winargs.X)) usex = winargs.X;
+	else usex = defwinargs.X;
+
+	if (isFin(winargs.Y)) usey = winargs.Y;
+	else usey = defwinargs.Y;
+
+	if (isFin(winargs.WID)) usew = winargs.WID;
+	else if (winargs.WID === "100%") usew = winw();
+	else usew = defwinargs.WID;
+
+	let botpad = winargs.BOTTOMPAD;
+	if (isFin(winargs.HGT)) useh = winargs.HGT;
+	else if (winargs.HGT === "100%") useh = winh();
+	else {
+		useh = defwinargs.HGT;
+		if (botpad) useh -= botpad;
+	}
+
+	let wintitle;
+	if (arg.name) wintitle = arg.name;
+	else if (winargs.TITLE) wintitle = winargs.TITLE;
+	else wintitle = "Untitled";
+
+//This won't work when the local filesystem is no longer uses this
+// kind of one-to-one mapping between files and the physically stored blobs
+
+//Test for app.match(/filesystem:.+.js$/, and "slice out" the "app" name)
+//	if (marr = app.match(/^filesystem:.+\/([a-z][a-z0-9]*)\.js$/i)){
+//		fs_url = app;
+//		app = `local.${marr[1]}`;
+//	}
+//log("ARG", arg);
+//	if (arg.fsUrl){
+//fs_url = arg.fsUrl;
+//log("FSURL", fs_url);
+//	}
+
+//»
+
+//DOM«
+
+	let win = make("div");//The top level window«
+	no_select(win);
+
+//I guess this is here so the app name shows up in the Elements view of devtools
+	win.dataset.app = app;
+	win._pos= "fixed";
+	win._bor= "1px solid #333";
+	win.id = winargs.ID || `win_${++win_num}`;
+	winid = win.id;
+	win._x=usex;
+	win._y=usey;
+	win._z=HI_WIN_Z+1;
+	win.className="topwin";
+	win.style.boxShadow = window_boxshadow;
+	win._winObj = this;
+//»
+	let main = make("div");//The application area«
+	no_select(main);
+	main.top = this;
+	main.id = "main_"+winid;
+	main._w=usew;
+	main._h=useh;
+	main._bgcol= APP_BG_COL;
+	main._tcol= APP_TEXT_COL;
+	main._bor= "0px solid transparent";
+	main._pos= "relative";
+	main.className="mainwin";
+	main.type = "window";
+//»
+	let titlebar = make('div');//«
+	titlebar.id="titlebar_"+winid;
+	titlebar._h = 18;
+	no_select(titlebar);
+	titlebar.className = "titlebar";
+	titlebar.win = win;
+	main.titlebar = titlebar;
+	main.appName = app;
+	let title = make("div");
+	title.id="title_"+winid;
+	title._padt=1.25;
+	title._ta= "center";
+	title._pos= "relative";
+	title._tcol= "black";
+	title._ff= "sans-serif";
+	titlebar._add(title);
+
+	let namespan = make('span');
+	namespan._dis="block";
+	namespan.id="namespan_"+winid;
+	namespan._fs= 12;
+//	namespan._padt=1;
+//	namespan._ff="monospace";
+//	namespan.style.maxWidth = "100px";
+//	namespan._over="hidden";
+//log(namespan);
+	namespan.title = winid;
+	titlebar.label = namespan;
+	title._add(namespan);
+	main._over="hidden";
+
+	let img_div = make('div');
+	img_div._pos= "absolute";
+	img_div._bor= "0px solid transparent";
+	img_div._x= 0;
+	img_div._y= 0;
+	img_div._padb= 3;
+	img_div.style.cursor = "default";
+
+	img_div.draggable=true;
+	img_div.ondragstart=nopropdef;
+
+	img_div.onclick = ()=>{this.contextMenuOn()};
+	title._add(img_div);
+	let useimg = winargs.WINTITLEIMG;
+	if (useimg) {
+		img_div.img = useimg;
+		img_div._add(useimg);
+	}
+	else set_app_img(img_div, app);
+	img_div.id="titleimgdiv_"+winid;
+	img_div._fs=12;
+	img_div._tcol="#a7a7a7";
+	img_div.title = app.split(".").pop();
+//»
+//«Min/Max/Close buttons
+
+	const mkbut = (sz) => {//«
+//	const mkbut = (col, sz) => {
+		let b = make('div');
+		b._over= "hidden";
+		b._padl=b._padr=2;
+		b._ta= "center";
+		b._fs= sz;
+		b._w= 16;
+		b._h = 16;
+		b._bor="1px solid #000";
+		b._bgcol= WINBUT_OFF_COL;
+		b.onmousedown=e=>{e.stopPropagation();};
+		b.hover = () => {
+			b._bgcol=WINBUT_ON_COL;
+		};
+		b.unhover = () => {
+			b._bgcol=WINBUT_OFF_COL;
+		};
+		b.top = win;
+		butdiv._add(b);
+		return b;
+	};//»
+	const doclose = (force, if_dev_reload)=>{//«
+//	const doclose = function(evt, thisarg, force, if_dev_reload) {
+
+		if (this.isMinimized||this.isTiled) return;
+		if (!force && (this != CWIN)) return;
+		if (this.no_events) return;
+		if (this.nobuttons && !force) return;
+		if (this.app.onkill) this.app.onkill(if_dev_reload, force);
+		OUTERLOOP2: for (let wins of workspaces) {
+			for (let i = 0; i < wins.length; i++) {
+				if (wins[i] == this) {
+					wins.splice(i, 1);
+					break OUTERLOOP2;
+				}
+			}
+		}
+		if (is_folder) icon_array_off(3);
+		this.killed = true;
+		this.app.killed = true;
+		win._del();
+		let icn = this.icon;
+		let node = this.node;
+		if (icn) {
+			if (!node) node = icn.node;
+			icn.win = null;
+		}
+		if (node && node.unlockFile) node.unlockFile();
+		top_win_on();
+	};//»
+	const onhover=function(){//«
+		if (CDL) return;
+		butdiv._op= 1;
+		this.hover();
+	};//»
+	const onunhover=function(){//«
+		if (CDL) return;
+		if (thiswin !== CWIN) butdiv._op=0.5;
+		else butdiv._op= 0.75;
+		this.unhover();
+	};//»
+
+	let butdiv = make('div');//«
+	butdiv.style.cursor = "default";
+	butdiv.off = () => {
+		butdiv._op= 0.5;
+	};
+	butdiv.on = () => {
+		butdiv._op= 0.75;
+	};
+	butdiv._pos= "absolute";
+	butdiv._r= 3;
+	butdiv._y= 0;
+	butdiv._dis= "flex";
+	butdiv.style.flexDirection = "row-reverse";
+	butdiv._h = 16;
+	butdiv._z=1000000;
+	butdiv._tcol= "#000";
+	butdiv.win = thiswin;
+//»
+	let close = mkbut("15px");//«
+	close.id="closebut_"+winid;
+	close.innerHTML="<b>X</b>";
+	close.title="Close";
+	close.style.lineHeight = "110%";
+	butdiv.close = close;
+	titlebar.close = close;
+	this.easyKill=()=>{
+//		doclose(null, close);
+		doclose();
+	}
+	this.forceKill = if_dev_reload => {
+		if (this.isMinimized) this.unminimize(true);
+//		doclose(null, close, true, if_dev_reload);
+		doclose(true, if_dev_reload);
+	};
+	close.onclick=()=>{
+		if (check_cwin_owned()) return;
+//		if (this._savecb) this._savecb();
+		this.forceKill();
+	}
+	this.keyKill = () => {
+		if (this.app && this.app.is_editing) {
+			if (this.app.try_kill) this.app.try_kill();
+			else cwarn("Dropping close signal");
+		} 
+		else {
+//			doclose(null, close, true);
+			doclose(true);
+		}
+	};
+//»
+	let max = mkbut("14px");//«
+	max.id="maxbut_"+winid;
+	max.style.lineHeight = "16px";
+	max.reset=()=>{
+		max.innerText="\u{1f5d6}";
+		max.title="Maximize";
+		win.style.boxShadow = window_boxshadow;
+	};
+	max.onclick = () => {
+		close.unhover();
+		max.unhover();
+		min.unhover();
+//		toggle_max_window(win);
+//		maximize_window(thiswin);
+		this.maximize();
+	};
+	max.reset();
+//»
+	let min = mkbut("14px");//«
+	min.id="minbut_"+winid;
+//	min.innerText="\u{1f5d5}"; 
+	min.innerText="\u{2b07}"; //Solid down arrow
+	min.style.lineHeight="135%";
+	min.title="Minimize";
+	min.onclick=()=>{
+		if (this.isFullscreen) {
+			if (thiswin!==CWIN) {
+cwarn("thiswin!==CWIN ????");
+				return;
+			}
+			this.fullscreen(true);
+		}
+		if (this.isMinimized||this.isTiled) return;
+		if (ICONS.length && ICONS[0].parWin==this) icon_array_off();
+		taskbar.addwin(thiswin);
+	};
+//»
+//Button event listeners«
+	close.draggable=max.draggable=min.draggable=true;
+	close.ondragstart=max.ondragstart=min.ondragstart=(e)=>nopropdef;
+	close.onmousedown=max.onmousedown=min.onmousedown=(e)=>{
+		icon_array_off();
+	}
+	close.onmouseenter=onhover;
+	close.onmouseleave=onunhover;
+	max.onmouseenter=onhover;
+	max.onmouseleave=onunhover;
+	min.onmouseenter=onhover;
+	min.onmouseleave=onunhover;
+//»
+	title._add(butdiv);
+
+//»
+	let footer = make('div');//«
+	let footer_wrap=make('div');
+
+//«
+//The BOTTOMPAD property is ultimately given to us via a WINARG argument, so
+//that, for example, from Desk.api.saveAs (@DWEUNFKL), a folder window can be
+//opened up that has a Main window with a smaller height than normal (shrunken by
+//the amount of SAVEAS_BOTTOM_HGT), so that buttons (like Save and Cancel) can be
+//put on the bottom. The point is that this bottom area is considered to be part
+//of the system's "window chrome" (like the titlebar), and the application
+//doesn't have to worry about changing anything about the logic of it's own
+//layout.
+//»
+	let bottom_div = make('div');
+	if (botpad){
+		bottom_div._bgcol="#373747";
+		bottom_div._tcol="#ddd";
+		bottom_div.style.borderTop="1px solid #556";
+		bottom_div.style.borderBottom="1px solid #556";
+		bottom_div._h=botpad-2;
+		footer_wrap._add(bottom_div);
+	}
+
+	footer._dis="flex";
+	footer.style.justifyContent="space-between";
+	footer._h=18;
+	let statdiv=make('div');
+	statdiv.id="stat_"+winid;
+	statdiv.onmousedown=e=>{
+		e.stopPropagation();
+		icon_array_off();
+	};
+	statdiv.onclick=noprop;
+	statdiv.oncontextmenu=noprop;
+	statdiv._tcol="#ddd";
+	statdiv._fs=14;
+	statdiv._padl=3;
+	statdiv._padt=1;
+	statdiv._over="hidden";
+	let rsdiv = make('div');
+	rsdiv.id="rsdiv_"+winid;
+	rsdiv.win = thiswin;
+	rsdiv.style.flex="0 0 15px";
+	rsdiv._bgcol="#778";
+	rsdiv._bor="2px inset #99a";
+//	rsdiv._bor="1px solid #333";
+	rsdiv.onmouseover=e=>{
+		if (CDL) rsdiv.style.cursor = "";
+		else rsdiv.style.cursor = "nwse-resize";
+	};
+	rsdiv.draggable=true;
+	rsdiv.ondragstart=e=>{
+		e.preventDefault();
+		if (this.isMaxed) {
+			max.reset();
+			this.isMaxed = false;
+		}
+		CRW = thiswin;
+		if (CRW != CWIN) CRW.on();
+		desk.style.cursor = "nwse-resize";
+	};
+	statdiv.resize=()=>{statdiv.style.maxWidth = main._w - 20;};
+
+	footer._add(statdiv);
+	footer._add(rsdiv);
+	footer_wrap._add(footer);
+//»
+
+	win._add(titlebar);
+	win._add(main);
+	win._add(footer_wrap);
+	desk._add(win);
+//»
+
+//Properties«
+
+Object.defineProperty(this, "fullpath", {//«
+	get: ()=>{
+		if (!this.name) {
+//cwarn("This window has no name!!!");
+			return null;
+		}
+		let path = (this.path ? this.path : "/") + "/" + this.name;
+		if (this.ext) path = path + "." + this.ext;
+		return path.regpath();
+	}
+});//»
+Object.defineProperty(this, "title", {//«
+	get: () => {
+		return namespan.innerText.trim();
+	},
+	set: arg => {
+		let str = arg;
+		namespan.innerText = str;
+		if (this.isMinimized) this.mintitle.innerText = str
+	}
+});//»
+
+	this.Desk = Desk;
+	this.Main = main;
+	this.main = main;
+	this.workspaceNum = current_workspace_num;
+	this.bottom_div = bottom_div;
+	this.statusBar = statdiv;
+	this.rs_div = rsdiv;
+	this.footer=footer_wrap;
+	this.butdiv = butdiv;
+	this.close_button = close;
+	this.max_button = max;
+	this.minimize_button = min;
+	this.titlebar = titlebar;
+	this.title_div = title;
+	this.title = wintitle;
+	this.winElem = win;
+	this.app = {onresize:NOOP};
+	this.appName = app;
+	this.type = "window";
+	this.id=winid;
+	this.namespan = namespan;
+	this.img_div = img_div;
+	if (arg.APPARGS) this.nosave = true;
+	else this.nosave = null;
+	this.ownedBy = undefined;
+
+//»
+//Methods«
+
+this.setWinArgs=args=>{//«
+//	let args={BOTTOMPAD: w.bottompad, X: w.winElem._x, Y:w.winElem._y, WID: w.main._w, HGT: w.main._h};
+	args.BOTTOMPAD = this.bottompad;
+	args.X = win._x;
+	args.Y = win._y;
+	args.WID = main._w;
+	args.HGT = main._h;
+	if (this.isMaxed){
+		args.isMaxed = true;
+		args.holdDims={W: this.maxholdw, H: this.maxholdh, X: this.maxholdx, Y: this.maxholdy};
+	}
+	if (this.isFullscreen){
+		args.isFullscreen = true;
+		args.holdDims={W: this.fsHoldW, H: this.fsHoldH, X: this.fsHoldX, Y: this.fsHoldY, BOR: this.bor_hold};
+	}
+};//»
+	this.makeScrollable=()=>{//«
+		main._overy="auto";
+		main.tabIndex="-1";
+		this.isScrollable = true;
+	};//»
+	this.up=()=>{//«
+		if (this.isMinimized) this.unminimize(true);
+		win.style.zIndex = ++HI_WIN_Z;
+		if (this.overdiv) this.overdiv.style.zIndex = ++HI_WIN_Z;
+	};//»
+	this.getIcons=()=>{//«
+		let _icons = main.getElementsByClassName("icon");
+		let ret = [];
+		for (let icn of _icons) ret.push(icn.icon);
+		return ret;
+	};//»
+	this.on = (which, if_no_zup) => {//«
+//		if (this.killed) {
+//cwarn("This window has been killed. Who is calling the 'on' method?");
+//			return;
+//		}
+		if (!windows_showing) toggle_show_windows();
+		if (CPR) return;
+		if (CWIN) {
+			if (this === CWIN) return;
+			CWIN&&CWIN.off();
+		}
+		if (this.workspaceNum !== current_workspace_num) {
+			switch_win_to_workspace(this, current_workspace_num);
+			if (this.child_win){
+				switch_win_to_workspace(this.child_win, current_workspace_num);
+			}
+		}
+		if (is_folder && !this.isMinimized) {
+//VKUIOKL
+			if (CUR.curElem.parentNode === desk) {
+				let icn = CUR.geticon();
+				if (icn) icn.hideLabelName();
+				desk.lastcurpos = CUR.getpos();
+			}
+			this.main.focus();
+			CUR.icon_div = this.main.icon_div;
+			CUR.main = this.main;
+			this.main._add(CUR.curElem);
+			this.cursor = CUR;
+//			CUR.set(2);
+			CUR.on();
+		}
+		this.winElem._dis= "block";
+		if (if_no_zup){}
+		else if (this.winElem._z && this.winElem._z < 10000000) this.up();
+		
+		if (!this.no_shadow) this.winElem.style.boxShadow = window_boxshadow;
+		document.activeElement.blur();
+		this.img_div._op= 0.75;
+		this.namespan._fw = "bold";
+		this.namespan._tcol= WINNAME_COL_ON;
+		this.winElem._bgcol= WIN_COL_ON;
+		if (this.butdiv) this.butdiv.on();
+		if (this.movediv) this.movediv.on();
+		let winobj = this.app;
+		if (winobj) {
+			if (winobj.onfocus&&!this.popup) {
+				winobj.onfocus();
+			}
+		}
+		else{
+cwarn(`window_on(): NO WINOBJ for this`, this);
+		}
+		if (this.isScrollable) this.main.focus();
+		if (this.isMinimized) this.taskbar_button.onmousedown();
+		if (this.child_win) this.child_win.on();
+		CWIN = this;
+	};
+	//»
+	this.off = () => {//«
+		if (is_folder) {
+			delete this.cursor;
+			this.cursor = null;
+		}
+		this.img_div._op= 0.5;
+		this.namespan._fw = "";
+		this.namespan._tcol= WINNAME_COL_OFF;
+		this.winElem._bgcol = WIN_COL_OFF;
+		if (this.butdiv) this.butdiv.off();
+		if (this.movediv) this.movediv.off();
+		if (this.area) {
+			this.area.selectionEnd = this.area.selectionStart;
+			this.area.blur();
+		}
+		this.winElem.style.boxShadow = "";
+		if (this.app && this.app.onblur) this.app.onblur();
+		if (this.isScrollable) this.main.blur();
+		if (this === CWIN) CWIN = null;
+		if (this.isMinimized) {
+			this.taskbar_button.onmouseup();
+			this.winElem._dis="none";
+		}
+	};
+	//»
+	this.setDefs = () => {//«
+		if (isMobile) this.fullscreen(true);
+		let a = this.app;
+		a.winid = this.id;
+		a.topwin = this;
+		if (!a.onresize) a.onresize = NOOP;
+		if (!a.onappinit) a.onappinit = NOOP;
+		if (!a.onkill) a.onkill = NOOP;
+		if (!a.onsave) a.onsave = NOOP;
+		if (!a.onloadfile) a.onloadfile = NOOP;
+		if (!a.onfocus) a.onfocus = NOOP;
+		if (!a.onblur) a.onblur = NOOP;
+		if (!a.onkeydown) a.onkeydown = NOOP;
+		if (!a.onkeyup) a.onkeyup = NOOP;
+		if (!a.onkeypress) a.onkeypress = NOOP;
+		if (!a.get_context) a.get_context = ()=>{return [];}
+	//	check_win_visible(this);
+
+	};//»
+	this.checkVisible=()=>{//«
+		let rect = win.getBoundingClientRect();
+		if (!rect) return;
+		if ((rect.left > winw()) || (rect.right < 0) || (rect.top > winh()) || rect.bottom < 0) {
+			cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
+			win._loc(0, 0);
+		}
+	};
+	//»
+	this.checkLoc = () => {//«
+		let rect = win._gbcr();
+		let w = rect.width,
+			h = rect.height;
+		let miny = 0;
+		if (win._x < 0) {
+			if (!win_overflow.left) win._x= 0;
+			else if (win._x + w < 0) win._x += 2 * win_move_inc;
+		} else if (win._x + w > winw()) {
+			if (!win_overflow.right) win._x= winw() - w;
+			else if (win._x > winw()) win._x -= 2 * win_move_inc;
+		}
+		if (win._y < miny) {
+			if (!win_overflow.top) win._y= miny;
+			else if (win._y + h < 0) win._y += 2 * win_move_inc;
+		} else if (win._y > miny && win._y + h > winh()) {
+			if (!win_overflow.bottom) {
+				let usey = winh() - h;
+				if (usey < miny) usey = miny;
+				win._y= usey;
+			} else if (win._y > winh()) win._y -= 2 * win_move_inc;
+		}
+	}//»
+	this.checkSize = () => {//«
+
+		let wid = main._w;
+		if (wid < win.clientWidth){
+			main._w = win.clientWidth;
+		}
+		else if (wid < min_win_width) {
+			main._w = min_win_width;
+		}
+//		if (main._w < min_win_width) main._w= min_win_width;
+		else if (win._x + win.clientWidth > winw()) {
+			if (!win_overflow.right) main._w= winw() - win._x;
+		}
+		if (win._h < 1) win._h = 1;
+		else if (win._y + win.clientHeight > winh()) {
+			if (!win_overflow.bottom) {
+				let menu_hgt = 0;
+				let winfrills = this.titlebar._h + 15;
+				let calc_hgt = winh() - win._y - winfrills - 3;
+				if (calc_hgt < 1) calc_hgt = 1;
+				main._h = calc_hgt;
+			}
+		}
+	}//»
+	this.addToResizeWins=()=>{//«
+		if (!CRWINS) CRWINS=[];
+		if (CRWINS.indexOf(this)<0) {
+			CRWINS.push(this);
+		}
+	};//»
+	this.set_fullscreen_dims=()=>{//«
+		let usepl = 0;
+		let usepr = 0;
+		let pl = main._padl;
+		let pr = main._padr;
+		if (pl) usepl = pi(pl);
+		if (pr) usepr = pi(pr);
+		win._bor="";
+		win._x= 0;
+		if (this.noChromeMode) win._y=0;
+		else win._y= "-" + (this.titlebar._h) + "px";
+		main._w= winw() - usepl - usepr;
+		main._h = winh(true);
+	};//»
+	this.fullscreen = (if_instant) => {//«
+		if (this.isTransitioning) return;
+		let transend = e => {
+			win.style.transition = "";
+			main.style.transition = "";
+			this.statusBar.resize();
+			this.app.onresize();
+			if (this.movediv) this.movediv.update();
+			win.removeEventListener('transitionend', transend);
+			this.isTransitioning = null;
+			delete this.isTransitioning;
+		};
+		if (this.isTiled || this.isMinimized) return;
+		win.style.transition = `left ${WIN_TRANS_SECS},top ${WIN_TRANS_SECS}`;
+		main.style.transition = `width ${WIN_TRANS_SECS},height ${WIN_TRANS_SECS}`;
+
+		if (this.isFullscreen) {
+			win._bor= this.bor_hold;
+			delete this.bor_hold;
+			win._x= this.fsHoldX;
+			win._y= this.fsHoldY;
+			main._w= this.fsHoldW;
+			main._h = this.fsHoldH;
+			this.isFullscreen = false;
+		} else {
+			this.fsHoldW = main._w;
+			this.fsHoldH = main._h;
+			this.fsHoldX = win._x;
+			this.fsHoldY = win._y;
+			this.bor_hold = win._bor;
+			this.set_fullscreen_dims();
+			this.isFullscreen = true;
+		}
+
+		if (if_instant) transend();
+		else {
+			this.isTransitioning = true;
+			win.addEventListener('transitionend', transend);
+		}
+
+	}//»
+	this.set_max_dims = ()=>{//«
+		let usepl = 0;
+		let usepr = 0;
+		let pl = main._padl;
+		let pr = main._padr;
+		if (pl) usepl = pi(pl);
+		if (pr) usepr = pi(pr);
+		win._loc(1,0);
+		main.style.width = winw() - usepl - usepr - 2 + "px";
+		main.style.height = winh() - this.titlebar._gbcr().height - this.footer._gbcr().height + "px";
+		win.style.boxShadow = "";
+		max.innerText="\u{1f5d7}";
+		max.title="Unmaximize";
+	};//»
+	this.maximize = (if_instant) => {//«
+		if (this.isTiled||this.isTransitioning||this.isMinimized||this.isFullscreen) return;
+		let transend = e =>{
+			win.style.transition = "";
+			main.style.transition = "";
+			this.statusBar.resize();
+			this.app.onresize();
+			win.removeEventListener('transitionend', transend);
+			this.isTransitioning = null;
+			delete this.isTransitioning;
+		};
+		win.style.transition = `left ${WIN_TRANS_SECS}, top ${WIN_TRANS_SECS}`;
+		main.style.transition = `width ${WIN_TRANS_SECS}, height ${WIN_TRANS_SECS}`;
+		let max = this.max_button;
+		if (!this.isMaxed) {
+			this.maxholdw = main._w;
+			this.maxholdh = main._h;
+			this.maxholdx = win._x;
+			this.maxholdy = win._y;
+			this.isMaxed = true;
+			this.set_max_dims();
+		} else {
+			this.isMaxed = false;
+			main._w = this.maxholdw;
+			main._h = this.maxholdh;
+			win._x= this.maxholdx;
+			win._y= this.maxholdy;
+			win.style.boxShadow = window_boxshadow;
+			max.innerText="\u{1f5d6}";
+			max.title="Maximize";
+		}
+		if (if_instant) transend();
+		else {
+			this.isTransitioning = true;
+			win.addEventListener('transitionend', transend);
+//			this.isTransitioning = true;
+//			win.addEventListener('transitionend', transend);
+		}
+	};//»
+	this.minimize=()=>{this.minimize_button.click();};
+	this.close=()=>{this.keyKill();}
+	this.toggleLayout=(if_set)=>{//«
+		let get_cursor = (e, rect) => {//«
+			let lr_pad = rect.width * 0.25;
+			let tb_pad = rect.height * 0.25;
+			let lhit = false;
+			let rhit = false;
+			let thit = false;
+			let bhit = false;
+			let ret;
+			if (e.clientX < rect.left + lr_pad) lhit = true;
+			else if (e.clientX > rect.right - lr_pad) rhit = true;
+			if (e.clientY < rect.top + tb_pad) thit = true;
+			else if (e.clientY > rect.bottom - tb_pad) bhit = true;;
+			if (rhit && bhit) ret = ["nwse-resize", "se"];
+			else if (lhit && thit) ret = ["nwse-resize", "nw"];
+			else if (rhit && thit) ret = ["nesw-resize", "ne"];
+			else if (lhit && bhit) ret = ["nesw-resize", "sw"];
+			else if (rhit) ret = ["ew-resize", "e"];
+			else if (lhit) ret = ["ew-resize", "w"];
+			else if (thit) ret = ["ns-resize", "n"];
+			else if (bhit) ret = ["ns-resize", "s"];
+			else ret = ["move"];
+	//log(ret);
+			if (this.isTiled) {
+				if (ret[0][2]!=="-"||num_tiled_wins>MAX_TILED_WINS_FOR_RESIZING) return [""];
+
+	//Comment this to allow the more difficult case of north and west resizing...
+	//			if (ret[1]=="w"||ret[1]=="n") return [""];
+
+	//Need to figure out if this is an interior edge.
+
+				if ((lhit && rect.left <= 0)||
+					(thit && rect.top <= 0)||
+					(rhit && rect.right + 3 > winw())||
+					(bhit && rect.bottom + 3 > winh())) return[""];
+
+	//				if (bhit && rect.top > 0) return [""];
+
+			}
+			return ret;
+		};//»
+
+		let mkhandle = (wid, hgt, x, y) => {//«
+			let div = make('div');
+			div._bor= "1px solid black";
+			div._pos= "absolute";
+			div._w= wid;
+			div._h = hgt;
+			if (x) div._x= 0;
+			else div._r= 0;
+			if (y) div._y= 0;
+			else div._b= 0;
+			odiv._add(div);
+		};//»
+
+		if (this.isLayout) {
+			desk.style.cursor = "default";
+			this.movediv._del();
+			delete this.movediv;
+			delete this.rs_dir;
+			this.isLayout = false;
+			return;
+		}
+		let odiv;
+		let dsty = document.body.style;
+		let rect = win.getBoundingClientRect();
+		odiv = make('div');
+		let osty = odiv.style;
+		odiv._pos= "absolute";
+		odiv._w= rect.width;
+		odiv._h = rect.height; 
+		odiv._x= 0;
+		odiv._y= 0;
+		odiv._z= 10000000;
+		odiv.class = "titlebar";
+		odiv.win = this;
+		odiv.onmousemove = (e) => {
+			if (CDICN || CRW) return;
+	//		if (this.isLayout) return;
+			osty.cursor = get_cursor(e, odiv.getBoundingClientRect())[0];
+		};
+
+		odiv.oncontextmenu = nopropdef;
+
+		odiv.onmousedown = (e) => {//«
+			e.stopPropagation();
+			if (this != CWIN) this.on();
+			let arr = get_cursor(e, odiv.getBoundingClientRect());
+			let sty = arr[0];
+			osty.cursor = sty;
+			if (this.isTiled) {
+			if (!sty) return;
+
+//	Once we figure out the logic of how to resize the other windows that are 
+//	being overlapped, then we can comment out this.
+			}
+			if (sty == "move") {
+				CDW = this;
+				DDX = e.clientX - pi(win.offsetLeft);
+				DDY = e.clientY - pi(win.offsetTop);
+				return;
+			}
+			CRW = this;
+	//log(CRW);
+			CRW.startx = e.clientX;
+			CRW.starty = e.clientY;
+			CRW.startw = this.main._w;
+			CRW.starth = this.main._h;
+			CRW.rs_dir = arr[1];
+			CRW.startl = win._x;
+			CRW.startt = win._y;
+		};//»
+		odiv.onmouseup = e => {//«
+			update_and_clear_resize_wins();
+			CDW = null
+		};//»
+		odiv.update = () => {//«
+			let rect = win._gbcr();
+			odiv._w= rect.width;
+			odiv._h = rect.height;
+			statdiv.innerHTML = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
+		};//»
+		odiv.on=()=>{
+			statdiv._tcol= "#ccc";
+			odiv._bgcol= "rgba(224,224,224,0.4)";
+		};
+		odiv.off=()=>{
+			statdiv._tcol= "#999";
+			odiv._bgcol= "rgba(176,176,176,0.4)";
+		};
+		win._add(odiv);
+		this.movediv = odiv;
+		let statdiv = make('div');
+		statdiv._bgcol= "#000";
+		statdiv._fs= 21;
+		statdiv.vcenter();
+		statdiv._ta= "center";
+		statdiv._over="hidden";
+		odiv._add(statdiv);
+		odiv.update();
+		mkhandle("100%", "25%", 1, 1);
+		mkhandle("100%", "25%", 1, 0);
+		mkhandle("25%", "100%", 1, 1);
+		mkhandle("25%", "100%", 0, 1);
+		this.isLayout = true;
+		if (CWIN == this) odiv.on();
+		else odiv.off();
+
+
+	};//»
+	this.toggleChrome = () => {//«
+		if (this.isFullscreen || this.isMaxed || this.isMinimized) return;
+		this.noChromeMode = !this.noChromeMode;
+		let bar = this.titlebar;
+		let foot = this.footer;
+		let m = main;
+		if (this.noChromeMode) {
+			let h = bar._gbcr().height + foot._gbcr().height;
+			this.bor_hold = this._bor;
+			this._bor= "";
+			m.diff_h = h;
+			bar._dis= "none";
+			foot._dis= "none";
+			m._h += h;
+
+		} else {
+			bar._dis= "block";
+			foot._dis= "";
+			this._bor= this.bor_hold;
+			delete this.bor_hold;
+			m._h -= m.diff_h;
+		}
+		this.statusBar.resize();
+		this.app.onresize();
+		return true;
+	}//»
+this.selectIcons = () =>{//«
+//let drag_div = this.dragDiv;
+let drect = this.dragDiv.getBoundingClientRect();
+let dr = drect.right;
+let dl = drect.left;
+let dt = drect.top;
+let db = drect.bottom;
+let OK=[];
+
+let icons = this.getIcons();
+
+for (let icn of icons) {
+	let wrap = icn.wrapper;
+	if (!wrap) continue;
+	let rect = wrap.getBoundingClientRect();
+	if (rect.left > dr || rect.right < dl || rect.top > db || rect.bottom < dt) {
+		icn.off();
+	}
+	else {
+		OK.push(icn);
+//		icon_on(icn);
+		icn.on();
+	}
+	
+}
+ICONS = OK;
+};//»
+this.reload = (opts={})=>{//«
+	if (this.killed){
+		poperr("This window has been killed");
+		return;
+	}
+	if (this.app.actor && this.app.actor.ondevreload) return this.app.actor.ondevreload();
+	if (this.app.ondevreload) return this.app.ondevreload();
+	if (app.match(/^local\./)&&!opts.dataUrl){
+		return popup("'local' (development) applications cannot be independently reloaded!");
+	}
+	main.innerHTML=`<center><h2 style="background-color: #000; color: #aaa;">Reloading...</h2></center>`;
+	statdiv.innerHTML="";
+	let scr = gbid(`script_${app}`);
+	if (scr) {
+		scr._del();
+	}
+	else{
+cwarn(`No script found for app: ${app}`);
+	}
+	delete LOTW.apps[app];
+
+	this.app.onkill&&this.app.onkill(true);
+	let arg = this.app.arg;
+	arg.APPARGS = {reInit: this.app.reInit};
+	arg.noShow = opts.noShow;
+	arg.dataUrl = opts.dataUrl;
+	return new Promise((Y,N)=>{
+		arg.CB = Y;
+		main.innerHTML="";
+		make_app(arg);
+	});
+};//»
+
+//»
+//Event listeners«
+
+	if (is_folder) {//«
+		let didleave;
+		const clear_drag = () => {//«
+			WDIE = null;
+			let dd = this.dragDiv;
+			dd._loc(-1, -1);
+			dd._w = 0;
+			dd._h = 0;
+		};//»
+		const nogo=()=>{//«
+			if (!CDL) return;
+			CDL.nogo();
+			main.style.cursor = "not-allowed";
+		};//»
+		const on = () => {//«
+			if (!CDL) return;
+			main.style.cursor = "copy";
+			CDL.into(this.name);
+		};//»
+		const off = () => {//«
+			main.style.cursor = "";
+			if (CDL) CDL.reset();
+		};//»
+		main.onmousedown=e=>{//«
+			e.stopPropagation();
+			icon_array_off(20);
+			if (e.clientX < win.offsetLeft + main.clientWidth + winx() && e.clientY < win.offsetTop + main.clientHeight + this.titlebar._h + winy()) {
+				this.on();
+				WDIE = e;
+				WDIE.scrtop = main.scrollTop;
+				WDIE.scrleft = main.scrollLeft;
+				let gotw = main.scrollWidth - (e.clientX - win.offsetLeft + main.scrollLeft);
+				WDIE._maxWidth = gotw - 1 + winw();
+			}
+			if (CWIN == this) return;
+			CWIN&&CWIN.off();
+			this.on();
+		};//»
+		main.onmouseover=async e=>{//«
+			e.stopPropagation();
+			if (CDICN){
+				let thispath = this.fullpath;
+				if (CDICN.path === thispath) return nogo();
+				if (!await fsapi.checkDirPerm(thispath)||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
+				didleave = false;
+				if (!CDICN) return;
+				if (!didleave) on();
+			}
+		};//»
+		main.onmouseout=e=>{//«
+			e.stopPropagation();
+			off();
+			if (CDICN) {
+				didleave = true;
+			}
+		};//»
+		main.onmouseup=async e=>{//«
+			e.stopPropagation();
+			if (CDICN){
+				desk.style.cursor = "";
+				await move_icons(this.fullpath, {e, win: this});
+				off();
+				CWIN&&CWIN.off();
+				CDICN = null;
+				cldragimg();
+			}
+			else {
+				CRW = null;
+				CRWINS = null;
+				CDW = null;
+				clear_drag();
+			}
+		};//»
+		main.ondrop=e=>{//«
+			e.stopPropagation();
+			e.preventDefault();
+			save_dropped_files(e, this);
+		};//»
+		main.onmouseleave=e=>{clear_drag();};
+		main.ondragover=e=>{};
+		this.clear_drag = clear_drag;
+		win.onmouseover=noprop;
+		win.onmouseout=noprop;
+	}//»
+	else{//«
+		main.onmouseup=e=>{
+			CRW = null;
+			CRWINS = null;
+			CDW = null;
+		};
+		main.ondrop=e=>{
+cwarn("No drop on main window");
+		};
+		win.onmouseover=()=>{
+			if (!CDL) return;
+			CDL.nogo();
+			win.style.cursor = "not-allowed";
+			main.style.cursor = "not-allowed";
+		};
+		win.onmouseout=()=>{
+			if (!CDL) return;
+			CDL.reset();
+			win.style.cursor = "";
+			main.style.cursor = "";
+		};
+	}//»
+	title.ael('mouseover',()=>{body.style.cursor="default";});
+	titlebar.onmouseover=e=>{//«
+		if (CDL) titlebar.style.cursor = "";
+		else titlebar.style.cursor = "move";
+	};//»
+	titlebar.oncontextmenu = nopropdef;
+	titlebar.draggable=true;
+	titlebar.ondragstart=e=>{//«
+		e.preventDefault();
+//		if (this.isMaxed) this.max_button.reset();
+		if (this.isMaxed) return;
+		win.style.boxShadow = "";
+		CDW = thiswin;
+		DDX = e.clientX - pi(win.offsetLeft);
+		DDY = e.clientY - pi(win.offsetTop);
+	};//»
+	main.oncontextmenu = e => {//«
+//		if (isMobile) return;
+		e.preventDefault();
+		e.stopPropagation();
+//		if (have_window_cycle) return;
+//		if (!cmenu_active) return;
+//		if (this.contextMenuOn) this.contextMenuOn(e);
+	};//»
+	win.ondrop = e => {//«
+		e.stopPropagation();
+		e.preventDefault();
+	};//»
+	win.onclick=noprop;
+	win.ondblclick=noprop;
+	win.onmousedown=e=>{//«
+		e.stopPropagation();
+		icon_array_off(21);
+		this.on();
+	};//»
+	win.ondrop = nopropdef;
+	win.ondragover = nopropdef;
+//{//Touch scrolling of "main" div«
+//	let tch1;
+//	let scrt1;
+//	main.addEventListener('touchstart', e => {
+//		if (tch1) return;
+//		scrt1 = main.scrollTop;
+//		tch1 = e.touches[0];
+//	});
+//	main.addEventListener('touchmove', e =>{
+//		if (!tch1) return;
+//		let t = e.changedTouches[0];
+//		let dy = tch1.pageY - t.pageY;
+//		main.scrollTop = scrt1 + dy;
+//	});
+//	main.addEventListener('touchend', ()=>{
+//		tch1 = null;
+//	});
+//
+//}//»
+//»
+//Context menu«
+	this.contextMenuOn = (e) => {
+		if (!this.app.get_context) return;
+		let items = this.app.get_context();
+		if (!items) items = [];
+		items.push("Switch\xa0to\xa0workspace");
+		let choices = [];
+		for (let i=0; i < num_workspaces; i++){
+			if (i!=current_workspace_num){
+				choices.push(`${i+1}`);
+				choices.push(()=>{
+					if (windows.layout_mode) toggle_layout_mode();
+					switch_win_to_workspace(this, i);
+					this.off();
+					this.winElem._dis="none";
+					top_win_on();
+				});
+			}
+		}
+		items.push(choices);
+		items.push(`Window ${winid.replace(/^win_/,"")} properties...`, ()=>{
+			let rect = win._gbcr();
+			let str = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
+			popup(str);
+		});
+//		items.push(`Window id: ${winid.replace(/^win_/,"")}`, null);
+		CG.on();
+		let op_hold = img_div._op;
+		let usex,usey;
+		if (e) {
+			usex = e.clientX;
+			usey = e.clientY;
+		}
+		else{
+			img_div._bgcol= "#fff";
+			img_div._tcol= "#000";
+			img_div._op=1;
+			let rect = win._gbcr();
+			usex = rect.left;
+			usey = rect.top+this.titlebar._h;
+		}
+		set_context_menu({X:usex,Y:usey},{items: items});
+		desk_menu.kill_cb = () => {
+			img_div._op=op_hold;
+			img_div._bgcol= "";
+			img_div._tcol="#a7a7a7";
+//HFYUIOTS
+//			if (this.app&&this.app.onfocus) {
+//				setTimeout(this.app.onfocus,50);
+//			}
+		};
+	};//»
+
+//Make app«
+
+	arg.topwin = this;
+//	arg.FS_URL = fs_url;
+	if (arg.SAVER) {
+		this.bottompad = botpad;
+		this.saver = arg.SAVER;
+		arg.SAVER.folderCb(this);
+	}
+	make_app(arg);
+	windows.push(this);
+
+	if (winargs.isMaxed){
+		max.innerText="\u{1f5d7}";
+		this.isMaxed = true;
+		let dims = winargs.holdDims;
+		this.maxholdx=dims.X;
+		this.maxholdy=dims.Y;
+		this.maxholdw=dims.W;
+		this.maxholdh=dims.H;
+	}
+	if (winargs.isFullscreen){
+		this.isFullscreen = true;
+		let dims = winargs.holdDims;
+		this.fsHoldX=dims.X;
+		this.fsHoldY=dims.Y;
+		this.fsHoldW=dims.W;
+		this.fsHoldH=dims.H;
+	}
+//»
+
+}
+//»

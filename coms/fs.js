@@ -175,7 +175,7 @@ const com_vim = async (args,opts, _) => {//«
 			if (!await fsapi.checkDirPerm(path)) return terr(`${fullpath}: Permission denied`);
 		}
 		else {
-			if (node.write_locked()) return terr(`${path}: Is locked by another application`);
+			if (node.writeLocked()) return terr(`${path}: Is locked by another application`);
 			if (node.appName === FOLDER_APP) return terr(`${fullpath}: Is a directory`);
 			val = await node.getValue({text:true});
 			if (!isStr(val)){

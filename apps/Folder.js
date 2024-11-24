@@ -30,7 +30,7 @@ export const app = function(Win) {
 
 //Var«
 
-const {Main, Desk, status_bar} = Win;
+const {Main, Desk, statusBar: status_bar} = Win;
 
 const statbar = status_bar;
 
@@ -70,9 +70,9 @@ icondv.style.flexShrink=0;
 icondv.style.flexGrow=0;
 icondv.style.flexWrap="wrap";
 Main._add(icondv);
-Win.drag_div = dd;
-Win.icon_div = icondv;
-Main.icon_div = icondv;
+Win.dragDiv = dd;
+Win.iconDiv = icondv;
+Main.iconDiv = icondv;
 
 let num_div = mkdv();
 let cur_div = mkdv();
@@ -164,7 +164,7 @@ const go_back = ()=>{//«
 		opts.SAVER = Win.saver;
 	}
 	Win.easyKill();
-	Desk.open_file_by_path(arr.join("/"), null, opts);
+	Desk.open_file_by_path(arr.join("/"), opts);
 };//»
 const go_forth=()=>{//«
 	if (!prev_paths) return;
@@ -180,7 +180,7 @@ cwarn("Cannot go forward with goto_path ===", goto_path);
 		opts.SAVER = Win.saver;
 	}
 	Win.easyKill();
-	Desk.open_file_by_path(goto_path, null, opts);
+	Desk.open_file_by_path(goto_path, opts);
 };//»
 
 const load_dir=()=>{//«

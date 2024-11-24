@@ -1,0 +1,303 @@
+//«
+const Node = function(arg){
+
+	const {isDir, isLink} = arg;
+	const okget=()=>{//«
+		if (this.type==MOUNT_TYPE||this.type==SHM_TYPE) return true;
+		let bid = this.blobId;
+		if (!bid || bid < FIRST_BLOB_ID) {
+			return;
+		}
+		return true;
+	};//»
+	const okset=()=>{//«
+		if (this.type!==FS_TYPE) {
+			if (this.type==SHM_TYPE) return true;
+			return false;
+		}
+		let bid = this.blobId;
+		if (!bid || bid < FIRST_BLOB_ID) return false;
+//		if (this.data) return false;
+		return true;
+	};//»
+	const setname=val=>{//«
+		this._name = val;
+		if (isDir||isLink){
+			this.baseName = val;
+			return;
+		}
+		let arr = getNameExt(val);
+		if (arr[1]) {
+			this.ext = arr[1];
+			this.baseName = arr[0];
+		}
+		else {
+			this.ext="";
+			this.baseName = val;
+		}
+	};//»
+	for (let k of Object.keys(arg)){//«
+		this[k] = arg[k];
+		if (k=="name") setname(arg[k]);
+		if (k=="kids"){
+			this.kids["."]=this; 
+			this.kids[".."]=this.par;
+		}
+	}//»
+
+	this.getRealBlobId=async()=>{//«
+		let bid = get_blob_id();
+		this.blobId = bid;
+		if (!await db.setNodeBlobID(this.id, bid)) {
+cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
+			return;
+		}
+		return true;
+	};//»
+	this.getValue = async opts=>{//«
+		if (!okget()) return;
+		if (this.blobId == IDB_DATA_TYPE) {
+			if (opts && opts.text) {
+cwarn("This is a data node, but opts.text was specified in getValue!");
+				try{
+					return JSON.stringify(this.data);
+				}catch(e){
+cerr(e);
+				}
+				return this.data.toString();
+			}
+			let dat = this.data;
+			return dat;
+		}
+		return getBlob(this, opts);
+	};//»
+	this.getDataType = () => {//«
+		if (this.blobId !== IDB_DATA_TYPE) return;
+		return this.data.type;
+	};//»
+	this.getDataValue = () => {//«
+		if (this.blobId !== IDB_DATA_TYPE) return;
+		return this.data.value;
+	};//»
+	this.setDataValue=async(val)=>{//«
+		if (this.blobId != IDB_DATA_TYPE){
+cerr("Cannot set data value on non-data node");
+			return;
+		}
+		let dat = this.data;
+		if (!dat){
+cerr("Data not found");
+log(this);
+			return;
+		}
+		dat.value = val;
+		if (!await db.setNodeData(this.id, this.data)) {
+cerr("Could not set node data");
+			return;
+		}
+		return true;
+	};//»
+	this.setValue = async (val, opts={})=>{//«
+		if (this.blobId == IDB_DATA_TYPE){
+			if (!(isObj(val) && isStr(val.type))){
+cerr(`Expected an object with a 'type' field! (for inline data storage)`);
+				return;
+			}
+			if (this.data.type !== val.type){
+cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
+			}
+			if (!await db.setNodeData(this.id, val)) {
+cerr("Could not set node data", this);
+				return;
+			}
+			this.data = val;
+			return true;
+		}
+		if (!okset()) return;
+		let blob = toBlob(val);
+		if (!blob){
+cerr("Unknown value", val);
+			return;
+		}
+		opts.node = this;
+		if (this.blobId===NULL_BLOB_FS_TYPE){//«
+			if (!await this.getRealBlobId()){
+cerr("Could not getRealBlobId()!?!?!?");
+				return;
+			}
+		}//»
+		opts.node = this;
+		let rv = await write_blob(await this.entry, blob, opts);
+		rv.node = this;
+		return rv;
+	};//»
+
+	Object.defineProperty(this,"buffer",{get:()=>{if(!okget())return;return getBlob(this,{buffer:true});}});
+	Object.defineProperty(this,"bytes",{get:()=>{if(!okget())return;return getBlob(this,{bytes:true});}});
+	Object.defineProperty(this, "text", {//«
+		get: () => {
+			if (!okget()) return;
+			return getBlob(this, {
+				text: true
+			});
+		}
+	});//»
+	if (isLink){//«
+		Object.defineProperty(this, "link", {
+			get: () => {
+				let symlink = this.symLink;
+				if (symlink.match(/^\x2f/)) return symlink;
+				return `${this.path}/${symlink}`;
+			}
+		});
+		Object.defineProperty(this, "ref", {
+			get: () => {return pathToNode(this.link);}
+		});
+	}//»
+	Object.defineProperty(this, "_file", {//«
+		get: () => {
+			if (!okget()) return;
+			return getBlob(this, {
+				getFileOnly: true
+			});
+		}
+	});//»
+	Object.defineProperty(this, "fullpath", {//«
+		get:()=>{
+			let str = this.name;
+			if (!str) return null;
+			let curobj = this;
+			let i = 0;
+			while (true) {
+				if (curobj && curobj.par) str = `${curobj.par.name}/${str}`;
+				else break;
+				curobj = curobj.par;
+				i++;
+			}
+			let arr = str.split("/");
+			while (!arr[0] && arr.length) {
+				arr.shift();
+				i++;
+			}
+			str = arr.join("/");
+			return ("/" + str).regpath();
+		}
+	});//»
+	Object.defineProperty(this, "entry", {//«
+		get: async() => {
+			if (this._entry) return this._entry;
+			if (!okget()) return;
+			let id = this.blobId;
+			if (id === NULL_BLOB_FS_TYPE){
+				id = get_blob_id();
+				this.blobId = id;
+			}
+			else if (this.type==SHM_TYPE) return;
+			else if (!Number.isFinite(id)) {
+cerr(`The node does not have a valid blobId: ${id}`);
+log(this);
+				return;
+			}
+			let ent = await get_blob_entry(id);
+			this._entry = ent;
+			return ent;
+		},
+		set: ent =>{
+cwarn("WHO SET ENTRY?", this, ent);
+			this._entry = ent;
+		}
+	});//»
+	Object.defineProperty(this, "type", {get:()=>this.root._type});
+	Object.defineProperty(this, "name", {//«
+		set: setname,
+		get: ()=>this._name
+	});//»
+	Object.defineProperty(this, "path", {//«
+		get:()=>{
+			if (this._path) return this._path;
+			return this.par.fullpath;
+		}
+	});//»
+
+	this.writeLocked=()=>{
+		return LOCKED_BLOBS[this.blobId];
+	};
+	this.icons = [];
+}//»
+const write_blob = async(fent, blob, opts={}) => {//«
+	if (globals.read_only) return;
+	let{
+		append,
+		spliceStart,
+		spliceEnd,
+		node
+	} = opts;
+	let append_from;
+
+	let f, sz1, sz2;
+	let truncsz;
+	if (node){
+		f = await opts.node._file;
+	}
+	if (Number.isFinite(spliceStart) && spliceEnd){
+		let sz1;
+		let endblob = await get_data_from_fs_file(f, "blob", spliceEnd-1);
+		blob = new Blob([blob, endblob]);
+		sz1 = f.size;
+		sz2 = blob.size + spliceStart;
+		truncsz = sz2;
+	}
+	if (node && node.type==SHM_TYPE){
+		if (append&&node._blob){
+			blob = new Blob([node._blob, blob]);
+		}
+		node._blob = blob;
+		return {size: blob.size};
+	}
+	let writer = await fent.createWritable({keepExistingData: append || spliceStart});
+	if (append||spliceStart) {
+		if (spliceStart) writer.seek(spliceStart);
+		else writer.seek(f.size);
+	}
+	await writer.write(blob);
+
+	if (Number.isFinite(sz2)){
+		await writer.truncate(sz2);
+		await writer.close();
+		return {size: sz2, diff: sz2-sz1};
+	}
+//	if (append){
+//		await writer.truncate(sz1+blob.size);
+//	}
+	await writer.close();
+	return {size: blob.size};
+//	else return blob.size;
+
+}
+//»
+//Old Issues«
+//@WMNJUGFNH Not removing blobs with 'rm' command
+/*@JEPOLMNYTH: When "copying" files from /mnt/ through the desktop interface 
+we needed to get the icon from the provided dom_objects, and the set the node
+property with the newly created node. Otherwise, any windows opened with this
+icon would think they were /mnt/ windows (and refuse to save the file) because
+the icon.fullpath would return the value from the old node.
+*/
+
+/*Early OCTOBER 2023:«
+Just switched this to the Origin Private File System format (instead of the old webkitRequestFileSystem way),
+which uses navigator.storage.getDirectory(). 
+Still need to implement command line append ">>", which would force us to do a writer.seek 
+@YTGEOPIUNMH. Otherwise, we have seek working in append_slice @EOPKIMNHKJ.
+
+The only other issue might be doing a truncate.
+
+Now, want to work on more possibilities for the ways that data is stored inline, inside the indexedDB.
+
+Per: https://developer.mozilla.org/en-US/docs/Web/API/FileSystemHandle
+
+»*/
+/*_TODO_: Tilde expansion, allowing for arbitrary relative paths in Link«
+targets.
+»*/
+//»

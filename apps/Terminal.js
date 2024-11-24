@@ -1987,8 +1987,8 @@ const write_to_redir=async(term, out, redir, env)=>{//«
 			if (env.CLOBBER_OK==="true"){}
 			else return {err: `Not clobbering the file (ALLOW_REDIRECT_CLOBBER==${ALLOW_REDIRECT_CLOBBER})`};
 		}
-		if (node.write_locked()){
-			return {err:`${fname}: the file is "write locked" (${node.write_locked()})`};
+		if (node.writeLocked()){
+			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
 		}
 		if (node.data){
 			return {err:`${fname}: cannot write to the data file`};
@@ -2054,7 +2054,15 @@ const execute_file = async (comword, script_args, cur_dir, env)=>{//«
 	for (let ln of lines){
 		let com = ln.trim();
 		if (!com) continue;
-		let {code, isExit} = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
+//		let {code, isExit} = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
+		let code, isExit;
+		let rv = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
+if (isObj(rv)){
+({code, isExit}=rv);
+}
+else{
+cerr("WHAT IS RV", rv);
+}
 		last_code = code;
 		if (isExit) break;
 	}
@@ -2087,15 +2095,8 @@ worthy
 »*/
 
 const terr=(arg, if_script)=>{//«
-
-if (script_out){
-	script_out.push(arg);
-}
-else {
 	term.response(arg, {isErr: true});
 	if (!if_script) term.response_end();
-}
-
 };//»
 const can=()=>{//«
 //Cancel test function
@@ -3008,7 +3009,7 @@ export const app = function(Win) {
 const TABSIZE = 4;
 const TABSIZE_MIN_1 = TABSIZE-1;
 
-const {main, Desk, status_bar} = Win;
+const {main, Desk, statusBar: status_bar} = Win;
 const topwin = Win;
 const winid = topwin.id;
 const termobj = this;

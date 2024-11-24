@@ -191,7 +191,7 @@ let use_padl=0;
 
 const NOPROPDEF=e=>{e.stopPropagation();e.preventDefault();};
 
-let statbar = Win.status_bar;
+let statbar = Win.statusBar;
 let Main = Win.main;
 Main._bgcol="#111";
 let canvas = mk('canvas');
