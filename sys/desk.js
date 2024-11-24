@@ -1,16 +1,16 @@
 /*11/22/24« Want to update the logic in 'make_app' (@DIOLMTNY) to reflect modern 
-standards, namely replacing the callback logic with Promises. Then, go through all 
-of the ways that application windows are opened to use this new logic.
+standards, namely replacing the callback logic (@BGEIUOP) with Promises. Then, go 
+through all of the ways that application windows are opened to use this new logic.
 
 HAVING ALL SORTS OF PROBLEMS RENAMING ICONS TO DIFFERENT APPLICATIONS (PARTICULARLY TO
 THE DEFAULT BINVIEW APPLICATION), AND THEN OPENING THEM AFTER RENAMING THEM!!!
 
 @FKIOPIU: figured out how to point to the "real" "imgdiv". The one at
 wrapper.childNodes[0] could sometimes be the little thing at the top-left
-corner of the text icons. So when we rename (via the Terminal's 'mv' command)
+corner of the text icons. So when we updateDOMElement (via the Terminal's 'mv' command)
 from a text icon to a DEF_BIN_APP icon, it still keeps the little thing at the
 top-left corner (e.g. "txt" or whatever the text extension is). So we just need
-to delete this dumb thing (created @YPOIKLJ) @LCUITYEP in Icon.rename!!! Took
+to delete this dumb thing (created @YPOIKLJ) @LCUITYEP in Icon.updateDOMElement!!! Took
 away the apparently superfluous logic @GJKLIUYT. This attempt to tag
 *everything* with '.iconElem' might be related to the algorithmic "paranoia" of
 making sure that the icon cursor can always select the icon in places like
@@ -18,9 +18,13 @@ making sure that the icon cursor can always select the icon in places like
 
 NEED TO FILTER ALL OF THIS NAMING/IMAGING/RENAMING/REIMAGING LOGIC THROUGH THE VERY 
 SAME METHODS (RATHER THAN DOING THE ONE THING IN THE MAIN BODY OF THE ICON LOGIC
-AND THE OTHER IN A RENAME METHOD)!!!! ALSO, IT IS CONFUSING TO HAVE AN ICON.setName
+AND THE OTHER IN A RENAME METHOD)!!!! ALSO, IT IS CONFUSING TO HAVE AN ICON.setLabelName
 method (which only changes the name in the icon's "namespan") AS WELL AS AN
-ICON.rename (which internally calls setName and does other stuff besides).
+ICON.updateDOMElement (which internally calls setLabelName and does other stuff besides).
+
+We need a single method that does all of the creation of icon images (including
+deleting anything that might already be there as well, and adding whatever "frills"
+are necessary like those 'txt' things in the upper left corners...).
 
 »*/
 //Imports«
@@ -1059,7 +1063,7 @@ drag_timeout = setTimeout(()=>{
 			off();
 			return;
 		}
-		if (CDL && CDL.clear) CDL.clear();
+		if (CDL && CDL.clearFromStorage) CDL.clearFromStorage();
 	};//»
 	desk.onmouseover = e => {//«
 		if (CDL && CDL.copyto) CDL.copyto("Desktop");
@@ -1522,131 +1526,59 @@ setTimeout(()=>{
 //»
 //Icons«
 
-const Icon = function(node, opts={}){//«
-let {elem, observer, ref}=opts;
+class Icon {//«
 
-//Var«
+constructor(node, opts={}){//«
 
-let fullname = node.name;
-let name = node.baseName;
-let ext;
-let ext_text;
-let usenode = node;
+	let {elem, observer, ref}=opts;
 
-let app;
-let linkapp;
-let islink=false;
+	this.elem = elem;
+	this.node = node;
+	this.ref = ref;
 
-if (node.link){
-	islink = true;
-	this.link = node.link;
-	usenode = ref;
-}
+	this.makeDOMElem();
+	this.setApp();
+	this.setImg();
+	this.setLabelName();
+	this.addDOMListeners();
 
-if (usenode && usenode.ext) {
-	ext = usenode.ext.toLowerCase();
-	if (TEXT_EXTENSIONS.includes(ext)) {
-		ext_text = ext;
-	}
-}
+	if (!node.fake) node.icons.push(this);
 
-if (node.kids) app=FOLDER_APP;
-else if (node.appicon){
-	try{
-		app=JSON.parse(node.appicon).app;
-		ext_text = "\u{2699}";
-	}
-	catch(e){cerr(e);};
-}
-else if (islink){
-	app = ref.appName;
-	islink = true;
-}
-else if (node.appName) app = node.appName;
-else if (ext) {
-	app = extToApp(ext);
-}
+	if (observer) {//«
+		this.moveCb=()=>{
+			observer.unobserve(this.iconElem);
+			delete this.moveCb;
+		};
+	}//»
 
-if (!app) app = DEF_BIN_APP;
-
-if (app=="Application"&&ref&&ref.appicon){
-	try{linkapp=JSON.parse(node.ref.appicon).app;}
-	catch(e){cerr(e);};
-}
-
-let isFolder = (app === FOLDER_APP) || (ref && ref.appName === FOLDER_APP);
-
-//»
-
-//DOM«
-
-let d;
-let icn = this;
-if (elem) d = elem;
-else {
-	d = make("div");
-	d.className="icon";
-}
-let iconelm = d;
-d.iconElem = d;
-d.icon = this;
-
-let ext_div="";
-let usename=name;
-if (ext_text){
-//YPOIKLJ
-	ext_div = `<div class="iconext">${ext_text}</div>`;
-	if (ref){
-		let a = name.split(".");
-		if (a.length > 1 && ext_text === a.pop().toLowerCase()){
-			usename = a.join(".");
-		}
-	}
-}
-let ch = getAppIcon(linkapp||app,{html:true});
-d.innerHTML=`<span class="iconw">${ext_div}<span class="iconi">${ch}</span></span><div class="iconl"><div class="iconn"></div></div>`;
-d._z=ICON_Z;
-
-let wrapper = d.childNodes[0];
-wrapper.draggable=true;
-wrapper.iconElem=d;
-
-//GJKLIUYT
-//let img = wrapper.childNodes[0];
-//img.iconElem = d;
-
-let label = d.childNodes[1];
-label._over="hidden";
-let namesp = label.childNodes[0];
-label.iconElem = d;
-label.title = name;
-
-//»
-
-//Listeners«
-
-//if (node.appName !== FOLDER_APP) {
-if (!isFolder) {//«
-	wrapper.ondragover=nopropdef;
-	wrapper.ondrop=e=>{
-		e.stopPropagation();
-		e.preventDefault();
-		popup("Cannot drop files onto non-folders!");
-	};
 }//»
-else {//«
+
+setLabelName(){//«
+	let s = this.node.baseName;
+	this.nameSpan.innerHTML="";
+	if (s.length > MAX_ICON_NAME_LEN) s = s.slice(0, MAX_ICON_NAME_LEN)+"...";
+	this.nameSpan.innerText = s.replace(/-/g, "\u{2011}");
+};//»
+showLabelName(){this.label._over="";}
+hideLabelName(){this.label._over="hidden";}
+addDOMListeners(){//«
+
+let {wrapper, iconElem: iconelm, ref, node} = this;
+
+if (this.isFolder) {//«
+
 let didleave;
 let isopen = false;
 let in_transit = false;
 let not_allowed = false;
-let on = () => {//«
+const on = () => {//«
 	isopen = true;
 	wrapper.style.cursor = "copy";
 	if (!CDL) return;
-	CDL.into(icn.name); 
-	icn.imgdiv.innerHTML = '\u{2009}\u{1f4c2}';
+	CDL.into(this.name); 
+	this.imgDiv.innerHTML = '\u{2009}\u{1f4c2}';
 };//»
-let off = () => {//«
+const off = () => {//«
 	if (in_transit) return;
 	not_allowed=false;
 	isopen = false;
@@ -1654,19 +1586,20 @@ let off = () => {//«
 	wrapper.style.cursor="";
 	if (!CDL) return;
 	CDL.reset();
-	icn.imgdiv.innerHTML = '\u{1f4c1}';
+	this.imgDiv.innerHTML = '\u{1f4c1}';
 };//»
+
 wrapper.onmouseover = async e => {//«
 	e.stopPropagation();
 	if (!CDICN) return;
-	if (CDICN === icn) return;
+	if (CDICN === this) return;
 	let node = this.node;
 	let typ = node.type;
 	if (ref) {
 		ref.type;
 		node = ref;
 	}
-	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === icn.linkfullpath) || (newPathIsBad(CDICN.fullpath, icn.linkfullpath + "/" + CDICN.name))) {
+	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
 		not_allowed = true;
 	}
 	didleave = false;
@@ -1679,7 +1612,7 @@ wrapper.onmouseover = async e => {//«
 };//»
 wrapper.onmouseout = e => {//«
 	off();
-	if (CDICN === icn) return;
+	if (CDICN === this) return;
 	e.stopPropagation();
 	if (!CDICN) return;
 	didleave = true;
@@ -1687,7 +1620,7 @@ wrapper.onmouseout = e => {//«
 wrapper.onmouseup = async e => {//«
 	e.stopPropagation();
 	if (CDICN) {
-		icn.off(true);
+		this.off(true);
 		if (!ICONS.length) return;
 		desk.style.cursor = "";
 		if (not_allowed) {
@@ -1701,16 +1634,16 @@ wrapper.onmouseup = async e => {//«
 		}
 		let rect = iconelm._gbcr();
 		in_transit = true;
-		await move_icons(icn.fullpath, {loc:{X: rect.left, Y: rect.top}});
+		await move_icons(this.fullpath, {loc:{X: rect.left, Y: rect.top}});
 		in_transit = false;
 		off();
 		CWIN&&CWIN.off();
-		if (icn.parWin !== desk) icn.parWin.on();
+		if (this.parWin !== desk) this.parWin.on();
 		CDICN = null;
 		cldragimg();
 		for (let icn of ICONS) icn.off();
 		ICONS=[];
-		if (icn.win) icn.win.app.reload();
+		if (this.win) this.win.app.reload();
 		return;
 	}
 	if (DDIE) {
@@ -1719,8 +1652,8 @@ wrapper.onmouseup = async e => {//«
 		DDD._w= 0;
 		DDD._h = 0;
 	}
-	if (icn.parWin === desk) return;
-	icn.parWin.clear_drag();
+	if (this.parWin === desk) return;
+	this.parWin.clear_drag();
 };//»
 wrapper.ondragover=e=>{//«
 	e.stopPropagation();
@@ -1729,20 +1662,30 @@ wrapper.ondragover=e=>{//«
 wrapper.ondrop=async e=>{//«
 	e.stopPropagation();
 	e.preventDefault();
-	let win = await icn.openWin();
+	let win = await this.openWin();
 	await save_dropped_files(e, win);
 };//»
 
-}
-//}//»
+}//»
+else {//«
+
+wrapper.ondragover=nopropdef;
+wrapper.ondrop=e=>{
+	e.stopPropagation();
+	e.preventDefault();
+	popup("Cannot drop files onto non-folders!");
+};
+
+}//»
+
 wrapper.ondragstart = e => {//«
 	e.preventDefault();
 	e.stopPropagation();
 	if (globals.read_only) return;
 	let par = iconelm.parentNode;
-	CDICN = icn;
+	CDICN = this;
 	CDL = make_cur_drag_img();
-	if (par !== desk) par = par.parentNode; /*Sad but true(for now):origins are always the mainwin,NOT topwin OR icon_div*/
+	if (par !== desk) par = par.parentNode; //Sad but true(for now):origins are always the mainwin,NOT topwin OR icon_div
 	desk.style.cursor = "grabbing";
 	CDL._loc(e.clientX + CDL_OFFSET - winw(), e.clientY + CDL_OFFSET - winy());
 	desk._add(CDL);
@@ -1750,17 +1693,17 @@ wrapper.ondragstart = e => {//«
 wrapper.onmousedown = e => {//«
 	e.stopPropagation();
 	if (e.button != 0) return;
-	let par = icn.parWin;
+	let par = this.parWin;
 	if (par === desk) {
 		CWIN&&CWIN.off();
 	}
 	else par.on();
-//	if (e.ctrlKey&&ICONS.includes(icn)) icon_off(icn,true);
-	if (e.ctrlKey&&ICONS.includes(icn)) icn.off(true);
-	else if (!ICONS.includes(icn)) {
+//	if (e.ctrlKey&&ICONS.includes(this)) icon_off(this,true);
+	if (e.ctrlKey&&ICONS.includes(this)) this.off(true);
+	else if (!ICONS.includes(this)) {
 		if (!e.ctrlKey) icon_array_off(18);
-//		icon_on(icn,true);
-		icn.on(true);
+//		icon_on(this,true);
+		this.on(true);
 	}
 };//»
 wrapper.onclick = e => {//«
@@ -1774,16 +1717,16 @@ let menu = [//«
 "Properties",()=>{show_node_props(node);},
 "Rename", () => {
 	setTimeout(() => {
-		icn.nodelete = true;
-		init_icon_editing(icn);
+		this.nodelete = true;
+		init_icon_editing(this);
 	}, 25);
 }, 
-"Delete", () => {delete_selected_files(icn);}
+"Delete", () => {delete_selected_files(this);}
 ];//»
-let open_opts=["Binary\xa0Viewer", ()=>{open_icon(icn,{useApp: DEF_BIN_APP});}];
-if (icn.appName !== FOLDER_APP){
-	if (TEXT_EXTENSIONS.includes(icn.ext)){
-		open_opts.unshift(()=>{open_icon(icn,{useApp:TEXT_EDITOR_APP});});
+let open_opts=["Binary\xa0Viewer", ()=>{open_icon(this,{useApp: DEF_BIN_APP});}];
+if (this.appName !== FOLDER_APP){
+	if (TEXT_EXTENSIONS.includes(this.ext)){
+		open_opts.unshift(()=>{open_icon(this,{useApp:TEXT_EDITOR_APP});});
 		open_opts.unshift("Text\xa0Editor");
 	}
 	menu.unshift(open_opts);
@@ -1794,71 +1737,160 @@ set_context_menu({X:e.clientX,Y:e.clientY},{items:menu});
 };//»
 wrapper.ondblclick = e => {//«
 	e.stopPropagation();
-	icn.dblclick = true;
-	open_icon(icn, {e: e});
+	this.dblclick = true;
+	open_icon(this, {e: e});
 };//»
-//detectClick(wrapper, 100,()=>{
-//	open_icon(icn);
-//});
 
-//»
-//Methods«
-
-if (observer) {//«
-	this.move_cb=()=>{
-		observer.unobserve(d);
-		delete this.move_cb;
-	};
-}//»
-this.del=()=>{//«
-	if (!d.parentNode) return;
-	this.clear(null,1);
-	d._del();
-};//»
-this.set_window_name = (name) => {//«
-	let win = this.win;
-	if (!win) return;
-	win.title = name;
-	win.name = name;
-}//»
-this.off = do_vacate => {//«
-//	if (!(icn && icn.imgdiv)) return;
-	if (do_vacate && ICONS.includes(icn)) ICONS.splice(ICONS.indexOf(icn), 1);
-//	icn.iconElem._bor= "2px solid transparent";
-	wrapper._bor="";
-	icn.iconElem._bgcol="";
-	label._bgcol="";
-	namesp._bgcol="";
-	label._tcol="";
-	icn.isOn=false;
-	if (icn.parWin!==desk) {
-		if (ICONS.length===1) icn.parWin.app.stat(ICONS[0].fullname);
-		else icn.parWin.app.stat(`${ICONS.length} selected`);
-	}
-}//»
-this.on = do_add => {//«
-	if (isMobile) return;
-	let iconelm = icn.iconElem;
-	if (do_add && !ICONS.includes(icn)) {
-		if (ICONS.length && (icn.parWin !== ICONS[0].parWin)) icon_array_off(9);
-		ICONS.push(icn);
-	}
-	wrapper._bor = "1px solid #ff0";
-	label._bgcol="#bb0";
-	label._tcol="#000";
-	namesp._bgcol="#bb0";
-
-	if (iconelm.parentNode === desk) {
-		iconelm._bgcol= DESK_ICON_BG;
+{
+	let typ;
+	if (ref) typ = ref.type;
+	else typ = node.type;
+	this.type = typ;
+	if (typ!==FS_TYPE && this.isFolder){
+		this.noMove = true;
 	}
 	else {
-		iconelm._bgcol= FOLDER_ICON_BG;
-		if (ICONS.length===1) icn.parWin.app.stat(icn.fullname);
-		else icn.parWin.app.stat(`${ICONS.length} selected`);
+		this.noMove = false;
 	}
-	icn.isOn = true;
+}
+
 }//»
-this.add_overlay = () => {//«
+makeDOMElem(){//«
+	let d;
+	if (this.elem) d = this.elem;
+	else {
+		d = make("div");
+		d.className="icon";
+	}
+	d._z=ICON_Z;
+	this.iconElem = d;
+	d.iconElem = d;
+	d.icon = this;
+	d.innerHTML=`<span class="iconw"></span><div class="iconl"><div class="iconn"></div></div>`;
+
+	let wrapper = d.childNodes[0];
+	this.wrapper = wrapper;
+	wrapper.draggable=true;
+	wrapper.iconElem=d;
+
+	let label = d.childNodes[1];
+	label._over="hidden";
+	label.iconElem = d;
+	label.title = name;
+	this.label = label;
+	this.nameSpan = label.childNodes[0];
+
+}//»
+setApp(){//«
+
+	let {node, ref} = this;
+
+	let usenode = node;
+	let ext;
+	let ext_text;
+
+	let app;
+	let islink=false;
+
+	if (node.link){
+		islink = true;
+		this.link = node.link;
+		usenode = ref;
+	}
+
+	if (usenode && usenode.ext) {
+		ext = usenode.ext.toLowerCase();
+		if (TEXT_EXTENSIONS.includes(ext)) {
+			ext_text = ext;
+		}
+	}
+
+	if (node.kids) app=FOLDER_APP;
+	else if (node.appicon){
+		try{
+			app=JSON.parse(node.appicon).app;
+			ext_text = "\u{2699}";
+		}
+		catch(e){cerr(e);};
+	}
+	else if (islink){
+		app = ref.appName;
+	}
+	else if (node.appName) app = node.appName;
+	else if (ext) {
+		app = extToApp(ext);
+	}
+
+	if (!app) app = DEF_BIN_APP;
+
+	if (app=="Application"&&ref&&ref.appicon){
+		try{
+			this.linkApp=JSON.parse(node.ref.appicon).app;
+		}
+		catch(e){cerr(e);};
+	}
+
+	this.isFolder = (app === FOLDER_APP) || (ref && ref.appName === FOLDER_APP);
+	this.app = app;
+	this.appName = app;
+	this.ext = ext;
+	this.extText = ext_text;
+	this.isLink = islink;
+
+	if (islink) {
+		if (ref) {//«
+			let arr = getNameExt(ref.name);
+			this.linkName = arr[0];
+			this.linkExt = arr[1];
+			this.linkPath = ref.par.fullpath;
+			this.ref = ref;
+		}//»
+		this.addLink(!ref);
+	}
+
+	this.useNode = usenode;
+
+
+
+}//»
+setImg(){//«
+	let{wrapper, useNode: usenode}=this;
+	let ext_div="";
+	let ext, ext_text;
+	if (usenode && usenode.ext) {
+		ext = usenode.ext.toLowerCase();
+		if (TEXT_EXTENSIONS.includes(ext)) {
+			ext_text = ext;
+		}
+	}
+	this.ext = ext;
+	if (ext_text){
+		ext_div = `<div class="iconext">${ext_text}</div>`;
+	}
+	this.extText = ext_text;
+	let ch = getAppIcon(this.linkApp||this.appName,{html:true});
+	wrapper.innerHTML=`${ext_div}<span class="iconi">${ch}</span>`;
+	this.imgDiv = wrapper.childNodes[wrapper.children.length-1];
+	this.imgDiv.iconElem = this.iconElem;
+};//»
+updateDOMElement(){//«
+
+	this.clearFromStorage();
+	this.setApp();
+	this.setImg();
+	this.setLabelName();
+	this.iconElem.dataset.name = this.fullname;
+	this.off();
+	this.saveToStorage();
+
+};//»
+setWindowName(){//«
+	let win = this.win;
+	if (!win) return;
+	win.title = this.name;
+	win.name = this.name;
+}//»
+addOverlay(){//«
 	let oncontext = (e) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -1901,93 +1933,17 @@ this.add_overlay = () => {//«
 	return overdiv;
 };
 //»
-this.showName=()=>{label._over="";};
-this.hideName=()=>{label._over="hidden";};
-this.setName = s =>{//«
-	namesp.innerHTML="";
-	if (s.length > MAX_ICON_NAME_LEN) s = s.slice(0, MAX_ICON_NAME_LEN)+"...";
-	namesp.innerText = s.replace(/-/g, "\u{2011}");
-};//»
-this.rename = namearg => {//«
-	icn.clear(null,0);
-	let oldext = icn.ext||"";
-	let name;
-	if (app!==FOLDER_APP) {
-		let arr = getNameExt(namearg);
-		name = arr[0];
-		icn.ext = arr[1]||"";
-	}
-	else name = namearg;
-	this.setName(name);
-
-	d.dataset.name = namearg;
-	icn.name = name;
-	icn.label.title = name;
-
-	icn.off();
-	if (icn.appName == FOLDER_APP) return;
-	if (icn.ext.toLowerCase() != oldext.toLowerCase()) {
-		delete icn.wrapper;
-//LCUITYEP
-		icn.imgdiv.innerHTML = "";
-		let newapp = extToApp(icn.ext.toLowerCase());
-		if (!newapp) newapp = DEF_BIN_APP;
-		icn.appName = newapp;
-		set_app_img(icn.imgdiv, newapp);
-	}
-	icn.save();
-
-};//»
-icn.shake = () => {//«
-	iconelm.style.animation = "shake 0.5s cubic-bezier(.36,.07,.19,.97)\x20both";
-	iconelm.addEventListener("animationend", () => {
-		iconelm.style.animation = "";
-	});
-};//»
-icn.clear = (patharg, which) =>{//«
-	if (icn.parWin !== desk) return;
-	let path;
-	if (patharg) path = patharg;
-	else path = icn.fullpath;
-	let k =`${FS_PREF}:${path}`;
-	if (!localStorage[k]) {
-if (debug_localstorage) {
-log(`Nothing found in localStorage[${k}]`);
-}
-return 
-}
-if (debug_localstorage) {
-log(`Deleting: localStorage["${k}"]`);
-}
-	delete localStorage[`${k}`];
-};//»
-icn.save = ()=>{//«
-	if (globals.read_only) return;
-	if (icn.parWin!==desk) return;
-	let k =`${FS_PREF}:${icn.fullpath}`;
-let verb;
-	if (localStorage[k]) {
-verb="Updating";
-	}
-	else{
-verb="Setting";
-	}
-if (debug_localstorage) {
-log(`${verb}: localStorage["${k}"]`);
-}
-	localStorage[k]=`${icn.col} ${icn.row}`;
-};//»
-icn.openWin = ()=>{//«
+openWin(){//«
 	return new Promise((Y,N)=>{
-		if (icn.win) return Y(icn.win);
+		if (this.win) return Y(this.win);
 		open_icon(icn, {winCb: Y});
 	});
 };//»
-icn.add_link = if_broken => {//«
+addLink(if_broken){//«
 	if (this.link_div) this.link_div._del();
 	let l = make('div');
 	this.link_div = l;
-	wrapper._add(l);
+	this.wrapper._add(l);
 	l._fs=14;
 	l.innerHTML="\u{27a5}";
 	l._padl=3;
@@ -1999,67 +1955,96 @@ icn.add_link = if_broken => {//«
 	l._r="0px";
 	l._b="-5px";
 };//»
-
-//»
-//Properties«
-
-Object.defineProperty(this, "fullpath", {get:()=>{
-	return this.node.fullpath;
-}});
-Object.defineProperty(this, "linkfullpath", {//«
-	get: ()=>{
-//		if (this.link) this.link.regpath();
-		if (ref) return ref.fullpath;
-		return this.node.fullpath;
+shake(){//«
+	let {iconElem} = this;
+	iconElem.style.animation = "shake 0.5s cubic-bezier(.36,.07,.19,.97)\x20both";
+	iconElem.addEventListener("animationend", () => {
+		iconElem.style.animation = "";
+	});
+};//»
+off(do_vacate){//«
+//	if (!(icn && icn.imgdiv)) return;
+	if (do_vacate && ICONS.includes(this)) ICONS.splice(ICONS.indexOf(this), 1);
+//	icn.iconElem._bor= "2px solid transparent";
+	this.wrapper._bor="";
+	this.iconElem._bgcol="";
+	this.label._bgcol="";
+	this.label._tcol="";
+	this.nameSpan._bgcol="";
+	this.isOn=false;
+	if (this.parWin!==desk) {
+		if (ICONS.length===1) this.parWin.app.stat(ICONS[0].fullname);
+		else this.parWin.app.stat(`${ICONS.length} selected`);
 	}
-});//»
-Object.defineProperty(this,"path",{get:function(){return this.node.path;}});
-Object.defineProperty(this, "fullname", {get: function() {return this.node.name;}});
+}//»
+on(do_add){//«
+	if (isMobile) return;
+	let iconelm = this.iconElem;
+	if (do_add && !ICONS.includes(this)) {
+		if (ICONS.length && (this.parWin !== ICONS[0].parWin)) icon_array_off(9);
+		ICONS.push(this);
+	}
+	this.wrapper._bor = "1px solid #ff0";
+	this.label._bgcol="#bb0";
+	this.label._tcol="#000";
+	this.nameSpan._bgcol="#bb0";
 
-{
-	let typ;
-	if (ref) typ = ref.type;
-	else typ = node.type;
-	this.type = typ;
-	if (typ!==FS_TYPE && app == FOLDER_APP){
-		this.noMove = true;
+	if (iconelm.parentNode === desk) {
+		iconelm._bgcol= DESK_ICON_BG;
 	}
 	else {
-		this.noMove = false;
+		iconelm._bgcol= FOLDER_ICON_BG;
+		if (ICONS.length===1) this.parWin.app.stat(this.fullname);
+		else this.parWin.app.stat(`${ICONS.length} selected`);
 	}
+	this.isOn = true;
+}//»
+del(){//«
+	if (!this.iconElem.parentNode) return;
+	this.clearFromStorage(null,1);
+	this.iconElem._del();
+};//»
+clearFromStorage(patharg){//«
+	if (this.parWin !== desk) return;
+	let path;
+	if (patharg) path = patharg;
+	else path = this.fullpath;
+	let k =`${FS_PREF}:${path}`;
+	if (!localStorage[k]) {
+if (debug_localstorage) {
+log(`Nothing found in localStorage[${k}]`);
 }
-this.set_node = (n)=>{
-	this.node = n;
-};
-this.node = node;
-this.iconElem = d;
-this.wrapper = wrapper;
-//FKIOPIU
-this.imgdiv = wrapper.childNodes[wrapper.children.length-1];
-//this.imgdiv = wrapper.childNodes[0];
-this.imgdiv.iconElem = d;
-this.name = name;
-this.ext = ext;
-this.appName = app;
-this.label = namesp;
-
-
-if (islink) {
-	if (ref) {//«
-		let arr = getNameExt(ref.name);
-		this.linkname = arr[0];
-		this.linkext = arr[1];
-		this.linkpath = ref.par.fullpath;
-		this.ref = ref;
-	}//»
-	this.add_link(!ref);
+return 
 }
+if (debug_localstorage) {
+log(`Deleting: localStorage["${k}"]`);
+}
+	delete localStorage[`${k}`];
+}
+clear(patharg){clearFromStorage(patharg);}
 //»
-this.setName(name);
-//CNJPLMYTY
-if (!node.fake) node.icons.push(this);
+saveToStorage(){//«
+	if (globals.read_only) return;
+	if (this.parWin!==desk) return;
+	let k =`${FS_PREF}:${this.fullpath}`;
+	let verb;
+	if (localStorage[k]) verb="Updating";	
+	else verb="Setting";
+	
+if (debug_localstorage) {
+log(`${verb}: localStorage["${k}"]`);
+}
+	localStorage[k]=`${this.col} ${this.row}`;
+}
+save(){saveToStorage();}
+//»
+get linkfullpath(){if (this.ref) return this.ref.fullpath;return this.node.fullpath;}
+get fullpath(){return this.node.fullpath;}
+get path(){return this.node.path;}
+get fullname(){return this.node.name;}
+get name(){return this.node.baseName;}
 
-};
+}
 api.Icon = Icon;
 //»
 
@@ -2103,9 +2088,9 @@ const do_end=async()=>{//«
 	for (let icn of ICONS){
 		icn.iconElem._op=1;
 		delete icn.disabled;
-		icn.save();
+		icn.saveToStorage();
 		if (icn.link) {
-			icn.add_link(!(await icn.node.ref));
+			icn.addLink(!(await icn.node.ref));
 		}
 	}
 	icon_array_off(5);
@@ -2336,7 +2321,7 @@ cwarn(`Skipping icn.appName!='${FOLDER_APP}'`, icn.fullpath);
 }//»
 
 for (let icn of ICONS) {//«
-	if (icn.move_cb) icn.move_cb();
+	if (icn.moveCb) icn.moveCb();
 	icn.iconElem._op=0.5;
 	icn.disabled = true;
 	let rect = icn.iconElem._gbcr();
@@ -2573,9 +2558,9 @@ return new Promise(async(Y,N)=>{
 	if (frombase) {
 		if (frombase === tobase) {
 			for (let icn of icons) {
-				let usename = toname;
-				if (ext) usename += `.${ext}`;
-				icn.rename(usename);
+//				let usename = toname;
+//				if (ext) usename += `.${ext}`;
+				icn.updateDOMElement();
 			}
 			doend();
 			return 
@@ -2949,11 +2934,11 @@ const save_icon_editing = async() => {//«
 			if (oldext) newnameext=`${newname}.${oldext}`;
 			newpath = `${parpath}/${newnameext}`;
 			update_all_paths(oldpath, newpath);
-			CEDICN.set_window_name(newname);
-			CEDICN.rename(newnameext);
+			CEDICN.setWindowName();
+			CEDICN.updateDOMElement();
 		}
 		else {
-			CEDICN.setName(oldname);
+			CEDICN.setLabelName();
 		}
 		CEDICN.dblclick = null;
 		if (CEDICN._savetext||CEDICN._savetext==="") {
@@ -2968,7 +2953,7 @@ const save_icon_editing = async() => {//«
 			CEDICN._editcb = null;
 		}
 		if (CEDICN.iconElem.parentNode===desk && !windows_showing) toggle_show_windows();
-		CEDICN.save();
+		CEDICN.saveToStorage();
 		CEDICN = null;
 		CG.off();
 	};//»
@@ -3849,7 +3834,7 @@ this.setWinArgs=args=>{//«
 //VKUIOKL
 			if (CUR.curElem.parentNode === desk) {
 				let icn = CUR.geticon();
-				if (icn) icn.hideName();
+				if (icn) icn.hideLabelName();
 				desk.lastcurpos = CUR.getpos();
 			}
 			this.main.focus();
@@ -5409,6 +5394,7 @@ const make_app = arg => {//«
 	if (data_url) {
 		win._data_url = data_url
 	}
+//BGEIUOP
 	let cb = arg.CB||(()=>{});
 	let scrpath;
 	let str, marr;
@@ -5578,9 +5564,9 @@ const open_new_window = async (icn, cb, opts={}) => {//«
 		}
 		else if (icn.node.lockFile) icn.node.lockFile();
 	}
-	let usename = icn.linkname||icn.name;
-	let usepath = icn.linkpath||(icn.node&&icn.path)||icn.path||"";
-	let useext = icn.linkext||icn.ext;
+	let usename = icn.linkName||icn.name;
+	let usepath = icn.linkPath||(icn.node&&icn.path)||icn.path||"";
+	let useext = icn.linkExt||icn.ext;
 	let ref = await icn.ref;
 	if (ref){
 		let arr = getNameExt(ref.name);
@@ -5666,7 +5652,7 @@ const open_file_by_path = async(patharg, cb, opt={}) => {//«
 		ok();
 		if (CUR.curElem.parentNode === desk) {
 			let icn = CUR.geticon();
-			if (icn) icn.hideName();
+			if (icn) icn.hideLabelName();
 		}
 		return open_folder_win(node.name, path, null, opt.WINARGS, opt.SAVER, opt.PREVPATHS);
 	}
@@ -5710,8 +5696,8 @@ const open_file = (bytes, icn, useapp, cb) => {//«
 	if (VIEWONLY_APPS.includes(icn.appName)) viewOnly = true;
 	let name, ext;
 	if (icn.link) {
-		name = icn.linkname;
-		ext = icn.linkext;
+		name = icn.linkName;
+		ext = icn.linkExt;
 	}
 	else{
 		name = icn.name;
@@ -5766,7 +5752,7 @@ this.off=(is_tog)=>{//«
 	else if (cur_showing) return;
 	if (this.isdesk()){
 		let icn = this.geticon(desk);
-		if (icn) icn.hideName();
+		if (icn) icn.hideLabelName();
 	}
 	curElem._op=0;
 	curElem._dis="none";
@@ -5779,11 +5765,11 @@ this.setpos=(X,Y,icn, is_tog)=>{//«
 		curElem._x= this.xoff()+IGSX*X;
 		curElem._y= this.yoff()+IGSY*Y;
 		let icn2 = this.geticon(desk);
-		if (icn1) icn1.hideName();
+		if (icn1) icn1.hideLabelName();
 //log(1,icn1);
 //log(2,icn2);
 		if (icn2 && (is_tog || icn2 !== icn1)) {
-			icn2.showName();
+			icn2.showLabelName();
 		}
 		curElem.scrollIntoViewIfNeeded();
 		desk.lastcurpos={X,Y};
@@ -6198,7 +6184,7 @@ cerr("No icn.name && icn.parWin", icn);
 	if (ind > -1) {
 		if (icn.parWin===desk){
 //			if (!globals.read_only) delete localStorage[FS_PREF+":"+icn.Fullpath()];
-			if (!(globals.read_only || if_no_clear)) icn.clear(null,3);
+			if (!(globals.read_only || if_no_clear)) icn.clearFromStorage(null,3);
 		}
 		oldarr[ind] = undefined;
 	} else cerr("The icon was not in the icons array!", icn);
@@ -6212,7 +6198,7 @@ const placeInIconSlot = (icn, opts={}) => {//«
 		} else {
 			icn.parWin = desk;
 			elem._add(iconelm);
-			icn.save();
+			icn.saveToStorage();
 		}
 	};//»
 	let{
@@ -6271,7 +6257,7 @@ const placeInIconSlot = (icn, opts={}) => {//«
 				iconelm._z= ICON_Z;
 				iconelm._x=desk_grid_start_x + (col * IGSX);
 				iconelm._y=desk_grid_start_y + (row * IGSY);
-				if (dosave) icn.save();
+				if (dosave) icn.saveToStorage();
 				return;
 			}
 			else if(load){
@@ -7671,7 +7657,7 @@ cerr(mess);
 			let fname = parts.pop();
 			let curicon = await make_icon(fname, where, {pos: usepos, ext: ext, node: fObj});
 			curicon.disabled=true;
-			curicon.add_overlay();
+			curicon.addOverlay();
 			let odiv = curicon.overdiv;
 			odiv.innerHTML = "0%";
 			curicon.cancel_func = () => {

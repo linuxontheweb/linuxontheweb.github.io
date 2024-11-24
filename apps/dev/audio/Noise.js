@@ -10,12 +10,6 @@ export const app = function(Win){
 let ctx;
 let out_gain;
 
-const MIDINOTES=(()=>{//«
-    let arr = [];
-    for (let i=0; i < 128; i++) arr[i]=13.75*(2**((i-9)/12));
-    return arr;
-})();//»
-
 //»
 //Funcs«
 

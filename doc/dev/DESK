@@ -204,3 +204,543 @@ const win_reload = (cbarg) => { //«
 	open_icon(icn,{winCb});
 
 };//»
+const Icon = function(node, opts={}){//«
+let {elem, observer, ref}=opts;
+
+//Var«
+
+let fullname = node.name;
+let name = node.baseName;
+let usenode = node;
+let ext;
+let ext_text;
+
+let app;
+let linkapp;
+let islink=false;
+
+if (node.link){
+	islink = true;
+	this.link = node.link;
+	usenode = ref;
+}
+
+if (usenode && usenode.ext) {
+	ext = usenode.ext.toLowerCase();
+	if (TEXT_EXTENSIONS.includes(ext)) {
+		ext_text = ext;
+	}
+}
+
+if (node.kids) app=FOLDER_APP;
+else if (node.appicon){
+	try{
+		app=JSON.parse(node.appicon).app;
+		ext_text = "\u{2699}";
+	}
+	catch(e){cerr(e);};
+}
+else if (islink){
+	app = ref.appName;
+	islink = true;
+}
+else if (node.appName) app = node.appName;
+else if (ext) {
+	app = extToApp(ext);
+}
+
+if (!app) app = DEF_BIN_APP;
+
+if (app=="Application"&&ref&&ref.appicon){
+	try{linkapp=JSON.parse(node.ref.appicon).app;}
+	catch(e){cerr(e);};
+}
+
+let isFolder = (app === FOLDER_APP) || (ref && ref.appName === FOLDER_APP);
+
+//»
+
+//DOM«
+
+let d;
+let icn = this;
+if (elem) d = elem;
+else {
+	d = make("div");
+	d.className="icon";
+}
+let iconelm = d;
+d.iconElem = d;
+d.icon = this;
+d.innerHTML=`<span class="iconw"></span><div class="iconl"><div class="iconn"></div></div>`;
+
+d._z=ICON_Z;
+
+let wrapper = d.childNodes[0];
+wrapper.draggable=true;
+wrapper.iconElem=d;
+
+//GJKLIUYT
+//let img = wrapper.childNodes[0];
+//img.iconElem = d;
+
+let label = d.childNodes[1];
+label._over="hidden";
+let namesp = label.childNodes[0];
+label.iconElem = d;
+label.title = name;
+
+//»
+
+//Listeners«
+
+if (!isFolder) {//«
+	wrapper.ondragover=nopropdef;
+	wrapper.ondrop=e=>{
+		e.stopPropagation();
+		e.preventDefault();
+		popup("Cannot drop files onto non-folders!");
+	};
+}//»
+else {//«
+let didleave;
+let isopen = false;
+let in_transit = false;
+let not_allowed = false;
+let on = () => {//«
+	isopen = true;
+	wrapper.style.cursor = "copy";
+	if (!CDL) return;
+	CDL.into(icn.name); 
+	icn.imgdiv.innerHTML = '\u{2009}\u{1f4c2}';
+};//»
+let off = () => {//«
+	if (in_transit) return;
+	not_allowed=false;
+	isopen = false;
+	iconelm.style.cursor = "";
+	wrapper.style.cursor="";
+	if (!CDL) return;
+	CDL.reset();
+	icn.imgdiv.innerHTML = '\u{1f4c1}';
+};//»
+wrapper.onmouseover = async e => {//«
+	e.stopPropagation();
+	if (!CDICN) return;
+	if (CDICN === icn) return;
+	let node = this.node;
+	let typ = node.type;
+	if (ref) {
+		ref.type;
+		node = ref;
+	}
+	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === icn.linkfullpath) || (newPathIsBad(CDICN.fullpath, icn.linkfullpath + "/" + CDICN.name))) {
+		not_allowed = true;
+	}
+	didleave = false;
+	if (!CDICN) return;
+	if (not_allowed) {
+		CDL.nogo();
+		wrapper.style.cursor = "not-allowed";
+	}
+	else if (!didleave) on();
+};//»
+wrapper.onmouseout = e => {//«
+	off();
+	if (CDICN === icn) return;
+	e.stopPropagation();
+	if (!CDICN) return;
+	didleave = true;
+};//»
+wrapper.onmouseup = async e => {//«
+	e.stopPropagation();
+	if (CDICN) {
+		icn.off(true);
+		if (!ICONS.length) return;
+		desk.style.cursor = "";
+		if (not_allowed) {
+			CDICN.shake();
+		}
+		if (!isopen) {
+			CDICN = null;
+			off();
+			cldragimg();
+			return;
+		}
+		let rect = iconelm._gbcr();
+		in_transit = true;
+		await move_icons(icn.fullpath, {loc:{X: rect.left, Y: rect.top}});
+		in_transit = false;
+		off();
+		CWIN&&CWIN.off();
+		if (icn.parWin !== desk) icn.parWin.on();
+		CDICN = null;
+		cldragimg();
+		for (let icn of ICONS) icn.off();
+		ICONS=[];
+		if (icn.win) icn.win.app.reload();
+		return;
+	}
+	if (DDIE) {
+		DDIE = null;
+		DDD._loc(-1, -1);
+		DDD._w= 0;
+		DDD._h = 0;
+	}
+	if (icn.parWin === desk) return;
+	icn.parWin.clear_drag();
+};//»
+wrapper.ondragover=e=>{//«
+	e.stopPropagation();
+	e.preventDefault();
+};//»
+wrapper.ondrop=async e=>{//«
+	e.stopPropagation();
+	e.preventDefault();
+	let win = await icn.openWin();
+	await save_dropped_files(e, win);
+};//»
+
+}
+//}//»
+wrapper.ondragstart = e => {//«
+	e.preventDefault();
+	e.stopPropagation();
+	if (globals.read_only) return;
+	let par = iconelm.parentNode;
+	CDICN = icn;
+	CDL = make_cur_drag_img();
+	if (par !== desk) par = par.parentNode; //Sad but true(for now):origins are always the mainwin,NOT topwin OR icon_div
+	desk.style.cursor = "grabbing";
+	CDL._loc(e.clientX + CDL_OFFSET - winw(), e.clientY + CDL_OFFSET - winy());
+	desk._add(CDL);
+};//»
+wrapper.onmousedown = e => {//«
+	e.stopPropagation();
+	if (e.button != 0) return;
+	let par = icn.parWin;
+	if (par === desk) {
+		CWIN&&CWIN.off();
+	}
+	else par.on();
+//	if (e.ctrlKey&&ICONS.includes(icn)) icon_off(icn,true);
+	if (e.ctrlKey&&ICONS.includes(icn)) icn.off(true);
+	else if (!ICONS.includes(icn)) {
+		if (!e.ctrlKey) icon_array_off(18);
+//		icon_on(icn,true);
+		icn.on(true);
+	}
+};//»
+wrapper.onclick = e => {//«
+	e.stopPropagation();
+};//»
+wrapper.oncontextmenu = e => {//«
+if (isMobile) return;
+if (!e.isFake) nopropdef(e);
+if (have_window_cycle) return;
+let menu = [//«
+"Properties",()=>{show_node_props(node);},
+"Rename", () => {
+	setTimeout(() => {
+		icn.nodelete = true;
+		init_icon_editing(icn);
+	}, 25);
+}, 
+"Delete", () => {delete_selected_files(icn);}
+];//»
+let open_opts=["Binary\xa0Viewer", ()=>{open_icon(icn,{useApp: DEF_BIN_APP});}];
+if (icn.appName !== FOLDER_APP){
+	if (TEXT_EXTENSIONS.includes(icn.ext)){
+		open_opts.unshift(()=>{open_icon(icn,{useApp:TEXT_EDITOR_APP});});
+		open_opts.unshift("Text\xa0Editor");
+	}
+	menu.unshift(open_opts);
+	menu.unshift("Open\xa0with...");
+}
+set_context_menu({X:e.clientX,Y:e.clientY},{items:menu});
+
+};//»
+wrapper.ondblclick = e => {//«
+	e.stopPropagation();
+	icn.dblclick = true;
+	open_icon(icn, {e: e});
+};//»
+
+//»
+//Methods«
+
+if (observer) {//«
+	this.moveCb=()=>{
+		observer.unobserve(d);
+		delete this.moveCb;
+	};
+}//»
+this.setImg=(namearg)=>{//«
+
+	let ext_div="";
+	if (usenode && usenode.ext) {
+		ext = usenode.ext.toLowerCase();
+		if (TEXT_EXTENSIONS.includes(ext)) {
+			ext_text = ext;
+		}
+	}
+	if (ext_text){
+		ext_div = `<div class="iconext">${ext_text}</div>`;
+	}
+	let ch = getAppIcon(linkapp||this.appName,{html:true});
+	wrapper.innerHTML=`${ext_div}<span class="iconi">${ch}</span>`;
+
+};//»
+this.del=()=>{//«
+	if (!d.parentNode) return;
+	this.clearFromStorage(null,1);
+	d._del();
+};//»
+this.off = do_vacate => {//«
+//	if (!(icn && icn.imgdiv)) return;
+	if (do_vacate && ICONS.includes(icn)) ICONS.splice(ICONS.indexOf(icn), 1);
+//	icn.iconElem._bor= "2px solid transparent";
+	wrapper._bor="";
+	icn.iconElem._bgcol="";
+	label._bgcol="";
+	namesp._bgcol="";
+	label._tcol="";
+	icn.isOn=false;
+	if (icn.parWin!==desk) {
+		if (ICONS.length===1) icn.parWin.app.stat(ICONS[0].fullname);
+		else icn.parWin.app.stat(`${ICONS.length} selected`);
+	}
+}//»
+this.on = do_add => {//«
+	if (isMobile) return;
+	let iconelm = icn.iconElem;
+	if (do_add && !ICONS.includes(icn)) {
+		if (ICONS.length && (icn.parWin !== ICONS[0].parWin)) icon_array_off(9);
+		ICONS.push(icn);
+	}
+	wrapper._bor = "1px solid #ff0";
+	label._bgcol="#bb0";
+	label._tcol="#000";
+	namesp._bgcol="#bb0";
+
+	if (iconelm.parentNode === desk) {
+		iconelm._bgcol= DESK_ICON_BG;
+	}
+	else {
+		iconelm._bgcol= FOLDER_ICON_BG;
+		if (ICONS.length===1) icn.parWin.app.stat(icn.fullname);
+		else icn.parWin.app.stat(`${ICONS.length} selected`);
+	}
+	icn.isOn = true;
+}//»
+this.showLabelName=()=>{label._over="";};
+this.hideLabelName=()=>{label._over="hidden";};
+this.setLabelName = s =>{//«
+	namesp.innerHTML="";
+	if (s.length > MAX_ICON_NAME_LEN) s = s.slice(0, MAX_ICON_NAME_LEN)+"...";
+	namesp.innerText = s.replace(/-/g, "\u{2011}");
+};//»
+this.updateDOMElement = namearg => {//«
+	icn.clearFromStorage(null,0);
+	let oldext = icn.ext||"";
+	let name;
+	if (app!==FOLDER_APP) {
+		let arr = getNameExt(namearg);
+		name = arr[0];
+		icn.ext = arr[1]||"";
+	}
+	else name = namearg;
+	this.setLabelName(name);
+
+	d.dataset.name = namearg;
+	icn.name = name;
+	icn.label.title = name;
+
+	icn.off();
+	if (icn.appName == FOLDER_APP) {}
+	else if (icn.ext.toLowerCase() != oldext.toLowerCase()) {
+//«
+		delete icn.wrapper;
+//LCUITYEP
+		icn.imgdiv.innerHTML = "";
+		let newapp = extToApp(icn.ext.toLowerCase());
+		if (!newapp) newapp = DEF_BIN_APP;
+		icn.appName = newapp;
+		this.setImg(namearg);
+//		set_app_img(icn.imgdiv, newapp);
+//»
+	}
+	icn.saveToStorage();
+
+};//»
+this.shake = () => {//«
+	iconelm.style.animation = "shake 0.5s cubic-bezier(.36,.07,.19,.97)\x20both";
+	iconelm.addEventListener("animationend", () => {
+		iconelm.style.animation = "";
+	});
+};//»
+this.clear = (patharg, which) =>{//«
+	if (this.parWin !== desk) return;
+	let path;
+	if (patharg) path = patharg;
+	else path = this.fullpath;
+	let k =`${FS_PREF}:${path}`;
+	if (!localStorage[k]) {
+if (debug_localstorage) {
+log(`Nothing found in localStorage[${k}]`);
+}
+return 
+}
+if (debug_localstorage) {
+log(`Deleting: localStorage["${k}"]`);
+}
+	delete localStorage[`${k}`];
+};//»
+this.save = ()=>{//«
+	if (globals.read_only) return;
+	if (this.parWin!==desk) return;
+	let k =`${FS_PREF}:${this.fullpath}`;
+let verb;
+	if (localStorage[k]) {
+verb="Updating";
+	}
+	else{
+verb="Setting";
+	}
+if (debug_localstorage) {
+log(`${verb}: localStorage["${k}"]`);
+}
+	localStorage[k]=`${this.col} ${this.row}`;
+};//»
+this.setWindowName = (name) => {//«
+	let win = this.win;
+	if (!win) return;
+	win.title = name;
+	win.name = name;
+}//»
+this.addOverlay = () => {//«
+	let oncontext = (e) => {
+		e.preventDefault();
+		e.stopPropagation();
+		if (overdiv.context_menu) return;
+		let canfunc = this.cancel_func;
+		set_context_menu({
+			X: e.clientX,
+			Y: e.clientY
+		}, {
+			items: ["Stop File Transfer", canfunc]
+		});
+	};
+	let overdiv = make('div');
+	let rect = icn.iconElem.getBoundingClientRect();
+	overdiv._w= rect.width;
+	overdiv._h = rect.height;
+
+	let od = overdiv;
+	icn.overdiv = od;
+	od._dis= "flex";
+	od.style.alignItems = "center";
+	od.style.justifyContent = "center";
+	od.style.flexDirection = "column";
+	od._bgcol= "#000";
+	od._op= 0.66;
+	od._tcol= "#fff";
+	od._ta= "center";
+	od._fs= 21;
+	od._pos= "absolute";
+	od._w="100%";
+	od._h="100%";
+	od._loc(0, 0);
+	icn.iconElem._add(overdiv);
+	icn.activate = () => {
+		this.cancel_func = null;
+		overdiv._del();
+		delete icn.disabled;
+	};
+	overdiv.oncontextmenu = oncontext;
+	return overdiv;
+};
+//»
+this.openWin = ()=>{//«
+	return new Promise((Y,N)=>{
+		if (this.win) return Y(this.win);
+		open_icon(icn, {winCb: Y});
+	});
+};//»
+this.addLink = if_broken => {//«
+	if (this.link_div) this.link_div._del();
+	let l = make('div');
+	this.link_div = l;
+	wrapper._add(l);
+	l._fs=14;
+	l.innerHTML="\u{27a5}";
+	l._padl=3;
+	l._padr=3;
+	l._bgcol="#000";
+	if (if_broken) l._tcol="#f77";
+	else l._tcol="#fff";
+	l._pos= "absolute";
+	l._r="0px";
+	l._b="-5px";
+};//»
+
+//»
+//Properties«
+
+Object.defineProperty(this, "fullpath", {get:()=>{
+	return this.node.fullpath;
+}});
+Object.defineProperty(this, "linkfullpath", {//«
+	get: ()=>{
+//		if (this.link) this.link.regpath();
+		if (ref) return ref.fullpath;
+		return this.node.fullpath;
+	}
+});//»
+Object.defineProperty(this,"path",{get:function(){return this.node.path;}});
+Object.defineProperty(this, "fullname", {get: function() {return this.node.name;}});
+
+{
+	let typ;
+	if (ref) typ = ref.type;
+	else typ = node.type;
+	this.type = typ;
+	if (typ!==FS_TYPE && app == FOLDER_APP){
+		this.noMove = true;
+	}
+	else {
+		this.noMove = false;
+	}
+}
+this.node = node;
+this.iconElem = d;
+this.wrapper = wrapper;
+//this.imgdiv = wrapper.childNodes[0];
+this.name = name;
+this.ext = ext;
+this.appName = app;
+this.label = namesp;
+this.setImg(name);
+//FKIOPIU
+this.imgdiv = wrapper.childNodes[wrapper.children.length-1];
+this.imgdiv.iconElem = d;
+
+
+if (islink) {
+	if (ref) {//«
+		let arr = getNameExt(ref.name);
+		this.linkName = arr[0];
+		this.linkExt = arr[1];
+		this.linkPath = ref.par.fullpath;
+		this.ref = ref;
+	}//»
+	this.addLink(!ref);
+}
+//»
+this.setLabelName(name);
+//CNJPLMYTY
+if (!node.fake) node.icons.push(this);
+
+};
+api.Icon = Icon;
+//»

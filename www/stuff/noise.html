@@ -1,0 +1,41 @@
+<html>
+<head>
+<script>
+
+document.onclick=(e)=>{
+
+document.onclick=null;
+
+let ctx = new AudioContext();
+
+let NOISE_BUF_SECS = 10;
+let samp_rate = ctx.sampleRate;
+let noise_buf_sz = samp_rate*NOISE_BUF_SECS;
+let buf = ctx.createBuffer(1, noise_buf_sz, samp_rate);
+let outbuf = buf.getChannelData(0);
+
+let last=0;
+for (let i = 0; i < noise_buf_sz; i++) {
+	let rand = Math.random() * 2 - 1;
+//	outbuf[i] = (last + (0.02 * rand)) / 1.02;
+	outbuf[i] = (last + (0.01 * rand)) / 1.01;
+	last = outbuf[i];
+	outbuf[i] *= 3.5; // (roughly) compensate for gain
+}
+
+
+let node = ctx.createBufferSource();
+node.buffer = buf;
+node.loop=true;
+node.start();
+node.connect(ctx.destination);
+
+}
+
+
+</script>
+</head>
+<body>
+<center><h1>Click me for noise!</h1></center>
+</body>
+</html>
