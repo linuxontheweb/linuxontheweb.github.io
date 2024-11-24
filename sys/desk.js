@@ -5,7 +5,7 @@ $ mv blah.txt FOOFOOFOO
 to be deleted at the appropriate point in the whole process. So we are NOT
 choosing @FUIMNTYU to delete it (but rather in fs.com_mv @TUIMN). We might need
 to have a '.isData' property on the nodes (as well as a '.isFile'), in order to
-cover ALL of our bases (Now we are adding these in ). Then we can just check
+cover ALL of our bases (Now we are adding these in mk_dir_kid). Then we can just check
 for .isFile if we want to do stuff like deleting the node.appName.
 node.appName is only "dynamically" set in saveFsByPath @DHYUI and mk_dir_kid
 @PYTNM.

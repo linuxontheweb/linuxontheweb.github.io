@@ -685,20 +685,40 @@ const try_get_kid=async(nm, curpar)=>{//«
 	if (!check_db_rv(rv)) return;
 	let gotrow = rv.rows[0];
 	if (!gotrow) return;
-	let isLink = gotrow.value === LINK_FS_TYPE;
+//	let isLink = gotrow.value === LINK_FS_TYPE;
+//	let isData = gotrow.value === IDB_DATA_TYPE;
+//	let isDir = gotrow.value === DIRECTORY_FS_TYPE;
+//cwarn("TRY",nm);
+	let isDir, isLink, isData, isFile;
+	switch(gotrow.value){
+		case DIRECTORY_FS_TYPE:
+			isDir = true;
+			break
+		case LINK_FS_TYPE:
+			isLink = true;
+			break;
+		case IDB_DATA_TYPE:
+			isData = true;
+			break
+		default:
+			isFile = true;
+	}
 	let kid = mk_dir_kid(curpar, nm,{
-		isDir: gotrow.value==DIRECTORY_FS_TYPE,
+		isDir,
+		isData,
+		isLink,
+		isFile,
+//		isFile:!(isDir||isData||isLink),
 		path: curpar.fullpath,
-		isLink
 	});
 	if (isLink) {
 		kid.symLink = gotrow.data;
 	}
-	else if (gotrow.value == IDB_DATA_TYPE){
+	else if (isData){
 		kid.blobId = IDB_DATA_TYPE;
 		kid.data = gotrow.data;
 	}
-	else {
+	else if (!isDir){
 		kid.blobId = gotrow.data;
 	}
 	kid.id = gotrow.id;
@@ -1634,7 +1654,7 @@ cwarn("GOTERMPT");
 	let id = await db.createNode(name, FILE_FS_TYPE, parid, blobid);
 	if (!id) return cerr("JEMEMEMEIOU");
 
-	let kid = mk_dir_kid(parobj, name);
+	let kid = mk_dir_kid(parobj, name, {isFile: true});
 
 	kid.blobId = blobid;
 	kid.id = id;
@@ -1668,7 +1688,10 @@ cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)
 		else id = await db.createNode(name, NULL_BLOB_FS_TYPE, parid);
 		if (!id) return cerr("ADBNYURL");
 	}
-	let kid = mk_dir_kid(parobj, name);
+	let kid = mk_dir_kid(parobj, name,{
+		isData: opts.data,
+		isFile: !opts.data
+	});
 
 	if (is_shm){
 	}
@@ -1801,7 +1824,7 @@ const mount_dir=(list, par)=>{//«
 		let nm = arr[0];
 		let sz = arr[1];
 		if (sz){
-			let node = mk_dir_kid(par, nm, {size: parseInt(sz)});
+			let node = mk_dir_kid(par, nm, {size: parseInt(sz), isFile: true});
 			kids[nm] = node;
 		}
 		else {
@@ -1882,9 +1905,10 @@ cerr(e);
 //»
 
 const mk_dir_kid = (par, name, opts={}) => {//«
-	let is_dir = opts.isDir;
-	let is_link = opts.isLink;
-	let is_data = opts.isData;
+//	let is_dir = opts.isDir;
+//	let is_link = opts.isLink;
+//	let is_data = opts.isData;
+	let {isDir, isLink, isData, isFile} = opts;
 	let mod_time = opts.modTime;
 	let path = opts.path;
 	let fullpath = `${path}/${name}`;
@@ -1898,15 +1922,16 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 			name: name,
 			par: par,
 			root: par.root,
-			isData: is_data,
-			isDir: is_dir,
-			isLink: is_link,
-			isFile: !(is_data||is_dir||is_link)
+			isData,
+			isDir,
+			isLink,
+			isFile
+//			isFile: !(is_data||is_dir||is_link)
 //			path: path
 		});
 	}
 //log(kid);
-	if (is_dir) {
+	if (isDir) {
 		kid.appName = FOLDER_APP;
 		if (par.par.treeroot == true) {
 			if (par.name == "home") kid.perm = name;
@@ -1918,10 +1943,10 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 		kid.moveLocks=[];
 		set_rm_move_lock(kid);
 	}
-	else if (is_link) {
+	else if (isLink) {
 		kid.appName=LINK_APP;
 	}
-	else if (is_data){
+	else if (isData){
 //		kid.isData = true;
 	}
 	else {
@@ -1936,7 +1961,6 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	kid.file = file;
 	return kid;
 }
-this.mk_dir_kid = mk_dir_kid;
 //»
 
 const popDir = (dirobj, opts = {}) => {return populate_dirobj(dirobj, opts);};
@@ -2044,12 +2068,28 @@ cerr(`getAll failure for id: ${dirid}`);
 let rows = rv.rows;
 for (let obj of rows){
 	let {id, name, type, value} = obj;
-	let isLink = type == LINK_FS_TYPE;
-	let isData = type == IDB_DATA_TYPE;
+//	let isLink = type == LINK_FS_TYPE;
+//	let isData = type == IDB_DATA_TYPE;
+	let isDir, isLink, isData, isFile;
+	switch(type){
+		case DIRECTORY_FS_TYPE:
+			isDir = true;
+			break
+		case LINK_FS_TYPE:
+			isLink = true;
+			break;
+		case IDB_DATA_TYPE:
+			isData = true;
+			break
+		default:
+			isFile = true;
+	}
 	let kid = mk_dir_kid(parobj, name, {
-		isDir: (type == DIRECTORY_FS_TYPE),
+//		isDir: (type == DIRECTORY_FS_TYPE),
+		isDir,
 		isLink,
-		isData
+		isData,
+		isFile
 	});
 	kid.id = id;
 	if (isLink){
@@ -2059,7 +2099,7 @@ for (let obj of rows){
 		kid.blobId = IDB_DATA_TYPE;
 		kid.data = value;
 	}
-	else{
+	else if (isFile){
 		kid.blobId = value;
 	}
 	kids[name] = kid;
