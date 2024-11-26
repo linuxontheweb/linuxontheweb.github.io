@@ -679,9 +679,9 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 
 	let pipeline = [];
 	let pipein;
+
 	for (let j=0; j < pipelist.length; j++) {//«
 		let inpipe = j < pipelist.length-1;
-//	while (pipelist.length) {
 const out_cb=(lns, opts={})=>{//«
 
 if (can()) return;
@@ -754,7 +754,6 @@ term.scroll_into_view();
 term.refresh();
 };//»
 
-//		let arr = pipelist.shift().com;
 		let arr = pipelist[j].com;
 		let args=[];
 
@@ -1038,7 +1037,7 @@ continue;
 		}//»
 
 	}//»
-//log(pipeline);
+
 	for (let com of pipeline){
 		if (com.init) await com.init();
 	}

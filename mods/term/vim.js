@@ -53,7 +53,7 @@ const globals = LOTW.globals;
 const{
 dev_mode
 }=globals;
-const{isArr, isStr, log, jlog, cwarn, cerr}=LOTW.api.util;
+const{isArr, isStr, isEOF, log, jlog, cwarn, cerr}=LOTW.api.util;
 const{fs,FS_TYPE,SHM_TYPE,NS}=globals;
 const fsapi = fs.api;
 const {widgets} = NS.api;
@@ -114,7 +114,6 @@ let AUTO_INSERT_ON_LINE_SEEKS = false;
 let no_save_mode = false;
 let one_line_mode;
 let quit_on_enter;
-let is_stdin;
 
 const overrides=["c_A", "f_CAS"];
 const PREV_DEF_SYMS=["TAB_", "j_C", "v_C", "l_C"];
@@ -160,6 +159,7 @@ let yank_buffer = [
 yank_buffer._type="B";
 */
 let lines;
+let await_command_mode_lines;
 let line_colors;
 let real_line_colors;
 
@@ -536,12 +536,25 @@ const onescape=()=>{//«
 	if (this.mode===INSERT_MODE||this.mode===REPLACE_MODE){
 		this.mode = COMMAND_MODE;
 		if (x>0&&x===(curarr().length)) x--;
-		render();
+		if (await_command_mode_lines){
+			append_lines_from_stdin(await_command_mode_lines);
+			await_command_mode_lines = null;
+//			lines.push(...await_command_mode_lines);
+//			stat_warn("lines have been added from stdin");
+		}
+		else render();
 		return true;
 	}
 	if (is_vis_mode()){
 		this.mode = COMMAND_MODE;
-		render();
+		if (await_command_mode_lines){
+			append_lines_from_stdin(await_command_mode_lines);
+			await_command_mode_lines = null;
+//			lines.push(...await_command_mode_lines);
+//			await_command_mode_lines = null;
+//			stat_warn("lines have been added from stdin");
+		}
+		else render();
 		return true;
 	}
 	if (num_escapes<NUM_ESCAPES_TO_ESCAPE){
@@ -4221,6 +4234,13 @@ const do_paste = val=>{//«
 	for (let ln of lns) yank_buffer.push([...ln]);
 	handle_paste("P");
 };//»
+const append_lines_from_stdin=(linesarg)=>{//«
+	yank_buffer = linesarg;
+	yank_buffer._type="L";
+	end();
+	handle_paste("p");
+	stat_warn(`${linesarg.length} lines have been appended from stdin`);
+};//»
 const handle_paste = async (which, opts = {}) => {//«
 
 let {keepFirst, doFold} = opts;
@@ -5630,7 +5650,7 @@ Object.defineProperty(this,"line_wrap_y",{get:()=>line_wrap_y});
 this.init = async(arg, patharg, o)=>{
 initial_str = arg;
 let opts;
-({opts, symbols, is_stdin}=o);
+({opts, symbols}=o);
 if (symbols){
 SYMBOL_WORDS=symbols.map(w=>w.split(/\s+/)[0]);
 }
@@ -5724,6 +5744,27 @@ setTimeout(async()=>{
 
 }
 //»
+this.addLines=linesarg=>{//«
+	let newlines = [];
+    if (isArr(linesarg)) {
+        for (let i = 0; i < linesarg.length; i++) {
+            newlines.push(linesarg[i].split(""));
+        }
+    }
+    else if (isStr(linesarg)) newlines.push(linesarg.split(""));
+    else if (isEOF(linesarg)) return;
+    else {
+cwarn("WHAT KINDA LINESARGGGGG????");
+log(linesarg);
+return;
+    }
+	if (this.mode===COMMAND_MODE){
+		append_lines_from_stdin(newlines);
+		return;
+	}
+	if (!await_command_mode_lines) await_command_mode_lines = newlines;
+	else await_command_mode_lines.push(...newlines);
+};/*»*/
 
 //}; End vim mod«
 }

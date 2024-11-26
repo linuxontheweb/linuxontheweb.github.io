@@ -1,4 +1,32 @@
 //Older terminal development notes are stored in doc/dev/TERMINAL
+/*11/26/24: No calls to com.out in the 'init' phase!
+*/
+/*11/25/24: New 'Com class{...}' and 'Com_whatever extends Com{...}'«
+
+class Com {
+	constructor(args, opts, _){
+		this.args=args;
+		this.opts=opts;
+		for (k in _) {
+			this[k]=_[k];
+		}
+	}
+}
+
+const Com_blah = class extends Com {
+
+async init(){
+//Parse the options
+}
+async run(){
+}
+pipeIn(val){
+}
+
+}
+
+»*/
+
 /*Let's make a command that gets a binary file and replaces one sequence (1+) of bytes«
 with another sequence (1+). Let's call it "brep".
 
@@ -94,7 +122,7 @@ const DEL_COMS=[
 //	"audio"
 //	"yt",
 //	"test",
-//	"fs",
+	"fs",
 //	"mail"
 //"esprima",
 //"shell"
@@ -442,7 +470,7 @@ continue;
 
 		let lib = NS.coms[libname];
 		if (!lib){
-cwarn(`The command library: ${libname} was in ALL_LIBS, but not in NS.coms!?!?!`);
+//cwarn(`The command library: ${libname} was in ALL_LIBS, but not in NS.coms!?!?!`);
 			continue;
 		}
 		let coms = lib.coms;
@@ -451,7 +479,7 @@ cwarn(`The command library: ${libname} was in ALL_LIBS, but not in NS.coms!?!?!`
 		for (let com of all){
 //CJIUKLEH
 			if (sh_coms[com] !== coms[com]){
-cwarn(`The command ${com} is not owned by lib: ${libname}!!`);
+//cwarn(`The command ${com} is not owned by lib: ${libname}!!`);
 				continue;
 			}
 			delete sh_coms[com];
@@ -462,7 +490,7 @@ cwarn(`Deleted: ${num_deleted} commands from '${libname}'`);
 		all = Object.keys(opts);
 		for (let opt of all){
 			if (sh_opts[opt] !== opts[opt]){
-cwarn(`The option ${opt} is not owned by lib: ${libname}!!`);
+//cwarn(`The option ${opt} is not owned by lib: ${libname}!!`);
 				continue;
 			}
 			delete sh_opts[opt];
@@ -478,7 +506,7 @@ const delete_mods=(arr)=>{//«
 			scr._del();
 		}
 else{
-cwarn(`The module ${m} was not loaded!`);
+//cwarn(`The module ${m} was not loaded!`);
 continue;
 }
 		delete NS.mods[m];
@@ -500,8 +528,343 @@ const com_ = async(args, opts, _)=>{
 };
 
 */
-const com_brep = async(args, opts, _)=>{
+const NoCom=class{
+	init(){
+		this.awaitEnd=new Promise((Y,N)=>{
+			this.ok=()=>{
+				if (this.pipeTo) this.out(EOF);
+				Y(E_SUC);
+			}
+		});
+	}
+	run(){
+		this.ok();
+	}
+}
+const Com = class {/*«*/
+	constructor(args, opts, env={}){
+		this.args=args;
+		this.opts=opts;
+		this.numErrors = 0;
+		for (let k in env) {
+			this[k]=env[k];
+		}
+		this.var={};
+		this.awaitEnd = new Promise((Y,N)=>{
+			this.end = (rv)=>{
+				Y(rv);
+				this.killed = true;
+			};
+			this.ok=(mess)=>{
+				if (mess) this.suc(mess);
+				if (this.pipeTo) this.out(EOF);
+				Y(E_SUC);
+				this.killed = true;
+			};
+			this.no=(mess)=>{
+				if (mess) this.err(mess);
+				if (this.inpipe) this.out(EOF);
+				Y(E_ERR);
+				this.killed = true;
+			};
+		});
+	}
+	eof(){
+		this.out(EOF);
+	}
+	init(){}
+	run(){
+		this.err(`sh: ${this._name}: the 'run' method has not been overriden!`);
+		this.no();
+	}
+}/*»*/
+const ErrCom = class extends Com{/*«*/
+	run(){
+		this.no(this.errorMessage);
+	}
+}/*»*/
+
+const com_Error=(mess,com_env)=>{//«
+	let com = new ErrCom(null,null,com_env);
+	com.errorMessage = mess;
+	return com;
+};/*»*/
+globals.comClasses={Com, ErrCom, com_Error};
+
+const com_pipe = class extends Com{//«
+	run(){
+		if (!this.pipeFrom){
+			this.no("Not in a pipe line");
+		}
+	}
+//	init(){
+//		if (this.pipeFrom) this.inf("Waiting for piped input...");
+//	}
+	pipeIn(val){
+		this.out(val);
+		if (isEOF(val)) this.ok();
+	}
+}//»
+const com_deadpipe = class extends Com{/*«*/
+	run(){
+		if (!this.pipeFrom){
+			this.no("Not in a pipe line");
+		}
+	}
+	pipeIn(val){
+//	this.out(val);
+log("Dropping", val);
+		if (isEOF(val)) this.ok();
+	}
+}/*»*/
+
 /*
+const com_ = class extends Com{
+init(){
+}
+run(){
+}
+}
+*/
+const com_norun=class extends Com{init(){}}
+const com_echoasync = class extends Com{//«
+	async run(){
+		for (let arg of this.args){
+			this.out(arg);
+			await sleep(500);
+		}
+		this.ok();
+	}
+}//»
+const com_echo = class extends Com{//«
+	run(){
+		this.out(this.args.join(" ").split("\n"));
+		this.ok();
+	}
+}//»
+const com_ls = class extends Com{//«
+
+init(){
+	let {opts, args}=this;
+	if (!args.length) args.push("./");
+	this.optAll = opts.all||opts.a;
+	this.optRecur = opts.recursive || opts.R;
+}
+async run(){//«
+//this.ok();
+	let colors = [];
+	let {pipeTo, term, out, err, args} = this;
+	let nargs = args.length;
+	let dir_was_last = false;
+	let all = this.optAll;
+	let recur = this.optRecur;
+	const do_path = async(node_or_path)=>{
+		let node;
+		let wants_dir;
+		let path;
+		let regpath;
+		if (isStr(node_or_path)){
+			path = node_or_path;
+			wants_dir = node_or_path.match(/\x2f$/);
+			regpath = normPath(node_or_path, term.cur_dir);
+			node = await fsapi.pathToNode(regpath, !wants_dir);
+		}
+		else {
+			node = node_or_path;
+			regpath = path = node.fullpath;
+		}
+		let recur_dirs;
+		if (recur) recur_dirs = [];
+		if (!node) {
+			dir_was_last = false;
+			err(`${regpath}: No such file or directory`);
+			return;
+		}
+		if (node.appName !== FOLDER_APP) {
+			if (wants_dir) {
+				err(`${regpath}: Not a directory`);
+				return;
+			}
+			if (dir_was_last) out.push("");
+			dir_was_last = false;
+			if (node.appName==LINK_APP){
+				out(`${node.name} -> ${node.symLink}`);
+				return;
+			}
+			let sz = "?";
+			if (node.type === FS_TYPE) {
+				let file = await node._file;
+				if (file) sz = file.size;
+			}
+			else if (Number.isFinite(node.size)) sz = node.size;
+			out(`${node.name} ${sz}`);
+			return;
+		}
+		if (!node.done) await fsapi.popDir(node);
+		dir_was_last = true;
+		let kids = node.kids;
+		let arr = kids._keys;
+		let names=[];
+		let lens = [];
+		let types = [];
+		if (out.length && nargs > 1 || recur) out("");
+		if (nargs > 1 || recur) out(`${path}:`);
+		let s = "";
+		let dir_arr = [];
+		for (let nm of arr){
+			if (!all) {
+				if (nm=="."||nm=="..") continue;
+				if (nm.match(/^\./)) continue;
+			}
+			if (pipeTo) {
+				out(nm);
+			}
+			dir_arr.push(nm);
+		}
+		if (recur){
+			for (let nm of dir_arr){
+				let n = kids[nm];
+				if (nm=="."||nm=="..") continue;
+				if (n.appName === FOLDER_APP) recur_dirs.push(n);
+			}
+		}
+		dir_arr = dir_arr.sort();
+		if (pipeTo) {
+			out(...dir_arr);
+		}
+		else {//«
+			for (let nm of dir_arr){
+				let n = kids[nm];
+				if (nm.match(/\x20/)){
+					nm=`'${nm}'`;
+				}
+				if (n.appName===FOLDER_APP) {
+					types.push(DIRECTORY_TYPE);
+				}
+				else if (n.appName==="Link") {
+					if (!await n.ref) types.push(BAD_LINK_TYPE);
+					else types.push(LINK_TYPE);
+				}
+				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
+				else types.push(null);
+			}
+			let name_lens = [];
+			for (let nm of dir_arr) name_lens.push(nm.length);
+			let ret = [];
+			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
+			out(ret, {colors, didFmt: true});
+		}//»
+		if (recur) {
+			for (let dir of recur_dirs) await do_path(dir);
+		}
+	};
+	while (args.length) {
+		await do_path(args.shift());
+	}
+	this.ok();
+}//»
+
+}//»
+const com_env = class extends Com{/*«*/
+run(){
+	let {term, args}=this; 
+	if (args.length) {
+		return this.no("Arguments are not supported");
+	}
+	let env = term.ENV;
+	let keys = env._keys;
+	let out = [];
+	for (let key of keys){
+		let val = env[key];
+		out.push(`${key}=${val}`);
+	}
+	this.out(out);
+	this.ok();
+}
+}/*»*/
+const com_parse = class extends Com{/*«*/
+	async run(){
+		if (this.pipeFrom) return;
+		let f;
+		while (f = this.args.shift()){
+			let node = await f.toNode(this.term);
+			if (!node) {
+				this.err(`Not found: ${f}`);
+				this.numErrors++;
+				continue;
+			}
+			this.tryParse(await node.text);
+		}
+		this.numErrors?this.no():this.ok();
+	}
+	tryParse(val){
+		try{
+			this.out(JSON.parse(val));
+			return true;
+		}
+		catch(e){
+			this.err(e.message);
+			this.numErrors++;
+			return false;
+		}
+	}
+	pipeIn(val){
+//		this.out(val);
+		if (!isEOF(val)) this.tryParse(val);
+		else this.ok();
+	}
+}/*»*/
+const com_clear = class extends Com{/*«*/
+	run(){
+		this.term.clear();
+		this.ok();
+	}
+}/*»*/
+const com_true = class extends Com{/*«*/
+	run(){
+		let mess;
+		if (this.args.length) mess = this.args.join(" ");
+		else mess = "I'm true";
+		this.ok(`true: ${mess}`);
+	}
+}/*»*/
+const com_false = class extends Com{/*«*/
+	run(){
+		let mess;
+		if (this.args.length) mess = this.args.join(" ");
+		else mess = "I'm false";
+		this.no(`false: ${mess}`);
+	}
+}/*»*/
+const com_cd = class extends Com{/*«*/
+init(){
+	if (!this.args.length) {
+		this.args.push(this.term.get_homedir());
+	}
+}
+async run(){
+	let {args, term} = this;
+	if (args.length > 1) return this.no("cd: too many arguments");
+	let res;
+	let got_dir;
+	let saypath = args[0];
+	let regpath = normPath(saypath, term.cur_dir);
+	let ret = await fsapi.pathToNode(regpath);
+	if (!ret) return this.no(`${saypath}: No such file or directory`);
+	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: Not a directory`);
+	got_dir = regpath;
+	if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
+	term.cur_dir = got_dir;
+	term.cwd = got_dir;
+	this.ok();
+}
+}
+/*»*/
+
+
+//Left to convert:
+const com_brep = async(args, opts, _)=>{//«
+/*«
 
 Want a series of numbers for "from" and another series for "to". The only question is
 how we represent these series (i.e. aaa,bbb,ccc xxx,yyy,zzz):
@@ -518,7 +881,7 @@ $ brep Desktop/DASH.c ab c2,ab | brep bb c2,bb > OUT.c
 We could also have done this without redirects (writing to an output file named as an
 argument, but it was more fun getting...)
 
-*/
+»*/
 	const {term, stdin, out, err, suc} = _;
 	let bytes;
 	if (stdin){
@@ -614,7 +977,7 @@ argument, but it was more fun getting...)
 out(bytes2);
 
 return E_SUC;
-};
+};/*»*/
 const com_math = async(args, opts, _)=>{//«
 	const {term, stdin, out, err, inf} = _;
 	if (!args.length) {
@@ -715,39 +1078,6 @@ out("Here is out 222");
 //return {ok: ["OKKKKKKKKKKKK...", "Place in the roy spotzleeeee", "Flung benottzle"]};
 return E_SUC;
 };//»
-const com_parse = async(args,opts, _)=>{//«
-	const {term, stdin, out, err} = _;
-	if (stdin){//«
-		try{
-			out(JSON.parse(stdin));
-			return E_SUC;
-		}
-		catch(e){
-			err("Invalid JSON in stdin");
-			return E_ERR;
-		}
-	}//»
-	let f = args.shift();
-	if (!f) return;
-	let node = await f.toNode(term);
-	if (!node) {
-		err(`Not found: ${f}`);
-		return E_ERR;
-	}
-	let txt = await node.text;
-	if (!txt) {
-		err(`No text in: ${f}`);
-		return E_ERR;
-	}
-	try{
-		out(JSON.parse(txt));
-		return E_SUC;
-	}
-	catch(e){
-		err("Invalid JSON in file");
-		return E_ERR;
-	}
-};//»
 const com_curcol = async(args,opts, _)=>{//«
 	const {term, stdin} = _;
 	let which = args.shift();
@@ -806,172 +1136,7 @@ const com_export = async (args, opts, _) => {//«
 		return E_SUC;
 };//»
 const com_hist=(args,opts,_)=>{_.out(_.term.get_history());return E_SUC;};
-const com_clear=(args,opts,_)=>{_.term.clear();return E_SUC;};
 const com_pwd=(args,opts,_)=>{_.out(_.term.cur_dir);return E_SUC;};
-const com_echo=async(args,opts,_)=>{_.out(args.join(" ").split("\n"));return E_SUC;};
-const com_ls = async (args,opts, _) => {//«
-	if (!args.length) args.push("./");
-	let colors = [];
-	let {inpipe, term, out, err} = _;
-	let nargs = args.length;
-	let dir_was_last = false;
-	let all = opts.all||opts.a;
-	let recur = opts.recursive || opts.R;
-	const do_path = async(node_or_path)=>{
-		let node;
-		let wants_dir;
-		let path;
-		let regpath;
-		if (isStr(node_or_path)){
-			path = node_or_path;
-			wants_dir = node_or_path.match(/\x2f$/);
-			regpath = normPath(node_or_path, term.cur_dir);
-			node = await fsapi.pathToNode(regpath, !wants_dir);
-		}
-		else {
-			node = node_or_path;
-			regpath = path = node.fullpath;
-		}
-		let recur_dirs;
-		if (recur) recur_dirs = [];
-		if (!node) {
-			dir_was_last = false;
-			err(`${regpath}: No such file or directory`);
-			return;
-		}
-		if (node.appName !== FOLDER_APP) {
-			if (wants_dir) {
-				err(`${regpath}: Not a directory`);
-				return;
-			}
-			if (dir_was_last) out.push("");
-			dir_was_last = false;
-			if (node.appName==LINK_APP){
-				out(`${node.name} -> ${node.symLink}`);
-				return;
-			}
-			let sz = "?";
-			if (node.type === FS_TYPE) {
-				let file = await node._file;
-				if (file) sz = file.size;
-			}
-			else if (Number.isFinite(node.size)) sz = node.size;
-			out(`${node.name} ${sz}`);
-			return;
-		}
-		if (!node.done) await fsapi.popDir(node);
-		dir_was_last = true;
-		let kids = node.kids;
-		let arr = kids._keys;
-		let names=[];
-		let lens = [];
-		let types = [];
-		if (out.length && nargs > 1 || recur) out("");
-		if (nargs > 1 || recur) out(`${path}:`);
-		let s = "";
-		let dir_arr = [];
-		for (let nm of arr){
-			if (!all) {
-				if (nm=="."||nm=="..") continue;
-				if (nm.match(/^\./)) continue;
-			}
-			if (inpipe) {
-				out(nm);
-			}
-			dir_arr.push(nm);
-		}
-		if (recur){
-			for (let nm of dir_arr){
-				let n = kids[nm];
-				if (nm=="."||nm=="..") continue;
-				if (n.appName === FOLDER_APP) recur_dirs.push(n);
-			}
-		}
-		dir_arr = dir_arr.sort();
-		if (inpipe) {
-			out(...dir_arr);
-		}
-		else {//«
-			for (let nm of dir_arr){
-				let n = kids[nm];
-				if (nm.match(/\x20/)){
-					nm=`'${nm}'`;
-				}
-				if (n.appName===FOLDER_APP) {
-					types.push(DIRECTORY_TYPE);
-				}
-				else if (n.appName==="Link") {
-					if (!await n.ref) types.push(BAD_LINK_TYPE);
-					else types.push(LINK_TYPE);
-				}
-				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
-				else types.push(null);
-			}
-			let name_lens = [];
-			for (let nm of dir_arr) name_lens.push(nm.length);
-			let ret = [];
-			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
-			out(ret, {colors, didFmt: true});
-		}//»
-		if (recur) {
-			for (let dir of recur_dirs) await do_path(dir);
-		}
-	};
-	while (args.length) {
-		await do_path(args.shift());
-	}
-	return E_SUC;
-};
-//»
-const com_cd = async (args, opts, _) => {//«
-	const e=s=>{
-		_.err(s);
-		return E_ERR;
-	};
-	let res;
-	let got_dir, dir_str, dirobj;
-	let {term}=_;
-	const cd_end = () => {
-		if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
-		term.cur_dir = got_dir;
-		term.cwd = got_dir;
-	};
-	if (!args.length) {
-		got_dir = term.get_homedir();
-		cd_end();
-		return E_SUC;
-	}
-	let saypath = args[0];
-	let regpath = normPath(saypath, term.cur_dir);
-	let ret = await fsapi.pathToNode(regpath);
-	if (!ret) {
-		_.err(`${saypath}: No such file or directory`);
-		return E_ERR;
-	}
-	if (ret.appName != FOLDER_APP) {
-		_.err(`${saypath}: Not a directory`);
-		return E_ERR;
-	}
-	got_dir = regpath;
-	cd_end();
-	return E_SUC;
-};//»
-const com_env = async (args, opts, _) => {//«
-	if (args.length) {
-		_.err("Arguments are not supported");
-		return E_ERR;
-	}
-	let {term}=_; 
-	let env = term.ENV;
-	let keys = env._keys;
-	let out = [];
-	for (let key of keys){
-		let val = env[key];
-		out.push(`${key}=${val}`);
-	}
-	_.out(out);
-	return E_SUC;
-};//»
 const com_app = async (args, opts, _) => {//«
 	let {term, err}=_; 
 //	let err = [];
@@ -1025,20 +1190,6 @@ const com_open = async (args, opts, _) => {//«
 const com_epoch = (args, opts, _) => {//«
 _.out(Math.round((new Date).getTime()/ 1000)+"");
 return E_SUC;
-};//»
-const com_true=(args, opts, _)=>{//«
-	let mess;
-	if (args.length) mess = args.join(" ");
-	else mess = "I'm true";
-	_.suc(`true: ${mess}`);
-	return E_SUC;
-};//»
-const com_false = (args, opts, _) => {//«
-	let mess;
-	if (args.length) mess = args.join(" ");
-	else mess = "I'm false";
-	_.err(`false: ${mess}`);
-	return E_ERR;
 };//»
 const com_msleep = async(args, opts, _)=>{//«
 	let ms = parseInt(args.shift());
@@ -1465,6 +1616,10 @@ Long options may be given an argument like this:
 //FWPORUITJ
 const shell_commands={//«
 //win: com_win,
+norun: com_norun,
+//deadpipe: com_deadpipe,
+pipe: com_pipe,
+//eco: com_eco,
 brep: com_brep,
 math: com_math,
 menu: com_menu,
@@ -1485,6 +1640,7 @@ pwd: com_pwd,
 clear: com_clear,
 cd: com_cd,
 ls: com_ls,
+echoasync: com_echoasync,
 echo: com_echo,
 env: com_env,
 app: com_app,
@@ -1794,8 +1950,193 @@ const shell_tokify = line_arr => {//«
 };//»
 
 //»
+/*NEW/CORRECT curly_expansion«
+//This takes a "word array". Begin with from_pos==0, then it will internally increase this.
+const curly_expansion = (arr, from_pos) => {//«
+//log("FROM", from_pos);
+let ind1 = arr.indexOf("{", from_pos);
+let ind2 = arr.lastIndexOf("}");
 
-const old_curly_expansion = (word) => {//«
+if (ind1 >= 0 && ind2 > ind1) {//«
+//We know these aren't escaped, but they *might* be inside of quotes
+let qtyp=null;
+let curly_arr;
+let start_i;
+let final_i;
+let have_comma = false;
+let have_dot = false;
+let have_quote = false;
+let have_escape = false;
+let comma_arr;
+let num_open_curlies = 0;
+for (let i=from_pos; i < arr.length; i++){//«
+
+let ch = arr[i];
+if (!qtyp){//«
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		have_quote = true;
+	}
+	else if (ch==="{" && (i===0 || arr[i-1] !== "$")){
+		num_open_curlies++;
+		if (num_open_curlies === 1 && !curly_arr) {
+			start_i = i;
+			curly_arr = [];
+			continue;
+		}
+	}
+	else if (ch==="}"){
+		num_open_curlies--;
+		if (num_open_curlies === 0 && curly_arr){
+			final_i =  i;
+			break;
+		}
+	}
+}//»
+else if (qtyp===ch) qtyp=null;
+
+if (curly_arr) {//«
+	if (!qtyp){
+		if (ch===",") {
+			have_comma = true;
+			if (num_open_curlies===1){
+				if (!comma_arr) comma_arr = [];
+				comma_arr.push([...curly_arr]);
+				curly_arr = [];
+				continue;
+			}
+		}
+		else {
+			if (!have_dot) have_dot = ch === ".";
+			if (!have_escape) have_escape = ch.escaped;
+		}
+	}
+	curly_arr.push(ch);
+}//»
+
+}//»
+
+if (comma_arr){
+	comma_arr.push([...curly_arr]);
+}
+
+if (!final_i){//«
+	if (Number.isFinite(start_i)){
+		if (start_i+2 < arr.length){
+			return curly_expansion(arr, start_i+1);
+		}
+		else{
+//cwarn("GIVING UP!");
+		}
+	}
+	else{
+//log("NOT OPENED");
+	}
+	return arr;
+}//»
+else{//«
+
+let pre = arr.slice(0, start_i);
+let post = arr.slice(final_i+1);
+if (comma_arr){//«
+	let words=[];
+	for (let comarr of comma_arr){
+		words.push(pre.slice().concat(comarr.slice()).concat(post.slice()));
+	}
+	return words;
+}//»
+else if (have_dot&&!have_quote&&!have_escape){//«
+//The dot pattern is a very strict, very literal pattern
+let cstr = curly_arr.join("");
+let marr;
+let from, to, inc, is_alpha;
+
+let min_wid=0;
+if (marr = cstr.match(/^([-+]?\d+)\.\.([-+]?\d+)(\.\.([-+]?\d+))?$/)){//«
+//cwarn("NUMS",marr[1], marr[2], marr[4]);
+
+//We're supposed to look for '0' padding on the from/to
+	let min_from_wid=0;
+	let from_str = marr[1].replace(/^[-+]?/,"");
+	if (from_str.match(/^(0+)/)) min_from_wid = from_str.length;
+
+	let min_to_wid=0;
+	let to_str = marr[2].replace(/^[-+]?/,"");
+	if (to_str.match(/^(0+)/)) min_to_wid = to_str.length;
+
+	if (min_from_wid > min_to_wid) min_wid = min_from_wid;
+	else min_wid = min_to_wid;
+
+	from = parseInt(marr[1]);
+	to = parseInt(marr[2]);
+	inc = marr[4]?parseInt(marr[4]):1;
+}
+else if (marr = cstr.match(/^([a-z])\.\.([a-z])(\.\.([-+]?\d+))?$/i)){
+//cwarn("ALPHA",marr[1], marr[2], marr[4]);
+	is_alpha = true;
+	from = marr[1].charCodeAt();
+	to = marr[2].charCodeAt();
+	inc = marr[4]?parseInt(marr[4]):1;
+}
+else{
+	return arr;
+}//»
+
+inc = Math.abs(inc);
+
+let vals=[];
+let iter=0;
+//log(from, to);
+if (from > to){
+	for (let i=from; i >= to; i-=inc){
+	iter++;
+	if (iter > 10000) throw new Error("INFINITE LOOP AFTER 10000 iters????");
+		if (is_alpha) vals.push(String.fromCharCode(i));
+		else vals.push(((i+"").padStart(min_wid, "0")));
+	}
+}
+else {
+	for (let i=from; i <= to; i+=inc){
+	iter++;
+	if (iter > 10000) throw new Error("INFINITE LOOP AFTER 10000 iters????");
+		if (is_alpha) vals.push(String.fromCharCode(i));
+		else vals.push(((i+"").padStart(min_wid, "0")));
+	}
+}
+
+let words = [];
+for (let val of vals){
+	words.push(pre.slice().concat([val]).concat(post.slice()));
+}
+return words;
+
+}//»
+else{
+//log("NOTHING");
+return arr;
+}
+}//»
+
+}//»
+else{//«
+	if (ind1<0 && ind2 < 0) {
+//log("NO CURLIES");
+	}
+	else if (ind1 >= 0 && ind2 >= 0){
+//log("BOTH CURLIES DETECTED IN WRONG POSITOIN");
+	}
+	else if (ind1 >= 0) {
+//log("OPEN CURLY ONLY");
+	}
+	else if (ind2 >= 0){
+//log("CLOSE CURLY ONLY");
+	}
+	return arr;
+}//»
+
+}//»
+»*/
+const old_curly_expansion = (word) => {//This is INCORRECT«
 	let marr;
 	let out = false;
 	if (marr = (word.match(/(.*){(\d+)\.\.(\d+)}(.*)/) ||word.match(/(.*){([a-z])\.\.([a-z])}(.*)/)||word.match(/(.*){([A-Z])\.\.([A-Z])}(.*)/))){
@@ -2010,7 +2351,6 @@ const write_to_redir=async(term, out, redir, env)=>{//«
 
 return function(term){
 
-
 //Var«
 const shell = this;
 
@@ -2069,6 +2409,7 @@ cerr("WHAT IS RV", rv);
 //	return out;
 	return {code: last_code, out};
 };//»
+const FATAL = mess => {term.topwin._fatal(new Error(mess));};
 
 this.execute=async(command_str, opts={})=>{//«
 /*Instead of trying to create a theoretically beautiful shell.execute algorithm, I//«
@@ -2247,9 +2588,14 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	}
 
 	let pipetype = pipe.type;
-
-	while (pipelist.length) {//«
-		let arr = pipelist.shift().com;
+	let pipeline = [];
+//	while (pipelist.length) {
+//		let arr = pipelist.shift().com;
+	for (let j=0; j < pipelist.length; j++) {//«
+		let arr = pipelist[j].com;
+//      let inpipe = j < pipelist.length-1;
+		let pipeFrom = j > 0;
+		let pipeTo = j < pipelist.length-1;
 		let args=[];
 
 //Expansions/Redirections«
@@ -2265,8 +2611,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 		if (rv){
 			term.response(rv, {isErr: true});
 		}
-		let inpipe = pipelist.length;
-
+//		let inpipe = pipelist.length;
 //BBBBBBBBB
 //- Turn quote objects into word objects
 //- Single quotes that start with '$' look for internal escapes (currently only newline)
@@ -2373,11 +2718,124 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 		if (arr[0]==" ") arr.shift();
 //»
 
+//Command response callbacks«
+
+//Everything that gets sent to redirects, pipes, and script output must be collected
+//By default, only the 'out' stream will be collected.
+let save_lns;
+if (pipeTo || script_out || (redir && redir.length)){
+save_lns = [];
+}
+
+const out_cb = (val, opts={})=>{//«
+
+if (can()) return;
+
+if (pipeTo){
+    let next_com = pipeline[j+1];
+    if (next_com.pipeIn) next_com.pipeIn(val);
+    return;
+}
+if (isEOF(val)) return;
+
+if (isStr(val)) val=[val];
+else if (!isArr(val)){
+log(val);
+FATAL("Invalid value in out_cb");
+return;
+}
+
+if (save_lns) {
+//KIUREUN
+	if (val instanceof Uint8Array){
+		if (!save_lns.length) save_lns = val;
+		else {
+			let hold = save_lns;
+			save_lns = new Uint8Array(hold.length + val.length);
+			save_lns.set(hold, 0);
+			save_lns.set(val, hold.length);
+		}
+		return save_lns;
+	}
+	return save_lns.push(...val);
+}
+//MDKLIOUTYH
+term.response(val, opts);
+term.scroll_into_view();
+term.refresh();
+
+};//»
+const err_cb=(lns)=>{//«
+if (can()) return;
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
+log(lns);
+throw new Error("Invalid value in err_cb");
+}
+term.response(lns, {isErr: true});
+term.scroll_into_view();
+term.refresh();
+
+};//»
+const suc_cb=(lns)=>{//«
+if (can()) return;
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
+log(lns);
+throw new Error("Invalid value in suc_cb");
+}
+term.response(lns, {isSuc: true});
+term.scroll_into_view();
+term.refresh();
+};//»
+const wrn_cb=(lns)=>{//«
+if (can()) return;
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
+log(lns);
+throw new Error("Invalid value in wrn_cb");
+}
+term.response(lns, {isWrn: true});
+term.scroll_into_view();
+term.refresh();
+};//»
+const inf_cb=(lns)=>{//«
+if (can()) return;
+if (isStr(lns)) lns=[lns];
+else if (!isArr(lns)){
+log(lns);
+throw new Error("Invalid value in inf_cb");
+}
+term.response(lns, {isInf: true});
+term.scroll_into_view();
+term.refresh();
+};//»
+
+//»
+
+const com_env = {/*«*/
+	redir,
+	script_out,
+	stdin,
+	pipeTo,
+	pipeFrom,
+	term,
+	env,
+//	opts,
+	command_str,
+	out: out_cb,
+	err: err_cb,
+	suc: suc_cb,
+	wrn: wrn_cb,
+	inf: inf_cb,
+}/*»*/
+
 //Get the command. Immediately return to prompt if it is empty and we are not in a script.
 		let comword = arr.shift();
 		if (!comword) {
 //			if (!script_out) term.response_end();
 //			return;
+			pipeline.push(new NoCom());
 			continue;
 		}
 //Replace with an alias if we can«
@@ -2438,11 +2896,17 @@ cerr(e);
 //It doesn't look like a file.
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
-				term.response(`sh: ${comword}: command not found`, {isErr: true});
-				lastcomcode = E_ERR;
+//let errcom = new ErrCom();
+//errcom.errorMessage = `sh: ${comword}: command not found`;
+				pipeline.push(com_Error(`sh: ${comword}: command not found`, com_env));
+//				term.response(`sh: ${comword}: command not found`, {isErr: true});
+//				lastcomcode = E_ERR;
+//				pipeline.push(new Com());
 				continue;
 			}
 
+			pipeline.push(com_Error(`sh: must try to find/execute: ${comword}`, com_env));
+/*«
 //XGJUIKM
 //Try to execute a "shell script" from file
 //			let rv = await execute_file(comword, arr, term.cur_dir, env);
@@ -2475,6 +2939,7 @@ cerr(e);
 					term.response(out);
 				}
 			}
+»*/
 			continue;
 		}//»
 
@@ -2485,101 +2950,18 @@ cerr(e);
 //Parse the options and fail if there is an error message
 		rv = get_options(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
-			term.response(rv[1][0]);
+			term.response(rv[1][0], {isErr: true});
 			continue;
 		}
 		opts = rv[0];
 
-//Command response callbacks«
-
-//Everything that gets sent to redirects, pipes, and script output must be collected
-//By default, only the 'out' stream will be collected.
-let save_lns;
-if (inpipe || script_out || (redir && redir.length)){
-save_lns = [];
-}
-
-const out_cb = (lns, opts={})=>{//«
-
-if (can()) return;
-
-if (isStr(lns)) lns=[lns];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in out_cb");
-}
-
-if (save_lns) {
-//KIUREUN
-	if (lns instanceof Uint8Array){
-		if (!save_lns.length) save_lns = lns;
-		else {
-			let hold = save_lns;
-			save_lns = new Uint8Array(hold.length + lns.length);
-			save_lns.set(hold, 0);
-			save_lns.set(lns, hold.length);
-		}
-		return save_lns;
-	}
-	return save_lns.push(...lns);
-}
-//MDKLIOUTYH
-term.response(lns, opts);
-term.scroll_into_view();
-term.refresh();
-
-};//»
-const err_cb=(lns)=>{//«
-if (can()) return;
-if (isStr(lns)) lns=[lns];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in err_cb");
-}
-term.response(lns, {isErr: true});
-term.scroll_into_view();
-term.refresh();
-
-};//»
-const suc_cb=(lns)=>{//«
-if (can()) return;
-if (isStr(lns)) lns=[lns];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in suc_cb");
-}
-term.response(lns, {isSuc: true});
-term.scroll_into_view();
-term.refresh();
-};//»
-const wrn_cb=(lns)=>{//«
-if (can()) return;
-if (isStr(lns)) lns=[lns];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in wrn_cb");
-}
-term.response(lns, {isWrn: true});
-term.scroll_into_view();
-term.refresh();
-};//»
-const inf_cb=(lns)=>{//«
-if (can()) return;
-if (isStr(lns)) lns=[lns];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in inf_cb");
-}
-term.response(lns, {isInf: true});
-term.scroll_into_view();
-term.refresh();
-};//»
-
-//»
+		let comobj = new com(arr, opts, com_env);
+		comobj._name = usecomword;
+		pipeline.push(comobj);
 
 //SKIOPRHJT
-//Run command
 
+/*«Run command
 		let code = await com(arr, opts, {//«
 			redir,
 			script_out,
@@ -2598,10 +2980,11 @@ term.refresh();
 
 		if (can()) return;
 
-if (!Number.isFinite(code)) {
+		if (!Number.isFinite(code)) {
 log(code);
-throw new Error(`Invalid return value from: '${usecomword}'`);
-}
+topwin._fatal(new Error(`Invalid return value from: '${usecomword}'`));
+return;
+		}
 
 
 		lastcomcode = code;
@@ -2620,9 +3003,28 @@ throw new Error(`Invalid return value from: '${usecomword}'`);
 			stdin = save_lns;
 		}
 		else if (script_out) script_out.push(...save_lns);
+»*/
 
 	}//»
+for (let com of pipeline){
+	await com.init();
+	if (can()) return;
+//	lastcomcode = await com.run();
+}
+for (let com of pipeline){
+	com.run();
+}
+for (let com of pipeline){
+	lastcomcode = await com.awaitEnd;
+	if (can()) return;
+	if (!Number.isFinite(lastcomcode)) {
+log(lastcomcode);
+		FATAL(`Invalid return value from: '${com._name}'`);
+		return;
+	}
+}
 
+//log(pipeline);
 //LEUIKJHX
 	if (lastcomcode===E_SUC){//SUCCESS«
 		if (pipetype=="||"){

@@ -389,7 +389,30 @@ getEnv:k=>{return ENV[k];},
 delEnv:k=>{return ENV[k];},
 toBytes:dat=>{return new Promise(async(Y,N)=>{let buf=await toBuf(dat);if(!buf)return Y(null);Y(new Uint8Array(buf));});},
 jlog:obj=>{log(JSON.stringify(obj,null,"  "));},
-center:(elem,usewin,dims)=>{let usew=window.innerWidth;let useh=window.innerHeight;let r;if(usewin){if(usewin.main)r=usewin.main.getBoundingClientRect();else r=usewin.getBoundingClientRect();usew=r.width;useh=r.height;}r=elem.getBoundingClientRect();let elemw=r.width;let elemh=r.height;if(dims){elemw=dims.X;elemh=dims.Y;}let usex=(usew / 2)-(elemw / 2);let usey=(useh / 2)-(elemh / 2);if(usex<0)usex=0;if(usey<0)usey=0;elem._x=usex;elem._y=usey;},
+center: (elem, usewin, dims) => {
+	let usew = window.innerWidth;
+	let useh = window.innerHeight;
+	let r;
+	if (usewin) {
+		if (usewin.main) r = usewin.main.getBoundingClientRect();
+		else r = usewin.getBoundingClientRect();
+		usew = r.width;
+		useh = r.height;
+	}
+	r = elem.getBoundingClientRect();
+	let elemw = r.width;
+	let elemh = r.height;
+	if (dims) {
+		elemw = dims.X;
+		elemh = dims.Y;
+	}
+	let usex = (usew / 2) - (elemw / 2);
+	let usey = (useh / 2) - (elemh / 2);
+	if (usex < 0) usex = 0;
+	if (usey < 0) usey = 0;
+	elem._x = usex;
+	elem._y = usey;
+},
 pathParts:arg=>{return getNameExt(arg, true, true);},
 getKeys:obj=>{if(!obj)obj={};let arr=Object.keys(obj);let ret=[];for(let k of arr)if(obj.hasOwnProperty(k))ret.push(k);return ret;},
 textToBytes:async s=>{return new Uint8Array(await strToBuf(s));},

@@ -2,7 +2,7 @@
 //Imports«
 const util = LOTW.api.util;
 const globals = LOTW.globals;
-const{strNum, isArr, isStr, log, jlog, cwarn, cerr}=util;
+const{strNum, isArr, isStr, log, jlog, cwarn, cerr, isEOF}=util;
 //»
 
 export const mod = function(termobj) {
@@ -500,33 +500,26 @@ lines = [];
 		let wraparr = wrap_line(ln.join("")).split("\n");
 		for (let l of wraparr) fmt_lines.push(l.split(""));
 	}
-//	set_lines(true);
-//	termobj.init_pager_mode(less, num_stat_lines);
 	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, onescape);
 	render();
-	return (linesarg, newnamearg)=>{//«
-		if (newnamearg) {
-			scroll_fname = newnamearg
-			render();
-			return;
+});
+
+}//»
+this.addLines=(linesarg)=>{//«
+	if (isArr(linesarg)) {
+		for (let i = 0; i < linesarg.length; i++) {
+			lines.push(linesarg[i].split(""));
 		}
-		if (isArr(linesarg)) {
-			for (let i = 0; i < linesarg.length; i++) {
-				lines.push(linesarg[i].split(""));
-			}
-		}
-		else if (isStr(linesarg)) lines.push(linesarg.split(""));
-		else {
+	}
+	else if (isStr(linesarg)) lines.push(linesarg.split(""));
+	else if (isEOF(linesarg)) return;
+	else {
 cwarn("WHAT KINDA LINESARGGGGG????");
 log(linesarg);
 return;
-		}
-		render();
-	}//»
-});
-
-
-}//»
+	}
+	render();
+};/*»*/
 
 }
 

@@ -909,23 +909,29 @@ const getPathByDirId=async(idarg)=>{//«
 };//»
 
 const doFsRm=async(args, errcb, opts={})=>{//«
+	let{dirsOnly}=opts;
 	let cwd = opts.CWD;
 	let is_root = opts.ROOT;
 	let do_full_dirs = opts.FULLDIRS;
 	let arr = [];
 	let no_error = true;
 	for (let path of args){
-		let rv = await check_ok_rm(
+		let node = await check_ok_rm(
 			normPath(path, cwd), 
 			errcb, 
 			is_root, 
 			do_full_dirs
 		);
-		if (!rv) {
+		if (!node) {
 			no_error = false;
 			continue;
 		}
-		arr.push(rv);
+		if (dirsOnly && node.appName!==FOLDER_APP){
+			errcb(`${node.fullpath}: not a directory`);
+			no_error = false;
+			continue;
+		}
+		arr.push(node);
 	}
 	for (let obj of arr) {
 		if (!await delete_fobj(obj, opts)) no_error = false;
@@ -1153,7 +1159,7 @@ else if (args.length===1){
 //Only if the file is explicitly named, does this error happen.
 	if (!force && destret && destret.appName != FOLDER_APP) {
 //log(cberr);
-		cberr(`${com}: ${topatharg}: not clobbering the destination`);
+		cberr(`${topatharg}: not clobbering the destination`);
 		return;
 	}
 }
@@ -1176,39 +1182,39 @@ for (let arg of args){//«
 
 	if (!srcret) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${com}: no such entry: ${path}`});
+		mvarr.push({ERR: `no such entry: ${path}`});
 		continue;
 	}
 	let srctype = srcret.type;
 	let isfolder = srcret.appName === FOLDER_APP;
 	if (srcret.treeroot || (srcret.root == srcret && srcret.type!==MOUNT_TYPE)) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${com}: skipping top level directory: ${path}`});
+		mvarr.push({ERR: `skipping top level directory: ${path}`});
 	}
 	else if (srctype == MOUNT_TYPE && !if_cp) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${com}: ${path}: cannot move from the mounted directory`});
+		mvarr.push({ERR: `${path}: cannot move from the mounted directory`});
 	}
 	else if (!(srctype == FS_TYPE || srctype == MOUNT_TYPE)) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${com}: ${path}: cannot ${verb} from directory type: ${srctype}`});
+		mvarr.push({ERR: `${path}: cannot ${verb} from directory type: ${srctype}`});
 	}
 //No moving of files that are actively being edited
 	else if (com==="mv"&&srcret.writeLocked()) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${com}: ${path} is "write locked"`});
+		mvarr.push({ERR: `${path} is "write locked"`});
 	}
 //No moving of folders that contain files that are actively being edited
 	else if (com==="mv"&&isfolder&&srcret.moveLocks.length){
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${com}: ${path} is "move locked"`});
+		mvarr.push({ERR: `${path} is "move locked"`});
 	}
 	else if (com==="cp"&&isfolder){
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `cp: ${path}: not (currently) copying directories`});
+		mvarr.push({ERR: `${path}: not (currently) copying directories`});
 	}
 	else if (isfolder && path == globals.desk_path){
-		mvarr.push({ERR:`${com}: not modifying the working desktop path: ${path}`});
+		mvarr.push({ERR:`not modifying the working desktop path: ${path}`});
 	}
 	else mvarr.push([path, srcret]);
 

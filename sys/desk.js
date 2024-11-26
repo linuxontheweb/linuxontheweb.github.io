@@ -636,11 +636,6 @@ taskbar.renderSwitcher();
 top_win_on();
 
 };//»
-const set_workspace_num = which => {//«
-	workspace_num_div.innerHTML=`${which+1}`;
-//	workspace_num_div.title = `Current workspace: ${which+1}\nTo switch, click here\nor use shortcut:\nCtrl+Alt+Shift+[1-${num_workspaces}]`;
-	workspace_num_div.title = `Current workspace: ${which+1}\nCtrl+Alt+Shift+[1-${num_workspaces}]\nto switch workspaces`;
-};//»
 const fit_desktop = ()=>{//«
 	let _h = winh(true)+1;
 	let _w = winw()+1;
@@ -1139,6 +1134,48 @@ const make_desktop = () => {//«
 	}
 
 }//»
+const desk_drag_off=()=>{DDIE=null;DDD._loc(-1,-1);DDD._w=0;DDD._h=0;}
+const make_cur_drag_img = () => {//«
+	let d = mkdv();
+	d.className = "dragimg";
+	let s = mksp();
+	d._pos= "fixed";
+	d._z= CG_Z - 1;
+	ICONS = uniq(ICONS);
+	let numarg = ICONS.length || 1;
+	let base_str = '<b>' + numarg + '</b>\xa0items\xa0\u2ba9\xa0';
+	d.into = name => {
+		s.innerHTML = base_str + '"<b><i>' + name + '</i></b>"';
+		d._op= 1;
+		d._bor= "2px ridge #0f0";
+	};
+	d.reset = () => {
+		s.innerHTML = base_str + "...";
+		d._op= DRAG_IMG_OP;
+		d._bor= "2px ridge #999";
+	};
+	d.nogo = elm => {
+//		elm.style.cursor = "not-allowed";
+		d._op= 1;
+		d._bor= "2px ridge #f00";
+	};
+	d._padl= 10;
+	d._padt= d._padb= d._padr= 5;
+	d._bgcol= "#fff";
+	d._tcol= "#000";
+	d._fs= "16px";
+	d.reset();
+	d._add(s);
+	return d;
+};//»
+const cldragimg = if_hard => {//«
+	if (if_hard) {
+		let arr = desk.getElementsByClassName("dragimg");
+		for (let d of arr) d._del();
+	} else CDL && CDL._del();
+	CDL = null;
+	desk.style.cursor = "";
+};//»
 
 //»
 //Taskbar«
@@ -2062,6 +2099,44 @@ get name(){return this.node.baseName;}
 api.Icon = Icon;
 //»
 
+const show_node_props=async(node)=>{//«
+
+	const pop=()=>{popup(s+"</div>",{title: "File node properties", wide: true});};
+	let s = `<div style="user-select: text;">Name: ${node.name}<br><br>Path: ${node.path}<br><br>`;
+	let app = node.appName;
+	if (app == FOLDER_APP) {
+		s+=`App: ${FOLDER_APP}`;
+		return pop();
+	}
+	if (!app) app="<i>None</i>";
+	s+=`App: ${app}<br><br>`;
+	if (node.type!==FS_TYPE) {
+		if (isFin(node.size)) s+=`Size: ${node.size} bytes`;
+		return pop();
+	}
+	if (app===LINK_APP){
+		let broken="";
+		if (!await node.ref) broken = "(broken)";
+		s+=`Link text: ${node.symLink}<br>${broken}`
+	}
+	let file = await node._file;
+	if (!file) {
+		return pop();
+	}
+	s+=`Size: ${file.size} bytes`;
+	if (!file.lastModified) return pop();
+
+	let a = (file.lastModifiedDate+"").split(" ");
+	s+=`<br><br>Last Modified:<br>${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}<br>`;
+	let mod = file.lastModified;
+	let diff = ((new Date()).getTime() - file.lastModified)/1000;
+	if (diff > 86400) s+=`${Math.floor(diff/86400)} days ago`;
+	else if (diff > 3600) s+=`${Math.floor(diff/3600)} hrs ago`;
+	else if (diff > 60) s+=`${Math.floor(diff/60)} mins ago`;
+	else s+=`${Math.floor(diff)} secs ago`;
+	s+=`<br><br>Blob id: ${node.blobId}`;
+	pop();
+};//»
 const move_icons = async (destpath,  opts={}) => {//«
 return new Promise(async(cb,N)=>{
 let {e, win:usewin, loc}=opts;
@@ -3507,11 +3582,6 @@ makeDOMElem(arg){//«
 	namespan._dis="block";
 	namespan.id="namespan_"+winid;
 	namespan._fs= 12;
-//	namespan._padt=1;
-//	namespan._ff="monospace";
-//	namespan.style.maxWidth = "100px";
-//	namespan._over="hidden";
-//log(namespan);
 	namespan.title = winid;
 	titlebar.label = namespan;
 	title._add(namespan);
@@ -3535,7 +3605,9 @@ makeDOMElem(arg){//«
 		img_div.img = useimg;
 		img_div._add(useimg);
 	}
-	else set_app_img(img_div, app);
+	else {
+		img_div.innerText = getAppIcon(app?app.split(".").pop():DEF_BIN_APP);
+	}
 	img_div.id="titleimgdiv_"+winid;
 	img_div._fs=12;
 	img_div._tcol="#a7a7a7";
@@ -4664,7 +4736,7 @@ set title(arg){/*«*/
 }/*»*/
 /*»*/
 
-}/*»*/
+}//»
 
 const win_reload = async () => {//«
 	if (!CWIN) return;
@@ -5689,6 +5761,7 @@ const open_file = async (bytes, icn, useapp) => {//«
 	win.app.onloadfile(bytes, {name, ext, viewOnly});
 
 }//»
+
 //»
 //Cursor«
 
@@ -8284,89 +8357,7 @@ keysym_map = std_keysym_map;
 //»
 
 //»
-//Util«
-
-const check_for_other_desktops=()=>{//«
-	if ('BroadcastChannel' in window) {
-		let syschan;
-		syschan = new BroadcastChannel("system");
-		syschan.postMessage("init:"+FS_PREF);
-		syschan.onmessage = e=>{
-			let mess = e.data;
-			if (mess=="init:"+FS_PREF) {
-				if (globals.read_only) return;
-				syschan.postMessage("ack:"+FS_PREF);
-			}
-			else if (mess=="ack:"+FS_PREF) globals.read_only = true;
-			else if (mess.match && mess.match(/^(init|ack):/)){
-cwarn("Dropping: " + mess);
-			}
-			else {
-cwarn("Message received on the broadcast channel...");
-log(mess);
-			}
-		}
-	}
-	else{
-cwarn("No BroadcastChannel! Cannot ensure system integrity!!!");
-	}
-};//»
-window.onblur=(e)=>{//«
-	let wins = workspaces.flat();
-	for (let w of wins){
-		if (w.app && w.app.onwinblur) w.app.onwinblur();
-	}
-};//»
-window.onfocus=(e)=>{//«
-	let wins = workspaces.flat();
-	for (let w of wins){
-		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
-	}
-};//»
-const show_node_props=async(node)=>{//«
-
-	const pop=()=>{popup(s+"</div>",{title: "File node properties", wide: true});};
-	let s = `<div style="user-select: text;">Name: ${node.name}<br><br>Path: ${node.path}<br><br>`;
-	let app = node.appName;
-	if (app == FOLDER_APP) {
-		s+=`App: ${FOLDER_APP}`;
-		return pop();
-	}
-	if (!app) app="<i>None</i>";
-	s+=`App: ${app}<br><br>`;
-	if (node.type!==FS_TYPE) {
-		if (isFin(node.size)) s+=`Size: ${node.size} bytes`;
-		return pop();
-	}
-	if (app===LINK_APP){
-		let broken="";
-		if (!await node.ref) broken = "(broken)";
-		s+=`Link text: ${node.symLink}<br>${broken}`
-	}
-	let file = await node._file;
-	if (!file) {
-		return pop();
-	}
-	s+=`Size: ${file.size} bytes`;
-	if (!file.lastModified) return pop();
-
-	let a = (file.lastModifiedDate+"").split(" ");
-	s+=`<br><br>Last Modified:<br>${a[0]} ${a[1]} ${a[2]} ${a[3]} ${a[4]}<br>`;
-	let mod = file.lastModified;
-	let diff = ((new Date()).getTime() - file.lastModified)/1000;
-	if (diff > 86400) s+=`${Math.floor(diff/86400)} days ago`;
-	else if (diff > 3600) s+=`${Math.floor(diff/3600)} hrs ago`;
-	else if (diff > 60) s+=`${Math.floor(diff/60)} mins ago`;
-	else s+=`${Math.floor(diff)} secs ago`;
-	s+=`<br><br>Blob id: ${node.blobId}`;
-	pop();
-};//»
-const focus_editing=e=>{//«
-	if(e)nopropdef(e);
-	if(CEDICN){
-		CEDICN._namearea.focus();
-	}
-}//»
+//«Context Menu
 const set_context_menu = (loc, opts={}) => {//«
 	CG.on();
 	let dx = 0;
@@ -8405,7 +8396,58 @@ const get_desk_context=()=>{//«
 	}
 	return menu;
 };//»
-const make_read_only = ()=>{//«
+//»
+//Util«
+
+window.onblur=(e)=>{//«
+	let wins = workspaces.flat();
+	for (let w of wins){
+		if (w.app && w.app.onwinblur) w.app.onwinblur();
+	}
+};//»
+window.onfocus=(e)=>{//«
+	let wins = workspaces.flat();
+	for (let w of wins){
+		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
+	}
+};//»
+
+const set_workspace_num = which => {//«
+	workspace_num_div.innerHTML=`${which+1}`;
+	workspace_num_div.title = `Current workspace: ${which+1}\nCtrl+Alt+Shift+[1-${num_workspaces}]\nto switch workspaces`;
+};//»
+const check_for_desktops_in_other_tabs=()=>{//«
+	if ('BroadcastChannel' in window) {
+		let syschan;
+		syschan = new BroadcastChannel("system");
+		syschan.postMessage("init:"+FS_PREF);
+		syschan.onmessage = e=>{
+			let mess = e.data;
+			if (mess=="init:"+FS_PREF) {
+				if (globals.read_only) return;
+				syschan.postMessage("ack:"+FS_PREF);
+			}
+			else if (mess=="ack:"+FS_PREF) globals.read_only = true;
+			else if (mess.match && mess.match(/^(init|ack):/)){
+cwarn("Dropping: " + mess);
+			}
+			else {
+cwarn("Message received on the broadcast channel...");
+log(mess);
+			}
+		}
+	}
+	else{
+cwarn("No BroadcastChannel! Cannot ensure system integrity!!!");
+	}
+};//»
+const focus_editing=e=>{//«
+	if(e)nopropdef(e);
+	if(CEDICN){
+		CEDICN._namearea.focus();
+	}
+}//»
+const make_read_only_dom = ()=>{//«
 	let d = mkdv();
 	d._z=-1;
 	d._ta="center";
@@ -8427,52 +8469,6 @@ const check_rs_timer = () => {//«
 		CWIN.app.onresize();
 	}, RS_TIMEOUT);
 }//»
-const set_app_img = (div, app) => {
-	if (!app) app = DEF_BIN_APP;
-	div.innerText = getAppIcon(app.split(".").pop());
-};
-const make_cur_drag_img = () => {//«
-	let d = mkdv();
-	d.className = "dragimg";
-	let s = mksp();
-	d._pos= "fixed";
-	d._z= CG_Z - 1;
-	ICONS = uniq(ICONS);
-	let numarg = ICONS.length || 1;
-	let base_str = '<b>' + numarg + '</b>\xa0items\xa0\u2ba9\xa0';
-	d.into = name => {
-		s.innerHTML = base_str + '"<b><i>' + name + '</i></b>"';
-		d._op= 1;
-		d._bor= "2px ridge #0f0";
-	};
-	d.reset = () => {
-		s.innerHTML = base_str + "...";
-		d._op= DRAG_IMG_OP;
-		d._bor= "2px ridge #999";
-	};
-	d.nogo = elm => {
-//		elm.style.cursor = "not-allowed";
-		d._op= 1;
-		d._bor= "2px ridge #f00";
-	};
-	d._padl= 10;
-	d._padt= d._padb= d._padr= 5;
-	d._bgcol= "#fff";
-	d._tcol= "#000";
-	d._fs= "16px";
-	d.reset();
-	d._add(s);
-	return d;
-};//»
-const cldragimg = if_hard => {//«
-	if (if_hard) {
-		let arr = desk.getElementsByClassName("dragimg");
-		for (let d of arr) d._del();
-	} else CDL && CDL._del();
-	CDL = null;
-	desk.style.cursor = "";
-};//»
-const desk_drag_off=()=>{DDIE=null;DDD._loc(-1,-1);DDD._w=0;DDD._h=0;}
 const show_overlay=(str)=>{//«
 	if (str.length > MAX_OVERLAY_LENGTH) str = str.slice(0,MAX_OVERLAY_LENGTH)+"...";
 	overlay.innerText = str;
@@ -8483,34 +8479,32 @@ const show_overlay=(str)=>{//«
 		overlay_timer = null;
 		overlay._del();
 	}, OVERLAY_MS);
-};//»
+};
 api.showOverlay = show_overlay;
+//»
 const winx=()=>{return 0;};
 this.winx=winx;
 const winy=()=>{return 0;};
 this.winy=winy;
 const winw=()=>{return window.innerWidth;}
 this.winw = winw;
-const winarea = ()=>{
-return window.innerWidth * window.innerHeight;
-};
-const winh = (if_no_taskbar) => {
+const winarea = ()=>{return window.innerWidth * window.innerHeight;};
+const winh = (if_no_taskbar) => {//«
 	if (taskbar_hidden||if_no_taskbar) return window.innerHeight;
 	return window.innerHeight - taskbar.taskbarElem.getBoundingClientRect().height;
 }
-this.winh = winh;
+this.winh = winh;//»
 const toggle_fullscreen=()=>{//«
 	if (!document.fullscreenElement) document.body.requestFullscreen();
 	else document.exitFullscreen();
 };//»
 const get_desk_grid=()=>{DESK_GRID_W=Math.floor((winw()-desk_grid_start_x)/IGSX);DESK_GRID_H=Math.floor((winh()-desk_grid_start_y)/IGSY);};
 const toggle_taskbar=()=>{if(taskbar_hidden)taskbar.show();else taskbar.hide();};
-const toggle_cursor = () => {
+const toggle_cursor = () => {//«
 	if (cur_showing) CUR.off(true);
 	else CUR.on(true);
-};
+};//»
 const FATAL=s=>{throw new Error(s)};
-const clearpop=()=>{let pop=CPR;if(pop&&pop.ok)pop.ok();};
 const z_compare=(a,b)=>{if(pi(a.style.zIndex)<pi(b.style.zIndex))return 1;else if(pi(a.style.zIndex)>pi(b.style.zIndex))return-1;return 0;};
 const gbid=(id)=>{return document.getElementById(id)}
 const pi=x=>{return parseInt(x, 10)}
@@ -8532,7 +8526,7 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;
 	if (!await fs.api.init()) return;
 	if (!await fs.mk_user_dirs()) return;
-	check_for_other_desktops();
+	check_for_desktops_in_other_tabs();
 	document.onkeyup = null;
 	make_desktop();
 	hidden_taskbar_thresh = taskbar.taskbarElem._gbcr().height;
@@ -8542,7 +8536,6 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	if (!isMobile && !qObj.nocursor && globals.is_local) CUR.on(true);
 	await reloadIcons();
 	setsyskeys();
-//	init_touch_listeners();
 	if (localStorage[`taskbar_hidden:${globals.current_user}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
 	document.onkeypress = dokeypress;
@@ -8566,7 +8559,7 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	setTimeout(()=>{
 		if (globals.read_only) {
 			popup("The system is in read-only mode! (Is it open in another tab?)");
-			make_read_only();
+			make_read_only_dom();
 		}
 	},250);
 	body.removeChild(gbid("error_message"));
