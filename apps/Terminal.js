@@ -593,15 +593,8 @@ const Com = class {/*«*/
 		this.out(EOF);
 	}
 	init(){}
-//	async saveToRedir(){
-//		let lns = this.saveLines;
-//		if (!this.saveLines) return;
-//cwarn("SAVE", this.redir, this.saveLines);
-//if (!)
-//	}
 	run(){
-		this.err(`sh: ${this._name}: the 'run' method has not been overriden!`);
-		this.no();
+		this.no(`the 'run' method has not been overriden!`);
 	}
 }/*»*/
 const NoCom=class{/*«*/
@@ -622,12 +615,13 @@ const ErrCom = class extends Com{/*«*/
 		this.no(this.errorMessage);
 	}
 }/*»*/
-const com_Error=(mess,com_env)=>{//«
+const make_error_com=(mess,com_env)=>{//«
 	let com = new ErrCom(null,null,com_env);
 	com.errorMessage = mess;
 	return com;
 };/*»*/
-globals.comClasses={Com, ErrCom, com_Error};
+globals.comClasses={Com, ErrCom, make_error_com};
+
 //Command functions«
 
 /*
@@ -674,6 +668,11 @@ run(){
 }
 }
 */
+const com_hang = class extends Com{/*«*/
+	run(){
+		this.inf("forever is a loooooong time!!!");
+	}
+}/*»*/
 const com_norun=class extends Com{init(){}}
 const com_echoasync = class extends Com{//«
 	async run(){
@@ -699,7 +698,6 @@ init(){
 	this.optRecur = opts.recursive || opts.R;
 }
 async run(){//«
-//this.ok();
 	let colors = [];
 	let {pipeTo, term, out, err, args} = this;
 	let nargs = args.length;
@@ -1011,7 +1009,7 @@ async run(){
 			continue;
 		}
 		let win = await Desk.open_file_by_path(node.fullpath);
-		if (!win) err(`open: ${path}: could not be opened`);
+		if (!win) err(`${path}: could not be opened`);
 	}
 	have_error?this.no():this.ok();
 }
@@ -1079,7 +1077,7 @@ async run(){
 	while (args.length){
 		let arg = args.shift();
 		if (NO_SET_ENV_VARS.includes(arg)) {
-			err(`read: refusing to modify read-only variable: ${arg}`);
+			err(`refusing to modify read-only variable: ${arg}`);
 			vals.shift();
 			continue;
 		}
@@ -1128,7 +1126,7 @@ Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/ma
 #doMath(str){
 
 	try{
-		this.inf(`math: evaluating: '${str}'`);
+		this.inf(`evaluating: '${str}'`);
 		this.out(this.var.math.eval(str)+"");
 		this.ok();
 	}catch(e){
@@ -1733,6 +1731,7 @@ Long options may be given an argument like this:
 //FWPORUITJ
 const shell_commands={//«
 //win: com_win,
+hang: com_hang,
 norun: com_norun,
 //deadpipe: com_deadpipe,
 pipe: com_pipe,
@@ -2854,7 +2853,7 @@ term.refresh();
 };//»
 const err_cb=(lns)=>{//«
 if (can()) return;
-if (isStr(lns)) lns=[lns];
+if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in err_cb");
@@ -2866,7 +2865,8 @@ term.refresh();
 };//»
 const suc_cb=(lns)=>{//«
 if (can()) return;
-if (isStr(lns)) lns=[lns];
+//if (isStr(lns)) lns=[lns];
+if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in suc_cb");
@@ -2877,7 +2877,8 @@ term.refresh();
 };//»
 const wrn_cb=(lns)=>{//«
 if (can()) return;
-if (isStr(lns)) lns=[lns];
+//if (isStr(lns)) lns=[lns];
+if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in wrn_cb");
@@ -2888,7 +2889,8 @@ term.refresh();
 };//»
 const inf_cb=(lns)=>{//«
 if (can()) return;
-if (isStr(lns)) lns=[lns];
+//if (isStr(lns)) lns=[lns];
+if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in inf_cb");
@@ -2983,11 +2985,11 @@ cerr(e);
 //It doesn't look like a file.
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
-				pipeline.push(com_Error(`sh: ${comword}: command not found`, com_env));
+				pipeline.push(make_error_com(`sh: ${comword}: command not found`, com_env));
 				continue;
 			}
 
-			pipeline.push(com_Error(`sh: must try to find and execute: '${comword}'`, com_env));
+			pipeline.push(make_error_com(`sh: must try to find and execute: '${comword}'`, com_env));
 /*«
 //XGJUIKM
 //Try to execute a "shell script" from file
@@ -3048,7 +3050,7 @@ cerr(e);
 //VKJEOKJ
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
-			pipeline.push(com_Error(`sh: ${usecomword}: ${e.message}`, com_env));
+			pipeline.push(make_error_com(`sh: ${usecomword}: ${e.message}`, com_env));
 		}
 //SKIOPRHJT
 
