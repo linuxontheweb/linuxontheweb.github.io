@@ -1,5 +1,6 @@
 //Older terminal development notes are stored in doc/dev/TERMINAL
-/*11/26/24: No calls to com.out in the 'init' phase!
+/*11/26/24: No calls to com.out in the 'init' phase please!
+Migrate to the new 'class extends Com{...}' notation or get the error message @VKJEOKJ.
 */
 /*11/25/24: New 'Com class{...}' and 'Com_whatever extends Com{...}'«
 
@@ -66,6 +67,7 @@ let USE_DEVSHELL = false;
 //import { globals } from "config";
 const util = LOTW.api.util;
 const globals = LOTW.globals;
+const{Desk}=LOTW;
 const {
 	strNum,
 	isArr,
@@ -145,8 +147,8 @@ const ALIASES={
 //	ai: "appicon"
 };
 
-//const ALLOW_REDIRECT_CLOBBER = false;
-const ALLOW_REDIRECT_CLOBBER = true;
+const ALLOW_REDIRECT_CLOBBER = false;
+//const ALLOW_REDIRECT_CLOBBER = true;
 
 const FS_COMS=[//«
 	"_purge",
@@ -514,33 +516,48 @@ cwarn(`Deleted module: ${m}`);
 	}
 }//»
 
+const write_to_redir = async(term, out, redir, env)=>{//«
+//let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
+	if (!(out instanceof Uint8Array || isStr(out))){
+		if (!isArr(out)) return {err: "the redirection output is not a String, Uint8Array or JS array!"}
+		if (out.length && !isStr(out[0])) return {err: "the redirection output does not seem to be an array of Strings!"};
+		out = out.join("\n");
+	}
+	let op = redir.shift();
+	let fname = redir.shift();
+	if (!fname) return {err:`missing operand to the redirection operator`};
+	let fullpath = normPath(fname, term.cur_dir);
+	let node = await fsapi.pathToNode(fullpath);
+	if (node) {
+		if (node.type == FS_TYPE && op===">" && !ALLOW_REDIRECT_CLOBBER) {
+			if (env.CLOBBER_OK==="true"){}
+			else return {err: `not clobbering '${fname}' (ALLOW_REDIRECT_CLOBBER==${ALLOW_REDIRECT_CLOBBER})`};
+		}
+		if (node.writeLocked()){
+			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
+		}
+		if (node.data){
+			return {err:`${fname}: cannot write to the data file`};
+		}
+	}
+	let patharr = fullpath.split("/");
+	patharr.pop();
+	let parpath = patharr.join("/");
+	if (!parpath) return {err:`${fname}: Permission denied`};
+	let parnode = await fsapi.pathToNode(parpath);
+	let typ = parnode.type;
+	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: Invalid or unsupported path`};
+	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+		return {err:`${fname}: Permission denied`};
+	}
+	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
+	return {};
+};//»
+
 //»
 
 //Builtin commands«
 
-//Command functions«
-
-/*
-
-//All vars in env: redir,script_out,stdin,inpipe,term,env,opts,command_str
-const com_ = async(args, opts, _)=>{
-	const {term, stdin, out, err, suc} = _;
-};
-
-*/
-const NoCom=class{
-	init(){
-		this.awaitEnd=new Promise((Y,N)=>{
-			this.ok=()=>{
-				if (this.pipeTo) this.out(EOF);
-				Y(E_SUC);
-			}
-		});
-	}
-	run(){
-		this.ok();
-	}
-}
 const Com = class {/*«*/
 	constructor(args, opts, env={}){
 		this.args=args;
@@ -548,6 +565,9 @@ const Com = class {/*«*/
 		this.numErrors = 0;
 		for (let k in env) {
 			this[k]=env[k];
+		}
+		if (this.redir&&this.redir.length){
+			this.saveLines = [];
 		}
 		this.var={};
 		this.awaitEnd = new Promise((Y,N)=>{
@@ -573,9 +593,28 @@ const Com = class {/*«*/
 		this.out(EOF);
 	}
 	init(){}
+//	async saveToRedir(){
+//		let lns = this.saveLines;
+//		if (!this.saveLines) return;
+//cwarn("SAVE", this.redir, this.saveLines);
+//if (!)
+//	}
 	run(){
 		this.err(`sh: ${this._name}: the 'run' method has not been overriden!`);
 		this.no();
+	}
+}/*»*/
+const NoCom=class{/*«*/
+	init(){
+		this.awaitEnd=new Promise((Y,N)=>{
+			this.ok=()=>{
+				if (this.pipeTo) this.out(EOF);
+				Y(E_SUC);
+			}
+		});
+	}
+	run(){
+		this.ok();
 	}
 }/*»*/
 const ErrCom = class extends Com{/*«*/
@@ -583,13 +622,22 @@ const ErrCom = class extends Com{/*«*/
 		this.no(this.errorMessage);
 	}
 }/*»*/
-
 const com_Error=(mess,com_env)=>{//«
 	let com = new ErrCom(null,null,com_env);
 	com.errorMessage = mess;
 	return com;
 };/*»*/
 globals.comClasses={Com, ErrCom, com_Error};
+//Command functions«
+
+/*
+
+//All vars in env: redir,script_out,stdin,inpipe,term,env,opts,command_str
+const com_ = async(args, opts, _)=>{
+	const {term, stdin, out, err, suc} = _;
+};
+
+*/
 
 const com_pipe = class extends Com{//«
 	run(){
@@ -860,6 +908,265 @@ async run(){
 }
 }
 /*»*/
+const com_app = class extends Com{//«
+
+async run(){
+	const{args, out, err: _err, term}=this;
+	let list = await util.getList("/site/apps/");
+	if (!args.length) {
+		if (!list){
+			return this.no("app: could not get the app list");
+		}
+		out(list);
+		return this.ok();
+	}
+	let have_error=false;
+	for (let appname of args){
+		if (list && !list.includes(appname)) {
+			_err(`app: ${appname}: not found`);
+			continue;
+		}
+		let win = await Desk.api.openApp(appname);
+		if (!win) _err(`app: ${appname}: not found`);
+	}
+	have_error?this.no():this.ok();
+}
+
+}//»
+
+const com_msleep = class extends Com{/*«*/
+	async run(){
+		let ms = parseInt(this.args.shift());
+		if (!Number.isFinite(ms)) ms = 0;
+		await sleep(ms);
+		this.ok();
+	}
+}/*»*/
+const com_hist = class extends Com{/*«*/
+	run(){
+		this.out(this.term.get_history());
+		this.ok();
+	}
+}/*»*/
+const com_pwd = class extends Com{/*«*/
+	run(){
+		this.out(this.term.cur_dir);
+		this.ok();
+	}
+}/*»*/
+const com_libs = class extends Com{/*«*/
+	async run(){
+		this.out(await util.getList("/site/coms/"));
+		this.ok();
+	}
+}/*»*/
+const com_lib = class extends Com{//«
+init(){
+	if (!this.args.length) return this.no("lib: no lib given");
+	if (this.args.length > 1) return this.no("lib: too many arguments");
+}
+async run(){
+	if (this.killed) return;
+	let lib = this.args.shift();
+	let hold = lib;
+	let got = ALL_LIBS[lib] || NS.coms[lib];
+	if (got){
+		if (!isArr(got)) got = Object.keys(got);
+		this.out(got);
+		return this.ok();
+	}
+	let orig = lib;
+	lib = lib.replace(/\./g,"/");
+	let path = `/coms/${lib}.js`;
+	try{
+		const coms = (await import(path)).coms;
+		NS.coms[orig] = coms;
+		this.out(Object.keys(coms));
+		this.ok();
+	}catch(e){
+cerr(e);
+		this.no(`The library: '${hold}' could not be loaded!`);
+	}
+
+}
+}//»
+const com_open = class extends Com{//«
+init(){
+	if (!this.args.length) {
+		this.no(`open: missing operand`);
+	}
+}
+async run(){
+	const{term, err:_err}=this;
+	let have_error = false;
+	const err=mess=>{
+		have_error = true;
+		_err(mess);
+	};
+	for (let path of this.args) {
+		let fullpath = normPath(path, term.cur_dir);
+		let node = await fsapi.pathToNode(fullpath);
+		if (!node) {
+			err(`${path}: no such file or directory`);
+			continue;
+		}
+		let win = await Desk.open_file_by_path(node.fullpath);
+		if (!win) err(`open: ${path}: could not be opened`);
+	}
+	have_error?this.no():this.ok();
+}
+}//»
+const com_epoch = class extends Com{/*«*/
+	run(){
+		this.out(Math.round((new Date).getTime()/ 1000)+"");
+		this.ok();
+	}
+}/*»*/
+const com_getch = class extends Com{//«
+
+async run(){
+	if (this.args.length) return this.no("getch: not expecting arguments");
+	let ch = await this.term.getch("");
+	if (!ch) return this.no("no character returned");
+	this.out(`Got: ${ch} (code: ${ch.charCodeAt()})`);
+	this.ok();
+}
+
+}//»
+const com_export = class extends Com{/*«*/
+	run(){
+		let rv = add_to_env(this.args, this.term.ENV, {if_export: true});
+		if (rv.length){
+			this.err(rv);
+			this.no();
+		}
+		else this.ok();
+	}
+}/*»*/
+const com_curcol = class extends Com{/*«*/
+	run(){
+		let which = this.args.shift();
+		if (which=="white"){
+			this.term.cur_white();
+			this.ok();
+		}
+		else if (which=="blue"){
+			this.term.cur_blue();
+			this.ok();
+		}
+		else{
+			this.no(`curcol: Missing or invalid arg`);
+		}
+	}
+}/*»*/
+const com_read = class extends Com{//«
+
+async run(){
+	const {args, opts, term, err: _err} = this;
+	const{ENV}=term;
+	let have_error = false;
+	const err=mess=>{
+		have_error = true;
+		_err(mess);
+	};
+	let use_prompt = opts.prompt;
+	if (use_prompt && use_prompt.length > term.w - 3){
+		this.no(`read: the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
+		return;
+	}
+	let ln = await term.read_line(use_prompt);
+	let vals = ln.trim().split(/ +/);
+	while (args.length){
+		let arg = args.shift();
+		if (NO_SET_ENV_VARS.includes(arg)) {
+			err(`read: refusing to modify read-only variable: ${arg}`);
+			vals.shift();
+			continue;
+		}
+		let useval;
+		if (!args.length) {
+			if (vals.length) useval = vals.join(" ");
+		}
+		else useval = vals.shift();
+		if (!useval) useval = "";
+		ENV[arg] = useval;
+	}
+	have_error?this.no():this.ok();
+}
+
+}//»
+const com_math = class extends Com{//«
+
+async init(){
+	if (!this.args.length && !this.pipeFrom) {
+		return this.no("math: nothing to do");
+	}
+	if (!this.args.length){
+		this.var.lines=[];
+	}
+/*math-expression-evaluator npm package/ github repo«
+
+From: https://github.com/bugwheels94/math-expression-evaluator
+Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/master/dist/browser/math-expression-evaluator.min.js
+1) At top of the file, put: 
+	const exports={};
+2) Then unfold first curly to make:
+	!function(e,t){"object"==typeof exports...
+...become:
+	!function(e,t){
+		exports.Mexp = t;
+		"object"==typeof exports...
+3) At bottom of the file, put:
+	export const mod = new exports.Mexp();
+
+»*/
+	if (!await util.loadMod("util.math")) {
+		return no("Could not load the math module");
+	}
+    this.var.math = new NS.mods["util.math"]();
+}
+#doMath(str){
+
+	try{
+		this.inf(`math: evaluating: '${str}'`);
+		this.out(this.var.math.eval(str)+"");
+		this.ok();
+	}catch(e){
+//cerr(e);
+		this.no(e.message);
+	}
+}
+run(){
+	if (this.killed || !this.args.length) return;
+	this.#doMath(this.args.join(" "));
+}
+pipeIn(val){
+    if (!this.var.lines) return;
+    if (isEOF(val)){
+        this.out(val);
+        this.#doMath(this.var.lines.join(" "));
+        return;
+    }
+    if (isStr(val)) this.var.lines.push(val);
+    else if (isArr(val)) this.var.lines.push(...val);
+    else{
+cwarn("WUTISTHIS", val);
+    }
+}
+}//»
+const com_appicon = class extends Com{//«
+
+async run(){
+	if (this.args.length){
+		this.out(JSON.stringify({app: this.args.shift()}));
+	}
+	else {
+		this.out(await util.getList("/site/apps/"));
+	}
+	this.ok();
+}
+
+}//»
 
 
 //Left to convert:
@@ -978,45 +1285,6 @@ out(bytes2);
 
 return E_SUC;
 };/*»*/
-const com_math = async(args, opts, _)=>{//«
-	const {term, stdin, out, err, inf} = _;
-	if (!args.length) {
-		err("Nothing to do!");
-		return E_ERR;
-	}
-/*math-expression-evaluator npm package/ github repo«
-
-From: https://github.com/bugwheels94/math-expression-evaluator
-Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/master/dist/browser/math-expression-evaluator.min.js
-1) At top of the file, put: 
-	const exports={};
-2) Then unfold first curly to make:
-	!function(e,t){"object"==typeof exports...
-...become:
-	!function(e,t){
-		exports.Mexp = t;
-		"object"==typeof exports...
-3) At bottom of the file, put:
-	export const mod = new exports.Mexp();
-
-»*/
-	if (!await util.loadMod("util.math")) {
-		err("Could not load the math module");
-		return E_ERR;
-	}
-    let math = new NS.mods["util.math"]();
-	try{
-		let str = args.join(" ");
-		inf(`Evaluating: '${str}'`);
-		let rv = math.eval(str);
-		out(rv+"");
-		return E_SUC;
-	}catch(e){
-cerr(e);
-		err(e.message);
-		return E_ERR;
-	}
-};/*»*/
 
 const com_menu = async(args, opts, _)=>{//«
 const {term, stdin, out, err, suc} = _;
@@ -1077,157 +1345,6 @@ out("Here is out 222");
 //return {err: "ERROR!!!"};
 //return {ok: ["OKKKKKKKKKKKK...", "Place in the roy spotzleeeee", "Flung benottzle"]};
 return E_SUC;
-};//»
-const com_curcol = async(args,opts, _)=>{//«
-	const {term, stdin} = _;
-	let which = args.shift();
-	if (which=="white"){
-		term.cur_white();
-	}
-	else if (which=="blue"){
-		term.cur_blue();
-	}
-	else{
-		_.err(`Missing or invalid arg`);
-		return E_ERR;
-	}
-	return E_SUC;
-};//»
-const com_getch = async(args, opts, _)=>{//«
-	const {term} = _;
-	let err=[];
-	let use_prompt = "";
-	let ch = await term.getch(use_prompt);
-	_.out(`Got: ${ch}`);
-	return E_SUC;
-};//»
-const com_read = async(args,opts, _)=>{//«
-	const {term} = _;
-	let err=[];
-	let use_prompt = opts.prompt;
-	if (use_prompt && use_prompt.length > term.w - 3){
-		_.err(`The prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
-		return E_ERR;
-	}
-	let ln = await term.read_line(use_prompt);
-	let vals = ln.trim().split(/ +/);
-	while (args.length){
-		let arg = args.shift();
-		if (NO_SET_ENV_VARS.includes(arg)) {
-			err.push(`Refusing to modify read-only variable: ${arg}`);
-			vals.shift();
-			continue;
-		}
-		let useval;
-		if (!args.length) {
-			if (vals.length) useval = vals.join(" ");
-		}
-		else useval = vals.shift();
-		if (!useval) useval = "";
-		term.ENV[arg] = useval;
-	}
-	if (err.length)_.err(err);
-	return E_SUC;
-};//»
-const com_export = async (args, opts, _) => {//«
-		_.err(add_to_env(args, _.term.ENV, {
-			if_export: true
-		}));
-		return E_SUC;
-};//»
-const com_hist=(args,opts,_)=>{_.out(_.term.get_history());return E_SUC;};
-const com_pwd=(args,opts,_)=>{_.out(_.term.cur_dir);return E_SUC;};
-const com_app = async (args, opts, _) => {//«
-	let {term, err}=_; 
-//	let err = [];
-	let list;
-//jlog(args);
-	if (!args.length) {
-		list = await util.getList("/site/apps/");
-		_.out(list);
-		return E_SUC;
-	}
-	for (let appname of args){
-log("OPEN", appname);
-		if (list && !list.includes(appname)) {
-			err(`${appname}: app not found`);
-			continue;
-		}
-		term.Desk.api.openApp(appname);
-	}
-//	if (err.length) _.err(err);
-	return E_SUC;
-};//»
-const com_appicon=async(args, opts, _)=>{//«
-	if (args.length){
-		_.out(JSON.stringify({app: args.shift()}));
-	}
-	else {
-		_.out(await util.getList("/site/apps/"));
-	}
-	return E_SUC;
-};//»
-const com_open = async (args, opts, _) => {//«
-	let {term}=_; 
-	let err = [];
-	if (!args.length) {
-		_.err(`open: missing operand`);
-		return E_ERR;
-	}
-	for (let path of args) {
-		let fullpath = normPath(path, term.cur_dir);
-		let node = await fsapi.pathToNode(fullpath);
-		if (!node) {
-			err.push(`${path}: No such file or directory`);
-			continue;
-		}
-		term.Desk.open_file_by_path(node.fullpath);
-	}
-	if (err.length) _.err(err);
-	return E_SUC;
-
-};//»
-const com_epoch = (args, opts, _) => {//«
-_.out(Math.round((new Date).getTime()/ 1000)+"");
-return E_SUC;
-};//»
-const com_msleep = async(args, opts, _)=>{//«
-	let ms = parseInt(args.shift());
-	if (!Number.isFinite(ms)) ms = 0;
-	await sleep(ms);
-	return E_SUC;
-};//»
-const com_libs = async (args, opts, _) => {//«
-	_.out(await util.getList("/site/coms/"));
-	return E_SUC;
-};//»
-const com_lib = async(args,opts, _)=>{//«
-	const {term, stdin, err, out} = _;
-	let lib = args.shift();
-	if (!lib) {
-		err("no lib given!");
-		return E_ERR;
-	}
-	let hold = lib;
-	let got = ALL_LIBS[lib] || NS.coms[lib];
-	if (got){
-		if (!isArr(got)) got = Object.keys(got);
-		out(got);
-		return E_SUC;
-	}
-	let orig = lib;
-	lib = lib.replace(/\./g,"/");
-	let path = `/coms/${lib}.js`;
-	try{
-		const coms = (await import(path)).coms;
-		NS.coms[orig] = coms;
-		out(Object.keys(coms));
-		return E_SUC;
-	}catch(e){
-cerr(e);
-		err(`The library: '${hold}' could not be loaded!`);
-		return E_ERR;
-	}
 };//»
 const com_import=async(args, opts, _)=>{//«
 	let {term}=_;
@@ -2310,44 +2427,6 @@ cerr(e);
 	return err;
 }//»
 const env_glob_brace_expansions = all_expansions;
-const write_to_redir=async(term, out, redir, env)=>{//«
-//let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
-
-	if (!(out instanceof Uint8Array || isStr(out))){
-		if (!isArr(out)) return {err: "The redirection output is not a String, Uint8Array or JS array!"}
-		if (out.length && !isStr(out[0])) return {err: "The redirection output does not seem to be an array of Strings!"};
-		out = out.join("\n");
-	}
-	let op = redir.shift();
-	let fname = redir.shift();
-	if (!fname) return {err:`Missing operand to the redirection operator`};
-	let fullpath = normPath(fname, term.cur_dir);
-	let node = await fsapi.pathToNode(fullpath);
-	if (node) {
-		if (node.type == FS_TYPE && op===">" && !ALLOW_REDIRECT_CLOBBER) {
-			if (env.CLOBBER_OK==="true"){}
-			else return {err: `Not clobbering the file (ALLOW_REDIRECT_CLOBBER==${ALLOW_REDIRECT_CLOBBER})`};
-		}
-		if (node.writeLocked()){
-			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
-		}
-		if (node.data){
-			return {err:`${fname}: cannot write to the data file`};
-		}
-	}
-	let patharr = fullpath.split("/");
-	patharr.pop();
-	let parpath = patharr.join("/");
-	if (!parpath) return {err:`${fname}: Permission denied`};
-	let parnode = await fsapi.pathToNode(parpath);
-	let typ = parnode.type;
-	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: Invalid or unsupported path`};
-	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
-		return {err:`${fname}: Permission denied`};
-	}
-	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
-	return {};
-};//»
 
 return function(term){
 
@@ -2453,7 +2532,6 @@ let {script_out, script_args, script_name, env}=opts;
 let rv;
 
 //Where does the output go?
-let redir;
 
 //This is only used for pipeline commands that are after the first command
 // cat somefile.txt | these | might | use | the | stdin | array
@@ -2590,13 +2668,15 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	let pipetype = pipe.type;
 	let pipeline = [];
 //	while (pipelist.length) {
-//		let arr = pipelist.shift().com;
+//	let arr = pipelist.shift().com;
 	for (let j=0; j < pipelist.length; j++) {//«
 		let arr = pipelist[j].com;
 //      let inpipe = j < pipelist.length-1;
 		let pipeFrom = j > 0;
 		let pipeTo = j < pipelist.length-1;
 		let args=[];
+		let comobj, usecomword;
+		let redir;
 
 //Expansions/Redirections«
 
@@ -2722,21 +2802,23 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 
 //Everything that gets sent to redirects, pipes, and script output must be collected
 //By default, only the 'out' stream will be collected.
-let save_lns;
-if (pipeTo || script_out || (redir && redir.length)){
-save_lns = [];
-}
+//let save_lns;
+//if (pipeTo || script_out || (redir && redir.length)){
+//if ((redir && redir.length)){
+//save_lns = [];
+//}
 
 const out_cb = (val, opts={})=>{//«
 
 if (can()) return;
 
-if (pipeTo){
+let save_lns = comobj.saveLines;
+//EOF is not meaningful at the end of a pipeline
+if (isEOF(val) || (!save_lns && pipeTo)){
     let next_com = pipeline[j+1];
-    if (next_com.pipeIn) next_com.pipeIn(val);
+    if (next_com && next_com.pipeIn) next_com.pipeIn(val);
     return;
 }
-if (isEOF(val)) return;
 
 if (isStr(val)) val=[val];
 else if (!isArr(val)){
@@ -2744,20 +2826,25 @@ log(val);
 FATAL("Invalid value in out_cb");
 return;
 }
-
+//log(com.args);
 if (save_lns) {
 //KIUREUN
 	if (val instanceof Uint8Array){
-		if (!save_lns.length) save_lns = val;
+		if (!save_lns.length) {
+			save_lns = val;
+		}
 		else {
 			let hold = save_lns;
 			save_lns = new Uint8Array(hold.length + val.length);
 			save_lns.set(hold, 0);
 			save_lns.set(val, hold.length);
 		}
-		return save_lns;
+		comobj.saveLines = save_lns;
+//		return save_lns;
+		return;
 	}
-	return save_lns.push(...val);
+	save_lns.push(...val);
+	return;
 }
 //MDKLIOUTYH
 term.response(val, opts);
@@ -2849,7 +2936,7 @@ const com_env = {/*«*/
 			}
 		}/*»*/
 
-		let usecomword = alias||comword;
+		usecomword = alias||comword;
 		if (usecomword=="exit"){//«
 			let numstr = arr.shift();
 			let code;
@@ -2896,16 +2983,11 @@ cerr(e);
 //It doesn't look like a file.
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
-//let errcom = new ErrCom();
-//errcom.errorMessage = `sh: ${comword}: command not found`;
 				pipeline.push(com_Error(`sh: ${comword}: command not found`, com_env));
-//				term.response(`sh: ${comword}: command not found`, {isErr: true});
-//				lastcomcode = E_ERR;
-//				pipeline.push(new Com());
 				continue;
 			}
 
-			pipeline.push(com_Error(`sh: must try to find/execute: ${comword}`, com_env));
+			pipeline.push(com_Error(`sh: must try to find and execute: '${comword}'`, com_env));
 /*«
 //XGJUIKM
 //Try to execute a "shell script" from file
@@ -2955,10 +3037,19 @@ cerr(e);
 		}
 		opts = rv[0];
 
-		let comobj = new com(arr, opts, com_env);
-		comobj._name = usecomword;
-		pipeline.push(comobj);
-
+//		comobj;
+		try{
+			comobj = new com(arr, opts, com_env);
+			comobj._name = usecomword;
+			pipeline.push(comobj);
+		}
+		catch(e){
+cerr(e);
+//VKJEOKJ
+//As of 11/26/24 This should be a 'com is not a constructor' error for commands
+//that have not migrated to the new 'class extends Com{...}' format
+			pipeline.push(com_Error(`sh: ${usecomword}: ${e.message}`, com_env));
+		}
 //SKIOPRHJT
 
 /*«Run command
@@ -2986,7 +3077,6 @@ topwin._fatal(new Error(`Invalid return value from: '${usecomword}'`));
 return;
 		}
 
-
 		lastcomcode = code;
 
 		if (redir&&redir.length){
@@ -3006,22 +3096,31 @@ return;
 »*/
 
 	}//»
+
 for (let com of pipeline){
 	await com.init();
 	if (can()) return;
-//	lastcomcode = await com.run();
 }
 for (let com of pipeline){
 	com.run();
 }
 for (let com of pipeline){
 	lastcomcode = await com.awaitEnd;
+
 	if (can()) return;
 	if (!Number.isFinite(lastcomcode)) {
 log(lastcomcode);
 		FATAL(`Invalid return value from: '${com._name}'`);
 		return;
 	}
+	if (com.saveLines) {
+		let {err} = await write_to_redir(term, com.saveLines, com.redir, com.env);
+		if (can()) return;
+		if (err) {
+			term.response(`sh: ${err}`, {isErr: true});
+		}
+	}
+
 }
 
 //log(pipeline);

@@ -5660,8 +5660,7 @@ const open_new_window = async (icn, opts={}) => {//«
 	icn.win = win;
 	win.icon = icn;
 
-//	return win;
-	return win.loadApp();
+	return await win.loadApp();
 
 }//»
 const open_icon_app = async(icn, bytes, ext, useapp, force_open) => {//«
@@ -5759,7 +5758,7 @@ const open_file = async (bytes, icn, useapp) => {//«
 	win._bytes = bytes;
 	win.ext = icn.ext;
 	win.app.onloadfile(bytes, {name, ext, viewOnly});
-
+	return win;
 }//»
 
 //»
