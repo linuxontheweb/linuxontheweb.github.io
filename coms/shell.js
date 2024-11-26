@@ -467,9 +467,10 @@ is one of the following symbols:
 
 //«Imports
 
-import { util, api as capi } from "util";
-import { globals } from "config";
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
+//import { util } from "util";
+//import { globals } from "config";
+const{globals}=LOTW;
+const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=LOTW.api.util;
 const {SHELL_ERROR_CODES}=globals;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 

@@ -615,7 +615,7 @@ const ErrCom = class extends Com{/*«*/
 		this.no(this.errorMessage);
 	}
 }/*»*/
-const make_error_com=(mess,com_env)=>{//«
+const make_error_com = (mess,com_env)=>{//«
 	let com = new ErrCom(null,null,com_env);
 	com.errorMessage = mess;
 	return com;
@@ -1165,6 +1165,23 @@ async run(){
 }
 
 }//»
+const com_import = class extends Com{/*«*/
+async run(){
+	let {term, err: _err, opts, args}=this;
+	let have_error = false;
+	const err=(arg)=>{
+		_err(arg);
+		have_error = true;
+	};
+	if (opts.delete || opts.d){
+		delete_coms(args);
+		this.ok();
+		return;
+	}
+	await do_imports(args, err);
+	have_error?this.no():this.ok();
+}
+}/*»*/
 
 
 //Left to convert:
@@ -1343,19 +1360,6 @@ out("Here is out 222");
 //return {err: "ERROR!!!"};
 //return {ok: ["OKKKKKKKKKKKK...", "Place in the roy spotzleeeee", "Flung benottzle"]};
 return E_SUC;
-};//»
-const com_import=async(args, opts, _)=>{//«
-	let {term}=_;
-	let err = [];
-	const terr=(arg)=>{err.push(arg);};
-if (opts.delete || opts.d){
-delete_coms(args);
-return E_SUC;
-}
-	await do_imports(args, terr);
-	if (err.length) _.err(err);
-	return E_SUC;
-//	return {err};
 };//»
 
 /*

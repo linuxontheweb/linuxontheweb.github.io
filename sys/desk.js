@@ -1,4 +1,4 @@
-/*@WJKNMTYT: When trying to 'mv' a file like this:
+/*11/25/24: @WJKNMTYT: When trying to 'mv' a file like this:«
 $ mv blah.txt FOOFOOFOO
 
 ... node.appName gets to be the name of the application. So this property needs
@@ -10,7 +10,7 @@ for .isFile if we want to do stuff like deleting the node.appName.
 node.appName is only "dynamically" set in saveFsByPath @DHYUI and mk_dir_kid
 @PYTNM.
 
-*/
+»*/
 /*11/22/24 « Want to update the logic in 'make_app' (@DIOLMTNY) to reflect modern 
 standards, namely replacing the callback logic (@BGEIUOP) with Promises. Then, go 
 through all of the ways that application windows are opened to use this new logic.
