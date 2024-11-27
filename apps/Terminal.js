@@ -562,7 +562,6 @@ const Com = class {/*«*/
 		if (this.redir&&this.redir.length){
 			this.redirLines = [];
 		}
-		this.var={};
 		this.awaitEnd = new Promise((Y,N)=>{
 			this.end = (rv)=>{
 				Y(rv);
@@ -1113,13 +1112,14 @@ async run(){
 
 }//»
 const com_math = class extends Com{//«
-
+#lines;
+#math;
 async init(){
 	if (!this.args.length && !this.pipeFrom) {
 		return this.no("math: nothing to do");
 	}
 	if (!this.args.length){
-		this.var.lines=[];
+		this.#lines=[];
 	}
 /*math-expression-evaluator npm package/ github repo«
 
@@ -1140,13 +1140,13 @@ Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/ma
 	if (!await util.loadMod("util.math")) {
 		return no("Could not load the math module");
 	}
-    this.var.math = new NS.mods["util.math"]();
+    this.#math = new NS.mods["util.math"]();
 }
 #doMath(str){
 
 	try{
 		this.inf(`evaluating: '${str}'`);
-		this.out(this.var.math.eval(str)+"");
+		this.out(this.#math.eval(str)+"");
 		this.ok();
 	}catch(e){
 //cerr(e);
@@ -1158,14 +1158,14 @@ run(){
 	this.#doMath(this.args.join(" "));
 }
 pipeIn(val){
-    if (!this.var.lines) return;
+    if (!this.#lines) return;
     if (isEOF(val)){
         this.out(val);
-        this.#doMath(this.var.lines.join(" "));
+        this.#doMath(this.#lines.join(" "));
         return;
     }
-    if (isStr(val)) this.var.lines.push(val);
-    else if (isArr(val)) this.var.lines.push(...val);
+    if (isStr(val)) this.#lines.push(val);
+    else if (isArr(val)) this.#lines.push(...val);
     else{
 cwarn("WUTISTHIS", val);
     }
@@ -3178,7 +3178,7 @@ character shall be used as the beginning of the next (operator) token.
 »*/
 else if (START_OPERATOR_CHARS.includes(ch)){
 	if (tok) {
-		toks.push(tok);
+		out.push(tok);
 	}
 	tok = new Oper();
 	if (!tok.add(ch)){
@@ -3190,7 +3190,7 @@ previous character is delimited and the current character shall be discarded.
 »*/
 else if (ch===" " || ch==="\t"){
 	if (tok){
-		toks.push(tok);
+		out.push(tok);
 		tok = null;
 	}
 	continue;

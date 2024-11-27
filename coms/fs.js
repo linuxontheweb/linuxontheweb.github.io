@@ -27,7 +27,8 @@ const {
 	DEF_EDITOR_MOD_NAME,
 	DEF_PAGER_MOD_NAME,
 	SHELL_ERROR_CODES,
-	comClasses
+	comClasses,
+	admin_mode
 } = globals;
 const fsapi = fs.api;
 const widgets = NS.api.widgets;
@@ -35,7 +36,7 @@ const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const {Com, ErrCom, make_error_com} = comClasses;
 const{make_icon_if_new}=LOTW.Desk;
-
+const ADMIN_COM = class extends Com{run(){this.no("must be in 'admin mode'!");}};
 //»
 
 //Var«
@@ -104,7 +105,7 @@ async run(){
 }
 }
 */
-
+//log(admin_mode);
 const com_brep = class extends Com{/*«*/
 /*«
 
@@ -675,7 +676,7 @@ async run(){
 
 }//»
 const com_grep = class extends Com{//«
-
+#re;
 async init(){
 
 	let patstr = this.args.shift();
@@ -685,7 +686,7 @@ async init(){
 	}
 
 	try {
-		this.var.re = new RegExp(patstr);
+		this.#re = new RegExp(patstr);
 	}
 	catch(e) {
 		this.no("invalid pattern: " + patstr);
@@ -694,7 +695,7 @@ async init(){
 	if (!this.args.length && !this.pipeFrom) this.no("no file args and not in a pipeline!");
 }
 #doGrep(val){
-	const re = this.var.re;
+	const re = this.#re;
 	if (!re) return;
 	const {out}=this;
 	let arr;
@@ -710,7 +711,6 @@ async init(){
 }
 async run(){
 	if (this.killed) return;
-	const re = this.var.re;
 	let{args, err: _err, out}=this;
 	let have_error = false;
 	const err=mess=>{
@@ -734,19 +734,21 @@ pipeIn(val){
 
 }//»
 const com_wc = class extends Com{//«
-
+#noPipe;
+#lines=0;
+#words=0;
+#chars=0;
 async init(){
 	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (this.args.length){
-		this.var.noPipe = true;
+		this.#noPipe = true;
 	}
-	this.var.lines=0;
-	this.var.words=0;
-	this.var.chars=0;
 }
 #doWC(val){
 	const {out}=this;
-	let{lines,words,chars}=this.var;
+	let lines = this.#lines;
+	let words = this.#words;
+	let chars = this.#chars;
 	let arr;
 	if (isStr(val)) arr=[val];
 	else if (!isArr(val)){
@@ -761,12 +763,12 @@ async init(){
 		if (word_arr.length===1 && word_arr[0]==="") continue;
 		words+=word_arr.length;
 	}
-	this.var.lines=lines;
-	this.var.words=words;
-	this.var.chars=chars;
+	this.#lines=lines;
+	this.#words=words;
+	this.#chars=chars;
 }
 #sendCount(){
-	this.out(`${this.var.lines} ${this.var.words} ${this.var.chars+this.var.lines}`);
+	this.out(`${this.#lines} ${this.#words} ${this.#chars+this.#lines}`);
 }
 async run(){
 	if (this.killed) return;
@@ -785,7 +787,7 @@ async run(){
 	have_error?this.no():this.ok();	
 }
 pipeIn(val){
-	if (this.var.noPipe) return;
+	if (this.#noPipe) return;
 	if (isEOF(val)){
 		this.out(val);
 		this.#sendCount();
@@ -797,31 +799,34 @@ pipeIn(val){
 
 }//»
 const com_dl = class extends Com{//«
-
+#name;
+#noPipe;
+#lines;
+#buffer;
 async init(){
 	const{opts, env, args}=this;
 	let nargs = args.length;
 	if (!nargs && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (!nargs){
-		this.var.name = opts.name || opts.n || env["DL_NAME"] || "DL-OUT.txt";
-		this.var.lines=[];
+		this.#name = opts.name || opts.n || env["DL_NAME"] || "DL-OUT.txt";
+		this.#lines=[];
 	}
 	else if(nargs > 1){
 		this.no("too many arguments");
 	}
 	else{
-		this.var.noPipe=true;
+		this.#noPipe=true;
 	}
 }
 #doDL(){
 	let val;
-	if (this.var.lines) val = this.var.lines.join("\n");
-	else if (this.var.buffer) val = this.var.buffer;
+	if (this.#lines) val = this.#lines.join("\n");
+	else if (this.#buffer) val = this.#buffer;
 	else{
 		this.no("NO LINES OR BUFFER?!?!?!");
 return;
 	}
-	util.download(new Blob([val]), this.var.name);
+	util.download(new Blob([val]), this.#name);
 	this.ok();
 }
 async run(){
@@ -838,55 +843,31 @@ async run(){
 		this.no(`${fullpath}: not a regular file`);
 		return;
 	}
-	this.var.buffer = await node.buffer;
-	this.var.name = node.name;
+	this.#buffer = await node.buffer;
+	this.#name = node.name;
 	this.#doDL();
 }
 pipeIn(val){
-	if (this.var.noPipe) return;
+	if (this.#noPipe) return;
 	if (isEOF(val)){
 		this.out(val);
 		this.#doDL();
 		return;
 	}
-	if (isStr(val)) this.var.lines.push(val);
-	else if (isArr(val)) this.var.lines.push(...val);
+	if (isStr(val)) this.#lines.push(val);
+	else if (isArr(val)) this.#lines.push(...val);
 	else{
 cwarn("WUTISTHIS", val);
 	}
 }
 
 }//»
-
-
-//Left to convert
-const com_purge = async(args,opts, _)=>{//«
-	let err=[];
-	let dir = await fsapi.getBlobDir();
-	for (let arg of args){
-		if (!arg.match(/^[0-9]+$/)) {
-			err.push(`Skipping invalid blob id: '${arg}'`);
-			continue;
-		}
-		let rows = await fsapi.getNodesByBlobId(parseInt(arg));
-		if (rows.length){
-			err.push(`${arg}: not purging (${rows.length} entries)`);
-			continue;
-		}
-		try{
-			await dir.removeEntry(arg);
-		}
-		catch(e){
-			err.push(`${arg}: ${e.message}`);
-		}
-	}
-	if (err.length) _.err(err);
-	return E_SUC;
-};//»
-const com_blobs = async(args,opts, _)=>{//«
+const com_blobs = class extends Com{/*«*/
+async run(){
+	const{args, term}=this;
 	let out = [];
 	let nargs = args.length;
-	let cur_dir = _.term.cur_dir;
+	let cur_dir = term.cur_dir;
 	if (nargs){
 		for (let arg of args){
 			if (nargs > 1) out.push(`${arg}:`);
@@ -932,9 +913,45 @@ const com_blobs = async(args,opts, _)=>{//«
 		out.push(`Entries: ${num}`);
 		out.push(`Size: ${tot}`);
 	}
-	if (out.length)  _.out(out);
-	return E_SUC;
-};//»
+	if (out.length)  this.out(out);
+	this.ok();
+}
+}/*»*/
+const com_purge = class extends Com{/*«*/
+
+async run(){
+	if (globals.read_only) return this.no("Read only");
+
+	const{err: _err, args}=this;
+	let have_error = false;
+	const err=(mess)=>{
+		have_error=true;
+		_err(mess);
+	}
+	let dir = await fsapi.getBlobDir();
+	for (let arg of args){
+		if (!arg.match(/^[0-9]+$/)) {
+			err(`skipping invalid blob id: '${arg}'`);
+			continue;
+		}
+		let rows = await fsapi.getNodesByBlobId(parseInt(arg));
+		if (rows.length){
+			err(`${arg}: not purging (${rows.length} entries)`);
+			continue;
+		}
+		try{
+			await dir.removeEntry(arg);
+		}
+		catch(e){
+			err(`${arg}: ${e.message}`);
+		}
+	}
+	have_error?this.no():this.ok();	
+}
+
+}/*»*/
+
+//Left to convert
 
 const com_clearstorage = async(args,opts, _)=>{//«
 
@@ -977,11 +994,9 @@ const com_mount = async (args,opts, _) => {//«
 
 //»
 
-export const coms = {//«
-//_clearstorage: com_clearstorage,
-_purge: com_purge,
+const coms = {
+
 _blobs: com_blobs,
-_clearstorage: com_clearstorage,
 brep: com_brep,
 wc: com_wc,
 grep: com_grep,
@@ -997,11 +1012,25 @@ symln:com_symln,
 ln:com_ln,
 vim:com_vim,
 touch:com_touch,
+
+}
+if (admin_mode){
+	coms._purge = com_purge;
+	coms._clearstorage = com_clearstorage;
+}
+else{
+	coms._purge = ADMIN_COM;
+	coms._clearstorage = ADMIN_COM;
+}
+//export _coms as const coms;
+
+//export const coms = {//«
+//_clearstorage: com_clearstorage,
 //mount: com_mount,
 //unmount: com_unmount,
-}//»
+//}//»
 
-export const opts = {//«
+const opts = {//«
 
 	rm: {//«
 		s:{
@@ -1031,3 +1060,4 @@ export const opts = {//«
 
 }//»
 
+export {coms, opts};

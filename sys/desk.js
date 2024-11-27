@@ -134,6 +134,7 @@ let pathToNode;
 const NOOP=()=>{}
 //Flags/Modes«
 let dev_mode;
+let admin_mode;
 let debug_localstorage=false;
 let show_desktop_during_win_cycle = true;
 let win_cycle_wins_hidden = false;
@@ -233,6 +234,8 @@ let CG;
 //»
 //String/Regex constants/vars«
 
+const READ_ONLY_TEXT = "\xa1\xa0Read\xa0Only\xa0!";
+const ADMIN_MODE_TEXT = "\xa1\xa0Admin\xa0Mode\xa0!";
 const RE_SP_PL = / +/,
 	RE_SP_G = / /g;
 //»
@@ -775,7 +778,7 @@ e.preventDefault();
 	desk._add(tiling_underlay);
 	desk._add(CG);
 	body._add(desk);
-	body._add(desk_imgdiv);
+	if (!admin_mode) body._add(desk_imgdiv);
 
 }
 //»
@@ -1121,6 +1124,7 @@ const make_desktop = () => {//«
 	set_desk_events();
 
 	let bgcol = qObj.bgcol;
+	if (admin_mode) bgcol="#800";
 	if (bgcol) {
 		if (bgcol.match(/^[a-f0-9]+$/i) && (bgcol.length==3 || bgcol.length==6)){
 			body._bgcol= `#${bgcol}`;
@@ -8446,14 +8450,14 @@ const focus_editing=e=>{//«
 		CEDICN._namearea.focus();
 	}
 }//»
-const make_read_only_dom = ()=>{//«
+const make_mode_dom = (str)=>{//«
 	let d = mkdv();
 	d._z=-1;
 	d._ta="center";
 	d.style.userSelect="none";
 	d._bgcol="#800";
 	d._tcol="#eee";
-	d.innerText="\xa1\xa0Read\xa0Only\xa0!";
+	d.innerText=str;
 	d._fs=32;
 	d._fw=900;
 	d._padb=10;
@@ -8523,6 +8527,7 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	let winorig = window.location.origin;
 	if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) globals.is_local = true;
 	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;
+	admin_mode = globals.admin_mode = !!(qObj.admin && qObj.admin.match(/^i_am_crazy$/i));
 	if (!await fs.api.init()) return;
 	if (!await fs.mk_user_dirs()) return;
 	check_for_desktops_in_other_tabs();
@@ -8558,7 +8563,10 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	setTimeout(()=>{
 		if (globals.read_only) {
 			popup("The system is in read-only mode! (Is it open in another tab?)");
-			make_read_only_dom();
+			make_mode_dom(READ_ONLY_TEXT);
+		}
+		else if (admin_mode){
+			make_mode_dom(ADMIN_MODE_TEXT);
 		}
 	},250);
 	body.removeChild(gbid("error_message"));
