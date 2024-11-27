@@ -168,6 +168,7 @@ const FS_COMS=[//«
 	"ln",
 	"vim",
 	"touch",
+	"brep",
 //	"mount",
 //	"unmount",
 ];//»
@@ -1205,123 +1206,7 @@ async run(){
 }
 }/*»*/
 
-
 //Left to convert:
-const com_brep = async(args, opts, _)=>{//«
-/*«
-
-Want a series of numbers for "from" and another series for "to". The only question is
-how we represent these series (i.e. aaa,bbb,ccc xxx,yyy,zzz):
-
-But I really just want to replace all 0xab with 0xc2 0xab and all 0xbb with 0xc2 0xbb.
-
-First, we will assume hex and then allow flags for decimal and octal.
-
-This is how we translated our file with non-utf8-encoded upper-ascii characters
-(in DASH.c) into utf8-encoded ones (in OUT.c):
-
-$ brep Desktop/DASH.c ab c2,ab | brep bb c2,bb > OUT.c
-
-We could also have done this without redirects (writing to an output file named as an
-argument, but it was more fun getting...)
-
-»*/
-	const {term, stdin, out, err, suc} = _;
-	let bytes;
-	if (stdin){
-		if (!(stdin instanceof Uint8Array)){
-			err("Received stdin, but not a Uint8Array!");
-			return E_ERR;
-		}
-		bytes = stdin;
-	}
-	else {
-		let f = args.shift();
-		if (!f) {
-			err("No file arg given");
-			return E_ERR;
-		}
-		let node = await f.toNode(term);
-		if (!node){
-			err(`${f}: Not found`);
-			return E_ERR;
-		}
-		bytes = await node.bytes;
-	}
-	let s1 = args.shift();
-	let s2 = args.shift();
-	if (!(s1&&s2)){
-		err("Need two sequences of hex bytes, e.g.: aa,bb cc,dd,ee");
-		return E_ERR;
-	}
-	let seq1=[];
-	let seq2=[];
-	for (let s of s1.split(",")){
-		let n = parseInt(s, 16);
-		if (isNaN(n)||n<0||n>255){
-			err(`${s}: invalid hex number`);
-			return E_ERR;
-		}
-		seq1.push(n);
-	}
-	for (let s of s2.split(",")){
-		let n = parseInt(s, 16);
-		if (isNaN(n)||n<0||n>255){
-			err(`${s}: invalid hex number`);
-			return E_ERR;
-		}
-		seq2.push(n);
-	}
-
-	let seq1len = seq1.length;
-	let seq1len_min1 = seq1len-1;
-	let seq2len = seq2.length;
-
-	if (!(seq1len && seq2len)){
-		err("Could not determine both sequences!?!?");
-		return E_ERR;
-	}
-
-	let len = bytes.length;
-	let bout = new Uint8Array(len*10);
-	let i1=0;
-	let i2=0;
-	let seq1_0 = seq1[0];
-
-	WHILE_LOOP: while(true){//«
-		if (i1 >= len) break;
-		if (bytes[i1]===seq1_0){
-			if (seq1len > 1){
-				for (let i=i1+1, iter=1; i < i1+seq1len; i++){
-					if (bytes[i]!==seq1[iter]){
-						bout[i2]=bytes[i1];
-						i1++;
-						i2++;
-						continue WHILE_LOOP;
-					}
-					iter++;
-				}
-			}
-			bout.set(seq2, i2);
-		}
-		else{
-			bout[i2]=bytes[i1];
-			i1++;
-			i2++;
-			continue;
-		}
-		i1+=seq1len;
-		i2+=seq2len;
-	}//»
-
-	let bytes2 = bout.slice(0, i2);
-//log(bytes);
-//cwarn("BYTES2");
-//log(bytes2);
-out(bytes2);
-
-return E_SUC;
-};/*»*/
 
 const com_menu = async(args, opts, _)=>{//«
 const {term, stdin, out, err, suc} = _;
@@ -1756,15 +1641,12 @@ Long options may be given an argument like this:
 
 //FWPORUITJ
 const shell_commands={//«
-//win: com_win,
 hang: com_hang,
 norun: com_norun,
-//deadpipe: com_deadpipe,
+deadpipe: com_deadpipe,
 pipe: com_pipe,
-//eco: com_eco,
-brep: com_brep,
 math: com_math,
-menu: com_menu,
+//menu: com_menu,
 curcol: com_curcol, 
 parse: com_parse,
 getch: com_getch,

@@ -105,6 +105,145 @@ async run(){
 }
 */
 
+const com_brep = class extends Com{/*«*/
+/*«
+
+Want a series of numbers for "from" and another series for "to". The only question is
+how we represent these series (i.e. aaa,bbb,ccc xxx,yyy,zzz):
+
+But I really just want to replace all 0xab with 0xc2 0xab and all 0xbb with 0xc2 0xbb.
+
+First, we will assume hex and then allow flags for decimal and octal.
+
+This is how we translated our file with non-utf8-encoded upper-ascii characters
+(in DASH.c) into utf8-encoded ones (in OUT.c):
+
+$ brep Desktop/DASH.c ab c2,ab | brep bb c2,bb > OUT.c
+
+We could also have done this without redirects (writing to an output file named as an
+argument, but it was more fun getting...)
+
+»*/
+
+#bytes;
+#seq1;
+#seq2;
+#noStdin;
+
+async init(){/*«*/
+	let{args, no}=this;
+
+	let s1 = args.shift();
+	let s2 = args.shift();
+	if (!(s1&&s2)){
+		return no("Need two sequences of hex bytes, e.g.: aa,bb cc,dd,ee");
+	}
+	let seq1=[];
+	let seq2=[];
+	for (let s of s1.split(",")){
+		let n = parseInt(s, 16);
+		if (isNaN(n)||n<0||n>255){
+			return no(`${s}: invalid hex number`);
+		}
+		seq1.push(n);
+	}
+	for (let s of s2.split(",")){
+		let n = parseInt(s, 16);
+		if (isNaN(n)||n<0||n>255){
+			return no(`${s}: invalid hex number`);
+		}
+		seq2.push(n);
+	}
+
+	if (!(seq1.length && seq2.length)){
+		return no("Could not determine both sequences!?!?");
+	}
+	this.#seq1 = seq1;
+	this.#seq2 = seq2;
+
+	if (!(this.pipeFrom || args.length)) return no("not in pipe and no file args!");
+	if (args.length > 1) return no("too many arguments");
+	let f = args.shift();
+	if (!f) {
+		return;
+	}
+	let node = await f.toNode(this.term);
+	if (!node){
+		return no(`${f}: Not found`);
+	}
+	let bytes = await node.bytes;
+	if (!(bytes instanceof Uint8Array)) return no(`${f}: no bytes were returned`);
+	this.#bytes = bytes;
+	this.#noStdin = true;
+
+}/*»*/
+#doBrep(){/*«*/
+	let bytes = this.#bytes;
+	let len = bytes.length;
+	let bout = new Uint8Array(len*10);
+	let i1=0;
+	let i2=0;
+	let seq1 = this.#seq1;
+	let seq2 = this.#seq2;
+	let seq1_0 = seq1[0];
+	let seq1len = seq1.length;
+	let seq1len_min1 = seq1len-1;
+	let seq2len = seq2.length;
+
+	WHILE_LOOP: while(true){//«
+		if (i1 >= len) break;
+		if (bytes[i1]===seq1_0){
+			if (seq1len > 1){
+				for (let i=i1+1, iter=1; i < i1+seq1len; i++){
+					if (bytes[i]!==seq1[iter]){
+						bout[i2]=bytes[i1];
+						i1++;
+						i2++;
+						continue WHILE_LOOP;
+					}
+					iter++;
+				}
+			}
+			bout.set(seq2, i2);
+		}
+		else{
+			bout[i2]=bytes[i1];
+			i1++;
+			i2++;
+			continue;
+		}
+		i1+=seq1len;
+		i2+=seq2len;
+	}//»
+
+	let bytes2 = bout.slice(0, i2);
+	this.out(bytes2);
+	this.ok();
+
+}/*»*/
+run(){
+	if (this.#noStdin) this.#doBrep();;
+}
+pipeIn(val){/*«*/
+	if (this.#noStdin) return;
+	if (isEOF(val)){
+		this.#doBrep();
+		return;
+	}
+	if (!val instanceof Uint8Array){
+		return;
+	}
+	if (!this.#bytes) this.#bytes = val;
+	else{
+		let hold = this.#bytes;
+		let bytes = new Uint8Array(hold.length + val.length);
+		bytes.set(hold, 0);
+		bytes.set(val, hold.length);
+		this.#bytes = bytes;
+	}
+}/*»*/
+
+}/*»*/
 const com_less = class extends Com{/*«*/
 async init(){
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
@@ -152,14 +291,13 @@ pipeIn(val){
 const com_vim = class extends Com{/*«*/
 
 async init(){
-	let {args, opts, command_str}=this;
+	let {args, opts, command_str, term}=this;
 	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 		this.no("could not load the pager module");
 		return;
 	}
 	this.editor = new NS.mods[DEF_EDITOR_MOD_NAME](this.term);
 	let path = args.shift();
-
 	let val;
 	let node;
 	let parnode;
@@ -182,7 +320,6 @@ async init(){
 		val="";
 	}
 	else {
-		let path = args.shift();
 		fullpath = normPath(path, term.cur_dir);
 		node = await fsapi.pathToNode(fullpath);
 		if (!node){
@@ -841,6 +978,7 @@ export const coms = {//«
 _purge: com_purge,
 _blobs: com_blobs,
 _clearstorage: com_clearstorage,
+brep: com_brep,
 wc: com_wc,
 grep: com_grep,
 dl: com_dl,
