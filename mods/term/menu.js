@@ -117,7 +117,7 @@ cerr("What in the hell is this thing???");
 log(val)
 		}
 		k = k.padEnd(min_key_len, " ");
-		lines.push([...k, ...val]);
+		lines.push([...k,":", ...val]);
 if (col) line_colors[iter]={[k.length+1]: [val.length, col]};
 		iter++;
 	}

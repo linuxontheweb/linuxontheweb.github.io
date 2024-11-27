@@ -1875,6 +1875,7 @@ as in com_ls, we might want to save on the cpu cycles, when it comes to very lon
 //»
 
 /*«DevShell*/
+//SOTFKL
 const DevShell = (()=>{
 
 /*«Command Classes*/

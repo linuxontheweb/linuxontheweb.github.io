@@ -1,8 +1,14 @@
-//Older terminal development notes are stored in doc/dev/TERMINAL
+//Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 //11/27/24: We are silently skipping file glob patterns with slashes in them//«
 //@EJUTIOPB, so only globs in the current directory will work.
 //$ echo */* *
 // -> */* [...all files in the current directory]
+
+/*Also, we are using old_curly_expansion, which does NOT do comma expansions, but
+the new curly_expansion @QXDPOLIT DOES do them (but that one uses the newer 
+parsing algorithm in the DevShell in /doc/dev/TERMINAL @SOTFKL).
+*/
+
 //»
 /*11/26/24: No calls to com.out in the 'init' phase please!«
 Migrate to the new 'class extends Com{...}' notation or get the error message @VKJEOKJ.
@@ -543,6 +549,8 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 };//»
 
 //»
+
+//Command Classes«
 const Com = class {/*«*/
 	constructor(args, opts, env={}){
 		this.args=args;
@@ -625,6 +633,7 @@ const make_error_com = (mess,com_env)=>{//«
 	return com;
 };/*»*/
 globals.comClasses={Com, ErrCom, make_error_com};
+//»
 
 //Builtin commands«
 
@@ -1192,16 +1201,32 @@ async run(){
 	have_error?this.no():this.ok();
 }
 }/*»*/
+const com_test = class extends Com{//«
+	async run() {
+		const {term, stdin, out, err, suc, wrn, inf} = this;
+		inf("Here is out 111 (in the time of the place which is in the thing that is where in the place of the thing in the placeeeeeeeeeeeeeeee.........................)");
+		await sleep(500);
+		suc("OKAY WEE WOOOO!!!!");
+		await sleep(500);
+		err("OOOOOOOOOO NOOOOOOOOO");
+		await sleep(500);
+		out("Here is out 222");
+		this.ok();
+	}
+};//»
 
-//Left to convert:
+const com_menu = class extends Com{/*«*/
 
-const com_menu = async(args, opts, _)=>{//«
-const {term, stdin, out, err, suc} = _;
-if (!await util.loadMod("term.menu")) {
-	err("Could not load the editor module");
-	return E_ERR;
+#menu;
+async init(){
+	if (!await util.loadMod("term.menu")) {
+		this.no("Could not load the editor module");
+		return;
+	}
+	this.#menu = new NS.mods["term.menu"](this.term);
 }
-let menu = new NS.mods["term.menu"](term);
+async run(){
+
 let fakeobj = {
     "BlahHartFunt": true,
     "Fla": 1,
@@ -1233,28 +1258,13 @@ let fakeobj = {
     }
 };
 let fakearr=[1,true,fakeobj,"Thrunxx", fakeobj];
+await this.#menu.init(fakearr,{opts: this.opts, command_str: this.command_str});
+this.ok();
 
-await menu.init(fakearr,{opts, command_str: _.command_str});
-return E_SUC;
-};//»
-const com_test = async(args,opts, _)=>{//«
+}
 
-const {term, stdin, out, err, suc, wrn, inf} = _;
-const {stat} = term;
-//stat("Sleep in...");
-inf("Here is out 111 (in the time of the place which is in the thing that is where in the place of the thing in the placeeeeeeeeeeeeeeee.........................)");
-await sleep(500);
-suc("OKAY WEE WOOOO!!!!");
-await sleep(500);
-err("OOOOOOOOOO NOOOOOOOOO");
-await sleep(500);
-out("Here is out 222");
+}/*»*/
 
-//stat("Done!");
-//return {err: "ERROR!!!"};
-//return {ok: ["OKKKKKKKKKKKK...", "Place in the roy spotzleeeee", "Flung benottzle"]};
-return E_SUC;
-};//»
 
 /*
 const com_help = async(args, opts, _)=>{//«
@@ -1633,7 +1643,7 @@ norun: com_norun,
 deadpipe: com_deadpipe,
 pipe: com_pipe,
 math: com_math,
-//menu: com_menu,
+menu: com_menu,
 curcol: com_curcol, 
 parse: com_parse,
 getch: com_getch,
@@ -1963,6 +1973,7 @@ const shell_tokify = line_arr => {//«
 //»
 /*NEW/CORRECT curly_expansion«
 //This takes a "word array". Begin with from_pos==0, then it will internally increase this.
+//QXDPOLIT
 const curly_expansion = (arr, from_pos) => {//«
 //log("FROM", from_pos);
 let ind1 = arr.indexOf("{", from_pos);
