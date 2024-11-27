@@ -35,7 +35,8 @@ const widgets = NS.api.widgets;
 const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const {Com, ErrCom, make_error_com} = comClasses;
-const{make_icon_if_new}=LOTW.Desk;
+const{Desk}=LOTW;
+const{make_icon_if_new}=Desk;
 const ADMIN_COM = class extends Com{run(){this.no("must be in 'admin mode'!");}};
 //»
 
@@ -950,27 +951,19 @@ async run(){
 }
 
 }/*»*/
-
-//Left to convert
-
-const com_clearstorage = async(args,opts, _)=>{//«
-
-	let {term}=_; 
-	if (globals.read_only) {
-		_.err("Read only");
-		return E_ERR;
-	}
+const com_clearstorage = class extends Com{/*«*/
+async run(){
+	let {term, no}=this; 
+	if (globals.read_only) return no("Read only");
+	
     let ret = await widgets.popyesno(`Clear EVERYTHING in storage?`,{reverse: true});
-	if (!ret) {
-		_.err("Not clearing");
-		return E_ERR;
-	}
+	if (!ret) return no("not clearing");
     await fsapi.clearStorage();
-	term.Desk.clear_desk_icons();
-	_.suc("Please resfresh the page");
-	return E_SUC;
+	Desk.clear_desk_icons();
+	this.ok("please refresh the page!");
+}
+}/*»*/
 
-};//»
 
 /*
 const com_unmount = async (args,opts, _) => {//«
@@ -994,7 +987,7 @@ const com_mount = async (args,opts, _) => {//«
 
 //»
 
-const coms = {
+const coms = {/*«*/
 
 _blobs: com_blobs,
 brep: com_brep,
@@ -1013,7 +1006,8 @@ ln:com_ln,
 vim:com_vim,
 touch:com_touch,
 
-}
+}/*»*/
+
 if (admin_mode){
 	coms._purge = com_purge;
 	coms._clearstorage = com_clearstorage;
@@ -1022,7 +1016,6 @@ else{
 	coms._purge = ADMIN_COM;
 	coms._clearstorage = ADMIN_COM;
 }
-//export _coms as const coms;
 
 //export const coms = {//«
 //_clearstorage: com_clearstorage,

@@ -79,6 +79,7 @@ const{
 
 	BACKGROUND_IMAGE_URL,
 	BACKGROUND_GRADIENT,
+	BEWARE_RED,
 //	DESK_GRADIENT,
 	ALWAYS_PREVENT,
 	KC
@@ -1124,7 +1125,7 @@ const make_desktop = () => {//«
 	set_desk_events();
 
 	let bgcol = qObj.bgcol;
-	if (admin_mode) bgcol="#800";
+	if (admin_mode) bgcol=BEWARE_RED;
 	if (bgcol) {
 		if (bgcol.match(/^[a-f0-9]+$/i) && (bgcol.length==3 || bgcol.length==6)){
 			body._bgcol= `#${bgcol}`;
@@ -8450,12 +8451,12 @@ const focus_editing=e=>{//«
 		CEDICN._namearea.focus();
 	}
 }//»
-const make_mode_dom = (str)=>{//«
+const make_mode_dom = str => {//«
 	let d = mkdv();
 	d._z=-1;
 	d._ta="center";
 	d.style.userSelect="none";
-	d._bgcol="#800";
+	d._bgcol=BEWARE_RED;
 	d._tcol="#eee";
 	d.innerText=str;
 	d._fs=32;

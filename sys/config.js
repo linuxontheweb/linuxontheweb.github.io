@@ -82,6 +82,7 @@ const APPDATA_PATH="/var/appdata";
 
 const BACKGROUND_IMAGE_URL = "/www/lotw256.png";
 const BACKGROUND_GRADIENT = "linear-gradient(135deg,#000 0%,#003 50%,#006 75%,#000077 87%, #993 100%)";
+const BEWARE_RED="#800";
 
 const SHELL_ERROR_CODES={
 	E_SUC: 0,
@@ -407,7 +408,7 @@ export const globals = {//«
 	SHM_TYPE,
 	BACKGROUND_IMAGE_URL,
 	BACKGROUND_GRADIENT,
-
+	BEWARE_RED,
 	USERNAME,
 	CURRENT_USER,
 	EOF: {EOF: true},

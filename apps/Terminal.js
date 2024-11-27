@@ -94,6 +94,7 @@ const {
 //	shell_libs,
 	SHELL_ERROR_CODES,
 	dev_mode,
+	admin_mode,
 	EOF
 } = globals;
 const fsapi = fs.api;
@@ -6085,8 +6086,11 @@ const init = async(appargs={})=>{
 	}
 	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`;
 	if(dev_mode){
-init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-init_prompt+=`\nDebug: ${DEBUG}`
+		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+		init_prompt+=`\nDebug: ${DEBUG}`;
+	}
+	if (admin_mode){
+		init_prompt+=`\nAdmin mode: true`;
 	}
 	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
 	let env_file_path = `${this.cur_dir}/.env`; 

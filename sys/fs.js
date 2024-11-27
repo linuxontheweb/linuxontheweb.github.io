@@ -343,7 +343,7 @@ return true;
 };//»
 
 this.dropDatabase = () => {//«
-throw new Error("Comment me out to use dropDatabase()!");
+//throw new Error("Comment me out to use dropDatabase()!");
 	return new Promise((Y,N)=>{
 		db.close();
 		const req = window.indexedDB.deleteDatabase(DBNAME);
