@@ -289,7 +289,7 @@ pipeIn(val){
 
 }/*»*/
 const com_vim = class extends Com{/*«*/
-
+#noPipe;
 async init(){
 	let {args, opts, command_str, term}=this;
 	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
@@ -316,6 +316,7 @@ async init(){
 			if (s.match(/^\w/)) symbols.push(s);
 		}
 	}//»
+//log("PATH", path);
 	if (!path) {
 		val="";
 	}
@@ -334,6 +335,7 @@ async init(){
 			parnode = await fsapi.pathToNode(path);
 			if (!parnode) return this.no(`${path}: no such directory`);
 			if (!await fsapi.checkDirPerm(path)) return this.no(`${fullpath}: permission denied`);
+			val = "";
 		}
 		else {
 			if (node.writeLocked()) return this.no(`${path}: is locked by another application`);
@@ -345,6 +347,7 @@ log(val);
 				return this.no(`${path}: could not get the contents (see console)`);
 			}
 		}
+		if (!opts.pipeok) this.#noPipe = true;
 	}
 	this.awaitCb = this.editor.init(val, fullpath, {
 		node,
@@ -359,6 +362,7 @@ async run(){
 	this.ok();
 }
 pipeIn(val){
+	if (this.#noPipe) return;
 	this.editor.addLines(val);
 }
 
@@ -1009,6 +1013,7 @@ export const opts = {//«
 	},//»
 	vim:{//«
 		l: {
+			pipeok: 1,
 			parsel: 1,
 			nosave: 1,
 			one: 1,

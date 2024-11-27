@@ -159,7 +159,7 @@ let yank_buffer = [
 yank_buffer._type="B";
 */
 let lines;
-let await_command_mode_lines;
+let stdin_lines;
 let line_colors;
 let real_line_colors;
 
@@ -512,7 +512,7 @@ const quit=()=>{//«
 	if (reload_win) delete reload_win.ownedBy;
 	quit_new_screen(hold_screen_state);
 };//»
-
+const warn_stdin=()=>{stat_warn(`${stdin_lines.length} lines have been received from stdin`);};
 const onescape=()=>{//«
 //	KEY_LOG.push("ESC");
 	if (stat_cb){
@@ -536,33 +536,22 @@ const onescape=()=>{//«
 	if (this.mode===INSERT_MODE||this.mode===REPLACE_MODE){
 		this.mode = COMMAND_MODE;
 		if (x>0&&x===(curarr().length)) x--;
-		if (await_command_mode_lines){
-			append_lines_from_stdin(await_command_mode_lines);
-			await_command_mode_lines = null;
-//			lines.push(...await_command_mode_lines);
-//			stat_warn("lines have been added from stdin");
-		}
+		if (stdin_lines) warn_stdin();
 		else render();
 		return true;
 	}
 	if (is_vis_mode()){
 		this.mode = COMMAND_MODE;
-		if (await_command_mode_lines){
-			append_lines_from_stdin(await_command_mode_lines);
-			await_command_mode_lines = null;
-//			lines.push(...await_command_mode_lines);
-//			await_command_mode_lines = null;
-//			stat_warn("lines have been added from stdin");
-		}
+		if (stdin_lines) warn_stdin();
 		else render();
 		return true;
 	}
+	if (stdin_lines) warn_stdin();
 	if (num_escapes<NUM_ESCAPES_TO_ESCAPE){
 		num_escapes++;
 		return true;
 	}
 	num_escapes = 0;
-//	return false;
 	return true;
 };//»
 
@@ -4059,6 +4048,13 @@ const delete_mode = (yank) => {//«
 		else if (c==="s") delete_word({spaces: true, yank});
 		else if (c==="T") delete_word({tabs: true, toEnd: true, yank});
 		else if (c==="t") delete_word({tabs: true, yank});
+		else if (c==="i") {
+			delete_stdin_lines({yank});
+		}
+		else { 
+			if (yank) stat_warn(`Unknown yank mode char`);
+			else stat_warn(`Unknown delete mode char`);
+		}
 	};
 	if (yank) stat("y");
 	else stat("d");
@@ -4234,6 +4230,7 @@ const do_paste = val=>{//«
 	for (let ln of lns) yank_buffer.push([...ln]);
 	handle_paste("P");
 };//»
+/*
 const append_lines_from_stdin=(linesarg)=>{//«
 	yank_buffer = linesarg;
 	yank_buffer._type="L";
@@ -4241,6 +4238,7 @@ const append_lines_from_stdin=(linesarg)=>{//«
 	handle_paste("p");
 	stat_warn(`${linesarg.length} lines have been appended from stdin`);
 };//»
+*/
 const handle_paste = async (which, opts = {}) => {//«
 
 let {keepFirst, doFold} = opts;
@@ -4870,6 +4868,16 @@ const delete_lines = async(opts={}) =>{//«
 	real_line_colors=[];
 	if (x>0 && x===curarr().length) x--;
 	render({},45);
+};//»
+const delete_stdin_lines = (opts={}) =>{//«
+	if (!stdin_lines) return stat_warn("No lines received from stdin");
+	yank_buffer = stdin_lines;
+	yank_buffer._type="L";
+	stat(`Yank buffer has: ${yank_buffer.length} lines`);
+	if (!opts.yank) {
+		stdin_lines = null;
+		if (yank_buffer.flat().length) cut_buffers.unshift(yank_buffer);
+	}
 };//»
 const delete_line = (yarg, opts = {}) => {//«
 	this.mode=VIS_LINE_MODE;
@@ -5758,12 +5766,18 @@ cwarn("WHAT KINDA LINESARGGGGG????");
 log(linesarg);
 return;
     }
+	if (!stdin_lines) stdin_lines = newlines;
+	else stdin_lines.push(...newlines);
+
+//cwarn("Got lines from stdin", newlines);
+/*
 	if (this.mode===COMMAND_MODE){
 		append_lines_from_stdin(newlines);
 		return;
 	}
-	if (!await_command_mode_lines) await_command_mode_lines = newlines;
-	else await_command_mode_lines.push(...newlines);
+	if (!stdin_lines) stdin_lines = newlines;
+	else stdin_lines.push(...newlines);
+*/
 };/*»*/
 
 //}; End vim mod«

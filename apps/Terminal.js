@@ -1,7 +1,18 @@
 //Older terminal development notes are stored in doc/dev/TERMINAL
-/*11/26/24: No calls to com.out in the 'init' phase please!
+//11/27/24: We are silently skipping file glob patterns with slashes in them//«
+//@EJUTIOPB, so only globs in the current directory will work.
+//$ echo */* *
+// -> */* [...all files in the current directory]
+//»
+/*11/26/24: No calls to com.out in the 'init' phase please!«
 Migrate to the new 'class extends Com{...}' notation or get the error message @VKJEOKJ.
-*/
+com.init is mainly for doing all the the async stuff that your command needs to work
+(like loading modules), and also for checking the sanity of the particular combination
+of arguments and options that are given to you. Outputting error messages (or other kinds
+of messages like warning or info) is always okay because these always go to the terminal.
+So we want to be sure that everyone in the pipeline is totally "ready to rumble" before 
+any calls to com.out(...) are made.
+»*/
 /*11/25/24: New 'Com class{...}' and 'Com_whatever extends Com{...}'«
 
 class Com {
@@ -28,30 +39,6 @@ pipeIn(val){
 
 »*/
 
-/*Let's make a command that gets a binary file and replaces one sequence (1+) of bytes«
-with another sequence (1+). Let's call it "brep".
-
-While doing this, I just needed to allow for Uint8Array's in the terminal's logic,
-such as @KIUREUN. I'm not quite sure if the logic where there is concatenation
-going on really works or even makes much "real world" sense. Also, in the places
-where I make calls to write_to_redir, I had to check to see if the value was an
-Uint8Array (otherwise, it is treated as a bunch of text lines to be joined). Maybe
-I should do that checking stuff in the actual write_to_redir function call.
-
-***NOW THIS MAKES SENSE***, WHEN I CONSIDER THE FACT THAT OUT_CB CAN BE CALLED
-ARBITRARY NUMBERS OF TIMES (RATHER THAN THE "OLD" WAY OF MAKING THE OUTPUT BE
-SIMPLY RETURNED AFTER THE COMMAND FINISHED). SO IF FOR SOME REASON YOU ARE
-REPEATEDLY CALLING THE "OUT" CB WITH BINARY DATA, THEN DOING THIS CONCATENATION
-MAKES SENSE. PERHAPS WE NEED A "BIN_OUT" METHOD, OR RATHER WE SHOULD (SOMEHOW)
-"DECLARE" OUR COMMAND (PIPELINE???) TO BE BINARY, SO THAT SENDING *ANY* TEXTUAL
-DATA WILL CAUSE AN ERROR.
-
-»*/
-/*11/14/24: I am mainly getting into the concept of the larger/"meta" structure«
-of this file, given my interest in restarting shell development over and over and
-over and over... . My main interest is to continue refactoring into more and more
-understandable (i.e. objective, rather than algorithmic) constructs.
-»*/
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
 let DEBUG = false;
@@ -267,7 +254,7 @@ const get_options = (args, com, opts={}) => {//«
 			args.splice(i, 1);
 			return [obj, err];
 		}
-		else if (marr = args[i].match(/^-([a-zA-Z][a-zA-Z]+)$/)) {
+		else if (marr = args[i].match(/^-([a-zA-Z0-9][a-zA-Z0-9]+)$/)) {
 			let arr = marr[1].split("");
 			for (let j = 0; j < arr.length; j++) {
 				ch = arr[j];
@@ -282,7 +269,7 @@ const get_options = (args, com, opts={}) => {//«
 			}
 			args.splice(i, 1);
 		}
-		else if (marr = args[i].match(/^-([a-zA-Z])$/)) {
+		else if (marr = args[i].match(/^-([a-zA-Z0-9])$/)) {
 			ch = marr[1];
 			if (getall){
 				if (!args[i + 1]) err.push(`${com}: option: '${ch}' requires an arg`);
@@ -306,20 +293,20 @@ const get_options = (args, com, opts={}) => {//«
 				err.push(`${com}: option: '${ch}' has an invalid option definition: ${sopts[ch]}`);
 				args.splice(i, 1);
 			}
-		} else if (marr = args[i].match(/^--([a-zA-Z][-a-zA-Z]+)=(.+)$/)) {
+		} else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=(.+)$/)) {
 			if (getall || (ret = getlong(marr[1]))) {
 				if (getall) ret = marr[1];
 				obj[ret] = marr[2];
 			}
 			args.splice(i, 1);
-		} else if (marr = args[i].match(/^--([a-zA-Z][-a-zA-Z]+)=$/)) {
+		} else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=$/)) {
 			if (getall || (ret = getlong(marr[1]))) {
 				if (getall) ret = marr[1];
 				obj[ret] = args[i + 1];
 				if (args[i + 1]) args.splice(i + 1, 2);
 				else args.splice(i, 1);
 			} else args.splice(i, 1);
-		} else if (marr = args[i].match(/^--([a-zA-Z][-a-zA-Z]+)$/)) {
+		} else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {
 			if (getall || (ret = getlong(marr[1]))) {
 				if (getall) ret = marr[1];
 				if (getall || (lopts[marr[1]] === 1 || lopts[marr[1]] === 2)) obj[ret] = true;
@@ -329,7 +316,7 @@ const get_options = (args, com, opts={}) => {//«
 				args.splice(i, 1);
 			} else args.splice(i, 1);
 		} 
-		else if (marr = args[i].match(/^(---+[a-zA-Z][-a-zA-Z]+)$/)) {
+		else if (marr = args[i].match(/^(---+[a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {
 			err.push(`${com}: invalid option: '${marr[1]}'`);
 			args.splice(i, 1);
 		}
@@ -1775,7 +1762,7 @@ const shell_quote_strings = (line_arr) => {//«
 			let ch2 = arr[j + 1];
 			let ch3 = arr[j + 2];
 			if (!qtype && ((((ch == '"' || ch == "'" || ch == "\x60") || (ch == "<" && ch2 == "<" && ch3 && ch3 != "<" && (j == 0 || (j > 0 && chneg1 != "<"))))))) {
-				if (ch == "<") return "Heredocs are not implemented";
+				if (ch == "<") return "heredocs are not implemented";
 				qtype = ch;
 				orig_line_num = i;
 				if (arr[j - 1] == "$") {
@@ -1839,11 +1826,11 @@ const shell_quote_strings = (line_arr) => {//«
 			}
 		}
 	}
-	if (qtype) return "Unterminated quote: "+qtype;
+	if (qtype) return "unterminated quote: "+qtype;
 	else {
 		let line = line_arr[line_arr.length - 1];
 		let lasttok = line[line.length - 1];
-		if (lasttok === "\\") return "Newline escapes are not implemented";
+		if (lasttok === "\\") return "newline escapes are not implemented";
 	}
 	return line_arr;
 };//»
@@ -2259,6 +2246,10 @@ const all_expansions = async(arr, term, script_opts={})=>{//«
 		}/*»*/
 		else if (word.match(/[*?]/)||word.match(/\[[-0-9a-z]+\]/i)) {//File glob«
 			if (word.match(/\x2f/)){
+//EJUTIOPB
+cwarn("Skipping path expansion with '/'", word);
+continue;
+/*
 				let path_arr = word.split("/");
 				if (word.match(/^\x2f/)) {
 					path_arr.shift();
@@ -2271,7 +2262,9 @@ const all_expansions = async(arr, term, script_opts={})=>{//«
 					use_cur_dir = normPath(path_arr.join("/"), cur_dir);
 					say_path = path_arr.join("/");
 				}
+*/
 			}
+//log("SAYPATH", say_path);
 //SMKOIOPU
 			let is_dot_word = word[0]==".";
 			let fpat = word.replace(/\./g,"\\.").replace(/\*/g, ".*").replace(/\?/g, ".");
@@ -2358,43 +2351,6 @@ if (started_time < cancelled_time) return;
 this.cancelled_time = 0;
 
 //»
-const execute_file = async (comword, script_args, script_out, cur_dir, env)=>{//«
-
-	const e=s=>{
-		return `sh: ${comword}: ${s}`;
-	};
-	let node = await fsapi.pathToNode(normPath(comword, cur_dir));
-	if (!node) return e(`not found`);
-	let app = node.appName;
-	if (app===FOLDER_APP) return e("is a directory");
-	if (app!==TEXT_EDITOR_APP) return e("not a text file");
-	if (!comword.match(/\.sh$/i)){
-		return e(`only executing files with '.sh' extension`);
-	}
-	let text = await node.text;
-	if (!text) return e("no text returned");
-	let rv;
-	let lines = text.split("\n");
-	let out = [];
-	let last_code;
-	for (let ln of lines){
-		let com = ln.trim();
-		if (!com) continue;
-//		let {code, isExit} = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
-		let code, isExit;
-		let rv = await this.execute(com, {scriptOut: script_out, env, script_args, script_name: comword});
-if (isObj(rv)){
-({code, isExit}=rv);
-}
-else{
-cerr("WHAT IS RV", rv);
-}
-		last_code = code;
-		if (isExit) break;
-	}
-//	return out;
-	return {code: last_code, out};
-};//»
 const FATAL = mess => {term.topwin._fatal(new Error(mess));};
 
 this.execute=async(command_str, opts={})=>{//«
@@ -2427,18 +2383,16 @@ worthy
 let started_time = (new Date).getTime();
 
 let {scriptOut, subLines, script_args, script_name, env}=opts;
+//let {scriptOut, subLines, env}=opts;
 let rv;
-let no_end = !!(scriptOut||subLines);
-//Where does the output go?
-
-//This is only used for pipeline commands that are after the first command
-// cat somefile.txt | these | might | use | the | stdin | array
-let stdin;
+let is_top_level = !(scriptOut||subLines);
+let no_end = !is_top_level;
 
 //Refuse and enter command that seems too long for our taste
 if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} ...': line length > MAX_LINE_LEN(${MAX_LINE_LEN})`, script_out);
 
 command_str = command_str.replace(/^ +/,"");
+
 //»
 const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});
@@ -2451,7 +2405,6 @@ const can=()=>{//«
 	return started_time < this.cancelled_time;
 };//»
 
-
 //Parser«
 
 //Escaping/Quoting«
@@ -2460,7 +2413,7 @@ let arr = shell_escapes([command_str]);
 
 //Makes quote objects from single, double and backtick quotes. Fails if not terminated
 arr = shell_quote_strings(arr);
-if (isStr(arr)) return terr(term.fmt(arr));
+if (isStr(arr)) return terr(`sh: ${arr}`);
 //»
 //Tokenization«
 
@@ -2470,7 +2423,8 @@ if (isStr(arr)) return terr(term.fmt(arr));
 //All unsupported tokens (redirects like '<' and control like '&') cause failure
 
 let toks = shell_tokify(arr);
-if (isStr(toks)) return terr(term.fmt(toks));
+if (isStr(toks)) return terr(`sh: ${toks}`);
+
 //»
 //Collect commands with their arguments«
 let com = [];
@@ -2507,6 +2461,7 @@ for (let tok of coms){
 if (pipe.length) pipes.push({pipe});
 //»
 //Collect ';' separated lists of pipelines+logic operators (if any)«
+
 let statements=[];
 let statement=[];
 for (let tok of pipes){
@@ -2517,7 +2472,7 @@ for (let tok of pipes){
 			statement = [];
 		}
 		else{
-			return terr(`unknown control operator: ${cop}`);
+			return terr(`sh: unknown control operator: ${cop}`);
 		}
 	}
 	else{
@@ -2527,37 +2482,6 @@ for (let tok of pipes){
 if (statement.length) statements.push({statement});
 //»
 
-/*BAD LOGIC«
-//NEUTYIOP
-let all3 = [];
-let andlist = [];
-for (let tok of all2){
-	if (tok.c_op && tok.c_op != "&&"){
-		all3.push({andlist});
-		andlist = [];
-		all3.push(tok);
-	}
-	else if (!tok.c_op){
-		andlist.push(tok);
-	}
-}
-if (andlist.length) all3.push({andlist});
-
-//WMJFOPUT
-let statements = [];
-let orlist = [];
-for (let tok of all3){
-	if (tok.c_op && tok.c_op != "||"){
-		statements.push({orlist});
-		orlist = [];
-	}
-	else if (!tok.c_op){
-		orlist.push(tok);
-	}
-}
-if (orlist.length) statements.push({orlist});
-»*/
-
 //»
 
 let lastcomcode;
@@ -2565,13 +2489,13 @@ STATEMENT_LOOP: for (let state of statements){//«A 'statement' is a list of boo
 
 let loglist = state.statement;
 if (!loglist){
-	return terr(`Logic list not found!`);
+	return terr(`sh: logic list not found!`);
 }
 LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	let pipe = loglist[i];
 	let pipelist = pipe.pipe;
 	if (!pipelist){
-		return terr(`Pipeline list not found!`);
+		return terr(`pipeline list not found!`);
 	}
 
 	let pipetype = pipe.type;
@@ -2829,7 +2753,7 @@ const com_env = {/*«*/
 	redir,
 	isSub: !!subLines,
 	scriptOut,
-	stdin,
+//	stdin,
 	pipeTo,
 	pipeFrom,
 	term,
@@ -2843,11 +2767,8 @@ const com_env = {/*«*/
 	inf: inf_cb,
 }/*»*/
 
-//Get the command. Immediately return to prompt if it is empty and we are not in a script.
 		let comword = arr.shift();
 		if (!comword) {
-//			if (!script_out) term.response_end();
-//			return;
 			pipeline.push(new NoCom());
 			continue;
 		}
@@ -2860,11 +2781,12 @@ const com_env = {/*«*/
 			if (ar.length){
 				arr.unshift(...ar);
 			}
-		}/*»*/
+		}//»
 
 		usecomword = alias||comword;
 		if (usecomword=="exit"){//«
-			if (!scriptOut){
+//			if (!scriptOut){
+			if (is_top_level){
 				term.response("sh: not exiting the toplevel shell", {isWrn: true});
 				break STATEMENT_LOOP;
 			}
@@ -2975,50 +2897,6 @@ cerr(e);
 			pipeline.push(make_error_com(`sh: ${usecomword}: ${e.message}`, com_env));
 		}
 //SKIOPRHJT
-
-/*«Run command
-		let code = await com(arr, opts, {//«
-			redir,
-			script_out,
-			stdin,
-			inpipe,
-			term,
-			env,
-			opts,
-			command_str,
-			out: out_cb,
-			err: err_cb,
-			suc: suc_cb,
-			wrn: wrn_cb,
-			inf: inf_cb,
-		});//»
-
-		if (can()) return;
-
-		if (!Number.isFinite(code)) {
-log(code);
-topwin._fatal(new Error(`Invalid return value from: '${usecomword}'`));
-return;
-		}
-
-		lastcomcode = code;
-
-		if (redir&&redir.length){
-//			let {err} = await write_to_redir(term, (redir_lns instanceof Uint8Array) ? redir_lns:redir_lns.join("\n"), redir, env);
-			let {err} = await write_to_redir(term, redir_lns, redir, env);
-			if (can()) return;
-			if (err) {
-				term.response(err);
-			}
-			redir_lns = [];
-		}
-
-		if (inpipe) {
-			stdin = redir_lns;
-		}
-		else if (script_out) script_out.push(...redir_lns);
-»*/
-
 	}//»
 
 for (let com of pipeline){

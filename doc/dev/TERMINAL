@@ -1620,9 +1620,6 @@ term.response_end();
 })();
 /*»*/
 
-
-//Everything below remove on 11/14/2024
-
 /*11/14/24:« Want to put the different quote types inside of the words as their own
 array objects. How about word objects:
 
@@ -3358,5 +3355,27 @@ term.response_end();
 })();
 /*»*/
 
+/*Let's make a command that gets a binary file and replaces one sequence (1+) of bytes«
+with another sequence (1+). Let's call it "brep".
 
+While doing this, I just needed to allow for Uint8Array's in the terminal's logic,
+such as @KIUREUN. I'm not quite sure if the logic where there is concatenation
+going on really works or even makes much "real world" sense. Also, in the places
+where I make calls to write_to_redir, I had to check to see if the value was an
+Uint8Array (otherwise, it is treated as a bunch of text lines to be joined). Maybe
+I should do that checking stuff in the actual write_to_redir function call.
 
+***NOW THIS MAKES SENSE***, WHEN I CONSIDER THE FACT THAT OUT_CB CAN BE CALLED
+ARBITRARY NUMBERS OF TIMES (RATHER THAN THE "OLD" WAY OF MAKING THE OUTPUT BE
+SIMPLY RETURNED AFTER THE COMMAND FINISHED). SO IF FOR SOME REASON YOU ARE
+REPEATEDLY CALLING THE "OUT" CB WITH BINARY DATA, THEN DOING THIS CONCATENATION
+MAKES SENSE. PERHAPS WE NEED A "BIN_OUT" METHOD, OR RATHER WE SHOULD (SOMEHOW)
+"DECLARE" OUR COMMAND (PIPELINE???) TO BE BINARY, SO THAT SENDING *ANY* TEXTUAL
+DATA WILL CAUSE AN ERROR.
+
+»*/
+/*11/14/24: I am mainly getting into the concept of the larger/"meta" structure«
+of this file, given my interest in restarting shell development over and over and
+over and over... . My main interest is to continue refactoring into more and more
+understandable (i.e. objective, rather than algorithmic) constructs.
+»*/
