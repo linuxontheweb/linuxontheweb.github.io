@@ -555,9 +555,6 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 };//»
 
 //»
-
-//Builtin commands«
-
 const Com = class {/*«*/
 	constructor(args, opts, env={}){
 		this.args=args;
@@ -567,7 +564,7 @@ const Com = class {/*«*/
 			this[k]=env[k];
 		}
 		if (this.redir&&this.redir.length){
-			this.saveLines = [];
+			this.redirLines = [];
 		}
 		this.var={};
 		this.awaitEnd = new Promise((Y,N)=>{
@@ -597,6 +594,25 @@ const Com = class {/*«*/
 		this.no(`the 'run' method has not been overriden!`);
 	}
 }/*»*/
+const ScriptCom = class extends Com{//«
+	constructor(shell, lines, args, env){
+		super(args, {}, env);
+		this.lines = lines;
+		this.shell = shell;
+	}
+	async run(){
+		let code;
+		let execute = this.shell.execute;
+		let scriptOut = this.out;
+		for (let ln of this.lines){
+			code = await execute(ln, {scriptOut});
+			if(code instanceof Number && code.isExit){
+				break;
+			}
+		}
+		this.end(code);
+	}
+}//»
 const NoCom=class{/*«*/
 	init(){
 		this.awaitEnd=new Promise((Y,N)=>{
@@ -621,6 +637,9 @@ const make_error_com = (mess,com_env)=>{//«
 	return com;
 };/*»*/
 globals.comClasses={Com, ErrCom, make_error_com};
+
+//Builtin commands«
+
 
 //Command functions«
 
@@ -699,7 +718,8 @@ init(){
 }
 async run(){//«
 	let colors = [];
-	let {pipeTo, term, out, err, args} = this;
+	let {pipeTo, isSub, term, out, err, args} = this;
+	let no_fmt = pipeTo|| isSub;
 	let nargs = args.length;
 	let dir_was_last = false;
 	let all = this.optAll;
@@ -762,7 +782,8 @@ async run(){//«
 				if (nm=="."||nm=="..") continue;
 				if (nm.match(/^\./)) continue;
 			}
-			if (pipeTo) {
+//			if (pipeTo) {
+			if (no_fmt) {
 				out(nm);
 			}
 			dir_arr.push(nm);
@@ -775,7 +796,8 @@ async run(){//«
 			}
 		}
 		dir_arr = dir_arr.sort();
-		if (pipeTo) {
+//		if (pipeTo||isSub) {
+		if (no_fmt) {
 			out(...dir_arr);
 		}
 		else {//«
@@ -2454,7 +2476,7 @@ if (started_time < cancelled_time) return;
 this.cancelled_time = 0;
 
 //»
-const execute_file = async (comword, script_args, cur_dir, env)=>{//«
+const execute_file = async (comword, script_args, script_out, cur_dir, env)=>{//«
 
 	const e=s=>{
 		return `sh: ${comword}: ${s}`;
@@ -2478,7 +2500,7 @@ const execute_file = async (comword, script_args, cur_dir, env)=>{//«
 		if (!com) continue;
 //		let {code, isExit} = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
 		let code, isExit;
-		let rv = await this.execute(com, {script_out: out, env, script_args, script_name: comword});
+		let rv = await this.execute(com, {scriptOut: script_out, env, script_args, script_name: comword});
 if (isObj(rv)){
 ({code, isExit}=rv);
 }
@@ -2517,23 +2539,14 @@ worthy
 
 »*/
 
-const terr=(arg, if_script)=>{//«
-	term.response(arg, {isErr: true});
-	if (!if_script) term.response_end();
-};//»
-const can=()=>{//«
-//Cancel test function
-	return started_time < this.cancelled_time;
-};//»
-
 //Init/Var«
 //WIMNNUYDKL
 
 let started_time = (new Date).getTime();
 
-let {script_out, script_args, script_name, env}=opts;
+let {scriptOut, subLines, script_args, script_name, env}=opts;
 let rv;
-
+let no_end = !!(scriptOut||subLines);
 //Where does the output go?
 
 //This is only used for pipeline commands that are after the first command
@@ -2545,6 +2558,17 @@ if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} 
 
 command_str = command_str.replace(/^ +/,"");
 //»
+const terr=(arg, code)=>{//«
+	term.response(arg, {isErr: true});
+//	if (!scriptOut) term.response_end();
+	if (!no_end) term.response_end();
+	return code||E_ERR;
+};//»
+const can=()=>{//«
+//Cancel test function
+	return started_time < this.cancelled_time;
+};//»
+
 
 //Parser«
 
@@ -2554,7 +2578,7 @@ let arr = shell_escapes([command_str]);
 
 //Makes quote objects from single, double and backtick quotes. Fails if not terminated
 arr = shell_quote_strings(arr);
-if (isStr(arr)) return terr(term.fmt(arr), script_out);
+if (isStr(arr)) return terr(term.fmt(arr));
 //»
 //Tokenization«
 
@@ -2564,7 +2588,7 @@ if (isStr(arr)) return terr(term.fmt(arr), script_out);
 //All unsupported tokens (redirects like '<' and control like '&') cause failure
 
 let toks = shell_tokify(arr);
-if (isStr(toks)) return terr(term.fmt(toks), script_out);
+if (isStr(toks)) return terr(term.fmt(toks));
 //»
 //Collect commands with their arguments«
 let com = [];
@@ -2611,7 +2635,7 @@ for (let tok of pipes){
 			statement = [];
 		}
 		else{
-			return terr(term.fmt(`Unknown control operator: ${cop}`), script_out);
+			return terr(`unknown control operator: ${cop}`);
 		}
 	}
 	else{
@@ -2659,22 +2683,19 @@ STATEMENT_LOOP: for (let state of statements){//«A 'statement' is a list of boo
 
 let loglist = state.statement;
 if (!loglist){
-	return terr(term.fmt(`Logic list not found!`), script_out);
+	return terr(`Logic list not found!`);
 }
 LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	let pipe = loglist[i];
 	let pipelist = pipe.pipe;
 	if (!pipelist){
-		return terr(term.fmt(`Pipeline list not found!`), script_out);
+		return terr(`Pipeline list not found!`);
 	}
 
 	let pipetype = pipe.type;
 	let pipeline = [];
-//	while (pipelist.length) {
-//	let arr = pipelist.shift().com;
 	for (let j=0; j < pipelist.length; j++) {//«
 		let arr = pipelist[j].com;
-//      let inpipe = j < pipelist.length-1;
 		let pipeFrom = j > 0;
 		let pipeTo = j < pipelist.length-1;
 		let args=[];
@@ -2718,13 +2739,21 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 				if (typ=="\x60") {
 					let out=[];
 //DJUYEKLMI
-					await this.execute(val, {script_out: out, env});
+					await this.execute(val, {subLines: out});
 					if (can()) return;
-					if (isStr(out)) val = out;
-					else if (isArr(out)&&out.length) val = out.join(" ");
-					else val = "";
+//jlog(out);
+					if (!out.length) out = [""];
+					let did_splice = false;
+					for (let wrd of out){
+						if (!did_splice) {
+							arr.splice(i, 1, " ");
+							did_splice = true;
+						}
+						arr.splice(i, 0, {t: "word", word: wrd}, " ");
+						i+=2;
+					}
 				}
-				arr[i]={t:"word", word: val};
+				else arr[i]={t:"word", word: val};
 			}
 		}//»
 
@@ -2770,7 +2799,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 			if (typ==="r_op"){
 				let rop = tok.r_op;
 				if (!(rop==">"||rop==">>")) {
-					return terr(`sh: unsupported operator: '${tok.r_op}'`, script_out);
+					return terr(`sh: unsupported operator: '${tok.r_op}'`);
 				}
 				let tok2 = arr[i+1];
 				if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
@@ -2779,7 +2808,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 					i++;
 					tok2 = arr[i+1];
 				}
-				if (!(tok2 && tok2.t==="word")) return terr(`sh: invalid or missing redirection operand`, script_out);
+				if (!(tok2 && tok2.t==="word")) return terr(`sh: invalid or missing redirection operand`);
 				arr.splice(i+1, 1);
 				val = null;
 				redir = [tok.r_op, tok2.word];
@@ -2815,9 +2844,9 @@ const out_cb = (val, opts={})=>{//«
 
 if (can()) return;
 
-let save_lns = comobj.saveLines;
+let redir_lns = comobj.redirLines;
 //EOF is not meaningful at the end of a pipeline
-if (isEOF(val) || (!save_lns && pipeTo)){
+if (isEOF(val) || (!redir_lns && pipeTo)){
     let next_com = pipeline[j+1];
     if (next_com && next_com.pipeIn) next_com.pipeIn(val);
     return;
@@ -2829,26 +2858,34 @@ log(val);
 FATAL("Invalid value in out_cb");
 return;
 }
-//log(com.args);
-if (save_lns) {
+
+if (redir_lns) {
 //KIUREUN
 	if (val instanceof Uint8Array){
-		if (!save_lns.length) {
-			save_lns = val;
+		if (!redir_lns.length) {
+			redir_lns = val;
 		}
 		else {
-			let hold = save_lns;
-			save_lns = new Uint8Array(hold.length + val.length);
-			save_lns.set(hold, 0);
-			save_lns.set(val, hold.length);
+			let hold = redir_lns;
+			redir_lns = new Uint8Array(hold.length + val.length);
+			redir_lns.set(hold, 0);
+			redir_lns.set(val, hold.length);
 		}
-		comobj.saveLines = save_lns;
-//		return save_lns;
+		comobj.redirLines = redir_lns;
 		return;
 	}
-	save_lns.push(...val);
+	redir_lns.push(...val);
 	return;
 }
+if (scriptOut) return scriptOut(val);
+
+//Save to subLines and call scriptOut
+if (subLines){
+	if (val instanceof Uint8Array) val = [`Uint8Array(${val.length})`];
+	subLines.push(...val);
+	return;
+}
+
 //MDKLIOUTYH
 term.response(val, opts);
 term.scroll_into_view();
@@ -2908,7 +2945,8 @@ term.refresh();
 
 const com_env = {/*«*/
 	redir,
-	script_out,
+	isSub: !!subLines,
+	scriptOut,
 	stdin,
 	pipeTo,
 	pipeFrom,
@@ -2944,16 +2982,23 @@ const com_env = {/*«*/
 
 		usecomword = alias||comword;
 		if (usecomword=="exit"){//«
+			if (!scriptOut){
+				term.response("sh: not exiting the toplevel shell", {isWrn: true});
+				break STATEMENT_LOOP;
+			}
 			let numstr = arr.shift();
 			let code;
 			if (numstr){
 				if (!numstr.match(/^-?[0-9]+$/)) term.response("sh: exit: numeric argument required", {isErr: true});
 				else code = parseInt(numstr);
 			}
-			else if (arr.length) term.response("sh: exit: too many arguments", {isErr: true});
-			if (script_name) return {code, isExit: true};
-			term.response("sh: not exiting the toplevel shell", {isWrn: true});
-			break STATEMENT_LOOP;
+			else if (arr.length) {
+				term.response("sh: exit: too many arguments", {isErr: true});
+			}
+			if (!Number.isFinite(code)) code = E_ERR;
+			code = new Number(code);
+			code.isExit = true;
+			return code;
 		}//»
 		let com = active_commands[usecomword];
 		if (isStr(com)){//QKIUTOPLK«
@@ -2982,7 +3027,7 @@ cerr(e);
 		if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
 			if (CONTROL_WORDS.includes(comword)){
-				terr(`sh: control structures are not implemented`, script_out);
+				terr(`sh: control structures are not implemented`);
 				return;
 			}
 
@@ -2993,41 +3038,32 @@ cerr(e);
 				continue;
 			}
 
-			pipeline.push(make_error_com(`sh: must try to find and execute: '${comword}'`, com_env));
-/*«
-//XGJUIKM
-//Try to execute a "shell script" from file
-//			let rv = await execute_file(comword, arr, term.cur_dir, env);
-			let {out, code} = await execute_file(comword, arr, term.cur_dir, env);
-			if (can()) return;
-			if (isStr(out)) {
-				term.response(out, {isErr: true});
-				lastcomcode = E_ERR;
+			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
+			if (!node) {
+				pipeline.push(make_error_com(`sh: ${comword}: file not found`, com_env));
 				continue;
 			}
-			if (Number.isFinite(code)) lastcomcode = code;
-			if (redir&&redir.length){
-//				let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
-				let {err} = await write_to_redir(term, out, redir, env);
-				if (can()) return;
-				if (err) {
-					term.response(err);
-				}
-				if (inpipe) stdin = [];
+			let app = node.appName;
+			if (app===FOLDER_APP) {
+				pipeline.push(make_error_com(`sh: ${comword}: is a directory`, com_env));
+				continue;
 			}
-			else if (inpipe) {
-//Collect the stdin (used as optional input for the next command) for pipelines
-				stdin = out;
+			if (app!==TEXT_EDITOR_APP) {
+				pipeline.push(make_error_com(`sh: ${comword}: not a text file`, com_env));
+				continue;
 			}
-			else {
-				if (script_out){
-					 if (out && out.length) script_out.push(...out);
-				}
-				else{
-					term.response(out);
-				}
+			if (!comword.match(/\.sh$/i)){
+				pipeline.push(make_error_com(`sh: ${comword}: only executing files with '.sh' extension`, com_env));
+				continue;
 			}
-»*/
+			let text = await node.text;
+			if (!text) {
+				pipeline.push(make_error_com(`sh: ${comword}: no text returned`, com_env));
+				continue;
+			}
+			comobj = new ScriptCom(this, text.split("\n"), arr, com_env);
+			comobj._name = usecomword;
+			pipeline.push(comobj);
 			continue;
 		}//»
 
@@ -3086,19 +3122,19 @@ return;
 		lastcomcode = code;
 
 		if (redir&&redir.length){
-//			let {err} = await write_to_redir(term, (save_lns instanceof Uint8Array) ? save_lns:save_lns.join("\n"), redir, env);
-			let {err} = await write_to_redir(term, save_lns, redir, env);
+//			let {err} = await write_to_redir(term, (redir_lns instanceof Uint8Array) ? redir_lns:redir_lns.join("\n"), redir, env);
+			let {err} = await write_to_redir(term, redir_lns, redir, env);
 			if (can()) return;
 			if (err) {
 				term.response(err);
 			}
-			save_lns = [];
+			redir_lns = [];
 		}
 
 		if (inpipe) {
-			stdin = save_lns;
+			stdin = redir_lns;
 		}
-		else if (script_out) script_out.push(...save_lns);
+		else if (script_out) script_out.push(...redir_lns);
 »*/
 
 	}//»
@@ -3114,13 +3150,14 @@ for (let com of pipeline){
 	lastcomcode = await com.awaitEnd;
 
 	if (can()) return;
-	if (!Number.isFinite(lastcomcode)) {
+//	if (!(Number.isFinite(lastcomcode))) {
+	if (!(isNum(lastcomcode))) {
 log(lastcomcode);
 		FATAL(`Invalid return value from: '${com._name}'`);
 		return;
 	}
-	if (com.saveLines) {
-		let {err} = await write_to_redir(term, com.saveLines, com.redir, com.env);
+	if (com.redirLines) {
+		let {err} = await write_to_redir(term, com.redirLines, com.redir, com.env);
 		if (can()) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
@@ -3131,7 +3168,7 @@ log(lastcomcode);
 
 //log(pipeline);
 //LEUIKJHX
-	if (lastcomcode===E_SUC){//SUCCESS«
+	if (lastcomcode==E_SUC){//SUCCESS«
 		if (pipetype=="||"){
 			for (let j=i+1; j < loglist.length; j++){
 				if (loglist[j].type=="&&"){
@@ -3165,9 +3202,10 @@ log(lastcomcode);
 }//»
 
 //In a script, refresh rather than returning to the prompt
-if (script_out) {
+//if (scriptOut) {
+if (no_end) {
 	term.refresh();
-	return {code: lastcomcode};
+	return lastcomcode;
 }
 
 //Command line input returns to prompt
