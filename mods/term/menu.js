@@ -71,6 +71,7 @@ const okint = val=>{//«
 const quit=(rv)=>{//«
 
 	delete this.command_str;
+	this.killed = true;
 	quit_new_screen(hold_screen_state);
 
 };//»
@@ -359,8 +360,8 @@ Object.defineProperty(this,"line_select_mode",{get:()=>true});
 //»
 
 this.init = (menuobj, o={})=>{//«
+this.topMenu = menuobj;
 //this.init = (linesarg, fname, o={})=>{
-
 //jlog(menuobj);
 let {opts}=o;
 this.command_str = o.command_str;
@@ -375,7 +376,12 @@ return new Promise((Y,N)=>{
 
 
 }//»
-
+this.addThing=(thing)=>{
+if (this.topMenu.push) {
+	this.topMenu.push(thing);
+	if (curobj === this.topMenu) set_menu(this.topMenu);
+}
+};
 }
 
 

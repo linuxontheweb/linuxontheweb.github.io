@@ -112,7 +112,7 @@ const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const DEL_MODS=[
 //	"util.less",
 	"term.vim",
-//	"term.menu"
+	"term.menu"
 ];
 const DEL_COMS=[
 //	"audio"
@@ -882,9 +882,33 @@ const com_parse = class extends Com{/*«*/
 		}
 	}
 	pipeIn(val){
-//		this.out(val);
 		if (!isEOF(val)) this.tryParse(val);
 		else this.ok();
+	}
+}/*»*/
+const com_stringify = class extends Com{/*«*/
+	init(){
+		if (!this.pipeFrom) return this.no("expecting piped input");
+	}
+	run(){
+	}
+	#tryStringify(val){
+		try{
+			this.out(JSON.stringify(val));
+			return true;
+		}
+		catch(e){
+			this.err(e.message);
+			this.numErrors++;
+			return false;
+		}
+	}
+	pipeIn(val){
+		if (!isEOF(val)) this.#tryStringify(val);
+		else {
+			this.numErrors?this.no():this.ok();
+			this.ok();
+		}
 	}
 }/*»*/
 const com_clear = class extends Com{/*«*/
@@ -1224,52 +1248,39 @@ const com_test = class extends Com{//«
 	}
 };//»
 
-const com_menu = class extends Com{/*«*/
+const com_inspect = class extends Com{/*«*/
 
 #menu;
+#thing;
+#addThing;
+#promise;
 async init(){
+	if (!this.pipeFrom) return this.no("expecting piped input");
 	if (!await util.loadMod("term.menu")) {
 		this.no("Could not load the editor module");
 		return;
 	}
-	this.#menu = new NS.mods["term.menu"](this.term);
+	let menu = new NS.mods["term.menu"](this.term);
+	this.#thing = [];
+	this.#promise = menu.init(this.#thing,{opts: this.opts, command_str: this.command_str});
+	this.#addThing = menu.addThing;
+	this.#menu = menu;
 }
 async run(){
-
-let fakeobj = {
-    "BlahHartFunt": true,
-    "Fla": 1,
-    "Flar": "Something",
-	Grug: 2,
-	Bug: 3,
-	Graych:[1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20],
-	Qeug: {
-		_val: 99,
-		where: true,
-		href: "http://where.in.the.place"
-	},
-	Jug: false,
-	Mug: "Targ",
-	Zlllug: 5,
-	Hanug: 6,
-	Wug: 4040,
-	Vug: -1234,
-	Lrug: "Hanjjj",
-    "Jart": {
-        "Gump": false,
-        "Room": {
-            "Fleem": true,
-            "Geem": 12,
-            "Yeem": "Fuggerr"
-        },
-        "Chump": 24,
-        "Jump": "Haha hoho hehe"
-    }
-};
-let fakearr=[1,true,fakeobj,"Thrunxx", fakeobj];
-await this.#menu.init(fakearr,{opts: this.opts, command_str: this.command_str});
-this.ok();
-
+	await this.#promise;
+	if (this.pipeTo) this.out(this.#thing);
+	this.ok();
+}
+pipeIn(val){
+	if (this.#menu.killed) return;
+	if (isEOF(val)){
+		return;
+	}
+	let add = this.#addThing;
+	if (isArr(val)) {
+		for (let v of val) add(v);
+	}
+	else add(val);
 }
 
 }/*»*/
@@ -1652,9 +1663,10 @@ norun: com_norun,
 deadpipe: com_deadpipe,
 pipe: com_pipe,
 math: com_math,
-menu: com_menu,
+inspect: com_inspect,
 curcol: com_curcol, 
 parse: com_parse,
+stringify: com_stringify,
 getch: com_getch,
 read: com_read,
 true: com_true,
@@ -4963,6 +4975,18 @@ return;
 	else if (isWrn) use_color = "#ff7";
 	else if (isInf) use_color = "#aaf";
 
+/*'actor' means there is a non-terminal screen.
+This can happen, e.g. with errors with screen-based commands inside of pipelines,
+since all "message" kinds of output *ALWAYS* go to the terminal (rather than 
+propagating through the pipeline).
+*/
+	if (actor){
+		let s = out.join("\n");
+		if (use_color) console.log("%c"+s, `color: ${use_color}`);
+		else console.log(s);
+		return;
+	}
+
 	if (colors) {
 		if (!didFmt){
 			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
@@ -4978,7 +5002,6 @@ log("response colors",colors);
 		}
 	}
 	else colors = [];
-
 
 	if (lines.length && !lines[lines.length-1].length) lines.pop();
 
@@ -6338,7 +6361,6 @@ this.quit_new_screen = (screen) => {//«
 
 let old_actor = actor;
 ({actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines} = screen);
-
 is_editor = appclass == "editor";
 is_pager = appclass == "pager";
 
