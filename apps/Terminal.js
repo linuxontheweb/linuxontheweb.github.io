@@ -552,6 +552,7 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 //»
 
 //Command Classes«
+
 const Com = class {/*«*/
 	constructor(args, opts, env={}){
 		this.args=args;
@@ -589,6 +590,10 @@ const Com = class {/*«*/
 	run(){
 		this.no(`the 'run' method has not been overriden!`);
 	}
+	cancel(){
+		this._cancelled = true;
+cwarn(`${this._name}: cancelled`);
+	}
 }/*»*/
 const ScriptCom = class extends Com{//«
 	constructor(shell, lines, args, env){
@@ -601,6 +606,7 @@ const ScriptCom = class extends Com{//«
 		let execute = this.shell.execute;
 		let scriptOut = this.out;
 		for (let ln of this.lines){
+			if (this._cancelled) return;
 			code = await execute(ln, {scriptOut});
 			if(code instanceof Number && code.isExit){
 				break;
@@ -621,6 +627,7 @@ const NoCom=class{/*«*/
 	run(){
 		this.ok();
 	}
+	cancel(){}
 }/*»*/
 const ErrCom = class extends Com{/*«*/
 	run(){
@@ -633,6 +640,7 @@ const make_error_com = (mess,com_env)=>{//«
 	return com;
 };/*»*/
 globals.comClasses={Com, ErrCom, make_error_com};
+
 //»
 
 //Builtin commands«
@@ -2364,7 +2372,7 @@ this.cancelled_time = 0;
 
 //»
 const FATAL = mess => {term.topwin._fatal(new Error(mess));};
-
+this.cancelled = false;
 this.execute=async(command_str, opts={})=>{//«
 /*Instead of trying to create a theoretically beautiful shell.execute algorithm, I//«
 wanted to instead provide explicit commentary on the one that should hopefully "just work"
@@ -2422,7 +2430,6 @@ const can=()=>{//«
 //Escaping/Quoting«
 //Only for creating newlines in single quotes: $'1\n2' and escaping spaces outside of quotes
 let arr = shell_escapes([command_str]);
-
 //Makes quote objects from single, double and backtick quotes. Fails if not terminated
 arr = shell_quote_strings(arr);
 if (isStr(arr)) return terr(`sh: ${arr}`);
@@ -2529,7 +2536,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 //$ echo file{0..3}.txt
 //file0.txt file1.txt file2.txt file3.txt
 		rv = await all_expansions(arr, term, {script_name, script_args});
-		if (can()) return;
+		if (this.cancelled) return;
 		if (rv){
 			term.response(rv, {isErr: true});
 		}
@@ -2558,7 +2565,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 					let out=[];
 //DJUYEKLMI
 					await this.execute(val, {subLines: out});
-					if (can()) return;
+					if (this.cancelled) return;
 //jlog(out);
 					if (!out.length) out = [""];
 					let did_splice = false;
@@ -2581,12 +2588,11 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 		for (let i=0; i < arr.length-1; i++){//«
 			let tok0 = arr[i];
 			let tok1 = arr[i+1];
-//XCFIUYO
-//			let have_quote = tok0.from_quote || tok1.from_quote;
-//			if (tok0.word && tok1.word && have_quote){
-			if (tok0.word && tok1.word){
+			let tok0word = tok0.word||tok0.esc;
+			let tok1word = tok1.word||tok1.esc;
+			if (tok0word && tok1word){
 //				arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`, from_quote: true}
-				arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`};
+				arr[i] = {t: "word", word: `${tok0word}${tok1word}`};
 				arr.splice(i+1, 1);
 				i--;
 			}
@@ -2606,7 +2612,6 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 
 //- Create redirection objects
 //- Objects are converted into strings ({t:"word", word: "blah"} -> "blah")
-//- Replace tilde with home path
 		for (let i=0; i < arr.length; i++){//«
 			let tok = arr[i];
 			let typ = tok.t;
@@ -2632,10 +2637,6 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 				redir = [tok.r_op, tok2.word];
 			}
 			if (val) {
-				if (val.match(/^~/)){
-					if (val==="~") val = globals.HOME_PATH;
-					else if (val.match(/^~\x2f/)) val = globals.HOME_PATH+val.slice(1);
-				}
 				args.push(val);
 			}
 		}//»
@@ -2660,7 +2661,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 
 const out_cb = (val, opts={})=>{//«
 
-if (can()) return;
+if (this.cancelled) return;
 
 let redir_lns = comobj.redirLines;
 //EOF is not meaningful at the end of a pipeline
@@ -2711,7 +2712,7 @@ term.refresh();
 
 };//»
 const err_cb=(lns)=>{//«
-if (can()) return;
+if (this.cancelled) return;
 if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
@@ -2723,7 +2724,7 @@ term.refresh();
 
 };//»
 const suc_cb=(lns)=>{//«
-if (can()) return;
+if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
 if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
@@ -2735,7 +2736,7 @@ term.scroll_into_view();
 term.refresh();
 };//»
 const wrn_cb=(lns)=>{//«
-if (can()) return;
+if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
 if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
@@ -2747,7 +2748,7 @@ term.scroll_into_view();
 term.refresh();
 };//»
 const inf_cb=(lns)=>{//«
-if (can()) return;
+if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
 if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
@@ -2825,9 +2826,9 @@ const com_env = {/*«*/
 //2) this is the first invocation of a command from one of those libraries.
 			try{
 				await import_coms(com);//com is the library name
-				if (can()) return;
+				if (this.cancelled) return;
 			}catch(e){
-				if (can()) return;
+				if (this.cancelled) return;
 cerr(e);
 				terr(`sh: command library: '${com}' could not be loaded`);
 				return;
@@ -2911,9 +2912,11 @@ cerr(e);
 //SKIOPRHJT
 	}//»
 
+this.pipeline = pipeline;
+
 for (let com of pipeline){
 	await com.init();
-	if (can()) return;
+	if (this.cancelled) return;
 }
 for (let com of pipeline){
 	com.run();
@@ -2921,7 +2924,7 @@ for (let com of pipeline){
 for (let com of pipeline){
 	lastcomcode = await com.awaitEnd;
 
-	if (can()) return;
+	if (this.cancelled) return;
 //	if (!(Number.isFinite(lastcomcode))) {
 	if (!(isNum(lastcomcode))) {
 log(lastcomcode);
@@ -2930,7 +2933,7 @@ log(lastcomcode);
 	}
 	if (com.redirLines) {
 		let {err} = await write_to_redir(term, com.redirLines, com.redir, com.env);
-		if (can()) return;
+		if (this.cancelled) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
 		}
@@ -2984,7 +2987,12 @@ if (no_end) {
 term.response_end();
 
 }//»
-
+this.cancel=()=>{
+	this.cancelled = true;
+	let pipe = this.pipeline;
+	if (!pipe) return;
+	for (let com of pipe) com.cancel();
+};
 };
 })();
 /*»*/
@@ -3225,14 +3233,11 @@ return out;
 
 return function(term){
 
-this.cancelled_time = 0;
+//this.cancelled_time = 0;
+
+this.cancelled = false;
 
 this.execute = async(command_str, opts={})=>{
-
-const cancelled=()=>{//«
-//Cancel test function
-	return started_time < this.cancelled_time;
-};//»
 
 let started_time = (new Date).getTime();
 
@@ -3256,6 +3261,13 @@ jlog(tokens);
 
 term.response_end();
 
+};
+
+this.cancel=()=>{
+	this.cancelled = true;
+	let pipe = this.pipeline;
+	if (!pipe) return;
+	for (let com of pipe) com.cancel();
 };
 
 };
@@ -3476,8 +3488,8 @@ let last_mode;
 
 let root_state = null;
 let cur_shell = null;
-let shell = null;
-let dev_shell = null;
+let shell_class = null;
+let dev_shell_class = null;
 let ls_padding = 2;
 let await_next_tab = null;
 
@@ -4757,7 +4769,8 @@ const get_command_arr=async (dir, arr, pattern)=>{//«
 const execute = async(str, if_init, halt_on_fail)=>{//«
 
 	ENV['USER'] = globals.CURRENT_USER;
-	cur_shell = this.shell;
+//	cur_shell = this.shell;
+	cur_shell = new this.shell_class(this);
 	let gotstr = str.trim();
 
 	str = str.replace(/\x7f/g, "");
@@ -5264,10 +5277,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 	else arr_pos = get_com_pos();
 	if (arr_arg) arr = arr_arg;
 	else arr = get_com_arr();
-//	if (this.ssh_immediate_mode && this.ssh_client){
-//		this.ssh_client.send(JSON.stringify({tab: true, pos: arr_pos, com_arr: arr}));
-//		return;
-//	}
+
 	let tok = "";
 	let new_arr = arr.slice(0, arr_pos);
 	let com_str = new_arr.join("");
@@ -5275,7 +5285,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 	if (!new_arr[0] && new_arr[1]) new_arr.shift();
 	let tokpos = new_arr.length;
 	if (tokpos > 1) {
-		if (new_arr[new_arr.length-2].match(/[\x60\(|;] *$/)) tokpos = 1;
+		if (new_arr[new_arr.length-2].match(/[\x60\(&|;] *$/)) tokpos = 1;
 	}
 	let tok0 = new_arr[0];
 	if ((com_str.match(/[\x22\x27]/g)||[]).length===1){//\x22=" \x27='«
@@ -5822,7 +5832,8 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	}
 	if (cur_shell){//«
 		if (sym==="c_C") {
-			cur_shell.cancelled_time = (new Date).getTime();
+//			cur_shell.cancelled_time = (new Date).getTime();
+			cur_shell.cancel();
 			cur_shell = null;
 			sleeping = false;
 			response("^C");
@@ -5971,12 +5982,12 @@ if (!dev_mode){
 cwarn("Not dev_mode");
 return;
 }
-if (this.shell === shell){
-	this.shell = dev_shell;
+if (this.shell_class === Shell){
+	this.shell_class = DevShell;
 do_overlay("Using dev_shell");
 }
 else {
-	this.shell = shell;
+	this.shell_class = shell_class;
 do_overlay("Using shell");
 }
 //log(this.shell);
@@ -6101,13 +6112,17 @@ const init = async(appargs={})=>{
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
 	}
-	shell = new Shell(this);
-	dev_shell = new DevShell(this);
+	shell_class = Shell;
+	dev_shell_class = DevShell;
+//	shell = new Shell(this);
+//	dev_shell = new DevShell(this);
 	if (dev_mode && USE_DEVSHELL) {
-		this.shell = dev_shell;
+//		this.shell = dev_shell;
+		this.shell_class = dev_shell_class;
 		init_prompt+=`\nDev shell: true`;
 	}
-	else this.shell = shell;
+//	else this.shell = shell;
+	else this.shell_class = shell_class;
 	response(init_prompt.split("\n"));
 	did_init = true;
 	sleeping = false;
