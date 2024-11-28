@@ -2276,61 +2276,87 @@ const all_expansions = async(arr, term, script_opts={})=>{//«
 				arr.splice(i, 1);
 			}
 		}/*»*/
-		else if (word.match(/[*?]/)||word.match(/\[[-0-9a-z]+\]/i)) {//File glob«
-			if (word.match(/\x2f/)){
-//EJUTIOPB
-cwarn("Skipping path expansion with '/'", word);
-continue;
-/*
-				let path_arr = word.split("/");
-				if (word.match(/^\x2f/)) {
-					path_arr.shift();
-					word = path_arr.pop();
-					say_path = "/"+path_arr.join("/");
-					use_cur_dir = say_path;
-				}
-				else if (path_arr.length && path_arr[0]) {
-					word = path_arr.pop();
-					use_cur_dir = normPath(path_arr.join("/"), cur_dir);
-					say_path = path_arr.join("/");
-				}
-*/
-			}
-//log("SAYPATH", say_path);
-//SMKOIOPU
-			let is_dot_word = word[0]==".";
-			let fpat = word.replace(/\./g,"\\.").replace(/\*/g, ".*").replace(/\?/g, ".");
-//			let fpat = word.replace(/\*/g, ".*").replace(/\?/g, ".");
-			let re;
-			try{ 
-				re = new RegExp("^" + fpat + "$");
-			}
-			catch(e){
-				err = e.message;
-				continue;
-			}
-			let dir = await pathToNode(use_cur_dir);
-			if (!dir) continue;
-			if (!dir.done) await fsapi.popDir(dir);
-			let kids = dir.kids;
-			let keys = Object.keys(kids);
-			let did_splice = false;
-			for (let k of keys){
-//				if (k=="."||k=="..") continue;
-				if (k.match(/^\./)&&!is_dot_word) continue;
-				if (re.test(k)) {
-					if (!did_splice) {
-						arr.splice(i, 1, " ");
-//						i--;
-						did_splice = true;
-					}
-					if (say_path && !say_path.match(/\x2f$/)) say_path = `${say_path}/`;
-					arr.splice(i, 0, {t:"word", word: `${say_path}${k}`}, " ");
-					i+=2;
+else if (word.match(/[*?]/)||word.match(/\[[-0-9a-z]+\]/i)) {//File glob«
+
+let parr = word.split(/\x2f/);
+let num_dirs = parr.length-1
+let start_dir;
+let parr0 = parr[0];
+let path_len = parr.length;
+if (!parr0) start_dir = "/";
+else start_dir = cur_dir;
+let dirs=[""];
+const do_dirs=async(dirs, parr, is_init)=>{//«
+
+let nm = parr.shift();
+let parr_len = parr.length;
+if (!nm) {
+	for (let i=0; i < dirs.length; i++){
+		dirs[i]=dirs[i]+"/";
+	}
+	if (!parr_len) return dirs;
+	return await do_dirs(dirs, parr);
+}
+let is_dot = nm[0]===".";
+let files_ok = !parr.length;
+let new_paths=[];
+for (let i=0; i < dirs.length; i++){
+	let dirname = dirs[i];
+	let dir_str = start_dir+"/"+dirname;
+	let dir = await pathToNode(dir_str);
+	let kids = dir.kids;
+if (!kids) continue;
+	let keys = Object.keys(kids);
+	if (nm.match(/[*?]/)||nm.match(/\[[-0-9a-z]+\]/i)) {
+		let fpat = nm.replace(/\./g,"\\.").replace(/\*/g, ".*").replace(/\?/g, ".");
+		try{ 
+			let re = new RegExp("^" + fpat + "$");
+			for (let key of keys){
+				if (!is_dot && key[0]===".") continue;
+				if (re.test(key)){
+					let node = kids[key];
+					if (!node) continue;
+					if (!files_ok && node.appName!==FOLDER_APP) continue;
+//					if (key==="."||key==="..") continue;
+					if (dirname) new_paths.push(`${dirname}/${key}`);
+					else new_paths.push(key);
 				}
 			}
-		}//»
-		else if (rv = old_curly_expansion(word)){//«
+		}
+		catch(e){
+cerr(e);
+			continue;
+		}
+	}
+	else{
+		let node = kids[nm];
+		if (!node) continue;
+		if (!files_ok && node.appName!==FOLDER_APP) continue;
+//		if (nm==="."||nm==="..") continue;
+		if (dirname) new_paths.push(`${dirname}/${nm}`);
+		else new_paths.push(nm);
+//		new_paths.push(`${dirname}/${nm}`);
+	}
+}
+if (!parr_len) return new_paths;
+return await do_dirs(new_paths, parr);
+
+};/*»*/
+let rv = await do_dirs(dirs, parr, true);
+if (rv.length){
+	arr.splice(i, 1, " ");
+	for (let path of rv){
+
+//This means we started with a slash, and this is the only way to get rid of the
+//extra slash that always shows up after expansion.
+		if (!parr0) path = path.slice(1);
+
+		arr.splice(i, 0, {t:"word", word: path}, " ");
+		i+=2;
+	}
+}
+}//»
+		else if (rv = old_curly_expansion(word)){//Doesn't do commas (use new curly_expansion @QXDPOLIT)«
 			const do_exp=(arr, out)=>{
 				for (let wrd of arr){
 					let rv = old_curly_expansion(wrd);
@@ -2358,6 +2384,7 @@ cerr(e);
 	}
 	return err;
 }//»
+
 const env_glob_brace_expansions = all_expansions;
 
 return function(term){
