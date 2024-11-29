@@ -720,9 +720,6 @@ globals.comClasses={Com, ErrCom, make_error_com};
 /*
 
 //All vars in env: redir,script_out,stdin,inpipe,term,env,opts,command_str
-const com_ = async(args, opts, _)=>{
-	const {term, stdin, out, err, suc} = _;
-};
 
 */
 
@@ -752,7 +749,13 @@ log("Dropping", val);
 		if (isEOF(val)) this.ok();
 	}
 }/*»*/
-
+const com_badret=class extends Com{run(){this.end("SOME STRING RETURNED HAHAHA!?!?!");}}
+const com_noret=class extends Com{run(){this.end();}}
+const com_nullret=class extends Com{run(){this.end(null);}}
+const com_badobj=class extends Com{run(){this.out({});this.ok();}}
+const com_badarrobj=class extends Com{run(){this.out([{}]);this.ok();}}
+const com_oktypedarr=class extends Com{run(){this.out(new Uint8Array([0,1,2,3,4]));this.ok();}}
+const com_badtypedarr=class extends Com{run(){this.out(new Int32Array([0,1,2,3,4]));this.ok();}}
 /*
 const com_ = class extends Com{
 init(){
@@ -1727,6 +1730,13 @@ Long options may be given an argument like this:
 
 //FWPORUITJ
 const shell_commands={//«
+badret: com_badret,
+badobj: com_badobj,
+badarrobj: com_badarrobj,
+oktypedarr: com_oktypedarr,
+badtypedarr: com_badtypedarr,
+noret: com_noret,
+nullret: com_nullret,
 hang: com_hang,
 norun: com_norun,
 deadpipe: com_deadpipe,
@@ -1849,6 +1859,7 @@ return arr;
 
 };//»
 const ds_single_quote_escapes = tok=>{//«
+cwarn(tok);
 let wrd = tok.word;
 if (!wrd){
 cwarn("WHAT THE HELL IS HERE????");
@@ -1858,20 +1869,19 @@ return tok;
 let arr = wrd;
 let out = [];
 let in_ds_single = false;
-
+let in_dq = false;
 for (let i=0; i < arr.length; i++){
 let ch = arr[i];
 let next = arr[i+1];
-if (!in_ds_single&&ch==="$"&&next==="'"){
+
+if (!in_dq && !in_ds_single &&ch ==="$" && next==="'"){
 	in_ds_single=true;
 //	out.push("$'");
 	out.push("$","'");
 	i++;
 }
 else if (in_ds_single){
-//log("INDSSINGLE");
 	if (ch.escaped){
-//log("CH.ESCAPED", ch);
 	let c;
 //switch(ch){/*«*/
 
@@ -1950,7 +1960,7 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 
 //}/*»*/
 	if (c) out.push(c);
-	else out.push(ch);
+		else out.push(ch);
 	}
 	else if (ch==="'"){
 		in_ds_single = false;
@@ -1961,10 +1971,12 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 	}
 }
 else {
-//	if (ch.escaped) out.push("\\"+ch);
-//	else out.push(ch);
+	if (ch==='"'){
+		in_dq = !in_dq;
+	}
 	out.push(ch);
 }
+
 }
 
 return {t:"word",word: out};
@@ -2894,7 +2906,6 @@ if (!arr.includes("`")) return arr;
 let out=[];
 let curword;
 let bq_arr;
-//let in_bq = false;
 for (let i=0; i < arr.length; i++){
 let ch = arr[i];
 
@@ -2943,6 +2954,7 @@ if (curword){
 return out;
 
 };/*»*/
+
 const ds_single_quote_escapes = tok=>{//«
 let wrd = tok.word;
 if (!wrd){
@@ -2953,20 +2965,17 @@ return tok;
 let arr = wrd;
 let out = [];
 let in_ds_single = false;
-
+let in_dq = false;
 for (let i=0; i < arr.length; i++){
 let ch = arr[i];
 let next = arr[i+1];
-if (!in_ds_single&&ch==="$"&&next==="'"){
+if (!in_dq && !in_ds_single&&ch==="$"&&next==="'"){
 	in_ds_single=true;
-//	out.push("$'");
 	out.push("$","'");
 	i++;
 }
 else if (in_ds_single){
-//log("INDSSINGLE");
 	if (ch.escaped){
-//log("CH.ESCAPED", ch);
 	let c;
 //switch(ch){/*«*/
 
@@ -3056,14 +3065,16 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 	}
 }
 else {
-//	if (ch.escaped) out.push("\\"+ch);
-//	else out.push(ch);
+	if (ch==='"'){
+		in_dq = !in_dq;
+	}
 	out.push(ch);
 }
 }
 
 return {t:"word",word: out};
 };//»
+
 const curly_expansion = (arr, from_pos) => {//«
 //log("FROM", from_pos);
 let ind1 = arr.indexOf("{", from_pos);
@@ -3539,15 +3550,21 @@ return tok;
 };/*»*/
 const quote_removal=(wrd)=>{//«
 	let s='';
-	let in_quote=false;
+	let qtyp;
 	for (let l=0; l < wrd.length; l++){
 		let c = wrd[l];
-		if (!in_quote && c==="$"&&wrd[l+1]==="'") continue;
-		if (c==='"'||c==="'"||c==="`") {
-			in_quote = !in_quote;
-			continue;
+		if (!qtyp && c==="$"&&wrd[l+1]==="'") continue;
+		if (c==='"'||c==="'") {
+			if (c===qtyp){
+				qtyp=null;
+				continue;
+			}
+			else if (!qtyp){
+				qtyp = c;
+				continue;
+			}
 		}
-		s+=c.valueOf();
+		s+=c.toString();
 	}
 	return s;
 };/*»*/
@@ -4027,16 +4044,38 @@ if (this.cancelled) return;
 
 let redir_lns = comobj.redirLines;
 //EOF is not meaningful at the end of a pipeline
+log(val);
 if (isEOF(val) || (!redir_lns && pipeTo)){
     let next_com = pipeline[j+1];
     if (next_com && next_com.pipeIn) next_com.pipeIn(val);
     return;
 }
-
 if (isStr(val)) val=[val];
 else if (!isArr(val)){
+//We are making sure there are no arbitrary "naked" objects in the output stream
+//log(val);
+//FATAL("Invalid value in out_cb");
+cwarn("Invalid value below");
 log(val);
-FATAL("Invalid value in out_cb");
+err_cb("invalid value in output stream (see console)");
+return;
+}
+else if (val.constructor.name === "Array") {
+ if (val.length > 0 && !isStr(val[0])){
+/*If this is a standard Javascript array, check that at least the first value is a string
+There may be weird things in the other positions, but at least this is a very
+efficient kind of sanity check (as opposed to iterating through *ALL* of the elements
+of a potentially *very* long array)*/
+cwarn("Invalid array value below");
+log(val[0]);
+err_cb("invalid array value in output stream (see console)");
+return;
+}
+}
+else if (!(val instanceof Uint8Array)){
+cwarn("Invalid array value below");
+log(val);
+err_cb("invalid 'array type' in output stream (see console)");
 return;
 }
 
@@ -4292,9 +4331,11 @@ for (let com of pipeline){
 	if (this.cancelled) return;
 //	if (!(Number.isFinite(lastcomcode))) {
 	if (!(isNum(lastcomcode))) {
+cwarn(`The value returned from '${com._name}' is below`);
 log(lastcomcode);
-		FATAL(`Invalid return value from: '${com._name}'`);
-		return;
+		if (!lastcomcode) term.response(`sh: a null, undefined, or empty value was returned from '${com._name}' (see console)`, {isErr: true});
+		else term.response(`sh: an invalid value was returned from '${com._name}' (see console)`, {isErr: true});
+		lastcomcode = E_ERR;
 	}
 	if (com.redirLines) {
 		let {err} = await write_to_redir(term, com.redirLines, com.redir, com.env);
