@@ -291,14 +291,14 @@ async run(){
 pipeIn(val){
 	this.pager.addLines(val);
 }
-static get grabsScreen(){return true;}
+//static get grabsScreen(){return true;}
+static grabsScreen = true;
 
 }//»
 const com_vim = class extends Com{//«
 
 #noPipe;
 async init(){//«
-	this.grabsScreen = true;
 	let {args, opts, command_str, term}=this;
 	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 		this.no("could not load the pager module");
@@ -377,8 +377,8 @@ pipeIn(val){
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
 }
-static get grabsScreen(){return true;}
-
+//static get grabsScreen(){return true;}
+static grabsScreen = true;
 }//»
 const com_cat = class extends Com{//«
 	init(){

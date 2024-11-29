@@ -655,7 +655,8 @@ const Com = class {/*«*/
 			};
 		});
 	}
-	static get grabsScreen(){return false;}
+//	static get grabsScreen(){return false;}
+	static grabsScreen = false;
 	eof(){
 		this.out(EOF);
 	}
@@ -1305,7 +1306,8 @@ pipeIn(val){
 	else add(val);
 }
 
-static get grabsScreen(){return true;}
+static grabsScreen = true;
+//static get grabsScreen(){return true;}
 }/*»*/
 
 
@@ -1506,7 +1508,6 @@ const Parser=(()=>{
 /*«Var*/
 
 /*»*/
-//Funcs«
 
 const escapes = arr => {//«
 
@@ -1532,608 +1533,6 @@ for (let j = 0; j < arr.length; j++) {
 return arr;
 
 };//»
-const ds_single_quote_escapes = tok=>{//«
-cwarn(tok);
-let wrd = tok.word;
-if (!wrd){
-cwarn("WHAT THE HELL IS HERE????");
-log(tok);
-return tok;
-}
-let arr = wrd;
-let out = [];
-let in_ds_single = false;
-let in_dq = false;
-for (let i=0; i < arr.length; i++){
-let ch = arr[i];
-let next = arr[i+1];
-
-if (!in_dq && !in_ds_single &&ch ==="$" && next==="'"){
-	in_ds_single=true;
-//	out.push("$'");
-	out.push("$","'");
-	i++;
-}
-else if (in_ds_single){
-	if (ch.escaped){
-	let c;
-//switch(ch){/*«*/
-
-//\" yields a <quotation-mark> (double-quote) character, but note that
-//<quotation-mark> can be included unescaped.
-if  (ch=='"') {c='"';}
-//\' yields an <apostrophe> (single-quote) character.
-//else if (ch=="'") { c="'";}
-
-//\\ yields a <backslash> character.
-else if (ch=='\\') { c='\\';}
-
-//\a yields an <alert> character.
-else if (ch=='a') { c='\x07';}
-
-//\b yields a <backspace> character.
-else if (ch=='b') { c='\x08';}
-
-//\e yields an <ESC> character.
-else if (ch=='e') { c='\x1b';}
-
-//\f yields a <form-feed> character.
-else if (ch=='f') { c='\x0c';}
-
-//\n yields a <newline> character.
-else if (ch=='n') { c='\n';}
-
-//\r yields a <carriage-return> character.
-else if (ch=='r') { c='\x0d';}
-
-//\t yields a <tab> character.
-else if (ch=='t') { c='\t';}
-
-//\v yields a <vertical-tab> character.
-else if (ch=='v') { c='\x0b';}
-
-else if (ch=='x'){/*«*/
-//\xXX yields the byte whose value is the hexadecimal value XX (one or more hexadecimal digits). If more than two hexadecimal digits follow \x, the results are unspecified.
-	if (next&&next.match(/[0-9a-fA-F]/)){
-	let next2 = arr[i+2];
-		if (next2 &&next2.match(/[0-9a-fA-F]/)){
-			c = eval( '"\\x' + next + next2 + '"' );
-			i+=2;
-		}
-		else{
-			c = eval( '"\\x0' + next + '"' );
-			i++;
-		}
-	}
-}/*»*/
-
-//\ddd yields the byte whose value is the octal value ddd (one to three octal digits).
-else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){/*«*/
-	let s = ch;
-//Array.includes tests for strict equality, so escaped chars will not match...
-	if (next&&OCTAL_CHARS.includes(next)){
-		s+=next;
-		let next2 = arr[i+2];
-		if (next2&&OCTAL_CHARS.includes(next2)){
-			s+=next2;
-			i+=2;
-		}
-		else i++;
-		c = eval( '"\\x' + (parseInt(s, 8).toString(16).padStart(2, "0")) + '"' );
-	}
-}/*»*/
-
-//The behavior of an unescaped <backslash> immediately followed by any other
-//character, including <newline>, is unspecified.
-
-//\cX yields the control character listed in the Value column of Values for
-//cpio c_mode Field in the OPERANDS section of the stty utility when X is one
-//of the characters listed in the ^c column of the same table, except that \c\\
-//yields the <FS> control character since the <backslash> character has to be
-//escaped.
-
-//}/*»*/
-	if (c) out.push(c);
-		else out.push(ch);
-	}
-	else if (ch==="'"){
-		in_ds_single = false;
-		out.push("'");
-	}
-	else{
-		out.push(ch);
-	}
-}
-else {
-	if (ch==='"'){
-		in_dq = !in_dq;
-	}
-	out.push(ch);
-}
-
-}
-
-return {t:"word",word: out};
-};//»
-const curly_expansion = (arr, from_pos) => {//«
-//log("FROM", from_pos);
-let ind1 = arr.indexOf("{", from_pos);
-let ind2 = arr.lastIndexOf("}");
-
-if (ind1 >= 0 && ind2 > ind1) {//«
-//We know these aren't escaped, but they *might* be inside of quotes
-let qtyp=null;
-let curly_arr;
-let start_i;
-let final_i;
-let have_comma = false;
-let have_dot = false;
-let have_quote = false;
-let have_escape = false;
-let comma_arr;
-let num_open_curlies = 0;
-for (let i=from_pos; i < arr.length; i++){//«
-
-let ch = arr[i];
-if (!qtyp){//«
-	if (["'",'"','`'].includes(ch)) {
-		qtyp = ch;
-		have_quote = true;
-	}
-	else if (ch==="{" && (i===0 || arr[i-1] !== "$")){
-		num_open_curlies++;
-		if (num_open_curlies === 1 && !curly_arr) {
-			start_i = i;
-			curly_arr = [];
-			continue;
-		}
-	}
-	else if (ch==="}"){
-		num_open_curlies--;
-		if (num_open_curlies === 0 && curly_arr){
-			final_i =  i;
-			break;
-		}
-	}
-}//»
-else if (qtyp===ch) qtyp=null;
-
-if (curly_arr) {//«
-	if (!qtyp){
-		if (ch===",") {
-			have_comma = true;
-			if (num_open_curlies===1){
-				if (!comma_arr) comma_arr = [];
-				comma_arr.push([...curly_arr]);
-				curly_arr = [];
-				continue;
-			}
-		}
-		else {
-			if (!have_dot) have_dot = ch === ".";
-			if (!have_escape) have_escape = ch.escaped;
-		}
-	}
-	curly_arr.push(ch);
-}//»
-
-}//»
-
-if (comma_arr){
-	comma_arr.push([...curly_arr]);
-}
-
-if (!final_i){//«
-	if (Number.isFinite(start_i)){
-		if (start_i+2 < arr.length){
-			return curly_expansion(arr, start_i+1);
-		}
-		else{
-//cwarn("GIVING UP!");
-		}
-	}
-	else{
-//log("NOT OPENED");
-	}
-	return arr;
-}//»
-else{//«
-
-let pre = arr.slice(0, start_i);
-let post = arr.slice(final_i+1);
-if (comma_arr){//«
-	let words=[];
-	for (let comarr of comma_arr){
-		words.push(pre.slice().concat(comarr.slice()).concat(post.slice()));
-	}
-	return words;
-}//»
-else if (have_dot&&!have_quote&&!have_escape){//«
-//The dot pattern is a very strict, very literal pattern
-let cstr = curly_arr.join("");
-let marr;
-let from, to, inc, is_alpha;
-
-let min_wid=0;
-if (marr = cstr.match(/^([-+]?\d+)\.\.([-+]?\d+)(\.\.([-+]?\d+))?$/)){//«
-//cwarn("NUMS",marr[1], marr[2], marr[4]);
-
-//We're supposed to look for '0' padding on the from/to
-	let min_from_wid=0;
-	let from_str = marr[1].replace(/^[-+]?/,"");
-	if (from_str.match(/^(0+)/)) min_from_wid = from_str.length;
-
-	let min_to_wid=0;
-	let to_str = marr[2].replace(/^[-+]?/,"");
-	if (to_str.match(/^(0+)/)) min_to_wid = to_str.length;
-
-	if (min_from_wid > min_to_wid) min_wid = min_from_wid;
-	else min_wid = min_to_wid;
-
-	from = parseInt(marr[1]);
-	to = parseInt(marr[2]);
-	inc = marr[4]?parseInt(marr[4]):1;
-}
-else if (marr = cstr.match(/^([a-z])\.\.([a-z])(\.\.([-+]?\d+))?$/i)){
-//cwarn("ALPHA",marr[1], marr[2], marr[4]);
-	is_alpha = true;
-	from = marr[1].charCodeAt();
-	to = marr[2].charCodeAt();
-	inc = marr[4]?parseInt(marr[4]):1;
-}
-else{
-	return arr;
-}//»
-
-inc = Math.abs(inc);
-
-let vals=[];
-let iter=0;
-//log(from, to);
-if (from > to){
-	for (let i=from; i >= to; i-=inc){
-	iter++;
-	if (iter > 10000) throw new Error("INFINITE LOOP AFTER 10000 iters????");
-		if (is_alpha) vals.push(String.fromCharCode(i));
-		else vals.push(((i+"").padStart(min_wid, "0")));
-	}
-}
-else {
-	for (let i=from; i <= to; i+=inc){
-	iter++;
-	if (iter > 10000) throw new Error("INFINITE LOOP AFTER 10000 iters????");
-		if (is_alpha) vals.push(String.fromCharCode(i));
-		else vals.push(((i+"").padStart(min_wid, "0")));
-	}
-}
-
-let words = [];
-for (let val of vals){
-	words.push(pre.slice().concat([val]).concat(post.slice()));
-}
-return words;
-
-}//»
-else{
-//log("NOTHING");
-return arr;
-}
-}//»
-
-}//»
-else{//«
-	if (ind1<0 && ind2 < 0) {
-//log("NO CURLIES");
-	}
-	else if (ind1 >= 0 && ind2 >= 0){
-//log("BOTH CURLIES DETECTED IN WRONG POSITOIN");
-	}
-	else if (ind1 >= 0) {
-//log("OPEN CURLY ONLY");
-	}
-	else if (ind2 >= 0){
-//log("CLOSE CURLY ONLY");
-	}
-	return arr;
-}//»
-
-}//»
-const tilde_expansion = tok => {//«
-//log("TILDE", tok);
-//Just expand everything after NAME=
-//NAME=...
-//let pref = tok
-let wrdarr = tok.word;
-let wrdstr = tok.word.join("");
-//cwarn(`CHECK: <${wrdstr}>`);
-let marr;
-if (marr = wrdstr.match(/^([_a-zA-Z][_a-zA-Z0-9]*=)/)){
-//If this is a valid shell variable assignment, expand lone '~' or all '~/' after 
-//the first '=' and every ':' with $HOME
-let from = marr[1].length;
-let start = tok.word.slice(0, from);
-let arr = tok.word.slice(from);
-//cwarn("EXPAND LONE '~' or initial '~/' and every one after a ':'");
-//log(arr);
-if (!arr.length) return tok;
-if (arr.length===1&&arr[0]==="~"){
-	return {t: "word",word: [...start, ...globals.HOME_PATH]};
-}
-let out=[];
-for (let i=0; i < arr.length; i++){/*«*/
-	if (i===0&&arr[0]==="~"&&arr[1]=="/"){
-		out.push(...globals.HOME_PATH, arr[1]);
-		i++;
-	}
-	else if (arr[i]===":" && arr[i+1]==="~"){
-		if (!arr[i+2]){
-			out.push(":", ...globals.HOME_PATH);
-			return {t: "word",word: [...start,...out]};
-		}
-		else if (arr[i+2]=="/"){
-			out.push(":", ...globals.HOME_PATH,"/");
-			i+=2;
-		}
-		else{
-			out.push(arr[i], arr[i+1]);
-			i++;
-		}
-	}
-	else {
-		out.push(arr[i]);
-	}
-}/*»*/
-return {t: "word",word: [...start,...out]};
-}
-else if (wrdstr==="~") {
-//Expand '~' or the leading '~/'
-//cwarn("EXPAND LONE '~'");
-//log(tok.word);
-tok.word=[...globals.HOME_PATH];
-}
-else if (wrdstr.match(/^~\x2f/)){
-tok.word=[...globals.HOME_PATH, ...wrdarr.slice(1)];
-//cwarn("EXPAND initial '~/'");
-}
-return tok;
-};/*»*/
-const parameter_expansion = tok => {//«
-//We will also need env, script_name, and script_args passed in here
-/*«
-
-A "parameter" is a NAME or a SYMBOL, as described below.
-
-We are looking for one of:
-
-$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
-@: positional parameters starting from 1, and something about field splitting
-*: Same as above, with something else about field splitting
-#: Number of positional parameters (minus the 0th)
-?: Most recent exit code
--: Current options flag
-$: pid of the shell
-!: pid of most recent '&' statement
-0: name of shell or shell script
-
-All DIGIT's (other than 0) are the current (1-based) positional parameters
-
-These expands in anything other than single quotes
-
-We can also easily support '${#NAME}', since this just gives the length of the
-string of the variable, NAME.
-
-I'm not sure how to handle:
-$ DQUOTE='"'
-$ echo "$DQUOTE"
-
-Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
-
-»*/
-/*
-
-Should we not put everything inside $'...', and then escape ALL
-single quotes that are in the replacement value??? Otherwise, there can't be
-escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
-
-So, if we do:
-PARAM_WITH_SINGLE_QUOTES="...'//..."
-
-echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
-=> BLAH$'...\'//...'BLAH
-
-*/
-let word = tok.word;
-let qtyp;
-for (let i=0; i < word.length; i++){
-
-let ch = word[i];
-if (!qtyp){
-	if (["'",'"','`'].includes(ch)) {
-		qtyp = ch;
-		continue;
-	}
-	else{
-//Unquoted stuff
-	}
-}
-else if (qtyp===ch) {
-	qtyp=null;
-	continue;
-}
-else if (qtyp!=='"') continue;
-
-//We are unquoted or in double quotes
-
-if (ch==="$"){/*«*/
-
-const do_name_sub=(name)=>{//«
-cwarn("NAME", name, start_i, end_i);
-
-let env={
-choint:"1",
-UB:"Far   in   the   harrrr!!!"
-};
-let diff = end_i - start_i;
-let val = env[name]||"";
-word.splice(start_i, end_i-start_i+1, ...val);
-
-/*
-for (let i=0; i < val.length; i++){
-	if (val[i]==="'"){
-		let s = new String("'");
-		s.escaped = true;
-		s.toString=function(){
-			return "\\"+this.valueOf();
-		};
-		val[i]=s;
-	}
-}
-//word.splice(start_i, end_i-start_i+1, "$", "'", ...val,"'");
-
-word.splice(start_i, end_i-start_i+4, "$", "'", ...val,"'");
-i = end_i + (name.length - (val.length+3));
-
-*/
-
-i = end_i + (name.length - val.length);
-
-};/*»*/
-const do_arg_sub=(num)=>{//«
-cwarn("ARG", num, start_i, end_i);
-};/*»*/
-const do_sym_sub=(sym)=>{//«
-cwarn("SYM", sym, start_i, end_i);
-};/*»*/
-const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
-
-	let next = word[i+1];
-	if (!next) continue;
-	let start_i = i;
-	let end_i;
-	if (next==="{") {/*«*/
-		i++;
-//If no next one or the next one is a "}", barf INVSUB
-//If the next one is a special symbol, there must be a "}" immediately following it
-//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
-//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
-//    ANY_NAME_CHARS, with a terminating "}".
-		next = word[i+1];
-		if (!next) return "bad substitution: '${<END>'";
-		else if (next==="}") return "bad substitution: '${}'";
-
-if (SPECIAL_SYMBOLS.includes(next)){/*«*/
-	let sym = next;
-	i++;
-	next = word[i+1];
-//	if (next !== "}") return INVSUB;
-//	if (next !== "}") return `bad substitution: have '\${${sym}${next?next:"<END>"}'`;
-	if (next !== "}") return BADSUB(sym, next);
-	end_i = i+1;
-	do_sym_sub(sym);
-//cwarn("Substitute symbol", sym);
-//Substitute symbol, 'sym'
-}/*»*/
-else if (DIGIT_CHARS_1_to_9.includes(next)){/*«*/
-	let numstr=next;
-	i++;
-	next = word[i+1];
-	while(true){
-		if (next==="}"){
-		//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
-//cwarn("Substitute script_arg #", argnum);
-//			end_i = i;
-			end_i = i+1;
-			do_arg_sub(parseInt(numstr)-1);
-			break;
-		}
-		if (!ANY_DIGIT_CHARS.includes(next)){
-//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
-			return BADSUB(numstr, next);
-//			return INVSUB;
-		}
-		numstr+=next;
-		i++;
-		next = word[i+1];
-	}
-}/*»*/
-else if (START_NAME_CHARS.includes(next)){/*«*/
-
-let namestr=next;
-i++;
-next = word[i+1];
-while(true){
-	if (next==="}"){
-//Replace with the substitution of 'namestr'
-//cwarn("Substitute param name", namestr);
-//		end_i = i;
-		end_i = i+1;
-		do_name_sub(namestr);
-		break;
-	}
-	if (!ANY_NAME_CHARS.includes(next)){
-//		return `bad substitution: have '\${${namestr}${next?next:"<END>"}'`;
-		return BADSUB(namestr, next);
-//		return INVSUB;
-	}
-	namestr+=next;
-	i++;
-	next = word[i+1];
-}
-
-}/*»*/
-else return INVSUB;
-
-	}/*»*/
-	else{/*«*/
-//If the next one is a special symbol (including "0"), we can do the substitution now«
-//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
-//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
-//  literal '$'
-//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
-
-//		i++;
-//		next = word[i+1];»
-
-if (SPECIAL_SYMBOLS.includes(next)){
-	end_i = i+1;
-	do_sym_sub(next);
-}
-else if (DIGIT_CHARS_1_to_9.includes(next)){
-	end_i = i+1;
-	do_arg_sub(parseInt(next)-1);
-}
-else if (!START_NAME_CHARS.includes(next)){
-	continue;
-}
-else{/*«*/
-
-let namestr=next;
-i++;
-next = word[i+1];
-while(true){
-	if (!ANY_NAME_CHARS.includes(next)){
-cwarn("Substitute param name", namestr);
-end_i=i;
-do_name_sub(namestr);
-		break;
-	}
-	namestr+=next;
-	i++;
-	next = word[i+1];
-}
-
-}/*»*/
-
-	}/*»*/
-
-}/*»*/
-
-}
-
-return tok;
-};/*»*/
-
-//»
 
 //ErrorHandler«
 
@@ -2991,7 +2390,7 @@ tok.word=[...globals.HOME_PATH, ...wrdarr.slice(1)];
 }
 return tok;
 };/*»*/
-const parameter_expansion = tok => {//«
+const parameter_expansion = (tok, env) => {//«
 //We will also need env, script_name, and script_args passed in here
 /*«
 
@@ -3038,9 +2437,10 @@ echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
 »*/
 let word = tok.word;
 let qtyp;
-for (let i=0; i < word.length; i++){
+OUTER_LOOP: for (let i=0; i < word.length; i++){
 
 let ch = word[i];
+//log("CH", i, ch);
 if (!qtyp){
 	if (["'",'"','`'].includes(ch)) {
 		qtyp = ch;
@@ -3061,37 +2461,13 @@ else if (qtyp!=='"') continue;
 if (ch==="$"){/*«*/
 
 const do_name_sub=(name)=>{//«
-cwarn("NAME", name, start_i, end_i);
 
-let env={
-choint:"1",
-UB:"Far   in   the   harrrr!!!"
-};
 let diff = end_i - start_i;
 let val = env[name]||"";
 word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
 
-/*
-for (let i=0; i < val.length; i++){
-	if (val[i]==="'"){
-		let s = new String("'");
-		s.escaped = true;
-		s.toString=function(){
-			return "\\"+this.valueOf();
-		};
-		val[i]=s;
-	}
-}
-//word.splice(start_i, end_i-start_i+1, "$", "'", ...val,"'");
-
-word.splice(start_i, end_i-start_i+4, "$", "'", ...val,"'");
-i = end_i + (name.length - (val.length+3));
-
-*/
-
-i = end_i + (name.length - val.length);
-
-};/*»*/
+};//»
 const do_arg_sub=(num)=>{//«
 cwarn("ARG", num, start_i, end_i);
 };/*»*/
@@ -3153,17 +2529,12 @@ const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${
 		next = word[i+1];
 		while(true){
 			if (next==="}"){
-		//Replace with the substitution of 'namestr'
-		//cwarn("Substitute param name", namestr);
-		//		end_i = i;
 				end_i = i+1;
 				do_name_sub(namestr);
-				break;
+				continue OUTER_LOOP;
 			}
 			if (!ANY_NAME_CHARS.includes(next)){
-		//		return `bad substitution: have '\${${namestr}${next?next:"<END>"}'`;
 				return BADSUB(namestr, next);
-		//		return INVSUB;
 			}
 			namestr+=next;
 			i++;
@@ -3202,10 +2573,9 @@ i++;
 next = word[i+1];
 while(true){
 	if (!ANY_NAME_CHARS.includes(next)){
-cwarn("Substitute param name", namestr);
-end_i=i;
-do_name_sub(namestr);
-		break;
+		end_i=i;
+		do_name_sub(namestr);
+		continue OUTER_LOOP;
 	}
 	namestr+=next;
 	i++;
@@ -3623,7 +2993,7 @@ for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
 if (tok.t==="word") {
-	let rv = parameter_expansion(tok);
+	let rv = parameter_expansion(tok, env);
 	if (isStr(rv)) return terr(`sh: ${rv}`);
 	arr[k] = rv;
 }
@@ -3965,7 +3335,7 @@ cerr(e);
 			continue;
 		}//»
 		if (screen_grab_com && com.grabsScreen){
-			pipeline.push(make_sh_error_com(comword, `the screen has already been grabbed by ${screen_grab_com}`, com_env));
+			pipeline.push(make_sh_error_com(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env));
 			continue;
 		}
 		screen_grab_com = com.grabsScreen?comword: false;
