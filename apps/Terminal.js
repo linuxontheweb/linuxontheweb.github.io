@@ -514,13 +514,13 @@ const do_imports = async(arr, err_cb) => {//«
 	if (!err_cb) err_cb = ()=>{};
 	for (let arg of arr){
 		if (ALL_LIBS[arg]) {
-			cwarn(`${arg}: Already loaded`);
+			err_cb(`${arg}: already loaded`);
 			continue;
 		}   
 		try{
 			await import_coms(arg);
 		}catch(e){
-			err_cb(`${arg}: Error importing the module`);
+			err_cb(`${arg}: error importing the module`);
 cerr(e);
 		}
 	}
@@ -655,6 +655,7 @@ const Com = class {/*«*/
 			};
 		});
 	}
+	static get grabsScreen(){return false;}
 	eof(){
 		this.out(EOF);
 	}
@@ -1304,6 +1305,7 @@ pipeIn(val){
 	else add(val);
 }
 
+static get grabsScreen(){return true;}
 }/*»*/
 
 
@@ -1449,16 +1451,16 @@ msleep: com_msleep,
 //meta: com_meta,
 };
 
-
-//for (let coms in NS.coms){
-//	for (let com in coms){
-//		if (!shell_commands[com]){
-//			shell_commands[com] = coms[com];
-//			continue;
-//		}
-//	}
-//}
-
+/*
+for (let coms in NS.coms){
+	for (let com in coms){
+		if (!shell_commands[com]){
+			shell_commands[com] = coms[com];
+			continue;
+		}
+	}
+}
+*/
 //»
 
 //Init«
@@ -1476,16 +1478,18 @@ continue;
 	}
 
 }
-
 const active_commands = globals.shell_commands || shell_commands;
-if (!globals.shell_commands) globals.shell_commands = shell_commands;
+if (!globals.shell_commands) {
+	globals.shell_commands = shell_commands;
+//log(globals.shell_commands);
+}
 //const active_commands = globals.shell_commands ? (globals.shell_commands) :
 if (dev_mode){
 
 active_commands.test = com_test;
 
 }
-
+//log(active_commands);
 //let BUILTINS = active_commands._keys;
 
 const active_options = globals.shell_command_options || command_options;
@@ -3474,6 +3478,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 
 	let pipetype = pipe.type;
 	let pipeline = [];
+	let screen_grab_com;
 	for (let j=0; j < pipelist.length; j++) {//«
 		let arr = pipelist[j].com;
 		let pipeFrom = j > 0;
@@ -3920,7 +3925,7 @@ cerr(e);
 		if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
 			if (CONTROL_WORDS.includes(comword)){
-				terr(`sh: control structures are not implemented`);
+				terr(`sh: ${comword}: control structures are not implemented`);
 				return;
 			}
 
@@ -3959,8 +3964,11 @@ cerr(e);
 			pipeline.push(comobj);
 			continue;
 		}//»
-
-//Look for the command's options
+		if (screen_grab_com && com.grabsScreen){
+			pipeline.push(make_sh_error_com(comword, `the screen has already been grabbed by ${screen_grab_com}`, com_env));
+			continue;
+		}
+		screen_grab_com = com.grabsScreen?comword: false;
 		let opts;
 		let gotopts = active_options[usecomword];
 
@@ -3972,10 +3980,8 @@ cerr(e);
 		}
 		opts = rv[0];
 
-//		comobj;
 		try{
 			comobj = new com(usecomword, arr, opts, com_env);
-//			comobj._name = usecomword;
 			pipeline.push(comobj);
 		}
 		catch(e){

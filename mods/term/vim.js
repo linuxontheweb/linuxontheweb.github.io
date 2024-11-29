@@ -1,4 +1,7 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
+/*11/29/24: When going into alternate modes, there is not a global varible called
+'hold_lines', where we keep the actual editor lines.
+*/
 /*11/20/24: Reading the comments below (from ~2.5 weeks ago), I had a hard time«
 "decifering" them. They now seem to me to be very abstract, and of very little "real
 world" utility value. I have just dropped in a file with tons of fold markers in them
@@ -159,6 +162,7 @@ let yank_buffer = [
 yank_buffer._type="B";
 */
 let lines;
+let hold_lines;
 let stdin_lines;
 let line_colors;
 let real_line_colors;
@@ -512,7 +516,7 @@ const quit=()=>{//«
 	if (reload_win) delete reload_win.ownedBy;
 	quit_new_screen(hold_screen_state);
 };//»
-const warn_stdin=()=>{stat_warn(`${stdin_lines.length} lines have been received from stdin`);};
+const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
 const onescape=()=>{//«
 //	KEY_LOG.push("ESC");
 	if (stat_cb){
@@ -988,10 +992,11 @@ const copy_fold_lines=(lns, all)=>{//«
 
 const get_edit_lines = (opts={})=>{//«
 	let {copy, str, from, to}=opts;
-	let uselines=[];
+	let linesout=[];
+	let uselines = hold_lines?hold_lines:lines;
 	let s;
 	if (!Number.isFinite(from)) from = 0;
-	if (!Number.isFinite(to)) to = lines.length;
+	if (!Number.isFinite(to)) to = uselines.length;
 	if (fold_mode){
 		const do_fold = (_from, _to, _lns) => {
 			for (let i = _from; i < _to; i++){
@@ -1001,24 +1006,24 @@ const get_edit_lines = (opts={})=>{//«
 					do_fold(0, fold.length, fold);
 				}
 				else {
-					if (str) uselines.push(ln.join(""));
-					else uselines.push(ln);
+					if (str) linesout.push(ln.join(""));
+					else linesout.push(ln);
 				}
 			}
 		};
-		do_fold(from, to, lines);
+		do_fold(from, to, uselines);
 	}
 	else if (str){
-		for (let i=from; i < to; i++) uselines.push(lines[i].join(""));
+		for (let i=from; i < to; i++) linesout.push(uselines[i].join(""));
 	}
 	else if (!copy) {
-		for (let i=from; i < to; i++) uselines.push(lines[i]);
+		for (let i=from; i < to; i++) linesout.push(uselines[i]);
 	}
 	else{
-		uselines = [];
-		for (let i=from; i < to; i++) uselines.push(...lines[i].slice());
+		linesout = [];
+		for (let i=from; i < to; i++) linesout.push(...uselines[i].slice());
 	}
-	return uselines;
+	return linesout;
 }
 this.get_lines = get_edit_lines;
 //»
@@ -1032,7 +1037,6 @@ const get_edit_save_arr = () =>{//«
 	return [str.replace(/\n$/,""), uselines.length];
 };
 const get_edit_str = ()=>{return get_edit_save_arr()[0];};
-
 //»
 const try_revert = ()=>{//«
 	if (!edit_fobj_hold) return;
@@ -1109,6 +1113,12 @@ cerr(e);
 	}
 	if (!edit_fobj) {
 		rv = await fsapi.saveFsByPath(usepath, val, opts);
+if (!(rv&&rv.node)){
+stat_err("There was a problem writing the file (see console)");
+cwarn("Here is the returned value from saveFsByPath");
+log(rv);
+return;
+}
 	}
 	else {
 		let par = edit_fobj.par;
@@ -1117,6 +1127,12 @@ cerr(e);
 			return;
 		}
 		rv = await edit_fobj.setValue(val, opts);
+if (!(rv&&rv.node)){
+stat_err("There was a problem writing the file (see console)");
+cwarn("Here is the returned value from node.setValue");
+log(rv);
+return;
+}
 	}
 	return write_cb_func(rv);
 }
@@ -1587,7 +1603,7 @@ const init_cut_buffer_mode=()=>{//«
 /*No need to set the global 'lines' variable since we are not (currently) using any
 functions outside of this scope.
 */
-	let hold_lines = lines;
+	hold_lines = lines;
 	lines = cut_buffers[0];
 	Term.set_lines(lines, []);
 	alt_screen_escape_handler = no_render => {//«
@@ -1599,6 +1615,7 @@ functions outside of this scope.
 		set_ry();
 		fold_mode = hold_fold;
 		lines = hold_lines;
+		hold_lines = null;
 		Term.set_lines(lines, line_colors);
 		this.mode = COMMAND_MODE;
 		if (!no_render) render();
@@ -1734,7 +1751,7 @@ const init_symbol_mode = (if_adv)=>{//«
 		SYMBOLS = ALLWORDS;
 	}
 
-	let hold_lines = lines;
+	hold_lines = lines;
 	let hold_colors = line_colors;
 	let hx=x,hy=y,hscr=scroll_num;
 	if (ln.length && if_adv) x++;
@@ -1761,6 +1778,7 @@ const init_symbol_mode = (if_adv)=>{//«
 		fold_mode = hold_fold;
 		scroll_num = hscr;
 		lines = hold_lines;
+		hold_lines = null;
 		line_colors = hold_colors;
 		Term.set_lines(lines, line_colors);
 //XJKUIOTL
@@ -1796,7 +1814,7 @@ const init_complete_mode=async()=>{//«
 	if (matches.length===1) return try_print(matches[0]);
 	SYMBOLS = matches.slice();
 	let hold_fold = fold_mode;
-	let hold_lines = lines;
+	hold_lines = lines;
 	let hold_colors = line_colors;
 	let hx=x,hy=y,hscr=scroll_num;
 	let mode_hold = this.mode;
@@ -1825,6 +1843,7 @@ const init_complete_mode=async()=>{//«
 		fold_mode = hold_fold;
 		scroll_num = hscr;
 		lines = hold_lines;
+		hold_lines = null;
 		line_colors = hold_colors;
 		Term.set_lines(lines, line_colors);
 		set_ry();
@@ -1843,7 +1862,7 @@ let str = await fname.toText({cwd:Term.cwd});
 //log(str);
 if (!isStr(str)) return render();
 
-let hold_lines = lines;
+hold_lines = lines;
 let hold_colors = line_colors;
 let hx=x,hy=y,hscr=scroll_num;
 x=y=scroll_num=0;
@@ -1855,6 +1874,7 @@ alt_screen_escape_handler = no_render => {//«
 	y=hy;
 	scroll_num = hscr;
 	lines = hold_lines;
+	hold_lines = null;
 	line_colors = hold_colors;
 	Term.set_lines(lines, line_colors);
 	set_line_lens();
@@ -1933,7 +1953,7 @@ const init_line_wrap_mode=()=>{//«
 	line_wrap_y = ry;
 	let hold_fold = fold_mode;
 	fold_mode = false;
-	let hold_lines = lines;
+	hold_lines = lines;
 	let _w = Term.w;
 	if (!ln.length){lines=[[]];}
 	else {
@@ -1967,6 +1987,7 @@ const init_line_wrap_mode=()=>{//«
 		scroll_num = hscr;
 		fold_mode = hold_fold;
 		lines = hold_lines;
+		hold_lines = null;
 		set_ry();
 		Term.set_lines(lines, line_colors);
 		this.mode = COMMAND_MODE;
@@ -5717,7 +5738,6 @@ if (patharg) {
 	}
 }
 
-//Term.hold_lines();
 lines=[];
 line_colors = [];
 real_line_colors = [];

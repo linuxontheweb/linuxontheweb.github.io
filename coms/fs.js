@@ -109,7 +109,7 @@ async run(){
 }
 }
 */
-//log(admin_mode);
+
 const com_brep = class extends Com{/*«*/
 /*«
 
@@ -249,7 +249,7 @@ pipeIn(val){/*«*/
 }/*»*/
 
 }/*»*/
-const com_less = class extends Com{/*«*/
+const com_less = class extends Com{//«
 async init(){
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		this.no("could not load the pager module");
@@ -291,11 +291,14 @@ async run(){
 pipeIn(val){
 	this.pager.addLines(val);
 }
+static get grabsScreen(){return true;}
 
-}/*»*/
-const com_vim = class extends Com{/*«*/
+}//»
+const com_vim = class extends Com{//«
+
 #noPipe;
-async init(){
+async init(){//«
+	this.grabsScreen = true;
 	let {args, opts, command_str, term}=this;
 	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 		this.no("could not load the pager module");
@@ -321,7 +324,6 @@ async init(){
 			if (s.match(/^\w/)) symbols.push(s);
 		}
 	}//»
-//log("PATH", path);
 	if (!path) {
 		val="";
 	}
@@ -341,6 +343,7 @@ async init(){
 			if (!parnode) return this.no(`${path}: no such directory`);
 			if (!await fsapi.checkDirPerm(path)) return this.no(`${fullpath}: permission denied`);
 			val = "";
+			typ = parnode.root.type;
 		}
 		else {
 			if (node.writeLocked()) return this.no(`${path}: is locked by another application`);
@@ -351,6 +354,7 @@ cwarn("Here are the contents...");
 log(val);
 				return this.no(`${path}: could not get the contents (see console)`);
 			}
+			typ = node.root.type;
 		}
 		if (!opts.pipeok) this.#noPipe = true;
 	}
@@ -361,17 +365,21 @@ log(val);
 		opts,
 		symbols,
 	});
-}
+}//»
 async run(){
 	await this.awaitCb;
+	if ((this.redir && this.redir.length) || this.pipeTo || this.opts["force-stdout"]){
+		this.out(this.editor.get_lines({str: true}));
+	}
 	this.ok();
 }
 pipeIn(val){
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
 }
+static get grabsScreen(){return true;}
 
-}/*»*/
+}//»
 const com_cat = class extends Com{//«
 	init(){
 		if (!this.args.length && !this.pipeFrom) this.no("no args and not in pipe");
@@ -1049,6 +1057,7 @@ const opts = {//«
 			symbols: 3,
 			'keylog-file': 3,
 			'num-keylog-steps':3,
+"force-stdout": 1
 		}
 	},//»
 	less:{l:{parsel:1}},
