@@ -136,6 +136,8 @@ if (dev_mode){
 
 //Var«
 
+let last_exit_code = 0;
+
 const EOF_Type = 1;
 const OPERATOR_CHARS=[//«
 "|",
@@ -679,9 +681,11 @@ const ScriptCom = class extends Com{//«
 		let code;
 		let execute = this.shell.execute;
 		let scriptOut = this.out;
+		let scriptArgs = this.args;
+		let scriptName = this.name;
 		for (let ln of this.lines){
 			if (this._cancelled) return;
-			code = await execute(ln, {scriptOut});
+			code = await execute(ln, {scriptOut, scriptName, scriptArgs});
 			if(code instanceof Number && code.isExit){
 				break;
 			}
@@ -2390,7 +2394,7 @@ tok.word=[...globals.HOME_PATH, ...wrdarr.slice(1)];
 }
 return tok;
 };/*»*/
-const parameter_expansion = (tok, env) => {//«
+const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {//«
 //We will also need env, script_name, and script_args passed in here
 /*«
 
@@ -2440,7 +2444,6 @@ let qtyp;
 OUTER_LOOP: for (let i=0; i < word.length; i++){
 
 let ch = word[i];
-//log("CH", i, ch);
 if (!qtyp){
 	if (["'",'"','`'].includes(ch)) {
 		qtyp = ch;
@@ -2469,10 +2472,28 @@ i = end_i - diff;
 
 };//»
 const do_arg_sub=(num)=>{//«
-cwarn("ARG", num, start_i, end_i);
-};/*»*/
+let diff = end_i - start_i;
+let val = script_args[num]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+};//»
 const do_sym_sub=(sym)=>{//«
-cwarn("SYM", sym, start_i, end_i);
+let diff = end_i - start_i;
+let val;
+//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
+switch(sym){
+	case "0": val = script_name; break;
+	case "#": val = script_args.length+""; break;
+	case "*":
+	case "@":
+		val = script_args.join(" ");
+		break;
+	case "?": val = last_exit_code+""; break;
+	default: val = "$"+sym;
+}
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+
 };/*»*/
 const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
 
@@ -2800,7 +2821,8 @@ worthy
 
 let started_time = (new Date).getTime();
 
-let {scriptOut, subLines, script_args, script_name, env}=opts;
+//let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
+let {scriptOut, scriptArgs, scriptName, subLines, env}=opts;
 //let {scriptOut, subLines, env}=opts;
 let rv;
 let is_top_level = !(scriptOut||subLines);
@@ -2993,7 +3015,7 @@ for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
 if (tok.t==="word") {
-	let rv = parameter_expansion(tok, env);
+	let rv = parameter_expansion(tok, env, scriptName, scriptArgs);
 	if (isStr(rv)) return terr(`sh: ${rv}`);
 	arr[k] = rv;
 }
@@ -3427,7 +3449,6 @@ log(lastcomcode);
 	}//»
 
 }//»
-
 }//»
 
 //In a script, refresh rather than returning to the prompt
@@ -3439,6 +3460,7 @@ if (no_end) {
 
 //Command line input returns to prompt
 term.response_end();
+return lastcomcode;
 
 }//»
 this.cancel=()=>{
@@ -4958,7 +4980,9 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 		env[k]=ENV[k];
 	}
 
-	cur_shell.execute(str,{env});
+	last_exit_code = await cur_shell.execute(str,{env});
+
+//log("RV", rv);
 
 	let ind = history.indexOf(gotstr);
 	if (ind >= 0) {
