@@ -79,7 +79,8 @@ const {
 	normPath,
 	linesToParas,
 	isBool,
-	isEOF
+	isEOF,
+	sleep
 } = util;
 const NS = LOTW;
 const {
@@ -278,13 +279,14 @@ const IDB_DATA_TYPE = "i";//Data structures that are stored directly in the inde
 //»
 
 //Helper funcs«
-
+/*
 const sleep = (ms)=>{//«
 	if (!Number.isFinite(ms)) ms = 0;
 	return new Promise((Y,N)=>{
 		setTimeout(Y, ms);
 	});
 };//»
+*/
 const hang=()=>{return new Promise((Y,N)=>{});};
 const get_options = (args, com, opts={}) => {//«
 	const getlong = opt => {
@@ -623,10 +625,11 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 //Command Classes«
 
 const Com = class {/*«*/
-	constructor(args, opts, env={}){
+	constructor(name, args, opts, env={}){
 		this.args=args;
 		this.opts=opts;
 		this.numErrors = 0;
+		this.name =name;
 		for (let k in env) {
 			this[k]=env[k];
 		}
@@ -657,16 +660,16 @@ const Com = class {/*«*/
 	}
 	init(){}
 	run(){
-		this.no(`the 'run' method has not been overriden!`);
+		this.wrn(`sh: ${this.name}: the 'run' method has not been overriden!`);
 	}
 	cancel(){
 		this._cancelled = true;
-cwarn(`${this._name}: cancelled`);
+cwarn(`${this.name}: cancelled`);
 	}
 }/*»*/
 const ScriptCom = class extends Com{//«
-	constructor(shell, lines, args, env){
-		super(args, {}, env);
+	constructor(shell, name, lines, args, env){
+		super(name, args, {}, env);
 		this.lines = lines;
 		this.shell = shell;
 	}
@@ -703,12 +706,12 @@ const ErrCom = class extends Com{/*«*/
 		this.no(this.errorMessage);
 	}
 }/*»*/
-const make_error_com = (mess,com_env)=>{//«
-	let com = new ErrCom(null,null,com_env);
-	com.errorMessage = mess;
+const make_sh_error_com = (name, mess, com_env)=>{//«
+	let com = new ErrCom(name, null,null,com_env);
+	com.errorMessage = `sh: ${name}: ${mess}`;
 	return com;
 };/*»*/
-globals.comClasses={Com, ErrCom, make_error_com};
+globals.comClasses={Com, ErrCom};
 
 //»
 
@@ -722,22 +725,19 @@ globals.comClasses={Com, ErrCom, make_error_com};
 //All vars in env: redir,script_out,stdin,inpipe,term,env,opts,command_str
 
 */
-
+/*
 const com_pipe = class extends Com{//«
 	run(){
 		if (!this.pipeFrom){
 			this.no("Not in a pipe line");
 		}
 	}
-//	init(){
-//		if (this.pipeFrom) this.inf("Waiting for piped input...");
-//	}
 	pipeIn(val){
 		this.out(val);
 		if (isEOF(val)) this.ok();
 	}
 }//»
-const com_deadpipe = class extends Com{/*«*/
+const com_deadpipe = class extends Com{//«
 	run(){
 		if (!this.pipeFrom){
 			this.no("not in a pipe line");
@@ -748,28 +748,21 @@ const com_deadpipe = class extends Com{/*«*/
 log("Dropping", val);
 		if (isEOF(val)) this.ok();
 	}
-}/*»*/
+}//»
 const com_badret=class extends Com{run(){this.end("SOME STRING RETURNED HAHAHA!?!?!");}}
 const com_noret=class extends Com{run(){this.end();}}
 const com_nullret=class extends Com{run(){this.end(null);}}
-const com_badobj=class extends Com{run(){this.out({});this.ok();}}
-const com_badarrobj=class extends Com{run(){this.out([{}]);this.ok();}}
+const com_badobj=class extends Com{run(){this.out({});this.no();}}
+const com_badarrobj=class extends Com{run(){this.out([{}]);this.no();}}
 const com_oktypedarr=class extends Com{run(){this.out(new Uint8Array([0,1,2,3,4]));this.ok();}}
-const com_badtypedarr=class extends Com{run(){this.out(new Int32Array([0,1,2,3,4]));this.ok();}}
-/*
-const com_ = class extends Com{
-init(){
-}
-run(){
-}
-}
-*/
-const com_hang = class extends Com{/*«*/
+const com_badtypedarr=class extends Com{run(){this.out(new Int32Array([0,1,2,3,4]));this.no();}}
+const com_weirdarr=class extends Com{run(){this.out(["1) This line is a string","2) This line is also a string (but not the next one)",{},"4) This line is a string again!"]);this.ok();}}
+const com_hang = class extends Com{//«
 	run(){
 		this.inf("forever is a loooooong time!!!");
 	}
-}/*»*/
-const com_norun=class extends Com{init(){}}
+}//»
+const com_norun=class extends Com{init(){this.ok(`Hi,this is from the init phase of '${this.name}'`);}}
 const com_echoasync = class extends Com{//«
 	async run(){
 		for (let arg of this.args){
@@ -779,6 +772,15 @@ const com_echoasync = class extends Com{//«
 		this.ok();
 	}
 }//»
+*/
+/*
+const com_ = class extends Com{
+init(){
+}
+run(){
+}
+}
+*/
 const com_echo = class extends Com{//«
 	run(){
 		this.out(this.args.join(" ").split("\n"));
@@ -1730,17 +1732,21 @@ Long options may be given an argument like this:
 
 //FWPORUITJ
 const shell_commands={//«
+/*
 badret: com_badret,
 badobj: com_badobj,
 badarrobj: com_badarrobj,
 oktypedarr: com_oktypedarr,
 badtypedarr: com_badtypedarr,
+weirdarr: com_weirdarr,
 noret: com_noret,
 nullret: com_nullret,
 hang: com_hang,
 norun: com_norun,
 deadpipe: com_deadpipe,
 pipe: com_pipe,
+echoasync: com_echoasync,
+*/
 math: com_math,
 inspect: com_inspect,
 curcol: com_curcol, 
@@ -1761,7 +1767,6 @@ pwd: com_pwd,
 clear: com_clear,
 cd: com_cd,
 ls: com_ls,
-echoasync: com_echoasync,
 echo: com_echo,
 env: com_env,
 app: com_app,
@@ -4044,38 +4049,38 @@ if (this.cancelled) return;
 
 let redir_lns = comobj.redirLines;
 //EOF is not meaningful at the end of a pipeline
-log(val);
+//log(val);
 if (isEOF(val) || (!redir_lns && pipeTo)){
     let next_com = pipeline[j+1];
     if (next_com && next_com.pipeIn) next_com.pipeIn(val);
     return;
 }
+
 if (isStr(val)) val=[val];
 else if (!isArr(val)){
 //We are making sure there are no arbitrary "naked" objects in the output stream
-//log(val);
-//FATAL("Invalid value in out_cb");
 cwarn("Invalid value below");
 log(val);
-err_cb("invalid value in output stream (see console)");
+err_cb(`sh: ${comobj.name}: invalid value in output stream (see console)`);
 return;
 }
 else if (val.constructor.name === "Array") {
- if (val.length > 0 && !isStr(val[0])){
+
+if (val.length > 0 && !isStr(val[0])){
 /*If this is a standard Javascript array, check that at least the first value is a string
 There may be weird things in the other positions, but at least this is a very
 efficient kind of sanity check (as opposed to iterating through *ALL* of the elements
 of a potentially *very* long array)*/
 cwarn("Invalid array value below");
 log(val[0]);
-err_cb("invalid array value in output stream (see console)");
+err_cb(`sh: ${comobj.name}: invalid array value in output stream (see console)`);
 return;
 }
 }
 else if (!(val instanceof Uint8Array)){
-cwarn("Invalid array value below");
+cwarn("Invalid array below");
 log(val);
-err_cb("invalid 'array type' in output stream (see console)");
+err_cb(`sh: ${comobj.name}: invalid 'array type' in output stream (see console)`);
 return;
 }
 
@@ -4142,7 +4147,9 @@ term.refresh();
 const wrn_cb=(lns)=>{//«
 if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
-if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
+if (isStr(lns)) {
+	if (!lns.match(/^sh:/)) lns=[`${usecomword}: ${lns}`];
+}
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in wrn_cb");
@@ -4255,35 +4262,35 @@ cerr(e);
 //It doesn't look like a file.
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
-				pipeline.push(make_error_com(`sh: ${comword}: command not found`, com_env));
+				pipeline.push(make_sh_error_com(comword, `command not found`, com_env));
 				continue;
 			}
 
 			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
 			if (!node) {
-				pipeline.push(make_error_com(`sh: ${comword}: file not found`, com_env));
+				pipeline.push(make_sh_error_com(comword, `file not found`, com_env));
 				continue;
 			}
 			let app = node.appName;
 			if (app===FOLDER_APP) {
-				pipeline.push(make_error_com(`sh: ${comword}: is a directory`, com_env));
+				pipeline.push(make_sh_error_com(comword, `is a directory`, com_env));
 				continue;
 			}
 			if (app!==TEXT_EDITOR_APP) {
-				pipeline.push(make_error_com(`sh: ${comword}: not a text file`, com_env));
+				pipeline.push(make_sh_error_com(comword, `not a text file`, com_env));
 				continue;
 			}
 			if (!comword.match(/\.sh$/i)){
-				pipeline.push(make_error_com(`sh: ${comword}: only executing files with '.sh' extension`, com_env));
+				pipeline.push(make_sh_error_com(comword, `only executing files with '.sh' extension`, com_env));
 				continue;
 			}
 			let text = await node.text;
 			if (!text) {
-				pipeline.push(make_error_com(`sh: ${comword}: no text returned`, com_env));
+				pipeline.push(make_sh_error_com(comword, `no text returned`, com_env));
 				continue;
 			}
-			comobj = new ScriptCom(this, text.split("\n"), arr, com_env);
-			comobj._name = usecomword;
+			comobj = new ScriptCom(this, usecomword, text.split("\n"), arr, com_env);
+//			comobj._name = usecomword;
 			pipeline.push(comobj);
 			continue;
 		}//»
@@ -4302,8 +4309,8 @@ cerr(e);
 
 //		comobj;
 		try{
-			comobj = new com(arr, opts, com_env);
-			comobj._name = usecomword;
+			comobj = new com(usecomword, arr, opts, com_env);
+//			comobj._name = usecomword;
 			pipeline.push(comobj);
 		}
 		catch(e){
@@ -4311,7 +4318,7 @@ cerr(e);
 //VKJEOKJ
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
-			pipeline.push(make_error_com(`sh: ${usecomword}: ${e.message}`, com_env));
+			pipeline.push(make_sh_error_com(usecomword, e.message, com_env));
 		}
 //SKIOPRHJT
 	}//»
@@ -4331,10 +4338,10 @@ for (let com of pipeline){
 	if (this.cancelled) return;
 //	if (!(Number.isFinite(lastcomcode))) {
 	if (!(isNum(lastcomcode))) {
-cwarn(`The value returned from '${com._name}' is below`);
+cwarn(`The value returned from '${com.name}' is below`);
 log(lastcomcode);
-		if (!lastcomcode) term.response(`sh: a null, undefined, or empty value was returned from '${com._name}' (see console)`, {isErr: true});
-		else term.response(`sh: an invalid value was returned from '${com._name}' (see console)`, {isErr: true});
+		if (!lastcomcode) term.response(`sh: a null, undefined, or empty value was returned from '${com.name}' (see console)`, {isErr: true});
+		else term.response(`sh: an invalid value was returned from '${com.name}' (see console)`, {isErr: true});
 		lastcomcode = E_ERR;
 	}
 	if (com.redirLines) {

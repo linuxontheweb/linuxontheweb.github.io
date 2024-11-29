@@ -484,7 +484,13 @@ return retstr;
 else throw new Error("Invalid arg to randstr");
 },//»
 numberLines:arr=>{if(!arr)arr=[];let tmp=[];let num=0;let numwid=(arr.length+"").length;for(let ln of arr){let numstr=(++num)+"";tmp.push(("0".repeat(numwid-numstr.length)+numstr)+ "\x20"+ln);}return tmp;},
-sleep: (ms)=>{return new Promise((Y,N)=>{setTimeout(Y, ms);});},
+sleep: (ms)=>{//«
+    if (!Number.isFinite(ms)) ms = 0;
+    return new Promise((Y,N)=>{
+        setTimeout(Y, ms);
+    });
+},//»
+//sleep: (ms)=>{return new Promise((Y,N)=>{setTimeout(Y, ms);});},
 log,
 wrn,
 err,
