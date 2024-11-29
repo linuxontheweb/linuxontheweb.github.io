@@ -74,7 +74,7 @@ const com_echodelay = class extends Com{//«
 
 const coms = {//«
 
-pipe:com_pipe,
+pipe: com_pipe,
 deadpipe: com_deadpipe,
 badret: com_badret,
 noret: com_noret,
@@ -84,7 +84,7 @@ baddarrobj: com_badarrobj,
 oktypedarr: com_oktypedarr,
 badtypedarr: com_badtypedarr,
 weirdarr: com_weirdarr,
-hand: com_hang,
+hang: com_hang,
 echodelay: com_echodelay,
 norun: com_norun
 

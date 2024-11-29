@@ -47,7 +47,7 @@ pipeIn(val){
 
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
-let DEBUG = false;
+//let DEBUG = false;
 //let DEBUG = true;
 let USE_ONDEVRELOAD = false;
 
@@ -721,59 +721,6 @@ globals.comClasses={Com, ErrCom};
 //Command functions«
 
 /*
-
-//All vars in env: redir,script_out,stdin,inpipe,term,env,opts,command_str
-
-*/
-/*
-const com_pipe = class extends Com{//«
-	run(){
-		if (!this.pipeFrom){
-			this.no("Not in a pipe line");
-		}
-	}
-	pipeIn(val){
-		this.out(val);
-		if (isEOF(val)) this.ok();
-	}
-}//»
-const com_deadpipe = class extends Com{//«
-	run(){
-		if (!this.pipeFrom){
-			this.no("not in a pipe line");
-		}
-	}
-	pipeIn(val){
-//	this.out(val);
-log("Dropping", val);
-		if (isEOF(val)) this.ok();
-	}
-}//»
-const com_badret=class extends Com{run(){this.end("SOME STRING RETURNED HAHAHA!?!?!");}}
-const com_noret=class extends Com{run(){this.end();}}
-const com_nullret=class extends Com{run(){this.end(null);}}
-const com_badobj=class extends Com{run(){this.out({});this.no();}}
-const com_badarrobj=class extends Com{run(){this.out([{}]);this.no();}}
-const com_oktypedarr=class extends Com{run(){this.out(new Uint8Array([0,1,2,3,4]));this.ok();}}
-const com_badtypedarr=class extends Com{run(){this.out(new Int32Array([0,1,2,3,4]));this.no();}}
-const com_weirdarr=class extends Com{run(){this.out(["1) This line is a string","2) This line is also a string (but not the next one)",{},"4) This line is a string again!"]);this.ok();}}
-const com_hang = class extends Com{//«
-	run(){
-		this.inf("forever is a loooooong time!!!");
-	}
-}//»
-const com_norun=class extends Com{init(){this.ok(`Hi,this is from the init phase of '${this.name}'`);}}
-const com_echoasync = class extends Com{//«
-	async run(){
-		for (let arg of this.args){
-			this.out(arg);
-			await sleep(500);
-		}
-		this.ok();
-	}
-}//»
-*/
-/*
 const com_ = class extends Com{
 init(){
 }
@@ -1359,288 +1306,6 @@ pipeIn(val){
 
 }/*»*/
 
-
-/*
-const com_help = async(args, opts, _)=>{//«
-	let help = globals.shell_help;
-	const {err, out}=_;
-	if (!help){
-		try{
-			help = (await import("shell_help")).help_text;
-		}catch(e){
-			err("Could not load the help module");
-			return E_ERR;
-		}
-		globals.shell_help = help;
-	}
-	let out = [];
-	let nargs = args.length;
-	if (!args.length) args = ["help"];
-	while (args.length){
-		if (out.length) out.push("");
-		let which = args.shift();
-		if (nargs > 1) out.push(`${which}:`);
-		let txt = help[which];
-		if (!txt) out.push("not found");
-		else out.push(...txt.split("\n"));
-	}
-	return {out, pretty: true};
-};//»
-const com_termlines=(args,opts, _)=>{//«
-	const {term, stdin, out, err} = _;
-	let idstr = args.shift();
-	if (!idstr) {
-		err("No winid given");
-		return E_ERR;
-	}
-	let id = idstr.ppi();
-	if (isNaN(id)) {
-		err("Invalid id: want a positive integer");
-		return E_ERR;
-	}
-	let win = document.getElementById(`win_${id}`);
-	if (!win) {
-		err("No window with that id");
-		return E_ERR;
-	}
-	if (win._winObj.appName!=="Terminal") {
-		err("Not a terminal");
-		return E_ERR;
-	}
-	out( win._winObj.app.lines);
-	return E_SUC;
-};//»
-const com_hi = async(args, o)=>{//«
-	const {term, opts} = o;
-	if (term.ssh_server) return {out: "Ready to serve"};
-	return {err: "Not connected"}
-};//»
-const com_ssh = async(args, o)=>{//«
-//let server_response_cb;
-const server_response=()=>{
-	return new Promise((Y,N)=>{
-		ws.server_response_cb = Y;
-	});
-};
-const open_socket = () => {//«
-return new Promise((Y,N)=>{
-const WS_URL = 'wss://192.168.1.100:4443/';
-cwarn(`Using WS_URL: ${WS_URL}`)
-s = new WebSocket(WS_URL);
-//s = new WebSocket('wss://192.168.0.98:4443/');
-
-s.onclose=()=>{//«
-cwarn("Socket closed!");
-	if (is_client) {
-		delete ws.client;
-		delete term.ssh_client;
-		delete term.ssh_immediate_mode;
-	}
-	else {
-		delete ws.server;
-		delete term.ssh_server;
-		delete term.locked;
-	}
-	term.response("Socket closed");
-	term.response_end();
-};//»
-s.onopen=(e)=>{//«
-	if (is_client) {
-		ws.client = s;
-		term.ssh_client = s;
-		if (opts.i) {
-			term.ssh_immediate_mode = true;
-			s.send("pwd");
-		}
-	}
-	else {
-		ws.server = s;
-		term.ssh_server = s;
-		term.locked = true;
-	}
-	Y();
-};//»
-s.onmessage=async(e)=>{//«
-	let txt = await e.data.text();
-	if (is_server){
-		let out = [];
-		let o = JSON.parse(txt);
-		if (o.com) {
-			let out = [];
-			let err = [];
-//			await term.shell.execute(o.com, {script_out: out});
-			await term.shell.execute(o.com, {ssh_out: out, ssh_err: err});
-			s.send(JSON.stringify({cwd: term.cur_dir, out: out.join("\n"), err: err.join("\n")}));
-		}
-		else if (o.tab){
-			term.handle_tab(o.pos, o.com_arr);
-		}
-		else{
-cwarn("Found non 'com' in server.onmessage...");
-log(o);
-		}
-	}
-	else{
-
-		let o = JSON.parse(txt);
-		if (o.cwd) {
-			term.ssh_cwd = o.cwd;
-			let use_cb;
-			if (ws.server_response_cb) use_cb = ws.server_response_cb;
-			else use_cb = term.response;
-			if (o.err) use_cb(o.err.split("\n"));
-			if (o.out) use_cb(o.out.split("\n"));
-			if (ws.server_response_cb) delete ws.server_response_cb;
-			else term.response_end();
-		}
-		else if (o.chars){
-			let chars = o.chars;
-			for (let c of chars) term.handle_letter_press(c);
-		}
-		else if (o.names){
-			term.response_com_names(o.names);
-		}
-		else{
-cwarn("What in client.onmessage...");
-log(o);
-		}
-	
-	}
-};//»
-
-});
-};//»
-const {term, opts} = o;
-
-let s;
-let is_client = opts.client||opts.c;
-let is_server = opts.server||opts.s;
-let do_close = opts.x;
-let mess;
-if (!globals.ws) globals.ws = {};
-let ws = globals.ws;
-if (!ws) return {err: "Not connected"}
-if (!is_client && opts.i){
-	if (!ws.client) return {err: "Not a client"}
-	term.ssh_immediate_mode = true;
-	return {out: "Immediate mode on"};
-}
-if (do_close) {//«
-	if (ws.client) {
-		ws.client.close();
-		delete ws.client;
-		return {out: "Client closed"};
-	}
-	if (ws.server) {
-		ws.server.close();
-		delete ws.server;
-		return {out: "Server closed"};
-	}
-	return {err: "Nothing to close!"};
-}//»
-if (args.length){
-	if (ws.client) {
-		ws.client.send(args.join(" "));
-		return {out: await server_response()};
-	}
-	return {err: "Nowhere to send to!"};
-}
-if (!(is_client||is_server)) return {err: "Need -s or -c specified"}
-if (is_client) {//«
-	if (ws.client) return {err: "Already a client"}
-	if (ws.server) return {err: "Cannot connect as a client (already a server)"}
-	mess="Client";
-}
-else {
-	if (ws.server) return {err: "Already a server"}
-	if (ws.client) return {err: "Cannot connect as a server (already a client)"}
-	mess="Server";
-}//»
-await open_socket();
-s.send(mess);
-if (is_client) {
-	if (opts.i){
-		await sleep(100);
-		s.send(JSON.stringify({com: "pwd"}));
-		await server_response();
-	}
-	return {out: `The ssh client is up${opts.i?" (immediate mode)":""}`}
-}
-term.response(["The ssh server is up","(terminal locked)"]);
-term.scroll_into_view();
-term.refresh({noCursor: true});
-await hang();
-
-};//»
-const com_meta = async(args, o)=>{//«
-	let {term}=o;
-	let {cwd} = term;
-	let file = args.shift();
-	if (!file) return {err: "No file"}
-	let node = await file.toNode({cwd});
-	if (!node) return {err: `${file}: not found`}
-	let s = await node.text;
-	if (!s) return {err: "No file text"}
-	let rv;
-	try {
-		rv = eval(`(async()=>{${s}})()`);
-	}
-	catch(e){
-cerr(e);
-		return {err: e.message};
-	}
-	return rv;
-};//»
-const com_pokerruns = async(args, o)=>{//«
-	let poker = globals.poker;
-	if (!(poker&&poker.hole_cards)) return;
-	let hands = poker.hole_cards;
-	let text = JSON.stringify(hands);
-	let node = await ("/home/me/.data/poker/all-in_trials.json".toNode());
-	if (node){
-		let rv = await node.setValue(text);
-		if (rv && rv.size){
-			return {out: `Saved: ${rv.size}`}
-		}
-	}
-	return {out: text};
-}//»
-const com_pokerhands = async(args, o)=>{//«
-	let poker = globals.poker;
-	if (!(poker&&poker.hole_cards)) return;
-	let hands = poker.hole_cards;
-	let keys = Object.keys(hands);
-	let arr = [];
-	for (let k of keys){
-		let o = {};
-		o.hand = k;
-		o.val = hands[k];
-		arr.push(o);
-	}
-	let all = [];
-	let sorted = arr.sort((_a,_b)=>{
-		let a = _a.val;
-		let b = _b.val;
-		let aper = (a.w+a.t) / (a.w+a.l+a.t);
-		let bper = (b.w+b.t) / (b.w+b.l+b.t);
-		_a.per = aper;
-		_b.per = bper;
-		if (aper > bper) return -1;
-		if (aper < bper) return 1;
-		return 0;
-	});
-	let len = sorted.length;
-	let out = {};
-	arr = [];
-	sorted.forEach((o, idx)=>{
-		let per = ((len-idx)/len).toFixed(3);
-		out[o.hand] = {rank: per, per: o.per.toFixed(3)};
-		arr.push(`${idx}) ${o.hand} ${o.per.toFixed(3)}`);
-	});
-//log(arr);
-	return {out: JSON.stringify(out)};
-};//»
-*/
 
 //»
 
@@ -7137,8 +6802,8 @@ else Term.ondevreload = ondevreload;
 do_overlay(`Reload terminal: ${!Term.ondevreload}`);
 	}
 else if (sym=="d_CAS"){
-DEBUG = !DEBUG;
-do_overlay(`Debug: ${DEBUG}`);
+//DEBUG = !DEBUG;
+//do_overlay(`Debug: ${DEBUG}`);
 
 }
 else if (sym=="s_CA"){
@@ -7266,7 +6931,6 @@ const init = async(appargs={})=>{
 	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`;
 	if(dev_mode){
 		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-		init_prompt+=`\nDebug: ${DEBUG}`;
 	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
