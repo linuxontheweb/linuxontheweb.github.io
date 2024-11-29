@@ -65,23 +65,25 @@ const get_file_lines_from_args = async(args, term)=>{//«
 			fullterr(`No such file or directory`);
 			continue;
 		}
+		if (node.appName === FOLDER_APP) {
+			fullterr(`is a directory`);
+			continue;
+		}
 		let typ = node.type;
 		if (typ==FS_TYPE) {
 			if (!node.blobId) {
+				fullterr(`no associated blob`);
 				continue;
 			}
 		}
 		else if (typ==MOUNT_TYPE||typ==SHM_TYPE){
 		}
 		else{
-cwarn(`Skipping: ${fullpath} (type=${typ})`);
+			fullterr(`invalid type: '${typ}'`);
+//cwarn(`Skipping: ${fullpath} (type=${typ})`);
 			continue;
 		}
 
-		if (node.appName === FOLDER_APP) {
-			fullterr(`Is a directory`);
-			continue;
-		}
 //		let val = await node.text;
 		let val = await node.getValue({text: true});
 		if (!isStr(val)) {

@@ -2032,6 +2032,7 @@ class NullCommand extends BaseCommand {//«
 	}
 }//»
 /*»*/
+
 /*«Var*/
 const EOF_Type = 1;
 const OPERATOR_CHARS=[//«
@@ -2115,6 +2116,7 @@ for (let j = 0; j < arr.length; j++) {
 return arr;
 
 };//»
+
 const ds_single_quote_escapes = tok=>{//«
 let wrd = tok.word;
 if (!wrd){
@@ -3380,3 +3382,384 @@ of this file, given my interest in restarting shell development over and over an
 over and over... . My main interest is to continue refactoring into more and more
 understandable (i.e. objective, rather than algorithmic) constructs.
 »*/
+//«DevShell
+const DevShell = (()=>{
+
+//«Var
+
+//Maybe quote these (depending on context)
+// *  ?  [  ]  ^  -  !  #  ~  =  %  {  ,  }
+
+//»
+
+class Oper{//«
+	#chars;
+	constructor(){
+		this.#chars="";
+	}
+	add(ch){
+		let str = this.#chars + ch;
+		if (OPERATOR_TOKS.includes(str)){
+			this.#chars = str;
+			return true;
+		}
+		return false;
+	}
+	get chars(){
+		return this.#chars;
+	}
+	get isRedir(){
+		return this.#chars[0]===">"|| this.#chars[0]==="<";
+	}
+
+}//»
+
+class Word{//«
+	#arr;
+	constructor(){
+		this.#arr=[];
+	}
+	add(val){
+		this.#arr.push(val);
+	}
+}//»
+
+//Return an array of Word's and Oper's
+//There might be a start_i and a stopping condition (an end quote or paren)
+
+//If 'typ' is undefined, we are in "free space"
+//Otherwise, it is one of:
+/*
+- ' (no escaping)
+- $'
+- "
+- $(
+- ` (DO NOT flat scan for the final '`'. Set off a tokenizer with a halt_on_bq flag)
+- ${
+*/
+const tokenize = (arr, start_i, typ) => {//«
+
+let tok = null;//The current token
+let out = [];//The array of tokens
+
+for (let i=start_i; i < arr.length; i++) {
+
+let ch=arr[i];
+let ch1=arr[i+1];
+
+/*«If the end of input is recognized, the current token (if any) shall be
+delimited.
+»*/
+
+/*«If the previous character was used as part of an operator and the current
+character is not quoted and can be used with the previous characters to form an
+operator, it shall be used as part of that (operator) token.
+»*/
+
+if (tok instanceof Oper && tok.add(ch)){
+	continue;
+}
+
+/*«If the previous character was used as part of an operator and the current
+character cannot be used with the previous characters to form an operator, the
+operator containing the previous character shall be delimited.
+»*/
+
+if (tok instanceof Oper){
+	out.push(tok);
+	tok = null;
+}
+
+/*«If the current character is an unquoted <backslash>, single-quote, or
+double-quote or is the first character of an unquoted <dollar-sign>
+single-quote sequence, it shall affect quoting for subsequent characters up to
+the end of the quoted text. The rules for quoting are as described in 2.2
+Quoting . During token recognition no substitutions shall be actually
+performed, and the result token shall contain exactly the characters that
+appear in the input unmodified, including any embedded or enclosing quotes or
+substitution operators, between the start and the end of the quoted text. The
+token shall not be delimited by the end of the quoted field.
+»*/
+if (ch==="\\") {
+/*
+
+By "escaping", we are just jumping over this character, and the either adding the next one to
+the current word or starting a new word.
+
+in free space:
+  -Escape if an operator, quote or ds+[ ' ( { START_NAME_CHARS SPECIAL_SYMBOLS DECIMAL_CHARS_1_to_9 ]
+  -Otherwise, skip this char
+type==='"':
+  -Escape if a '"'
+*/
+
+}
+else if (ch==="'") {
+//Scan for next "'" (no escapes)
+}
+else if (ch ==='"') {
+// tokenize(arr, i+1, '"')
+//	 - No "$'" will be done
+}
+else if(ch==="$" && ch1==="'"){
+//Flat scan for next "'" (with escapes)
+
+}
+/*«If the current character is an unquoted '$' or '`', the shell shall identify
+the start of any candidates for parameter expansion ( 2.6.2 Parameter Expansion
+), command substitution ( 2.6.3 Command Substitution ), or arithmetic expansion
+( 2.6.4 Arithmetic Expansion ) from their introductory unquoted character
+sequences: '$' or "${", "$(" or '`', and "$((", respectively. The shell shall
+read sufficient input to determine the end of the unit to be expanded (as
+explained in the cited sections). While processing the characters, if instances
+of expansions or quoting are found nested within the substitution, the shell
+shall recursively process them in the manner specified for the construct that
+is found. For "$(" and '`' only, if instances of io_here tokens are found
+nested within the substitution, they shall be parsed according to the rules of
+2.7.4 Here-Document ; if the terminating ')' or '`' of the substitution occurs
+before the NEWLINE token marking the start of the here-document, the behavior
+is unspecified. The characters found from the beginning of the substitution to
+its end, allowing for any recursion necessary to recognize embedded constructs,
+shall be included unmodified in the result token, including any embedded or
+enclosing substitution operators or quotes. The token shall not be delimited by
+the end of the substitution.
+»*/
+else if (ch==="$" && ch1==="(") {
+// tokenize(arr, i+2, '$(')
+
+}
+else if (ch==="$" && ch1==="{") {
+/*
+Scan forward for a valid parameter (or #parameter), and the following possible chars
+before doing: tokenize(arr, some_i, "${")
+
+:- := :? :+ - = ? + % %% # ##
+
+*/
+
+}
+else if (ch==="$" && START_NAME_CHARS.includes(ch[i+1])) {
+//Param sub: scan forward until non-ANY_NAME_CHARS
+}
+else if (ch==="$" && SPECIAL_SYMBOLS.includes(ch[i+1])) {
+//Symbol sub: Just grab this next char
+}
+else if (ch==="$" && DECIMAL_CHARS_1_to_9.includes(ch[i+1])) {
+//Arg sub: Just grab this next char
+}
+else if (ch==="`") {
+//Flat scan forward for the first unescaped "`"
+}
+/*«If the current character is not quoted and can be used as the first character
+of a new operator, the current token (if any) shall be delimited. The current
+character shall be used as the beginning of the next (operator) token.
+»*/
+else if (START_OPERATOR_CHARS.includes(ch)){
+	if (tok) {
+		out.push(tok);
+	}
+	tok = new Oper();
+	if (!tok.add(ch)){
+throw new Error(`Could not start the operator tok with: '${ch}' !?!?!?`);
+	}
+}
+/*«If the current character is an unquoted <blank>, any token containing the
+previous character is delimited and the current character shall be discarded.
+»*/
+else if (ch===" " || ch==="\t"){
+	if (tok){
+		out.push(tok);
+		tok = null;
+	}
+	continue;
+}
+/*«If the previous character was part of a word, the current character shall be
+appended to that word.
+»*/
+else if (tok instanceof Word){
+	tok.add(ch);
+}
+
+/*«If the current character is a '#', it and all subsequent characters up to, but
+excluding, the next <newline> shall be discarded as a comment. The <newline>
+that ends the line is not considered part of the comment.
+»*/
+else if (ch==="#"){
+//THis *would be* the start of a new word (since that is the default, else condition)
+	while (arr[i+1] && arr[i+1]!=="\n") i++;
+}
+
+//The current character is used as the start of a new word.
+	else{
+		tok = new Word();
+		tok.add(ch);
+	}
+}
+
+return out;
+
+};//»
+
+return function(term){
+
+//this.cancelled_time = 0;
+
+this.cancelled = false;
+
+this.execute = async(command_str, opts={})=>{
+
+let started_time = (new Date).getTime();
+
+const { interactive } = opts;
+
+const sherr = mess => {//«
+	term.response(`sh: ${mess}`, {isErr: true});
+	if (!scriptName) term.response_end();
+};//»
+
+let tokens = tokenize(command_str.split(""), 0);
+if (isStr(tokens)) {
+	sherr(tokens);
+	return;
+}
+
+if (DEBUG){
+jlog(tokens);
+}
+//log(command_str);
+
+term.response_end();
+
+};
+
+this.cancel=()=>{
+	this.cancelled = true;
+	let pipe = this.pipeline;
+	if (!pipe) return;
+	for (let com of pipe) com.cancel();
+};
+
+};
+})();
+/*»*/
+//Expansions/Redirections«
+
+//1) Environment variable substitution
+//2) File globbing '*', '?' and character ranges [a-zA-Z0-9]
+//3) Curly brace expansion:
+//
+//$ echo file{0..3}.txt
+//file0.txt file1.txt file2.txt file3.txt
+		rv = await all_expansions(arr, term, {script_name, script_args});
+		if (this.cancelled) return;
+		if (rv){
+			term.response(rv, {isErr: true});
+		}
+//		let inpipe = pipelist.length;
+//BBBBBBBBB
+//- Turn quote objects into word objects
+//- Single quotes that start with '$' look for internal escapes (currently only newline)
+//- Backquotes are executed and replaced with the output
+		for (let i=0; i < arr.length; i++){//«
+			let tok = arr[i];
+			let typ = tok.t;
+			let val = tok[typ];
+			if (typ==="quote") { 
+				let typ = tok.quote_t;
+				let ds = tok['$'];
+				let outstr='';
+				for (let ch of val){
+					if (isObj(ch)&&ch.t=="esc"){
+						if (ch.esc=="n"&&typ=="'"&&ds) outstr+="\n";
+						else outstr+=ch.esc;
+					}
+					else outstr+=ch;
+				}
+				val = outstr;
+				if (typ=="\x60") {
+					let out=[];
+//DJUYEKLMI
+					await this.execute(val, {subLines: out});
+					if (this.cancelled) return;
+//jlog(out);
+					if (!out.length) out = [""];
+					let did_splice = false;
+					for (let wrd of out){
+						if (!did_splice) {
+							arr.splice(i, 1, " ");
+							did_splice = true;
+						}
+						arr.splice(i, 0, {t: "word", word: wrd}, " ");
+						i+=2;
+					}
+				}
+				else arr[i]={t:"word", word: val};
+			}
+		}//»
+
+//All sequences of non-whitespace separated quotes and words are concatenated:
+//~$ echo "q 1"A"q 2""q 3"B   "q 4"C"q       5"D"q 6"
+//q 1Aq 2q 3B q 4Cq       5Dq 6
+		for (let i=0; i < arr.length-1; i++){//«
+			let tok0 = arr[i];
+			let tok1 = arr[i+1];
+			let tok0word = tok0.word||tok0.esc;
+			let tok1word = tok1.word||tok1.esc;
+			if (tok0word && tok1word){
+//				arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`, from_quote: true}
+				arr[i] = {t: "word", word: `${tok0word}${tok1word}`};
+				arr.splice(i+1, 1);
+				i--;
+			}
+		}//»
+
+//Concatenate all sequences of escaped spaces and words
+// ~$ touch this\ is\ cool.txt
+		for (let i=0; i < arr.length-1; i++){//«
+			let tok0 = arr[i];
+			let tok1 = arr[i+1];
+			if (tok0.esc === " " || tok1.esc === " "){
+				arr[i] = {t: "word", word: `${tok0.word||" "}${tok1.word||" "}`, esc: tok1.esc}
+				arr.splice(i+1, 1);
+				i--;
+			}
+		}//»
+
+//- Create redirection objects
+//- Objects are converted into strings ({t:"word", word: "blah"} -> "blah")
+		for (let i=0; i < arr.length; i++){//«
+			let tok = arr[i];
+			let typ = tok.t;
+			let val = tok[typ];
+			if (tok===" "){
+				continue;
+			}
+			if (typ==="r_op"){
+				let rop = tok.r_op;
+				if (!(rop==">"||rop==">>")) {
+					return terr(`sh: unsupported operator: '${tok.r_op}'`);
+				}
+				let tok2 = arr[i+1];
+				if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
+				if (tok2.t == "quote") tok2={t: "word", word: tok2.quote.join("")}
+				if (tok2==" ") {
+					i++;
+					tok2 = arr[i+1];
+				}
+				if (!(tok2 && tok2.t==="word")) return terr(`sh: invalid or missing redirection operand`);
+				arr.splice(i+1, 1);
+				val = null;
+				redir = [tok.r_op, tok2.word];
+			}
+			if (val) {
+				args.push(val);
+			}
+		}//»
+
+		arr = args;
+
+//Set environment variables (exports to terminal's environment if there is nothing left)
+		rv = add_to_env(arr, env, {term});
+		if (rv.length) term.response(rv, {isErr: true});
+		if (arr[0]==" ") arr.shift();
+//»

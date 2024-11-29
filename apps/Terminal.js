@@ -52,7 +52,10 @@ let DEBUG = false;
 let USE_ONDEVRELOAD = false;
 
 //let USE_DEVSHELL = true;
-let USE_DEVSHELL = false;
+//let USE_DEVSHELL = false;
+let USE_DEV_PARSER = true;
+//let USE_DEV_PARSER = false;
+let parser;
 //»
 //Imports«
 
@@ -131,6 +134,72 @@ if (dev_mode){
 //»
 
 //Var«
+
+const EOF_Type = 1;
+const OPERATOR_CHARS=[//«
+"|",
+"&",
+";",
+"<",
+">",
+"(",
+")",
+];//»
+const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
+const UNSUPPORTED_OPERATOR_TOKS=[/*«*/
+	'&',
+	'<',
+	';;',
+	';&',
+	'>&',
+	'>|',
+	'<&',
+	'<<',
+	'<>',
+	'<<-',
+	'<<<'
+];/*»*/
+const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
+//const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
+
+const INVSUB="invalid/unsupported substitution";
+const START_NAME_CHARS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "_"];
+//const START_NAME_CHARS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","_"];
+const DIGIT_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
+const DECIMAL_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
+const DECIMAL_CHARS_0_to_9=["0", "1","2","3","4","5","6","7","8","9"];
+const ANY_DIGIT_CHARS=["0", "1","2","3","4","5","6","7","8","9"];
+const ANY_NAME_CHARS = [...START_NAME_CHARS, ...ANY_DIGIT_CHARS];
+//const ANY_NAME_CHARS = [...START_NAME_CHARS, ...DECIMAL_CHARS_0_to_9];
+const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
+
+//const START_OPERATOR_CHARS=[ "|","&",";","<",">","(",")",];
+//const OPERATOR_TOKS=[...START_OPERATOR_CHARS, '&&','||',';;',';&','>&','>>','>|','<&','<<','<>','<<-','<<<',];
+
+const OPERATOR_TOKS=[//«
+'&&',
+'||',
+';;',
+';&',
+'>&',
+'>>',
+'>|',
+'<&',
+'<<',
+'<>',
+'<<-',
+'<<<',
+];//»
+//Let's allow '<' and '<<<' (and maybe heredocs in scripts)
+const UNSUPPORTED_SCRIPT_OPERATOR_TOKS=[ '&',';;',';&','>&','>|','<&','<>'];
+const UNSUPPORTED_INTERACTIVE_OPERATOR_TOKS=[...UNSUPPORTED_SCRIPT_OPERATOR_TOKS,"<<","<<-"];
+
+const HEX_CHARS=[ "a","A","b","B","c","C","d","D","e","E","f","F",...DECIMAL_CHARS_0_to_9 ];
+
+const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
+const shell_metas = [" ", "\t", "|", "&", ";", "(", ")", "<", ">"];
+const shell_c_op = [";;&", "||", "&&", ";;", ";&", "|&", "((", "&", ";", "|", "(", ")"];
+const shell_r_op = ["<<<", "&>>", "<>", ">>", "<<", "<&", "&>", ">&", ">", "<"];
 
 const NO_SET_ENV_VARS = ["USER"];
 
@@ -674,7 +743,7 @@ const com_pipe = class extends Com{//«
 const com_deadpipe = class extends Com{/*«*/
 	run(){
 		if (!this.pipeFrom){
-			this.no("Not in a pipe line");
+			this.no("not in a pipe line");
 		}
 	}
 	pipeIn(val){
@@ -748,12 +817,12 @@ async run(){//«
 		if (recur) recur_dirs = [];
 		if (!node) {
 			dir_was_last = false;
-			err(`${regpath}: No such file or directory`);
+			err(`${regpath}: no such file or directory`);
 			return;
 		}
 		if (node.appName !== FOLDER_APP) {
 			if (wants_dir) {
-				err(`${regpath}: Not a directory`);
+				err(`${regpath}: not a directory`);
 				return;
 			}
 			if (dir_was_last) out.push("");
@@ -842,7 +911,7 @@ const com_env = class extends Com{/*«*/
 run(){
 	let {term, args}=this; 
 	if (args.length) {
-		return this.no("Arguments are not supported");
+		return this.no("arguments are not supported");
 	}
 	let env = term.ENV;
 	let keys = env._keys;
@@ -862,7 +931,7 @@ const com_parse = class extends Com{/*«*/
 		while (f = this.args.shift()){
 			let node = await f.toNode(this.term);
 			if (!node) {
-				this.err(`Not found: ${f}`);
+				this.err(`not found: ${f}`);
 				this.numErrors++;
 				continue;
 			}
@@ -922,7 +991,7 @@ const com_true = class extends Com{/*«*/
 		let mess;
 		if (this.args.length) mess = this.args.join(" ");
 		else mess = "I'm true";
-		this.ok(`true: ${mess}`);
+		this.ok(mess);
 	}
 }/*»*/
 const com_false = class extends Com{/*«*/
@@ -930,7 +999,7 @@ const com_false = class extends Com{/*«*/
 		let mess;
 		if (this.args.length) mess = this.args.join(" ");
 		else mess = "I'm false";
-		this.no(`false: ${mess}`);
+		this.no(mess);
 	}
 }/*»*/
 const com_cd = class extends Com{/*«*/
@@ -941,14 +1010,14 @@ init(){
 }
 async run(){
 	let {args, term} = this;
-	if (args.length > 1) return this.no("cd: too many arguments");
+	if (args.length > 1) return this.no("too many arguments");
 	let res;
 	let got_dir;
 	let saypath = args[0];
 	let regpath = normPath(saypath, term.cur_dir);
 	let ret = await fsapi.pathToNode(regpath);
-	if (!ret) return this.no(`${saypath}: No such file or directory`);
-	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: Not a directory`);
+	if (!ret) return this.no(`${saypath}: no such file or directory`);
+	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: not a directory`);
 	got_dir = regpath;
 	if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
 	term.cur_dir = got_dir;
@@ -964,7 +1033,7 @@ async run(){
 	let list = await util.getList("/site/apps/");
 	if (!args.length) {
 		if (!list){
-			return this.no("app: could not get the app list");
+			return this.no("could not get the app list");
 		}
 		out(list);
 		return this.ok();
@@ -972,11 +1041,11 @@ async run(){
 	let have_error=false;
 	for (let appname of args){
 		if (list && !list.includes(appname)) {
-			_err(`app: ${appname}: not found`);
+			_err(`${appname}: not found`);
 			continue;
 		}
 		let win = await Desk.api.openApp(appname);
-		if (!win) _err(`app: ${appname}: not found`);
+		if (!win) _err(`${appname}: not found`);
 	}
 	have_error?this.no():this.ok();
 }
@@ -1011,8 +1080,8 @@ const com_libs = class extends Com{/*«*/
 }/*»*/
 const com_lib = class extends Com{//«
 init(){
-	if (!this.args.length) return this.no("lib: no lib given");
-	if (this.args.length > 1) return this.no("lib: too many arguments");
+	if (!this.args.length) return this.no("no lib given");
+	if (this.args.length > 1) return this.no("too many arguments");
 }
 async run(){
 	if (this.killed) return;
@@ -1034,7 +1103,7 @@ async run(){
 		this.ok();
 	}catch(e){
 cerr(e);
-		this.no(`The library: '${hold}' could not be loaded!`);
+		this.no(`the library: '${hold}' could not be loaded!`);
 	}
 
 }
@@ -1042,7 +1111,7 @@ cerr(e);
 const com_open = class extends Com{//«
 init(){
 	if (!this.args.length) {
-		this.no(`open: missing operand`);
+		this.no(`missing operand`);
 	}
 }
 async run(){
@@ -1074,7 +1143,7 @@ const com_epoch = class extends Com{/*«*/
 const com_getch = class extends Com{//«
 
 async run(){
-	if (this.args.length) return this.no("getch: not expecting arguments");
+	if (this.args.length) return this.no("not expecting arguments");
 	let ch = await this.term.getch("");
 	if (!ch) return this.no("no character returned");
 	this.out(`Got: ${ch} (code: ${ch.charCodeAt()})`);
@@ -1104,7 +1173,7 @@ const com_curcol = class extends Com{/*«*/
 			this.ok();
 		}
 		else{
-			this.no(`curcol: Missing or invalid arg`);
+			this.no(`missing or invalid arg`);
 		}
 	}
 }/*»*/
@@ -1120,7 +1189,7 @@ async run(){
 	};
 	let use_prompt = opts.prompt;
 	if (use_prompt && use_prompt.length > term.w - 3){
-		this.no(`read: the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
+		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
 		return;
 	}
 	let ln = await term.read_line(use_prompt);
@@ -1149,7 +1218,7 @@ const com_math = class extends Com{//«
 #math;
 async init(){
 	if (!this.args.length && !this.pipeFrom) {
-		return this.no("math: nothing to do");
+		return this.no("nothing to do");
 	}
 	if (!this.args.length){
 		this.#lines=[];
@@ -1171,7 +1240,7 @@ Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/ma
 
 »*/
 	if (!await util.loadMod("util.math")) {
-		return no("Could not load the math module");
+		return no("could not load the math module");
 	}
     this.#math = new NS.mods["util.math"]();
 }
@@ -1257,7 +1326,7 @@ const com_inspect = class extends Com{/*«*/
 async init(){
 	if (!this.pipeFrom) return this.no("expecting piped input");
 	if (!await util.loadMod("term.menu")) {
-		this.no("Could not load the editor module");
+		this.no("could not load the editor module");
 		return;
 	}
 	let menu = new NS.mods["term.menu"](this.term);
@@ -1747,17 +1816,1078 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 //»
 
-//«Shell
-const Shell = (()=>{
 
-//Parse«
+const DevParser=(()=>{//«
 
-//Var«
-const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
-const shell_metas = [" ", "\t", "|", "&", ";", "(", ")", "<", ">"];
-const shell_c_op = [";;&", "||", "&&", ";;", ";&", "|&", "((", "&", ";", "|", "(", ")"];
-const shell_r_op = ["<<<", "&>>", "<>", ">>", "<<", "<&", "&>", ">&", ">", "<"];
+/*«Var*/
+
+/*»*/
+//Util«
+
+const escapes = arr => {//«
+
+let in_single = false;
+for (let j = 0; j < arr.length; j++) {
+	let tok = arr[j];
+	if (tok === "\\") {
+		if (!in_single && arr[j+1]) {
+			let obj = new String(arr[j+1]);
+			obj.escaped = true;
+			obj.toString=function(){
+				return "\\"+this.valueOf();
+			};
+			arr[j] = obj;
+			arr.splice(j + 1, 1);
+		}
+	}
+	else if(tok==="'") {
+		if (in_single) in_single = false;
+		else if (j>0 && arr[j-1] !== "$") in_single = true;
+	}
+}
+return arr;
+
+};//»
+const ds_single_quote_escapes = tok=>{//«
+let wrd = tok.word;
+if (!wrd){
+cwarn("WHAT THE HELL IS HERE????");
+log(tok);
+return tok;
+}
+let arr = wrd;
+let out = [];
+let in_ds_single = false;
+
+for (let i=0; i < arr.length; i++){
+let ch = arr[i];
+let next = arr[i+1];
+if (!in_ds_single&&ch==="$"&&next==="'"){
+	in_ds_single=true;
+//	out.push("$'");
+	out.push("$","'");
+	i++;
+}
+else if (in_ds_single){
+//log("INDSSINGLE");
+	if (ch.escaped){
+//log("CH.ESCAPED", ch);
+	let c;
+//switch(ch){/*«*/
+
+//\" yields a <quotation-mark> (double-quote) character, but note that
+//<quotation-mark> can be included unescaped.
+if  (ch=='"') {c='"';}
+//\' yields an <apostrophe> (single-quote) character.
+//else if (ch=="'") { c="'";}
+
+//\\ yields a <backslash> character.
+else if (ch=='\\') { c='\\';}
+
+//\a yields an <alert> character.
+else if (ch=='a') { c='\x07';}
+
+//\b yields a <backspace> character.
+else if (ch=='b') { c='\x08';}
+
+//\e yields an <ESC> character.
+else if (ch=='e') { c='\x1b';}
+
+//\f yields a <form-feed> character.
+else if (ch=='f') { c='\x0c';}
+
+//\n yields a <newline> character.
+else if (ch=='n') { c='\n';}
+
+//\r yields a <carriage-return> character.
+else if (ch=='r') { c='\x0d';}
+
+//\t yields a <tab> character.
+else if (ch=='t') { c='\t';}
+
+//\v yields a <vertical-tab> character.
+else if (ch=='v') { c='\x0b';}
+
+else if (ch=='x'){/*«*/
+//\xXX yields the byte whose value is the hexadecimal value XX (one or more hexadecimal digits). If more than two hexadecimal digits follow \x, the results are unspecified.
+	if (next&&next.match(/[0-9a-fA-F]/)){
+	let next2 = arr[i+2];
+		if (next2 &&next2.match(/[0-9a-fA-F]/)){
+			c = eval( '"\\x' + next + next2 + '"' );
+			i+=2;
+		}
+		else{
+			c = eval( '"\\x0' + next + '"' );
+			i++;
+		}
+	}
+}/*»*/
+
+//\ddd yields the byte whose value is the octal value ddd (one to three octal digits).
+else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){/*«*/
+	let s = ch;
+//Array.includes tests for strict equality, so escaped chars will not match...
+	if (next&&OCTAL_CHARS.includes(next)){
+		s+=next;
+		let next2 = arr[i+2];
+		if (next2&&OCTAL_CHARS.includes(next2)){
+			s+=next2;
+			i+=2;
+		}
+		else i++;
+		c = eval( '"\\x' + (parseInt(s, 8).toString(16).padStart(2, "0")) + '"' );
+	}
+}/*»*/
+
+//The behavior of an unescaped <backslash> immediately followed by any other
+//character, including <newline>, is unspecified.
+
+//\cX yields the control character listed in the Value column of Values for
+//cpio c_mode Field in the OPERANDS section of the stty utility when X is one
+//of the characters listed in the ^c column of the same table, except that \c\\
+//yields the <FS> control character since the <backslash> character has to be
+//escaped.
+
+//}/*»*/
+	if (c) out.push(c);
+	else out.push(ch);
+	}
+	else if (ch==="'"){
+		in_ds_single = false;
+		out.push("'");
+	}
+	else{
+		out.push(ch);
+	}
+}
+else {
+//	if (ch.escaped) out.push("\\"+ch);
+//	else out.push(ch);
+	out.push(ch);
+}
+}
+
+return {t:"word",word: out};
+};//»
+
+const curly_expansion = (arr, from_pos) => {//«
+//log("FROM", from_pos);
+let ind1 = arr.indexOf("{", from_pos);
+let ind2 = arr.lastIndexOf("}");
+
+if (ind1 >= 0 && ind2 > ind1) {//«
+//We know these aren't escaped, but they *might* be inside of quotes
+let qtyp=null;
+let curly_arr;
+let start_i;
+let final_i;
+let have_comma = false;
+let have_dot = false;
+let have_quote = false;
+let have_escape = false;
+let comma_arr;
+let num_open_curlies = 0;
+for (let i=from_pos; i < arr.length; i++){//«
+
+let ch = arr[i];
+if (!qtyp){//«
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		have_quote = true;
+	}
+	else if (ch==="{" && (i===0 || arr[i-1] !== "$")){
+		num_open_curlies++;
+		if (num_open_curlies === 1 && !curly_arr) {
+			start_i = i;
+			curly_arr = [];
+			continue;
+		}
+	}
+	else if (ch==="}"){
+		num_open_curlies--;
+		if (num_open_curlies === 0 && curly_arr){
+			final_i =  i;
+			break;
+		}
+	}
+}//»
+else if (qtyp===ch) qtyp=null;
+
+if (curly_arr) {//«
+	if (!qtyp){
+		if (ch===",") {
+			have_comma = true;
+			if (num_open_curlies===1){
+				if (!comma_arr) comma_arr = [];
+				comma_arr.push([...curly_arr]);
+				curly_arr = [];
+				continue;
+			}
+		}
+		else {
+			if (!have_dot) have_dot = ch === ".";
+			if (!have_escape) have_escape = ch.escaped;
+		}
+	}
+	curly_arr.push(ch);
+}//»
+
+}//»
+
+if (comma_arr){
+	comma_arr.push([...curly_arr]);
+}
+
+if (!final_i){//«
+	if (Number.isFinite(start_i)){
+		if (start_i+2 < arr.length){
+			return curly_expansion(arr, start_i+1);
+		}
+		else{
+//cwarn("GIVING UP!");
+		}
+	}
+	else{
+//log("NOT OPENED");
+	}
+	return arr;
+}//»
+else{//«
+
+let pre = arr.slice(0, start_i);
+let post = arr.slice(final_i+1);
+if (comma_arr){//«
+	let words=[];
+	for (let comarr of comma_arr){
+		words.push(pre.slice().concat(comarr.slice()).concat(post.slice()));
+	}
+	return words;
+}//»
+else if (have_dot&&!have_quote&&!have_escape){//«
+//The dot pattern is a very strict, very literal pattern
+let cstr = curly_arr.join("");
+let marr;
+let from, to, inc, is_alpha;
+
+let min_wid=0;
+if (marr = cstr.match(/^([-+]?\d+)\.\.([-+]?\d+)(\.\.([-+]?\d+))?$/)){//«
+//cwarn("NUMS",marr[1], marr[2], marr[4]);
+
+//We're supposed to look for '0' padding on the from/to
+	let min_from_wid=0;
+	let from_str = marr[1].replace(/^[-+]?/,"");
+	if (from_str.match(/^(0+)/)) min_from_wid = from_str.length;
+
+	let min_to_wid=0;
+	let to_str = marr[2].replace(/^[-+]?/,"");
+	if (to_str.match(/^(0+)/)) min_to_wid = to_str.length;
+
+	if (min_from_wid > min_to_wid) min_wid = min_from_wid;
+	else min_wid = min_to_wid;
+
+	from = parseInt(marr[1]);
+	to = parseInt(marr[2]);
+	inc = marr[4]?parseInt(marr[4]):1;
+}
+else if (marr = cstr.match(/^([a-z])\.\.([a-z])(\.\.([-+]?\d+))?$/i)){
+//cwarn("ALPHA",marr[1], marr[2], marr[4]);
+	is_alpha = true;
+	from = marr[1].charCodeAt();
+	to = marr[2].charCodeAt();
+	inc = marr[4]?parseInt(marr[4]):1;
+}
+else{
+	return arr;
+}//»
+
+inc = Math.abs(inc);
+
+let vals=[];
+let iter=0;
+//log(from, to);
+if (from > to){
+	for (let i=from; i >= to; i-=inc){
+	iter++;
+	if (iter > 10000) throw new Error("INFINITE LOOP AFTER 10000 iters????");
+		if (is_alpha) vals.push(String.fromCharCode(i));
+		else vals.push(((i+"").padStart(min_wid, "0")));
+	}
+}
+else {
+	for (let i=from; i <= to; i+=inc){
+	iter++;
+	if (iter > 10000) throw new Error("INFINITE LOOP AFTER 10000 iters????");
+		if (is_alpha) vals.push(String.fromCharCode(i));
+		else vals.push(((i+"").padStart(min_wid, "0")));
+	}
+}
+
+let words = [];
+for (let val of vals){
+	words.push(pre.slice().concat([val]).concat(post.slice()));
+}
+return words;
+
+}//»
+else{
+//log("NOTHING");
+return arr;
+}
+}//»
+
+}//»
+else{//«
+	if (ind1<0 && ind2 < 0) {
+//log("NO CURLIES");
+	}
+	else if (ind1 >= 0 && ind2 >= 0){
+//log("BOTH CURLIES DETECTED IN WRONG POSITOIN");
+	}
+	else if (ind1 >= 0) {
+//log("OPEN CURLY ONLY");
+	}
+	else if (ind2 >= 0){
+//log("CLOSE CURLY ONLY");
+	}
+	return arr;
+}//»
+
+}//»
+const tilde_expansion = tok => {//«
+//log("TILDE", tok);
+//Just expand everything after NAME=
+//NAME=...
+//let pref = tok
+let wrdarr = tok.word;
+let wrdstr = tok.word.join("");
+//cwarn(`CHECK: <${wrdstr}>`);
+let marr;
+if (marr = wrdstr.match(/^([_a-zA-Z][_a-zA-Z0-9]*=)/)){
+//If this is a valid shell variable assignment, expand lone '~' or all '~/' after 
+//the first '=' and every ':' with $HOME
+let from = marr[1].length;
+let start = tok.word.slice(0, from);
+let arr = tok.word.slice(from);
+//cwarn("EXPAND LONE '~' or initial '~/' and every one after a ':'");
+//log(arr);
+if (!arr.length) return tok;
+if (arr.length===1&&arr[0]==="~"){
+	return {t: "word",word: [...start, ...globals.HOME_PATH]};
+}
+let out=[];
+for (let i=0; i < arr.length; i++){/*«*/
+	if (i===0&&arr[0]==="~"&&arr[1]=="/"){
+		out.push(...globals.HOME_PATH, arr[1]);
+		i++;
+	}
+	else if (arr[i]===":" && arr[i+1]==="~"){
+		if (!arr[i+2]){
+			out.push(":", ...globals.HOME_PATH);
+			return {t: "word",word: [...start,...out]};
+		}
+		else if (arr[i+2]=="/"){
+			out.push(":", ...globals.HOME_PATH,"/");
+			i+=2;
+		}
+		else{
+			out.push(arr[i], arr[i+1]);
+			i++;
+		}
+	}
+	else {
+		out.push(arr[i]);
+	}
+}/*»*/
+return {t: "word",word: [...start,...out]};
+}
+else if (wrdstr==="~") {
+//Expand '~' or the leading '~/'
+//cwarn("EXPAND LONE '~'");
+//log(tok.word);
+tok.word=[...globals.HOME_PATH];
+}
+else if (wrdstr.match(/^~\x2f/)){
+tok.word=[...globals.HOME_PATH, ...wrdarr.slice(1)];
+//cwarn("EXPAND initial '~/'");
+}
+return tok;
+};/*»*/
+const parameter_expansion = tok => {//«
+//We will also need env, script_name, and script_args passed in here
+/*«
+
+A "parameter" is a NAME or a SYMBOL, as described below.
+
+We are looking for one of:
+
+$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
+@: positional parameters starting from 1, and something about field splitting
+*: Same as above, with something else about field splitting
+#: Number of positional parameters (minus the 0th)
+?: Most recent exit code
+-: Current options flag
+$: pid of the shell
+!: pid of most recent '&' statement
+0: name of shell or shell script
+
+All DIGIT's (other than 0) are the current (1-based) positional parameters
+
+These expands in anything other than single quotes
+
+We can also easily support '${#NAME}', since this just gives the length of the
+string of the variable, NAME.
+
+I'm not sure how to handle:
+$ DQUOTE='"'
+$ echo "$DQUOTE"
+
+Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
+
+»*/
+/*
+
+Should we not put everything inside $'...', and then escape ALL
+single quotes that are in the replacement value??? Otherwise, there can't be
+escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
+
+So, if we do:
+PARAM_WITH_SINGLE_QUOTES="...'//..."
+
+echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
+=> BLAH$'...\'//...'BLAH
+
+*/
+let word = tok.word;
+let qtyp;
+for (let i=0; i < word.length; i++){
+
+let ch = word[i];
+if (!qtyp){
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		continue;
+	}
+	else{
+//Unquoted stuff
+	}
+}
+else if (qtyp===ch) {
+	qtyp=null;
+	continue;
+}
+else if (qtyp!=='"') continue;
+
+//We are unquoted or in double quotes
+
+if (ch==="$"){/*«*/
+
+const do_name_sub=(name)=>{//«
+cwarn("NAME", name, start_i, end_i);
+
+let env={
+choint:"1",
+UB:"Far   in   the   harrrr!!!"
+};
+let diff = end_i - start_i;
+let val = env[name]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+
+/*
+for (let i=0; i < val.length; i++){
+	if (val[i]==="'"){
+		let s = new String("'");
+		s.escaped = true;
+		s.toString=function(){
+			return "\\"+this.valueOf();
+		};
+		val[i]=s;
+	}
+}
+//word.splice(start_i, end_i-start_i+1, "$", "'", ...val,"'");
+
+word.splice(start_i, end_i-start_i+4, "$", "'", ...val,"'");
+i = end_i + (name.length - (val.length+3));
+
+*/
+
+i = end_i + (name.length - val.length);
+
+};/*»*/
+const do_arg_sub=(num)=>{//«
+cwarn("ARG", num, start_i, end_i);
+};/*»*/
+const do_sym_sub=(sym)=>{//«
+cwarn("SYM", sym, start_i, end_i);
+};/*»*/
+const BADSUB=(arg, next)=>{return `bad substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
+
+	let next = word[i+1];
+	if (!next) continue;
+	let start_i = i;
+	let end_i;
+	if (next==="{") {/*«*/
+		i++;
+//If no next one or the next one is a "}", barf INVSUB
+//If the next one is a special symbol, there must be a "}" immediately following it
+//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
+//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
+//    ANY_NAME_CHARS, with a terminating "}".
+		next = word[i+1];
+		if (!next) return "bad substitution: '${<END>'";
+		else if (next==="}") return "bad substitution: '${}'";
+
+if (SPECIAL_SYMBOLS.includes(next)){/*«*/
+	let sym = next;
+	i++;
+	next = word[i+1];
+//	if (next !== "}") return INVSUB;
+//	if (next !== "}") return `bad substitution: have '\${${sym}${next?next:"<END>"}'`;
+	if (next !== "}") return BADSUB(sym, next);
+	end_i = i+1;
+	do_sym_sub(sym);
+//cwarn("Substitute symbol", sym);
+//Substitute symbol, 'sym'
+}/*»*/
+else if (DIGIT_CHARS_1_to_9.includes(next)){/*«*/
+	let numstr=next;
+	i++;
+	next = word[i+1];
+	while(true){
+		if (next==="}"){
+		//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
+//cwarn("Substitute script_arg #", argnum);
+//			end_i = i;
+			end_i = i+1;
+			do_arg_sub(parseInt(numstr)-1);
+			break;
+		}
+		if (!ANY_DIGIT_CHARS.includes(next)){
+//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
+			return BADSUB(numstr, next);
+//			return INVSUB;
+		}
+		numstr+=next;
+		i++;
+		next = word[i+1];
+	}
+}/*»*/
+else if (START_NAME_CHARS.includes(next)){/*«*/
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (next==="}"){
+//Replace with the substitution of 'namestr'
+//cwarn("Substitute param name", namestr);
+//		end_i = i;
+		end_i = i+1;
+		do_name_sub(namestr);
+		break;
+	}
+	if (!ANY_NAME_CHARS.includes(next)){
+//		return `bad substitution: have '\${${namestr}${next?next:"<END>"}'`;
+		return BADSUB(namestr, next);
+//		return INVSUB;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}/*»*/
+else return INVSUB;
+
+	}/*»*/
+	else{/*«*/
+//If the next one is a special symbol (including "0"), we can do the substitution now«
+//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
+//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
+//  literal '$'
+//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
+
+//		i++;
+//		next = word[i+1];»
+
+if (SPECIAL_SYMBOLS.includes(next)){
+	end_i = i+1;
+	do_sym_sub(next);
+}
+else if (DIGIT_CHARS_1_to_9.includes(next)){
+	end_i = i+1;
+	do_arg_sub(parseInt(next)-1);
+}
+else if (!START_NAME_CHARS.includes(next)){
+	continue;
+}
+else{/*«*/
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (!ANY_NAME_CHARS.includes(next)){
+cwarn("Substitute param name", namestr);
+end_i=i;
+do_name_sub(namestr);
+		break;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}/*»*/
+
+	}/*»*/
+
+}/*»*/
+
+}
+
+return tok;
+};/*»*/
+
 //»
+
+//ErrorHandler«
+
+const ErrorHandler = class {
+
+	constructor() {//«
+		this.errors = [];
+		this.tolerant = false;
+	}//»
+	recordError(error) {//«
+		this.errors.push(error);
+	};//»
+	tolerate(error) {//«
+		if (this.tolerant) {
+			this.recordError(error);
+		}
+		else {
+			throw error;
+		}
+	};//»
+	constructError(msg, column) {//«
+		var error = new Error(msg);
+		try {
+			throw error;
+		}
+		catch (base) {
+
+			if (Object.create && Object.defineProperty) {
+				error = Object.create(base);
+				Object.defineProperty(error, 'column', { value: column });
+			}
+		}
+		return error;
+	};//»
+	createError(index, line, col, description) {//«
+		var msg = description + ` (line ${line})`;
+		var error = this.constructError(msg, col);
+		error.index = index;
+		error.lineNumber = line;
+		error.description = description;
+		return error;
+	};//»
+	throwError(index, line, col, description) {//«
+		throw this.createError(index, line, col, description);
+	};//»
+	tolerateError(index, line, col, description) {//«
+		var error = this.createError(index, line, col, description);
+		if (this.tolerant) {
+			this.recordError(error);
+		}
+		else {
+			throw error;
+		}
+	};//»
+
+};//»
+//Scanner«
+
+//These 2 functions are "holdover" logic from esprima, which seems too "loose" for 
+//typical shell scripting purposes
+const isWhiteSpace = (cp) => {//«
+	return (cp === 0x20) || (cp === 0x09) || (cp === 0x0B) || (cp === 0x0C) || (cp === 0xA0) ||
+		(cp >= 0x1680 && [0x1680, 0x2000, 0x2001, 0x2002, 0x2003, 0x2004, 0x2005, 0x2006, 0x2007, 0x2008, 0x2009, 0x200A, 0x202F, 0x205F, 0x3000, 0xFEFF].indexOf(cp) >= 0);
+};//»
+const isLineTerminator = (cp) => {//«
+	return (cp === 0x0A) || (cp === 0x0D) || (cp === 0x2028) || (cp === 0x2029);
+};//»
+
+const Scanner = class {
+
+constructor(code, handler) {//«
+	this.source = code;
+	this.errorHandler = handler;
+	this.length = code.length;
+	this.index = 0;
+	this.lineNumber = (code.length > 0) ? 1 : 0;
+	this.lineStart = 0;
+}//»
+
+eof() {//«
+	return this.index >= this.length;
+};//»
+
+throwUnexpectedToken(message) {//«
+	if (message === void 0) { message = Messages.UnexpectedTokenIllegal; }
+	return this.errorHandler.throwError(this.index, this.lineNumber, this.index - this.lineStart + 1, message);
+};//»
+
+skipSingleLineComment() {//«
+	while (!this.eof()) {
+//		let ch = this.source.charCodeAt(this.index);
+		let code = this.source[this.index].charCodeAt();
+		if (isLineTerminator(code)) {
+			return;
+		}
+		this.index++;
+	}
+};//»
+scanComments() {//«
+	while (!this.eof()) {
+		let code = this.source[this.index].charCodeAt();
+		if (isWhiteSpace(code)) {
+			++this.index;
+		}
+		else if (isLineTerminator(code)) {
+			break;
+		}
+		else if (code===0x23){//'#' in 0th line position or preceeded by a space or tab«
+			if (this.index - this.lineStart === 0 || this.source[this.index-1] === " " || this.source[this.index-1] === "\t"){
+				this.index++;
+				this.skipSingleLineComment();
+			}
+			else {
+				break;
+			}
+		}//»
+		else {
+			break;
+		}
+	}
+};//»
+
+scanOperator(){/*«*/
+
+	let src = this.source;
+	let start = this.index;
+	let str = src[start];
+	switch(str){
+	case '(':/*«*/
+	case ')':
+		++this.index;
+		break;/*»*/
+	case '&':/*«*/
+		++this.index;
+		if (src[this.index]==="&"){
+			this.index++;
+			str="&&";
+		}
+		break;/*»*/
+	case '|':/*«*/
+		++this.index;
+		if (src[this.index]==="|"){
+			this.index++;
+			str="||";
+		}
+		break;/*»*/
+	case '>'://«
+		++this.index;
+		if ([">","&","|"].includes(src[this.index])){
+			str+=src[this.index];
+			++this.index;
+		}
+		break;/*»*/
+	case '<':/*«*/
+		++this.index;
+	//'<<',
+	//'<>',
+	//'<<-',
+	//'<<<',
+		if (src[this.index]===">"){
+			str = "<>";
+			++this.index;
+		}
+		else if (src[this.index]==="<"){
+			++this.index;
+			if (src[this.index]==="<"){
+				++this.index;
+				str = "<<<";
+			}
+			else if (src[this.index]==="-"){
+				++this.index;
+				str = "<<-";
+			}
+			else{
+				str="<<";
+			}
+		}
+		break;/*»*/
+	case ';':
+		++this.index;
+		break;
+	}
+	if (this.index === start) {
+		this.throwUnexpectedToken(`Unexpected token ${str}`);
+	}
+	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`Unsupported token ${str}`);
+
+	if (str.match(/[<>]/)) return {t:"r_op", r_op:str};
+	return {t:"c_op", c_op:str};
+
+}/*»*/
+scanQuote(which, prev){/*«*/
+	this.index++;
+	let start = this.index;
+	let src = this.source;
+	let iter=0;
+	let out = [which];
+	let len = this.length;
+	let cur = start;
+	let is_ds_single = (which == "'") && prev == "$" && !prev.escaped;
+	let ch = src[cur];
+	while(ch && (ch != which || (ch.escaped && ch != "'") || (ch.escaped && is_ds_single))){
+		if (ch=="\n") {
+			if (ALLOW_NEWLINES_IN_QUOTES) this.lineNumber++;
+			else return null;
+		}
+		cur++;
+		if (cur>=len) return null;
+		out.push(ch);
+		if (which==='"'&&ch==="$"&&src[cur]==="(") return "unsupported substitution pattern: '$('";
+		ch = src[cur];
+	}
+	if (cur>=len) return null;
+	this.index = cur;
+	return out;
+}/*»*/
+scanWord(){/*«*/
+	let start = this.index;
+	let src = this.source;
+//	let str='';
+	let rv;
+	let start_line_number = this.lineNumber;
+	let start_line_start = this.lineStart;
+	let word = [];
+	while (!this.eof()) {
+		let ch = src[this.index];
+//		if (["'",'"','`'].includes(ch)){
+		if (ch==="'"||ch==='"'||ch==='`'){
+			if (this.index > 0) rv = this.scanQuote(ch, src[this.index-1]);
+			else rv = this.scanQuote(ch);
+			if (rv===null) this.throwUnexpectedToken(`Unterminated quote ${ch}`);
+			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			word.push(...rv);
+		}
+		else if (ch==="\\"){//Error condition (either known or unknown)
+			let next = src[this.index+1];
+			if (!next || next === "\n") this.throwUnexpectedToken("Unsupported line continuation");
+//We should not get here because all other "naked" backslashes should either be 
+//inside a quote or escaping something.
+this.throwUnexpectedToken("Should not get here!?! (found a literal '\\' that never got used to escape the following character)");
+
+		}
+//		if (["\n","\r"," ","\t"].includes(ch)) break;
+//		if (["\n"," ","\t"].includes(ch)) break;
+
+		if (ch==="\n"||ch===" "||ch==="\t") break;
+		if (OPERATOR_CHARS.includes(ch)) {
+			if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`Unsupported token: ${ch}`);
+			break;
+		}
+		this.index++;
+//		if (ch.escaped) str+="\\"+ch;
+//		else str+=ch;
+		word.push(ch);
+	}
+
+	return {t:"word", word};
+}/*»*/
+scanNewlines(){/*«*/
+
+	let start = this.index;
+	let src = this.source;
+	let str="";
+	let iter=0;
+	let start_line_number = this.lineNumber;
+	let start_line_start = this.index;;
+	while (src[start+iter]==="\n"){
+		str+="\n";
+		iter++;
+	}
+	this.index+=iter;
+	this.lineStart = start_line_start+iter;
+	this.lineNumber+=iter;
+	return {t:"nl", nl:str};
+
+}/*»*/
+
+lex(){/*«*/
+
+if (this.eof()) {//«
+	return {
+		type: EOF_Type,
+		value: '',
+		lineNumber: this.lineNumber,
+		lineStart: this.lineStart,
+		start: this.index,
+		end: this.index
+	};
+}//»
+
+let ch = this.source[this.index];
+if (ch==="\n") return this.scanNewlines();
+if (OPERATOR_CHARS.includes(ch)) {
+	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`Unsupported token: ${ch}`);
+	return this.scanOperator();
+}
+return this.scanWord();
+
+}/*»*/
+
+};
+
+//»
+//Parser«
+
+const Parser = class {
+
+constructor(code, options={}) {//«
+	this.errorHandler = new ErrorHandler();
+	this.scanner = new Scanner(code, this.errorHandler);
+	this.lookahead = {//«
+		type: EOF_Type,
+		value: '',
+		lineNumber: this.scanner.lineNumber,
+		lineStart: 0,
+		start: 0,
+		end: 0
+	};//»
+	this.hasLineTerminator = false;
+	this.tokens = [];
+	this.nextToken();
+}//»
+
+nextToken() {//«
+	let token = this.lookahead;
+	this.scanner.scanComments();
+	let next = this.scanner.lex();
+	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
+	this.lookahead = next;
+	return token;
+};//»
+
+parse() {//«
+	let chars = [];
+	while (this.lookahead.type !== EOF_Type) {
+		chars.push(this.lookahead);
+		this.nextToken();
+	}
+	return chars;
+};//»
+
+};
+//»
+
+return {
+
+parse:command_str=>{
+//cwarn(command_str);
+
+let escaped = escapes(command_str.split(""));
+
+let parser = new Parser(escaped);
+let toks;
+try {
+toks = parser.parse();
+}
+catch(e){
+cerr(e);
+return e.message;
+}
+
+//Collect commands with their arguments«
+let com = [];
+let coms = [];
+for (let tok of toks){
+	if (tok.c_op){
+		if (!com.length) return `unexpected empty command (found: '${tok.c_op}')`;
+		coms.push({com});
+		com = [];
+		coms.push(tok);
+	}
+	else{
+		if (!com.length && tok===" "){}//Do not allow a command to begin with whitespace
+//		else com.push(ds_single_quote_escapes(tok));
+		else com.push(tok);
+	}
+}
+if (com.length) coms.push({com});
+//»
+//Collect pipelines with their subsequent logic operators (if any)«
+let pipes = [];
+let pipe = [];
+for (let i=0; i < coms.length; i++){
+	let tok = coms[i];
+	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here
+		if (tok.c_op==="&&"||tok.c_op==="||") {
+			if (!coms[i+1]) return "malformed logic list";
+			pipes.push({pipe, type: tok.c_op});
+		}
+		else {
+			pipes.push({pipe}, tok);
+		}
+		pipe = [];
+	}
+	else if (!tok.c_op){//Commands and redirects
+		pipe.push(tok);
+	}
+	else if (pipe.length && coms[i+1]){//noop: This token "must" be a '|'
+	}
+	else {
+		return "malformed pipeline";
+	}
+
+}
+if (pipe.length) pipes.push({pipe});
+//»
+//Collect ';' separated lists of pipelines+logic operators (if any)«
+let statements=[];
+let statement=[];
+for (let tok of pipes){
+	let cop = tok.c_op;
+	if (cop) {
+		if (cop==="&"||cop===";"){
+			statements.push({statement, type: cop});
+			statement = [];
+		}
+		else{
+			return `unknown control operator: ${cop}`;
+		}
+	}
+	else{
+		statement.push(tok);
+	}
+}
+if (statement.length) statements.push({statement});
+
+//»
+
+//jlog(statements);
+//return [];
+return statements;
+
+}
+}
+
+})();/*»*/
+
+const Parser=(()=>{//«
+
 
 const shell_escapes = line_arr => {//«
 	for (let i = 0; i < line_arr.length; i++) {
@@ -1991,10 +3121,270 @@ const shell_tokify = line_arr => {//«
 	return ret;
 };//»
 
+
+return {
+
+parse:command_str=>{
+
+//Escaping/Quoting«
+//Only for creating newlines in single quotes: $'1\n2' and escaping spaces outside of quotes
+let arr = shell_escapes([command_str]);
+//Makes quote objects from single, double and backtick quotes. Fails if not terminated
+arr = shell_quote_strings(arr);
+if (isStr(arr)) return `sh: ${arr}`;
 //»
-/*NEW/CORRECT curly_expansion«
-//This takes a "word array". Begin with from_pos==0, then it will internally increase this.
-//QXDPOLIT
+//Tokenization«
+
+//Comments are stripped
+//This creates word objects and '$' objects.
+//It also creates '>' and '>>' redirections.
+//All unsupported tokens (redirects like '<' and control like '&') cause failure
+
+let toks = shell_tokify(arr);
+if (isStr(toks)) return `sh: ${toks}`;
+
+//»
+//Collect commands with their arguments«
+let com = [];
+let coms = [];
+for (let tok of toks){
+	if (tok.c_op){
+		coms.push({com});
+		com = [];
+		coms.push(tok);
+	}
+	else{
+		com.push(tok);
+	}
+}
+if (com.length) coms.push({com});
+//»
+//Collect pipelines with their subsequent logic operators (if any)«
+let pipes = [];
+let pipe = [];
+for (let tok of coms){
+	if (tok.c_op && tok.c_op != "|"){
+		if (tok.c_op==="&&"||tok.c_op==="||") {
+			pipes.push({pipe, type: tok.c_op});
+		}
+		else {
+			pipes.push({pipe}, tok);
+		}
+		pipe = [];
+	}
+	else if (!tok.c_op){
+		pipe.push(tok);
+	}
+}
+if (pipe.length) pipes.push({pipe});
+//»
+//Collect ';' separated lists of pipelines+logic operators (if any)«
+
+let statements=[];
+let statement=[];
+for (let tok of pipes){
+	let cop = tok.c_op;
+	if (cop) {
+		if (cop==="&"||cop===";"){
+			statements.push({statement, type: cop});
+			statement = [];
+		}
+		else{
+			return terr(`sh: unknown control operator: ${cop}`);
+		}
+	}
+	else{
+		statement.push(tok);
+	}
+}
+if (statement.length) statements.push({statement});
+//»
+
+return statements;
+
+}
+}
+
+})();/*»*/
+
+//log(Parser);
+
+//«Shell
+const Shell = (()=>{
+
+const backquote_substitution = async(arr, shell, env) =>{//«
+/*We can have any number of backquotes in here:
+sloom`ls -l ~/slerm`CHOOM`date +%s`"  GWUBBB   "`./some_script.sh -x -y zzzz | gerble --it`
+*/
+if (!arr.includes("`")) return arr;
+
+let out=[];
+let curword;
+let bq_arr;
+//let in_bq = false;
+for (let i=0; i < arr.length; i++){
+let ch = arr[i];
+
+if (ch === "`"){
+	if (!bq_arr){
+//initialize
+		bq_arr = [];
+	}
+	else{
+		let sub_lines = [];
+//Don't care about return value, just output
+		await shell.execute(bq_arr.join(""), {subLines: sub_lines, env});
+		for (let ln of sub_lines){
+			if (curword){
+				curword.push(...ln);
+				out.push(curword);
+				curword = null;
+			}
+			else{
+				out.push([...ln]);
+			}
+		}
+		bq_arr = null;
+	}
+}
+else if (bq_arr){
+	bq_arr.push(ch);
+}
+else {
+	if (!curword) curword = [];
+	curword.push(ch);
+}
+}
+if (curword){
+	if (out.length){
+		out[out.length-1].push(...curword);
+	}
+	else out.push(curword);
+}
+return out;
+
+};/*»*/
+const ds_single_quote_escapes = tok=>{//«
+let wrd = tok.word;
+if (!wrd){
+cwarn("WHAT THE HELL IS HERE????");
+log(tok);
+return tok;
+}
+let arr = wrd;
+let out = [];
+let in_ds_single = false;
+
+for (let i=0; i < arr.length; i++){
+let ch = arr[i];
+let next = arr[i+1];
+if (!in_ds_single&&ch==="$"&&next==="'"){
+	in_ds_single=true;
+//	out.push("$'");
+	out.push("$","'");
+	i++;
+}
+else if (in_ds_single){
+//log("INDSSINGLE");
+	if (ch.escaped){
+//log("CH.ESCAPED", ch);
+	let c;
+//switch(ch){/*«*/
+
+//\" yields a <quotation-mark> (double-quote) character, but note that
+//<quotation-mark> can be included unescaped.
+if  (ch=='"') {c='"';}
+//\' yields an <apostrophe> (single-quote) character.
+//else if (ch=="'") { c="'";}
+
+//\\ yields a <backslash> character.
+else if (ch=='\\') { c='\\';}
+
+//\a yields an <alert> character.
+else if (ch=='a') { c='\x07';}
+
+//\b yields a <backspace> character.
+else if (ch=='b') { c='\x08';}
+
+//\e yields an <ESC> character.
+else if (ch=='e') { c='\x1b';}
+
+//\f yields a <form-feed> character.
+else if (ch=='f') { c='\x0c';}
+
+//\n yields a <newline> character.
+else if (ch=='n') { c='\n';}
+
+//\r yields a <carriage-return> character.
+else if (ch=='r') { c='\x0d';}
+
+//\t yields a <tab> character.
+else if (ch=='t') { c='\t';}
+
+//\v yields a <vertical-tab> character.
+else if (ch=='v') { c='\x0b';}
+
+else if (ch=='x'){/*«*/
+//\xXX yields the byte whose value is the hexadecimal value XX (one or more hexadecimal digits). If more than two hexadecimal digits follow \x, the results are unspecified.
+	if (next&&next.match(/[0-9a-fA-F]/)){
+	let next2 = arr[i+2];
+		if (next2 &&next2.match(/[0-9a-fA-F]/)){
+			c = eval( '"\\x' + next + next2 + '"' );
+			i+=2;
+		}
+		else{
+			c = eval( '"\\x0' + next + '"' );
+			i++;
+		}
+	}
+}/*»*/
+
+//\ddd yields the byte whose value is the octal value ddd (one to three octal digits).
+else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){/*«*/
+	let s = ch;
+//Array.includes tests for strict equality, so escaped chars will not match...
+	if (next&&OCTAL_CHARS.includes(next)){
+		s+=next;
+		let next2 = arr[i+2];
+		if (next2&&OCTAL_CHARS.includes(next2)){
+			s+=next2;
+			i+=2;
+		}
+		else i++;
+		c = eval( '"\\x' + (parseInt(s, 8).toString(16).padStart(2, "0")) + '"' );
+	}
+}/*»*/
+
+//The behavior of an unescaped <backslash> immediately followed by any other
+//character, including <newline>, is unspecified.
+
+//\cX yields the control character listed in the Value column of Values for
+//cpio c_mode Field in the OPERANDS section of the stty utility when X is one
+//of the characters listed in the ^c column of the same table, except that \c\\
+//yields the <FS> control character since the <backslash> character has to be
+//escaped.
+
+//}/*»*/
+	if (c) out.push(c);
+	else out.push(ch);
+	}
+	else if (ch==="'"){
+		in_ds_single = false;
+		out.push("'");
+	}
+	else{
+		out.push(ch);
+	}
+}
+else {
+//	if (ch.escaped) out.push("\\"+ch);
+//	else out.push(ch);
+	out.push(ch);
+}
+}
+
+return {t:"word",word: out};
+};//»
 const curly_expansion = (arr, from_pos) => {//«
 //log("FROM", from_pos);
 let ind1 = arr.indexOf("{", from_pos);
@@ -2178,7 +3568,594 @@ else{//«
 }//»
 
 }//»
+const tilde_expansion = tok => {//«
+//log("TILDE", tok);
+//Just expand everything after NAME=
+//NAME=...
+//let pref = tok
+let wrdarr = tok.word;
+let wrdstr = tok.word.join("");
+//cwarn(`CHECK: <${wrdstr}>`);
+let marr;
+if (marr = wrdstr.match(/^([_a-zA-Z][_a-zA-Z0-9]*=)/)){
+//If this is a valid shell variable assignment, expand lone '~' or all '~/' after 
+//the first '=' and every ':' with $HOME
+let from = marr[1].length;
+let start = tok.word.slice(0, from);
+let arr = tok.word.slice(from);
+//cwarn("EXPAND LONE '~' or initial '~/' and every one after a ':'");
+//log(arr);
+if (!arr.length) return tok;
+if (arr.length===1&&arr[0]==="~"){
+	return {t: "word",word: [...start, ...globals.HOME_PATH]};
+}
+let out=[];
+for (let i=0; i < arr.length; i++){/*«*/
+	if (i===0&&arr[0]==="~"&&arr[1]=="/"){
+		out.push(...globals.HOME_PATH, arr[1]);
+		i++;
+	}
+	else if (arr[i]===":" && arr[i+1]==="~"){
+		if (!arr[i+2]){
+			out.push(":", ...globals.HOME_PATH);
+			return {t: "word",word: [...start,...out]};
+		}
+		else if (arr[i+2]=="/"){
+			out.push(":", ...globals.HOME_PATH,"/");
+			i+=2;
+		}
+		else{
+			out.push(arr[i], arr[i+1]);
+			i++;
+		}
+	}
+	else {
+		out.push(arr[i]);
+	}
+}/*»*/
+return {t: "word",word: [...start,...out]};
+}
+else if (wrdstr==="~") {
+//Expand '~' or the leading '~/'
+//cwarn("EXPAND LONE '~'");
+//log(tok.word);
+tok.word=[...globals.HOME_PATH];
+}
+else if (wrdstr.match(/^~\x2f/)){
+tok.word=[...globals.HOME_PATH, ...wrdarr.slice(1)];
+//cwarn("EXPAND initial '~/'");
+}
+return tok;
+};/*»*/
+const parameter_expansion = tok => {//«
+//We will also need env, script_name, and script_args passed in here
+/*«
+
+A "parameter" is a NAME or a SYMBOL, as described below.
+
+We are looking for one of:
+
+$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
+@: positional parameters starting from 1, and something about field splitting
+*: Same as above, with something else about field splitting
+#: Number of positional parameters (minus the 0th)
+?: Most recent exit code
+-: Current options flag
+$: pid of the shell
+!: pid of most recent '&' statement
+0: name of shell or shell script
+
+All DIGIT's (other than 0) are the current (1-based) positional parameters
+
+These expands in anything other than single quotes
+
+We can also easily support '${#NAME}', since this just gives the length of the
+string of the variable, NAME.
+
+I'm not sure how to handle:
+$ DQUOTE='"'
+$ echo "$DQUOTE"
+
+Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
+
 »*/
+/*
+
+Should we not put everything inside $'...', and then escape ALL
+single quotes that are in the replacement value??? Otherwise, there can't be
+escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
+
+So, if we do:
+PARAM_WITH_SINGLE_QUOTES="...'//..."
+
+echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
+=> BLAH$'...\'//...'BLAH
+
+*/
+let word = tok.word;
+let qtyp;
+for (let i=0; i < word.length; i++){
+
+let ch = word[i];
+if (!qtyp){
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		continue;
+	}
+	else{
+//Unquoted stuff
+	}
+}
+else if (qtyp===ch) {
+	qtyp=null;
+	continue;
+}
+else if (qtyp!=='"') continue;
+
+//We are unquoted or in double quotes
+
+if (ch==="$"){/*«*/
+
+const do_name_sub=(name)=>{//«
+cwarn("NAME", name, start_i, end_i);
+
+let env={
+choint:"1",
+UB:"Far   in   the   harrrr!!!"
+};
+let diff = end_i - start_i;
+let val = env[name]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+
+/*
+for (let i=0; i < val.length; i++){
+	if (val[i]==="'"){
+		let s = new String("'");
+		s.escaped = true;
+		s.toString=function(){
+			return "\\"+this.valueOf();
+		};
+		val[i]=s;
+	}
+}
+//word.splice(start_i, end_i-start_i+1, "$", "'", ...val,"'");
+
+word.splice(start_i, end_i-start_i+4, "$", "'", ...val,"'");
+i = end_i + (name.length - (val.length+3));
+
+*/
+
+i = end_i + (name.length - val.length);
+
+};/*»*/
+const do_arg_sub=(num)=>{//«
+cwarn("ARG", num, start_i, end_i);
+};/*»*/
+const do_sym_sub=(sym)=>{//«
+cwarn("SYM", sym, start_i, end_i);
+};/*»*/
+const BADSUB=(arg, next)=>{return `bad substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
+
+	let next = word[i+1];
+	if (!next) continue;
+	let start_i = i;
+	let end_i;
+	if (next==="{") {/*«*/
+		i++;
+//If no next one or the next one is a "}", barf INVSUB
+//If the next one is a special symbol, there must be a "}" immediately following it
+//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
+//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
+//    ANY_NAME_CHARS, with a terminating "}".
+		next = word[i+1];
+		if (!next) return "bad substitution: '${<END>'";
+		else if (next==="}") return "bad substitution: '${}'";
+
+if (SPECIAL_SYMBOLS.includes(next)){/*«*/
+	let sym = next;
+	i++;
+	next = word[i+1];
+//	if (next !== "}") return INVSUB;
+//	if (next !== "}") return `bad substitution: have '\${${sym}${next?next:"<END>"}'`;
+	if (next !== "}") return BADSUB(sym, next);
+	end_i = i+1;
+	do_sym_sub(sym);
+//cwarn("Substitute symbol", sym);
+//Substitute symbol, 'sym'
+}/*»*/
+else if (DIGIT_CHARS_1_to_9.includes(next)){/*«*/
+	let numstr=next;
+	i++;
+	next = word[i+1];
+	while(true){
+		if (next==="}"){
+		//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
+//cwarn("Substitute script_arg #", argnum);
+//			end_i = i;
+			end_i = i+1;
+			do_arg_sub(parseInt(numstr)-1);
+			break;
+		}
+		if (!ANY_DIGIT_CHARS.includes(next)){
+//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
+			return BADSUB(numstr, next);
+//			return INVSUB;
+		}
+		numstr+=next;
+		i++;
+		next = word[i+1];
+	}
+}/*»*/
+else if (START_NAME_CHARS.includes(next)){/*«*/
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (next==="}"){
+//Replace with the substitution of 'namestr'
+//cwarn("Substitute param name", namestr);
+//		end_i = i;
+		end_i = i+1;
+		do_name_sub(namestr);
+		break;
+	}
+	if (!ANY_NAME_CHARS.includes(next)){
+//		return `bad substitution: have '\${${namestr}${next?next:"<END>"}'`;
+		return BADSUB(namestr, next);
+//		return INVSUB;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}/*»*/
+else return INVSUB;
+
+	}/*»*/
+	else{/*«*/
+//If the next one is a special symbol (including "0"), we can do the substitution now«
+//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
+//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
+//  literal '$'
+//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
+
+//		i++;
+//		next = word[i+1];»
+
+if (SPECIAL_SYMBOLS.includes(next)){
+	end_i = i+1;
+	do_sym_sub(next);
+}
+else if (DIGIT_CHARS_1_to_9.includes(next)){
+	end_i = i+1;
+	do_arg_sub(parseInt(next)-1);
+}
+else if (!START_NAME_CHARS.includes(next)){
+	continue;
+}
+else{/*«*/
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (!ANY_NAME_CHARS.includes(next)){
+cwarn("Substitute param name", namestr);
+end_i=i;
+do_name_sub(namestr);
+		break;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}/*»*/
+
+	}/*»*/
+
+}/*»*/
+
+}
+
+return tok;
+};/*»*/
+const quote_removal=(wrd)=>{//«
+	let s='';
+	let in_quote=false;
+	for (let l=0; l < wrd.length; l++){
+		let c = wrd[l];
+		if (!in_quote && c==="$"&&wrd[l+1]==="'") continue;
+		if (c==='"'||c==="'"||c==="`") {
+			in_quote = !in_quote;
+			continue;
+		}
+		s+=c.valueOf();
+	}
+	return s;
+};/*»*/
+const filepath_expansion=async(arr, cur_dir)=>{
+//cwarn("CURDIR", cur_dir);
+/*
+First we need to separate everything by "/" (escapes or quotes don't matter)
+
+
+Create a pattern string by removing quotes. 
+
+- For every non-escaped ".", "*", "?", "[" or "]" in quotes, put an escape before it. 
+
+- For every non-escaped '.', put an escape before it.
+- For every non-escaped '*', put a '.' before it.
+- For every non-escaped '?', replace it with a "."
+
+//											  v----REMOVE THIS SPACE!!!!
+let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
+
+*/
+if (!(arr.includes("*")||arr.includes("?")||arr.includes("["))) return arr;
+//jlog(arr);
+//A 'name' is a (possible empty) part of a path
+/*IS THIS IS WRONG!?!?!?!?«
+let path_arr=[];
+let cur_name=[];
+for (let ch of arr){
+	if (ch=="/"){
+		path_arr.push(cur_name);
+		cur_name = [];
+	}
+	else{
+		cur_name.push(ch);
+	}
+}
+»*/
+
+//return arr;
+
+///*«
+
+let patstr='';
+let parr;
+let qtyp;
+let path_arr=[];
+//let new_paths=[];
+
+for (let ch of arr){//«
+
+if (ch=="/"){
+	path_arr.push(patstr);
+	patstr='';
+	continue;
+}
+if (ch==="'"||ch==='"'){
+	if (!qtyp) qtyp = ch;
+	else if (qtyp===ch) qtyp=null;
+	else patstr+=ch;
+	continue;
+}
+else if (qtyp){
+	if ([".", "*","?","[","]"].includes(ch)) patstr+="\\";
+	patstr+=ch;
+}
+else if (ch==="."){
+	patstr+='\\.';
+}
+else if (ch==="*"){
+	patstr+='.*';
+}
+else if (ch==="?"){
+	patstr+='.';
+}
+else {
+//if ()
+//log();
+//jlog(ch);
+if (ch instanceof String){
+//log(ch.escaped, ch);
+	patstr+=ch.toString();
+}
+else patstr+=ch;
+
+}
+
+}//»
+
+if (patstr){
+	path_arr.push(patstr);
+}
+//log(path_arr);
+let start_dir;
+let parr0 = path_arr[0];
+let path_len = path_arr.length;
+if (!parr0) start_dir = "/";
+else start_dir = cur_dir;
+let dirs=[""];
+const do_dirs=async(dirs, parr, is_init)=>{//«
+
+let nm = parr.shift();
+//jlog(nm);
+let parr_len = parr.length;
+if (!nm) {
+	for (let i=0; i < dirs.length; i++){
+		dirs[i]=dirs[i]+"/";
+	}
+	if (!parr_len) return dirs;
+	return await do_dirs(dirs, parr);
+}
+let is_dot = (nm[0]==="\\"&&nm[1]===".");
+let files_ok = !parr.length;
+let new_paths=[];
+//log(dirs);
+for (let i=0; i < dirs.length; i++){
+	let dirname = dirs[i];
+//log("DIRNAME", dirname);
+	let dir_str = start_dir+"/"+dirname;
+	let dir = await pathToNode(dir_str);
+	let kids = dir.kids;
+	if (!kids) continue;
+	let keys = Object.keys(kids);
+	if (nm.match(/[*?]/)||nm.match(/\[[-0-9a-z]+\]/i)) {
+//													  v----REMOVE THIS SPACE
+//		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
+		try{ 
+			let re = new RegExp("^" + nm + "$");
+			for (let key of keys){
+				if (!is_dot && key[0]===".") continue;
+				if (re.test(key)){
+					let node = kids[key];
+					if (!node) continue;
+					if (!files_ok && node.appName!==FOLDER_APP) continue;
+//					if (key==="."||key==="..") continue;
+					if (dirname) new_paths.push(`${dirname}/${key}`);
+					else new_paths.push(key);
+				}
+			}
+		}
+		catch(e){
+cerr(e);
+			continue;
+		}
+	}
+	else{
+		let node = kids[nm];
+		if (!node) continue;
+		if (!files_ok && node.appName!==FOLDER_APP) continue;
+		if (nm==="."||nm==="..") continue;
+		if (dirname) new_paths.push(`${dirname}/${nm}`);
+		else new_paths.push(nm);
+//		new_paths.push(`${dirname}/${nm}`);
+	}
+}
+if (!parr_len) return new_paths;
+return await do_dirs(new_paths, parr);
+
+};//»
+let rv = await do_dirs(dirs, path_arr, true);
+if (rv.length) return rv;
+//log(rv);
+return arr;
+//if (!rv.length)
+//return rv;
+/*
+if (rv.length){
+	arr.splice(i, 1, " ");
+	for (let path of rv){
+
+//This means we started with a slash, and this is the only way to get rid of the
+//extra slash that always shows up after expansion.
+		if (!parr0) path = path.slice(1);
+
+		arr.splice(i, 0, {t:"word", word: path}, " ");
+		i+=2;
+	}
+}
+*/
+//for (let nm of path_arr){
+//}
+//log(path_arr);
+
+/*
+try{
+let re = new RegExp("^" + patstr + "$");
+
+}
+catch(e){
+cerr(e);
+return e.message;
+}
+
+log(`PAT <${patstr}>`);
+*/
+return arr;
+//»*/
+/*
+if (word.match(/[*?]/)||word.match(/\[[-0-9a-z]+\]/i)) {//File glob«
+
+let parr = word.split(/\x2f/);
+let num_dirs = parr.length-1
+let start_dir;
+let parr0 = parr[0];
+let path_len = parr.length;
+if (!parr0) start_dir = "/";
+else start_dir = cur_dir;
+let dirs=[""];
+const do_dirs=async(dirs, parr, is_init)=>{//«
+
+let nm = parr.shift();
+let parr_len = parr.length;
+if (!nm) {
+	for (let i=0; i < dirs.length; i++){
+		dirs[i]=dirs[i]+"/";
+	}
+	if (!parr_len) return dirs;
+	return await do_dirs(dirs, parr);
+}
+let is_dot = nm[0]===".";
+let files_ok = !parr.length;
+let new_paths=[];
+for (let i=0; i < dirs.length; i++){
+	let dirname = dirs[i];
+	let dir_str = start_dir+"/"+dirname;
+	let dir = await pathToNode(dir_str);
+	let kids = dir.kids;
+if (!kids) continue;
+	let keys = Object.keys(kids);
+	if (nm.match(/[*?]/)||nm.match(/\[[-0-9a-z]+\]/i)) {
+//													  v----REMOVE THIS SPACE
+		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
+		try{ 
+			let re = new RegExp("^" + fpat + "$");
+			for (let key of keys){
+				if (!is_dot && key[0]===".") continue;
+				if (re.test(key)){
+					let node = kids[key];
+					if (!node) continue;
+					if (!files_ok && node.appName!==FOLDER_APP) continue;
+//					if (key==="."||key==="..") continue;
+					if (dirname) new_paths.push(`${dirname}/${key}`);
+					else new_paths.push(key);
+				}
+			}
+		}
+		catch(e){
+cerr(e);
+			continue;
+		}
+	}
+	else{
+		let node = kids[nm];
+		if (!node) continue;
+		if (!files_ok && node.appName!==FOLDER_APP) continue;
+//		if (nm==="."||nm==="..") continue;
+		if (dirname) new_paths.push(`${dirname}/${nm}`);
+		else new_paths.push(nm);
+//		new_paths.push(`${dirname}/${nm}`);
+	}
+}
+if (!parr_len) return new_paths;
+return await do_dirs(new_paths, parr);
+
+};//»
+let rv = await do_dirs(dirs, parr, true);
+if (rv.length){
+	arr.splice(i, 1, " ");
+	for (let path of rv){
+
+//This means we started with a slash, and this is the only way to get rid of the
+//extra slash that always shows up after expansion.
+		if (!parr0) path = path.slice(1);
+
+		arr.splice(i, 0, {t:"word", word: path}, " ");
+		i+=2;
+	}
+}
+}//»
+*/
+
+
+};
+
 const old_curly_expansion = (word) => {//This is INCORRECT«
 	let marr;
 	let out = false;
@@ -2385,8 +4362,6 @@ cerr(e);
 	return err;
 }//»
 
-const env_glob_brace_expansions = all_expansions;
-
 return function(term){
 
 //Var«
@@ -2464,83 +4439,9 @@ const can=()=>{//«
 	return started_time < this.cancelled_time;
 };//»
 
-//Parser«
+let statements = parser.parse(command_str);
 
-//Escaping/Quoting«
-//Only for creating newlines in single quotes: $'1\n2' and escaping spaces outside of quotes
-let arr = shell_escapes([command_str]);
-//Makes quote objects from single, double and backtick quotes. Fails if not terminated
-arr = shell_quote_strings(arr);
-if (isStr(arr)) return terr(`sh: ${arr}`);
-//»
-//Tokenization«
-
-//Comments are stripped
-//This creates word objects and '$' objects.
-//It also creates '>' and '>>' redirections.
-//All unsupported tokens (redirects like '<' and control like '&') cause failure
-
-let toks = shell_tokify(arr);
-if (isStr(toks)) return terr(`sh: ${toks}`);
-
-//»
-//Collect commands with their arguments«
-let com = [];
-let coms = [];
-for (let tok of toks){
-	if (tok.c_op){
-		coms.push({com});
-		com = [];
-		coms.push(tok);
-	}
-	else{
-		com.push(tok);
-	}
-}
-if (com.length) coms.push({com});
-//»
-//Collect pipelines with their subsequent logic operators (if any)«
-let pipes = [];
-let pipe = [];
-for (let tok of coms){
-	if (tok.c_op && tok.c_op != "|"){
-		if (tok.c_op==="&&"||tok.c_op==="||") {
-			pipes.push({pipe, type: tok.c_op});
-		}
-		else {
-			pipes.push({pipe}, tok);
-		}
-		pipe = [];
-	}
-	else if (!tok.c_op){
-		pipe.push(tok);
-	}
-}
-if (pipe.length) pipes.push({pipe});
-//»
-//Collect ';' separated lists of pipelines+logic operators (if any)«
-
-let statements=[];
-let statement=[];
-for (let tok of pipes){
-	let cop = tok.c_op;
-	if (cop) {
-		if (cop==="&"||cop===";"){
-			statements.push({statement, type: cop});
-			statement = [];
-		}
-		else{
-			return terr(`sh: unknown control operator: ${cop}`);
-		}
-	}
-	else{
-		statement.push(tok);
-	}
-}
-if (statement.length) statements.push({statement});
-//»
-
-//»
+if (isStr(statements)) return terr(statements);
 
 let lastcomcode;
 STATEMENT_LOOP: for (let state of statements){//«A 'statement' is a list of boolean-separated pipelines.
@@ -2566,127 +4467,220 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 		let comobj, usecomword;
 		let redir;
 
-//Expansions/Redirections«
+//For each word within a command, the shell processes <backslash>-escape«
+//sequences inside dollar-single-quotes (See 2.2.4 Dollar-Single-Quotes)
+for (let k=0; k < arr.length; k++){
+	let tok = arr[k];
+	if (tok.t==="word"){
+		arr[k] = ds_single_quote_escapes(tok);
+	}
+}
+//»
 
-//1) Environment variable substitution
-//2) File globbing '*', '?' and character ranges [a-zA-Z0-9]
-//3) Curly brace expansion:
-//
-//$ echo file{0..3}.txt
-//file0.txt file1.txt file2.txt file3.txt
-		rv = await all_expansions(arr, term, {script_name, script_args});
-		if (this.cancelled) return;
-		if (rv){
-			term.response(rv, {isErr: true});
+//and then performs various word expansions (see 2.6 Word Expansions ). «
+/*2.6 Word Expansions«
+
+This section describes the various expansions that are performed on words. Not
+all expansions are performed on every word, as explained in the following
+sections and elsewhere in this chapter. The expansions that are performed for a
+given word shall be performed in the following order:
+
+1) Tilde expansion (see 2.6.1 Tilde Expansion ), parameter expansion (see 2.6.2
+Parameter Expansion ), command substitution (see 2.6.3 Command Substitution ),
+and arithmetic expansion (see 2.6.4 Arithmetic Expansion ) shall be performed,
+beginning to end. See item 5 in 2.3 Token Recognition .
+
+2) Field splitting (see 2.6.5 Field Splitting ) shall be performed on the portions
+of the fields generated by step 1.
+
+3) Pathname expansion (see 2.6.6 Pathname Expansion ) shall be performed, unless
+set -f is in effect.
+
+4) Quote removal (see 2.6.7 Quote Removal ), if performed, shall always be
+performed last.
+
+Tilde expansions, parameter expansions, command substitutions, arithmetic
+expansions, and quote removals that occur within a single word shall expand to
+a single field, except as described below. The shell shall create multiple
+fields or no fields from a single word only as a result of field splitting,
+pathname expansion, or the following cases:
+
+1) Parameter expansion of the special parameters '@' and '*', as described in
+2.5.2 Special Parameters , can create multiple fields or no fields from a
+single word.
+
+2) When the expansion occurs in a context where field splitting will be performed,
+a word that contains all of the following somewhere within it, before any
+expansions are applied, in the order specified:
+
+	a) an unquoted <left-curly-bracket> ('{') that is not immediately preceded by an
+	unquoted <dollar-sign> ('$')
+
+	b) one or more unquoted <comma> (',') characters or a sequence that consists of
+	two adjacent <period> ('.') characters surrounded by other characters (which
+	can also be <period> characters)
+
+	c) an unquoted <right-curly-bracket> ('}')
+
+may be subject to an additional implementation-defined form of expansion that
+can create multiple fields from a single word. This expansion, if supported,
+shall be applied before all the other word expansions are applied. The other
+expansions shall then be applied to each field that results from this
+expansion.
+
+When the expansions in this section are performed other than in the context of
+preparing a command for execution, they shall be carried out in the current
+shell execution environment.
+
+When expanding words for a command about to be executed, and the word will be
+the command name or an argument to the command, the expansions shall be carried
+out in the current shell execution environment. (The environment for the
+command to be executed is unknown until the command word is known.)
+
+When expanding the words in a command about to be executed that are used with
+variable assignments or redirections, it is unspecified whether the expansions
+are carried out in the current execution environment or in the environment of
+the command about to be executed.
+
+The '$' character is used to introduce parameter expansion, command
+substitution, or arithmetic evaluation. If a '$' that is neither within
+single-quotes nor escaped by a <backslash> is immediately followed by a
+character that is not a <space>, not a <tab>, not a <newline>, and is not one
+of the following:
+
+- A numeric character
+- The name of one of the special parameters (see 2.5.2 Special Parameters )
+- A valid first character of a variable name
+- A <left-curly-bracket> ('{')
+- A <left-parenthesis>
+- A single-quote
+
+the result is unspecified. If a '$' that is neither within single-quotes nor
+escaped by a <backslash> is immediately followed by a <space>, <tab>, or a
+<newline>, or is not followed by any character, the '$' shall be treated as a
+literal character.
+
+»*/
+/*«When we find a: 
+1) '{' ? "," ? '}' (ignore embedded curlies or give a syntax error)
+2) '{' \d .. \d '}'
+3) '{' \[a-z] .. \[a-z] '}'
+3) '{' \[A-Z] .. \[A-Z] '}'
+
+Skip over quotes to look for unescaped '{' followed by the closest unescaped '}'
+Collect everything inside.
+If there is a strict '..' pattern, use it
+Else if there is an internal unquoted (unescaped) comma, use it
+Else, let it pass through
+
+»*/
+
+for (let k=0; k < arr.length; k++){//curlies«
+
+let tok = arr[k];
+if (tok.t==="word") {
+	let rv = curly_expansion(tok.word, 0);
+	if (rv !== tok.word){
+		let newtoks = [];
+		for (let wrd of rv){
+			newtoks.push({t:"word",word: wrd});
 		}
-//		let inpipe = pipelist.length;
-//BBBBBBBBB
-//- Turn quote objects into word objects
-//- Single quotes that start with '$' look for internal escapes (currently only newline)
-//- Backquotes are executed and replaced with the output
-		for (let i=0; i < arr.length; i++){//«
-			let tok = arr[i];
-			let typ = tok.t;
-			let val = tok[typ];
-			if (typ==="quote") { 
-				let typ = tok.quote_t;
-				let ds = tok['$'];
-				let outstr='';
-				for (let ch of val){
-					if (isObj(ch)&&ch.t=="esc"){
-						if (ch.esc=="n"&&typ=="'"&&ds) outstr+="\n";
-						else outstr+=ch.esc;
-					}
-					else outstr+=ch;
-				}
-				val = outstr;
-				if (typ=="\x60") {
-					let out=[];
-//DJUYEKLMI
-					await this.execute(val, {subLines: out});
-					if (this.cancelled) return;
-//jlog(out);
-					if (!out.length) out = [""];
-					let did_splice = false;
-					for (let wrd of out){
-						if (!did_splice) {
-							arr.splice(i, 1, " ");
-							did_splice = true;
-						}
-						arr.splice(i, 0, {t: "word", word: wrd}, " ");
-						i+=2;
-					}
-				}
-				else arr[i]={t:"word", word: val};
-			}
-		}//»
+		arr.splice(k, 1, ...newtoks);
+		k--;//Need to revisit the original position, in case there are more expansions there
+	}
+}
 
-//All sequences of non-whitespace separated quotes and words are concatenated:
-//~$ echo "q 1"A"q 2""q 3"B   "q 4"C"q       5"D"q 6"
-//q 1Aq 2q 3B q 4Cq       5Dq 6
-		for (let i=0; i < arr.length-1; i++){//«
-			let tok0 = arr[i];
-			let tok1 = arr[i+1];
-			let tok0word = tok0.word||tok0.esc;
-			let tok1word = tok1.word||tok1.esc;
-			if (tok0word && tok1word){
-//				arr[i] = {t: "word", word: `${tok0.word}${tok1.word}`, from_quote: true}
-				arr[i] = {t: "word", word: `${tok0word}${tok1word}`};
-				arr.splice(i+1, 1);
-				i--;
-			}
-		}//»
+}//»
+for (let k=0; k < arr.length; k++){//tilde«
 
-//Concatenate all sequences of escaped spaces and words
-// ~$ touch this\ is\ cool.txt
-		for (let i=0; i < arr.length-1; i++){//«
-			let tok0 = arr[i];
-			let tok1 = arr[i+1];
-			if (tok0.esc === " " || tok1.esc === " "){
-				arr[i] = {t: "word", word: `${tok0.word||" "}${tok1.word||" "}`, esc: tok1.esc}
-				arr.splice(i+1, 1);
-				i--;
-			}
-		}//»
+let tok = arr[k];
+if (tok.t==="word") {
+	arr[k] = tilde_expansion(tok);
+}
 
-//- Create redirection objects
-//- Objects are converted into strings ({t:"word", word: "blah"} -> "blah")
-		for (let i=0; i < arr.length; i++){//«
-			let tok = arr[i];
-			let typ = tok.t;
-			let val = tok[typ];
-			if (tok===" "){
-				continue;
-			}
-			if (typ==="r_op"){
-				let rop = tok.r_op;
-				if (!(rop==">"||rop==">>")) {
-					return terr(`sh: unsupported operator: '${tok.r_op}'`);
-				}
-				let tok2 = arr[i+1];
-				if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
-				if (tok2.t == "quote") tok2={t: "word", word: tok2.quote.join("")}
-				if (tok2==" ") {
-					i++;
-					tok2 = arr[i+1];
-				}
-				if (!(tok2 && tok2.t==="word")) return terr(`sh: invalid or missing redirection operand`);
-				arr.splice(i+1, 1);
-				val = null;
-				redir = [tok.r_op, tok2.word];
-			}
-			if (val) {
-				args.push(val);
-			}
-		}//»
+}//»
+for (let k=0; k < arr.length; k++){//parameters«
 
-		arr = args;
+let tok = arr[k];
+if (tok.t==="word") {
+	let rv = parameter_expansion(tok);
+	if (isStr(rv)) return terr(`sh: ${rv}`);
+	arr[k] = rv;
+}
+
+}//»
+for (let k=0; k < arr.length; k++){//backquotes«
+
+let tok = arr[k];
+if (tok.t==="word") {
+	let rv = await backquote_substitution(tok.word, this, env);
+	if (rv !== tok.word){
+		let newtoks = [];
+		for (let wrd of rv){
+			newtoks.push({t:"word",word: wrd});
+		}
+		arr.splice(k, 1, ...newtoks);
+		k+=newtoks.length-1;
+//		k--;//Need to revisit the original position, in case there are more expansions there
+	}
+}
+
+}//»
+
+for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
+
+let tok = arr[k];
+if (tok.t==="word") {
+//log(k, tok);
+	let rv = await filepath_expansion(tok.word, term.cur_dir);
+//log("RV", rv);
+	if (isStr(rv)){
+		term.response(rv, {isErr: true});
+		continue;
+	}
+	if (rv !== tok.word){
+		let newtoks = [];
+		for (let wrd of rv){
+			newtoks.push({t:"word",word: wrd});
+		}
+		arr.splice(k, 1, ...newtoks);
+		k+=newtoks.length-1;
+//		k--;//Need to revisit the original position, in case there are more expansions there
+	}
+}
+
+}//»
+
+
+for (let k=0; k < arr.length; k++){/*«quote removal*/
+	let tok = arr[k];
+	if (tok.t==="word") {
+		arr[k]=quote_removal(tok.word);
+	}
+}/*»*/
+
+for (let k=0; k < arr.length; k++){//«
+	let tok = arr[k];
+	let typ = tok.t;
+	let val = tok[typ];
+	if (typ==="r_op"){
+		let rop = tok.r_op;
+		if (!(rop==">"||rop==">>")) {
+			return terr(`sh: unsupported operator: '${tok.r_op}'`);
+		}
+		let tok2 = arr[k+1];
+		if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
+		if (!(tok2 && isStr(tok2))) return terr(`sh: invalid or missing redirection operand`);
+		arr.splice(k, 2);
+		val = null;
+		redir = [tok.r_op, tok2];
+	}
+}//»
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
-		rv = add_to_env(arr, env, {term});
+		let rv = add_to_env(arr, env, {term});
 		if (rv.length) term.response(rv, {isErr: true});
 		if (arr[0]==" ") arr.shift();
-//»
 
 //Command response callbacks«
 
@@ -2752,7 +4746,10 @@ term.refresh();
 };//»
 const err_cb=(lns)=>{//«
 if (this.cancelled) return;
-if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
+if (isStr(lns)) {
+if (!lns.match(/^sh:/)) lns=[`${usecomword}: ${lns}`];
+else lns = [lns];
+}
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in err_cb");
@@ -3032,284 +5029,7 @@ this.cancel=()=>{
 	if (!pipe) return;
 	for (let com of pipe) com.cancel();
 };
-};
-})();
-/*»*/
-
-//«DevShell
-const DevShell = (()=>{
-
-//«Var
-
-//Maybe quote these (depending on context)
-// *  ?  [  ]  ^  -  !  #  ~  =  %  {  ,  }
-const START_OPERATOR_CHARS=[ "|","&",";","<",">","(",")",];
-const OPERATOR_TOKS=[...START_OPERATOR_CHARS, '&&','||',';;',';&','>&','>>','>|','<&','<<','<>','<<-','<<<',];
-//Let's allow '<' and '<<<' (and maybe heredocs in scripts)
-const UNSUPPORTED_SCRIPT_OPERATOR_TOKS=[ '&',';;',';&','>&','>|','<&','<>'];
-const UNSUPPORTED_INTERACTIVE_OPERATOR_TOKS=[...UNSUPPORTED_SCRIPT_OPERATOR_TOKS,"<<","<<-"];
-
-const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
-
-const DECIMAL_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
-const DECIMAL_CHARS_0_to_9=["0", "1","2","3","4","5","6","7","8","9"];
-const HEX_CHARS=[ "a","A","b","B","c","C","d","D","e","E","f","F",...DECIMAL_CHARS_0_to_9 ];
-
-const START_NAME_CHARS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","_"];
-const ANY_NAME_CHARS = [...START_NAME_CHARS, ...DECIMAL_CHARS_0_to_9];
-
-const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
-
-//»
-
-class Oper{//«
-	#chars;
-	constructor(){
-		this.#chars="";
-	}
-	add(ch){
-		let str = this.#chars + ch;
-		if (OPERATOR_TOKS.includes(str)){
-			this.#chars = str;
-			return true;
-		}
-		return false;
-	}
-	get chars(){
-		return this.#chars;
-	}
-	get isRedir(){
-		return this.#chars[0]===">"|| this.#chars[0]==="<";
-	}
-
-}//»
-
-class Word{//«
-	#arr;
-	constructor(){
-		this.#arr=[];
-	}
-	add(val){
-		this.#arr.push(val);
-	}
-}//»
-
-//Return an array of Word's and Oper's
-//There might be a start_i and a stopping condition (an end quote or paren)
-
-//If 'typ' is undefined, we are in "free space"
-//Otherwise, it is one of:
-/*
-- ' (no escaping)
-- $'
-- "
-- $(
-- ` (DO NOT flat scan for the final '`'. Set off a tokenizer with a halt_on_bq flag)
-- ${
-*/
-const tokenize = (arr, start_i, typ) => {//«
-
-let tok = null;//The current token
-let out = [];//The array of tokens
-
-for (let i=start_i; i < arr.length; i++) {
-
-let ch=arr[i];
-let ch1=arr[i+1];
-
-/*«If the end of input is recognized, the current token (if any) shall be
-delimited.
-»*/
-
-/*«If the previous character was used as part of an operator and the current
-character is not quoted and can be used with the previous characters to form an
-operator, it shall be used as part of that (operator) token.
-»*/
-
-if (tok instanceof Oper && tok.add(ch)){
-	continue;
-}
-
-/*«If the previous character was used as part of an operator and the current
-character cannot be used with the previous characters to form an operator, the
-operator containing the previous character shall be delimited.
-»*/
-
-if (tok instanceof Oper){
-	out.push(tok);
-	tok = null;
-}
-
-/*«If the current character is an unquoted <backslash>, single-quote, or
-double-quote or is the first character of an unquoted <dollar-sign>
-single-quote sequence, it shall affect quoting for subsequent characters up to
-the end of the quoted text. The rules for quoting are as described in 2.2
-Quoting . During token recognition no substitutions shall be actually
-performed, and the result token shall contain exactly the characters that
-appear in the input unmodified, including any embedded or enclosing quotes or
-substitution operators, between the start and the end of the quoted text. The
-token shall not be delimited by the end of the quoted field.
-»*/
-if (ch==="\\") {
-/*
-
-By "escaping", we are just jumping over this character, and the either adding the next one to
-the current word or starting a new word.
-
-in free space:
-  -Escape if an operator, quote or ds+[ ' ( { START_NAME_CHARS SPECIAL_SYMBOLS DECIMAL_CHARS_1_to_9 ]
-  -Otherwise, skip this char
-type==='"':
-  -Escape if a '"'
-*/
-
-}
-else if (ch==="'") {
-//Scan for next "'" (no escapes)
-}
-else if (ch ==='"') {
-// tokenize(arr, i+1, '"')
-//	 - No "$'" will be done
-}
-else if(ch==="$" && ch1==="'"){
-//Flat scan for next "'" (with escapes)
-
-}
-/*«If the current character is an unquoted '$' or '`', the shell shall identify
-the start of any candidates for parameter expansion ( 2.6.2 Parameter Expansion
-), command substitution ( 2.6.3 Command Substitution ), or arithmetic expansion
-( 2.6.4 Arithmetic Expansion ) from their introductory unquoted character
-sequences: '$' or "${", "$(" or '`', and "$((", respectively. The shell shall
-read sufficient input to determine the end of the unit to be expanded (as
-explained in the cited sections). While processing the characters, if instances
-of expansions or quoting are found nested within the substitution, the shell
-shall recursively process them in the manner specified for the construct that
-is found. For "$(" and '`' only, if instances of io_here tokens are found
-nested within the substitution, they shall be parsed according to the rules of
-2.7.4 Here-Document ; if the terminating ')' or '`' of the substitution occurs
-before the NEWLINE token marking the start of the here-document, the behavior
-is unspecified. The characters found from the beginning of the substitution to
-its end, allowing for any recursion necessary to recognize embedded constructs,
-shall be included unmodified in the result token, including any embedded or
-enclosing substitution operators or quotes. The token shall not be delimited by
-the end of the substitution.
-»*/
-else if (ch==="$" && ch1==="(") {
-// tokenize(arr, i+2, '$(')
-
-}
-else if (ch==="$" && ch1==="{") {
-/*
-Scan forward for a valid parameter (or #parameter), and the following possible chars
-before doing: tokenize(arr, some_i, "${")
-
-:- := :? :+ - = ? + % %% # ##
-
-*/
-
-}
-else if (ch==="$" && START_NAME_CHARS.includes(ch[i+1])) {
-//Param sub: scan forward until non-ANY_NAME_CHARS
-}
-else if (ch==="$" && SPECIAL_SYMBOLS.includes(ch[i+1])) {
-//Symbol sub: Just grab this next char
-}
-else if (ch==="$" && DECIMAL_CHARS_1_to_9.includes(ch[i+1])) {
-//Arg sub: Just grab this next char
-}
-else if (ch==="`") {
-//Flat scan forward for the first unescaped "`"
-}
-/*«If the current character is not quoted and can be used as the first character
-of a new operator, the current token (if any) shall be delimited. The current
-character shall be used as the beginning of the next (operator) token.
-»*/
-else if (START_OPERATOR_CHARS.includes(ch)){
-	if (tok) {
-		out.push(tok);
-	}
-	tok = new Oper();
-	if (!tok.add(ch)){
-throw new Error(`Could not start the operator tok with: '${ch}' !?!?!?`);
-	}
-}
-/*«If the current character is an unquoted <blank>, any token containing the
-previous character is delimited and the current character shall be discarded.
-»*/
-else if (ch===" " || ch==="\t"){
-	if (tok){
-		out.push(tok);
-		tok = null;
-	}
-	continue;
-}
-/*«If the previous character was part of a word, the current character shall be
-appended to that word.
-»*/
-else if (tok instanceof Word){
-	tok.add(ch);
-}
-
-/*«If the current character is a '#', it and all subsequent characters up to, but
-excluding, the next <newline> shall be discarded as a comment. The <newline>
-that ends the line is not considered part of the comment.
-»*/
-else if (ch==="#"){
-//THis *would be* the start of a new word (since that is the default, else condition)
-	while (arr[i+1] && arr[i+1]!=="\n") i++;
-}
-
-//The current character is used as the start of a new word.
-	else{
-		tok = new Word();
-		tok.add(ch);
-	}
-}
-
-return out;
-
 };//»
-
-return function(term){
-
-//this.cancelled_time = 0;
-
-this.cancelled = false;
-
-this.execute = async(command_str, opts={})=>{
-
-let started_time = (new Date).getTime();
-
-const { interactive } = opts;
-
-const sherr = mess => {//«
-	term.response(`sh: ${mess}`, {isErr: true});
-	if (!scriptName) term.response_end();
-};//»
-
-let tokens = tokenize(command_str.split(""), 0);
-if (isStr(tokens)) {
-	sherr(tokens);
-	return;
-}
-
-if (DEBUG){
-jlog(tokens);
-}
-//log(command_str);
-
-term.response_end();
-
-};
-
-this.cancel=()=>{
-	this.cancelled = true;
-	let pipe = this.pipeline;
-	if (!pipe) return;
-	for (let com of pipe) com.cancel();
-};
-
-};
 })();
 /*»*/
 
@@ -3527,8 +5247,8 @@ let last_mode;
 
 let root_state = null;
 let cur_shell = null;
-let shell_class = null;
-let dev_shell_class = null;
+//let shell_class = null;
+//let dev_shell_class = null;
 let ls_padding = 2;
 let await_next_tab = null;
 
@@ -3558,6 +5278,7 @@ let cur_ps1;
 const OK_READLINE_SYMS=["DEL_","BACK_","LEFT_", "RIGHT_"];
 let stat_spans;
 
+let hold_terminal_screen;
 //let cur_dir;
 
 //»
@@ -4809,7 +6530,7 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 
 	ENV['USER'] = globals.CURRENT_USER;
 //	cur_shell = this.shell;
-	cur_shell = new this.shell_class(this);
+	cur_shell = new Shell(this);
 	let gotstr = str.trim();
 
 	str = str.replace(/\x7f/g, "");
@@ -5007,13 +6728,14 @@ This can happen, e.g. with errors with screen-based commands inside of pipelines
 since all "message" kinds of output *ALWAYS* go to the terminal (rather than 
 propagating through the pipeline).
 */
+/*
 	if (actor){
 		let s = out.join("\n");
 		if (use_color) console.log("%c"+s, `color: ${use_color}`);
 		else console.log(s);
 		return;
 	}
-
+*/
 	if (colors) {
 		if (!didFmt){
 			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
@@ -5030,15 +6752,30 @@ log("response colors",colors);
 	}
 	else colors = [];
 
-	if (lines.length && !lines[lines.length-1].length) lines.pop();
+/*The response mechanism is *ONLY* meant for the terminal's REPL mode. If there is
+an 'actor' in a pipeline, and a previous command in the pipeline has some non-output-stream
+message, then it always gets sent here, so we need to make sure we are putting the message
+into the appropriate lines (otherwise, the message gets primted onto the actor's screen.
+*/
+	let use_lines, use_line_colors;
+	if (hold_terminal_screen){
+		use_line_colors = hold_terminal_screen.line_colors;
+		use_lines = hold_terminal_screen.lines;
+	}
+	else {
+		use_lines = lines;
+		use_line_colors = line_colors;
+	}
+
+	if (use_lines.length && !use_lines[use_lines.length-1].length) use_lines.pop();
 
 	let len = out.length;
-	for (let i=0, curnum = lines.length; i < len; i++){
+	for (let i=0, curnum = use_lines.length; i < len; i++){
 		let ln = out[i];
 		let col = colors[i];
 		if (didFmt){
-			lines[curnum] = ln.split("");
-			line_colors[curnum] = col;
+			use_lines[curnum] = ln.split("");
+			use_line_colors[curnum] = col;
 			curnum++;
 			continue;
 		}
@@ -5046,9 +6783,9 @@ log("response colors",colors);
 		if (pretty) arr = fmt2(ln);
 		else arr = fmt(ln);
 		for (let l of arr){
-			lines[curnum] = l.split("");
-			if (use_color) line_colors[curnum] = {0: [l.length, use_color]};
-			else line_colors[curnum] = col;
+			use_lines[curnum] = l.split("");
+			if (use_color) use_line_colors[curnum] = {0: [l.length, use_color]};
+			else use_line_colors[curnum] = col;
 			curnum++;
 		}
 	}
@@ -6032,13 +7769,15 @@ if (!dev_mode){
 cwarn("Not dev_mode");
 return;
 }
-if (this.shell_class === Shell){
-	this.shell_class = DevShell;
-do_overlay("Using dev_shell");
+if (parser === Parser){
+parser = DevParser;
+//	this.shell_class = DevShell;
+do_overlay("Using DevParser");
 }
 else {
-	this.shell_class = shell_class;
-do_overlay("Using shell");
+//	this.shell_class = Shell;
+parser = Parser;
+do_overlay("Using Parser");
 }
 //log(this.shell);
 }
@@ -6162,17 +7901,21 @@ const init = async(appargs={})=>{
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
 	}
-	shell_class = Shell;
-	dev_shell_class = DevShell;
+//	shell_class = Shell;
+//	dev_shell_class = DevShell;
 //	shell = new Shell(this);
 //	dev_shell = new DevShell(this);
-	if (dev_mode && USE_DEVSHELL) {
+	if (dev_mode && USE_DEV_PARSER) {
 //		this.shell = dev_shell;
-		this.shell_class = dev_shell_class;
-		init_prompt+=`\nDev shell: true`;
+//		this.shell_class = dev_shell_class;
+		parser = DevParser;
+		init_prompt+=`\nDev parser: true`;
+	}
+	else{
+		parser = Parser;
 	}
 //	else this.shell = shell;
-	else this.shell_class = shell_class;
+//	else this.shell_class = shell_class;
 	response(init_prompt.split("\n"));
 	did_init = true;
 	sleeping = false;
@@ -6366,6 +8109,7 @@ this.set_lines = (linesarg, colorsarg)=>{//«
 this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {//«
 
 	let screen = {actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines, onescape: termobj.onescape};
+	if (!actor) hold_terminal_screen = screen;
 	termobj.onescape = escape_fn;
 	actor = actor_arg;
 
@@ -6385,7 +8129,7 @@ this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines
 
 };//»
 this.quit_new_screen = (screen) => {//«
-
+if (screen === hold_terminal_screen) hold_terminal_screen = null;
 let old_actor = actor;
 ({actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines} = screen);
 is_editor = appclass == "editor";
