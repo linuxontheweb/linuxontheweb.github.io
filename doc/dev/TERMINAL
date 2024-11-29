@@ -3727,6 +3727,7 @@ this.cancel=()=>{
 
 //- Create redirection objects
 //- Objects are converted into strings ({t:"word", word: "blah"} -> "blah")
+
 		for (let i=0; i < arr.length; i++){//«
 			let tok = arr[i];
 			let typ = tok.t;
@@ -3762,4 +3763,5 @@ this.cancel=()=>{
 		rv = add_to_env(arr, env, {term});
 		if (rv.length) term.response(rv, {isErr: true});
 		if (arr[0]==" ") arr.shift();
+
 //»
