@@ -160,6 +160,7 @@ const OPERATOR_CHARS=[//«
 "(",
 ")",
 ];//»
+//const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
 const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
 const UNSUPPORTED_OPERATOR_TOKS=[/*«*/
 	'&',
@@ -188,9 +189,6 @@ const ANY_NAME_CHARS = [...START_NAME_CHARS, ...ANY_DIGIT_CHARS];
 //const ANY_NAME_CHARS = [...START_NAME_CHARS, ...DECIMAL_CHARS_0_to_9];
 const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
 
-//const START_OPERATOR_CHARS=[ "|","&",";","<",">","(",")",];
-//const OPERATOR_TOKS=[...START_OPERATOR_CHARS, '&&','||',';;',';&','>&','>>','>|','<&','<<','<>','<<-','<<<',];
-
 const OPERATOR_TOKS=[//«
 '&&',
 '||',
@@ -208,9 +206,6 @@ const OPERATOR_TOKS=[//«
 const OK_OUT_REDIR_TOKS=[">",">>"];
 const OK_IN_REDIR_TOKS=["<","<<","<<<"];
 const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
-//Let's allow '<' and '<<<' (and maybe heredocs in scripts)
-const UNSUPPORTED_SCRIPT_OPERATOR_TOKS=[ '&',';;',';&','>&','>|','<&','<>'];
-const UNSUPPORTED_INTERACTIVE_OPERATOR_TOKS=[...UNSUPPORTED_SCRIPT_OPERATOR_TOKS,"<<","<<-"];
 
 const HEX_CHARS=[ "a","A","b","B","c","C","d","D","e","E","f","F",...DECIMAL_CHARS_0_to_9 ];
 
@@ -629,7 +624,7 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 	if (!parpath) return {err:`${fname}: Permission denied`};
 	let parnode = await fsapi.pathToNode(parpath);
 	let typ = parnode.type;
-	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: Invalid or unsupported path`};
+	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: invalid or unsupported path`};
 	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 		return {err:`${fname}: Permission denied`};
 	}
@@ -1138,7 +1133,8 @@ async run(){
 	if (this.args.length) return this.no("not expecting arguments");
 	let ch = await this.term.getch("");
 	if (!ch) return this.no("no character returned");
-	this.out(`Got: ${ch} (code: ${ch.charCodeAt()})`);
+	this.suc(`Got: ${ch} (code: ${ch.charCodeAt()})`);
+	this.out(ch);
 	this.ok();
 }
 
@@ -3595,14 +3591,14 @@ log(lastcomcode);
 		lastcomcode = E_ERR;
 	}
 	if (com.redirLines) {
-cwarn("Not writing to", com.out_redir);
-/*
+//cwarn("Not writing to", com.out_redir);
+///*
 		let {err} = await write_to_redir(term, com.redirLines, com.out_redir, com.env);
 		if (this.cancelled) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
 		}
-*/
+//*/
 	}
 
 }
@@ -6276,11 +6272,13 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 		}
 		else if (getch_cb){
 			if (ispress) {
+				sleeping = true;
 				getch_cb(e.key);
 				getch_cb = null;
 			}
 			else {
 				if (sym=="ENTER_"){
+					sleeping = true;
 					getch_cb(getch_def_ch);
 					getch_def_ch = undefined;
 				}
@@ -6599,18 +6597,19 @@ this.getch = async(promptarg, def_ch)=>{//«
 	if (promptarg){
 		for (let ch of promptarg) handle_letter_press(ch);
 	}
+	sleeping = false;
 	return new Promise((Y,N)=>{
 		getch_def_ch = def_ch;
 		getch_cb = Y;
 	});
 };//»
 this.read_line = async(promptarg)=>{//«
-	sleeping = false;
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		line_break();
 		cur_prompt_line = y+scroll_num-1;
 	}
 	x=0;
+	sleeping = false;
 	if (promptarg){
 		read_line_prompt_len = promptarg.length;
 		for (let ch of promptarg) handle_letter_press(ch);

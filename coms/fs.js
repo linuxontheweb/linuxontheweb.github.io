@@ -369,8 +369,14 @@ log(val);
 }//»
 async run(){
 	await this.awaitCb;
-	if ((this.redir && this.redir.length) || this.pipeTo || this.opts["force-stdout"]){
+	if (this.pipeTo || this.opts["force-stdout"]){
 		this.out(this.editor.get_lines({str: true}));
+	}
+	else if (this.redirLines){
+		let lns = this.editor.get_lines({str: true});
+		this.redirLines.push(...lns);
+//cwarn("REDIRLINES");
+//log(lns);
 	}
 	this.ok();
 }
