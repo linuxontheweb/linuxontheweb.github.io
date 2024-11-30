@@ -1,4 +1,16 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
+/*11/30/24: Heredocs: Instead of passing a string into execute, perhaps we should
+pass in a object with a "scan for eof marker", in order to allow heredocs to be
+collected.
+
+We are passing in heredocScanner's in from the terminal's shell.execute call, and
+the call in class ScriptCom.
+
+We are not currently doing anything past tilde expansion for the redir words (including
+herestrings),
+and we are not currently expanding anything in the heredocs. So, the herestrings
+themselves only get tilde expanded.
+*/
 //11/27/24: We are silently skipping file glob patterns with slashes in them//«
 //@EJUTIOPB, so only globs in the current directory will work.
 //$ echo */* *
@@ -151,16 +163,16 @@ const OPERATOR_CHARS=[//«
 const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
 const UNSUPPORTED_OPERATOR_TOKS=[/*«*/
 	'&',
-	'<',
+//	'<',
 	';;',
 	';&',
 	'>&',
 	'>|',
 	'<&',
-	'<<',
+//	'<<',
 	'<>',
 	'<<-',
-	'<<<'
+//	'<<<'
 ];/*»*/
 const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 //const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
@@ -193,6 +205,9 @@ const OPERATOR_TOKS=[//«
 '<<-',
 '<<<',
 ];//»
+const OK_OUT_REDIR_TOKS=[">",">>"];
+const OK_IN_REDIR_TOKS=["<","<<","<<<"];
+const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 //Let's allow '<' and '<<<' (and maybe heredocs in scripts)
 const UNSUPPORTED_SCRIPT_OPERATOR_TOKS=[ '&',';;',';&','>&','>|','<&','<>'];
 const UNSUPPORTED_INTERACTIVE_OPERATOR_TOKS=[...UNSUPPORTED_SCRIPT_OPERATOR_TOKS,"<<","<<-"];
@@ -635,7 +650,7 @@ const Com = class {/*«*/
 		for (let k in env) {
 			this[k]=env[k];
 		}
-		if (this.redir&&this.redir.length){
+		if (this.out_redir&&this.out_redir.length){
 			this.redirLines = [];
 		}
 		this.awaitEnd = new Promise((Y,N)=>{
@@ -683,9 +698,28 @@ const ScriptCom = class extends Com{//«
 		let scriptOut = this.out;
 		let scriptArgs = this.args;
 		let scriptName = this.name;
-		for (let ln of this.lines){
+		let lns = this.lines;
+		let len = lns.length;
+		let i;
+		let heredocScanner = (which) => {
+			let doc = [];
+			i++;
+			if (i===len) return `unexpected newline (looking for '${which}')`;
+			while (i < len){
+				let ln = lns[i];
+				if (ln === which) {
+					return doc;
+				}
+				doc.push(ln);
+				i++;
+			}
+			return `marker not found (looking for '${which}')`
+		};
+		for (i=0; i < len; i++){
+			let ln = lns[i];
 			if (this._cancelled) return;
-			code = await execute(ln, {scriptOut, scriptName, scriptArgs});
+			let rv = await execute(ln, {scriptOut, scriptName, scriptArgs, heredocScanner});
+			if (Number.isFinite(rv)) code = rv;
 			if(code instanceof Number && code.isExit){
 				break;
 			}
@@ -1512,7 +1546,67 @@ const Parser=(()=>{
 /*«Var*/
 
 /*»*/
+const escapes = arr =>{//«
+let qtyp;
+const DQ_ESC_CHARS=['"',"$", "`", "\\"];
+const BQ_ESC_CHARS=["$", "`", "\\"];
+for (let i = 0; i < arr.length; i++) {
+	let tok = arr[i];
+	let next = arr[i+1];
+	if (tok === "\\") {
+		if (!next) return "line continuation is not supported";
+		if (qtyp === "'") continue;
+		if (qtyp==='"') {
+			let str = new String(next);
+			str.escaped = true;
+			if(!DQ_ESC_CHARS.includes(next)){
+				str.toString=()=>{return "\\" + next;};
+			}
+			arr[i] = str;
+			arr.splice(i + 1, 1);
+		}
+		else if (qtyp==='`'){
+			if (BQ_ESC_CHARS.includes(next)){
+				let str = new String(next);
+				str.escaped = true;
+				arr[i] = str;
+				arr.splice(i + 1, 1);
+			}
+		}
+		else{
+			let str = new String(next);
+			str.escaped = true;
+			if (qtyp){
+				if (qtyp === "$'" && next === "'"){}
+				else {
+					str.toString=()=>{return "\\" + next;};
+				}
+			}
+			arr[i] = str;
+			arr.splice(i + 1, 1);
+		}
+	}
+	else if (!qtyp && tok === '$' && next === "'"){
+		qtyp = "$'";
+		i++;
+	}
+	else if (!qtyp && tok === "'"){
+		qtyp = "'";
+	}
+	else if (!qtyp && tok === '"'){
+		qtyp = '"';
+	}
+	else if (!qtyp && tok === '`'){
+		qtyp = '`';
+	}
+	else if (tok === qtyp || (tok === "'" && qtyp === "$'")) qtyp = null;
+}
+if (qtyp) return `unterminated quote: ${qtyp}`
+return arr;
 
+};/*»*/
+
+/*
 const escapes = arr => {//«
 
 let in_single = false;
@@ -1537,6 +1631,7 @@ for (let j = 0; j < arr.length; j++) {
 return arr;
 
 };//»
+*/
 
 //ErrorHandler«
 
@@ -1885,6 +1980,7 @@ return {
 parse:command_str=>{//«
 
 let escaped = escapes(command_str.split(""));
+if (isStr(escaped)) return escaped;
 let parser = new Parser(escaped);
 let toks;
 try {
@@ -1980,35 +2076,38 @@ sloom`ls -l ~/slerm`CHOOM`date +%s`"  GWUBBB   "`./some_script.sh -x -y zzzz | g
 */
 if (!arr.includes("`")) return arr;
 
+let qtyp;
 let out=[];
 let curword;
 let bq_arr;
 for (let i=0; i < arr.length; i++){
 let ch = arr[i];
-
-if (ch === "`"){
+if (ch === "`" && qtyp !== "'"){
 	if (!bq_arr){
-//initialize
 		bq_arr = [];
 	}
 	else{
 		let sub_lines = [];
-//Don't care about return value, just output
-try{
-		await shell.execute(bq_arr.join(""), {subLines: sub_lines, env});
-}
-catch(e){
-//cerr(e);
-return e.message;
-}
-		for (let ln of sub_lines){
-			if (curword){
-				curword.push(...ln);
-				out.push(curword);
-				curword = null;
-			}
-			else{
-				out.push([...ln]);
+		try{
+			await shell.execute(bq_arr.join(""), {subLines: sub_lines, env});
+		}
+		catch(e){
+			return e.message;
+		}
+		if (qtyp==='"'){
+			if (curword) curword.push(...sub_lines.join("\n"));
+			else out.push([...sub_lines.join("\n")]);
+		}
+		else {
+			for (let ln of sub_lines){
+				if (curword){
+					curword.push(...ln);
+					out.push(curword);
+					curword = null;
+				}
+				else{
+					out.push([...ln]);
+				}
 			}
 		}
 		bq_arr = null;
@@ -2018,10 +2117,23 @@ else if (bq_arr){
 	bq_arr.push(ch);
 }
 else {
+	if (ch==='"'||ch === "'"){
+		if (!qtyp) qtyp = ch;
+		else if (qtyp===ch) qtyp = null;
+	}
 	if (!curword) curword = [];
 	curword.push(ch);
 }
 }
+
+if (bq_arr){
+//An unterminated backquote array should only happen like this (this isn't how bash works):
+//$ echo "`whatever blah 123"
+//In this case, bash will open the secondary prompt in order to continue input
+	if (qtyp==='"') return `unterminated backquote inside double quotes`
+	return `should not get here asjdasjdksa!^@*^#*&@!`;
+}
+
 if (curword){
 	if (out.length){
 		out[out.length-1].push(...curword);
@@ -2766,6 +2878,45 @@ let rv = await do_dirs(dirs, path_arr, true);
 if (rv.length) return rv;
 return arr;
 };/*»*/
+const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {//«
+let stdin;
+let red = in_redir[0];
+let val = in_redir[1];
+if (red==="<"){
+	let node = await val.toNode(term);
+	if (!node) {
+		return `${val}: no such file or directory`;
+	}
+	if (!node.isFile){
+		return `${val}: not a regular file`;
+	}
+	let rv = await node.text;
+	if (!isStr(rv)){
+		return `${val}: an invalid value was returned`;
+	}
+	stdin = rv.split("\n");
+}
+else if (red==="<<<"){
+	stdin = [val];
+}
+else if (red==="<<"){
+	if (!heredocScanner){
+		if (haveSubLines){
+			return "heredocs are not implemented within command substititions";
+		}
+		else{
+			return "no 'heredocScanner' was found! (this error should not exist djkljk*&*[}#$JKF)";
+		}
+	}
+	if (heredocScanner){
+		stdin = await heredocScanner(val);
+	}
+	else{
+cwarn("NO HEREDOC SCANNER!!!");
+	}
+}
+return stdin;
+}/*»*/
 
 return function(term){
 
@@ -2822,10 +2973,11 @@ worthy
 let started_time = (new Date).getTime();
 
 //let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
-let {scriptOut, scriptArgs, scriptName, subLines, env}=opts;
+let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env}=opts;
 //let {scriptOut, subLines, env}=opts;
 let rv;
 let is_top_level = !(scriptOut||subLines);
+let heredocs;
 let no_end = !is_top_level;
 
 //Refuse and enter command that seems too long for our taste
@@ -2838,7 +2990,8 @@ const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});
 //	if (!scriptOut) term.response_end();
 	if (!no_end) term.response_end();
-	return code||E_ERR;
+	last_exit_code = code||E_ERR;
+	return last_exit_code;
 };//»
 const can=()=>{//«
 //Cancel test function
@@ -2877,7 +3030,8 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 		let pipeTo = j < pipelist.length-1;
 		let args=[];
 		let comobj, usecomword;
-		let redir;
+//		let redir;
+		let in_redir, out_redir;
 
 //For each word within a command, the shell processes <backslash>-escape«
 //sequences inside dollar-single-quotes (See 2.2.4 Dollar-Single-Quotes)
@@ -2987,6 +3141,7 @@ Else, let it pass through
 
 »*/
 
+
 for (let k=0; k < arr.length; k++){//curlies«
 
 let tok = arr[k];
@@ -3011,6 +3166,30 @@ if (tok.t==="word") {
 }
 
 }//»
+
+for (let k=0; k < arr.length; k++){//redirs«
+	let tok = arr[k];
+	let typ = tok.t;
+	let val = tok[typ];
+	if (typ==="r_op"){
+		let rop = tok.r_op;
+		if (!OK_REDIR_TOKS.includes(rop)) {
+			return terr(`sh: unsupported operator: '${tok.r_op}'`);
+		}
+		let tok2 = arr[k+1];
+		if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
+//		if (!(tok2 && isStr(tok2))) return terr(`sh: invalid or missing redirection operand`);
+//		if (!(tok2 && isStr(tok2))) return terr(`sh: invalid or missing redirection operand`);
+		if (!tok2.word) return terr(`sh: invalid or missing redirection operand`);
+		arr.splice(k, 2);
+		k-=2;
+		val = null;
+		if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [tok.r_op, tok2.word.join("")];
+		else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [tok.r_op, tok2.word.join("")];
+		else return terr(`sh: unsupported operator: '${rop}'`);
+	}
+}//»
+
 for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
@@ -3059,7 +3238,6 @@ if (tok.t==="word") {
 		}
 		arr.splice(k, 1, ...newtoks);
 		k+=newtoks.length-1;
-//		k--;//Need to revisit the original position, in case there are more expansions there
 	}
 }
 
@@ -3071,24 +3249,6 @@ for (let k=0; k < arr.length; k++){/*«quote removal*/
 		arr[k]=quote_removal(tok.word);
 	}
 }/*»*/
-
-for (let k=0; k < arr.length; k++){//«
-	let tok = arr[k];
-	let typ = tok.t;
-	let val = tok[typ];
-	if (typ==="r_op"){
-		let rop = tok.r_op;
-		if (!(rop==">"||rop==">>")) {
-			return terr(`sh: unsupported operator: '${tok.r_op}'`);
-		}
-		let tok2 = arr[k+1];
-		if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
-		if (!(tok2 && isStr(tok2))) return terr(`sh: invalid or missing redirection operand`);
-		arr.splice(k, 2);
-		val = null;
-		redir = [tok.r_op, tok2];
-	}
-}//»
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
 		let rv = add_to_env(arr, env, {term});
@@ -3236,7 +3396,9 @@ term.refresh();
 //»
 
 const com_env = {/*«*/
-	redir,
+//	redir,
+	in_redir,
+	out_redir,
 	isSub: !!subLines,
 	scriptOut,
 //	stdin,
@@ -3325,39 +3487,45 @@ cerr(e);
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
 				pipeline.push(make_sh_error_com(comword, `command not found`, com_env));
+				last_exit_code = E_ERR;
 				continue;
 			}
 
 			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
 			if (!node) {
 				pipeline.push(make_sh_error_com(comword, `file not found`, com_env));
+				last_exit_code = E_ERR;
 				continue;
 			}
 			let app = node.appName;
 			if (app===FOLDER_APP) {
 				pipeline.push(make_sh_error_com(comword, `is a directory`, com_env));
+				last_exit_code = E_ERR;
 				continue;
 			}
 			if (app!==TEXT_EDITOR_APP) {
 				pipeline.push(make_sh_error_com(comword, `not a text file`, com_env));
+				last_exit_code = E_ERR;
 				continue;
 			}
 			if (!comword.match(/\.sh$/i)){
 				pipeline.push(make_sh_error_com(comword, `only executing files with '.sh' extension`, com_env));
+				last_exit_code = E_ERR;
 				continue;
 			}
 			let text = await node.text;
 			if (!text) {
 				pipeline.push(make_sh_error_com(comword, `no text returned`, com_env));
+				last_exit_code = E_ERR;
 				continue;
 			}
 			comobj = new ScriptCom(this, usecomword, text.split("\n"), arr, com_env);
-//			comobj._name = usecomword;
 			pipeline.push(comobj);
 			continue;
 		}//»
 		if (screen_grab_com && com.grabsScreen){
 			pipeline.push(make_sh_error_com(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env));
+			last_exit_code = E_ERR;
 			continue;
 		}
 		screen_grab_com = com.grabsScreen?comword: false;
@@ -3368,9 +3536,29 @@ cerr(e);
 		rv = get_options(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
 			term.response(rv[1][0], {isErr: true});
+			last_exit_code = E_ERR;
 			continue;
 		}
 		opts = rv[0];
+
+		let stdin;
+//log("IN REDIR", in_redir);
+		if (in_redir) {
+			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
+			if (isStr(stdin)){
+				pipeline.push(make_sh_error_com(comword, stdin, com_env));
+				last_exit_code = E_ERR;
+				continue;
+			}
+			else if (!isArr(stdin)){
+				pipeline.push(make_sh_error_com(comword, "an invalid value was returned from get_stdin_lines (see console)", com_env));
+cwarn("Here is the non-array value");
+log(stdin);
+				last_exit_code = E_ERR;
+				continue;
+			}
+		}
+		com_env.stdin = stdin;
 
 		try{
 			comobj = new com(usecomword, arr, opts, com_env);
@@ -3408,16 +3596,20 @@ log(lastcomcode);
 		lastcomcode = E_ERR;
 	}
 	if (com.redirLines) {
-		let {err} = await write_to_redir(term, com.redirLines, com.redir, com.env);
+cwarn("Not writing to", com.out_redir);
+/*
+		let {err} = await write_to_redir(term, com.redirLines, com.out_redir, com.env);
 		if (this.cancelled) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
 		}
+*/
 	}
 
 }
 
-//log(pipeline);
+last_exit_code = lastcomcode;
+
 //LEUIKJHX
 	if (lastcomcode==E_SUC){//SUCCESS«
 		if (pipetype=="||"){
@@ -4967,7 +5159,6 @@ const get_command_arr=async (dir, arr, pattern)=>{//«
 	return match_arr;
 };//»
 const execute = async(str, if_init, halt_on_fail)=>{//«
-
 	ENV['USER'] = globals.CURRENT_USER;
 //	cur_shell = this.shell;
 	cur_shell = new Shell(this);
@@ -4979,8 +5170,24 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 	for (let k in ENV){
 		env[k]=ENV[k];
 	}
-
-	last_exit_code = await cur_shell.execute(str,{env});
+	let heredocScanner=async(which)=>{
+		let doc = [];
+		sleeping = false;
+		let didone = false;
+		let prmpt="> ";
+		let prmpt_len = prmpt.length;
+		let rv;
+		while (true){
+			rv = await this.read_line(prmpt);
+			if (didone) rv = rv.slice(prmpt_len);
+			if (rv===which) break;
+			doc.push(rv);
+			didone = true;
+		}
+		sleeping = true;
+		return doc;
+	};
+	await cur_shell.execute(str,{env, heredocScanner});
 
 //log("RV", rv);
 
@@ -6112,7 +6319,6 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 			}
 		}
 	}//»
-
 	let ret = null;
  	if (ispress) {//«
 		num_ctrl_d = 0;

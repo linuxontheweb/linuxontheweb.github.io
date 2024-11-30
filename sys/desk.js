@@ -599,7 +599,9 @@ const DESK_CONTEXT_MENU=[
 	"Explorer::Alt+e",open_home_folder,
 	"Terminal::Alt+t", open_terminal,
 	"Help::Alt+h", open_help,
-
+	"Github\xa0Link", ()=>{
+		popok('<a href="https://github.com/linuxontheweb/linuxontheweb.github.io">Direct link</a> (opens in new window)',{title:"LOTW Github repo"});
+	}
 //"XMark\xa0Test __XMARK__",()=>{log(12345)},
 //"Check\xa0Test __CHECK__",()=>{log(12345)}
 
@@ -7034,12 +7036,9 @@ const poparea = (str_or_arr, title, if_rev_arr, cb, read_only, if_cancel, win) =
 //log(area);
 
 	area._fs = 20;
-//	div._add(area);
 	return make_popup({
-//		INPUT:if_input,
 		USEINPUT:area,
 		'SEL': true,
-//		'STR': div,
 		STR: area,
 		'VERYBIG': true,
 		'CB': cb,
@@ -7175,7 +7174,7 @@ const mkpopup_tdiv = (str, opts={}) => {//«
 			tdiv.innerHTML=str;
 		} 
 		else if (str instanceof HTMLElement) tdiv._add(str);
-//		do_links(tdiv);
+		do_links(tdiv);
 	}
 //log(tdiv);
 	tdiv.tabIndex="-1";

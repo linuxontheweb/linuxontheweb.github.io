@@ -52,18 +52,19 @@ const command_options = globals.shell_command_options;
 
 //Funcs«
 
-const get_file_lines_from_args = async(args, term)=>{//«
+const get_file_lines_from_args = async(args, term, errcb)=>{//«
 	let err = [];
 	let out = [];
 	const fullterr=(arg)=>{
-		err.push(`${fullpath}: ${arg}`);
+		if (errcb) errcb(`${fullpath}: ${arg}`);
+		else err.push(`${fullpath}: ${arg}`);
 	};
 	let fullpath;
 	while (args.length) {
 		fullpath = normPath(args.shift(), term.cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
-			fullterr(`No such file or directory`);
+			fullterr(`no such file or directory`);
 			continue;
 		}
 		if (node.appName === FOLDER_APP) {
@@ -382,17 +383,25 @@ static grabsScreen = true;
 }//»
 const com_cat = class extends Com{//«
 	init(){
-		if (!this.args.length && !this.pipeFrom) this.no("no args and not in pipe");
+//cwarn("STDIN?", this.stdin);
+		if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
 	}
 	async run(){
-		let{args}=this;
-		if (!args.length) return;
-		let rv = await get_file_lines_from_args(args, this.term);
-		if (rv.err && rv.err.length) this.err(rv.err);
+		let{args, err}=this;
+		if (!args.length) {
+			if (this.stdin){
+				this.out(this.stdin);
+				this.ok();
+			}
+			return;
+		}
+		let rv = await get_file_lines_from_args(args, this.term, err);
+//		if (rv.err && rv.err.length) this.err(rv.err);
 		if (rv.out && rv.out.length) this.out(rv.out);
 		this.ok();
 	}
 	pipeIn(val){
+		if (this.stdin) return;
 		this.out(val);
 		if (isEOF(val)) this.ok();
 	}
@@ -730,8 +739,8 @@ async run(){
 		have_error=true;
 		_err(mess);
 	};
-	let rv = await get_file_lines_from_args(args, this.term);
-	if (rv.err && rv.err.length) err(rv.err);
+	let rv = await get_file_lines_from_args(args, this.term, err);
+//	if (rv.err && rv.err.length) err(rv.err);
 	if (rv.out&&rv.out.length) this.#doGrep(rv.out);
 	have_error?this.no():this.ok();	
 }
@@ -792,8 +801,8 @@ async run(){
 		have_error=true;
 		_err(mess);
 	};
-	let rv = await get_file_lines_from_args(args, this.term);
-	if (rv.err && rv.err.length) err(rv.err);
+	let rv = await get_file_lines_from_args(args, this.term, err);
+//	if (rv.err && rv.err.length) err(rv.err);
 	if (rv.out&&rv.out.length) this.#doWC(rv.out);
 	this.#sendCount();
 	have_error?this.no():this.ok();	
@@ -1019,14 +1028,14 @@ touch:com_touch,
 
 }/*»*/
 
-if (admin_mode){
+if (admin_mode){/*«*/
 	coms._purge = com_purge;
 	coms._clearstorage = com_clearstorage;
 }
 else{
 	coms._purge = ADMIN_COM;
 	coms._clearstorage = ADMIN_COM;
-}
+}/*»*/
 
 //export const coms = {//«
 //_clearstorage: com_clearstorage,

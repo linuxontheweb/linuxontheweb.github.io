@@ -861,6 +861,7 @@ cerr(`${parpath}: Not a directory!`);
 _.toText = async function(opts = {}) {
 	let node = await this.toNode(opts);
 	if (!node) return;
+	if (!node.isFile) return;
 	let txt = await node.text;
 	if (opts.lines) return txt.split("\n");
 	return txt;
