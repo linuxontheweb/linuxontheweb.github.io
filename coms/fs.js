@@ -326,7 +326,8 @@ async init(){//«
 		}
 	}//»
 	if (!path) {
-		val="";
+		if (this.stdin) val = this.stdin.join("\n");
+		else val="";
 	}
 	else {
 		fullpath = normPath(path, term.cur_dir);
@@ -375,8 +376,6 @@ async run(){
 	else if (this.redirLines){
 		let lns = this.editor.get_lines({str: true});
 		this.redirLines.push(...lns);
-//cwarn("REDIRLINES");
-//log(lns);
 	}
 	this.ok();
 }

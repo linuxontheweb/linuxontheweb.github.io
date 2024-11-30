@@ -1,4 +1,19 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
+/*11/30/24: While doing "visual line select" in "file mode", it gave an
+error like: "yank_buffer is not iterable" when trying to do a weird
+operation like do_line_wrap, so @WUIOPHMDL, we are checking for the
+mode_hold variable, and then returning. I guess "file mode" was only to
+be for line selection/"yanking" purposes (rather than any kind of editing).
+
+In delete_lines @KOPLIERT, we are checking for the existence of the 'copy'
+attribute, when mode_hold === FILE_MODE;
+
+Perhaps we should have:
+const vis_line_edit_ok=()=>{
+	if (this.mode === VIS_LINE_MODE && this.mode_hold !== FILE_MODE) return true;
+	return false;
+};
+*/
 /*11/29/24: When going into alternate modes, there is not a global varible called
 'hold_lines', where we keep the actual editor lines.
 */
@@ -1362,16 +1377,23 @@ const handle_edit_input_tab = async(if_ctrl)=>{//«
 	}
 	let rv = await get_dir_contents(cur_completion_dir, cur_completion_name);
 	if (!rv.length) return;
-	if (!num_completion_tabs) num_completion_tabs = 0;
+	if (!num_completion_tabs) {
+		num_completion_tabs = 0;
+	}
+
 	let which = rv[num_completion_tabs%rv.length];
 	let str = which[0].slice(cur_completion_name.length);
+	let is_folder;
 	if (which[1]=="Folder") {
 		str=str+"/";
+		is_folder = true;
 	}
 	stat_com_arr=(cur_completion_str+str).split("");
 	stat_x=stat_com_arr.length;
 	render({},81);
-	num_completion_tabs++;
+	if (is_folder&&rv.length==1) num_completion_tabs=0;
+	else num_completion_tabs++;
+
 };//»
 const handle_edit_input_enter = async()=> {//«
 
@@ -1439,6 +1461,10 @@ if (marr = com.match(/^(%)?s\/(.*)$/)){//«
 				stat_ok(`OK: no_ctrl_n=${NO_CTRL_N}`);
 			}
 		}//»
+		else if (com==="stdin"){
+if (!stdin_lines) stat_warn("No lines received from stdin");
+else init_file_mode("*stdin*",{isStdin: true});
+		}
 		else stat_err("Unknown command: " + com);
 	}//»
 	else if (inp_type=="|"){//«
@@ -1856,18 +1882,22 @@ const init_complete_mode=async()=>{//«
 //»
 //File yank«
 
-const init_file_mode = async(fname) => {//«
-
-let str = await fname.toText({cwd:Term.cwd});
-//log(str);
-if (!isStr(str)) return render();
+const init_file_mode = async(fname, opts={}) => {//«
+let arr;
+if (opts.isStdin){
+	arr = stdin_lines;
+}
+else {
+	let str = await fname.toText({cwd:Term.cwd});
+	if (!isStr(str)) return render();
+	arr = str.split(/\r?\n/);
+}
 
 hold_lines = lines;
 let hold_colors = line_colors;
 let hx=x,hy=y,hscr=scroll_num;
 x=y=scroll_num=0;
 
-let arr = str.split(/\r?\n/);
 
 alt_screen_escape_handler = no_render => {//«
 	x=hx;
@@ -4727,7 +4757,9 @@ const fmt=(str,opts={})=>{//«
 }//»
 const do_line_wrap=async()=>{//«
 
-	if (this.mode !== VIS_LINE_MODE) return;
+//WUIOPHMDL
+	if (this.mode !== VIS_LINE_MODE || this.mode_hold === FILE_MODE) return;
+
 	let time = Date.now();
 	delete_lines({time, keepFirst: true});
 	let s='';
@@ -4844,6 +4876,7 @@ const do_delete_block=async(top,bot,left,right,opts={})=>{//«
 }//»
 const delete_lines = async(opts={}) =>{//«
 	let {copy, time}=opts;
+//KOPLIERT
 	if (!copy && this.mode_hold === FILE_MODE) return;
 	let _scrh = scroll_num;
 	if (this.mode===VIS_LINE_MODE){//«
@@ -4863,17 +4896,6 @@ const delete_lines = async(opts={}) =>{//«
 	else if (this.mode===VIS_MARK_MODE){//«
 		open_all_sel_folds();
 		set_sel_mark();
-/*«
-		let useleft, useright;
-		if (edit_sel_start == seltop){
-			useleft = edit_sel_mark;
-			useright = x;
-		}
-		else{
-			useright = edit_sel_mark;
-			useleft = x;
-		}
-»*/
 		let [x1, y1, x2, y2] = get_marker_coords();
 		y = seltop - scroll_num;
 		x = x1;
@@ -5328,7 +5350,6 @@ const handle_visual_key=ch=>{//«
 		else if (ch=="p") do_pad_lines({padBlankLines: true});
 		else if (ch=="t") do_something_to_lines({trim: true});
 		else if (ch=="r") do_something_to_lines({regspace: true});
-		
 	}//»
 	else if (m===VIS_MARK_MODE){//«
 		if (ch=="|"){
