@@ -760,8 +760,9 @@ const com_wc = class extends Com{//«
 #words=0;
 #chars=0;
 async init(){
-	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
-	if (this.args.length){
+	if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
+//	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
+	if (this.args.length || this.stdin){
 		this.#noPipe = true;
 	}
 }
@@ -794,7 +795,14 @@ async init(){
 async run(){
 	if (this.killed) return;
 	let{args, err: _err, out}=this;
-	if (!args.length) return;
+	if (!args.length) {
+		if (this.stdin){
+			this.#doWC(this.stdin);
+			this.#sendCount();
+			this.ok();
+		}
+		return;
+	}
 	let have_error = false;
 	const err=mess=>{
 		if (!mess) return;

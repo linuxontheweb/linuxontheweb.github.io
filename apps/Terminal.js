@@ -704,7 +704,7 @@ const ScriptCom = class extends Com{//«
 		let heredocScanner = (which) => {
 			let doc = [];
 			i++;
-			if (i===len) return `unexpected newline (looking for '${which}')`;
+			if (i===len) return `end-of-heredoc marker not found (found unexpected newline, looking for '${which}')`;
 			while (i < len){
 				let ln = lns[i];
 				if (ln === which) {
@@ -713,7 +713,7 @@ const ScriptCom = class extends Com{//«
 				doc.push(ln);
 				i++;
 			}
-			return `marker not found (looking for '${which}')`
+			return `end-of-heredoc marker not found (looking for '${which}')`
 		};
 		for (i=0; i < len; i++){
 			let ln = lns[i];
@@ -3542,7 +3542,6 @@ cerr(e);
 		opts = rv[0];
 
 		let stdin;
-//log("IN REDIR", in_redir);
 		if (in_redir) {
 			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
 			if (isStr(stdin)){
@@ -3557,8 +3556,8 @@ log(stdin);
 				last_exit_code = E_ERR;
 				continue;
 			}
+			com_env.stdin = stdin;
 		}
-		com_env.stdin = stdin;
 
 		try{
 			comobj = new com(usecomword, arr, opts, com_env);
@@ -5172,19 +5171,18 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 	}
 	let heredocScanner=async(which)=>{
 		let doc = [];
-		sleeping = false;
+//		sleeping = false;
 		let didone = false;
 		let prmpt="> ";
 		let prmpt_len = prmpt.length;
 		let rv;
 		while (true){
-			rv = await this.read_line(prmpt);
-			if (didone) rv = rv.slice(prmpt_len);
+			let rv = await this.read_line(prmpt);
 			if (rv===which) break;
 			doc.push(rv);
 			didone = true;
 		}
-		sleeping = true;
+//		sleeping = true;
 		return doc;
 	};
 	await cur_shell.execute(str,{env, heredocScanner});
@@ -6297,11 +6295,16 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 				let s='';
 				let from = cur_prompt_line+1;
 				for (let i=from; i < lines.length; i++) {
-					if (i==from) s+=lines[i].slice(read_line_prompt_len).join("");
-					else s+=lines[i].join("");
+					if (i==from) {
+						s+=lines[i].slice(read_line_prompt_len).join("");
+					}
+					else {
+						s+=lines[i].join("");
+					}
 				}
 				read_line_cb(s);
 				read_line_cb = null;
+				sleeping = true;
 				return;
 			}
 			else{
@@ -6602,15 +6605,18 @@ this.getch = async(promptarg, def_ch)=>{//«
 	});
 };//»
 this.read_line = async(promptarg)=>{//«
+	sleeping = false;
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		line_break();
 		cur_prompt_line = y+scroll_num-1;
 	}
+	x=0;
 	if (promptarg){
 		read_line_prompt_len = promptarg.length;
 		for (let ch of promptarg) handle_letter_press(ch);
 	}
 	else read_line_prompt_len = 0;
+	x = read_line_prompt_len;
 	return new Promise((Y,N)=>{
 		read_line_cb = Y;
 	});
