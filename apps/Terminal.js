@@ -161,7 +161,7 @@ const OPERATOR_CHARS=[//«
 ")",
 ];//»
 //const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
-const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
+const UNSUPPORTED_OPERATOR_CHARS=[];
 const UNSUPPORTED_OPERATOR_TOKS=[/*«*/
 	'&',
 //	'<',
@@ -714,10 +714,11 @@ const ScriptCom = class extends Com{//«
 			let ln = lns[i];
 			if (this._cancelled) return;
 			let rv = await execute(ln, {scriptOut, scriptName, scriptArgs, heredocScanner});
-			if (Number.isFinite(rv)) code = rv;
-			if(code instanceof Number && code.isExit){
+			if(rv instanceof Number && rv.isExit){
+				code = rv.valueOf();
 				break;
 			}
+			if (Number.isFinite(rv)) code = rv;
 		}
 		this.end(code);
 	}
@@ -1816,35 +1817,210 @@ scanOperator(){/*«*/
 	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
 
 	if (str.match(/[<>]/)) return {t:"r_op", r_op:str};
-	return {t:"c_op", c_op:str};
+	return {t:"c_op", c_op:str, start};
 
 }/*»*/
 scanQuote(which, prev){/*«*/
-	this.index++;
+log("scanQuote", this.index);
+// If we are in double-quotes or back-quotes, we need to check for:
+// 1) '$((': scanMathExp 
+// 2) '$(': scanComSub
+	let check_subs = which==='"'||which==="`";
+
+//If we are in double quotes, need to check for backquotes
+	let check_bq = which==='"';
+
+//	this.index++;
+//let check_subs
+
 	let start = this.index;
 	let src = this.source;
-	let iter=0;
-	let out = [which];
-	let len = this.length;
+//	let out = [which];
+	let len = src.length;
 	let cur = start;
-	let is_ds_single = (which == "'") && prev == "$" && !prev.escaped;
+	let is_single = which === "'";
+	let is_ds_single = is_single && prev === "$";
+	let is_hard_single = is_single && !is_ds_single;;
+	let is_dq = which === '"';
+	let is_bq = which === '`';
+
 	let ch = src[cur];
-	while(ch && (ch != which || (ch.escaped && ch != "'") || (ch.escaped && is_ds_single))){
-		if (ch=="\n") {
-			if (ALLOW_NEWLINES_IN_QUOTES) this.lineNumber++;
-			else return null;
-		}
+	let out = [which, ch];
+	let rv;
+	let next;
+	while(ch !== which){
+		if (check_subs&&ch==="$"&&src[cur+1]==="(") {/*«*/
+			if (src[cur+2]==="("){
+				cur+=2;
+				this.index+=3;
+				rv = this.scanMathExp();
+				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
+				if (isStr(rv)) this.throwUnexpectedToken(rv);
+				out.push(...rv);
+				cur+=rv.length-2;
+			}
+			else{
+				this.index+=2;
+				rv = this.scanComSub();
+				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
+				if (isStr(rv)) this.throwUnexpectedToken(rv);
+				rv.shift();
+				out.push(...rv);
+				cur+=rv.length;
+			}
+		}/*»*/
+		else if (check_bq&&ch==="`"){/*«*/
+			rv = this.scanQuote("`");
+			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
+			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			out.push(...rv);
+			cur+=rv.length;
+		}/*»*/
+		else if (ch==="\\"){/*«*/
+			cur++;
+			ch = src[cur];
+			if (!ch) this.throwUnexpectedToken("unsupported line continuation");
+			if (!is_hard_single){
+				ch = new String(ch);
+				ch.escaped = true;
+				if (is_ds_single||is_dq)ch.toString=()=>{return "\\"+ch;};
+				//else is_bq: the character is in "free space" (no backslashes show up)
+				cur++;
+			}
+			//else is_hard_single: the backslash is an ordinary character
+			out.push(ch);
+			cur+=rv.length;
+		}/*»*/
+		else if (is_bq && ch==="$" && src[cur+1]==="'"){/*«*/
+//echo `echo $'123\n456'`
+			cur++;
+			this.index+=2;
+			rv = this.scanQuote("'","$");
+			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
+			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			out.push(...rv);
+			cur+=rv.length;
+		}/*»*/
 		cur++;
-		if (cur>=len) return null;
-		out.push(ch);
-		if (which==='"'&&ch==="$"&&src[cur]==="(") return "unsupported substitution pattern: '$('";
+		if (cur>=len) {
+cwarn("BAD FROM", start, "LEN",len);
+			return null;
+		}
 		ch = src[cur];
+		if (ch=="\n") return null;
+		out.push(ch);
 	}
-	if (cur>=len) return null;
 	this.index = cur;
+//log("DONE", start, cur, src[cur], out.join(""));
 	return out;
 }/*»*/
+scanMathExp(){/*«*/
+	let cur = this.index;
+	let src = this.source;
+	let out = ["$","(","("];
+	let ch = src[cur];
+
+while(ch){
+ch = src[cur];
+cur++;
+}
+
+//	this.scanComments();
+//	if (this.eof()) this.throwUnexpectedToken("could not find matching '))'");
+//Need to find 2 consecutive unquoted end-parens: ')'
+//If, when we find one unquoted ")", the next character is not ")", throw error
+
+//Throw error on un-escaped '#'
+
+
+}/*»*/
+scanComSub(){/*«*/
+
+let out = ["$","("];
+let cur = this.index;
+let src = this.source;
+let ch = src[cur];
+if (!ch) return null;
+while(ch){
+
+if (!ch || ch==="\n" || (ch==="\\"&& !src[cur+1])) return "the command substitution must be on a single line";
+
+if (ch==="\\"){/*«*/
+	cur++;
+	out.push("\\", src[cur]);
+}/*»*/
+else if (ch==="$"&&src[cur+1]==="'"){/*«*/
+	this.index+=2;
+	cur++;
+	let rv = this.scanQuote("'","$");
+	if (rv===null) return `unterminated quote: $'`;
+	if (isStr(rv)) return rv;
+	out.push(...rv);
+}/*»*/
+else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
+	this.index=cur+1;
+	let rv = this.scanQuote(ch);
+	if (rv===null) return `unterminated quote: ${ch}`;
+	if (isStr(rv)) return rv;
+	out.push(...rv);
+	cur+=rv.length-1;
+}/*»*/
+else if (ch==="$"&&src[cur+1]==="("){/*«*/
+	if (src[cur+2]==="("){
+		cur+=2;
+		this.index+=3;
+		let rv = this.scanMathExp();
+		if (rv===null) return `unterminated math expansion`;
+		if (isStr(rv)) return rv;
+		out.push(...rv);
+	}
+	else{
+		cur++;
+		this.index+=2;
+		let rv = this.scanComSub();
+		if (rv===null) return `unterminated command substitution`;
+		if (isStr(rv)) return rv;
+		out.push(...rv);
+	}
+}/*»*/
+else if (ch===")"){/*«*/
+	out.push(ch);
+	cur++;
+	break;
+}/*»*/
+else if (ch===" " || ch==="\t"){/*«*/
+	//Need to scan foward to see if there are any unescaped #'s
+	out.push(ch);
+//	cur++;
+	ch = src[cur+1];
+	while (ch===" "||ch==="\t"){
+		out.push(ch);
+		cur++;
+		ch = src[cur+1];
+	}
+	if (!ch) return "unterminated command substitution";
+	if (ch==="#") return "command substitution terminated by '#'";
+}/*»*/
+else{
+	out.push(ch);
+}
+
+cur++;
+ch = src[cur];
+
+}
+this.index = cur;
+return out;
+
+}/*»*/
 scanWord(){/*«*/
+/*
+
+Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
+can either be in free space or just after "`", "$(" or "$((" that are in free space,
+or in double quotes or in themselves ("`" must be escaped to be "inside of" itself).
+
+*/
 	let start = this.index;
 	let src = this.source;
 //	let str='';
@@ -1854,7 +2030,32 @@ scanWord(){/*«*/
 	let word = [];
 	while (!this.eof()) {
 		let ch = src[this.index];
-		if (ch==="'"||ch==='"'||ch==='`'){
+		let next1 = src[this.index+1];
+		let next2 = src[this.index+2];
+		if (ch==="\\"){/*«*/
+			if (!next1 || next1 === "\n") this.throwUnexpectedToken("unsupported line continuation");
+			ch = new String(next1);
+			ch.escaped = true;
+			this.index++;
+		}/*»*/
+		else if (ch==="$" && next1 === "(" && next2==="("){/*«*/
+//math: need matching "))"
+			this.index+=3;
+			rv = this.scanMathExp();
+			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
+			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			word.push(...rv);
+		}/*»*/
+		else if (ch==="$" && next1 === "("){/*«*/
+			this.index+=2;
+			rv = this.scanComSub();
+			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
+			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			word.push(...rv);
+			continue;
+		}/*»*/
+		else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
+			this.index++;
 			if (this.index > 0) rv = this.scanQuote(ch, src[this.index-1]);
 			else rv = this.scanQuote(ch);
 			if (rv===null) {
@@ -1867,7 +2068,10 @@ scanWord(){/*«*/
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(...rv);
-		}
+			this.index++;
+			continue;
+		}/*»*/
+/*«
 		else if (ch==="\\"){//Error condition (either known or unknown)
 			let next = src[this.index+1];
 			if (!next || next === "\n") this.throwUnexpectedToken("unsupported line continuation");
@@ -1875,15 +2079,16 @@ scanWord(){/*«*/
 //inside a quote or escaping something.
 			this.throwUnexpectedToken("Should not get here!?! (found a literal '\\' that never got used to escape the following character)");
 		}
-		if (ch==="\n"||ch===" "||ch==="\t") break;
-		if (OPERATOR_CHARS.includes(ch)) {
+»*/
+		else if (ch==="\n"||ch===" "||ch==="\t") break;
+		else if (OPERATOR_CHARS.includes(ch)) {/*«*/
 			if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 			break;
-		}
+		}/*»*/
 		this.index++;
 		word.push(ch);
 	}
-	return {t:"word", word};
+	return {t:"word", word, start};
 }/*»*/
 scanNewlines(){/*«*/
 
@@ -1918,7 +2123,18 @@ if (this.eof()) {//«
 }//»
 
 let ch = this.source[this.index];
+
+//We never do this because we are always entering single lines from the interactive terminal
+//or sending them through one-by-one via ScriptCom.
 if (ch==="\n") return this.scanNewlines();
+
+/*
+if (ch==="\\"){
+	let next = this.source[this.index+1];
+	if (!next || next === "\n") this.throwUnexpectedToken("unsupported line continuation");
+	return this.scanWord();
+}
+*/
 if (OPERATOR_CHARS.includes(ch)) {
 	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
@@ -1960,12 +2176,12 @@ nextToken() {//«
 };//»
 
 parse() {//«
-	let chars = [];
+	let toks = [];
 	while (this.lookahead.type !== EOF_Type) {
-		chars.push(this.lookahead);
+		toks.push(this.lookahead);
 		this.nextToken();
 	}
-	return chars;
+	return toks;
 };//»
 
 };
@@ -1975,9 +2191,7 @@ return {
 
 parse:command_str=>{//«
 
-let escaped = escapes(command_str.split(""));
-if (isStr(escaped)) return escaped;
-let parser = new Parser(escaped);
+let parser = new Parser(command_str.split(""));
 let toks;
 try {
 	toks = parser.parse();
@@ -3591,14 +3805,11 @@ log(lastcomcode);
 		lastcomcode = E_ERR;
 	}
 	if (com.redirLines) {
-//cwarn("Not writing to", com.out_redir);
-///*
 		let {err} = await write_to_redir(term, com.redirLines, com.out_redir, com.env);
 		if (this.cancelled) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
 		}
-//*/
 	}
 
 }
