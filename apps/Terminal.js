@@ -1857,7 +1857,7 @@ log("scanQuote", this.index);
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				out.push(...rv);
-				cur+=rv.length-2;
+				cur+=rv.length;
 			}
 			else{
 				this.index+=2;
@@ -1870,9 +1870,11 @@ log("scanQuote", this.index);
 			}
 		}/*»*/
 		else if (check_bq&&ch==="`"){/*«*/
+			this.index++;
 			rv = this.scanQuote("`");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			rv.shift();
 			out.push(...rv);
 			cur+=rv.length;
 		}/*»*/
@@ -1911,6 +1913,8 @@ cwarn("BAD FROM", start, "LEN",len);
 		out.push(ch);
 	}
 	this.index = cur;
+//log(`scanQuote DONE: ${start} -> ${cur}`);
+log(`scanQuote DONE: ${start} -> ${cur}, <${out.join("")}>`);
 //log("DONE", start, cur, src[cur], out.join(""));
 	return out;
 }/*»*/
@@ -1935,12 +1939,15 @@ cur++;
 
 }/*»*/
 scanComSub(){/*«*/
+log("scanComSub", this.index);
 
 let out = ["$","("];
 let cur = this.index;
+let start = cur;
 let src = this.source;
 let ch = src[cur];
 if (!ch) return null;
+
 while(ch){
 
 if (!ch || ch==="\n" || (ch==="\\"&& !src[cur+1])) return "the command substitution must be on a single line";
@@ -1986,6 +1993,9 @@ else if (ch==="$"&&src[cur+1]==="("){/*«*/
 else if (ch===")"){/*«*/
 	out.push(ch);
 	cur++;
+	log(`scanComSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
+	this.index = cur;
+	return out;
 	break;
 }/*»*/
 else if (ch===" " || ch==="\t"){/*«*/
@@ -2009,8 +2019,8 @@ cur++;
 ch = src[cur];
 
 }
-this.index = cur;
-return out;
+//log("scanComSub DONE", start);
+return null;
 
 }/*»*/
 scanWord(){/*«*/
