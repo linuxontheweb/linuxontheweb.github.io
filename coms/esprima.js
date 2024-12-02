@@ -37,7 +37,7 @@ the syntax phase, because:
 //import { globals } from "config";
 const {globals}=LOTW;
 
-const{strnum, isArr, isStr, isNum, isObj, log, jlog, cwarn, cerr, isEOF}=LOTW.api.util;
+const{strnum, isArr, isJSArr, isStr, isNum, isObj, log, jlog, cwarn, cerr, isEOF}=LOTW.api.util;
 const {SHELL_ERROR_CODES, comClasses}=globals;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const{Com}=comClasses;
@@ -5031,43 +5031,65 @@ const parse = function(code, options) {//«
 }//»
 
 const com_esparse=class extends Com{//«
+#lines=[];
+#didWarn = false;
 init(){
-	if (this.noStdinOrArgs()) return this.no();
+	if (this.noInputOrArgs() || (this.noStdin && !this.expectArgs(1))) this.no();
 }
-async run() {
-	let {out, err, stdin, term, args, no} = this;
-	let str;
-	if (stdin){
-		str = stdin.join("\n");
-	}
-	else{
-		let fname = args.shift();
-		if (!fname){
-			no("No file arg given!");
-		}
-		let node = await fname.toNode(term);
-		if (!node){
-			err(`${fname}: does not exist`);
-			return E_ERR;
-		}
-		str = await node.text;
-	}
+#doEsparse(str){/*«*/
+log(str);
 	try{
 		let ast = parse(str, {sourceType: "module"});
 log(ast);
-		out(JSON.stringify(ast));
-		return E_SUC;
+		this.out(JSON.stringify(ast));
+		this.ok();
 	}
 	catch(e){
 log(e);
 //cerr(e.stack);
-		err(`${e.message} (${e.lineNumber}:${e.column})`);
-		return E_ERR;
+		this.err(`${e.message} (${e.lineNumber}:${e.column})`);
+		this.no();
 	}
-}
-pipeIn(val){
+}/*»*/
+async run() {/*«*/
+	let {out, err, stdin, term, args, no} = this;
+	let str;
+	if (!args.length){
+		if (stdin){
+			this.#doEsparse(stdin.join("\n"));
+		}
+		return;
+	}
+	let fname = args.shift();
+	let node = await fname.toNode(term);
+	if (!node){
+		err(`${fname}: does not exist`);
+		this.no();
+		return;
+	}
+	if (!node.isFile){
+		err(`${fname}: is not a regular file`);
+		this.no();
+		return;
+	}
+	this.#doEsparse(await node.text);
+}/*»*/
+pipeIn(val){/*«*/
+	if (isEOF(val)){
+		this.#doEsparse(this.#lines.join("\n"));
+		return;
+	}
+	if (isStr(val)) this.#lines.push(val);
+	else if (isJSArr(val)) this.#lines.push(...val);
+	else{
+if (this.#didWarn) return;
+this.#didWarn = true;
+this.wrn("Dropping unknown pipeline input (see console)");
+cwarn("Here is the unknown value below");
+log(val);
+	}
+}/*»*/
 
-}
 };//»
 
 export const coms={esparse: com_esparse};

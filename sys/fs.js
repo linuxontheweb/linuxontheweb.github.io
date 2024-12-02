@@ -10,8 +10,8 @@ but there is no ability to mv or cp.
 {type: "whatever"}
 
 There SHOULD be a "data" (or "value") field as well, though this is not
-currently checked. This uses the IDB_DATA_TYPE in the Node database's
-type field. It works via writeDataFile in the fs api (here). Upon Node
+currently checked. This uses the IDB_DATA_TYPE in the FSNode database's
+type field. It works via writeDataFile in the fs api (here). Upon FSNode
 creation, the data field is created with the given object. 
 
 In saveFsByPath, there are 2 possibilities:
@@ -419,10 +419,10 @@ const bad_link_cbs = {};
 
 //»
 
-//Node
+//FSNode
 
 const LOCKED_BLOBS = {};
-class Node {//«
+class FSNode {//«
 
 constructor(arg){//«
 	this.isDir = arg.isDir;
@@ -661,12 +661,13 @@ get path(){//«
 }//»
 
 }
-const isNode=n=>{return n instanceof Node;};
+const isNode=n=>{return n instanceof FSNode;};
 util.isNode = isNode;
-const isDir=n=>{return (n instanceof Node && n.isDir===true);};
+const isDir=n=>{return (n instanceof FSNode && n.isDir===true);};
 util.isDir = isDir;
-const isFile=n=>{return (n instanceof Node && n.isFile===true);};
+const isFile=n=>{return (n instanceof FSNode && n.isFile===true);};
 util.isFile = isFile;
+
 //»
 
 //Filesystem ops«
@@ -1932,7 +1933,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	let kid;
 	if (opts.useKid) kid = opts.useKid;
 	else {
-		kid = new Node({
+		kid = new FSNode({
 			name: name,
 			par: par,
 			root: par.root,
@@ -1980,7 +1981,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 const popDir = (dirobj, opts = {}) => {return populate_dirobj(dirobj, opts);};
 const popDirByPath=(patharg, opts={})=>{return populate_dirobj_by_path(patharg, opts);};
 const mount_tree=(name, type, pararg)=>{//«
-	let dir = new Node({
+	let dir = new FSNode({
 		name: name,
 		_type: type,
 		kids: {},
@@ -2000,7 +2001,7 @@ else root.kids[name]=dir;
 }//»
 const make_fs_tree = async name => {//«
 	const new_root_tree = (name, type) => {//«
-		return new Node({
+		return new FSNode({
 			appName: FOLDER_APP,
 			isDir: true,
 			name: name,
@@ -2032,7 +2033,7 @@ const make_dev_tree = ()=>{//«
 	let kids = par.kids;
 	let arr = ["null", "log"];
 	for (let name of arr){
-		let kid = new Node({
+		let kid = new FSNode({
 			name: name,
 			appName: "Device",
 			par,

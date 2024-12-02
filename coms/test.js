@@ -50,25 +50,6 @@ const com_hang = class extends Com{/*«*/
 	}
 }/*»*/
 const com_norun=class extends Com{init(){this.ok(`Hi,this is from the init phase of '${this.name}'`);}}
-const com_echodelay = class extends Com{//«
-	async run(){
-		let delay;
-		if (this.opts.d) {
-			delay = parseInt(this.opts.d);
-			if (isNaN(delay)) {
-				delay = 0;
-				this.wrn(`invalid delay value (using 0 ms)`);
-			}
-		}
-		else delay = 0;
-
-		for (let arg of this.args){
-			this.out(arg);
-			await sleep(delay);
-		}
-		this.ok();
-	}
-}//»
 
 //»
 
@@ -85,13 +66,12 @@ oktypedarr: com_oktypedarr,
 badtypedarr: com_badtypedarr,
 weirdarr: com_weirdarr,
 hang: com_hang,
-echodelay: com_echodelay,
 norun: com_norun
 
 }//»
 
 const opts = {//«
-echodelay:{s:{d: 3}}
+//echodelay:{s:{d: 3}}
 }//»
 
 export {coms, opts};

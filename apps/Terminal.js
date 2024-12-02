@@ -67,7 +67,7 @@ let USE_ONDEVRELOAD = false;
 //let USE_DEVSHELL = false;
 //let USE_DEV_PARSER = true;
 //let USE_DEV_PARSER = false;
-let parser;
+//let parser;
 //»
 //Imports«
 
@@ -739,6 +739,22 @@ const Com = class {/*«*/
 	get noArgs(){
 		return (this.args.length === 0);
 	}
+	expectArgs(num){
+		if (!isNum(num)) {
+			this.err(`invalid argument given to expectArgs (see console)`);
+			this.numErrors++;
+cwarn("Here is the non-numerical value below");
+log(num);
+			return;
+		}
+		let nargs = this.args.length;
+		if (nargs != num){
+			this.err(`expected ${num} arguments (got ${nargs})`);
+			this.numErrors++;
+			return;
+		}
+		return true;
+	}
 	maybeSetNoPipe(){
 		if (this.args.length || this.stdin) this.noPipe = true;
 	}
@@ -848,6 +864,25 @@ run(){
 const com_echo = class extends Com{//«
 	run(){
 		this.out(this.args.join(" ").split("\n"));
+		this.ok();
+	}
+}//»
+const com_echodelay = class extends Com{//«
+	async run(){
+		let delay;
+		if (this.opts.d) {
+			delay = parseInt(this.opts.d);
+			if (isNaN(delay)) {
+				delay = 0;
+				this.wrn(`invalid delay value (using 0 ms)`);
+			}
+		}
+		else delay = 0;
+
+		for (let arg of this.args){
+			this.out(arg);
+			await sleep(delay);
+		}
 		this.ok();
 	}
 }//»
@@ -1414,23 +1449,27 @@ static grabsScreen = true;
 }/*»*/
 
 const com_test = class extends Com{//«
-/*
+/*«
 This is the basic algorithm for LOTW's 'cat'
+
 init:
-	1) Check for no kind of input and exit
-	2) Block any piped input if we have args or redirected input (this.stdin)
+	1) Check for no means of input and exit
+	2) Block any piped input if either is true:
+		a) this.args.length > 0
+		b) this.stdin exists
+
 run:
 	1) if no args:
-		a) maybe send stdin to the output steam and exit
-		b) listen for piped input until EOF
-	2) loop around all args, sending out anything that isn't an error
+		a) send any standard input to the output steam and exit
+		b) listen for piped input until EOF and exit
+	2) loop around all args, sending out anything that isn't an Error
 	3) exit with this.nok() (calls this.ok() if this.numErrors===0, else calls this.no())
 
 	Notes for this.nextArgAsText(): 
-		- this.numErrors is updated internally (in case the arg doesn't exist, etc.)
-		- It is not an error for there *not* to be a next arg (null is returned when this.args is empty)
+		- this.numErrors is updated internally (in case the arg doesn't resolve to a file system node, etc.)
+		- It isn't an error for there *not* to be a next arg (null is returned when this.args is empty)
 
-*/
+»*/
 	init(){
 		if (this.noInputOrArgs()) return this.no();
 		this.maybeSetNoPipe();
@@ -1494,7 +1533,8 @@ Long options may be given an argument like this:
 		}
 	},//»
 	read:{l:{prompt:3}},
-	import:{s:{d:1},l:{delete: 1}}
+	import:{s:{d:1},l:{delete: 1}},
+	echodelay:{s:{d: 3}}
 
 /*«
 
@@ -1585,6 +1625,7 @@ clear: com_clear,
 cd: com_cd,
 ls: com_ls,
 echo: com_echo,
+echodelay: com_echodelay,
 env: com_env,
 app: com_app,
 appicon: com_appicon,
@@ -1650,71 +1691,13 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 //»
 
+//«Shell
+
+const Shell = (()=>{
+
 //Parser«
+
 const Parser=(()=>{
-
-/*«Var*/
-
-/*»*/
-const escapes = arr =>{//«
-let qtyp;
-const DQ_ESC_CHARS=['"',"$", "`", "\\"];
-const BQ_ESC_CHARS=["$", "`", "\\"];
-for (let i = 0; i < arr.length; i++) {
-	let tok = arr[i];
-	let next = arr[i+1];
-	if (tok === "\\") {
-		if (!next) return "line continuation is not supported";
-		if (qtyp === "'") continue;
-		if (qtyp==='"') {
-			let str = new String(next);
-			str.escaped = true;
-			if(!DQ_ESC_CHARS.includes(next)){
-				str.toString=()=>{return "\\" + next;};
-			}
-			arr[i] = str;
-			arr.splice(i + 1, 1);
-		}
-		else if (qtyp==='`'){
-			if (BQ_ESC_CHARS.includes(next)){
-				let str = new String(next);
-				str.escaped = true;
-				arr[i] = str;
-				arr.splice(i + 1, 1);
-			}
-		}
-		else{
-			let str = new String(next);
-			str.escaped = true;
-			if (qtyp){
-				if (qtyp === "$'" && next === "'"){}
-				else {
-					str.toString=()=>{return "\\" + next;};
-				}
-			}
-			arr[i] = str;
-			arr.splice(i + 1, 1);
-		}
-	}
-	else if (!qtyp && tok === '$' && next === "'"){
-		qtyp = "$'";
-		i++;
-	}
-	else if (!qtyp && tok === "'"){
-		qtyp = "'";
-	}
-	else if (!qtyp && tok === '"'){
-		qtyp = '"';
-	}
-	else if (!qtyp && tok === '`'){
-		qtyp = '`';
-	}
-	else if (tok === qtyp || (tok === "'" && qtyp === "$'")) qtyp = null;
-}
-if (qtyp) return `unterminated quote: ${qtyp}`
-return arr;
-
-};/*»*/
 
 //ErrorHandler«
 
@@ -2371,10 +2354,6 @@ return statements;
 }
 
 })();//»
-
-//«Shell
-
-const Shell = (()=>{
 
 const backquote_substitution = async(arr, shell, env) =>{//«
 /*We can have any number of backquotes in here:
@@ -3306,7 +3285,7 @@ const can=()=>{//«
 
 let statements;
 try{
-	statements = parser.parse(command_str);
+	statements = Parser.parse(command_str);
 }
 catch(e){
 	return terr("sh: "+e.message);
@@ -6867,7 +6846,7 @@ const init = async(appargs={})=>{
 //	dev_shell_class = DevShell;
 //	shell = new Shell(this);
 //	dev_shell = new DevShell(this);
-	parser = Parser;
+//	parser = Parser;
 /*
 	if (dev_mode && USE_DEV_PARSER) {
 //		this.shell = dev_shell;
