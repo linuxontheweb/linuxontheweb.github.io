@@ -2584,52 +2584,6 @@ const Parser = class {
 		this.nextToken();
 		return token;
 	};//»
-	nextToken() {//«
-		var token = this.lookahead;
-		this.lastMarker.index = this.scanner.index;
-		this.lastMarker.line = this.scanner.lineNumber;
-		this.lastMarker.column = this.scanner.index - this.scanner.lineStart;
-		this.collectComments();
-		if (this.scanner.index !== this.startMarker.index) {
-			this.startMarker.index = this.scanner.index;
-			this.startMarker.line = this.scanner.lineNumber;
-			this.startMarker.column = this.scanner.index - this.scanner.lineStart;
-		}
-		var next = this.scanner.lex();
-		this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
-		if (next && this.context.strict && next.type === Identifier_Type) {
-			if (this.scanner.isStrictModeReservedWord(next.value)) {
-				next.type = Keyword_Type;
-			}
-		}
-		this.lookahead = next;
-		if (this.config.tokens && next.type !== EOF_Type) {
-			this.tokens.push(this.convertToken(next));
-		}
-		return token;
-	};//»
-
-	parseModule() {//«
-	// https://tc39.github.io/ecma262/#sec-modules
-		this.context.strict = true;
-		this.context.isModule = true;
-		this.scanner.isModule = true;
-		var node = this.createNode();
-		var body = this.parseDirectivePrologues();
-		while (this.lookahead.type !== EOF_Type) {
-			body.push(this.parseStatementListItem());
-		}
-		return this.finalize(node, new Node.Module(body));
-	};//»
-	parseScript() {//«
-	// https://tc39.github.io/ecma262/#sec-scripts
-		var node = this.createNode();
-		var body = this.parseDirectivePrologues();
-		while (this.lookahead.type !== EOF_Type) {
-			body.push(this.parseStatementListItem());
-		}
-		return this.finalize(node, new Node.Script(body));
-	};//»
 
 //»
 
@@ -5010,6 +4964,52 @@ const Parser = class {
 	};//»
 
 //»
+
+	nextToken() {//«
+		var token = this.lookahead;
+		this.lastMarker.index = this.scanner.index;
+		this.lastMarker.line = this.scanner.lineNumber;
+		this.lastMarker.column = this.scanner.index - this.scanner.lineStart;
+		this.collectComments();
+		if (this.scanner.index !== this.startMarker.index) {
+			this.startMarker.index = this.scanner.index;
+			this.startMarker.line = this.scanner.lineNumber;
+			this.startMarker.column = this.scanner.index - this.scanner.lineStart;
+		}
+		var next = this.scanner.lex();
+		this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
+		if (next && this.context.strict && next.type === Identifier_Type) {
+			if (this.scanner.isStrictModeReservedWord(next.value)) {
+				next.type = Keyword_Type;
+			}
+		}
+		this.lookahead = next;
+		if (this.config.tokens && next.type !== EOF_Type) {
+			this.tokens.push(this.convertToken(next));
+		}
+		return token;
+	};//»
+	parseModule() {//«
+	// https://tc39.github.io/ecma262/#sec-modules
+		this.context.strict = true;
+		this.context.isModule = true;
+		this.scanner.isModule = true;
+		var node = this.createNode();
+		var body = this.parseDirectivePrologues();
+		while (this.lookahead.type !== EOF_Type) {
+			body.push(this.parseStatementListItem());
+		}
+		return this.finalize(node, new Node.Module(body));
+	};//»
+	parseScript() {//«
+	// https://tc39.github.io/ecma262/#sec-scripts
+		var node = this.createNode();
+		var body = this.parseDirectivePrologues();
+		while (this.lookahead.type !== EOF_Type) {
+			body.push(this.parseStatementListItem());
+		}
+		return this.finalize(node, new Node.Script(body));
+	};//»
 
 };
 //»

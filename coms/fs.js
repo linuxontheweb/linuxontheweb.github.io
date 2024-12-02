@@ -299,6 +299,7 @@ static grabsScreen = true;
 const com_vim = class extends Com{//«
 
 #noPipe;
+static grabsScreen = true;
 async init(){//«
 	let {args, opts, command_str, term}=this;
 	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
@@ -383,9 +384,57 @@ pipeIn(val){
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
 }
-//static get grabsScreen(){return true;}
-static grabsScreen = true;
 }//»
+
+/*«The algorithm for LOTW's 'cat'
+
+init:
+	1) Check for no means of input and exit
+	2) Block any piped input if either is true:
+		a) this.args.length > 0
+		b) this.stdin exists
+
+run:
+	1) if no args:
+		a) send any standard input to the output steam and exit
+		b) listen for piped input until EOF and exit
+	2) loop around all args, sending out anything that isn't an Error
+	3) exit with this.nok() (calls this.ok() if this.numErrors===0, else calls this.no())
+
+	Notes for this.nextArgAsText(): 
+		- this.numErrors is updated internally (in case the arg doesn't resolve to a file system node, etc.)
+		- It isn't an error for there *not* to be a next arg (null is returned when this.args is empty)
+
+»*/
+const com_cat = class extends Com{//«
+	init(){
+		if (this.noInputOrArgs()) return this.no();
+		this.maybeSetNoPipe();
+	}
+	pipeIn(val){
+		this.out(val);
+		if (isEOF(val)){
+			this.ok();
+		}
+	}
+	async run() {//«
+		const{out,stdin}=this;
+		if (!this.args.length){
+			if (stdin){
+				out(stdin);
+				this.ok();
+			}
+			//else: we have piped input, and are waiting for an 'EOF' to exit
+			return;
+		}
+		let txt;
+		while (txt = await this.nextArgAsText()){
+			if (!isErr(txt)) out(txt);
+		}
+		this.nok();
+	}//»
+};//»
+/*
 const com_cat = class extends Com{//«
 	init(){
 //cwarn("STDIN?", this.stdin);
@@ -411,6 +460,7 @@ const com_cat = class extends Com{//«
 		if (isEOF(val)) this.ok();
 	}
 }//»
+*/
 const com_touch = class extends Com{//«
 
 init(){

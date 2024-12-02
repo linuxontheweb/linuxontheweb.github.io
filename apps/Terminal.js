@@ -1,5 +1,30 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
-/*11/30/24: Heredocs: Instead of passing a string into execute, perhaps we should
+/*12/2/24:« Lexing and Parsing the Shell Command Language
+1) The lexer just spits out these tokens:
+ - Words
+ - Operators
+ - Newline lists
+
+The tricky part is a Word:
+
+A sequence of non-whitespace separated:
+ - Chars (plus Escaped Chars)
+ - Substitutions ( $(...), $((...)) or ${...} )
+ - Strings ( "...", $'...', '...' or `...` )
+  ) Strings must be recorded faithfully as an array of Chars or Escaped Chars
+  ) "...": 
+   > can include embedded Substitutions and `...`
+  ) `...`:
+   > can include embedded Substitutions and Strings (expect itself)
+   > all scans for embedded entities must end when an unescaped '`' is detected
+
+To "be in the top-level" means that you are not inside of a String
+ - at the appropriate point, top-level Strings can be turned into sequences of 
+   Chars, Substitutions and Strings
+ - there can be an 'unflatten' or 'objectify' class method to do this
+
+»*/
+/*11/30/24: Heredocs: Instead of passing a string into execute, perhaps we should«
 pass in a object with a "scan for eof marker", in order to allow heredocs to be
 collected.
 
@@ -10,7 +35,7 @@ We are not currently doing anything past tilde expansion for the redir words (in
 herestrings),
 and we are not currently expanding anything in the heredocs. So, the herestrings
 themselves only get tilde expanded.
-*/
+»*/
 //11/27/24: We are silently skipping file glob patterns with slashes in them//«
 //@EJUTIOPB, so only globs in the current directory will work.
 //$ echo */* *
@@ -733,13 +758,9 @@ const Com = class {/*«*/
 		if (asStr) return str;
 		return str.split("\n");;
 	}/*»*/
-	get noStdin(){
-		return (!(this.pipeFrom || this.stdin));
-	}
-	get noArgs(){
-		return (this.args.length === 0);
-	}
-	expectArgs(num){
+	get noStdin(){return(!(this.pipeFrom || this.stdin));}
+	get noArgs(){return(this.args.length===0);}
+	expectArgs(num){/*«*/
 		if (!isNum(num)) {
 			this.err(`invalid argument given to expectArgs (see console)`);
 			this.numErrors++;
@@ -754,26 +775,23 @@ log(num);
 			return;
 		}
 		return true;
-	}
-	maybeSetNoPipe(){
-		if (this.args.length || this.stdin) this.noPipe = true;
-	}
-	noInputOrArgs(opts={}){
+	}/*»*/
+	maybeSetNoPipe(){if(this.args.length || this.stdin)this.noPipe=true;}
+	noInputOrArgs(opts={}){/*«*/
 		let have_none = !(this.args.length || this.pipeFrom || this.stdin);
 		if (have_none && !opts.noErr){
 			this.err("no args or input received");
+			this.numErrors++;
 		}
 		return have_none;
-	}
-	eof(){
-		this.out(EOF);
-	}
+	}/*»*/
+	eof(){this.out(EOF);}
 	init(){}
 	run(){
 		this.wrn(`sh: ${this.name}: the 'run' method has not been overriden!`);
 	}
 	cancel(){
-		this._cancelled = true;
+		this.killed = true;
 cwarn(`${this.name}: cancelled`);
 	}
 
@@ -809,7 +827,7 @@ const ScriptCom = class extends Com{//«
 		};
 		for (i=0; i < len; i++){
 			let ln = lns[i];
-			if (this._cancelled) return;
+			if (this.killed) return;
 			let rv = await execute(ln, {scriptOut, scriptName, scriptArgs, heredocScanner});
 			if(rv instanceof Number && rv.isExit){
 				code = rv.valueOf();
@@ -849,7 +867,6 @@ globals.comClasses={Com, ErrCom};
 //»
 
 //Shell Builtins«
-
 
 //Command functions«
 
@@ -1449,59 +1466,20 @@ static grabsScreen = true;
 }/*»*/
 
 const com_test = class extends Com{//«
-/*«
-This is the basic algorithm for LOTW's 'cat'
-
-init:
-	1) Check for no means of input and exit
-	2) Block any piped input if either is true:
-		a) this.args.length > 0
-		b) this.stdin exists
-
-run:
-	1) if no args:
-		a) send any standard input to the output steam and exit
-		b) listen for piped input until EOF and exit
-	2) loop around all args, sending out anything that isn't an Error
-	3) exit with this.nok() (calls this.ok() if this.numErrors===0, else calls this.no())
-
-	Notes for this.nextArgAsText(): 
-		- this.numErrors is updated internally (in case the arg doesn't resolve to a file system node, etc.)
-		- It isn't an error for there *not* to be a next arg (null is returned when this.args is empty)
-
-»*/
 	init(){
-		if (this.noInputOrArgs()) return this.no();
-		this.maybeSetNoPipe();
-	}
-	async run() {
-		const{out,stdin}=this;
-		if (!this.args.length){
-			if (stdin){
-				out(stdin);
-				this.ok();
-			}
-			//else: we have piped input, and are waiting for an 'EOF' to exit
-			return;
-		}
-		let txt;
-		while (txt = await this.nextArgAsText()){
-			if (!isErr(txt)) out(txt);
-		}
-		this.nok();
 	}
 	pipeIn(val){
-		this.out(val);
-		if (isEOF(val)){
-			this.ok();
-		}
 	}
+	async run() {//«
+this.ok("NOT MUCH HERE!!!");
+	}//»
 };//»
 
 //»
 
 const command_options = {//«
-/*
+
+/*«
 l: long options
 s: short options
 
@@ -1518,7 +1496,7 @@ Long options may be given an argument like this:
 
 ~$ dosomething --like-this="Right here" to_some.json
 
-*/
+»*/
 	ls: {//«
 		s: {
 			a: 1,
@@ -1537,44 +1515,10 @@ Long options may be given an argument like this:
 	echodelay:{s:{d: 3}}
 
 /*«
-
-	rm: {//«
-		s:{
-			r:1, R:1
-		},
-		l:{
-			recursive: 1
-		}
-	},//»
-	vim:{//«
-		l: {
-			parsel: 1,
-			nosave: 1,
-			one: 1,
-			insert: 1,
-			enterquit: 1,
-			"convert-markers": 1,
-			"text-input-win": 3,
-			"reload-win": 3,
-			symbols: 3,
-			'keylog-file': 3,
-			'num-keylog-steps':3,
-//			"is-meta-app": 1,
-//			'switch-lns-win': 3,
-//			'meta-com-win': 3,
-//			'meta-com-args': 3,
-		}
-	},//»
-	less:{l:{parsel:1}},
-	dl:{s:{n:3,},l:{name:2}},
-
 //	ssh:{//«
 //		s:{c:1, s:1, x:1, i: 1},
 //		l:{client: 1, server: 1}
 //	},//»
-//	ytsrch:{s:{v:1, c:1, p:1},l:{video:1,channel:1,playlist:1}},
-//	ytthing:{l:{list:1,items:1,channel:1}},
-//	ytdl:{s:{p:3, n:1},l:{port:3,name:1}},
 	email:{
 		s:{a:1,d:1},
 		l:{add:1,del:1},
@@ -1889,7 +1833,7 @@ scanOperator(){/*«*/
 	return {t:"c_op", c_op:str, start};
 
 }/*»*/
-scanQuote(which, prev){/*«*/
+scanQuote(which){/*«*/
 log("scanQuote", this.index);
 // If we are in double-quotes or back-quotes, we need to check for:
 // 1) '$((': scanMathExp 
@@ -1898,93 +1842,101 @@ log("scanQuote", this.index);
 
 //If we are in double quotes, need to check for backquotes
 	let check_bq = which==='"';
-
-//	this.index++;
 //let check_subs
-
+	let out=[];
 	let start = this.index;
 	let src = this.source;
-//	let out = [which];
 	let len = src.length;
-	let cur = start;
-	let is_single = which === "'";
-	let is_ds_single = is_single && prev === "$";
-	let is_hard_single = is_single && !is_ds_single;;
+	let is_ds_single = which === "$";
+	let is_single;
+	if (is_ds_single) {
+		out.push("$");
+		this.index++;
+		is_single = true;
+	}
+	else if (which==="'"){
+		is_single = true;
+	}
+	let is_hard_single = is_single && !is_ds_single;
 	let is_dq = which === '"';
 	let is_bq = which === '`';
-
+	out.push(which);
+	this.index++;
+	let cur = this.index;
 	let ch = src[cur];
-	let out = [which, ch];
 	let rv;
 	let next;
-	while(ch !== which){
+	while(ch && ch !== which){
 		if (check_subs&&ch==="$"&&src[cur+1]==="(") {/*«*/
 			if (src[cur+2]==="("){
-				cur+=2;
-				this.index+=3;
-				rv = this.scanMathExp();
+				this.index=cur;
+				rv = this.scanComSub(true);
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				out.push(...rv);
-				cur+=rv.length;
+				cur=this.index;
 			}
 			else{
-				this.index+=2;
+				this.index=cur;
 				rv = this.scanComSub();
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
-				rv.shift();
 				out.push(...rv);
-				cur+=rv.length+2;
+				cur=this.index;
 			}
 		}/*»*/
 		else if (check_bq&&ch==="`"){/*«*/
-			this.index++;
+			this.index = cur;
 			rv = this.scanQuote("`");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
-			rv.shift();
 			out.push(...rv);
-			cur+=rv.length;
+			cur=this.index;
+//			continue;
 		}/*»*/
 		else if (ch==="\\"){/*«*/
 			cur++;
 			ch = src[cur];
 			if (!ch) this.throwUnexpectedToken("unsupported line continuation");
 			if (!is_hard_single){
-				ch = new String(ch);
+				let c = ch;
+				ch = new String(c);
 				ch.escaped = true;
-				if (is_ds_single||is_dq)ch.toString=()=>{return "\\"+ch;};
+				if (is_ds_single||is_dq)ch.toString=()=>{return "\\"+c;};
 				//else is_bq: the character is in "free space" (no backslashes show up)
-				cur++;
+//				cur++;
 			}
+//log("WUT", ch);
 			//else is_hard_single: the backslash is an ordinary character
 			out.push(ch);
-			cur+=rv.length;
+//jlog(out);
+//			cur++;
+//			cur+=rv.length;
+//			continue;
 		}/*»*/
 		else if (is_bq && ch==="$" && src[cur+1]==="'"){/*«*/
 //echo `echo $'123\n456'`
-			cur++;
-			this.index+=2;
-			rv = this.scanQuote("'","$");
+//			cur++;
+//			this.index+=2;
+			rv = this.scanQuote("$");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(...rv);
-			cur+=rv.length;
+//			cur+=rv.length;
+			cur = this.index;
+//			continue;
 		}/*»*/
-		cur++;
-		if (cur>=len) {
-cwarn("BAD FROM", start, "LEN",len);
-			return null;
+		else {
+//log("CH", ch);
+			out.push(ch);
 		}
+		cur++;
 		ch = src[cur];
-		if (ch=="\n") return null;
-		out.push(ch);
 	}
-	this.index = cur;
-//log(`scanQuote DONE: ${start} -> ${cur}`);
+	if (ch !== which) return null;
+	out.push(ch);
+	this.index = cur+1;
 log(`scanQuote DONE: ${start} -> ${cur}, <${out.join("")}>`);
-//log("DONE", start, cur, src[cur], out.join(""));
 	return out;
 }/*»*/
 scanMathExp(){/*«*/
@@ -2007,10 +1959,15 @@ cur++;
 
 
 }/*»*/
-scanComSub(){/*«*/
-log("scanComSub", this.index);
+scanComSub(is_math){/*«*/
 
+log("scanComSub", this.index);
+this.index+=2;
 let out = ["$","("];
+if (is_math){
+	out.push("(");
+	this.index++;
+}
 let cur = this.index;
 let start = cur;
 let src = this.source;
@@ -2026,46 +1983,49 @@ if (ch==="\\"){/*«*/
 	out.push("\\", src[cur]);
 }/*»*/
 else if (ch==="$"&&src[cur+1]==="'"){/*«*/
-	this.index+=2;
-	cur++;
-	let rv = this.scanQuote("'","$");
+	this.index=cur;
+	let rv = this.scanQuote("$");
 	if (rv===null) return `unterminated quote: $'`;
 	if (isStr(rv)) return rv;
 	out.push(...rv);
+	cur=this.index-1;
 }/*»*/
 else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
-	this.index=cur+1;
+	this.index=cur;
 	let rv = this.scanQuote(ch);
 	if (rv===null) return `unterminated quote: ${ch}`;
 	if (isStr(rv)) return rv;
 	out.push(...rv);
-	cur+=rv.length-1;
+	cur=this.index-1;
 }/*»*/
 else if (ch==="$"&&src[cur+1]==="("){/*«*/
 	if (src[cur+2]==="("){
-		cur+=2;
-		this.index+=3;
-		let rv = this.scanMathExp();
+		this.index=cur;
+		let rv = this.scanComSub(true);
 		if (rv===null) return `unterminated math expansion`;
 		if (isStr(rv)) return rv;
 		out.push(...rv);
+		cur=this.index;
 	}
 	else{
-		cur++;
-		this.index+=2;
+		this.index=cur;
 		let rv = this.scanComSub();
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(...rv);
+		cur=this.index;
 	}
 }/*»*/
 else if (ch===")"){/*«*/
-	out.push(ch);
-	cur++;
+	out.push(")");
+	if (is_math){
+		if (src[cur+1] !== ")") return "expect a final '))'";
+		cur++;
+		out.push(")");
+	}
 	log(`scanComSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
 	this.index = cur;
 	return out;
-	break;
 }/*»*/
 else if (ch===" " || ch==="\t"){/*«*/
 	//Need to scan foward to see if there are any unescaped #'s
@@ -2088,7 +2048,8 @@ cur++;
 ch = src[cur];
 
 }
-//log("scanComSub DONE", start);
+
+//If we get here, we are "unterminated"
 return null;
 
 }/*»*/
@@ -2118,25 +2079,21 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			this.index++;
 		}/*»*/
 		else if (ch==="$" && next1 === "(" && next2==="("){/*«*/
-//math: need matching "))"
-			this.index+=3;
-			rv = this.scanMathExp();
+			rv = this.scanComSub(true);
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(...rv);
+			continue;
 		}/*»*/
 		else if (ch==="$" && next1 === "("){/*«*/
-			this.index+=2;
 			rv = this.scanComSub();
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(...rv);
 			continue;
 		}/*»*/
-		else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
-			this.index++;
-			if (this.index > 0) rv = this.scanQuote(ch, src[this.index-1]);
-			else rv = this.scanQuote(ch);
+		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){/*«*/
+			rv = this.scanQuote(ch);
 			if (rv===null) {
 				if (ch=="'"){
 					this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -2147,7 +2104,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(...rv);
-			this.index++;
 			continue;
 		}/*»*/
 /*«
