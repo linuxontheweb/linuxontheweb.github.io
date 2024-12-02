@@ -33,11 +33,14 @@ the syntax phase, because:
 »*/
 //«Imports
 
-import { util, api as capi } from "util";
-import { globals } from "config";
-const{strnum, isarr, isstr, isnum, isobj, log, jlog, cwarn, cerr}=util;
-const {SHELL_ERROR_CODES}=globals;
+//import { util} from "util";
+//import { globals } from "config";
+const {globals}=LOTW;
+
+const{strnum, isArr, isStr, isNum, isObj, log, jlog, cwarn, cerr, isEOF}=LOTW.api.util;
+const {SHELL_ERROR_CODES, comClasses}=globals;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
+const{Com}=comClasses;
 
 //»
 
@@ -5027,8 +5030,12 @@ const parse = function(code, options) {//«
 	return ast;
 }//»
 
-const com_esparse=async(args, opts, _)=>{//«
-	let {out, err, stdin, term} = _;
+const com_esparse=class extends Com{//«
+init(){
+	if (this.noStdinOrArgs()) return this.no();
+}
+async run() {
+	let {out, err, stdin, term, args, no} = this;
 	let str;
 	if (stdin){
 		str = stdin.join("\n");
@@ -5036,8 +5043,7 @@ const com_esparse=async(args, opts, _)=>{//«
 	else{
 		let fname = args.shift();
 		if (!fname){
-			err("No file arg given!");
-			return E_ERR;
+			no("No file arg given!");
 		}
 		let node = await fname.toNode(term);
 		if (!node){
@@ -5058,6 +5064,10 @@ log(e);
 		err(`${e.message} (${e.lineNumber}:${e.column})`);
 		return E_ERR;
 	}
+}
+pipeIn(val){
+
+}
 };//»
 
 export const coms={esparse: com_esparse};

@@ -660,7 +660,14 @@ get path(){//«
 	return this.par.fullpath;
 }//»
 
-}//»
+}
+const isNode=n=>{return n instanceof Node;};
+util.isNode = isNode;
+const isDir=n=>{return (n instanceof Node && n.isDir===true);};
+util.isDir = isDir;
+const isFile=n=>{return (n instanceof Node && n.isFile===true);};
+util.isFile = isFile;
+//»
 
 //Filesystem ops«
 

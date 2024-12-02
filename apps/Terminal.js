@@ -82,6 +82,10 @@ const {
 	isStr,
 	isNum,
 	isObj,
+	isNode,
+	isDir,
+	isFile,
+	isErr,
 	make,
 	kc,
 	log,
@@ -136,10 +140,12 @@ const DEL_COMS=[
 //	"test",
 	"fs",
 //	"mail"
-//"esprima",
+	"esprima",
 //"shell"
 ];
-const ADD_COMS=[];
+const ADD_COMS=[
+"esprima"
+];
 
 if (dev_mode){
 //	ADD_COMS.push("shell");
@@ -637,11 +643,12 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 //Command Classes«
 
 const Com = class {/*«*/
-	constructor(name, args, opts, env={}){
+	constructor(name, args, opts, env={}){/*«*/
+		this.name =name;
 		this.args=args;
 		this.opts=opts;
 		this.numErrors = 0;
-		this.name =name;
+		this.noPipe = false;
 		for (let k in env) {
 			this[k]=env[k];
 		}
@@ -665,10 +672,83 @@ const Com = class {/*«*/
 				Y(E_ERR);
 				this.killed = true;
 			};
+			this.nok=(mess)=>{
+				this.numErrors?this.no(mess):this.ok(mess);
+			};
 		});
-	}
-//	static get grabsScreen(){return false;}
+	}/*»*/
 	static grabsScreen = false;
+	async nextArgAsNode(opts={}){/*«*/
+		let {noErr, noneIsErr} = opts;
+		let e, f, node;
+		f = this.args.shift();
+		if (!f) {
+			if (noneIsErr) e = `there are no args left`;
+			else return null;
+		}
+		else{
+			node = await f.toNode(this.term);
+			if (node) return node;
+			e = `${f}: not found`;
+		}
+		if (!noErr) {
+			this.err(e);
+			this.numErrors++;
+		}
+		return new Error(e);
+	}/*»*/
+	async nextArgAsFile(opts={}){/*«*/
+		let file = await this.nextArgAsNode(opts);
+		if (!isNode(file) || file.isFile) return file;
+		let e = `${file.name}: not a regular file`;
+		if (!opts.noErr) {
+			this.err(e);
+			this.numErrors++;
+		}
+		return new Error(e);
+	}/*»*/
+	async nextArgAsDir(opts={}){/*«*/
+		let dir = await this.nextArgAsNode(opts);
+		if (!isNode(dir) || dir.isDir) return dir;
+		let e = `${dir.name}: not a directory`;
+		if (!opts.noErr) {
+			this.err(e);
+			this.numErrors++;
+		}
+		return new Error(e);
+	}/*»*/
+	async nextArgAsText(opts={}){/*«*/
+		let {noErr, noneIsErr, asStr} = opts;
+		let f = await this.nextArgAsFile(opts);
+		if (!isFile(f)) return f;
+		let str = await f.text;
+		if (!isStr(str)) {
+			let e = `${f.name}: unknown value returned from 'node.text'`;
+			if (!noErr) {
+				this.err(e);
+				this.numErrors++;
+			}
+			return e;
+		}
+		if (asStr) return str;
+		return str.split("\n");;
+	}/*»*/
+	get noStdin(){
+		return (!(this.pipeFrom || this.stdin));
+	}
+	get noArgs(){
+		return (this.args.length === 0);
+	}
+	maybeSetNoPipe(){
+		if (this.args.length || this.stdin) this.noPipe = true;
+	}
+	noInputOrArgs(opts={}){
+		let have_none = !(this.args.length || this.pipeFrom || this.stdin);
+		if (have_none && !opts.noErr){
+			this.err("no args or input received");
+		}
+		return have_none;
+	}
 	eof(){
 		this.out(EOF);
 	}
@@ -680,6 +760,7 @@ const Com = class {/*«*/
 		this._cancelled = true;
 cwarn(`${this.name}: cancelled`);
 	}
+
 }/*»*/
 const ScriptCom = class extends Com{//«
 	constructor(shell, name, lines, args, env){
@@ -1292,19 +1373,6 @@ async run(){
 	have_error?this.no():this.ok();
 }
 }/*»*/
-const com_test = class extends Com{//«
-	async run() {
-		const {term, stdin, out, err, suc, wrn, inf} = this;
-		inf("Here is out 111 (in the time of the place which is in the thing that is where in the place of the thing in the placeeeeeeeeeeeeeeee.........................)");
-		await sleep(500);
-		suc("OKAY WEE WOOOO!!!!");
-		await sleep(500);
-		err("OOOOOOOOOO NOOOOOOOOO");
-		await sleep(500);
-		out("Here is out 222");
-		this.ok();
-	}
-};//»
 
 const com_inspect = class extends Com{/*«*/
 
@@ -1345,6 +1413,51 @@ static grabsScreen = true;
 //static get grabsScreen(){return true;}
 }/*»*/
 
+const com_test = class extends Com{//«
+/*
+This is the basic algorithm for LOTW's 'cat'
+init:
+	1) Check for no kind of input and exit
+	2) Block any piped input if we have args or redirected input (this.stdin)
+run:
+	1) if no args:
+		a) maybe send stdin to the output steam and exit
+		b) listen for piped input until EOF
+	2) loop around all args, sending out anything that isn't an error
+	3) exit with this.nok() (calls this.ok() if this.numErrors===0, else calls this.no())
+
+	Notes for this.nextArgAsText(): 
+		- this.numErrors is updated internally (in case the arg doesn't exist, etc.)
+		- It is not an error for there *not* to be a next arg (null is returned when this.args is empty)
+
+*/
+	init(){
+		if (this.noInputOrArgs()) return this.no();
+		this.maybeSetNoPipe();
+	}
+	async run() {
+		const{out,stdin}=this;
+		if (!this.args.length){
+			if (stdin){
+				out(stdin);
+				this.ok();
+			}
+			//else: we have piped input, and are waiting for an 'EOF' to exit
+			return;
+		}
+		let txt;
+		while (txt = await this.nextArgAsText()){
+			if (!isErr(txt)) out(txt);
+		}
+		this.nok();
+	}
+	pipeIn(val){
+		this.out(val);
+		if (isEOF(val)){
+			this.ok();
+		}
+	}
+};//»
 
 //»
 
@@ -1603,33 +1716,6 @@ return arr;
 
 };/*»*/
 
-/*
-const escapes = arr => {//«
-
-let in_single = false;
-for (let j = 0; j < arr.length; j++) {
-	let tok = arr[j];
-	if (tok === "\\") {
-		if (!in_single && arr[j+1]) {
-			let obj = new String(arr[j+1]);
-			obj.escaped = true;
-			obj.toString=function(){
-				return "\\"+this.valueOf();
-			};
-			arr[j] = obj;
-			arr.splice(j + 1, 1);
-		}
-	}
-	else if(tok==="'") {
-		if (in_single) in_single = false;
-		else if (j>0 && arr[j-1] !== "$") in_single = true;
-	}
-}
-return arr;
-
-};//»
-*/
-
 //ErrorHandler«
 
 const ErrorHandler = class {
@@ -1866,7 +1952,7 @@ log("scanQuote", this.index);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				rv.shift();
 				out.push(...rv);
-				cur+=rv.length;
+				cur+=rv.length+2;
 			}
 		}/*»*/
 		else if (check_bq&&ch==="`"){/*«*/
@@ -3494,7 +3580,9 @@ let redir_lns = comobj.redirLines;
 //log(val);
 if (isEOF(val) || (!redir_lns && pipeTo)){
     let next_com = pipeline[j+1];
-    if (next_com && next_com.pipeIn) next_com.pipeIn(val);
+    if (next_com && next_com.pipeIn && !next_com.noPipe) {
+		next_com.pipeIn(val);
+	}
     return;
 }
 
@@ -3800,7 +3888,10 @@ for (let com of pipeline){
 	if (this.cancelled) return;
 }
 for (let com of pipeline){
-	com.run();
+	if (!com.killed) com.run();
+	else{
+log(`Not running (was killed): ${com.name}`);	
+	}
 }
 for (let com of pipeline){
 	lastcomcode = await com.awaitEnd;

@@ -254,6 +254,7 @@ const gbid=id=>{return document.getElementById(id);};
 const rand = (min,max)=>(Math.floor(Math.random()*(max-min+1))+min);
 const strToBuf=s=>{return blobToBuf(new Blob([s],{type:"text/plain"}));};
 const isStr=arg=>{return typeof arg==="string" || arg instanceof String;};
+const isErr=arg=>{return arg instanceof Error;};
 const isNum=arg=>{return((typeof arg==="number")||(arg instanceof Number));};
 const isZero=arg=>{return arg===0;};
 const isInt=arg=>{if(!isNum(arg))return false;return !((arg+"").match(/\./));};
@@ -348,6 +349,7 @@ isBool,
 isInt,
 isArr,
 isZero,
+isErr,
 isStr,
 isObj,
 strToBuf,
