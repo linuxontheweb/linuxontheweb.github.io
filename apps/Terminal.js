@@ -165,11 +165,11 @@ const DEL_COMS=[
 //	"test",
 	"fs",
 //	"mail"
-	"esprima",
+//	"esprima",
 //"shell"
 ];
 const ADD_COMS=[
-"esprima"
+//"esprima"
 ];
 
 if (dev_mode){
@@ -1639,53 +1639,6 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 const Shell = (()=>{
 
-
-const Sequence=class{
-	#par;
-	constructor(start, par){
-		this.#par = par;
-		this.val = [];
-		this.start = start;
-	}
-	toString(){
-		return this.val.join("");
-	}
-}
-const Word = class extends Sequence{
-resolve(){
-
-}
-}
-const DQuote = class extends Sequence{
-resolve(){
-
-}
-}
-const SQuote = class extends Sequence{
-	resolve(){
-		return this.toString();
-	}
-}
-const DSQuote = class extends Sequence{
-resolve(){
-
-}
-}
-const BQuote = class extends Sequence{
-resolve(){
-
-}
-}
-const MathSub = class extends Sequence{
-resolve(){
-
-}
-}
-const ComSub = class extends Sequence{
-resolve(){
-
-}
-}
 //Parser«
 
 const Parser=(()=>{
@@ -1759,7 +1712,8 @@ const isLineTerminator = (cp) => {//«
 
 const Scanner = class {
 
-constructor(code, handler) {//«
+constructor(code, env, handler) {//«
+	this.env = env;
 	this.source = code;
 	this.errorHandler = handler;
 	this.length = code.length;
@@ -1850,8 +1804,8 @@ log("scanQuote", which, this.index);
 	if (err) throw err;
 	const out = quote.val;
 
-	if (is_ds_single) out.push("$");
-	out.push(which);
+//	if (is_ds_single) out.push("$");
+//	out.push(which);
 
 	this.index++;
 	let cur = this.index;
@@ -1867,7 +1821,7 @@ log("scanQuote", which, this.index);
 		if (check_subs&&ch==="$"&&src[cur+1]==="(") {/*«*/
 			if (src[cur+2]==="("){
 				this.index=cur;
-				rv = this.scanComSub(par, true, is_bq);
+				rv = this.scanComSub(quote, true, is_bq);
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				out.push(rv);
@@ -1875,7 +1829,7 @@ log("scanQuote", which, this.index);
 			}
 			else{
 				this.index=cur;
-				rv = this.scanComSub(par, null, is_bq);
+				rv = this.scanComSub(quote, null, is_bq);
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				out.push(rv);
@@ -1884,7 +1838,7 @@ log("scanQuote", which, this.index);
 		}/*»*/
 		else if (check_bq&&ch==="`"){/*«*/
 			this.index = cur;
-			rv = this.scanQuote(par, "`");
+			rv = this.scanQuote(quote, "`");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
@@ -1905,14 +1859,14 @@ log("scanQuote", which, this.index);
 			out.push(ch);
 		}/*»*/
 		else if (is_bq && ch==='"'){/*«*/
-			rv = this.scanQuote(par, '"', true);
+			rv = this.scanQuote(quote, '"', true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur = this.index;
 		}/*»*/
 		else if (is_bq && ch==="$" && src[cur+1]==="'"){/*«*/
-			rv = this.scanQuote(par, "$");
+			rv = this.scanQuote(quote, "$");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
@@ -1925,31 +1879,33 @@ log("scanQuote", which, this.index);
 		ch = src[cur];
 	}
 	if (ch !== which) return null;
-	out.push(ch);
+//	out.push(ch);
 	this.index = cur+1;
 log(`scanQuote DONE: ${start} -> ${cur}, <${out.join("")}>`);
 // quote = new
 	return quote;
 }/*»*/
 scanComSub(par, is_math, in_backquote){/*«*/
-
-log("scanComSub", this.index);
+/*
+We need to collect words rather than chars if:
+If par is a top-level word, then 
+or:
+If we are not embedded in any kind of quote
+*/
+//log("scanComSub", this.index);
 
 let start = this.index;
 const sub = is_math ? new MathSub(start, par) : new ComSub(start, par);
 const out = sub.val;
 this.index+=2;
-//let out = ["$","("];
-out.push("$","(");
 if (is_math){
-	out.push("(");
 	this.index++;
 }
 let cur = this.index;
 let src = this.source;
 let ch = src[cur];
 if (!ch) return null;
-
+let have_space = false;
 while(ch){
 
 if (!ch || ch==="\n" || (ch==="\\"&& !src[cur+1])) return "the command substitution must be on a single line";
@@ -1957,6 +1913,7 @@ if (!ch || ch==="\n" || (ch==="\\"&& !src[cur+1])) return "the command substitut
 if (ch==="\\"){/*«*/
 	cur++;
 	out.push("\\", src[cur]);
+	have_space = false;
 }/*»*/
 else if (ch==="$"&&src[cur+1]==="'"){/*«*/
 	this.index=cur;
@@ -1965,22 +1922,24 @@ else if (ch==="$"&&src[cur+1]==="'"){/*«*/
 	if (isStr(rv)) return rv;
 	out.push(rv);
 	cur=this.index-1;
+	have_space = false;
 }/*»*/
 else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
 	if (ch==="`"&& in_backquote){
 		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
 	}
 	this.index=cur;
-	let rv = this.scanQuote(par, ch);
+	let rv = this.scanQuote(sub, ch);
 	if (rv===null) return `unterminated quote: ${ch}`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
 	cur=this.index-1;
+	have_space = false;
 }/*»*/
 else if (ch==="$"&&src[cur+1]==="("){/*«*/
 	if (src[cur+2]==="("){
 		this.index=cur;
-		let rv = this.scanComSub(par, true);
+		let rv = this.scanComSub(sub, true);
 		if (rv===null) return `unterminated math expansion`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -1988,42 +1947,34 @@ else if (ch==="$"&&src[cur+1]==="("){/*«*/
 	}
 	else{
 		this.index=cur;
-		let rv = this.scanComSub(par);
+		let rv = this.scanComSub(sub);
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
 		cur=this.index;
 	}
+	have_space = false;
 }/*»*/
 else if (ch===")"){/*«*/
-	out.push(")");
 	if (is_math){
 		if (src[cur+1] !== ")") return "expected a final '))'";
 		cur++;
-		out.push(")");
 	}
-	log(`scanComSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
 	this.index = cur;
+//	log(`scanComSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
 	return sub;
-//	if (is_math) return new MathSub(out);
-//	return new ComSub(out);
-//	return out;
 }/*»*/
 else if (ch===" " || ch==="\t"){/*«*/
 	//Need to scan foward to see if there are any unescaped #'s
 	out.push(ch);
-//	cur++;
-	ch = src[cur+1];
-	while (ch===" "||ch==="\t"){
-		out.push(ch);
-		cur++;
-		ch = src[cur+1];
-	}
-	if (!ch) return "unterminated command substitution";
-	if (ch==="#") return "command substitution terminated by '#'";
+	have_space = true;
 }/*»*/
 else{
+if (ch==="#"&&have_space){
+return 'the substitution was terminated by "#"';
+}
 	out.push(ch);
+	have_space = false;
 }
 
 cur++;
@@ -2104,7 +2055,7 @@ scanOperator(){/*«*/
 	return {t:"c_op", c_op:str, start};
 
 }/*»*/
-scanWord(){/*«*/
+scanWord(par, env){/*«*/
 /*
 
 Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
@@ -2118,8 +2069,7 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let rv;
 	let start_line_number = this.lineNumber;
 	let start_line_start = this.lineStart;
-//	let word = [];
-	let _word = new Word(start);
+	let _word = new Word(start, par, env);
 	let word = _word.val;
 	while (!this.eof()) {
 		let ch = src[this.index];
@@ -2168,8 +2118,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		word.push(ch);
 	}
 	return _word;
-//	return new Word(word);
-//	return {t:"word", word, start};
 }/*»*/
 scanNewlines(){/*«*/
 
@@ -2220,7 +2168,7 @@ if (OPERATOR_CHARS.includes(ch)) {
 	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
 }
-return this.scanWord();
+return this.scanWord(null, this.env);
 
 }/*»*/
 
@@ -2231,9 +2179,10 @@ return this.scanWord();
 
 const Parser = class {
 
-constructor(code, options={}) {//«
+constructor(code, env, options={}) {//«
+	this.env = env;
 	this.errorHandler = new ErrorHandler();
-	this.scanner = new Scanner(code, this.errorHandler);
+	this.scanner = new Scanner(code, env, this.errorHandler);
 	this.lookahead = {//«
 		type: EOF_Type,
 		value: '',
@@ -2270,13 +2219,12 @@ parse() {//«
 
 return {
 
-parse:command_str=>{//«
+parse:(command_str, env)=>{//«
 
-let parser = new Parser(command_str.split(""));
+let parser = new Parser(command_str.split(""), env);
 let toks;
 try {
 	toks = parser.parse();
-log(toks);
 }
 catch(e){
 	cerr(e);
@@ -2357,6 +2305,162 @@ return statements;
 }
 
 })();//»
+
+/*Sequence Classes (Words, Quotes, Subs)«*/
+
+const Sequence=class{/*«*/
+	constructor(start, par, env){
+		this.par = par;
+		this.env = env;
+		this.val = [];
+		this.start = start;
+	}
+	toString(){
+		return this.val.join("");
+	}
+}/*»*/
+const Word = class extends Sequence{/*«*/
+async expand(){
+
+}
+//static isWord = true;
+
+tildeExpansion(){/*«*/
+	const {val} = this;
+	let parts = this.assignmentParts;
+	let home_path = globals.HOME_PATH;
+	let home_path_len = home_path.length;
+	if (!parts){
+		if (val[0]!=="~") return;
+		if (val.length===1 || val[1]==="/"){
+			val.splice(0, 1, ...home_path);
+		}
+		return;
+	}
+	let pos = parts[1];
+	for (let i=pos; i < val.length; i++){
+		if (i===pos&&val[pos]==="~"&&val[pos+1]=="/"){
+			val.splice(pos, 1, ...home_path);
+			i+=home_path_len;
+		}
+		else if (val[i]===":" && val[i+1]==="~"){
+			if (!val[i+2]){
+				val.splice(i+1, 1, ...home_path);
+				return;
+			}
+			else if (val[i+2]=="/"){
+				val.splice(i+1, 1, ...home_path);
+				i+=home_path_len+2;
+			}
+		}
+	}
+}/*»*/
+get assignmentParts(){/*«*/
+//const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
+	let eq_pos = this.val.indexOf("=");
+	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
+	let pre_eq_arr = this.val.slice(0, eq_pos);
+	let first = pre_eq_arr.shift();
+	if (!(typeof first === "string" && first.match(/^[_a-zA-Z]$/))) return null;
+	let assign_word = first;
+
+	for (let ch of pre_eq_arr){
+		if (!(typeof ch === "string" && ch.match(/^[_a-zA-Z0-9]$/))) return null;
+		assign_word+=ch;
+	}
+	return [assign_word, eq_pos+1];
+}/*»*/
+get isWord(){return true;}
+
+dup(){
+	let word = new Word(this.start, this.par, this.env);
+	let arr = word.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return word;
+}
+
+
+}/*»*/
+const DQuote = class extends Sequence{/*«*/
+async expand(){
+
+}
+
+dup(){
+	let dq = new DQuote(this.start, this.par, this.env);
+	let arr = dq.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return dq;
+}
+
+}/*»*/
+const SQuote = class extends Sequence{/*«*/
+	expand(){
+		return this.toString();
+	}
+	dup(){
+		return this.val.slice();
+	}
+}/*»*/
+const DSQuote = class extends Sequence{/*«*/
+expand(){
+
+}
+dup(){
+	return this.val.slice();
+}
+}/*»*/
+const BQuote = class extends Sequence{/*«*/
+async expand(){
+
+}
+dup(){
+	let bq = new BQuote(this.start, this.par, this.env);
+	let arr = bq.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return bq;
+}
+
+}/*»*/
+const MathSub = class extends Sequence{/*«*/
+async expand(){
+
+}
+dup(){
+	let math = new MathSub(this.start, this.par, this.env);
+	let arr = math.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return math;
+}
+}/*»*/
+const ComSub = class extends Sequence{/*«*/
+async expand(){
+
+}
+dup(){
+	let com = new ComSub(this.start, this.par, this.env);
+	let arr = com.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return com;
+}
+}/*»*/
+
+/*»*/
 
 const backquote_substitution = async(arr, shell, env) =>{//«
 /*We can have any number of backquotes in here:
@@ -2552,8 +2656,9 @@ else {
 return {t:"word",word: out};
 };//»
 
-const curly_expansion = (arr, from_pos) => {//«
-//log("FROM", from_pos);
+const curly_expansion = (tok, from_pos) => {//«
+
+const arr = tok.val;
 let ind1 = arr.indexOf("{", from_pos);
 let ind2 = arr.lastIndexOf("}");
 
@@ -2623,7 +2728,7 @@ if (comma_arr){
 if (!final_i){//«
 	if (Number.isFinite(start_i)){
 		if (start_i+2 < arr.length){
-			return curly_expansion(arr, start_i+1);
+			return curly_expansion(tok, start_i+1);
 		}
 		else{
 //cwarn("GIVING UP!");
@@ -2632,17 +2737,38 @@ if (!final_i){//«
 	else{
 //log("NOT OPENED");
 	}
-	return arr;
+	return tok;
 }//»
 else{//«
 
 let pre = arr.slice(0, start_i);
 let post = arr.slice(final_i+1);
 if (comma_arr){//«
+/*
+Everything in all these arrays that isn't a basic string needs to be duplicated (right?)
+
+*/
 	let words=[];
 	for (let comarr of comma_arr){
-		words.push(pre.slice().concat(comarr.slice()).concat(post.slice()));
+//		let word=[];
+		let _word = new Word(tok.start, tok.par, tok.env);
+		let word = _word.val;
+		for (let ent of pre){
+			if (isStr(ent)) word.push(ent);
+			else word.push(ent.dup());
+		}
+		for (let ent of comarr){
+			if (isStr(ent)) word.push(ent);
+			else word.push(ent.dup());
+		}
+		for (let ent of post){
+			if (isStr(ent)) word.push(ent);
+			else word.push(ent.dup());
+		}
+		words.push(_word);
+//		words.push(pre.slice().concat(comarr.slice()).concat(post.slice()));
 	}
+
 	return words;
 }//»
 else if (have_dot&&!have_quote&&!have_escape){//«
@@ -2679,7 +2805,7 @@ else if (marr = cstr.match(/^([a-z])\.\.([a-z])(\.\.([-+]?\d+))?$/i)){
 	inc = marr[4]?parseInt(marr[4]):1;
 }
 else{
-	return arr;
+	return tok;
 }//»
 
 inc = Math.abs(inc);
@@ -2713,7 +2839,7 @@ return words;
 }//»
 else{
 //log("NOTHING");
-return arr;
+return tok;
 }
 }//»
 
@@ -2731,69 +2857,10 @@ else{//«
 	else if (ind2 >= 0){
 //log("CLOSE CURLY ONLY");
 	}
-	return arr;
+	return tok;
 }//»
 
 }//»
-const tilde_expansion = tok => {//«
-//log("TILDE", tok);
-//Just expand everything after NAME=
-//NAME=...
-//let pref = tok
-let wrdarr = tok.word;
-let wrdstr = tok.word.join("");
-//cwarn(`CHECK: <${wrdstr}>`);
-let marr;
-if (marr = wrdstr.match(/^([_a-zA-Z][_a-zA-Z0-9]*=)/)){
-//If this is a valid shell variable assignment, expand lone '~' or all '~/' after 
-//the first '=' and every ':' with $HOME
-let from = marr[1].length;
-let start = tok.word.slice(0, from);
-let arr = tok.word.slice(from);
-//cwarn("EXPAND LONE '~' or initial '~/' and every one after a ':'");
-//log(arr);
-if (!arr.length) return tok;
-if (arr.length===1&&arr[0]==="~"){
-	return {t: "word",word: [...start, ...globals.HOME_PATH]};
-}
-let out=[];
-for (let i=0; i < arr.length; i++){/*«*/
-	if (i===0&&arr[0]==="~"&&arr[1]=="/"){
-		out.push(...globals.HOME_PATH, arr[1]);
-		i++;
-	}
-	else if (arr[i]===":" && arr[i+1]==="~"){
-		if (!arr[i+2]){
-			out.push(":", ...globals.HOME_PATH);
-			return {t: "word",word: [...start,...out]};
-		}
-		else if (arr[i+2]=="/"){
-			out.push(":", ...globals.HOME_PATH,"/");
-			i+=2;
-		}
-		else{
-			out.push(arr[i], arr[i+1]);
-			i++;
-		}
-	}
-	else {
-		out.push(arr[i]);
-	}
-}/*»*/
-return {t: "word",word: [...start,...out]};
-}
-else if (wrdstr==="~") {
-//Expand '~' or the leading '~/'
-//cwarn("EXPAND LONE '~'");
-//log(tok.word);
-tok.word=[...globals.HOME_PATH];
-}
-else if (wrdstr.match(/^~\x2f/)){
-tok.word=[...globals.HOME_PATH, ...wrdarr.slice(1)];
-//cwarn("EXPAND initial '~/'");
-}
-return tok;
-};/*»*/
 const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {//«
 //We will also need env, script_name, and script_args passed in here
 /*«
@@ -3288,7 +3355,7 @@ const can=()=>{//«
 
 let statements;
 try{
-	statements = Parser.parse(command_str);
+	statements = Parser.parse(command_str, env);
 }
 catch(e){
 	return terr("sh: "+e.message);
@@ -3429,30 +3496,21 @@ Else, let it pass through
 
 »*/
 
-
 for (let k=0; k < arr.length; k++){//curlies«
 
 let tok = arr[k];
-if (tok.t==="word") {
-	let rv = curly_expansion(tok.word, 0);
-	if (rv !== tok.word){
-		let newtoks = [];
-		for (let wrd of rv){
-			newtoks.push({t:"word",word: wrd});
-		}
-		arr.splice(k, 1, ...newtoks);
+if (tok.isWord) {
+	let rv = curly_expansion(tok, 0);
+	if (rv !== tok){
+		arr.splice(k, 1, ...rv);
 		k--;//Need to revisit the original position, in case there are more expansions there
 	}
 }
 
 }//»
 for (let k=0; k < arr.length; k++){//tilde«
-
-let tok = arr[k];
-if (tok.t==="word") {
-	arr[k] = tilde_expansion(tok);
-}
-
+	let tok = arr[k];
+	if (tok instanceof Word) tok.tildeExpansion();
 }//»
 
 for (let k=0; k < arr.length; k++){//redirs«
@@ -3466,14 +3524,12 @@ for (let k=0; k < arr.length; k++){//redirs«
 		}
 		let tok2 = arr[k+1];
 		if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
-//		if (!(tok2 && isStr(tok2))) return terr(`sh: invalid or missing redirection operand`);
-//		if (!(tok2 && isStr(tok2))) return terr(`sh: invalid or missing redirection operand`);
-		if (!tok2.word) return terr(`sh: invalid or missing redirection operand`);
+		if (!(tok2 instanceof Word)) return terr(`sh: invalid or missing redirection operand`);
 		arr.splice(k, 2);
 		k-=2;
 		val = null;
-		if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [tok.r_op, tok2.word.join("")];
-		else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [tok.r_op, tok2.word.join("")];
+		if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [tok.r_op, tok2.toString()];
+		else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [tok.r_op, tok2.toString()];
 		else return terr(`sh: unsupported operator: '${rop}'`);
 	}
 }//»
@@ -6829,7 +6885,7 @@ const init = async(appargs={})=>{
 			history = arr.reverse();
 		}
 	}
-	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`;
+	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`
 	if(dev_mode){
 		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
 	}
@@ -6864,6 +6920,9 @@ const init = async(appargs={})=>{
 //	else this.shell = shell;
 //	else this.shell_class = shell_class;
 	response(init_prompt.split("\n"));
+if (!dev_mode) {
+	response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners"`, {isWrn: true});
+}
 	did_init = true;
 	sleeping = false;
 	set_prompt();
