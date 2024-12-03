@@ -180,7 +180,7 @@ if (dev_mode){
 //Var«
 
 let last_exit_code = 0;
-
+const PAD_SPACE = new String(" ");
 const EOF_Type = 1;
 const OPERATOR_CHARS=[//«
 "|",
@@ -1766,7 +1766,7 @@ scanComments() {//«
 };//»
 
 scanQuote(par, which, in_backquote){/*«*/
-log("scanQuote", which, this.index);
+//log("scanQuote", which, this.index);
 // If we are in double-quotes or back-quotes, we need to check for:
 // 2) '$(': scanComSub
 	let check_subs = which==='"'||which==="`";
@@ -1877,7 +1877,7 @@ log("scanQuote", which, this.index);
 	if (ch !== end_quote) return null;
 //	out.push(ch);
 	this.index = cur;
-log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
+//log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
 // quote = new
 	return quote;
 }/*»*/
@@ -2366,7 +2366,6 @@ get assignmentParts(){/*«*/
 	return [assign_word, eq_pos+1];
 }/*»*/
 get isWord(){return true;}
-
 dup(){/*«*/
 	let word = new Word(this.start, this.par, this.env);
 	let arr = word.val;
@@ -2376,7 +2375,6 @@ dup(){/*«*/
 	}
 	return word;
 }/*»*/
-
 
 }/*»*/
 const SQuote = class extends Sequence{/*«*/
@@ -2504,21 +2502,26 @@ dup(){/*«*/
 	}
 	return dq;
 }/*»*/
-async expandSubs(shell){
+async expandSubs(shell){/*«*/
 
 let val = this.val;
 let _word = new Word(this.start, this.par, this.env);
 let word = _word.val;
 for (let ent of val){
-	if (ent.expandSubs) word.push(...(await ent.expandSubs(shell)));
+	if (ent.expandSubs) {
+		let rv = await ent.expandSubs(shell);
+		word.push(rv.join("\n"));
+	}
 	else word.push(ent);
 }
 
 return [_word];
-}
 
 }/*»*/
-
+toString(){
+	return this.val.join("");
+}
+}/*»*/
 const BQuote = class extends Sequence{/*«*/
 //Collect everything in a string...
 async expandSubs(shell){/*«*/
@@ -2536,6 +2539,7 @@ dup(){/*«*/
 
 }/*»*/
 const ComSub = class extends Sequence{/*«*/
+
 async expandSubs(shell){
 	return await do_comsub(this, shell);
 }
@@ -2549,7 +2553,6 @@ dup(){/*«*/
 	return com;
 }/*»*/
 }/*»*/
-
 const MathSub = class extends Sequence{/*«*/
 
 async expandSubs(shell){/*«*/
@@ -2607,7 +2610,6 @@ const do_comsub=async(tok, shell)=>{//«
 			sub+=ent.toString();
 		}
 	}
-cwarn(`EXECUTE: ${sub}`);
 	let sub_lines = [];
 	try{
 		await shell.execute(sub, {subLines: sub_lines, env: tok.env});
@@ -2615,100 +2617,35 @@ cwarn(`EXECUTE: ${sub}`);
 	catch(e){
 	}
 	let out = [];
-	for (let ln of sub_lines){
+//	for (let ln of sub_lines){
+	let len = sub_lines.length;
+	let len_min_1 = len-1;
+	for (let i = 0; i < len; i++){
+		let ln = sub_lines[i];
 		let word = new Word(tok.start, tok.par, tok.env);
-		word.val = [...ln, " "];
+		if (i < len_min_1){
+			word.val = [...ln, PAD_SPACE];
+		}
+		else{
+			word.val = [...ln];
+		}
 		out.push(word);
 	}
 	return out;
 
 };/*»*/
 
-const backquote_substitution = async(arr, shell, env) =>{//«
-/*We can have any number of backquotes in here:
-sloom`ls -l ~/slerm`CHOOM`date +%s`"  GWUBBB   "`./some_script.sh -x -y zzzz | gerble --it`
-*/
-if (!arr.includes("`")) return arr;
-
-let qtyp;
-let out=[];
-let curword;
-let bq_arr;
-for (let i=0; i < arr.length; i++){
-let ch = arr[i];
-if (ch === "`" && qtyp !== "'"){
-	if (!bq_arr){
-		bq_arr = [];
-	}
-	else{
-		let sub_lines = [];
-		try{
-			await shell.execute(bq_arr.join(""), {subLines: sub_lines, env});
-		}
-		catch(e){
-			return e.message;
-		}
-		if (qtyp==='"'){
-			if (curword) curword.push(...sub_lines.join("\n"));
-			else out.push([...sub_lines.join("\n")]);
-		}
-		else {
-			for (let ln of sub_lines){
-				if (curword){
-					curword.push(...ln);
-					out.push(curword);
-					curword = null;
-				}
-				else{
-					out.push([...ln]);
-				}
-			}
-		}
-		bq_arr = null;
-	}
-}
-else if (bq_arr){
-	bq_arr.push(ch);
-}
-else {
-	if (ch==='"'||ch === "'"){
-		if (!qtyp) qtyp = ch;
-		else if (qtyp===ch) qtyp = null;
-	}
-	if (!curword) curword = [];
-	curword.push(ch);
-}
-}
-
-if (bq_arr){
-//An unterminated backquote array should only happen like this (this isn't how bash works):
-//$ echo "`whatever blah 123"
-//In this case, bash will open the secondary prompt in order to continue input
-	if (qtyp==='"') return `unterminated backquote inside double quotes`
-	return `should not get here asjdasjdksa!^@*^#*&@!`;
-}
-
-if (curword){
-	if (out.length){
-		out[out.length-1].push(...curword);
-	}
-	else out.push(curword);
-}
-return out;
-
-};/*»*/
-
 const comsub_expansions= async(tok, shell)=>{//«
 
-let arr = tok.val;
-let have_sub = false;
-let _word = new Word(tok.start, tok.par, tok.env);
-let out = _word.val;
-for (let ent of arr){
-	if (!ent.expandSubs) out.push(ent);
-	else out.push(...(await ent.expandSubs(shell)));
-}
-return _word;
+	let arr = tok.val;
+	let have_sub = false;
+	let _word = new Word(tok.start, tok.par, tok.env);
+	let out = _word.val;
+	for (let ent of arr){
+		if (!ent.expandSubs) out.push(ent);
+		else out.push(...(await ent.expandSubs(shell)));
+	}
+	return _word;
 
 }/*»*/
 
@@ -3606,37 +3543,13 @@ if (tok.t==="word") {
 }
 
 }//»
-/*
-for (let k=0; k < arr.length; k++){//backquotes«
 
-let tok = arr[k];
-if (tok.t==="word") {
-	let rv = await backquote_substitution(tok.word, this, env);
-	if (isStr(rv)) return terr(`sh: command substitution: ${rv}`);
-
-	if (rv !== tok.word){
-		let newtoks = [];
-		for (let wrd of rv){
-			newtoks.push({t:"word",word: wrd});
-		}
-		arr.splice(k, 1, ...newtoks);
-		k+=newtoks.length-1;
-	}
-}
-
-}//»
-*/
 for (let k=0; k < arr.length; k++){//command sub«
-let tok = arr[k];
-log(tok);
-if (tok.isWord) {
-	let rv = await comsub_expansions(tok, this);
-	arr[k] = rv;
-//log("RV", rv);
-//	if (rv !== tok){
-//		arr.splice(k, 1, ...rv);
-//	}
-}
+	let tok = arr[k];
+	if (tok.isWord) {
+		let rv = await comsub_expansions(tok, this);
+		arr[k] = rv;
+	}
 }//»
 
 for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
@@ -3662,14 +3575,21 @@ if (tok.t==="word") {
 
 }//»
 
-for (let k=0; k < arr.length; k++){/*«quote removal*/
+/*
+for (let k=0; k < arr.length; k++){//«quote removal
 	let tok = arr[k];
 	if (tok.t==="word") {
 		arr[k]=quote_removal(tok.word);
 	}
-}/*»*/
-
+}//»
+*/
 //Set environment variables (exports to terminal's environment if there is nothing left)
+		{
+			let hold = arr;
+			arr = [];
+			for (let arg of hold) arr.push(arg.toString());
+		}
+
 		let rv = add_to_env(arr, env, {term});
 		if (rv.length) term.response(rv, {isErr: true});
 		if (arr[0]==" ") arr.shift();
