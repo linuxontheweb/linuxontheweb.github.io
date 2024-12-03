@@ -1782,7 +1782,6 @@ log("scanQuote", which, this.index);
 	let is_ds_single = which === "$";
 	let is_single;
 	if (is_ds_single) {
-//		out.push("$");
 		this.index++;
 		is_single = true;
 	}
@@ -1804,17 +1803,16 @@ log("scanQuote", which, this.index);
 	if (err) throw err;
 	const out = quote.val;
 
-//	if (is_ds_single) out.push("$");
-//	out.push(which);
+	let end_quote;
+	if (which==="$") end_quote="'";
+	else end_quote = which;
 
 	this.index++;
 	let cur = this.index;
 	let ch = src[cur];
 	let rv;
 	let next;
-
-	while(ch && ch !== which){
-
+	while(ch && ch !== end_quote){
 		if (ch==="`" && in_backquote){
 			return `unexpected EOF while looking for matching '${which}'`;
 		}
@@ -1843,22 +1841,20 @@ log("scanQuote", which, this.index);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur=this.index;
-//			continue;
 		}/*»*/
-		else if (ch==="\\"){/*«*/
+		else if (!is_hard_single && ch==="\\"){/*«*/
 			cur++;
 			ch = src[cur];
 			if (!ch) this.throwUnexpectedToken("unsupported line continuation");
-			if (!is_hard_single){
-				let c = ch;
-				ch = new String(c);
-				ch.escaped = true;
-				if (is_ds_single||is_dq)ch.toString=()=>{return "\\"+c;};
-				//else is_bq: the character is in "free space" (no backslashes show up)
-			}
+			let c = ch;
+			ch = new String(c);
+			ch.escaped = true;
+			if (is_ds_single||is_dq)ch.toString=()=>{return "\\"+c;};
+			//else is_bq: the character is in "free space" (no backslashes show up)
 			out.push(ch);
 		}/*»*/
 		else if (is_bq && ch==='"'){/*«*/
+			this.index=cur;
 			rv = this.scanQuote(quote, '"', true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -1878,10 +1874,10 @@ log("scanQuote", which, this.index);
 		cur++;
 		ch = src[cur];
 	}
-	if (ch !== which) return null;
+	if (ch !== end_quote) return null;
 //	out.push(ch);
-	this.index = cur+1;
-log(`scanQuote DONE: ${start} -> ${cur}, <${out.join("")}>`);
+	this.index = cur;
+log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
 // quote = new
 	return quote;
 }/*»*/
@@ -1921,7 +1917,7 @@ else if (ch==="$"&&src[cur+1]==="'"){/*«*/
 	if (rv===null) return `unterminated quote: $'`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
-	cur=this.index-1;
+	cur=this.index;
 	have_space = false;
 }/*»*/
 else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
@@ -1933,7 +1929,7 @@ else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
 	if (rv===null) return `unterminated quote: ${ch}`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
-	cur=this.index-1;
+	cur=this.index;
 	have_space = false;
 }/*»*/
 else if (ch==="$"&&src[cur+1]==="("){/*«*/
@@ -2080,20 +2076,19 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			ch = new String(next1);
 			ch.escaped = true;
 			this.index++;
+			word.push(ch);
 		}/*»*/
 		else if (ch==="$" && next1 === "(" && next2==="("){/*«*/
 			rv = this.scanComSub(_word, true);
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-			continue;
 		}/*»*/
 		else if (ch==="$" && next1 === "("){/*«*/
 			rv = this.scanComSub(_word);
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-			continue;
 		}/*»*/
 		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){/*«*/
 			rv = this.scanQuote(_word, ch);
@@ -2107,15 +2102,14 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-			continue;
 		}/*»*/
 		else if (ch==="\n"||ch===" "||ch==="\t") break;
 		else if (OPERATOR_CHARS.includes(ch)) {/*«*/
 			if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 			break;
 		}/*»*/
+		else word.push(ch);
 		this.index++;
-		word.push(ch);
 	}
 	return _word;
 }/*»*/
@@ -2308,7 +2302,7 @@ return statements;
 
 /*Sequence Classes (Words, Quotes, Subs)«*/
 
-const Sequence=class{/*«*/
+const Sequence = class {/*«*/
 	constructor(start, par, env){
 		this.par = par;
 		this.env = env;
@@ -2320,10 +2314,6 @@ const Sequence=class{/*«*/
 	}
 }/*»*/
 const Word = class extends Sequence{/*«*/
-async expand(){
-
-}
-//static isWord = true;
 
 tildeExpansion(){/*«*/
 	const {val} = this;
@@ -2355,6 +2345,11 @@ tildeExpansion(){/*«*/
 		}
 	}
 }/*»*/
+dsSQuoteExpansion(){/*«*/
+	for (let ent of this.val){
+		if (ent instanceof DSQuote) ent.expand();
+	}
+}/*»*/
 get assignmentParts(){/*«*/
 //const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 	let eq_pos = this.val.indexOf("=");
@@ -2372,7 +2367,7 @@ get assignmentParts(){/*«*/
 }/*»*/
 get isWord(){return true;}
 
-dup(){
+dup(){/*«*/
 	let word = new Word(this.start, this.par, this.env);
 	let arr = word.val;
 	for (let ent of this.val){
@@ -2380,24 +2375,8 @@ dup(){
 		else arr.push(ent.dup());
 	}
 	return word;
-}
-
-
 }/*»*/
-const DQuote = class extends Sequence{/*«*/
-async expand(){
 
-}
-
-dup(){
-	let dq = new DQuote(this.start, this.par, this.env);
-	let arr = dq.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return dq;
-}
 
 }/*»*/
 const SQuote = class extends Sequence{/*«*/
@@ -2405,139 +2384,13 @@ const SQuote = class extends Sequence{/*«*/
 		return this.toString();
 	}
 	dup(){
-		return this.val.slice();
+		return this;
 	}
 }/*»*/
 const DSQuote = class extends Sequence{/*«*/
 expand(){
 
-}
-dup(){
-	return this.val.slice();
-}
-}/*»*/
-const BQuote = class extends Sequence{/*«*/
-async expand(){
-
-}
-dup(){
-	let bq = new BQuote(this.start, this.par, this.env);
-	let arr = bq.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return bq;
-}
-
-}/*»*/
-const MathSub = class extends Sequence{/*«*/
-async expand(){
-
-}
-dup(){
-	let math = new MathSub(this.start, this.par, this.env);
-	let arr = math.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return math;
-}
-}/*»*/
-const ComSub = class extends Sequence{/*«*/
-async expand(){
-
-}
-dup(){
-	let com = new ComSub(this.start, this.par, this.env);
-	let arr = com.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return com;
-}
-}/*»*/
-
-/*»*/
-
-const backquote_substitution = async(arr, shell, env) =>{//«
-/*We can have any number of backquotes in here:
-sloom`ls -l ~/slerm`CHOOM`date +%s`"  GWUBBB   "`./some_script.sh -x -y zzzz | gerble --it`
-*/
-if (!arr.includes("`")) return arr;
-
-let qtyp;
-let out=[];
-let curword;
-let bq_arr;
-for (let i=0; i < arr.length; i++){
-let ch = arr[i];
-if (ch === "`" && qtyp !== "'"){
-	if (!bq_arr){
-		bq_arr = [];
-	}
-	else{
-		let sub_lines = [];
-		try{
-			await shell.execute(bq_arr.join(""), {subLines: sub_lines, env});
-		}
-		catch(e){
-			return e.message;
-		}
-		if (qtyp==='"'){
-			if (curword) curword.push(...sub_lines.join("\n"));
-			else out.push([...sub_lines.join("\n")]);
-		}
-		else {
-			for (let ln of sub_lines){
-				if (curword){
-					curword.push(...ln);
-					out.push(curword);
-					curword = null;
-				}
-				else{
-					out.push([...ln]);
-				}
-			}
-		}
-		bq_arr = null;
-	}
-}
-else if (bq_arr){
-	bq_arr.push(ch);
-}
-else {
-	if (ch==='"'||ch === "'"){
-		if (!qtyp) qtyp = ch;
-		else if (qtyp===ch) qtyp = null;
-	}
-	if (!curword) curword = [];
-	curword.push(ch);
-}
-}
-
-if (bq_arr){
-//An unterminated backquote array should only happen like this (this isn't how bash works):
-//$ echo "`whatever blah 123"
-//In this case, bash will open the secondary prompt in order to continue input
-	if (qtyp==='"') return `unterminated backquote inside double quotes`
-	return `should not get here asjdasjdksa!^@*^#*&@!`;
-}
-
-if (curword){
-	if (out.length){
-		out[out.length-1].push(...curword);
-	}
-	else out.push(curword);
-}
-return out;
-
-};/*»*/
-
-const ds_single_quote_escapes = tok=>{//«
-let wrd = tok.word;
+let wrd = this.val;
 if (!wrd){
 cwarn("WHAT THE HELL IS HERE????");
 log(tok);
@@ -2545,21 +2398,12 @@ return tok;
 }
 let arr = wrd;
 let out = [];
-let in_ds_single = false;
-let in_dq = false;
-for (let i=0; i < arr.length; i++){
-let ch = arr[i];
-let next = arr[i+1];
-if (!in_dq && !in_ds_single&&ch==="$"&&next==="'"){
-	in_ds_single=true;
-	out.push("$","'");
-	i++;
-}
-else if (in_ds_single){
+for (let i=0; i < arr.length; i++){/*«*/
+	let ch = arr[i];
+	let next = arr[i+1];
 	if (ch.escaped){
 	let c;
 //switch(ch){/*«*/
-
 //\" yields a <quotation-mark> (double-quote) character, but note that
 //<quotation-mark> can be included unescaped.
 if  (ch=='"') {c='"';}
@@ -2637,24 +2481,236 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 	if (c) out.push(c);
 	else out.push(ch);
 	}
-	else if (ch==="'"){
-		in_ds_single = false;
-		out.push("'");
-	}
 	else{
 		out.push(ch);
 	}
+}/*»*/
+this.val = out;
+}
+
+dup(){
+	return this;
+}
+}/*»*/
+
+const DQuote = class extends Sequence{/*«*/
+
+dup(){/*«*/
+	let dq = new DQuote(this.start, this.par, this.env);
+	let arr = dq.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return dq;
+}/*»*/
+async expandSubs(shell){
+
+let val = this.val;
+let _word = new Word(this.start, this.par, this.env);
+let word = _word.val;
+for (let ent of val){
+	if (ent.expandSubs) word.push(...(await ent.expandSubs(shell)));
+	else word.push(ent);
+}
+
+return [_word];
+}
+
+}/*»*/
+
+const BQuote = class extends Sequence{/*«*/
+//Collect everything in a string...
+async expandSubs(shell){/*«*/
+	return await do_comsub(this, shell);
+}/*»*/
+dup(){/*«*/
+	let bq = new BQuote(this.start, this.par, this.env);
+	let arr = bq.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return bq;
+}/*»*/
+
+}/*»*/
+const ComSub = class extends Sequence{/*«*/
+async expandSubs(shell){
+	return await do_comsub(this, shell);
+}
+dup(){/*«*/
+	let com = new ComSub(this.start, this.par, this.env);
+	let arr = com.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return com;
+}/*»*/
+}/*»*/
+
+const MathSub = class extends Sequence{/*«*/
+
+async expandSubs(shell){/*«*/
+if (!await util.loadMod("util.math")) {
+//	return no("could not load the math module");
+	return [];
+}
+let sub = '';
+for (let ent of this.val){
+	if (ent.expandSubs){
+		let arr = await ent.expandSubs();
+		for (let rv of arr){
+			sub+=rv.toString();
+		}
+	}
+	else {
+		sub+=ent.toString();
+	}
+}
+let math = new NS.mods["util.math"]();
+try{
+let rv = math.eval(sub)+"";
+let word = new Word(this.start, this.par, this.env);
+word.val=[...rv];
+return [word];
+}
+catch(e){
+return [];
+}
+}/*»*/
+dup(){/*«*/
+	let math = new MathSub(this.start, this.par, this.env);
+	let arr = math.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return math;
+}/*»*/
+
+}/*»*/
+
+/*»*/
+
+const do_comsub=async(tok, shell)=>{//«
+	let sub = '';
+	for (let ent of tok.val){
+		if (ent.expandSubs){
+			let arr = await ent.expandSubs();
+			for (let rv of arr){
+				sub+=rv.toString();
+			}
+		}
+		else {
+			sub+=ent.toString();
+		}
+	}
+cwarn(`EXECUTE: ${sub}`);
+	let sub_lines = [];
+	try{
+		await shell.execute(sub, {subLines: sub_lines, env: tok.env});
+	}
+	catch(e){
+	}
+	let out = [];
+	for (let ln of sub_lines){
+		let word = new Word(tok.start, tok.par, tok.env);
+		word.val = [...ln, " "];
+		out.push(word);
+	}
+	return out;
+
+};/*»*/
+
+const backquote_substitution = async(arr, shell, env) =>{//«
+/*We can have any number of backquotes in here:
+sloom`ls -l ~/slerm`CHOOM`date +%s`"  GWUBBB   "`./some_script.sh -x -y zzzz | gerble --it`
+*/
+if (!arr.includes("`")) return arr;
+
+let qtyp;
+let out=[];
+let curword;
+let bq_arr;
+for (let i=0; i < arr.length; i++){
+let ch = arr[i];
+if (ch === "`" && qtyp !== "'"){
+	if (!bq_arr){
+		bq_arr = [];
+	}
+	else{
+		let sub_lines = [];
+		try{
+			await shell.execute(bq_arr.join(""), {subLines: sub_lines, env});
+		}
+		catch(e){
+			return e.message;
+		}
+		if (qtyp==='"'){
+			if (curword) curword.push(...sub_lines.join("\n"));
+			else out.push([...sub_lines.join("\n")]);
+		}
+		else {
+			for (let ln of sub_lines){
+				if (curword){
+					curword.push(...ln);
+					out.push(curword);
+					curword = null;
+				}
+				else{
+					out.push([...ln]);
+				}
+			}
+		}
+		bq_arr = null;
+	}
+}
+else if (bq_arr){
+	bq_arr.push(ch);
 }
 else {
-	if (ch==='"'){
-		in_dq = !in_dq;
+	if (ch==='"'||ch === "'"){
+		if (!qtyp) qtyp = ch;
+		else if (qtyp===ch) qtyp = null;
 	}
-	out.push(ch);
+	if (!curword) curword = [];
+	curword.push(ch);
 }
 }
 
-return {t:"word",word: out};
-};//»
+if (bq_arr){
+//An unterminated backquote array should only happen like this (this isn't how bash works):
+//$ echo "`whatever blah 123"
+//In this case, bash will open the secondary prompt in order to continue input
+	if (qtyp==='"') return `unterminated backquote inside double quotes`
+	return `should not get here asjdasjdksa!^@*^#*&@!`;
+}
+
+if (curword){
+	if (out.length){
+		out[out.length-1].push(...curword);
+	}
+	else out.push(curword);
+}
+return out;
+
+};/*»*/
+
+const comsub_expansions= async(tok, shell)=>{//«
+
+let arr = tok.val;
+let have_sub = false;
+let _word = new Word(tok.start, tok.par, tok.env);
+let out = _word.val;
+for (let ent of arr){
+	if (!ent.expandSubs) out.push(ent);
+	else out.push(...(await ent.expandSubs(shell)));
+}
+return _word;
+
+}/*»*/
 
 const curly_expansion = (tok, from_pos) => {//«
 
@@ -2744,13 +2800,8 @@ else{//«
 let pre = arr.slice(0, start_i);
 let post = arr.slice(final_i+1);
 if (comma_arr){//«
-/*
-Everything in all these arrays that isn't a basic string needs to be duplicated (right?)
-
-*/
 	let words=[];
 	for (let comarr of comma_arr){
-//		let word=[];
 		let _word = new Word(tok.start, tok.par, tok.env);
 		let word = _word.val;
 		for (let ent of pre){
@@ -2766,7 +2817,6 @@ Everything in all these arrays that isn't a basic string needs to be duplicated 
 			else word.push(ent.dup());
 		}
 		words.push(_word);
-//		words.push(pre.slice().concat(comarr.slice()).concat(post.slice()));
 	}
 
 	return words;
@@ -2830,11 +2880,25 @@ else {
 	}
 }
 
-let words = [];
+
+let words=[];
 for (let val of vals){
-	words.push(pre.slice().concat([val]).concat(post.slice()));
+	let _word = new Word(tok.start, tok.par, tok.env);
+	let word = _word.val;
+	for (let ent of pre){
+		if (isStr(ent)) word.push(ent);
+		else word.push(ent.dup());
+	}
+	word.push(val);
+	for (let ent of post){
+		if (isStr(ent)) word.push(ent);
+		else word.push(ent.dup());
+	}
+	words.push(_word);
 }
-return words;
+
+	return words;
+
 
 }//»
 else{
@@ -3392,8 +3456,8 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 //sequences inside dollar-single-quotes (See 2.2.4 Dollar-Single-Quotes)
 for (let k=0; k < arr.length; k++){
 	let tok = arr[k];
-	if (tok.t==="word"){
-		arr[k] = ds_single_quote_escapes(tok);
+	if (tok instanceof Word){
+		tok.dsSQuoteExpansion();
 	}
 }
 //»
@@ -3497,7 +3561,6 @@ Else, let it pass through
 »*/
 
 for (let k=0; k < arr.length; k++){//curlies«
-
 let tok = arr[k];
 if (tok.isWord) {
 	let rv = curly_expansion(tok, 0);
@@ -3506,7 +3569,6 @@ if (tok.isWord) {
 		k--;//Need to revisit the original position, in case there are more expansions there
 	}
 }
-
 }//»
 for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
@@ -3544,6 +3606,7 @@ if (tok.t==="word") {
 }
 
 }//»
+/*
 for (let k=0; k < arr.length; k++){//backquotes«
 
 let tok = arr[k];
@@ -3558,10 +3621,22 @@ if (tok.t==="word") {
 		}
 		arr.splice(k, 1, ...newtoks);
 		k+=newtoks.length-1;
-//		k--;//Need to revisit the original position, in case there are more expansions there
 	}
 }
 
+}//»
+*/
+for (let k=0; k < arr.length; k++){//command sub«
+let tok = arr[k];
+log(tok);
+if (tok.isWord) {
+	let rv = await comsub_expansions(tok, this);
+	arr[k] = rv;
+//log("RV", rv);
+//	if (rv !== tok){
+//		arr.splice(k, 1, ...rv);
+//	}
+}
 }//»
 
 for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
