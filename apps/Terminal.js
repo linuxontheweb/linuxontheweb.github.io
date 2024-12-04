@@ -2231,6 +2231,7 @@ catch(e){
 //Collect commands with their arguments«
 let com = [];
 let coms = [];
+let have_neg = false;
 for (let tok of toks){
 	if (tok.c_op){
 		if (!com.length) return `unexpected empty command (found: '${tok.c_op}')`;
@@ -2240,8 +2241,21 @@ for (let tok of toks){
 	}
 	else{
 		if (!com.length && tok===" "){}//Do not allow a command to begin with whitespace
-//		else com.push(ds_single_quote_escapes(tok));
-		else com.push(tok);
+		else {
+			let old_have_neg  = have_neg;
+			if (!com.length){
+				if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
+					have_neg = true;
+					continue;
+				}
+				else have_neg = false;
+			}
+			else have_neg = false;
+			if (old_have_neg){
+				tok.hasBang = true;
+			}
+			com.push(tok);
+		}
 	}
 }
 if (com.length) coms.push({com});
@@ -3469,6 +3483,12 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	let screen_grab_com;
 	for (let j=0; j < pipelist.length; j++) {//«
 		let arr = pipelist[j].com;
+{
+	let arr0=arr[0];
+	if (arr0 && arr0.hasBang){
+		pipeline._hasBang = true;
+	}
+}
 		let pipeFrom = j > 0;
 		let pipeTo = j < pipelist.length-1;
 		let args=[];
@@ -3583,6 +3603,7 @@ Else if there is an internal unquoted (unescaped) comma, use it
 Else, let it pass through
 
 »*/
+//»
 
 for (let k=0; k < arr.length; k++){//curlies«
 let tok = arr[k];
@@ -4009,7 +4030,7 @@ cerr(e);
 			pipeline.push(make_sh_error_com(usecomword, e.message, com_env));
 		}
 //SKIOPRHJT
-	}//»
+	}//
 
 this.pipeline = pipeline;
 
@@ -4044,7 +4065,10 @@ log(lastcomcode);
 	}
 
 }
-
+if (pipeline._hasBang){
+	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
+	else lastcomcode = E_SUC;
+}
 last_exit_code = lastcomcode;
 
 //LEUIKJHX
@@ -4078,10 +4102,10 @@ last_exit_code = lastcomcode;
 	}//»
 
 }//»
+
 }//»
 
 //In a script, refresh rather than returning to the prompt
-//if (scriptOut) {
 if (no_end) {
 	term.refresh();
 	return lastcomcode;
@@ -6997,28 +7021,11 @@ const init = async(appargs={})=>{
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
 	}
-//	shell_class = Shell;
-//	dev_shell_class = DevShell;
-//	shell = new Shell(this);
-//	dev_shell = new DevShell(this);
-//	parser = Parser;
-/*
-	if (dev_mode && USE_DEV_PARSER) {
-//		this.shell = dev_shell;
-//		this.shell_class = dev_shell_class;
-		parser = DevParser;
-		init_prompt+=`\nDev parser: true`;
-	}
-	else{
-		parser = Parser;
-	}
-*/
-//	else this.shell = shell;
-//	else this.shell_class = shell_class;
 	response(init_prompt.split("\n"));
-if (!dev_mode) {
-	response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners"`, {isWrn: true});
-}
+	if (!dev_mode) {
+		response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners" like:`, {isWrn: true});
+		response(`  $ cat some files here || echo "That didn't quite work!"`, {isWrn: true});
+	}
 	did_init = true;
 	sleeping = false;
 	set_prompt();

@@ -9,6 +9,7 @@ const {
 	isArr,
 	isStr,
 	isEOF,
+	isErr,
 	log,
 	jlog,
 	cwarn,
