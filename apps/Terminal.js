@@ -2355,8 +2355,12 @@ for (let ent of this.val){
 	else if (ent instanceof DQuote){//«
 //resolve and start or append to curfield
 //resolve by looping through everything and calling expand
-		curfield += await ent.expand(shell, term);
+//		curfield += await ent.expand(shell, term);
+		curfield += '"'+await ent.expand(shell, term)+'"';
 	}//»
+	else if (ent instanceof SQuote || ent instanceof DSQuote){
+		curfield += "'"+ent.toString()+"'";
+	}
 	else{//Must be isStr or DSQuote or SQuote«
 		curfield += ent.toString();
 	}//»
@@ -2980,7 +2984,7 @@ echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
 => BLAH$'...\'//...'BLAH
 
 »*/
-let word = tok.word;
+let word = tok.val;
 let qtyp;
 OUTER_LOOP: for (let i=0; i < word.length; i++){
 
@@ -3154,12 +3158,12 @@ while(true){
 
 return tok;
 };/*»*/
-const quote_removal=(wrd)=>{//«
+const quote_removal=(tok)=>{//«
 	let s='';
 	let qtyp;
-	for (let l=0; l < wrd.length; l++){
-		let c = wrd[l];
-		if (!qtyp && c==="$"&&wrd[l+1]==="'") continue;
+	let arr = tok.val;
+	for (let l=0; l < arr.length; l++){
+		let c = arr[l];
 		if (c==='"'||c==="'") {
 			if (c===qtyp){
 				qtyp=null;
@@ -3172,11 +3176,11 @@ const quote_removal=(wrd)=>{//«
 		}
 		s+=c.toString();
 	}
-	return s;
+	tok.val = [...s];
+//	return s;
 };/*»*/
-const filepath_expansion=async(arr, cur_dir)=>{//«
-//cwarn("CURDIR", cur_dir);
-/*
+const filepath_expansion=async(tok, cur_dir)=>{//«
+/*«
 First we need to separate everything by "/" (escapes or quotes don't matter)
 
 
@@ -3191,17 +3195,18 @@ Create a pattern string by removing quotes.
 //											  v----REMOVE THIS SPACE!!!!
 let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
 
-*/
-if (!(arr.includes("*")||arr.includes("?")||arr.includes("["))) return arr;
-
+»*/
+let arr = tok.val;
+if (!(arr.includes("*")||arr.includes("?")||arr.includes("["))) return tok;
+//log(tok);
+//log(arr);
 let patstr='';
 let parr;
 let qtyp;
 let path_arr=[];
-//let new_paths=[];
 
 for (let ch of arr){//«
-
+//log(ch);
 if (ch=="/"){
 	path_arr.push(patstr);
 	patstr='';
@@ -3258,7 +3263,6 @@ if (!nm) {
 let is_dot = (nm[0]==="\\"&&nm[1]===".");
 let files_ok = !parr.length;
 let new_paths=[];
-//log(dirs);
 for (let i=0; i < dirs.length; i++){
 	let dirname = dirs[i];
 //log("DIRNAME", dirname);
@@ -3304,8 +3308,18 @@ return await do_dirs(new_paths, parr);
 
 };//»
 let rv = await do_dirs(dirs, path_arr, true);
-if (rv.length) return rv;
-return arr;
+if (rv.length) {
+let words = [];
+let {start, par, env}=tok;
+for (let val of rv){
+let word = new Word(start, par, env);
+word.val=[...val];
+words.push(word);
+}
+//log(words);
+return words;
+}
+return tok;
 };/*»*/
 const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {//«
 let stdin;
@@ -3609,10 +3623,10 @@ for (let k=0; k < arr.length; k++){//redirs«
 for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
-if (tok.t==="word") {
+if (tok.isWord) {
 	let rv = parameter_expansion(tok, env, scriptName, scriptArgs);
 	if (isStr(rv)) return terr(`sh: ${rv}`);
-	arr[k] = rv;
+//	arr[k] = rv;
 }
 
 }//»
@@ -3620,9 +3634,12 @@ if (tok.t==="word") {
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
+//Let's reinsert the quote marks here!?!?!?
 		await tok.expandSubs(this, term);
 	}
 }//»
+
+//But don't we LOSE all Strings during field splitting
 for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
@@ -3637,38 +3654,31 @@ for (let k=0; k < arr.length; k++){//field splitting«
 		k+=words.length-1;
 	}
 }//»
-//log(arr);
+
 for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
 
 let tok = arr[k];
-if (tok.t==="word") {
-//log(k, tok);
-	let rv = await filepath_expansion(tok.word, term.cur_dir);
-//log("RV", rv);
+if (tok.isWord) {
+	let rv = await filepath_expansion(tok, term.cur_dir);
 	if (isStr(rv)){
 		term.response(rv, {isErr: true});
 		continue;
 	}
-	if (rv !== tok.word){
-		let newtoks = [];
-		for (let wrd of rv){
-			newtoks.push({t:"word",word: wrd});
-		}
-		arr.splice(k, 1, ...newtoks);
-		k+=newtoks.length-1;
+	if (rv !== tok){
+		arr.splice(k, 1, ...rv);
+//		k--;//Need to revisit the original position, in case there are more expansions there
 	}
 }
 
 }//»
 
-/*
 for (let k=0; k < arr.length; k++){//«quote removal
 	let tok = arr[k];
-	if (tok.t==="word") {
-		arr[k]=quote_removal(tok.word);
+	if (tok.isWord) {
+		quote_removal(tok);
 	}
 }//»
-*/
+
 //Set environment variables (exports to terminal's environment if there is nothing left)
 		{
 			let hold = arr;
