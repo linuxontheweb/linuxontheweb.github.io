@@ -2705,17 +2705,17 @@ pushed into the quote's characters.
 			}
 		}
 		else {
-if (ent instanceof SQuote){
-s+="'"+ent.toString()+"'";
-}
-else {
- s+=ent.toString();
-}
+			if (ent instanceof SQuote){
+				s+="'"+ent.toString()+"'";
+			}
+			else {
+				 s+=ent.toString();
+			}
 		}
 	}
 	let sub_lines = [];
 	try{
-cwarn(`COMSUB <${s}>`);
+//cwarn(`COMSUB <${s}>`);
 		await shell.execute(s, {subLines: sub_lines, env: tok.env});
 		return sub_lines.join("\n");
 	}
@@ -3680,16 +3680,9 @@ for (let k=0; k < arr.length; k++){//«quote removal
 }//»
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
-		{
-			let hold = arr;
-			arr = [];
-			for (let arg of hold) arr.push(arg.toString());
-		}
 
 		let rv = add_to_env(arr, env, {term});
 		if (rv.length) term.response(rv, {isErr: true});
-		if (arr[0]==" ") arr.shift();
-
 //Command response callbacks«
 
 //Everything that gets sent to redirects, pipes, and script output must be collected
@@ -3857,6 +3850,12 @@ const com_env = {/*«*/
 			pipeline.push(new NoCom());
 			continue;
 		}
+		{
+			let hold = arr;
+			arr = [];
+			for (let arg of hold) arr.push(arg.toString());
+		}
+//log(comword);
 //Replace with an alias if we can«
 		let alias = ALIASES[comword];
 		if (alias){
@@ -3869,6 +3868,7 @@ const com_env = {/*«*/
 		}//»
 
 		usecomword = alias||comword;
+//log(usecomword);
 		if (usecomword=="exit"){//«
 //			if (!scriptOut){
 			if (is_top_level){
@@ -3912,9 +3912,10 @@ cerr(e);
 			}
 			com = gotcom;
 		}//»
-
 		if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
+//Need to do this for matching stuff
+			comword = comword.toString();
 			if (CONTROL_WORDS.includes(comword)){
 				terr(`sh: ${comword}: control structures are not implemented`);
 				return;
@@ -3956,7 +3957,7 @@ cerr(e);
 				last_exit_code = E_ERR;
 				continue;
 			}
-			comobj = new ScriptCom(this, usecomword, text.split("\n"), arr, com_env);
+			comobj = new ScriptCom(this, comword, text.split("\n"), arr, com_env);
 			pipeline.push(comobj);
 			continue;
 		}//»
