@@ -3496,6 +3496,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 //		let redir;
 		let in_redir, out_redir;
 
+/*«Expansions*/
 //For each word within a command, the shell processes <backslash>-escape«
 //sequences inside dollar-single-quotes (See 2.2.4 Dollar-Single-Quotes)
 for (let k=0; k < arr.length; k++){
@@ -3615,6 +3616,7 @@ if (tok.isWord) {
 	}
 }
 }//»
+
 for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
 	if (tok instanceof Word) tok.tildeExpansion();
@@ -3647,7 +3649,6 @@ let tok = arr[k];
 if (tok.isWord) {
 	let rv = parameter_expansion(tok, env, scriptName, scriptArgs);
 	if (isStr(rv)) return terr(`sh: ${rv}`);
-//	arr[k] = rv;
 }
 
 }//»
@@ -3655,12 +3656,10 @@ if (tok.isWord) {
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
-//Let's reinsert the quote marks here!?!?!?
 		await tok.expandSubs(this, term);
 	}
 }//»
 
-//But don't we LOSE all Strings during field splitting
 for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
@@ -3699,9 +3698,9 @@ for (let k=0; k < arr.length; k++){//«quote removal
 		quote_removal(tok);
 	}
 }//»
+/*»*/
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
-
 		let rv = add_to_env(arr, env, {term});
 		if (rv.length) term.response(rv, {isErr: true});
 //Command response callbacks«
@@ -3876,7 +3875,6 @@ const com_env = {/*«*/
 			arr = [];
 			for (let arg of hold) arr.push(arg.toString());
 		}
-//log(comword);
 //Replace with an alias if we can«
 		let alias = ALIASES[comword];
 		if (alias){
@@ -3889,7 +3887,6 @@ const com_env = {/*«*/
 		}//»
 
 		usecomword = alias||comword;
-//log(usecomword);
 		if (usecomword=="exit"){//«
 //			if (!scriptOut){
 			if (is_top_level){
@@ -3935,6 +3932,7 @@ cerr(e);
 		}//»
 		if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
+
 //Need to do this for matching stuff
 			comword = comword.toString();
 			if (CONTROL_WORDS.includes(comword)){
