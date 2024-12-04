@@ -180,7 +180,7 @@ if (dev_mode){
 //Var«
 
 let last_exit_code = 0;
-const PAD_SPACE = new String(" ");
+
 const EOF_Type = 1;
 const OPERATOR_CHARS=[//«
 "|",
@@ -1819,7 +1819,7 @@ scanQuote(par, which, in_backquote){/*«*/
 		if (check_subs&&ch==="$"&&src[cur+1]==="(") {/*«*/
 			if (src[cur+2]==="("){
 				this.index=cur;
-				rv = this.scanComSub(quote, true, is_bq);
+				rv = this.scanComSub(quote, true, is_bq||in_backquote);
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				out.push(rv);
@@ -1827,7 +1827,7 @@ scanQuote(par, which, in_backquote){/*«*/
 			}
 			else{
 				this.index=cur;
-				rv = this.scanComSub(quote, null, is_bq);
+				rv = this.scanComSub(quote, null, is_bq||in_backquote);
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 				if (isStr(rv)) this.throwUnexpectedToken(rv);
 				out.push(rv);
@@ -1862,7 +1862,7 @@ scanQuote(par, which, in_backquote){/*«*/
 			cur = this.index;
 		}/*»*/
 		else if (is_bq && ch==="$" && src[cur+1]==="'"){/*«*/
-			rv = this.scanQuote(quote, "$");
+			rv = this.scanQuote(quote, "$", true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
@@ -1913,7 +1913,7 @@ if (ch==="\\"){/*«*/
 }/*»*/
 else if (ch==="$"&&src[cur+1]==="'"){/*«*/
 	this.index=cur;
-	let rv = this.scanQuote(par, "$");
+	let rv = this.scanQuote(par, "$", in_backquote);
 	if (rv===null) return `unterminated quote: $'`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
@@ -1925,7 +1925,7 @@ else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
 		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
 	}
 	this.index=cur;
-	let rv = this.scanQuote(sub, ch);
+	let rv = this.scanQuote(sub, ch, in_backquote);
 	if (rv===null) return `unterminated quote: ${ch}`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
@@ -1935,7 +1935,7 @@ else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
 else if (ch==="$"&&src[cur+1]==="("){/*«*/
 	if (src[cur+2]==="("){
 		this.index=cur;
-		let rv = this.scanComSub(sub, true);
+		let rv = this.scanComSub(sub, true, in_backquote);
 		if (rv===null) return `unterminated math expansion`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -1943,7 +1943,7 @@ else if (ch==="$"&&src[cur+1]==="("){/*«*/
 	}
 	else{
 		this.index=cur;
-		let rv = this.scanComSub(sub);
+		let rv = this.scanComSub(sub, false, in_backquote);
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -1961,7 +1961,6 @@ else if (ch===")"){/*«*/
 	return sub;
 }/*»*/
 else if (ch===" " || ch==="\t"){/*«*/
-	//Need to scan foward to see if there are any unescaped #'s
 	out.push(ch);
 	have_space = true;
 }/*»*/
@@ -2309,13 +2308,60 @@ const Sequence = class {/*«*/
 		this.val = [];
 		this.start = start;
 	}
-	toString(){
-		return this.val.join("");
-	}
 }/*»*/
-const Word = class extends Sequence{/*«*/
+const Word = class extends Sequence{//«
+#fields;
+async expandSubs(shell, term){//«
 
-tildeExpansion(){/*«*/
+/*«
+Here we need a concept of "fields".
+
+- Everything is a ComSub or BQuote will get expanded into as many fields as
+  the lines that it returns.
+
+- Everything else gets treated as a string that either starts the first
+  field or gets concatenated onto the current field.
+
+- DQuote is a special string that must resolve internal expansions.
+
+»*/
+
+const fields = [];
+let curfield="";
+let didone = false;
+for (let ent of this.val){
+
+	if (ent instanceof BQuote || ent instanceof ComSub){//«
+//The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
+		let rv = await ent.expand(shell, term);
+		if (!didone) curfield +=rv;
+		else{
+			fields.push(curfield);
+			curfield = rv;
+		}
+	}//»
+	else if (ent instanceof MathSub){//«
+//resolve and start or append to curfield, since this can only return 1 (possibly empty) value
+		curfield += await ent.expand(shell, term);
+	}//»
+	else if (ent instanceof DQuote){//«
+//resolve and start or append to curfield
+//resolve by looping through everything and calling expand
+		curfield += await ent.expand(shell, term);
+	}//»
+	else{//Must be isStr or DSQuote or SQuote«
+		curfield += ent.toString();
+	}//»
+	didone = true;
+
+}
+fields.push(curfield);
+
+this.#fields = fields;
+
+}//»
+
+tildeExpansion(){//«
 	const {val} = this;
 	let parts = this.assignmentParts;
 	let home_path = globals.HOME_PATH;
@@ -2344,13 +2390,13 @@ tildeExpansion(){/*«*/
 			}
 		}
 	}
-}/*»*/
-dsSQuoteExpansion(){/*«*/
+}//»
+dsSQuoteExpansion(){//«
 	for (let ent of this.val){
 		if (ent instanceof DSQuote) ent.expand();
 	}
-}/*»*/
-get assignmentParts(){/*«*/
+}//»
+get assignmentParts(){//«
 //const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 	let eq_pos = this.val.indexOf("=");
 	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
@@ -2364,9 +2410,9 @@ get assignmentParts(){/*«*/
 		assign_word+=ch;
 	}
 	return [assign_word, eq_pos+1];
-}/*»*/
+}//»
 get isWord(){return true;}
-dup(){/*«*/
+dup(){//«
 	let word = new Word(this.start, this.par, this.env);
 	let arr = word.val;
 	for (let ent of this.val){
@@ -2374,15 +2420,23 @@ dup(){/*«*/
 		else arr.push(ent.dup());
 	}
 	return word;
-}/*»*/
+}//»
 
-}/*»*/
+toString(){
+//If only 0 or 1 fields, there will be no newlines
+	return this.#fields.join("\n");
+}
+
+}//»
 const SQuote = class extends Sequence{/*«*/
 	expand(){
 		return this.toString();
 	}
 	dup(){
 		return this;
+	}
+	toString(){
+		return this.val.join("");
 	}
 }/*»*/
 const DSQuote = class extends Sequence{/*«*/
@@ -2491,9 +2545,9 @@ dup(){
 }
 }/*»*/
 
-const DQuote = class extends Sequence{/*«*/
+const DQuote = class extends Sequence{//«
 
-dup(){/*«*/
+dup(){//«
 	let dq = new DQuote(this.start, this.par, this.env);
 	let arr = dq.val;
 	for (let ent of this.val){
@@ -2501,33 +2555,43 @@ dup(){/*«*/
 		else arr.push(ent.dup());
 	}
 	return dq;
-}/*»*/
-async expandSubs(shell){/*«*/
+}//»
+async expand(shell, term){//This returns a string (with possible embedded newlines)«
 
-let val = this.val;
-let _word = new Word(this.start, this.par, this.env);
-let word = _word.val;
-for (let ent of val){
-	if (ent.expandSubs) {
-		let rv = await ent.expandSubs(shell);
-		word.push(rv.join("\n"));
+let out = [];
+let curword="";
+let vals = this.val;
+for (let ent of vals){
+	if (ent.expand){//This cannot be another DQuote
+		if (curword){
+			out.push(curword);
+			curword="";
+		}
+		out.push(await ent.expand(shell, term));
 	}
-	else word.push(ent);
+	else if (!isStr(ent)){
+cwarn("HERE IS ENT!!!!");
+log(ent);
+throw new Error("WWWWWTFFFFF IS ENT!?!?!");
+	}
+	else{
+		curword+=ent;
+	}
 }
+if (curword) out.push(curword);
 
-return [_word];
+return out.join("\n");
 
-}/*»*/
-toString(){
-	return this.val.join("");
-}
-}/*»*/
-const BQuote = class extends Sequence{/*«*/
+}//»
+
+}//»
+
+const BQuote = class extends Sequence{//«
 //Collect everything in a string...
-async expandSubs(shell){/*«*/
-	return await do_comsub(this, shell);
-}/*»*/
-dup(){/*«*/
+expand(shell, term){
+	return expand_comsub(this, shell, term);
+}
+dup(){//«
 	let bq = new BQuote(this.start, this.par, this.env);
 	let arr = bq.val;
 	for (let ent of this.val){
@@ -2535,15 +2599,14 @@ dup(){/*«*/
 		else arr.push(ent.dup());
 	}
 	return bq;
-}/*»*/
+}//»
 
-}/*»*/
-const ComSub = class extends Sequence{/*«*/
-
-async expandSubs(shell){
-	return await do_comsub(this, shell);
+}//»
+const ComSub = class extends Sequence{//«
+expand(shell, term){
+	return expand_comsub(this, shell, term);
 }
-dup(){/*«*/
+dup(){//«
 	let com = new ComSub(this.start, this.par, this.env);
 	let arr = com.val;
 	for (let ent of this.val){
@@ -2551,39 +2614,34 @@ dup(){/*«*/
 		else arr.push(ent.dup());
 	}
 	return com;
-}/*»*/
-}/*»*/
-const MathSub = class extends Sequence{/*«*/
+}//»
+}//»
+const MathSub = class extends Sequence{//«
 
-async expandSubs(shell){/*«*/
-if (!await util.loadMod("util.math")) {
-//	return no("could not load the math module");
-	return [];
-}
-let sub = '';
-for (let ent of this.val){
-	if (ent.expandSubs){
-		let arr = await ent.expandSubs();
-		for (let rv of arr){
-			sub+=rv.toString();
-		}
+async expand(shell, term){//«
+//Need to turn everything into a string that gets sent through math.eval()
+	const err = term.resperr;
+	if (!await util.loadMod("util.math")) {
+		err("could not load the math module");
+		return "";
 	}
-	else {
-		sub+=ent.toString();
+	let s='';
+	let vals = this.val;
+	for (let ent of vals){
+		if (ent.expand) s+=await ent.expand(shell, term);
+		else s+=ent.toString();
 	}
-}
-let math = new NS.mods["util.math"]();
-try{
-let rv = math.eval(sub)+"";
-let word = new Word(this.start, this.par, this.env);
-word.val=[...rv];
-return [word];
-}
-catch(e){
-return [];
-}
-}/*»*/
-dup(){/*«*/
+
+	let math = new NS.mods["util.math"]();
+	try{
+		return math.eval(s)+"";
+	}
+	catch(e){
+		err(e.message);
+		return "";
+	}
+}//»
+dup(){//«
 	let math = new MathSub(this.start, this.par, this.env);
 	let arr = math.val;
 	for (let ent of this.val){
@@ -2591,63 +2649,31 @@ dup(){/*«*/
 		else arr.push(ent.dup());
 	}
 	return math;
-}/*»*/
+}//»
 
-}/*»*/
+}//»
 
 /*»*/
 
-const do_comsub=async(tok, shell)=>{//«
-	let sub = '';
-	for (let ent of tok.val){
-		if (ent.expandSubs){
-			let arr = await ent.expandSubs();
-			for (let rv of arr){
-				sub+=rv.toString();
-			}
-		}
-		else {
-			sub+=ent.toString();
-		}
+const expand_comsub=async(tok, shell, term)=>{//«
+	const err = term.resperr;
+	let s='';
+	let vals = tok.val;
+	for (let ent of vals){
+		if (ent.expand) s+=await ent.expand(shell, term);
+		else s+=ent.toString();
 	}
 	let sub_lines = [];
+cwarn(`COMSUB: <${s}>`);
 	try{
-		await shell.execute(sub, {subLines: sub_lines, env: tok.env});
+		await shell.execute(s, {subLines: sub_lines, env: tok.env});
+		return sub_lines.join("\n");
 	}
 	catch(e){
+		err(e.message);
+		return "";
 	}
-	let out = [];
-//	for (let ln of sub_lines){
-	let len = sub_lines.length;
-	let len_min_1 = len-1;
-	for (let i = 0; i < len; i++){
-		let ln = sub_lines[i];
-		let word = new Word(tok.start, tok.par, tok.env);
-		if (i < len_min_1){
-			word.val = [...ln, PAD_SPACE];
-		}
-		else{
-			word.val = [...ln];
-		}
-		out.push(word);
-	}
-	return out;
-
-};/*»*/
-
-const comsub_expansions= async(tok, shell)=>{//«
-
-	let arr = tok.val;
-	let have_sub = false;
-	let _word = new Word(tok.start, tok.par, tok.env);
-	let out = _word.val;
-	for (let ent of arr){
-		if (!ent.expandSubs) out.push(ent);
-		else out.push(...(await ent.expandSubs(shell)));
-	}
-	return _word;
-
-}/*»*/
+};//»
 
 const curly_expansion = (tok, from_pos) => {//«
 
@@ -3547,8 +3573,7 @@ if (tok.t==="word") {
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
-		let rv = await comsub_expansions(tok, this);
-		arr[k] = rv;
+		await tok.expandSubs(this, term);
 	}
 }//»
 
@@ -5693,6 +5718,10 @@ const response_end = () => {//«
 };
 this.response_end = response_end;
 //»
+const response_err=(out)=>{
+response(out, {isErr: true});
+}
+this.resperr = response_err;
 const response = (out, opts={})=>{//«
 	if (isStr(out)) out = [out];
 	else if (!out) return;
