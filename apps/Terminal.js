@@ -1,4 +1,6 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
+/*12/4/24: At this late date, we still needed to add the line @DPORUTIH !!!«
+»*/
 /*12/2/24:« Lexing and Parsing the Shell Command Language
 1) The lexer just spits out these tokens:
  - Words
@@ -1765,7 +1767,7 @@ scanComments() {//«
 	}
 };//»
 
-scanQuote(par, which, in_backquote){/*«*/
+scanQuote(par, which, in_backquote){//«
 //log("scanQuote", which, this.index);
 // If we are in double-quotes or back-quotes, we need to check for:
 // 2) '$(': scanComSub
@@ -1816,58 +1818,60 @@ scanQuote(par, which, in_backquote){/*«*/
 		if (ch==="`" && in_backquote){
 			return `unexpected EOF while looking for matching '${which}'`;
 		}
-		if (check_subs&&ch==="$"&&src[cur+1]==="(") {/*«*/
+		if (check_subs&&ch==="$"&&src[cur+1]==="(") {//«
+			this.index=cur;
 			if (src[cur+2]==="("){
-				this.index=cur;
 				rv = this.scanComSub(quote, true, is_bq||in_backquote);
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
-				if (isStr(rv)) this.throwUnexpectedToken(rv);
-				out.push(rv);
-				cur=this.index;
 			}
 			else{
-				this.index=cur;
 				rv = this.scanComSub(quote, null, is_bq||in_backquote);
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
-				if (isStr(rv)) this.throwUnexpectedToken(rv);
-				out.push(rv);
-				cur=this.index;
 			}
-		}/*»*/
-		else if (check_bq&&ch==="`"){/*«*/
+			if (isStr(rv)) this.throwUnexpectedToken(rv);
+			out.push(rv);
+			cur=this.index;
+		}//»
+		else if (check_bq&&ch==="`"){//«
 			this.index = cur;
 			rv = this.scanQuote(quote, "`");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur=this.index;
-		}/*»*/
-		else if (!is_hard_single && ch==="\\"){/*«*/
+		}//»
+		else if (!is_hard_single && ch==="\\"){//«
 			cur++;
 			ch = src[cur];
+//log("HICH", ch);
 			if (!ch) this.throwUnexpectedToken("unsupported line continuation");
 			let c = ch;
 			ch = new String(c);
 			ch.escaped = true;
-			if (is_ds_single||is_dq)ch.toString=()=>{return "\\"+c;};
+			if (is_ds_single||is_dq)ch.toString=()=>{
+//log("TOSTRING!!!");
+				return "\\"+c;
+			};
+//log(ch);
 			//else is_bq: the character is in "free space" (no backslashes show up)
 			out.push(ch);
-		}/*»*/
-		else if (is_bq && ch==='"'){/*«*/
+		}//»
+		else if (is_bq && ch==='"'){//«
 			this.index=cur;
 			rv = this.scanQuote(quote, '"', true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur = this.index;
-		}/*»*/
-		else if (is_bq && ch==="$" && src[cur+1]==="'"){/*«*/
+		}//»
+		else if (is_bq && ch==="$" && src[cur+1]==="'"){//«
+			this.index=cur;//DPORUTIH  ARGHHHHHHH!?!?!?!?!?
 			rv = this.scanQuote(quote, "$", true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur = this.index;
-		}/*»*/
+		}//»
 		else {
 			out.push(ch);
 		}
@@ -1880,8 +1884,8 @@ scanQuote(par, which, in_backquote){/*«*/
 //log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
 // quote = new
 	return quote;
-}/*»*/
-scanComSub(par, is_math, in_backquote){/*«*/
+}//»
+scanComSub(par, is_math, in_backquote){//«
 /*
 We need to collect words rather than chars if:
 If par is a top-level word, then 
@@ -1906,12 +1910,12 @@ while(ch){
 
 if (!ch || ch==="\n" || (ch==="\\"&& !src[cur+1])) return "the command substitution must be on a single line";
 
-if (ch==="\\"){/*«*/
+if (ch==="\\"){//«
 	cur++;
 	out.push("\\", src[cur]);
 	have_space = false;
-}/*»*/
-else if (ch==="$"&&src[cur+1]==="'"){/*«*/
+}//»
+else if (ch==="$"&&src[cur+1]==="'"){//«
 	this.index=cur;
 	let rv = this.scanQuote(par, "$", in_backquote);
 	if (rv===null) return `unterminated quote: $'`;
@@ -1919,8 +1923,8 @@ else if (ch==="$"&&src[cur+1]==="'"){/*«*/
 	out.push(rv);
 	cur=this.index;
 	have_space = false;
-}/*»*/
-else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
+}//»
+else if (ch==="'"||ch==='"'||ch==='`'){//«
 	if (ch==="`"&& in_backquote){
 		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
 	}
@@ -1931,8 +1935,8 @@ else if (ch==="'"||ch==='"'||ch==='`'){/*«*/
 	out.push(rv);
 	cur=this.index;
 	have_space = false;
-}/*»*/
-else if (ch==="$"&&src[cur+1]==="("){/*«*/
+}//»
+else if (ch==="$"&&src[cur+1]==="("){//«
 	if (src[cur+2]==="("){
 		this.index=cur;
 		let rv = this.scanComSub(sub, true, in_backquote);
@@ -1950,8 +1954,8 @@ else if (ch==="$"&&src[cur+1]==="("){/*«*/
 		cur=this.index;
 	}
 	have_space = false;
-}/*»*/
-else if (ch===")"){/*«*/
+}//»
+else if (ch===")"){//«
 	if (is_math){
 		if (src[cur+1] !== ")") return "expected a final '))'";
 		cur++;
@@ -1959,11 +1963,11 @@ else if (ch===")"){/*«*/
 	this.index = cur;
 //	log(`scanComSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
 	return sub;
-}/*»*/
-else if (ch===" " || ch==="\t"){/*«*/
+}//»
+else if (ch===" " || ch==="\t"){//«
 	out.push(ch);
 	have_space = true;
-}/*»*/
+}//»
 else{
 if (ch==="#"&&have_space){
 return 'the substitution was terminated by "#"';
@@ -1980,7 +1984,7 @@ ch = src[cur];
 //If we get here, we are "unterminated"
 return null;
 
-}/*»*/
+}//»
 scanOperator(){/*«*/
 
 	let src = this.source;
@@ -2310,7 +2314,6 @@ const Sequence = class {/*«*/
 	}
 }/*»*/
 const Word = class extends Sequence{//«
-#fields;
 async expandSubs(shell, term){//«
 
 /*«
@@ -2328,17 +2331,22 @@ Here we need a concept of "fields".
 
 const fields = [];
 let curfield="";
-let didone = false;
+//let didone = false;
 for (let ent of this.val){
 
 	if (ent instanceof BQuote || ent instanceof ComSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
 		let rv = await ent.expand(shell, term);
-		if (!didone) curfield +=rv;
-		else{
+		let arr = rv.split("\n");
+		if (arr.length) {
+			curfield+=arr.shift();
 			fields.push(curfield);
-			curfield = rv;
+			let last = arr.pop();
+			if (arr.length) fields.push(...arr);
+			if (last) curfield = last;
+			else curfield = "";
 		}
+//log(fields);
 	}//»
 	else if (ent instanceof MathSub){//«
 //resolve and start or append to curfield, since this can only return 1 (possibly empty) value
@@ -2352,12 +2360,11 @@ for (let ent of this.val){
 	else{//Must be isStr or DSQuote or SQuote«
 		curfield += ent.toString();
 	}//»
-	didone = true;
 
 }
 fields.push(curfield);
-
-this.#fields = fields;
+this.fields = fields;
+//log(this.fields);
 
 }//»
 
@@ -2423,8 +2430,13 @@ dup(){//«
 }//»
 
 toString(){
+//We actually need to do field splitting instead of doing this...
+//log("TOSTRING!!!", this.val.join(""));
+//log(this.fields);
 //If only 0 or 1 fields, there will be no newlines
-	return this.#fields.join("\n");
+//if (this.fields)
+//return this.fields.join("\n");
+return this.val.join("");
 }
 
 }//»
@@ -2441,7 +2453,7 @@ const SQuote = class extends Sequence{/*«*/
 }/*»*/
 const DSQuote = class extends Sequence{/*«*/
 expand(){
-
+//cwarn("EXPAND DSQUOTE!");
 let wrd = this.val;
 if (!wrd){
 cwarn("WHAT THE HELL IS HERE????");
@@ -2538,10 +2550,15 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 	}
 }/*»*/
 this.val = out;
+//log("OUT",out.join(""));
+return out.join("");
 }
 
 dup(){
 	return this;
+}
+toString(){
+return this.val.join("");
 }
 }/*»*/
 
@@ -2575,7 +2592,7 @@ log(ent);
 throw new Error("WWWWWTFFFFF IS ENT!?!?!");
 	}
 	else{
-		curword+=ent;
+		curword+=ent.toString();
 	}
 }
 if (curword) out.push(curword);
@@ -2664,7 +2681,6 @@ const expand_comsub=async(tok, shell, term)=>{//«
 		else s+=ent.toString();
 	}
 	let sub_lines = [];
-cwarn(`COMSUB: <${s}>`);
 	try{
 		await shell.execute(s, {subLines: sub_lines, env: tok.env});
 		return sub_lines.join("\n");
@@ -3576,7 +3592,21 @@ for (let k=0; k < arr.length; k++){//command sub«
 		await tok.expandSubs(this, term);
 	}
 }//»
-
+for (let k=0; k < arr.length; k++){//field splitting«
+	let tok = arr[k];
+	if (tok.isWord) {
+		let{start, par, env} = tok;
+		let words = [];
+		for (let field of tok.fields){
+			let word = new Word(start, par, env);
+			word.val = [...field];
+			words.push(word);
+		}
+		arr.splice(k, 1, ...words);
+		k+=words.length-1;
+	}
+}//»
+//log(arr);
 for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
 
 let tok = arr[k];
