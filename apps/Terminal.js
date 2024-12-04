@@ -1856,9 +1856,9 @@ scanQuote(par, which, in_backquote){//«
 			//else is_bq: the character is in "free space" (no backslashes show up)
 			out.push(ch);
 		}//»
-		else if (is_bq && ch==='"'){//«
+		else if (is_bq && (ch==='"'||ch==="'")){//«
 			this.index=cur;
-			rv = this.scanQuote(quote, '"', true);
+			rv = this.scanQuote(quote, ch, true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
@@ -1873,13 +1873,13 @@ scanQuote(par, which, in_backquote){//«
 			cur = this.index;
 		}//»
 		else {
+//DJJUTILJJ
 			out.push(ch);
 		}
 		cur++;
 		ch = src[cur];
 	}
 	if (ch !== end_quote) return null;
-//	out.push(ch);
 	this.index = cur;
 //log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
 // quote = new
@@ -2677,15 +2677,46 @@ const expand_comsub=async(tok, shell, term)=>{//«
 	let s='';
 	let vals = tok.val;
 	for (let ent of vals){
-		if (ent.expand) s+=await ent.expand(shell, term);
-		else s+=ent.toString();
+		if (ent.expand) {
+			if (ent instanceof DQuote){
+/*Amazingly, having internal newline characters works here because they
+are treated like any other character inside of scanQuote()
+@DJJUTILJJ is where all the "others" characters (including newlines, "\n") are 
+pushed into the quote's characters.
+*/
+				s+='"'+(await ent.expand(shell, term))+'"';
+			}
+			else if (ent instanceof DSQuote){
+//Don't need to wrap it in $'...' again if we are actuall expanding it
+//				s+="'"+(await ent.expand(shell, term))+"'";
+
+//Otherwise, wrap it up like we found it...
+				s+="$'"+(ent.toString())+"'";
+			}
+			else {
+				if (ent instanceof SQuote) {
+					s+="'"+ent.toString()+"'";
+				}
+				else s+=(await ent.expand(shell, term)).split("\n").join(" ");
+			}
+		}
+		else {
+if (ent instanceof SQuote){
+s+="'"+ent.toString()+"'";
+}
+else {
+ s+=ent.toString();
+}
+		}
 	}
 	let sub_lines = [];
 	try{
+cwarn(`COMSUB <${s}>`);
 		await shell.execute(s, {subLines: sub_lines, env: tok.env});
 		return sub_lines.join("\n");
 	}
 	catch(e){
+cerr(e);
 		err(e.message);
 		return "";
 	}
@@ -3378,12 +3409,6 @@ let is_top_level = !(scriptOut||subLines);
 let heredocs;
 let no_end = !is_top_level;
 
-//Refuse and enter command that seems too long for our taste
-if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} ...': line length > MAX_LINE_LEN(${MAX_LINE_LEN})`, script_out);
-
-command_str = command_str.replace(/^ +/,"");
-
-//»
 const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});
 //	if (!scriptOut) term.response_end();
@@ -3395,6 +3420,12 @@ const can=()=>{//«
 //Cancel test function
 	return started_time < this.cancelled_time;
 };//»
+//Refuse and enter command that seems too long for our taste
+//log(command_str);
+//if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} ...': line length > MAX_LINE_LEN(${MAX_LINE_LEN})`, script_out);
+command_str = command_str.replace(/^ +/,"");
+
+//»
 
 let statements;
 try{
