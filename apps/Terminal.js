@@ -1899,16 +1899,13 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 		if (this.eol()){
 			quote.val = out;
 			await this.more();
-			let rv = await this.scanQuote(par, which, in_backquote, quote);
-//this.index--;
-			return rv;
+			return await this.scanQuote(par, which, in_backquote, quote);
 		}
 		return null;
 	}
-//log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
 	return quote;
 }//»
-async scanComSub(par, is_math, in_backquote){//«
+async scanComSub(par, is_math, in_backquote, cont_sub){//«
 /*
 We need to collect words rather than chars if:
 If par is a top-level word, then 
@@ -1918,27 +1915,29 @@ If we are not embedded in any kind of quote
 //log("scanComSub", this.index);
 
 let start = this.index;
-const sub = is_math ? new MathSub(start, par) : new ComSub(start, par);
+const sub = cont_sub || (is_math ? new MathSub(start, par) : new ComSub(start, par));
 const out = sub.val;
-this.index+=2;
-if (is_math){
-	this.index++;
+if (!cont_sub) {
+	this.index+=2;
+	if (is_math){
+		this.index++;
+	}
 }
 let cur = this.index;
-let src = this.source;
-let ch = src[cur];
-if (!ch) return null;
+//let src = this.source;
+let ch = this.source[cur];
+//if (!ch) return null;
 let have_space = false;
 while(ch){
 
-if (!ch || ch==="\n" || (ch==="\\"&& !src[cur+1])) return "the command substitution must be on a single line";
+if (ch==="\\"&& !this.source[cur+1]) return "the command substitution must be on a single line";
 
 if (ch==="\\"){//«
 	cur++;
-	out.push("\\", src[cur]);
+	out.push("\\", this.source[cur]);
 	have_space = false;
 }//»
-else if (ch==="$"&&src[cur+1]==="'"){//«
+else if (ch==="$"&&this.source[cur+1]==="'"){//«
 	this.index=cur;
 	let rv = await this.scanQuote(par, "$", in_backquote);
 	if (rv===null) return `unterminated quote: $'`;
@@ -1959,8 +1958,8 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 	cur=this.index;
 	have_space = false;
 }//»
-else if (ch==="$"&&src[cur+1]==="("){//«
-	if (src[cur+2]==="("){
+else if (ch==="$"&&this.source[cur+1]==="("){//«
+	if (this.source[cur+2]==="("){
 		this.index=cur;
 		let rv = await this.scanComSub(sub, true, in_backquote);
 		if (rv===null) return `unterminated math expansion`;
@@ -1980,7 +1979,7 @@ else if (ch==="$"&&src[cur+1]==="("){//«
 }//»
 else if (ch===")"){//«
 	if (is_math){
-		if (src[cur+1] !== ")") return "expected a final '))'";
+		if (this.source[cur+1] !== ")") return "expected a final '))'";
 		cur++;
 	}
 	this.index = cur;
@@ -2000,9 +1999,17 @@ return 'the substitution was terminated by "#"';
 }
 
 cur++;
-ch = src[cur];
+ch = this.source[cur];
 
 }
+this.index = cur;
+
+if (this.eol()){
+	sub.val = out;
+	await this.more();
+	return await this.scanComSub(par, is_math, in_backquote, sub);
+}
+
 
 //If we get here, we are "unterminated"
 return null;
@@ -2086,17 +2093,18 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 
 */
 	let start = this.index;
-	let src = this.source;
+//	let src = this.source;
 //	let str='';
+	let src;
 	let rv;
 	let start_line_number = this.lineNumber;
 	let start_line_start = this.lineStart;
 	let _word = new Word(start, par, env);
 	let word = _word.val;
 	while (!this.eof()) {
-		let ch = src[this.index];
-		let next1 = src[this.index+1];
-		let next2 = src[this.index+2];
+		let ch = this.source[this.index];
+		let next1 = this.source[this.index+1];
+		let next2 = this.source[this.index+2];
 		if (ch==="\\"){/*«*/
 			if (!next1 || next1 === "\n") this.throwUnexpectedToken("unsupported line continuation");
 			ch = new String(next1);
@@ -2128,7 +2136,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-			src = this.source;
 		}/*»*/
 		else if (ch==="\n"||ch===" "||ch==="\t") break;
 		else if (OPERATOR_CHARS.includes(ch)) {/*«*/
@@ -2142,22 +2149,25 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	}
 	return _word;
 }/*»*/
-scanNewlines(){/*«*/
+scanNewlines(par, env){/*«*/
 
 	let start = this.index;
 	let src = this.source;
-	let str="";
+//	let str="";
+	let val = [];
 	let iter=0;
 	let start_line_number = this.lineNumber;
-	let start_line_start = this.index;;
+	let start_line_start = this.index;
 	while (src[start+iter]==="\n"){
-		str+="\n";
 		iter++;
 	}
 	this.index+=iter;
 	this.lineStart = start_line_start+iter;
 	this.lineNumber+=iter;
-	return {t:"nl", nl:str};
+
+	let newlines = new Newlines(start, par, env);
+	newlines.newlines = iter;
+	return newlines;
 
 }/*»*/
 
@@ -2178,7 +2188,9 @@ let ch = this.source[this.index];
 
 //We never do this because we are always entering single lines from the interactive terminal
 //or sending them through one-by-one via ScriptCom.
-if (ch==="\n") return this.scanNewlines();
+if (ch==="\n") return this.scanNewlines(null, this.env);
+
+//if (ch==="\n") this.scanNewlines();
 
 /*
 if (ch==="\\"){
@@ -2200,7 +2212,7 @@ return await this.scanWord(null, this.env);
 //»
 //Parser«
 
-const Parser = class {
+const _Parser = class {
 
 constructor(code, opts={}) {//«
 	this.env = opts.env;
@@ -2247,7 +2259,7 @@ return {
 
 parse:async(command_str, opts={})=>{//«
 
-let parser = new Parser(command_str.split(""), opts);
+let parser = new _Parser(command_str.split(""), opts);
 let toks;
 try {
 	await parser.nextToken();
@@ -2269,24 +2281,30 @@ for (let tok of toks){
 		com = [];
 		coms.push(tok);
 	}
-	else{
-		if (!com.length && tok===" "){}//Do not allow a command to begin with whitespace
-		else {
-			let old_have_neg  = have_neg;
-			if (!com.length){
-				if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
-					have_neg = true;
-					continue;
-				}
-				else have_neg = false;
-			}
-			else have_neg = false;
-			if (old_have_neg){
-				tok.hasBang = true;
-			}
-			com.push(tok);
+	else if (isNLs(tok)){
+		if (com.length){
+			coms.push({com});
+			com = [];
 		}
 	}
+	else{
+//		if (!com.length && tok===" "){}//Do not allow a command to begin with whitespace
+//		else {
+		let old_have_neg  = have_neg;
+		if (!com.length){
+			if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
+				have_neg = true;
+				continue;
+			}
+			else have_neg = false;
+		}
+		else have_neg = false;
+		if (old_have_neg){
+			tok.hasBang = true;
+		}
+		com.push(tok);
+	}
+//	}
 }
 if (com.length) coms.push({com});
 //»
@@ -2297,7 +2315,16 @@ for (let i=0; i < coms.length; i++){
 	let tok = coms[i];
 	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here
 		if (tok.c_op==="&&"||tok.c_op==="||") {
-			if (!coms[i+1]) return "malformed logic list";
+			if (!coms[i+1]) {
+				if (opts.isInteractive){
+					let rv;
+					while (!(rv = await opts.terminal.read_line("> "))) {
+						command_str = "\n"+command_str;
+					}
+					return Parser.parse("\n"+command_str+rv, opts);
+				}
+				return "malformed logic list";
+			}
 			pipes.push({pipe, type: tok.c_op});
 		}
 		else {
@@ -2311,6 +2338,13 @@ for (let i=0; i < coms.length; i++){
 	else if (pipe.length && coms[i+1]){//noop: This token "must" be a '|'
 	}
 	else {
+		if (opts.isInteractive && !coms[i+1]){
+			let rv;
+			while (!(rv = await opts.terminal.read_line("> "))) {
+				command_str = "\n"+command_str;
+			}
+			return Parser.parse("\n"+command_str+rv, opts);
+		}
 		return "malformed pipeline";
 	}
 
@@ -2357,6 +2391,7 @@ const Sequence = class {/*«*/
 		this.start = start;
 	}
 }/*»*/
+const Newlines = class extends Sequence{}
 const Word = class extends Sequence{//«
 async expandSubs(shell, term){//«
 
@@ -2719,6 +2754,8 @@ dup(){//«
 }//»
 
 /*»*/
+
+const isNLs=val=>{return val instanceof Newlines;};
 
 const expand_comsub=async(tok, shell, term)=>{//«
 	const err = term.resperr;
