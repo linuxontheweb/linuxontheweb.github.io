@@ -2249,7 +2249,7 @@ async parse() {//«
 		toks.push(this.lookahead);
 		await this.nextToken();
 	}
-	return toks;
+	return {tokens: toks, source: this.scanner.source.join("")};
 };//»
 
 };
@@ -2260,10 +2260,12 @@ return {
 parse:async(command_str, opts={})=>{//«
 
 let parser = new _Parser(command_str.split(""), opts);
-let toks;
+let toks, comstr_out;
 try {
 	await parser.nextToken();
-	toks = await parser.parse();
+	({tokens: toks, source: comstr_out} = await parser.parse());
+	command_str = comstr_out;
+//log(`STROUT ${comstr_out}`);
 }
 catch(e){
 	cerr(e);
@@ -2288,8 +2290,6 @@ for (let tok of toks){
 		}
 	}
 	else{
-//		if (!com.length && tok===" "){}//Do not allow a command to begin with whitespace
-//		else {
 		let old_have_neg  = have_neg;
 		if (!com.length){
 			if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
@@ -2304,7 +2304,6 @@ for (let tok of toks){
 		}
 		com.push(tok);
 	}
-//	}
 }
 if (com.length) coms.push({com});
 //»
@@ -2318,10 +2317,10 @@ for (let i=0; i < coms.length; i++){
 			if (!coms[i+1]) {
 				if (opts.isInteractive){
 					let rv;
-					while (!(rv = await opts.terminal.read_line("> "))) {
-						command_str = "\n"+command_str;
+					while ((rv = await opts.terminal.read_line("> ")).match(/^ *$/)) {
+						command_str+="\n";
 					}
-					return Parser.parse("\n"+command_str+rv, opts);
+					return Parser.parse(command_str+"\n"+rv, opts);
 				}
 				return "malformed logic list";
 			}
@@ -2340,10 +2339,10 @@ for (let i=0; i < coms.length; i++){
 	else {
 		if (opts.isInteractive && !coms[i+1]){
 			let rv;
-			while (!(rv = await opts.terminal.read_line("> "))) {
-				command_str = "\n"+command_str;
+			while ((rv = await opts.terminal.read_line("> ")).match(/^ *$/)) {
+				command_str+="\n";
 			}
-			return Parser.parse("\n"+command_str+rv, opts);
+			return Parser.parse(command_str+"\n"+rv, opts);
 		}
 		return "malformed pipeline";
 	}
