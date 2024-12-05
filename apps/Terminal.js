@@ -1714,8 +1714,10 @@ const isLineTerminator = (cp) => {//«
 
 const Scanner = class {
 
-constructor(code, env, handler) {//«
-	this.env = env;
+constructor(code, opts={}, handler) {//«
+	this.isInteractive = opts.isInteractive||false;
+	this.env = opts.env;
+	this.terminal = opts.terminal;
 	this.source = code;
 	this.errorHandler = handler;
 	this.length = code.length;
@@ -1727,7 +1729,18 @@ constructor(code, env, handler) {//«
 eof() {//«
 	return this.index >= this.length;
 };//»
-
+eol(){//«
+	return this.isInteractive && (this.index >= this.length);
+}//»
+async more(){/*«*/
+	if (!this.eol()){
+		throw new Error("more() was call, but NOT at eol()");
+	}
+	let rv = "\n"+(await this.terminal.read_line("> "));
+//log(RV, `${rv}`);
+	this.source = this.source.concat(...rv);
+	this.length = this.source.length;
+}/*»*/
 throwUnexpectedToken(message) {//«
 	if (message === void 0) { message = Messages.UnexpectedTokenIllegal; }
 	return this.errorHandler.throwError(this.index, this.lineNumber, this.index - this.lineStart + 1, message);
@@ -1767,7 +1780,7 @@ scanComments() {//«
 	}
 };//»
 
-scanQuote(par, which, in_backquote){//«
+async scanQuote(par, which, in_backquote, cont_quote){//«
 //log("scanQuote", which, this.index);
 // If we are in double-quotes or back-quotes, we need to check for:
 // 2) '$(': scanComSub
@@ -1778,13 +1791,16 @@ scanQuote(par, which, in_backquote){//«
 //let check_subs
 //	let out=[];
 
-	let start = this.index;
+	let start;
+	if (!cont_quote){
+	 	start = this.index;
+	}
 	let src = this.source;
 	let len = src.length;
 	let is_ds_single = which === "$";
 	let is_single;
 	if (is_ds_single) {
-		this.index++;
+		if (!cont_quote) this.index++;
 		is_single = true;
 	}
 	else if (which==="'"){
@@ -1794,14 +1810,14 @@ scanQuote(par, which, in_backquote){//«
 	let is_dq = which === '"';
 	let is_bq = which === '`';
 	let err;
-	const quote = is_dq ? new DQuote(start, par) : 
+	const quote = cont_quote || (is_dq ? new DQuote(start, par) : 
 		(is_hard_single ? new SQuote(start, par) : 
 			(is_ds_single ? new DSQuote(start, par) :
 				(is_bq ? new BQuote(start, par) :
 					(err = new Error("WWTTFFFFFF ^&*^&(#&$*($#@"))
 				)
 			)
-		);
+		));
 	if (err) throw err;
 	const out = quote.val;
 
@@ -1809,7 +1825,7 @@ scanQuote(par, which, in_backquote){//«
 	if (which==="$") end_quote="'";
 	else end_quote = which;
 
-	this.index++;
+	if (!cont_quote) this.index++;
 	let cur = this.index;
 	let ch = src[cur];
 	let rv;
@@ -1821,11 +1837,11 @@ scanQuote(par, which, in_backquote){//«
 		if (check_subs&&ch==="$"&&src[cur+1]==="(") {//«
 			this.index=cur;
 			if (src[cur+2]==="("){
-				rv = this.scanComSub(quote, true, is_bq||in_backquote);
+				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			}
 			else{
-				rv = this.scanComSub(quote, null, is_bq||in_backquote);
+				rv = await this.scanComSub(quote, null, is_bq||in_backquote);
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			}
 			if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -1834,7 +1850,7 @@ scanQuote(par, which, in_backquote){//«
 		}//»
 		else if (check_bq&&ch==="`"){//«
 			this.index = cur;
-			rv = this.scanQuote(quote, "`");
+			rv = await this.scanQuote(quote, "`");
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
@@ -1858,7 +1874,7 @@ scanQuote(par, which, in_backquote){//«
 		}//»
 		else if (is_bq && (ch==='"'||ch==="'")){//«
 			this.index=cur;
-			rv = this.scanQuote(quote, ch, true);
+			rv = await this.scanQuote(quote, ch, true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
@@ -1866,26 +1882,33 @@ scanQuote(par, which, in_backquote){//«
 		}//»
 		else if (is_bq && ch==="$" && src[cur+1]==="'"){//«
 			this.index=cur;//DPORUTIH  ARGHHHHHHH!?!?!?!?!?
-			rv = this.scanQuote(quote, "$", true);
+			rv = await this.scanQuote(quote, "$", true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur = this.index;
 		}//»
 		else {
-//DJJUTILJJ
 			out.push(ch);
 		}
 		cur++;
 		ch = src[cur];
 	}
-	if (ch !== end_quote) return null;
 	this.index = cur;
+	if (ch !== end_quote) {
+		if (this.eol()){
+			quote.val = out;
+			await this.more();
+			let rv = await this.scanQuote(par, which, in_backquote, quote);
+//this.index--;
+			return rv;
+		}
+		return null;
+	}
 //log(`scanQuote ${which} DONE: ${start} -> ${cur}, <${out.join("")}>`);
-// quote = new
 	return quote;
 }//»
-scanComSub(par, is_math, in_backquote){//«
+async scanComSub(par, is_math, in_backquote){//«
 /*
 We need to collect words rather than chars if:
 If par is a top-level word, then 
@@ -1917,7 +1940,7 @@ if (ch==="\\"){//«
 }//»
 else if (ch==="$"&&src[cur+1]==="'"){//«
 	this.index=cur;
-	let rv = this.scanQuote(par, "$", in_backquote);
+	let rv = await this.scanQuote(par, "$", in_backquote);
 	if (rv===null) return `unterminated quote: $'`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
@@ -1929,7 +1952,7 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
 	}
 	this.index=cur;
-	let rv = this.scanQuote(sub, ch, in_backquote);
+	let rv = await this.scanQuote(sub, ch, in_backquote);
 	if (rv===null) return `unterminated quote: ${ch}`;
 	if (isStr(rv)) return rv;
 	out.push(rv);
@@ -1939,7 +1962,7 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 else if (ch==="$"&&src[cur+1]==="("){//«
 	if (src[cur+2]==="("){
 		this.index=cur;
-		let rv = this.scanComSub(sub, true, in_backquote);
+		let rv = await this.scanComSub(sub, true, in_backquote);
 		if (rv===null) return `unterminated math expansion`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -1947,7 +1970,7 @@ else if (ch==="$"&&src[cur+1]==="("){//«
 	}
 	else{
 		this.index=cur;
-		let rv = this.scanComSub(sub, false, in_backquote);
+		let rv = await this.scanComSub(sub, false, in_backquote);
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -2054,7 +2077,7 @@ scanOperator(){/*«*/
 	return {t:"c_op", c_op:str, start};
 
 }/*»*/
-scanWord(par, env){/*«*/
+async scanWord(par, env){/*«*/
 /*
 
 Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
@@ -2082,19 +2105,19 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			word.push(ch);
 		}/*»*/
 		else if (ch==="$" && next1 === "(" && next2==="("){/*«*/
-			rv = this.scanComSub(_word, true);
+			rv = await this.scanComSub(_word, true);
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
 		}/*»*/
 		else if (ch==="$" && next1 === "("){/*«*/
-			rv = this.scanComSub(_word);
+			rv = await this.scanComSub(_word);
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
 		}/*»*/
 		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){/*«*/
-			rv = this.scanQuote(_word, ch);
+			rv = await this.scanQuote(_word, ch);
 			if (rv===null) {
 				if (ch=="'"){
 					this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -2105,13 +2128,16 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
+			src = this.source;
 		}/*»*/
 		else if (ch==="\n"||ch===" "||ch==="\t") break;
 		else if (OPERATOR_CHARS.includes(ch)) {/*«*/
 			if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 			break;
 		}/*»*/
-		else word.push(ch);
+		else {
+			word.push(ch);
+		}
 		this.index++;
 	}
 	return _word;
@@ -2135,7 +2161,7 @@ scanNewlines(){/*«*/
 
 }/*»*/
 
-lex(){/*«*/
+async lex(){/*«*/
 
 if (this.eof()) {//«
 	return {
@@ -2165,7 +2191,7 @@ if (OPERATOR_CHARS.includes(ch)) {
 	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
 }
-return this.scanWord(null, this.env);
+return await this.scanWord(null, this.env);
 
 }/*»*/
 
@@ -2176,10 +2202,13 @@ return this.scanWord(null, this.env);
 
 const Parser = class {
 
-constructor(code, env, options={}) {//«
-	this.env = env;
+constructor(code, opts={}) {//«
+	this.env = opts.env;
+	this.terminal = opts.terminal;
+	this.isInteractive = opts.isInteractive;
 	this.errorHandler = new ErrorHandler();
-	this.scanner = new Scanner(code, env, this.errorHandler);
+	this.scanner = new Scanner(code, opts, this.errorHandler);
+//	this.isInteractive = opts.isInteractive;
 	this.lookahead = {//«
 		type: EOF_Type,
 		value: '',
@@ -2190,23 +2219,23 @@ constructor(code, env, options={}) {//«
 	};//»
 	this.hasLineTerminator = false;
 	this.tokens = [];
-	this.nextToken();
+//	this.nextToken();
 }//»
 
-nextToken() {//«
+async nextToken() {//«
 	let token = this.lookahead;
 	this.scanner.scanComments();
-	let next = this.scanner.lex();
+	let next = await this.scanner.lex();
 	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
 	this.lookahead = next;
 	return token;
 };//»
 
-parse() {//«
+async parse() {//«
 	let toks = [];
 	while (this.lookahead.type !== EOF_Type) {
 		toks.push(this.lookahead);
-		this.nextToken();
+		await this.nextToken();
 	}
 	return toks;
 };//»
@@ -2216,12 +2245,13 @@ parse() {//«
 
 return {
 
-parse:(command_str, env)=>{//«
+parse:async(command_str, opts={})=>{//«
 
-let parser = new Parser(command_str.split(""), env);
+let parser = new Parser(command_str.split(""), opts);
 let toks;
 try {
-	toks = parser.parse();
+	await parser.nextToken();
+	toks = await parser.parse();
 }
 catch(e){
 	cerr(e);
@@ -3430,7 +3460,7 @@ worthy
 let started_time = (new Date).getTime();
 
 //let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
-let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env}=opts;
+let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 //let {scriptOut, subLines, env}=opts;
 let rv;
 let is_top_level = !(scriptOut||subLines);
@@ -3457,7 +3487,7 @@ command_str = command_str.replace(/^ +/,"");
 
 let statements;
 try{
-	statements = Parser.parse(command_str, env);
+	statements = await Parser.parse(command_str, {env, terminal: term, isInteractive});
 }
 catch(e){
 	return terr("sh: "+e.message);
@@ -5645,7 +5675,7 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 //		sleeping = true;
 		return doc;
 	};
-	await cur_shell.execute(str,{env, heredocScanner});
+	await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
 
 //log("RV", rv);
 
