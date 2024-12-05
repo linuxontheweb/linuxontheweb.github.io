@@ -373,7 +373,7 @@ log(val);
 async run(){
 	await this.awaitCb;
 	if (this.pipeTo || this.opts["force-stdout"]){
-		this.out(this.editor.get_lines({str: true}));
+		this.out(this.editor.get_lines({str: true}).join("\n"));
 	}
 	else if (this.redirLines){
 		let lns = this.editor.get_lines({str: true});
@@ -422,7 +422,7 @@ const com_cat = class extends Com{//«
 		const{out,stdin}=this;
 		if (!this.args.length){
 			if (stdin){
-				out(stdin);
+				out(stdin.join("\n"));
 				this.ok();
 			}
 			//else: we have piped input, and are waiting for an 'EOF' to exit
@@ -430,38 +430,11 @@ const com_cat = class extends Com{//«
 		}
 		let txt;
 		while (txt = await this.nextArgAsText()){
-			if (!isErr(txt)) out(txt);
+			if (!isErr(txt)) out(txt.join("\n"));
 		}
 		this.nok();
 	}//»
 };//»
-/*
-const com_cat = class extends Com{//«
-	init(){
-//cwarn("STDIN?", this.stdin);
-		if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
-	}
-	async run(){
-		let{args, err}=this;
-		if (!args.length) {
-			if (this.stdin){
-				this.out(this.stdin);
-				this.ok();
-			}
-			return;
-		}
-		let rv = await get_file_lines_from_args(args, this.term, err);
-//		if (rv.err && rv.err.length) this.err(rv.err);
-		if (rv.out && rv.out.length) this.out(rv.out);
-		this.ok();
-	}
-	pipeIn(val){
-		if (this.stdin) return;
-		this.out(val);
-		if (isEOF(val)) this.ok();
-	}
-}//»
-*/
 const com_touch = class extends Com{//«
 
 init(){
@@ -998,7 +971,7 @@ async run(){
 		out.push(`Entries: ${num}`);
 		out.push(`Size: ${tot}`);
 	}
-	if (out.length)  this.out(out);
+	if (out.length)  this.out(out.join("\n"));
 	this.ok();
 }
 }/*»*/

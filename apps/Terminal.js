@@ -1,7 +1,18 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
+
+/*12/5/24: An example of the weird case of Arrays vs Strings«
+1) @WPRLKUT, we are calling make_sh_error_com(comword, `command not found`, com_env),
+2) in that function @SPOIRUTM, we use to do:
+	com.errorMessage = `sh: ${name}: ${mess}`;
+...but at the out_cb (@WLKUIYDP), we do testing for isStr, without checking for
+embedded newlines, so now we do:
+	com.errorMessage = `sh: ${name}: ${mess}`.split("\n");
+...in order to get the correct output in the terminal for the case when comword
+has embedded newlines
+»*/
 /*12/4/24: At this late date, we still needed to add the line @DPORUTIH !!!«
 »*/
-/*12/2/24:« Lexing and Parsing the Shell Command Language
+/*12/2/24: Lexing and Parsing the Shell Command Language«
 1) The lexer just spits out these tokens:
  - Words
  - Operators
@@ -860,8 +871,10 @@ const ErrCom = class extends Com{/*«*/
 	}
 }/*»*/
 const make_sh_error_com = (name, mess, com_env)=>{//«
+
 	let com = new ErrCom(name, null,null,com_env);
-	com.errorMessage = `sh: ${name}: ${mess}`;
+//SPOIRUTM
+	com.errorMessage = `sh: ${name}: ${mess}`.split("\n");
 	return com;
 };/*»*/
 globals.comClasses={Com, ErrCom};
@@ -882,7 +895,7 @@ run(){
 */
 const com_echo = class extends Com{//«
 	run(){
-		this.out(this.args.join(" ").split("\n"));
+		this.out(this.args.join(" "));
 		this.ok();
 	}
 }//»
@@ -1017,7 +1030,8 @@ async run(){//«
 			for (let nm of dir_arr) name_lens.push(nm.length);
 			let ret = [];
 			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
-			out(ret, {colors, didFmt: true});
+//log(ret);
+			out(ret.join("\n"), {colors, didFmt: true});
 		}//»
 		if (recur) {
 			for (let dir of recur_dirs) await do_path(dir);
@@ -1043,7 +1057,7 @@ run(){
 		let val = env[key];
 		out.push(`${key}=${val}`);
 	}
-	this.out(out);
+	this.out(out.join("\n"));
 	this.ok();
 }
 }/*»*/
@@ -1158,7 +1172,7 @@ async run(){
 		if (!list){
 			return this.no("could not get the app list");
 		}
-		out(list);
+		out(list.join("\n"));
 		return this.ok();
 	}
 	let have_error=false;
@@ -1185,7 +1199,7 @@ const com_msleep = class extends Com{/*«*/
 }/*»*/
 const com_hist = class extends Com{/*«*/
 	run(){
-		this.out(this.term.get_history());
+		this.out(this.term.get_history().join("\n"));
 		this.ok();
 	}
 }/*»*/
@@ -1197,7 +1211,7 @@ const com_pwd = class extends Com{/*«*/
 }/*»*/
 const com_libs = class extends Com{/*«*/
 	async run(){
-		this.out(await util.getList("/site/coms/"));
+		this.out((await util.getList("/site/coms/")).join("\n"));
 		this.ok();
 	}
 }/*»*/
@@ -1213,7 +1227,7 @@ async run(){
 	let got = ALL_LIBS[lib] || NS.coms[lib];
 	if (got){
 		if (!isArr(got)) got = Object.keys(got);
-		this.out(got);
+		this.out(got.join("\n"));
 		return this.ok();
 	}
 	let orig = lib;
@@ -1222,7 +1236,7 @@ async run(){
 	try{
 		const coms = (await import(path)).coms;
 		NS.coms[orig] = coms;
-		this.out(Object.keys(coms));
+		this.out((Object.keys(coms)).join("\n"));
 		this.ok();
 	}catch(e){
 cerr(e);
@@ -1448,7 +1462,7 @@ async init(){
 }
 async run(){
 	await this.#promise;
-	if (this.pipeTo) this.out(this.#thing);
+	if (this.pipeTo) this.out(this.#thing,join("\n"));
 	this.ok();
 }
 pipeIn(val){
@@ -3793,7 +3807,8 @@ if (isEOF(val) || (!redir_lns && pipeTo)){
 	}
     return;
 }
-
+//WLKUIYDP
+/*«
 if (isStr(val)) val=[val];
 else if (!isArr(val)){
 //We are making sure there are no arbitrary "naked" objects in the output stream
@@ -3805,10 +3820,10 @@ return;
 else if (val.constructor.name === "Array") {
 
 if (val.length > 0 && !isStr(val[0])){
-/*If this is a standard Javascript array, check that at least the first value is a string
-There may be weird things in the other positions, but at least this is a very
-efficient kind of sanity check (as opposed to iterating through *ALL* of the elements
-of a potentially *very* long array)*/
+//If this is a standard Javascript array, check that at least the first value is a string
+//There may be weird things in the other positions, but at least this is a very
+//efficient kind of sanity check (as opposed to iterating through *ALL* of the elements
+//of a potentially *very* long array)
 cwarn("Invalid array value below");
 log(val[0]);
 err_cb(`sh: ${comobj.name}: invalid array value in output stream (see console)`);
@@ -3821,7 +3836,7 @@ log(val);
 err_cb(`sh: ${comobj.name}: invalid 'array type' in output stream (see console)`);
 return;
 }
-
+»*/
 if (redir_lns) {
 //KIUREUN
 	if (val instanceof Uint8Array){
@@ -3844,7 +3859,7 @@ if (scriptOut) return scriptOut(val);
 
 //Save to subLines and call scriptOut
 if (subLines){
-	if (val instanceof Uint8Array) val = [`Uint8Array(${val.length})`];
+	if (val instanceof Uint8Array) val = `Uint8Array(${val.length})`;
 	subLines.push(...val);
 	return;
 }
@@ -3857,6 +3872,7 @@ term.refresh();
 };//»
 const err_cb=(lns)=>{//«
 if (this.cancelled) return;
+/*
 if (isStr(lns)) {
 if (!lns.match(/^sh:/)) lns=[`${usecomword}: ${lns}`];
 else lns = [lns];
@@ -3865,6 +3881,7 @@ else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in err_cb");
 }
+*/
 term.response(lns, {isErr: true});
 term.scroll_into_view();
 term.refresh();
@@ -3873,11 +3890,13 @@ term.refresh();
 const suc_cb=(lns)=>{//«
 if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
+/*
 if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in suc_cb");
 }
+*/
 term.response(lns, {isSuc: true});
 term.scroll_into_view();
 term.refresh();
@@ -3885,6 +3904,7 @@ term.refresh();
 const wrn_cb=(lns)=>{//«
 if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
+/*
 if (isStr(lns)) {
 	if (!lns.match(/^sh:/)) lns=[`${usecomword}: ${lns}`];
 }
@@ -3892,6 +3912,7 @@ else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in wrn_cb");
 }
+*/
 term.response(lns, {isWrn: true});
 term.scroll_into_view();
 term.refresh();
@@ -3899,11 +3920,13 @@ term.refresh();
 const inf_cb=(lns)=>{//«
 if (this.cancelled) return;
 //if (isStr(lns)) lns=[lns];
+/*
 if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
 else if (!isArr(lns)){
 log(lns);
 throw new Error("Invalid value in inf_cb");
 }
+*/
 term.response(lns, {isInf: true});
 term.scroll_into_view();
 term.refresh();
@@ -4009,6 +4032,7 @@ cerr(e);
 //It doesn't look like a file.
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
+//WPRLKUT
 				pipeline.push(make_sh_error_com(comword, `command not found`, com_env));
 				last_exit_code = E_ERR;
 				continue;
@@ -5883,7 +5907,9 @@ response(out, {isErr: true});
 }
 this.resperr = response_err;
 const response = (out, opts={})=>{//«
-	if (isStr(out)) out = [out];
+	if (!isStr(out)) Win._fatal(new Error("Non-string given to terminal.response"));
+	out = out.split("\n");
+/*
 	else if (!out) return;
 	else if (!isArr(out)){
 log("STDOUT");
@@ -5891,7 +5917,7 @@ log(out);
 return;
 	}
 	else if (out instanceof Uint8Array) out = [`Uint8Array(${out.length})`];
-
+*/
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf} = opts;
 //WOPIUTHSDKL
 	let use_color;
@@ -6103,7 +6129,7 @@ const response_com_names = arr => {//«
 	for (let nm of arr) name_lens.push(nm.length);
 	let command_return = [];
 	fmt_ls(arr, name_lens, command_return);
-	response(command_return, {didFmt: true});
+	response(command_return.join("\n"), {didFmt: true});
 	response_end();
 	for (let i=0; i < repeat_arr.length; i++) handle_letter_press(repeat_arr[i]);
 	let xoff = repeat_arr.length - arr_pos;
@@ -7085,7 +7111,7 @@ const init = async(appargs={})=>{
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
 	}
-	response(init_prompt.split("\n"));
+	response(init_prompt);
 	if (!dev_mode) {
 		response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners" like:`, {isWrn: true});
 		response(`  $ cat some files here || echo "That didn't quite work!"`, {isWrn: true});
