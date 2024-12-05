@@ -1,5 +1,6 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
-/*11/30/24: While doing "visual line select" in "file mode", it gave an
+
+/*11/30/24: While doing "visual line select" in "file mode", it gave an«
 error like: "yank_buffer is not iterable" when trying to do a weird
 operation like do_line_wrap, so @WUIOPHMDL, we are checking for the
 mode_hold variable, and then returning. I guess "file mode" was only to
@@ -13,10 +14,10 @@ const vis_line_edit_ok=()=>{
 	if (this.mode === VIS_LINE_MODE && this.mode_hold !== FILE_MODE) return true;
 	return false;
 };
-*/
-/*11/29/24: When going into alternate modes, there is not a global varible called
+»*/
+/*11/29/24: When going into alternate modes, there is not a global varible called«
 'hold_lines', where we keep the actual editor lines.
-*/
+»*/
 /*11/20/24: Reading the comments below (from ~2.5 weeks ago), I had a hard time«
 "decifering" them. They now seem to me to be very abstract, and of very little "real
 world" utility value. I have just dropped in a file with tons of fold markers in them

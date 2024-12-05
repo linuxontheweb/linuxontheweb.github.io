@@ -1,5 +1,6 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
+/*«Notes*/
 /*12/5/24: An example of the weird case of Arrays vs Strings«
 1) @WPRLKUT, we are calling make_sh_error_com(comword, `command not found`, com_env),
 2) in that function @SPOIRUTM, we use to do:
@@ -94,6 +95,7 @@ pipeIn(val){
 }
 
 »*/
+/*»*/
 
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
@@ -810,34 +812,44 @@ cwarn(`${this.name}: cancelled`);
 
 }/*»*/
 const ScriptCom = class extends Com{//«
-	constructor(shell, name, lines, args, env){
+	constructor(shell, name, text, args, env){
 		super(name, args, {}, env);
-		this.lines = lines;
+		this.text = text;
 		this.shell = shell;
 	}
 	async run(){
-		let code;
-		let execute = this.shell.execute;
+//		let code;
+//		let execute = this.shell.execute;
 		let scriptOut = this.out;
 		let scriptArgs = this.args;
 		let scriptName = this.name;
-		let lns = this.lines;
-		let len = lns.length;
-		let i;
-		let heredocScanner = (which) => {
+//		let text = this.text;
+//		let lns = text.split("\n");
+//		let len = lns.length;
+//«
+//		let i=0;
+/*
+		let heredocScanner = (marker, iter) => {
 			let doc = [];
-			i++;
+//			i++;
 			if (i===len) return `end-of-heredoc marker not found (found unexpected newline, looking for '${which}')`;
 			while (i < len){
-				let ln = lns[i];
-				if (ln === which) {
-					return doc;
+				let ln = lns[iter];
+				if (ln === marker) {
+//cwarn("HEREDOCOUT");
+//log(doc);
+					return doc.join("\n");
 				}
 				doc.push(ln);
-				i++;
+				iter++;
 			}
 			return `end-of-heredoc marker not found (looking for '${which}')`
 		};
+»*/
+//		let rv = await execute(text, {scriptOut, scriptName, scriptArgs, heredocScanner});
+		let code = await this.shell.execute(this.text, {scriptOut, scriptName, scriptArgs});
+//		if (Number.isFinite(rv)) code = rv;
+/*«
 		for (i=0; i < len; i++){
 			let ln = lns[i];
 			if (this.killed) return;
@@ -848,6 +860,7 @@ const ScriptCom = class extends Com{//«
 			}
 			if (Number.isFinite(rv)) code = rv;
 		}
+»*/
 		this.end(code);
 	}
 }//»
@@ -874,7 +887,7 @@ const make_sh_error_com = (name, mess, com_env)=>{//«
 
 	let com = new ErrCom(name, null,null,com_env);
 //SPOIRUTM
-	com.errorMessage = `sh: ${name}: ${mess}`.split("\n");
+	com.errorMessage = `sh: ${name}: ${mess}`;
 	return com;
 };/*»*/
 globals.comClasses={Com, ErrCom};
@@ -2245,6 +2258,11 @@ constructor(code, opts={}) {//«
 	};//»
 	this.hasLineTerminator = false;
 	this.tokens = [];
+/*
+Since this is async (because we might need to get more lines from 'await terminal.read_line()'),
+then we need to do 'await this.nextToken()' **outside** of the constructor, since there is
+NO async/await in constructors.
+*/
 //	this.nextToken();
 }//»
 
@@ -3808,35 +3826,6 @@ if (isEOF(val) || (!redir_lns && pipeTo)){
     return;
 }
 //WLKUIYDP
-/*«
-if (isStr(val)) val=[val];
-else if (!isArr(val)){
-//We are making sure there are no arbitrary "naked" objects in the output stream
-cwarn("Invalid value below");
-log(val);
-err_cb(`sh: ${comobj.name}: invalid value in output stream (see console)`);
-return;
-}
-else if (val.constructor.name === "Array") {
-
-if (val.length > 0 && !isStr(val[0])){
-//If this is a standard Javascript array, check that at least the first value is a string
-//There may be weird things in the other positions, but at least this is a very
-//efficient kind of sanity check (as opposed to iterating through *ALL* of the elements
-//of a potentially *very* long array)
-cwarn("Invalid array value below");
-log(val[0]);
-err_cb(`sh: ${comobj.name}: invalid array value in output stream (see console)`);
-return;
-}
-}
-else if (!(val instanceof Uint8Array)){
-cwarn("Invalid array below");
-log(val);
-err_cb(`sh: ${comobj.name}: invalid 'array type' in output stream (see console)`);
-return;
-}
-»*/
 if (redir_lns) {
 //KIUREUN
 	if (val instanceof Uint8Array){
@@ -3860,7 +3849,8 @@ if (scriptOut) return scriptOut(val);
 //Save to subLines and call scriptOut
 if (subLines){
 	if (val instanceof Uint8Array) val = `Uint8Array(${val.length})`;
-	subLines.push(...val);
+//	subLines.push(...val);
+	subLines.push(val);
 	return;
 }
 
@@ -3870,64 +3860,28 @@ term.scroll_into_view();
 term.refresh();
 
 };//»
-const err_cb=(lns)=>{//«
+const err_cb=(str)=>{//«
 if (this.cancelled) return;
-/*
-if (isStr(lns)) {
-if (!lns.match(/^sh:/)) lns=[`${usecomword}: ${lns}`];
-else lns = [lns];
-}
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in err_cb");
-}
-*/
-term.response(lns, {isErr: true});
+term.response(str, {isErr: true});
 term.scroll_into_view();
 term.refresh();
 
 };//»
-const suc_cb=(lns)=>{//«
+const suc_cb=(str)=>{//«
 if (this.cancelled) return;
-//if (isStr(lns)) lns=[lns];
-/*
-if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in suc_cb");
-}
-*/
-term.response(lns, {isSuc: true});
+term.response(str, {isSuc: true});
 term.scroll_into_view();
 term.refresh();
 };//»
-const wrn_cb=(lns)=>{//«
+const wrn_cb=(str)=>{//«
 if (this.cancelled) return;
-//if (isStr(lns)) lns=[lns];
-/*
-if (isStr(lns)) {
-	if (!lns.match(/^sh:/)) lns=[`${usecomword}: ${lns}`];
-}
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in wrn_cb");
-}
-*/
-term.response(lns, {isWrn: true});
+term.response(str, {isWrn: true});
 term.scroll_into_view();
 term.refresh();
 };//»
-const inf_cb=(lns)=>{//«
+const inf_cb=(str)=>{//«
 if (this.cancelled) return;
-//if (isStr(lns)) lns=[lns];
-/*
-if (isStr(lns)) lns=[`${usecomword}: ${lns}`];
-else if (!isArr(lns)){
-log(lns);
-throw new Error("Invalid value in inf_cb");
-}
-*/
-term.response(lns, {isInf: true});
+term.response(str, {isInf: true});
 term.scroll_into_view();
 term.refresh();
 };//»
@@ -3953,7 +3907,7 @@ const com_env = {/*«*/
 	wrn: wrn_cb,
 	inf: inf_cb,
 }/*»*/
-
+//XXXXXXXXXXXX
 		let comword = arr.shift();
 		if (!comword) {
 			pipeline.push(new NoCom());
@@ -4066,7 +4020,7 @@ cerr(e);
 				last_exit_code = E_ERR;
 				continue;
 			}
-			comobj = new ScriptCom(this, comword, text.split("\n"), arr, com_env);
+			comobj = new ScriptCom(this, comword, text, arr, com_env);
 			pipeline.push(comobj);
 			continue;
 		}//»
