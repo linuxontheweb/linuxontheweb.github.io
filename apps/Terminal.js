@@ -2376,11 +2376,37 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 	}
 //Just mainly to  allow script names to pass through (since we are currently worrying about
 //parsing strings with many newlines...)
-if (toks.length===1) return {tokens: toks, source: this.scanner.source.join("")};
+if (toks.length<3) return {tokens: toks, source: this.scanner.source.join("")};
 
-log(toks);
+//log(toks);
+let len = toks.length;
+let tok = toks.shift();
+while(tok){
+if (isNLs(tok)){
+log("NL");
+	tok = toks.shift();
+	while (isNLs(tok)) {
+		tok = toks.shift();
+	}
+}
+else {
+if (tok.isWord){
+log(tok.toString());
+}
+else{
+if (tok.r_op=="<<"){
+cwarn("HEREDOC");
+log(tok.value)
+}
+else {
+cwarn(tok[tok.type]);
+}
+}
+	tok = toks.shift();
+}
+}
 
-return {err: `NOT DOING THIS ANYMORE: ${toks.length}`};
+return {err: `Parse this many tokens: ${len}`};
 
 };//»
 
