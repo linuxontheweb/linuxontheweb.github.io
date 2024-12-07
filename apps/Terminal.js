@@ -1,6 +1,8 @@
+/*@KUYDHYET: _Parser.compile
+*/
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
-const MAX_TOKS_TO_PASS_THROUGH=5;
+const MAX_TOKS_TO_PASS_THROUGH=0;
 /*Allow up this many tokens to send through the old parsing and execution stuff, so: 
 $ ./some_script.sh
   ...and:
@@ -2119,8 +2121,22 @@ scanOperator(){/*«*/
 	}
 	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
 
-	if (str.match(/[<>]/)) return {type:"r_op", r_op:str};
-	return {type:"c_op", c_op:str, start};
+	let obj = {val: str, isOp: true};
+	obj.toString=()=>{
+		return str;
+	};
+
+	if (str.match(/[<>]/)) {
+		obj.type="r_op";
+		obj.r_op = str;
+	}
+	else{
+		obj.type="c_op";
+		obj.c_op = str;
+	}
+	return obj;
+//	if (str.match(/[<>]/)) return {type:"r_op", r_op:str, val: str, isOp: true};
+//	return {type:"c_op", c_op:str, start, val: str, isOp: true};
 
 }/*»*/
 async scanWord(par, env){/*«*/
@@ -2316,7 +2332,224 @@ nextLinesUntilDelim(delim){/*«*/
 	if (rv===true) return out;
 	return false;
 }/*»*/
+dumpTokens(){//«
+
+let toks = this.tokens;
+let tok = toks.shift();
+while(tok){
+if (isNLs(tok)){
+cwarn("NL");
+	tok = toks.shift();
+	while (isNLs(tok)) {
+		tok = toks.shift();
+	}
+}
+else {
+if (tok.isWord){
+log(tok.toString());
+}
+else{
+if (tok.isHeredoc){
+cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
+}
+else {
+cwarn(tok[tok.type]);
+}
+}
+	tok = toks.shift();
+}
+}
+}
+//»
+shiftNewlines(){/*«*/
+	let toks = this.tokens;
+	while (isNLs(toks[0])){
+		toks.shift();
+	}
+}/*»*/
+fatal(mess){/*«*/
+throw new Error(mess);
+}/*»*/
+
+async parseSimpleCommand(){/*«*/
+
+/*Get all 
+- assignment words, plus 
+- isHeredoc toks
+- All other io_file: 
+  one of: "<" "<&" ">" ">&" ">>" "<>" ">|"
+  plus: word
+
+*/
+
+let err = this.fatal;
+let toks = this.tokens;
+let pref;
+let word;
+let name;
+let suf;
+let have_comword;
+let tok = toks[0];
+while(tok){
+	if (tok.isHeredoc){/*«*/
+		if (!have_comword){
+			if (!pref) pref = [];
+			pref.push({heredoc: tok});
+		}
+		else{
+			if (!suf) suf = [];
+			suf.push({heredoc: tok});
+		}
+	}/*»*/
+	else if (tok.r_op){/*«*/
+		let rop = tok;
+		toks.shift();
+		let fname = toks[0];
+		if (!fname) err("syntax error near unexpected token 'newline'");
+		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
+		if (!fname.isChars) err(`wanted characters only in the filename`);
+log("REDIRECT TO", fname);
+		if (!have_comword){
+			if (!pref) pref = [];
+			pref.push({redir: fname});
+		}
+		else{
+			if (!suf) suf = [];
+			suf.push({redir: fname});
+		}
+	}/*»*/
+	else if (tok.isWord){/*«*/
+		if (!have_comword) {
+			if (tok.isAssignment){
+				if (!pref) pref = [];
+				pref.push(tok);
+			}
+			else{
+				have_comword = tok;
+			}
+
+		}
+		else{
+			if (!suf) suf = [];
+			suf.push({word: tok});
+		}
+	}/*»*/
+	else{
+		break;
+	}
+	toks.shift();
+	tok = toks[0];
+}
+if (!have_comword){
+	if (!pref) err("NO COMWORD && NO PREFIX!?!?");
+	return {prefix: pref};
+}
+else if (pref){
+	return {prefix: pref, word: have_comword, suffix: suf};
+}
+else return {name: have_comword, suffix: suf};
+
+}/*»*/
+async parseCommand(){/*«*/
+
+const COMPOUND_START_WORDS = [/*«*/
+	"{",
+	"for",
+	"if",
+	"while",
+	"until",
+	"case"
+];/*»*/
+
+let toks = this.tokens;
+let err = this.fatal;
+let tok = toks[0];
+log("parseCommand", tok);
+if (tok.isWord) {/*«*/
+	let wrd = tok.toString();
+	if (COMPOUND_START_WORDS.includes(wrd)){
+cwarn(`FOUND COMPOUND: '${wrd}'`);
+		return;
+	}
+	let tok1 = toks[1];
+	if (tok1 && tok1.c_op==="("){
+		let tok2 = toks[2];
+		if (!tok2) err("syntax error near unexpected token 'newline'");
+		if (!(tok2.c_op===")")) {
+			err(`syntax error near unexpected token '${tok1.toString()}'`);
+		}
+cwarn(`FUNCTION DEF: '${wrd.toString()}'`);
+	}
+	else{
+cwarn(`COMMAND OR ASSIGNMENT: '${wrd.toString()}'`);
+//		return 
+		let rv = await this.parseSimpleCommand();
+		rv.type="simple_command";
+		return rv;
+	}
+}/*»*/
+else if(tok.isOp){/*«*/
+	if (tok.c_op==="("){
+cwarn("SUBSHELL", tok);
+		return;
+	}
+	if (tok.r_op){
+//Looks like cmd_pref
+//cwarn("Parse simple command!");
+		let rv = await this.parseSimpleCommand();
+		rv.type="simple_command";
+		return rv;
+	}
+	this.fatal(`unexpected token: '${tok.c_op}'`);
+}/*»*/
+else{/*«*/
+cwarn("WUD IS THIS BELOW!?!?!?!");
+log(wrd);
+err("WHAT IS THIS NOT NEWLINE OR WORD OR OPERATOR?????????");
+}/*»*/
+
+}/*»*/
+async parsePipeSequence(){/*«*/
+let toks = this.tokens;
+let com = await this.parseCommand();
+//log("GOTCOM", com);
+let seq = [com];
+log("NEXT",toks[0]);
+//while
+//Loop through "|" + linebreak + com
+}/*»*/
+async parsePipeline(){/*«*/
+let toks = this.tokens;
+// Check for "!" at toks[0]
+let seq = await this.parsePipeSequence();
+
+}/*»*/
+async parseAndOr(){/*«*/
+let toks = this.tokens;
+let pipe = await this.parsePipeline();
+let andor = [pipe];
+//Loop through "&&" or "||" + linebreak + pipe
+
+}/*»*/
+async parseList(){/*«*/
+let toks = this.tokens;
+let and_or = await this.parseAndOr();
+let list = [and_or];
+//Loop through "&" or ";" + and_or (no linebreak's!)
+
+}/*»*/
+async parseCompleteCommand(){/*«*/
+let toks = this.tokens;
+let list = await this.parseList();
+}/*»*/
+async parseCompleteCommands(){/*«*/
+let toks = this.tokens;
+let comp_com = await this.parseCompleteCommand();
+let comp_coms = [comp_com];
+
+}/*»*/
 async compile(){/*«*/
+//KUYDHYET
 /*If interative and a line ends w/ "|" , "&&" or "||" (or something w/compund commands):«
 
 Examples of parse-level continuations:
@@ -2356,34 +2589,41 @@ catch(e){
 
 
 »*/
-cwarn("COMPILE");
-
-/*
 let toks = this.tokens;
-let tok = toks.shift();
-while(tok){
-if (isNLs(tok)){
-cwarn("NL");
-	tok = toks.shift();
-	while (isNLs(tok)) {
-		tok = toks.shift();
-	}
-}
-else {
-if (tok.isWord){
-log(tok.toString());
-}
-else{
-if (tok.isHeredoc){
-cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
-}
-else {
-cwarn(tok[tok.type]);
-}
-}
-	tok = toks.shift();
-}
-}
+cwarn("COMPILE");
+this.shiftNewlines();
+let complete_coms = await this.parseCompleteCommands();
+//log(toks);
+//Diagnosis stuff
+//this.dumpTokens();
+/*
+
+[something] means that "something" is optional
+
+Just simple commands for now, then add brace_group's and subshell's and function's
+with brace_group's or subshell's filled with simple_command's
+
+program: linebreak complete_commands linebreak | linebreak
+complete_commands: complete_commands newline_list complete_command  |  complete_command
+complete_command: list separator_op  |  list
+list: list separator_op and_or  |  and_or
+and_or: and_or "&&" linebreak pipeline  |  and_or "||" linebreak pipeline  |  pipeline
+pipeline: "!" pipe_sequence  |  pipe_sequence
+pipe_sequence: pipe_sequence "|" linebreak command  |  command
+command: simple_command  |  compound_command  [redirect_list]  |  function_definition
+simple_command: cmd_pref [cmd_word [cmd_suf]]  |  cmd_name [cmd_suf]
+cmd_pref: cmd_pref io_redir  |  cmd_pref ASSIGN_WORD  |  io_redir  |  ASSIGN_WORD
+cmd_suf: cmd_suf io_redir  |  cmd_suf WORD  |  io_redir  |  WORD
+redirect_list: redirect_list io_redir  |  io_redir 
+io_redirect: [IO_[NUMBER|LOCATION]] io_file  |  [IO_[NUMBER|LOCATION]] io_here
+io_file: REDIR_OP filename
+io_here: "<<" WORD  |  "<<-" WORD
+newline_list: newline_list NEWLINE  |  NEWLINE
+linebreak: newline_list  |  (empty)
+separator_op: "&" | ";"
+separator: separator_op linebreak  |  newline_list
+sequential_sep: ";" linebreak  |  newline_list
+
 */
 
 }/*»*/
@@ -2470,9 +2710,10 @@ if (this.isContinue || len<=MAX_TOKS_TO_PASS_THROUGH) return {tokens: toks, sour
 this.tokens = toks;
 await this.compile();
 
-
-return {err: `found ${len} tokens (MAX_TOKS_TO_PASS_THROUGH == ${MAX_TOKS_TO_PASS_THROUGH})`};
-
+if (!dev_mode) {
+	return {err: `found ${len} tokens (MAX_TOKS_TO_PASS_THROUGH == ${MAX_TOKS_TO_PASS_THROUGH})`};
+}
+return {tokens: []};
 };//»
 
 };
@@ -2492,7 +2733,7 @@ try {
 	command_str = comstr_out;
 }
 catch(e){
-	cerr(e);
+//	cerr(e);
 	return e.message;
 }
 
@@ -2711,6 +2952,13 @@ dsSQuoteExpansion(){//«
 		if (ent instanceof DSQuote) ent.expand();
 	}
 }//»
+get isAssignment(){
+	let eq_pos = this.val.indexOf("=");
+	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
+	let pre_eq_arr = this.val.slice(0, eq_pos);
+	let first = pre_eq_arr.shift();
+	return (typeof first === "string" && first.match(/^[_a-zA-Z]$/));
+}
 get assignmentParts(){//«
 //const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 	let eq_pos = this.val.indexOf("=");
@@ -2736,8 +2984,7 @@ dup(){//«
 	}
 	return word;
 }//»
-
-toString(){
+toString(){/*«*/
 //We actually need to do field splitting instead of doing this...
 //log("TOSTRING!!!", this.val.join(""));
 //log(this.fields);
@@ -2745,8 +2992,14 @@ toString(){
 //if (this.fields)
 //return this.fields.join("\n");
 return this.val.join("");
-}
-
+}/*»*/
+get isChars(){/*«*/
+	let chars = this.val;
+	for (let ch of chars) {
+		if (!isStr(ch)) return false;
+	}
+	return true;
+}/*»*/
 }//»
 const SQuote = class extends Sequence{/*«*/
 	expand(){
