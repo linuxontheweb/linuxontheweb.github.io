@@ -2584,6 +2584,30 @@ const Parser = class {
 		this.nextToken();
 		return token;
 	};//»
+	nextToken() {//«
+		var token = this.lookahead;
+		this.lastMarker.index = this.scanner.index;
+		this.lastMarker.line = this.scanner.lineNumber;
+		this.lastMarker.column = this.scanner.index - this.scanner.lineStart;
+		this.collectComments();
+		if (this.scanner.index !== this.startMarker.index) {
+			this.startMarker.index = this.scanner.index;
+			this.startMarker.line = this.scanner.lineNumber;
+			this.startMarker.column = this.scanner.index - this.scanner.lineStart;
+		}
+		var next = this.scanner.lex();
+		this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
+		if (next && this.context.strict && next.type === Identifier_Type) {
+			if (this.scanner.isStrictModeReservedWord(next.value)) {
+				next.type = Keyword_Type;
+			}
+		}
+		this.lookahead = next;
+		if (this.config.tokens && next.type !== EOF_Type) {
+			this.tokens.push(this.convertToken(next));
+		}
+		return token;
+	};//»
 
 //»
 
@@ -3364,11 +3388,11 @@ const Parser = class {
 		}
 		var message;
 		var id = null;
-		var firstRestricted;
+		var firstRestricted;/*«*/
 		var previousAllowAwait = this.context.await;
 		var previousAllowYield = this.context.allowYield;
 		this.context.await = isAsync;
-		this.context.allowYield = !isGenerator;
+		this.context.allowYield = !isGenerator;/*»*/
 		if (!this.match('(')) {//«
 			var token = this.lookahead;
 			id = (!this.context.strict && !isGenerator && this.matchKeyword('yield')) ? this.parseIdentifierName() : this.parseVariableIdentifier();
@@ -3390,25 +3414,25 @@ const Parser = class {
 		}//»
 		var formalParameters = this.parseFormalParameters(firstRestricted);
 		var params = formalParameters.params;
-		var stricted = formalParameters.stricted;
+		var stricted = formalParameters.stricted;/*«*/
 		firstRestricted = formalParameters.firstRestricted;
 		if (formalParameters.message) {
 			message = formalParameters.message;
 		}
 		var previousStrict = this.context.strict;
 		var previousAllowStrictDirective = this.context.allowStrictDirective;
-		this.context.allowStrictDirective = formalParameters.simple;
+		this.context.allowStrictDirective = formalParameters.simple;/*»*/
 		var body = this.parseFunctionSourceElements();
-		if (this.context.strict && firstRestricted) {
+		if (this.context.strict && firstRestricted) {/*«*/
 			this.throwUnexpectedToken(firstRestricted, message);
 		}
 		if (this.context.strict && stricted) {
 			this.tolerateUnexpectedToken(stricted, message);
-		}
-		this.context.strict = previousStrict;
+		}/*»*/
+		this.context.strict = previousStrict;/*«*/
 		this.context.allowStrictDirective = previousAllowStrictDirective;
 		this.context.await = previousAllowAwait;
-		this.context.allowYield = previousAllowYield;
+		this.context.allowYield = previousAllowYield;/*»*/
 		return isAsync ? this.finalize(node, new Node.AsyncFunctionExpression(id, params, body)) :
 			this.finalize(node, new Node.FunctionExpression(id, params, body, isGenerator));
 	};//»
@@ -3491,18 +3515,18 @@ const Parser = class {
 		var node = this.createNode();
 		this.expectKeyword('for');
 		this.expect('(');
-		if (this.match(';')) {
+		if (this.match(';')) {/*«*/
 			this.nextToken();
-		}
-		else {
-			if (this.matchKeyword('var')) {
+		}/*»*/
+		else {/*«*/
+			if (this.matchKeyword('var')) {/*«*/
 				init = this.createNode();
 				this.nextToken();
 				var previousAllowIn = this.context.allowIn;
 				this.context.allowIn = false;
 				var declarations = this.parseVariableDeclarationList({ inFor: true });
 				this.context.allowIn = previousAllowIn;
-				if (declarations.length === 1 && this.matchKeyword('in')) {
+				if (declarations.length === 1 && this.matchKeyword('in')) {/*«*/
 					var decl = declarations[0];
 					if (decl.init && (decl.id.type === Syntax.ArrayPattern || decl.id.type === Syntax.ObjectPattern || this.context.strict)) {
 						this.tolerateError(Messages.ForInOfLoopInitializer, 'for-in');
@@ -3512,63 +3536,63 @@ const Parser = class {
 					left = init;
 					right = this.parseExpression();
 					init = null;
-				}
-				else if (declarations.length === 1 && declarations[0].init === null && this.matchContextualKeyword('of')) {
+				}/*»*/
+				else if (declarations.length === 1 && declarations[0].init === null && this.matchContextualKeyword('of')) {/*«*/
 					init = this.finalize(init, new Node.VariableDeclaration(declarations, 'var'));
 					this.nextToken();
 					left = init;
 					right = this.parseAssignmentExpression();
 					init = null;
 					forIn = false;
-				}
-				else {
+				}/*»*/
+				else {/*«*/
 					init = this.finalize(init, new Node.VariableDeclaration(declarations, 'var'));
 					this.expect(';');
-				}
-			}
-			else if (this.matchKeyword('const') || this.matchKeyword('let')) {
+				}/*»*/
+			}/*»*/
+			else if (this.matchKeyword('const') || this.matchKeyword('let')) {/*«*/
 				init = this.createNode();
 				var kind = this.nextToken().value;
-				if (!this.context.strict && this.lookahead.value === 'in') {
+				if (!this.context.strict && this.lookahead.value === 'in') {/*«*/
 					init = this.finalize(init, new Node.Identifier(kind));
 					this.nextToken();
 					left = init;
 					right = this.parseExpression();
 					init = null;
-				}
-				else {
+				}/*»*/
+				else {/*«*/
 					var previousAllowIn = this.context.allowIn;
 					this.context.allowIn = false;
 					var declarations = this.parseBindingList(kind, { inFor: true });
 					this.context.allowIn = previousAllowIn;
-					if (declarations.length === 1 && declarations[0].init === null && this.matchKeyword('in')) {
+					if (declarations.length === 1 && declarations[0].init === null && this.matchKeyword('in')) {/*«*/
 						init = this.finalize(init, new Node.VariableDeclaration(declarations, kind));
 						this.nextToken();
 						left = init;
 						right = this.parseExpression();
 						init = null;
-					}
-					else if (declarations.length === 1 && declarations[0].init === null && this.matchContextualKeyword('of')) {
+					}/*»*/
+					else if (declarations.length === 1 && declarations[0].init === null && this.matchContextualKeyword('of')) {/*«*/
 						init = this.finalize(init, new Node.VariableDeclaration(declarations, kind));
 						this.nextToken();
 						left = init;
 						right = this.parseAssignmentExpression();
 						init = null;
 						forIn = false;
-					}
-					else {
+					}/*»*/
+					else {/*«*/
 						this.consumeSemicolon();
 						init = this.finalize(init, new Node.VariableDeclaration(declarations, kind));
-					}
-				}
-			}
-			else {
+					}/*»*/
+				}/*»*/
+			}/*»*/
+			else {/*«*/
 				var initStartToken = this.lookahead;
 				var previousAllowIn = this.context.allowIn;
 				this.context.allowIn = false;
 				init = this.inheritCoverGrammar(this.parseAssignmentExpression);
 				this.context.allowIn = previousAllowIn;
-				if (this.matchKeyword('in')) {
+				if (this.matchKeyword('in')) {/*«*/
 					if (!this.context.isAssignmentTarget || init.type === Syntax.AssignmentExpression) {
 						this.tolerateError(Messages.InvalidLHSInForIn);
 					}
@@ -3577,8 +3601,8 @@ const Parser = class {
 					left = init;
 					right = this.parseExpression();
 					init = null;
-				}
-				else if (this.matchContextualKeyword('of')) {
+				}/*»*/
+				else if (this.matchContextualKeyword('of')) {/*«*/
 					if (!this.context.isAssignmentTarget || init.type === Syntax.AssignmentExpression) {
 						this.tolerateError(Messages.InvalidLHSInForLoop);
 					}
@@ -3588,8 +3612,8 @@ const Parser = class {
 					right = this.parseAssignmentExpression();
 					init = null;
 					forIn = false;
-				}
-				else {
+				}/*»*/
+				else {/*«*/
 					if (this.match(',')) {
 						var initSeq = [init];
 						while (this.match(',')) {
@@ -3599,10 +3623,10 @@ const Parser = class {
 						init = this.finalize(this.startNode(initStartToken), new Node.SequenceExpression(initSeq));
 					}
 					this.expect(';');
-				}
-			}
-		}
-		if (typeof left === 'undefined') {
+				}/*»*/
+			}/*»*/
+		}//»
+		if (typeof left === 'undefined') {/*«*/
 			if (!this.match(';')) {
 				test = this.parseExpression();
 			}
@@ -3610,19 +3634,19 @@ const Parser = class {
 			if (!this.match(')')) {
 				update = this.parseExpression();
 			}
-		}
+		}/*»*/
 		var body;
-		if (!this.match(')') && this.config.tolerant) {
+		if (!this.match(')') && this.config.tolerant) {/*«*/
 			this.tolerateUnexpectedToken(this.nextToken());
 			body = this.finalize(this.createNode(), new Node.EmptyStatement());
-		}
-		else {
+		}/*»*/
+		else {/*«*/
 			this.expect(')');
 			var previousInIteration = this.context.inIteration;
 			this.context.inIteration = true;
 			body = this.isolateCoverGrammar(this.parseStatement);
 			this.context.inIteration = previousInIteration;
-		}
+		}/*»*/
 		return (typeof left === 'undefined') ?
 			this.finalize(node, new Node.ForStatement(init, test, update, body)) :
 			forIn ? this.finalize(node, new Node.ForInStatement(left, right, body)) :
@@ -4701,14 +4725,14 @@ const Parser = class {
 	};//»
 	parseAssignmentExpression() {//«
 		var expr;
-		if (!this.context.allowYield && this.matchKeyword('yield')) {
+		if (!this.context.allowYield && this.matchKeyword('yield')) {/*«*/
 			expr = this.parseYieldExpression();
-		}
-		else {
+		}/*»*/
+		else {/*«*/
 			var startToken = this.lookahead;
 			var token = startToken;
 			expr = this.parseConditionalExpression();
-			if (token.type === Identifier_Type && (token.lineNumber === this.lookahead.lineNumber) && token.value === 'async') {
+			if (token.type === Identifier_Type && (token.lineNumber === this.lookahead.lineNumber) && token.value === 'async') {/*«*/
 				if (this.lookahead.type === Identifier_Type || this.matchKeyword('yield')) {
 					var arg = this.parsePrimaryExpression();
 					this.reinterpretExpressionAsPattern(arg);
@@ -4718,14 +4742,14 @@ const Parser = class {
 						async: true
 					};
 				}
-			}
-			if (expr.type === ArrowParameterPlaceHolder || this.match('=>')) {
+			}/*»*/
+			if (expr.type === ArrowParameterPlaceHolder || this.match('=>')) {//«
 				// https://tc39.github.io/ecma262/#sec-arrow-function-definitions
 				this.context.isAssignmentTarget = false;
 				this.context.isBindingElement = false;
 				var isAsync = expr.async;
 				var list = this.reinterpretAsCoverFormalsList(expr);
-				if (list) {
+				if (list) {/*«*/
 					if (this.hasLineTerminator) {
 						this.tolerateUnexpectedToken(this.lookahead);
 					}
@@ -4740,12 +4764,12 @@ const Parser = class {
 					var node = this.startNode(startToken);
 					this.expect('=>');
 					var body = void 0;
-					if (this.match('{')) {
+					if (this.match('{')) {/*«*/
 						var previousAllowIn = this.context.allowIn;
 						this.context.allowIn = true;
 						body = this.parseFunctionSourceElements();
 						this.context.allowIn = previousAllowIn;
-					}
+					}/*»*/
 					else {
 						body = this.isolateCoverGrammar(this.parseAssignmentExpression);
 					}
@@ -4762,9 +4786,9 @@ const Parser = class {
 					this.context.allowStrictDirective = previousAllowStrictDirective;
 					this.context.allowYield = previousAllowYield;
 					this.context.await = previousAwait;
-				}
-			}
-			else {
+				}/*»*/
+			}/*»*/
+			else {/*«*/
 				if (this.matchAssign()) {
 					if (!this.context.isAssignmentTarget) {
 						this.tolerateError(Messages.InvalidLHSInAssignment);
@@ -4791,8 +4815,8 @@ const Parser = class {
 					expr = this.finalize(this.startNode(startToken), new Node.AssignmentExpression(operator, expr, right));
 					this.context.firstCoverInitializedNameError = null;
 				}
-			}
-		}
+			}/*»*/
+		}/*»*/
 		return expr;
 	};//»
 	parseExpression() {//«
@@ -4943,14 +4967,14 @@ const Parser = class {
 				case 'const'://«
 					statement = this.parseLexicalDeclaration({ inFor: false });
 					break;//»
+				case 'let'://«
+					statement = this.isLexicalDeclaration() ? this.parseLexicalDeclaration({ inFor: false }) : this.parseStatement();
+					break;//»
 				case 'function'://«
 					statement = this.parseFunctionDeclaration();
 					break;//»
 				case 'class'://«
 					statement = this.parseClassDeclaration();
-					break;//»
-				case 'let'://«
-					statement = this.isLexicalDeclaration() ? this.parseLexicalDeclaration({ inFor: false }) : this.parseStatement();
 					break;//»
 				default://«
 					statement = this.parseStatement();
@@ -4965,30 +4989,6 @@ const Parser = class {
 
 //»
 
-	nextToken() {//«
-		var token = this.lookahead;
-		this.lastMarker.index = this.scanner.index;
-		this.lastMarker.line = this.scanner.lineNumber;
-		this.lastMarker.column = this.scanner.index - this.scanner.lineStart;
-		this.collectComments();
-		if (this.scanner.index !== this.startMarker.index) {
-			this.startMarker.index = this.scanner.index;
-			this.startMarker.line = this.scanner.lineNumber;
-			this.startMarker.column = this.scanner.index - this.scanner.lineStart;
-		}
-		var next = this.scanner.lex();
-		this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
-		if (next && this.context.strict && next.type === Identifier_Type) {
-			if (this.scanner.isStrictModeReservedWord(next.value)) {
-				next.type = Keyword_Type;
-			}
-		}
-		this.lookahead = next;
-		if (this.config.tokens && next.type !== EOF_Type) {
-			this.tokens.push(this.convertToken(next));
-		}
-		return token;
-	};//»
 	parseModule() {//«
 	// https://tc39.github.io/ecma262/#sec-modules
 		this.context.strict = true;

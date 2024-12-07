@@ -250,7 +250,7 @@ const OPERATOR_TOKS=[//«
 '<<<',
 ];//»
 const OK_OUT_REDIR_TOKS=[">",">>"];
-const OK_IN_REDIR_TOKS=["<","<<","<<<"];
+const OK_IN_REDIR_TOKS=["<","<<","<<<","<<-"];
 const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 
 const HEX_CHARS=[ "a","A","b","B","c","C","d","D","e","E","f","F",...DECIMAL_CHARS_0_to_9 ];
@@ -2107,8 +2107,8 @@ scanOperator(){/*«*/
 	}
 	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
 
-	if (str.match(/[<>]/)) return {t:"r_op", r_op:str};
-	return {t:"c_op", c_op:str, start};
+	if (str.match(/[<>]/)) return {type:"r_op", r_op:str};
+	return {type:"c_op", c_op:str, start};
 
 }/*»*/
 async scanWord(par, env){/*«*/
@@ -2176,7 +2176,7 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	}
 	return _word;
 }/*»*/
-scanNewlines(par, env){/*«*/
+scanNewlines(par, env, heredoc_flag){/*«*/
 
 	let start = this.index;
 	let src = this.source;
@@ -2187,6 +2187,7 @@ scanNewlines(par, env){/*«*/
 	let start_line_start = this.index;
 	while (src[start+iter]==="\n"){
 		iter++;
+		if (heredoc_flag) break;
 	}
 	this.index+=iter;
 	this.lineStart = start_line_start+iter;
@@ -2197,8 +2198,25 @@ scanNewlines(par, env){/*«*/
 	return newlines;
 
 }/*»*/
-
-async lex(){/*«*/
+scanNextLineNot(delim){/*«*/
+	let cur = this.index;
+	let src = this.source;
+	let ln='';
+	let ch = src[cur];
+	while(ch!=="\n"){
+		if (!ch) break;
+		ln+=ch;
+		cur++;
+		ch = src[cur];
+	}
+	this.index = cur+1;
+	if (ln===delim) {
+		return true;
+	}
+	if (this.eof()) return false;
+	return ln;
+}/*»*/
+async lex(heredoc_flag){/*«*/
 
 if (this.eof()) {//«
 	return {
@@ -2215,7 +2233,7 @@ let ch = this.source[this.index];
 
 //We never do this because we are always entering single lines from the interactive terminal
 //or sending them through one-by-one via ScriptCom.
-if (ch==="\n") return this.scanNewlines(null, this.env);
+if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
 
 //if (ch==="\n") this.scanNewlines();
 
@@ -2245,6 +2263,7 @@ constructor(code, opts={}) {//«
 	this.env = opts.env;
 	this.terminal = opts.terminal;
 	this.isInteractive = opts.isInteractive;
+	this.heredocScanner = opts.heredocScanner;
 	this.errorHandler = new ErrorHandler();
 	this.scanner = new Scanner(code, opts, this.errorHandler);
 //	this.isInteractive = opts.isInteractive;
@@ -2266,22 +2285,103 @@ NO async/await in constructors.
 //	this.nextToken();
 }//»
 
-async nextToken() {//«
+async nextToken(heredoc_flag) {//«
 	let token = this.lookahead;
 	this.scanner.scanComments();
-	let next = await this.scanner.lex();
+	let next = await this.scanner.lex(heredoc_flag);
 	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
 	this.lookahead = next;
 	return token;
 };//»
-
+nextLinesUntilDelim(delim){/*«*/
+	let out='';
+	let rv = this.scanner.scanNextLineNot(delim);
+	while (isStr(rv)){
+		out+=rv+"\n";
+		rv = this.scanner.scanNextLineNot(delim);
+	}
+	if (rv===true) return out;
+	return false;
+}/*»*/
 async parse() {//«
 	let toks = [];
-	while (this.lookahead.type !== EOF_Type) {
-		toks.push(this.lookahead);
-		await this.nextToken();
+	let next = this.lookahead;
+	let cur_iohere_tok;
+	let heredocs;
+	let heredoc_num;
+	let cur_heredoc_tok;
+	let cur_heredoc;
+	let interactive = this.isInteractive;
+	while (next.type !== EOF_Type) {
+//If !heredocs && next is "<<" or "<<-", we need to:
+		if (heredocs && isNLs(next)){
+if (interactive){
+throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
+}
+			for (let i=0; i < heredocs.length; i++){
+				let heredoc = heredocs[i];
+				let rv = this.nextLinesUntilDelim(heredoc.delim);
+				if (!isStr(rv)){
+					return {err: "warning: here-document at line ? delimited by end-of-file"}
+				}
+				heredoc.tok.value = rv;
+			}
+this.scanner.index--;
+			heredocs = null;
+		}
+		else if (cur_heredoc_tok){/*«*/
+			if (next.isWord){
+				if (!heredocs) {
+					heredocs = [];
+					heredoc_num = 0;
+				}
+				heredocs.push({tok: cur_heredoc_tok, delim: next.toString()});	
+				cur_heredoc_tok = null;
+			}
+			else{
+				if (isNLs(next)){
+					return "syntax error near unexpected token 'newline'";
+				}
+				else if (next.r_op || next.c_op){
+					return `syntax error near unexpected token '${next.r_op||next.c_op}'`;
+				}
+				else{
+cwarn("Whis this non-NLs or r_op or c_op????");
+					log(next);
+					throw new Error("WUUTTTTTTTTT IZZZZZZZZZ THISSSSSSSSS JKFD^&*$% (see console)");
+				}
+			}
+		}/*»*/
+		else if (next.type==="r_op" && (next.r_op==="<<" || next.r_op==="<<-")){/*«*/
+			toks.push(next);
+			cur_heredoc_tok = next;
+		}/*»*/
+		else {/*«*/
+				toks.push(next);
+		}/*»*/
+		await this.nextToken(!!heredocs);
+		next = this.lookahead;
 	}
-	return {tokens: toks, source: this.scanner.source.join("")};
+	if (heredocs){
+		if (!interactive) return {err: "warning: here-document at line ? delimited by end-of-file"}
+		for (let i=0; i < heredocs.length; i++){
+			let heredoc = heredocs[i];
+			let rv = await this.heredocScanner(heredoc.delim);
+			heredoc.tok.value = rv.join("\n");
+		}
+		heredocs = null;
+	}
+	if (cur_heredoc_tok){
+		return {err: "syntax error near unexpected token 'newline'"};
+	}
+//Just mainly to  allow script names to pass through (since we are currently worrying about
+//parsing strings with many newlines...)
+if (toks.length===1) return {tokens: toks, source: this.scanner.source.join("")};
+
+log(toks);
+
+return {err: `NOT DOING THIS ANYMORE: ${toks.length}`};
+
 };//»
 
 };
@@ -2294,9 +2394,12 @@ parse:async(command_str, opts={})=>{//«
 let parser = new _Parser(command_str.split(""), opts);
 let toks, comstr_out;
 try {
+	let errmess;
 	await parser.nextToken();
-	({tokens: toks, source: comstr_out} = await parser.parse());
+	({err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
+	if (errmess) return errmess;
 	command_str = comstr_out;
+//log(toks);
 //log(`STROUT ${comstr_out}`);
 }
 catch(e){
@@ -2344,8 +2447,9 @@ let pipes = [];
 let pipe = [];
 for (let i=0; i < coms.length; i++){
 	let tok = coms[i];
-	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here
-		if (tok.c_op==="&&"||tok.c_op==="||") {
+//log(tok);
+	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here«
+		if (tok.c_op==="&&"||tok.c_op==="||") {/*«*/
 			if (!coms[i+1]) {
 				if (opts.isInteractive){
 					let rv;
@@ -2357,16 +2461,18 @@ for (let i=0; i < coms.length; i++){
 				return "malformed logic list";
 			}
 			pipes.push({pipe, type: tok.c_op});
-		}
+		}/*»*/
 		else {
 			pipes.push({pipe}, tok);
 		}
 		pipe = [];
-	}
+	}/*»*/
 	else if (!tok.c_op){//Commands and redirects
+//log("WUT1", tok);
 		pipe.push(tok);
 	}
 	else if (pipe.length && coms[i+1]){//noop: This token "must" be a '|'
+//log("WUT2", coms[i+1]);
 	}
 	else {
 		if (opts.isInteractive && !coms[i+1]){
@@ -2403,7 +2509,6 @@ for (let tok of pipes){
 if (statement.length) statements.push({statement});
 
 //»
-
 return statements;
 
 }//»
@@ -3433,7 +3538,8 @@ return words;
 }
 return tok;
 };/*»*/
-const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {//«
+const get_stdin_lines = async(in_redir, term, haveSubLines) => {//«
+//const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {
 let stdin;
 let red = in_redir[0];
 let val = in_redir[1];
@@ -3455,6 +3561,7 @@ else if (red==="<<<"){
 	stdin = [val];
 }
 else if (red==="<<"){
+/*
 	if (!heredocScanner){
 		if (haveSubLines){
 			return "heredocs are not implemented within command substititions";
@@ -3463,12 +3570,8 @@ else if (red==="<<"){
 			return "no 'heredocScanner' was found! (this error should not exist djkljk*&*[}#$JKF)";
 		}
 	}
-	if (heredocScanner){
-		stdin = await heredocScanner(val);
-	}
-	else{
-cwarn("NO HEREDOC SCANNER!!!");
-	}
+*/
+	return val.split("\n");
 }
 return stdin;
 }/*»*/
@@ -3555,7 +3658,7 @@ command_str = command_str.replace(/^ +/,"");
 
 let statements;
 try{
-	statements = await Parser.parse(command_str, {env, terminal: term, isInteractive});
+	statements = await Parser.parse(command_str, {env, terminal: term, isInteractive, heredocScanner});
 }
 catch(e){
 	return terr("sh: "+e.message);
@@ -3714,20 +3817,25 @@ if (tok.isWord) {
 	}
 }
 }//»
-
 for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
 	if (tok instanceof Word) tok.tildeExpansion();
 }//»
-
 for (let k=0; k < arr.length; k++){//redirs«
 	let tok = arr[k];
-	let typ = tok.t;
+	let typ = tok.type;
 	let val = tok[typ];
 	if (typ==="r_op"){
 		let rop = tok.r_op;
 		if (!OK_REDIR_TOKS.includes(rop)) {
 			return terr(`sh: unsupported operator: '${tok.r_op}'`);
+		}
+		if (rop==="<<"||rop=="<<-"){
+			arr.splice(k, 1);
+			k--;
+			val=null;
+			in_redir = [rop, tok.value];
+			continue;
 		}
 		let tok2 = arr[k+1];
 		if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
@@ -3740,7 +3848,6 @@ for (let k=0; k < arr.length; k++){//redirs«
 		else return terr(`sh: unsupported operator: '${rop}'`);
 	}
 }//»
-
 for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
@@ -3750,14 +3857,12 @@ if (tok.isWord) {
 }
 
 }//»
-
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
 		await tok.expandSubs(this, term);
 	}
 }//»
-
 for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
@@ -3772,7 +3877,6 @@ for (let k=0; k < arr.length; k++){//field splitting«
 		k+=words.length-1;
 	}
 }//»
-
 for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
 
 let tok = arr[k];
@@ -3789,13 +3893,13 @@ if (tok.isWord) {
 }
 
 }//»
-
 for (let k=0; k < arr.length; k++){//«quote removal
 	let tok = arr[k];
 	if (tok.isWord) {
 		quote_removal(tok);
 	}
 }//»
+
 /*»*/
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
@@ -4044,7 +4148,10 @@ cerr(e);
 
 		let stdin;
 		if (in_redir) {
-			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
+//The only point for a heredocScanner is during tokenization while in interactive mode
+//So there is NO POINT for it here!!!
+//			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
+			stdin = await get_stdin_lines(in_redir, term, !!subLines);
 			if (isStr(stdin)){
 				pipeline.push(make_sh_error_com(comword, stdin, com_env));
 				last_exit_code = E_ERR;
@@ -5673,16 +5780,16 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 	for (let k in ENV){
 		env[k]=ENV[k];
 	}
-	let heredocScanner=async(which)=>{
+	let heredocScanner=async(eof_tok)=>{
 		let doc = [];
 //		sleeping = false;
 		let didone = false;
 		let prmpt="> ";
-		let prmpt_len = prmpt.length;
 		let rv;
 		while (true){
+//log("SCAN", eof_tok);
 			let rv = await this.read_line(prmpt);
-			if (rv===which) break;
+			if (rv===eof_tok) break;
 			doc.push(rv);
 			didone = true;
 		}

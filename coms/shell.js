@@ -8,6 +8,13 @@ a "real" implementation of bash (aka Shell Command Language: https://pubs.opengr
 »*/
 /*«Grammar 1
 
+Everything to be constructed is *EITHER* Object-like or Array-like
+- Object-like things are composed of definite numbers of different parts
+- Array-like things are composed of arbitrary sequences of the same parts, and can
+  be seen from their self-referential descriptions.
+
+In other words, nothing can be *BOTH* (or *NEITHER*) Object-like or Array-like.
+
 //   The grammar symbols«
 
 %token  WORD
@@ -84,8 +91,8 @@ pipe_sequence    :                             command//«
 //»
 //Command«
 command          : simple_command//«
-                 | compound_command
                  | compound_command redirect_list
+                 | compound_command
                  | function_definition
                  ;//»
 compound_command : brace_group//«
@@ -97,6 +104,7 @@ compound_command : brace_group//«
                  | until_clause
                  ;//»
 //»
+//Compound Commands«
 //Compound List (A List that can also be separated by newline)«
 compound_list    : linebreak term//«
                  | linebreak term separator
@@ -168,6 +176,7 @@ brace_group      : Lbrace compound_list Rbrace//«
 do_group         : Do compound_list Done           // Apply rule 6«
                  ;//»
 //»
+//»
 //Simple Command«
 simple_command   : cmd_prefix cmd_word cmd_suffix
                  | cmd_prefix cmd_word
@@ -175,21 +184,6 @@ simple_command   : cmd_prefix cmd_word cmd_suffix
                  | cmd_name cmd_suffix
                  | cmd_name
                  ;
-//»
-//Basic«
-wordlist         : wordlist WORD//«
-                 |          WORD
-                 ;//»
-name             : NAME                     // Apply rule 5«
-                 ;//»
-in               : In                       // Apply rule 6«
-                 ;//»
-fname            : NAME                            // Apply rule 8«
-                 ;//»
-cmd_name         : WORD                   // Apply rule 7a«
-                 ;//»
-cmd_word         : WORD                   // Apply rule 7b«
-                 ;//»
 cmd_prefix       :            io_redirect//«
                  | cmd_prefix io_redirect
                  |            ASSIGNMENT_WORD
@@ -199,6 +193,21 @@ cmd_suffix       :            io_redirect//«
                  | cmd_suffix io_redirect
                  |            WORD
                  | cmd_suffix WORD
+                 ;//»
+//»
+//Basic«
+in               : In                       // Apply rule 6«
+                 ;//»
+wordlist         : wordlist WORD//«
+                 |          WORD
+                 ;//»
+name             : NAME                     // Apply rule 5«
+                 ;//»
+fname            : NAME                            // Apply rule 8«
+                 ;//»
+cmd_name         : WORD                   // Apply rule 7a«
+                 ;//»
+cmd_word         : WORD                   // Apply rule 7b«
                  ;//»
 redirect_list    :               io_redirect//«
                  | redirect_list io_redirect
@@ -301,8 +310,8 @@ sequential_sep   : ';' linebreak//«
                    |  <SIMPLE-COMMAND> <SIMPLE-COMMAND-ELEMENT>
 
 <COMMAND> ::=  <SIMPLE-COMMAND>
-            |  <SHELL-COMMAND>
             |  <SHELL-COMMAND> <REDIRECTION-LIST>
+            |  <SHELL-COMMAND>
 
 <SHELL-COMMAND> ::=  <FOR-COMMAND>
                   |  <CASE-COMMAND>
