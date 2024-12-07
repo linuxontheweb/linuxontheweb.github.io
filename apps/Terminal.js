@@ -1,5 +1,17 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
+const MAX_TOKS_TO_PASS_THROUGH=5;
+/*Allow up this many tokens to send through the old parsing and execution stuff, so: 
+$ ./some_script.sh
+  ...and:
+$ vim some_script.sh
+  ...still works, but not not:
+$ echo 1 2
+
+The point is to do the "real" parsing (using LALR, etc) of whatever craziness
+might be in files like "some_script.sh".
+
+*/
 /*«Notes*/
 /*12/5/24: An example of the weird case of Arrays vs Strings«
 1) @WPRLKUT, we are calling make_sh_error_com(comword, `command not found`, com_env),
@@ -2263,6 +2275,7 @@ constructor(code, opts={}) {//«
 	this.env = opts.env;
 	this.terminal = opts.terminal;
 	this.isInteractive = opts.isInteractive;
+	this.isContinue = opts.isContinue;
 	this.heredocScanner = opts.heredocScanner;
 	this.errorHandler = new ErrorHandler();
 	this.scanner = new Scanner(code, opts, this.errorHandler);
@@ -2303,6 +2316,77 @@ nextLinesUntilDelim(delim){/*«*/
 	if (rv===true) return out;
 	return false;
 }/*»*/
+async compile(){/*«*/
+/*If interative and a line ends w/ "|" , "&&" or "||" (or something w/compund commands):«
+
+Examples of parse-level continuations:
+$ echo hi | 		# need full pipeline
+$ echo hi && 		# need full and_or
+$ if 				# need compound_list
+$ blah() 			# need function_body
+$ ( 				# need compound_list
+$ { 				# need compound_list
+
+Get another line from the terminal, and do a "sub parser" (with an 'isContinue' flag) 
+that returns the flat list of tokens, rather than calling another "compile":
+
+let continue_str = await this.terminal.read_line("> ");
+
+let parser = new _Parser(continue_str.split(""), {
+	terminal: this.terminal,
+	heredocScanner: this.heredocScanner,
+	env: opts.env,
+	isInteractive: true,
+	isContinue: true,
+});
+let newtoks, comstr_out;
+try {
+	let errmess;
+	await parser.nextToken();
+	({err: errmess, tokens: newtoks, source: comstr_out} = await parser.parse());
+	if (errmess) return errmess;
+//	command_str = comstr_out;
+	this.tokens = this.tokens.concat(newtoks);
+	toks = this.tokens;
+}
+catch(e){
+	cerr(e);
+	return e.message;
+}
+
+
+»*/
+cwarn("COMPILE");
+
+/*
+let toks = this.tokens;
+let tok = toks.shift();
+while(tok){
+if (isNLs(tok)){
+cwarn("NL");
+	tok = toks.shift();
+	while (isNLs(tok)) {
+		tok = toks.shift();
+	}
+}
+else {
+if (tok.isWord){
+log(tok.toString());
+}
+else{
+if (tok.isHeredoc){
+cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
+}
+else {
+cwarn(tok[tok.type]);
+}
+}
+	tok = toks.shift();
+}
+}
+*/
+
+}/*»*/
 async parse() {//«
 	let toks = [];
 	let next = this.lookahead;
@@ -2314,7 +2398,7 @@ async parse() {//«
 	let interactive = this.isInteractive;
 	while (next.type !== EOF_Type) {
 //If !heredocs && next is "<<" or "<<-", we need to:
-		if (heredocs && isNLs(next)){
+		if (heredocs && isNLs(next)){/*«*/
 if (interactive){
 throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
 }
@@ -2326,19 +2410,20 @@ throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
 				}
 				heredoc.tok.value = rv;
 			}
-this.scanner.index--;
+			this.scanner.index--;
 			heredocs = null;
-		}
+		}/*»*/
 		else if (cur_heredoc_tok){/*«*/
-			if (next.isWord){
+			if (next.isWord){/*«*/
 				if (!heredocs) {
 					heredocs = [];
 					heredoc_num = 0;
 				}
+				cur_heredoc_tok.delim = next.toString();
 				heredocs.push({tok: cur_heredoc_tok, delim: next.toString()});	
 				cur_heredoc_tok = null;
-			}
-			else{
+			}/*»*/
+			else{/*«*/
 				if (isNLs(next)){
 					return "syntax error near unexpected token 'newline'";
 				}
@@ -2350,11 +2435,12 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 					log(next);
 					throw new Error("WUUTTTTTTTTT IZZZZZZZZZ THISSSSSSSSS JKFD^&*$% (see console)");
 				}
-			}
+			}/*»*/
 		}/*»*/
 		else if (next.type==="r_op" && (next.r_op==="<<" || next.r_op==="<<-")){/*«*/
 			toks.push(next);
 			cur_heredoc_tok = next;
+			cur_heredoc_tok.isHeredoc = true;
 		}/*»*/
 		else {/*«*/
 				toks.push(next);
@@ -2362,7 +2448,7 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		await this.nextToken(!!heredocs);
 		next = this.lookahead;
 	}
-	if (heredocs){
+	if (heredocs){/*«*/
 		if (!interactive) return {err: "warning: here-document at line ? delimited by end-of-file"}
 		for (let i=0; i < heredocs.length; i++){
 			let heredoc = heredocs[i];
@@ -2370,43 +2456,22 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 			heredoc.tok.value = rv.join("\n");
 		}
 		heredocs = null;
-	}
-	if (cur_heredoc_tok){
+	}/*»*/
+	if (cur_heredoc_tok){/*«*/
 		return {err: "syntax error near unexpected token 'newline'"};
-	}
+	}/*»*/
 //Just mainly to  allow script names to pass through (since we are currently worrying about
 //parsing strings with many newlines...)
-if (toks.length<3) return {tokens: toks, source: this.scanner.source.join("")};
 
-//log(toks);
 let len = toks.length;
-let tok = toks.shift();
-while(tok){
-if (isNLs(tok)){
-log("NL");
-	tok = toks.shift();
-	while (isNLs(tok)) {
-		tok = toks.shift();
-	}
-}
-else {
-if (tok.isWord){
-log(tok.toString());
-}
-else{
-if (tok.r_op=="<<"){
-cwarn("HEREDOC");
-log(tok.value)
-}
-else {
-cwarn(tok[tok.type]);
-}
-}
-	tok = toks.shift();
-}
-}
+//Or if we are doing a "sub parse"
+if (this.isContinue || len<=MAX_TOKS_TO_PASS_THROUGH) return {tokens: toks, source: this.scanner.source.join("")};
 
-return {err: `Parse this many tokens: ${len}`};
+this.tokens = toks;
+await this.compile();
+
+
+return {err: `found ${len} tokens (MAX_TOKS_TO_PASS_THROUGH == ${MAX_TOKS_TO_PASS_THROUGH})`};
 
 };//»
 
@@ -2425,8 +2490,6 @@ try {
 	({err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
 	if (errmess) return errmess;
 	command_str = comstr_out;
-//log(toks);
-//log(`STROUT ${comstr_out}`);
 }
 catch(e){
 	cerr(e);
