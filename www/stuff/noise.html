@@ -2,11 +2,26 @@
 <head>
 <script>
 
+let is_on = false;
+let ctx, node;
+
 document.onclick=(e)=>{
 
-document.onclick=null;
+//document.onclick=null;
+if (node) {
+	if (is_on){
+		node.disconnect();  
+		document.body.innerHTML = '<center><h1>Click me for noise!</h1></center>'
+	}
+	else{
+		node.connect(ctx.destination);
+		document.body.innerHTML = '<center><h1>Click me to stop</h1></center>'
+	}
+	is_on = !is_on;
+	return;
+}
 
-let ctx = new AudioContext();
+ctx = new AudioContext();
 
 let NOISE_BUF_SECS = 10;
 let samp_rate = ctx.sampleRate;
@@ -24,16 +39,18 @@ for (let i = 0; i < noise_buf_sz; i++) {
 }
 
 
-let node = ctx.createBufferSource();
+node = ctx.createBufferSource();
 node.buffer = buf;
 node.loop=true;
 node.start();
 node.connect(ctx.destination);
 
+is_on = true;
+document.body.innerHTML = '<center><h1>Click me to stop</h1></center>'
 }
 
-
 </script>
+
 </head>
 <body>
 <center><h1>Click me for noise!</h1></center>
