@@ -3,6 +3,7 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
 const MAX_TOKS_TO_PASS_THROUGH=0;
+let PARSER_PASS_THRU_MODE = false;
 /*Allow up this many tokens to send through the old parsing and execution stuff, so: 
 $ ./some_script.sh
   ...and:
@@ -117,11 +118,6 @@ pipeIn(val){
 //let DEBUG = true;
 let USE_ONDEVRELOAD = false;
 
-//let USE_DEVSHELL = true;
-//let USE_DEVSHELL = false;
-//let USE_DEV_PARSER = true;
-//let USE_DEV_PARSER = false;
-//let parser;
 //»
 //Imports«
 
@@ -2705,15 +2701,18 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 
 let len = toks.length;
 //Or if we are doing a "sub parse"
-if (this.isContinue || len<=MAX_TOKS_TO_PASS_THROUGH) return {tokens: toks, source: this.scanner.source.join("")};
+//if (this.isContinue || len<=MAX_TOKS_TO_PASS_THROUGH) return {tokens: toks, source: this.scanner.source.join("")};
+if (this.isContinue || !dev_mode || (dev_mode && PARSER_PASS_THRU_MODE)) return {tokens: toks, source: this.scanner.source.join("")};
 
 this.tokens = toks;
 await this.compile();
+return {tokens:[]};
 
-if (!dev_mode) {
-	return {err: `found ${len} tokens (MAX_TOKS_TO_PASS_THROUGH == ${MAX_TOKS_TO_PASS_THROUGH})`};
-}
-return {tokens: []};
+//return {err: };
+//if (!dev_mode) {
+//	return {err: `found ${len} tokens (MAX_TOKS_TO_PASS_THROUGH == ${MAX_TOKS_TO_PASS_THROUGH})`};
+//}
+//return {tokens: []};
 };//»
 
 };
@@ -7377,6 +7376,9 @@ else if (sym=="d_CAS"){
 
 }
 else if (sym=="s_CA"){
+if (!dev_mode) return;
+PARSER_PASS_THRU_MODE = !PARSER_PASS_THRU_MODE
+do_overlay(`Parser\xa0Pass-Thru:\xa0${PARSER_PASS_THRU_MODE}`);
 /*
 if (!dev_mode){
 cwarn("Not dev_mode");
@@ -7501,6 +7503,7 @@ const init = async(appargs={})=>{
 	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`
 	if(dev_mode){
 		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+		init_prompt+=`\nPass-Thru: ${PARSER_PASS_THRU_MODE}`
 	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
