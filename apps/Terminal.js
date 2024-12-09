@@ -1678,7 +1678,7 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 const Shell = (()=>{
 
-//Parser«
+//Scanner/Parser«
 
 const Parser=(()=>{
 
@@ -1749,14 +1749,7 @@ const isLineTerminator = (cp) => {//«
 	return (cp === 0x0A) || (cp === 0x0D) || (cp === 0x2028) || (cp === 0x2029);
 };//»
 
-const COMPOUND_START_WORDS = [/*«*/
-	"{",
-	"for",
-	"if",
-	"while",
-	"until",
-	"case"
-];/*»*/
+//const COMPOUND_START_WORDS = [
 const COMPOUND_NON_START_WORDS = [/*«*/
 	'then',
 	'else',
@@ -1768,7 +1761,7 @@ const COMPOUND_NON_START_WORDS = [/*«*/
 	'}',
 	'in'
 ];/*»*/
-const ALL_COMPOUND_WORDS = [/*«*/
+const RESERVERD_WORDS = [/*«*/
 	'if',
 	'then',
 	'else',
@@ -1784,6 +1777,14 @@ const ALL_COMPOUND_WORDS = [/*«*/
 	'{',
 	'}',
 	'in'
+];/*»*/
+const RESERVED_START_WORDS = [/*«*/
+	"{",
+	"for",
+	"if",
+	"while",
+	"until",
+	"case"
 ];/*»*/
 
 const Scanner = class {
@@ -2094,9 +2095,15 @@ scanOperator(){/*«*/
 	let src = this.source;
 	let start = this.index;
 	let str = src[start];
+	let obj={};
 	switch(str){
 	case '(':/*«*/
+		obj.isSubStart = true;
+		obj.isComStart = true;
+		++this.index;
+		break;
 	case ')':
+		obj.isSubEnd = true;
 		++this.index;
 		break;/*»*/
 	case '&':/*«*/
@@ -2139,9 +2146,11 @@ scanOperator(){/*«*/
 			else if (src[this.index]==="-"){
 				++this.index;
 				str = "<<-";
+				obj.isHeredoc = true;
 			}
 			else{
 				str="<<";
+				obj.isHeredoc = true;
 			}
 		}
 		break;/*»*/
@@ -2154,7 +2163,9 @@ scanOperator(){/*«*/
 	}
 	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
 
-	let obj = {val: str, isOp: true};
+//	let obj = {val: str, isOp: true};
+	obj.val=str;
+	obj.isOp = true;
 	obj.toString=()=>{
 		return str;
 	};
@@ -2162,10 +2173,12 @@ scanOperator(){/*«*/
 	if (str.match(/[<>]/)) {
 		obj.type="r_op";
 		obj.r_op = str;
+		obj.isRedir = true;
 	}
 	else{
 		obj.type="c_op";
 		obj.c_op = str;
+		obj.isControl = true;
 	}
 	return obj;
 //	if (str.match(/[<>]/)) return {type:"r_op", r_op:str, val: str, isOp: true};
@@ -2189,30 +2202,35 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let start_line_start = this.lineStart;
 	let _word = new Word(start, par, env);
 	let word = _word.val;
+	let is_all_plain_chars = true;
 	while (!this.eof()) {
 		let ch = this.source[this.index];
 		let next1 = this.source[this.index+1];
 		let next2 = this.source[this.index+2];
 		if (ch==="\\"){/*«*/
 			if (!next1 || next1 === "\n") this.throwUnexpectedToken("unsupported line continuation");
+			is_all_plain_chars = false;
 			ch = new String(next1);
 			ch.escaped = true;
 			this.index++;
 			word.push(ch);
 		}/*»*/
 		else if (ch==="$" && next1 === "(" && next2==="("){/*«*/
+			is_all_plain_chars = false;
 			rv = await this.scanComSub(_word, true);
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
 		}/*»*/
 		else if (ch==="$" && next1 === "("){/*«*/
+			is_all_plain_chars = false;
 			rv = await this.scanComSub(_word);
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
 		}/*»*/
 		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){/*«*/
+			is_all_plain_chars = false;
 			rv = await this.scanQuote(_word, ch);
 			if (rv===null) {
 				if (ch=="'"){
@@ -2227,7 +2245,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		}/*»*/
 		else if (ch==="\n"||ch===" "||ch==="\t") break;
 		else if (OPERATOR_CHARS.includes(ch)) {/*«*/
-			if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 			break;
 		}/*»*/
 		else {
@@ -2235,6 +2252,34 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		}
 		this.index++;
 	}
+	if (is_all_plain_chars){/*«*/
+		let wrd = word.join("");
+		if (RESERVERD_WORDS.includes(wrd)) {
+			_word.isRes = true;
+			if (RESERVED_START_WORDS.includes(wrd)) {
+				_word.isResStart = true;
+				_word.isComStart = true;
+			}
+			else{
+				switch(wrd){
+
+				case "fi": _word.isFi=true;break;
+				case "then": _word.isThen=true;break;
+				case "elif": _word.isElif=true;break;
+				case "else": _word.isElse=true;break;
+				case "do": _word.isDo=true;break;
+				case "in": _word.isIn=true;break;
+				case "done": _word.isDone=true;break;
+				case "esac": _word.isEsac=true;break;
+				case "}": _word.isRBrace=true;break;
+				default: 
+cwarn("What is the word below, not RESERVED_START_WORDS or: fi, then. elif, else, do, in , done, esac, } ????");
+log(wrd);
+					this.fatal("WUTTHEHELLISTHISWORD ^&*^$#&^&*$ (see console)");
+				}
+			}
+		}
+	}/*»*/
 	return _word;
 }/*»*/
 scanNewlines(par, env, heredoc_flag){/*«*/
@@ -2450,30 +2495,25 @@ matchAnyWord(vals, tok){/*«*/
 	}
 	return false;
 }/*»*/
-matchCompoundStart(tok){/*«*/
-	return this.matchAnyWord(COMPOUND_START_WORDS,tok);
-}/*»*/
-matchCompoundNonStart(tok){return this.matchAnyWord(COMPOUND_NON_START_WORDS,tok);}
 isCommandStart(){/*«*/
 
 let wrd;
 let tok = this.curTok();
 if (!tok) return false;
+/*If anybody wants to check beyond any newlines, they should have done that themselves
+rather than assuming we would do that here. We are just worried about the current token here.
+*/
 if (isNLs(tok)) return false;
-if (tok.isOp){
-	 if (tok.r_op) return true;
-	if (tok.c_op==="(") return true;
-	return false;
-}
+
+if (tok.isRedir || tok.isSubStart) return true;
+if (tok.isOp) return false;
+
 if (!tok.isWord){
 	this.fatal("WHAT TOKEN NOT NLs AND NOT OP AND NOT WORD????");
 }
+if (this.isResStart) return true;
+if (this.isRes) return false;
 
-if(this.matchCompoundStart(tok)) return true;
-
-if (wrd = this.matchCompoundNonStart(tok)){
-	return false;
-}
 return true;
 
 }/*»*/
@@ -2656,57 +2696,52 @@ async parseCommand(){/*«*/
 let toks = this.tokens;
 let err = this.fatal;
 let tok = toks[this.tokNum];
-//log("parseCommand", tok);
 if (tok.isWord) {/*«*/
-//	let wrd = tok.toString();
 	let wrd;
-	if (wrd = this.matchAnyWord(COMPOUND_START_WORDS, tok)){
-log("WRD", wrd);
-		let f;
-		switch (wrd){
-		case "if":
-			return this.parseIfClause();
-			break;
-		}
-err(`unknown compound word: ${wrd}`);
-//		if (!f) err(`unknown compound word: ${wrd}`);
-//err(`parse compound ${wrd}`);
-
-//		this.tokNum++;
-//		return await f();
-	}
-	else if (wrd = this.matchAnyWord(COMPOUND_NON_START_WORDS, tok)){
+//"{","for","if","while","until","case"
+	if (tok.isRes) {
+		let wrd = tok.toString();
+		if (tok.isResStart) {/*«*/
+			switch (wrd){
+				case "if":
+					return this.parseIfClause();
+					break;
+				case "{":
+					return this.parseBraceGroup();
+					break;
+				case "for":
+					return this.parseForClause();
+					break;
+				case "while":
+					return this.parseWhileClause();
+					break;
+				case "until":
+					return this.parseUntilClause();
+					break;
+				case "case":
+					return this.parseCaseClause();
+					break;
+				default:
+					this.fatal(`unknown reserved 'start' word: ${wrd}`);
+			}
+		}/*»*/
 		this.unexp(wrd);
 	}
+	if (tok.isAssignment) return this.parseSimpleCommand();
 	let tok1 = toks[1];
-	if (tok1 && tok1.c_op==="("){
-		let tok2 = toks[2];
-		if (!tok2) err("syntax error near unexpected token 'newline'");
-		if (!(tok2.c_op===")")) {
-			err(`syntax error near unexpected token '${tok1.toString()}'`);
-		}
-cwarn(`FUNCTION DEF: '${wrd.toString()}'`);
+	if (tok1 && tok1.isSubStart) {
+//Want to ensure a certain level of "simplicity" to function names, i.e. they have
+//no substitutions or newlines (maybe disallow $'...')
+		return this.parseFuncDef();// blah(  or foo  (
 	}
-	else{
-//cwarn(`COMMAND OR ASSIGNMENT: '${tok.toString()}'`);
-//		return 
-		let rv = await this.parseSimpleCommand();
-		rv.type="simple_command";
-		return rv;
-	}
+	return this.parseSimpleCommand();
 }/*»*/
 else if(tok.isOp){/*«*/
-	if (tok.c_op==="("){
-cwarn("SUBSHELL", tok);
-		return;
+	if (tok.isSubStart) return this.parseSubshell();
+	if (tok.isRedir){
+		return this.parseSimpleCommand();
 	}
-	if (tok.r_op){
-//Looks like cmd_pref
-		let rv = await this.parseSimpleCommand();
-		rv.type="simple_command";
-		return rv;
-	}
-	this.fatal(`syntax error near unexpected token: '${tok.c_op}' (UEK)`);
+	this.unexp(tok.c_op);
 }/*»*/
 else{/*«*/
 cwarn("WUD IS THIS BELOW!?!?!?!");
@@ -2983,7 +3018,7 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		else if (next.type==="r_op" && (next.r_op==="<<" || next.r_op==="<<-")){/*«*/
 			toks.push(next);
 			cur_heredoc_tok = next;
-			cur_heredoc_tok.isHeredoc = true;
+//			cur_heredoc_tok.isHeredoc = true;
 		}/*»*/
 		else {/*«*/
 				toks.push(next);
