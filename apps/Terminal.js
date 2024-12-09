@@ -2587,38 +2587,90 @@ logCurTokStr(tokarg){//«
 	log(tok.toString());
 }//»
 async parseTerm(seq_arg){//«
+/*
+In order to return, this is required to positively find a word token that has:
+isRes && !isResStart
+*/
+	let err = this.fatal;
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
-//log("ANDOR", andor);
+log("ANDOR", andor);
 	seq.push(andor);
 	let next = this.curTok();
-	if (!next) return {term: seq};
 
-	let num_hold = this.tokNum;
+let use_sep;
+if (next){
+	if (next.isNLs) use_sep = ";";
+	else if (next.isSeqSep) use_sep = next.val;
+	else this.unexp(next);
+	this.skipNewlines();
+}
+else {
+	if (this.eos()) this.unexpeof();
+//- if this.eos: this.unexpeof()
+	else if (!this.isInteractive) err("WWWWUTTTTTT???????");
+	await this.getMoreTokens();
+	use_sep = ";";
+}
+
+next = this.curTok();
+if (!next) this.unexpeof();
+
+if (this.isCommandStart(next)){
+	seq.push(use_sep);
+}
+else if (next.isRes){
+	return {term: seq};
+}
+else{
+	this.unexp(tok);
+}
+return this.parseTerm(seq);
+
+/*«
+log("NEXT", next);
+
+//	let num_hold = this.tokNum;
+	let num_hold;
 	let use_op;
-	if (next.isSeqSep){
+	if (!next) {
+		if (this.eos()) this.unexpeof()
+		else if (!this.isInteractive) err("WUT IS !this.eos() && !this.isInteractive !?!?!?");
+		else await this.getMoreTokens();
+		use_op = ";";
+	}
+	else if (next.isSeqSep){
 		use_op = next.val;
 		this.tokNum++;
+		this.skipNewlines();
 	}
 	else if(isNLs(next)){
 		use_op = ";";
+		this.skipNewlines();
 	}
 	else{
-		return {term: seq};
+		this.unexp(next);
 	}
-	this.skipNewlines();
 	next = this.curTok();
-//Looking for "then"???
-//log("NEXT", next.toString);
-	if (next && this.isCommandStart(next)){
+	if (!next){
+		if (!this.isInteractive){
+			this.unexpeof();
+		}
+		await this.getMoreTokens();
+		next = this.curTok();
+	}
+	if (this.isCommandStart(next)){
 		seq.push(use_op);
 	}
-	else{
+	else if (next.isRes){
 		this.tokNum = num_hold;
-//log("RETURN", seq);
 		return {term: seq};
 	}
+	else{
+		this.unexp(next);
+	}
 	return this.parseTerm(seq);
+»*/
 }//»
 async parseCompoundList(){//«
 	let err = this.fatal;
@@ -2636,6 +2688,7 @@ async parseCompoundList(){//«
 	let term = await this.parseTerm();
 	let next = this.curTok();
 	if (!next) return {compound_list: term}
+log(next);
 	if (next.isSeqSep){
 		term.term.push(next.val);
 		this.tokNum++;
@@ -2674,14 +2727,47 @@ async parseDoGroup(){//«
 }//»
 async parseBraceGroup(){//«
 }//»
-async parseWhileClause(){//«
-}//»
-async parseUntilClause(){//«
-}//»
 async parseCaseClause(){//«
 }//»
 
+async parseUntilClause(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isUntil)){
+		err(`'until' token not found!`);
+	}
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+log(tok);
+	if (!(tok && tok.isDo)){
+		this.unexp(tok);
+	}
+	let do_group = await this.parseDoGroup();
+	return {until_clause: {condition: list, do_group}};
+}//»
+
+async parseWhileClause(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isWhile)){
+		err(`'while' token not found!`);
+	}
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+//log(list);
+///*
+	tok = this.curTok();
+	if (!(tok && tok.isDo)){
+		this.unexp(tok);
+	}
+	let do_group = await this.parseDoGroup();
+	return {while_clause: {condition: list, do_group}};
+//*/
+}//»
+
 async parseForClause(){//«
+
 let err = this.fatal;
 let tok = this.curTok();
 
