@@ -2422,11 +2422,7 @@ haveBang(){//«
 	let tok = this.tokens[this.tokNum];
 	return (tok.isWord && tok.val.length===1 && tok.val[0]==="!");
 }//»
-haveSeqSeq(){
-	let tok = this.tokens[this.tokNum];
-	return (tok && tok.isOp && (tok.val==="&" || tok.val===";"));
-}
-unexp(tok){this.fatal(`syntax error near unexpected token '${tok}'`);}
+unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
 end(){return(this.tokNum===this.numToks);}
 dumpTokens(){//«
 
@@ -2538,18 +2534,26 @@ if (!tok.isWord){
 this.badTokenLogger(tok, "WHAT TOKEN IS NOT NLs, OP, or WORD???");
 }
 //We have a reserved start word token like "if" or "{"
-if (this.isResStart) return true;
+if (tok.isResStart) return true;
 //All other reserved words like "fi" or "}" are bad
-if (this.isRes) return false;
+if (tok.isRes) return false;
 
 //Any other word (including assignments) are good
 return true;
 
 }//»
-
+logCurTokStr(tokarg){//«
+	let tok = tokarg || this.curTok();
+	if (!tok){
+	cerr("No next token");
+	return;
+	}
+	log(tok.toString());
+}//»
 async parseTerm(seq_arg){//«
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
+//log("ANDOR", andor);
 	seq.push(andor);
 	let next = this.curTok();
 	if (!next) return {term: seq};
@@ -2559,18 +2563,23 @@ async parseTerm(seq_arg){//«
 	if (next.isSeqSep){
 		use_op = next.val;
 		this.tokNum++;
-		this.skipNewlines();
 	}
 	else if(isNLs(next)){
 		use_op = ";";
-		this.skipNewlines();
 	}
+	else{
+		return {term: seq};
+	}
+	this.skipNewlines();
 	next = this.curTok();
+//Looking for "then"???
+//log("NEXT", next.toString);
 	if (next && this.isCommandStart(next)){
 		seq.push(use_op);
 	}
 	else{
 		this.tokNum = num_hold;
+//log("RETURN", seq);
 		return {term: seq};
 	}
 	return this.parseTerm(seq);
@@ -2587,11 +2596,10 @@ async parseCompoundList(){//«
 	else if (this.eos()){
 		err(`syntax error: unexpected end of file`);
 	}
+
 	let term = await this.parseTerm();
-cwarn("COMPOUND LIST!!!");
-log(term);
 	let next = this.curTok();
-	if (!next) return {compount_list: term}
+	if (!next) return {compound_list: term}
 	if (next.isSeqSep){
 		term.term.push(next.val);
 		this.tokNum++;
@@ -2603,7 +2611,7 @@ log(term);
 		err(`could not find ";", "&" or <newlines> to complete the compound list!`);
 	}
 	this.skipNewlines();
-	return {compount_list: term};
+	return {compound_list: term};
 }//»
 
 async parseFuncDef(){//«
@@ -2620,6 +2628,7 @@ async parseUntilClause(){//«
 }//»
 async parseCaseClause(){//«
 }//»
+
 async parseElsePart(seq_arg){//«
 
 let seq = seq_arg || [];
@@ -2629,10 +2638,9 @@ if (!(tok && (tok.isElse||tok.isElif))){
 	err(`could not find "elif" or "else"`);
 }
 this.tokNum++;
-this.skipNewlines();
 if (tok.isElse){
 	let else_list = await this.parseCompoundList();
-	return {elif_list: seq, else_list};
+	return {elif_seq: seq, else_list};
 }
 let elif_list = await this.parseCompoundList();
 seq.push(elif_list);
@@ -2641,7 +2649,6 @@ if (!(tok && tok.isThen)){
 	err(`'then' token not found!`);
 }
 this.tokNum++;
-this.skipNewlines();
 let then_list = await this.parseCompoundList();
 tok = this.curTok();
 
@@ -2651,14 +2658,13 @@ else{
 }
 
 if (tok.isElse || tok.isFi){
-	return {elif_list: seq, else_list};
+	return {elif_seq: seq, else_list};
 }
 
 return this.parseElsePart(seq);
 
 }//»
 async parseIfClause(){//«
-
 let err = this.fatal;
 let tok = this.curTok();
 
@@ -2666,28 +2672,33 @@ if (!(tok&&tok.isIf)){
 	err(`'if' token not found!`);
 }
 this.tokNum++;
-this.skipNewlines();
+
+//Is there a this.getMoreTokens in here???
 let if_list = await this.parseCompoundList();
-//log("IF LIST", list);
+//log("IFLIST", if_list);
 tok = this.curTok();
 if (!(tok && tok.isThen)){
 	err(`'then' token not found!`);
 }
 this.tokNum++;
-this.skipNewlines();
 let then_list = await this.parseCompoundList();
 tok = this.curTok();
 if (!(tok && (tok.isFi || tok.isElse || tok.isElif))){
-	err(`could not find "elif", "else" or "fi"`);
+	if (!tok) err(`unexpected EOF while looking for "fi", "elif" or "else"`);
+	this.unexp(tok);
 }
 let else_part;
 if (!tok.isFi){
 	else_part = await this.parseElsePart();
 	tok = this.curTok();
-	if (!(tok&&tok.isFi)){
-		err(`could not find "fi" after the "else part"`);
+	if (!tok){
+		err(`unexpected EOF while looking for "fi"`);
+	}
+	else if (!tok.isFi){
+		this.unexp(tok);
 	}
 }
+//curTok *MUST* be "fi"!?!?
 this.tokNum++;
 return {if_clause: {if_list, then_list, else_part}};
 
@@ -2765,12 +2776,12 @@ log("REDIRECT TO", fname);
 }
 if (!have_comword){
 	if (!pref) err("NO COMWORD && NO PREFIX!?!?");
-	return {prefix: pref};
+	return {simple_command: {prefix: pref}};
 }
 else if (pref){
-	return {prefix: pref, word: have_comword, suffix: suf};
+	return {simple_command: {prefix: pref, word: have_comword, suffix: suf}};
 }
-else return {name: have_comword, suffix: suf};
+else return {simple_command: {name: have_comword, suffix: suf}};
 
 }/*»*/
 async parseCommand(){/*«*/
@@ -2840,7 +2851,7 @@ async parsePipeSequence(seq_arg){/*«*/
 	let com = await this.parseCommand();
 	seq.push(com);
 	let next = this.curTok();
-	if (!next||!next.isOp||next.val!=="|") return seq;
+	if (!next||!next.isOp||next.val!=="|") return {pipe_sequence: seq};
 	this.tokNum++;
 	if (this.eol()){
 		if (this.isInteractive){//refill our tank with new tokens
@@ -2874,7 +2885,7 @@ async parseAndOr(seq_arg){/*«*/
 	if (next && next.isOp && (next.val==="&&"||next.val==="||")){}
 //	if (!next||!next.isOp||!(next.val==="&&"||next.val==="||")) {
 	else {
-		return seq;
+		return {andor: seq};
 	}
 	seq.push(next.val);
 	this.tokNum++;
@@ -2899,10 +2910,10 @@ async parseList(seq_arg){/*«*/
 	seq.push(andor);
 	let next = this.curTok();
 //	if (!next||!next.isOp||next.val!=="&"||next.val!==";") return seq;
-	if (!next||!next.isOp||!(next.val==="&"||next.val===";")) return seq;
+	if (!next||!next.isOp||!(next.val==="&"||next.val===";")) return {list: seq};
 	seq.push(next.val);
 	this.tokNum++;
-	if (this.eol()||this.eos()) return seq;
+	if (this.eol()||this.eos()) return {list: seq};
 	return this.parseList(seq);
 }/*»*/
 async parseCompleteCommand(){/*«*/
@@ -2913,7 +2924,7 @@ async parseCompleteCommand(){/*«*/
 		list.push(next.val);
 		this.tokNum++;
 	}
-	return list;
+	return {complete_command: list};
 }/*»*/
 async parseCompleteCommands(){/*«*/
 	let toks = this.tokens;
@@ -2925,7 +2936,7 @@ async parseCompleteCommands(){/*«*/
 		comp_coms.push(comp_com);
 		this.skipNewlines();
 	}
-	return comp_coms;
+	return {complete_commands: comp_coms};
 }/*»*/
 
 async compile(){/*«*/
@@ -2978,11 +2989,11 @@ if (!this.end()){
 	this.fatal("compilation failed");
 }
 
-//cwarn("COMPCOMS");
+cwarn("COMPCOMS");
 //let str = JSON.stringify(complete_coms, (val)=>{
 //log(val);
 //}, " ");
-//jlog(complete_coms);
+log(complete_coms);
 
 //log(toks);
 //Diagnosis stuff
