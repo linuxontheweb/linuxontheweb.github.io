@@ -2179,6 +2179,7 @@ scanOperator(){/*«*/
 		obj.type="c_op";
 		obj.c_op = str;
 		obj.isControl = true;
+		if (str===";"||str==="&") obj.isSeqSep = true;
 	}
 	return obj;
 //	if (str.match(/[<>]/)) return {type:"r_op", r_op:str, val: str, isOp: true};
@@ -2202,35 +2203,35 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let start_line_start = this.lineStart;
 	let _word = new Word(start, par, env);
 	let word = _word.val;
-	let is_all_plain_chars = true;
+	let is_plain_chars = true;
 	while (!this.eof()) {
 		let ch = this.source[this.index];
 		let next1 = this.source[this.index+1];
 		let next2 = this.source[this.index+2];
-		if (ch==="\\"){/*«*/
+		if (ch==="\\"){//«
 			if (!next1 || next1 === "\n") this.throwUnexpectedToken("unsupported line continuation");
-			is_all_plain_chars = false;
+			is_plain_chars = false;
 			ch = new String(next1);
 			ch.escaped = true;
 			this.index++;
 			word.push(ch);
-		}/*»*/
-		else if (ch==="$" && next1 === "(" && next2==="("){/*«*/
-			is_all_plain_chars = false;
+		}//»
+		else if (ch==="$" && next1 === "(" && next2==="("){//«
+			is_plain_chars = false;
 			rv = await this.scanComSub(_word, true);
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-		}/*»*/
-		else if (ch==="$" && next1 === "("){/*«*/
-			is_all_plain_chars = false;
+		}//»
+		else if (ch==="$" && next1 === "("){//«
+			is_plain_chars = false;
 			rv = await this.scanComSub(_word);
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-		}/*»*/
-		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){/*«*/
-			is_all_plain_chars = false;
+		}//»
+		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){//«
+			is_plain_chars = false;
 			rv = await this.scanQuote(_word, ch);
 			if (rv===null) {
 				if (ch=="'"){
@@ -2242,44 +2243,51 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
-		}/*»*/
+		}//»
 		else if (ch==="\n"||ch===" "||ch==="\t") break;
-		else if (OPERATOR_CHARS.includes(ch)) {/*«*/
+		else if (OPERATOR_CHARS.includes(ch)) {//«
 			break;
-		}/*»*/
+		}//»
 		else {
 			word.push(ch);
 		}
 		this.index++;
 	}
-	if (is_all_plain_chars){/*«*/
+	if (is_plain_chars){//«
 		let wrd = word.join("");
 		if (RESERVERD_WORDS.includes(wrd)) {
 			_word.isRes = true;
 			if (RESERVED_START_WORDS.includes(wrd)) {
 				_word.isResStart = true;
 				_word.isComStart = true;
-			}
-			else{
-				switch(wrd){
 
-				case "fi": _word.isFi=true;break;
-				case "then": _word.isThen=true;break;
-				case "elif": _word.isElif=true;break;
-				case "else": _word.isElse=true;break;
-				case "do": _word.isDo=true;break;
-				case "in": _word.isIn=true;break;
-				case "done": _word.isDone=true;break;
-				case "esac": _word.isEsac=true;break;
-				case "}": _word.isRBrace=true;break;
-				default: 
-cwarn("What is the word below, not RESERVED_START_WORDS or: fi, then. elif, else, do, in , done, esac, } ????");
+			}
+//	if then else elif fi do done case esac while until for { } in
+			switch(wrd){
+
+			case "if": _word.isIf=true;break;
+			case "then": _word.isThen=true;break;
+			case "else": _word.isElse=true;break;
+			case "elif": _word.isElif=true;break;
+			case "fi": _word.isFi=true;break;
+			case "do": _word.isDo=true;break;
+			case "done": _word.isDone=true;break;
+			case "case": _word.isCase=true;break;
+			case "esac": _word.isEsac=true;break;
+			case "while": _word.isWhile=true;break;
+			case "until": _word.isUntil=true;break;
+			case "for": _word.isFor=true;break;
+			case "{": _word.isLBrace=true;break;
+			case "}": _word.isRBrace=true;break;
+			case "in": _word.isIn=true;break;
+			default: 
+cwarn("What is the word below, not RESERVED_WORDS!!!");
 log(wrd);
-					this.fatal("WUTTHEHELLISTHISWORD ^&*^$#&^&*$ (see console)");
-				}
+				this.fatal(`WUTTHEHELLISTHISWORD --->${wrd} <---- ^&*^$#&^&*$ (see console)`);
+
 			}
 		}
-	}/*»*/
+	}//»
 	return _word;
 }/*»*/
 scanNewlines(par, env, heredoc_flag){/*«*/
@@ -2394,16 +2402,32 @@ NO async/await in constructors.
 //	this.scanNextTok();
 }//»
 
-nextLinesUntilDelim(delim){/*«*/
-	let out='';
-	let rv = this.scanner.scanNextLineNot(delim);
-	while (isStr(rv)){
-		out+=rv+"\n";
-		rv = this.scanner.scanNextLineNot(delim);
-	}
-	if (rv===true) return out;
-	return false;
-}/*»*/
+fatal(mess){//«
+throw new Error(mess);
+}//»
+nextTok(){//«
+	this.tokNum++;
+	return this.tokens[this.tokNum];
+}//»
+eol(){//«
+	return (
+		(this.isInteractive && this.tokNum === this.numToks) || 
+		(!this.isInteractive && isNLs(this.tokens[this.tokNum]))
+	)
+}//»
+eos(){//end-of-script«
+	return (!this.isInteractive && this.tokNum === this.numToks);
+}//»
+haveBang(){//«
+	let tok = this.tokens[this.tokNum];
+	return (tok.isWord && tok.val.length===1 && tok.val[0]==="!");
+}//»
+haveSeqSeq(){
+	let tok = this.tokens[this.tokNum];
+	return (tok && tok.isOp && (tok.val==="&" || tok.val===";"));
+}
+unexp(tok){this.fatal(`syntax error near unexpected token '${tok}'`);}
+end(){return(this.tokNum===this.numToks);}
 dumpTokens(){//«
 
 let toks = this.tokens;
@@ -2436,36 +2460,34 @@ cwarn("NL");
 }
 
 }//»
-skipNewlines(){/*«*/
+skipNewlines(){//«
 	let toks = this.tokens;
 	while (isNLs(toks[this.tokNum])){
-//		toks.shift();
 		this.tokNum++;
 	}
-}/*»*/
-fatal(mess){/*«*/
-throw new Error(mess);
-}/*»*/
-nextTok(){/*«*/
-	this.tokNum++;
-	return this.tokens[this.tokNum];
-}/*»*/
-eol(){/*«*/
-	return (
-		(this.isInteractive && this.tokNum === this.numToks) || 
-		(!this.isInteractive && isNLs(this.tokens[this.tokNum]))
-	)
-}/*»*/
-eos(){//end-of-script«
-	return (!this.isInteractive && this.tokNum === this.numToks);
 }//»
-unexp(tok){this.fatal(`syntax error near unexpected token '${tok}'`);}
-end(){return(this.tokNum===this.numToks);}
-haveBang(){/*«*/
-	let tok = this.tokens[this.tokNum];
-	return (tok.isWord && tok.val.length===1 && tok.val[0]==="!");
-}/*»*/
-curTok(){return this.tokens[this.tokNum];}
+
+nextLinesUntilDelim(delim){//«
+	let out='';
+	let rv = this.scanner.scanNextLineNot(delim);
+	while (isStr(rv)){
+		out+=rv+"\n";
+		rv = this.scanner.scanNextLineNot(delim);
+	}
+	if (rv===true) return out;
+	return false;
+}//»
+getNextNonNewlinesTok(){//«
+	let iter=0;
+	let curnum = this.tokNum;
+	let tok = toks[curnum];
+	while (isNLs(tok)){
+		iter++;
+		tok = toks[curnum+iter];
+	}
+	return tok;
+}//»
+curTok(add_num=0){return this.tokens[this.tokNum+add_num];}
 async getNonEmptyLineFromTerminal(){/*«*/
 	let rv;
 	while ((rv = await this.terminal.read_line("> ")).match(/^[\x20\t]*(#.+)?$/)){}
@@ -2489,34 +2511,188 @@ matchWord(val, tok){//«
 	}
 	return val;
 }//»
-matchAnyWord(vals, tok){/*«*/
-	for (let val of vals){
-		if (this.matchWord(val, tok)) return val;
-	}
-	return false;
-}/*»*/
-isCommandStart(){/*«*/
+badTokenLogger(tok, mess){//«
+if (!mess) mess = "FATAL TOKEN!!! (see console)";
+cwarn("HERE IS THE BAD TOKEN BELOW:");
+log(tok);
+this.fatal(mess);
+}//»
+isCommandStart(tok_arg){//«
 
 let wrd;
-let tok = this.curTok();
+let tok = tok_arg || this.curTok();
+//We are at the end, so nothing can start
 if (!tok) return false;
-/*If anybody wants to check beyond any newlines, they should have done that themselves
-rather than assuming we would do that here. We are just worried about the current token here.
-*/
+
+//If anybody wants to check beyond any newlines, they should have done that themselves
+//with this.skipNewlines() rather than assuming we would do that here. We are just 
+//worried about the current token here.
 if (isNLs(tok)) return false;
 
+//All redirections operators and "("
 if (tok.isRedir || tok.isSubStart) return true;
+//Any other operators CANNOT start a command
 if (tok.isOp) return false;
 
 if (!tok.isWord){
-	this.fatal("WHAT TOKEN NOT NLs AND NOT OP AND NOT WORD????");
+this.badTokenLogger(tok, "WHAT TOKEN IS NOT NLs, OP, or WORD???");
 }
+//We have a reserved start word token like "if" or "{"
 if (this.isResStart) return true;
+//All other reserved words like "fi" or "}" are bad
 if (this.isRes) return false;
 
+//Any other word (including assignments) are good
 return true;
 
-}/*»*/
+}//»
+
+async parseTerm(seq_arg){//«
+	let seq = seq_arg || [];
+	let andor = await this.parseAndOr();
+	seq.push(andor);
+	let next = this.curTok();
+	if (!next) return {term: seq};
+
+	let num_hold = this.tokNum;
+	let use_op;
+	if (next.isSeqSep){
+		use_op = next.val;
+		this.tokNum++;
+		this.skipNewlines();
+	}
+	else if(isNLs(next)){
+		use_op = ";";
+		this.skipNewlines();
+	}
+	next = this.curTok();
+	if (next && this.isCommandStart(next)){
+		seq.push(use_op);
+	}
+	else{
+		this.tokNum = num_hold;
+		return {term: seq};
+	}
+	return this.parseTerm(seq);
+}//»
+async parseCompoundList(){//«
+	let err = this.fatal;
+	this.skipNewlines();
+	if (this.isInteractive){
+		if (this.eol()){
+//Get more token...
+			await this.getMoreTokens();
+		}
+	}
+	else if (this.eos()){
+		err(`syntax error: unexpected end of file`);
+	}
+	let term = await this.parseTerm();
+cwarn("COMPOUND LIST!!!");
+log(term);
+	let next = this.curTok();
+	if (!next) return {compount_list: term}
+	if (next.isSeqSep){
+		term.term.push(next.val);
+		this.tokNum++;
+	}
+	else if (isNLs(next)){
+		term.term.push(";");
+	}
+	else{
+		err(`could not find ";", "&" or <newlines> to complete the compound list!`);
+	}
+	this.skipNewlines();
+	return {compount_list: term};
+}//»
+
+async parseFuncDef(){//«
+}//»
+async parseSubshell(){//«
+}//»
+async parseBraceGroup(){//«
+}//»
+async parseForClause(){//«
+}//»
+async parseWhileClause(){//«
+}//»
+async parseUntilClause(){//«
+}//»
+async parseCaseClause(){//«
+}//»
+async parseElsePart(seq_arg){//«
+
+let seq = seq_arg || [];
+let err = this.fatal;
+let tok = this.curTok();
+if (!(tok && (tok.isElse||tok.isElif))){
+	err(`could not find "elif" or "else"`);
+}
+this.tokNum++;
+this.skipNewlines();
+if (tok.isElse){
+	let else_list = await this.parseCompoundList();
+	return {elif_list: seq, else_list};
+}
+let elif_list = await this.parseCompoundList();
+seq.push(elif_list);
+tok = this.curTok();
+if (!(tok && tok.isThen)){
+	err(`'then' token not found!`);
+}
+this.tokNum++;
+this.skipNewlines();
+let then_list = await this.parseCompoundList();
+tok = this.curTok();
+
+if (tok&&(tok.isElif || tok.isElse || tok.isFi)){}
+else{
+	err(`could not find "elif", "else" or "fi"`);
+}
+
+if (tok.isElse || tok.isFi){
+	return {elif_list: seq, else_list};
+}
+
+return this.parseElsePart(seq);
+
+}//»
+async parseIfClause(){//«
+
+let err = this.fatal;
+let tok = this.curTok();
+
+if (!(tok&&tok.isIf)){
+	err(`'if' token not found!`);
+}
+this.tokNum++;
+this.skipNewlines();
+let if_list = await this.parseCompoundList();
+//log("IF LIST", list);
+tok = this.curTok();
+if (!(tok && tok.isThen)){
+	err(`'then' token not found!`);
+}
+this.tokNum++;
+this.skipNewlines();
+let then_list = await this.parseCompoundList();
+tok = this.curTok();
+if (!(tok && (tok.isFi || tok.isElse || tok.isElif))){
+	err(`could not find "elif", "else" or "fi"`);
+}
+let else_part;
+if (!tok.isFi){
+	else_part = await this.parseElsePart();
+	tok = this.curTok();
+	if (!(tok&&tok.isFi)){
+		err(`could not find "fi" after the "else part"`);
+	}
+}
+this.tokNum++;
+return {if_clause: {if_list, then_list, else_part}};
+
+}//»
+
 async parseSimpleCommand(){/*«*/
 
 /*Get all 
@@ -2597,100 +2773,6 @@ else if (pref){
 else return {name: have_comword, suffix: suf};
 
 }/*»*/
-async parseTerm(seq_arg, ok_words){/*«*/
-	let seq = seq_arg || [];
-	let andor = await this.parseAndOr();
-	seq.push(andor);
-	let next = this.curTok();
-	if (next){
-		if (isNLs(next)) {
-			seq.push(";");
-		}
-		else if(next.isOp&&(next.val==="&"||next.val===";")){
-			seq.push(next.val);
-			this.tokNum++;
-		}
-		this.skipNewlines();
-	}
-	else return seq;
-
-	next = this.curTok();
-	if (!next) return seq;
-	if (this.isCommandStart()) return this.parseTerm(seq);
-	return seq;
-//if (ok_words)
-//if (this.isNo)
-//this.fatal("RETURN THIS.PARSETERM");
-//cwarn();
-
-/*
-Need to test for whatever works as the start of an andor and then send
-this back through with
-return this.parseTerm(seq);
-or...???
-*/
-
-/*«
-	next = this.curTok();
-	if (!next) return seq;
-	if (next.isOp) {
-		if (next.c_op){
-//If this is a "(", we have a subshell
-if (next.c_op==="("){
-	return this.parseTerm(seq);
-}
-			this.unexp(next.c_op);
-		}
-//A redirection opeator means we have another command
-		return this.parseTerm(seq);
-	}
-	if (!next.isWord){
-cwarn("Here is the next token");
-log(next);
-this.fatal("NOT A WORD OR OP OR NEWLINES (see console)");
-	}
-
-//	if (!next||!next.isOp||!(next.val==="&"||next.val===";")) return seq;
-//	seq.push(next.val);
-//	this.tokNum++;
-//	if (this.eol()||this.eos()) return seq;
-	return this.parseTerm(seq);
-»*/
-
-//*/
-}/*»*/
-async parseCompoundList(ok_words){/*«*/
-
-let err = this.fatal;
-this.skipNewlines();
-if (this.isInteractive){
-	if (this.eol()){
-	//Get more tokens
-		await this.getMoreTokens();
-	}
-}
-else if (this.eos()){
-err(`syntax error: unexpected end of file`);
-}
-let term = await this.parseTerm(null, ok_words);
-//log("TERM", term);
-
-}/*»*/
-async parseIfClause(){/*«*/
-
-let err = this.fatal;
-let tok = this.curTok();
-
-if (!this.matchWord("if", tok)){
-	err(`'if' token not found!`);
-}
-this.tokNum++;
-let list = await this.parseCompoundList(["then"]);
-log("IF LIST", list);
-tok = this.curTok();
-log(tok);
-
-}/*»*/
 async parseCommand(){/*«*/
 
 let toks = this.tokens;
@@ -2750,6 +2832,7 @@ err("WHAT IS THIS NOT NEWLINE OR WORD OR OPERATOR?????????");
 }/*»*/
 
 }/*»*/
+
 async parsePipeSequence(seq_arg){/*«*/
 	let err = this.fatal;
 	let toks = this.tokens;
@@ -2844,6 +2927,7 @@ async parseCompleteCommands(){/*«*/
 	}
 	return comp_coms;
 }/*»*/
+
 async compile(){/*«*/
 //KUYDHYET
 /*If interative and a line ends w/ "|" , "&&" or "||" (or something w/compund commands):«
