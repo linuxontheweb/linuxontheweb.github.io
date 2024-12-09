@@ -2,7 +2,7 @@
 */
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
-const MAX_TOKS_TO_PASS_THROUGH=2;
+const MAX_TOKS_TO_PASS_THROUGH=0;
 //let PARSER_PASS_THRU_MODE = false;
 /*Allow up this many tokens to send through the old parsing and execution stuff, so: 
 $ ./some_script.sh
@@ -2179,7 +2179,14 @@ scanOperator(){/*«*/
 		obj.type="c_op";
 		obj.c_op = str;
 		obj.isControl = true;
-		if (str===";"||str==="&") obj.isSeqSep = true;
+		if (str===";"){
+			obj.isSeqSep = true;
+			obj.isSemi = true;
+		}
+		else if (str==="&") {
+			obj.isSeqSep = true;
+			obj.isAmper = true;
+		}
 	}
 	return obj;
 //	if (str.match(/[<>]/)) return {type:"r_op", r_op:str, val: str, isOp: true};
@@ -2308,6 +2315,7 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 	this.lineNumber+=iter;
 
 	let newlines = new Newlines(start, par, env);
+	newlines.isNLs = true;
 	newlines.newlines = iter;
 	return newlines;
 
@@ -2423,6 +2431,7 @@ haveBang(){//«
 	return (tok.isWord && tok.val.length===1 && tok.val[0]==="!");
 }//»
 unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
+unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
 end(){return(this.tokNum===this.numToks);}
 dumpTokens(){//«
 
@@ -2458,9 +2467,36 @@ cwarn("NL");
 }//»
 skipNewlines(){//«
 	let toks = this.tokens;
+	if (!isNLs(toks[this.tokNum])) return false;
 	while (isNLs(toks[this.tokNum])){
 		this.tokNum++;
 	}
+	return true;
+}//»
+eatSeqSep(){//«
+	this.eatSemicolon();
+	this.skipNewlines();
+}//»
+eatSemicolon(){//«
+	let tok = this.tokens[this.tokNum];
+	if (tok && tok.isSemi){
+		this.tokNum++;
+		return true;
+	}
+	return false;
+}//»
+getWordSeq(){//«
+	let list=[];
+	let toks = this.tokens;
+	let curnum = this.tokNum;
+	let iter = 0;
+	let tok;
+	while((tok = toks[curnum+iter]) && tok.isWord){
+		list.push(tok);
+		iter++;
+	}
+	this.tokNum+=iter;
+	return list;
 }//»
 
 nextLinesUntilDelim(delim){//«
@@ -2618,9 +2654,25 @@ async parseFuncDef(){//«
 }//»
 async parseSubshell(){//«
 }//»
-async parseBraceGroup(){//«
+async parseDoGroup(){//«
+
+	let err = this.fatal;
+	let tok = this.curTok();
+
+	if (!(tok&&tok.isDo)){
+		err(`'do' token not found!`);
+	}
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!(tok && tok.isDone)){
+		err(`'done' token not found!`);
+	}
+	this.tokNum++;
+	return {do_group: list};
+
 }//»
-async parseForClause(){//«
+async parseBraceGroup(){//«
 }//»
 async parseWhileClause(){//«
 }//»
@@ -2629,6 +2681,84 @@ async parseUntilClause(){//«
 async parseCaseClause(){//«
 }//»
 
+async parseForClause(){//«
+let err = this.fatal;
+let tok = this.curTok();
+
+if (!(tok&&tok.isFor)){
+	err(`'for' token not found!`);
+}
+this.tokNum++;
+
+tok = this.curTok();
+if (!tok || tok.isNLs){
+this.unexp("newline");
+}
+if (!tok.isWord){
+	this.unexp(tok);
+}
+let name = tok;
+this.tokNum++;
+tok = this.curTok();
+if (!tok) {//«
+	if (this.eos()){
+		this.unexpeof();
+	}
+	else if (!this.isInteractive){
+		err("NO CURTOK && NOT EOS && NOT INTERACTIVE?!?!?!?!? #(&**()");
+	}
+	else await this.getMoreTokens();
+	tok = this.curTok();
+}//»
+let do_group;
+let in_list;
+if (tok.isDo){//«
+	//for name do_group
+	do_group = await this.parseDoGroup();
+}//»
+else if (tok.isSemi){//«
+	//for name sequential_sep(";") do_group
+	this.tokNum++;
+	this.skipNewlines();
+	if (this.isInteractive && this.eol()) await this.getMoreTokens();
+	tok = this.curTok();
+	if (!tok.isDo){
+		this.unexp(tok);
+	}
+	do_group = await this.parseDoGroup();
+}//»
+else if (tok.isIn){//«
+//for name linebreak(0 newlines) "in" [wordlist] sequential_sep do_group
+	this.tokNum++;
+	in_list = this.getWordSeq();
+	this.eatSeqSep();
+	do_group = await this.parseDoGroup();
+}//»
+else if (!tok.isNLs){//«
+	this.unexp(tok);
+}//»
+else{//«
+	this.skipNewlines();
+	if (this.isInteractive && this.eol()) await this.getMoreTokens();
+	else if (this.eos()) this.unexpeof();
+	tok = this.curTok();
+	if (tok.isDo){//«
+		do_group = await this.parseDoGroup();
+	}//»
+	else if (tok.isIn){//«
+		this.tokNum++;
+		in_list = this.getWordSeq();
+		this.eatSeqSep();
+		do_group = await this.parseDoGroup();
+	}//»
+	else{//«
+		this.unexp(tok);
+	}//»
+}//»
+
+return {for_clause: {name, in_list, do_group}};
+
+}//»
 async parseElsePart(seq_arg){//«
 
 let seq = seq_arg || [];
@@ -2675,7 +2805,6 @@ this.tokNum++;
 
 //Is there a this.getMoreTokens in here???
 let if_list = await this.parseCompoundList();
-//log("IFLIST", if_list);
 tok = this.curTok();
 if (!(tok && tok.isThen)){
 	err(`'then' token not found!`);

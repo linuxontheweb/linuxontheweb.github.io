@@ -4,18 +4,15 @@
 
 let is_on = false;
 let ctx, node;
-
-document.onclick=(e)=>{
-
-//document.onclick=null;
+const do_toggle=e=>{
 if (node) {
 	if (is_on){
 		node.disconnect();  
-		document.body.innerHTML = '<center><h1>Click me for noise!</h1></center>'
+		document.body.innerHTML = '<center><h1>Click or Spacebar for noise!</h1></center>'
 	}
 	else{
 		node.connect(ctx.destination);
-		document.body.innerHTML = '<center><h1>Click me to stop</h1></center>'
+		document.body.innerHTML = '<center><h1>Click or Spacebar to stop</h1></center>'
 	}
 	is_on = !is_on;
 	return;
@@ -46,13 +43,15 @@ node.start();
 node.connect(ctx.destination);
 
 is_on = true;
-document.body.innerHTML = '<center><h1>Click me to stop</h1></center>'
+document.body.innerHTML = '<center><h1>Click or Spacebar to stop</h1></center>'
 }
+document.onkeypress=do_toggle;
+document.onclick=do_toggle;
 
 </script>
 
 </head>
 <body>
-<center><h1>Click me for noise!</h1></center>
+<center><h1>Click or Spacebar for noise!</h1></center>
 </body>
 </html>
