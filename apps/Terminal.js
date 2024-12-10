@@ -2485,6 +2485,11 @@ eatSemicolon(){//«
 	}
 	return false;
 }//»
+pushNewline(){/*«*/
+	let nl = new Newlines();
+	nl.inserted = true;
+	this.tokens.push(nl);
+}/*»*/
 getWordSeq(){//«
 	let list=[];
 	let toks = this.tokens;
@@ -2525,17 +2530,13 @@ async getNonEmptyLineFromTerminal(){/*«*/
 	while ((rv = await this.terminal.read_line("> ")).match(/^[\x20\t]*(#.+)?$/)){}
 	return rv;
 }/*»*/
+
 async getMoreTokens(){/*«*/
 	let rv = await this.getNonEmptyLineFromTerminal();
 	let newtoks = await this.parseContinueStr(rv);
 	if (isStr(newtoks)) this.fatal(newtoks);
-//log(newtoks);
-	let nl = new Newlines();
-//log(nl);
-	nl.inserted = true;
-	newtoks.push(nl);
 	this.tokens = this.tokens.concat(newtoks);
-//log(this.tokens);
+	this.pushNewline();
 	this.numToks = this.tokens.length;
 }/*»*/
 matchWord(val, tok){//«
@@ -2592,7 +2593,25 @@ logCurTokStr(tokarg){//«
 	}
 	log(tok.toString());
 }//»
-async parseList(seq_arg){/*«*/
+eatRedirects(){/*«*/
+	let err = this.fatal;
+	let tok = this.curTok();
+	let list=[];
+	while(tok && tok.isRedir){
+		let rop = tok;
+		this.tokNum++;
+		let fname = toks[this.tokNum];
+		if (!fname) err("syntax error near unexpected token 'newline'");
+		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
+		if (!fname.isChars) err(`wanted characters only in the filename`);
+		list.push({redir: [rop, fname]});
+		this.tokNum++;
+		tok = this.curTok();
+	}
+	return list;
+}/*»*/
+
+async parseList(seq_arg){//«
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
 	seq.push(andor);
@@ -2601,17 +2620,27 @@ async parseList(seq_arg){/*«*/
 	seq.push(next.val);
 	this.tokNum++;
 	return this.parseList(seq);
-}/*»*/
+}//»
 async parseTerm(seq_arg){//«
 	let seq = seq_arg || [];
+
+/*
+If we are interactive here, and we are at the end of the line with tokens,
+shouldn't we insert a NEWLINE at the end???
+*/
+
 	let andor = await this.parseAndOr();
 	seq.push(andor);
 	let tok_num_hold = this.tokNum;
 	let next = this.curTok();
 	let use_sep;
+
 	if (!next){
 		if (this.eos()) this.unexpeof();
-		else this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
+		else {
+log(this.tokens);
+			this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
+		}
 	}
 	if (next.isSeqSep) {
 		use_sep = next.val;
@@ -2668,10 +2697,46 @@ async parseCompoundList(){//«
 	return {compound_list: term};
 }//»
 
+async parseFuncBody(){//«
+let comp_com = await this.parseCommand(true);
+if (comp_com===false){
+	let tok = this.curTok();
+	this.unexp(tok);
+}
+let redirs = this.eatRedirects();
+//Then get the bunch of redirections after it
+return {function_body: {command: comp_com, redirs}};
+}//»
 async parseFuncDef(){//«
+//log("PARSEFUNCDEF!?!?!?");
+	let err=this.fatal;
+	let fname = this.curTok();
+	if (!(fname && fname.isWord)) err("function name token not found");
+	this.tokNum++;
+	let lparen = this.curTok();
+//log("LPAREN", lparen);
+	if (!(lparen && lparen.isSubStart)) err("'(' token not found");
+	this.tokNum++;
+	let rparen = this.curTok();
+	if (!rparen){
+		this.unexp("newline");
+	}
+	if (!rparen.isSubEnd) this.unexp(rparen);
+//log("RPAREN", lparen);
+	this.tokNum++;
+	this.skipNewlines();
+	let tok = this.curTok();
+	if (!tok){
+		if (this.eos()) this.unexpeof();
+		if (!this.isInteractive) err("WTFFFFFF NOTTTTT INNNNTERRACTIVEEEEEEE &*(&*(");
+		await this.getMoreTokens();
+		tok = this.curTok();
+	}
+	let body = await this.parseFuncBody();
+	return {function_def: {name: fname, body}};
+
 }//»
-async parseSubshell(){//«
-}//»
+
 async parseDoGroup(){//«
 
 	let err = this.fatal;
@@ -2689,8 +2754,36 @@ async parseDoGroup(){//«
 	return {do_group: list};
 
 }//»
+
 async parseBraceGroup(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok && tok.isLBrace)) err(`'{' token not found!`);
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!tok) this.unexpeof();
+	if (!tok.isRBrace){
+		this.unexp(tok);
+	}
+	this.tokNum++;
+	return {brace_group: list};
 }//»
+async parseSubshell(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok && tok.isSubStart)) err(`'(' token not found!`);
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!tok) this.unexpeof();
+	if (!tok.isSubEnd){
+		this.unexp(tok);
+	}
+	this.tokNum++;
+	return {subshell: list};
+}//»
+
 async parseCaseClause(){//«
 }//»
 
@@ -2703,14 +2796,21 @@ async parseUntilClause(){//«
 	this.tokNum++;
 	let list = await this.parseCompoundList();
 	tok = this.curTok();
-log(tok);
-	if (!(tok && tok.isDo)){
+	if (!tok) this.unexpeof();
+/*«
+	if (!tok){
+		if (!this.isInteractive) this.unexpeof();
+		await this.getMoreTokens();
+		tok = this.curTok();
+	}
+*»*/
+	if (!tok.isDo){
 		this.unexp(tok);
 	}
 	let do_group = await this.parseDoGroup();
 	return {until_clause: {condition: list, do_group}};
+//*/
 }//»
-
 async parseWhileClause(){//«
 	let err = this.fatal;
 	let tok = this.curTok();
@@ -2719,14 +2819,15 @@ async parseWhileClause(){//«
 	}
 	this.tokNum++;
 	let list = await this.parseCompoundList();
-//log(list);
-///*
 	tok = this.curTok();
+	if (!tok) this.unexpeof();
+/*«
 	if (!tok){
 		if (!this.isInteractive) this.unexpeof();
 		await this.getMoreTokens();
 		tok = this.curTok();
 	}
+»*/
 	if (!tok.isDo){
 		this.unexp(tok);
 	}
@@ -2734,7 +2835,6 @@ async parseWhileClause(){//«
 	return {while_clause: {condition: list, do_group}};
 //*/
 }//»
-
 async parseForClause(){//«
 
 let err = this.fatal;
@@ -2929,11 +3029,11 @@ while(tok){
 log("REDIRECT TO", fname);
 		if (!have_comword){
 			if (!pref) pref = [];
-			pref.push({redir: fname});
+			pref.push({redir: [rop, fname]});
 		}
 		else{
 			if (!suf) suf = [];
-			suf.push({redir: fname});
+			suf.push({redir: [rop, fname]});
 		}
 	}/*»*/
 	else if (tok.isWord){/*«*/
@@ -2968,11 +3068,11 @@ else if (pref){
 else return {simple_command: {name: have_comword, suffix: suf}};
 
 }/*»*/
-async parseCommand(){/*«*/
-
+async parseCommand(force_compound){/*«*/
 let toks = this.tokens;
 let err = this.fatal;
-let tok = toks[this.tokNum];
+let tok = this.curTok();
+//log("PARSECOM", force_compound, tok.toString());
 if (tok.isWord) {/*«*/
 	let wrd;
 //"{","for","if","while","until","case"
@@ -3004,18 +3104,24 @@ if (tok.isWord) {/*«*/
 		}/*»*/
 		this.unexp(wrd);
 	}
-	if (tok.isAssignment) return this.parseSimpleCommand();
-	let tok1 = toks[1];
+	if (tok.isAssignment) {
+		if (force_compound) return false;
+		return this.parseSimpleCommand();
+	}
+	let tok1 = this.curTok(1);
 	if (tok1 && tok1.isSubStart) {
 //Want to ensure a certain level of "simplicity" to function names, i.e. they have
 //no substitutions or newlines (maybe disallow $'...')
+		if (force_compound) return false;
 		return this.parseFuncDef();// blah(  or foo  (
 	}
+	if (force_compound) return false;
 	return this.parseSimpleCommand();
 }/*»*/
 else if(tok.isOp){/*«*/
 	if (tok.isSubStart) return this.parseSubshell();
 	if (tok.isRedir){
+		if (force_compound) return false;
 		return this.parseSimpleCommand();
 	}
 	this.unexp(tok.c_op);
@@ -3067,8 +3173,10 @@ async parseAndOr(seq_arg){/*«*/
 	seq.push(pipe);
 	let next = this.curTok();
 	if (next && next.isOp && (next.val==="&&"||next.val==="||")){}
-//	if (!next||!next.isOp||!(next.val==="&&"||next.val==="||")) {
 	else {
+		if (!next && this.isInteractive) {
+			this.pushNewline();
+		}
 		return {andor: seq};
 	}
 	seq.push(next.val);
