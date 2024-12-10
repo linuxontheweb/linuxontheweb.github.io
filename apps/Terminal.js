@@ -2315,7 +2315,7 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 	this.lineNumber+=iter;
 
 	let newlines = new Newlines(start, par, env);
-	newlines.isNLs = true;
+//	newlines.isNLs = true;
 	newlines.newlines = iter;
 	return newlines;
 
@@ -2529,7 +2529,13 @@ async getMoreTokens(){/*«*/
 	let rv = await this.getNonEmptyLineFromTerminal();
 	let newtoks = await this.parseContinueStr(rv);
 	if (isStr(newtoks)) this.fatal(newtoks);
+//log(newtoks);
+	let nl = new Newlines();
+//log(nl);
+	nl.inserted = true;
+	newtoks.push(nl);
 	this.tokens = this.tokens.concat(newtoks);
+//log(this.tokens);
 	this.numToks = this.tokens.length;
 }/*»*/
 matchWord(val, tok){//«
@@ -2586,28 +2592,48 @@ logCurTokStr(tokarg){//«
 	}
 	log(tok.toString());
 }//»
+
+async parseList(seq_arg){/*«*/
+/*This is wrong because we need to positively identify a command start in order
+to be recursive here.
+*/
+	let seq = seq_arg || [];
+	let andor = await this.parseAndOr();
+	seq.push(andor);
+	let next = this.curTok();
+	if (!(next && next.isSeqSep && this.isCommandStart(this.curTok(1)))) return {list: seq};
+	seq.push(next.val);
+	this.tokNum++;
+	return this.parseList(seq);
+}/*»*/
 async parseTerm(seq_arg){//«
 /*
+This is almost perfectly identical to parseList, except for separator instead of
+separator_op to separate the andor's.
 In order to return, this is required to positively find a word token that has:
 isRes && !isResStart
+We must skip forward to see if we have a command start token and then back up
+(to hold_tok_num), if not... (RIGHT?)
 */
 	let err = this.fatal;
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
-log("ANDOR", andor);
 	seq.push(andor);
 	let next = this.curTok();
 
 let use_sep;
+let hold_tok_num = this.tokNum;
 if (next){
 	if (next.isNLs) use_sep = ";";
-	else if (next.isSeqSep) use_sep = next.val;
+	else if (next.isSeqSep) {
+		use_sep = next.val;
+		this.tokNum++;
+	}
 	else this.unexp(next);
 	this.skipNewlines();
 }
 else {
 	if (this.eos()) this.unexpeof();
-//- if this.eos: this.unexpeof()
 	else if (!this.isInteractive) err("WWWWUTTTTTT???????");
 	await this.getMoreTokens();
 	use_sep = ";";
@@ -2620,57 +2646,14 @@ if (this.isCommandStart(next)){
 	seq.push(use_sep);
 }
 else if (next.isRes){
+	this.tokNum = hold_tok_num;
 	return {term: seq};
 }
 else{
-	this.unexp(tok);
+	this.unexp(next);
 }
 return this.parseTerm(seq);
 
-/*«
-log("NEXT", next);
-
-//	let num_hold = this.tokNum;
-	let num_hold;
-	let use_op;
-	if (!next) {
-		if (this.eos()) this.unexpeof()
-		else if (!this.isInteractive) err("WUT IS !this.eos() && !this.isInteractive !?!?!?");
-		else await this.getMoreTokens();
-		use_op = ";";
-	}
-	else if (next.isSeqSep){
-		use_op = next.val;
-		this.tokNum++;
-		this.skipNewlines();
-	}
-	else if(isNLs(next)){
-		use_op = ";";
-		this.skipNewlines();
-	}
-	else{
-		this.unexp(next);
-	}
-	next = this.curTok();
-	if (!next){
-		if (!this.isInteractive){
-			this.unexpeof();
-		}
-		await this.getMoreTokens();
-		next = this.curTok();
-	}
-	if (this.isCommandStart(next)){
-		seq.push(use_op);
-	}
-	else if (next.isRes){
-		this.tokNum = num_hold;
-		return {term: seq};
-	}
-	else{
-		this.unexp(next);
-	}
-	return this.parseTerm(seq);
-»*/
 }//»
 async parseCompoundList(){//«
 	let err = this.fatal;
@@ -2688,7 +2671,6 @@ async parseCompoundList(){//«
 	let term = await this.parseTerm();
 	let next = this.curTok();
 	if (!next) return {compound_list: term}
-log(next);
 	if (next.isSeqSep){
 		term.term.push(next.val);
 		this.tokNum++;
@@ -3119,18 +3101,6 @@ async parseAndOr(seq_arg){/*«*/
 //	else: We are interactive and have more tokens on this line
 	return await this.parseAndOr(seq);
 }/*»*/
-async parseList(seq_arg){/*«*/
-	let seq = seq_arg || [];
-	let andor = await this.parseAndOr();
-	seq.push(andor);
-	let next = this.curTok();
-//	if (!next||!next.isOp||next.val!=="&"||next.val!==";") return seq;
-	if (!next||!next.isOp||!(next.val==="&"||next.val===";")) return {list: seq};
-	seq.push(next.val);
-	this.tokNum++;
-	if (this.eol()||this.eos()) return {list: seq};
-	return this.parseList(seq);
-}/*»*/
 async parseCompleteCommand(){/*«*/
 	let toks = this.tokens;
 	let list = await this.parseList();
@@ -3512,7 +3482,10 @@ const Sequence = class {/*«*/
 		this.start = start;
 	}
 }/*»*/
-const Newlines = class extends Sequence{}
+const Newlines = class extends Sequence{
+	get isNLs(){ return true; }
+	toString(){ return "newline"; }
+}
 const Word = class extends Sequence{//«
 async expandSubs(shell, term){//«
 
