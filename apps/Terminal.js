@@ -2592,11 +2592,7 @@ logCurTokStr(tokarg){//«
 	}
 	log(tok.toString());
 }//»
-
 async parseList(seq_arg){/*«*/
-/*This is wrong because we need to positively identify a command start in order
-to be recursive here.
-*/
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
 	seq.push(andor);
@@ -2607,53 +2603,40 @@ to be recursive here.
 	return this.parseList(seq);
 }/*»*/
 async parseTerm(seq_arg){//«
-/*
-This is almost perfectly identical to parseList, except for separator instead of
-separator_op to separate the andor's.
-In order to return, this is required to positively find a word token that has:
-isRes && !isResStart
-We must skip forward to see if we have a command start token and then back up
-(to hold_tok_num), if not... (RIGHT?)
-*/
-	let err = this.fatal;
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
 	seq.push(andor);
+	let tok_num_hold = this.tokNum;
 	let next = this.curTok();
-
-let use_sep;
-let hold_tok_num = this.tokNum;
-if (next){
-	if (next.isNLs) use_sep = ";";
-	else if (next.isSeqSep) {
+	let use_sep;
+	if (!next){
+		if (this.eos()) this.unexpeof();
+		else this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
+	}
+	if (next.isSeqSep) {
 		use_sep = next.val;
 		this.tokNum++;
 	}
-	else this.unexp(next);
+	else if (next.isNLs) {
+		use_sep = ";";
+	}
+	else {
+		return {term: seq};
+	}
 	this.skipNewlines();
-}
-else {
-	if (this.eos()) this.unexpeof();
-	else if (!this.isInteractive) err("WWWWUTTTTTT???????");
-	await this.getMoreTokens();
-	use_sep = ";";
-}
-
-next = this.curTok();
-if (!next) this.unexpeof();
-
-if (this.isCommandStart(next)){
+	next = this.curTok();
+	if (!next){
+		if (this.eos()) this.unexpeof();
+		else if (!this.isInteractive) this.fatal("!NEXT && !isInteractive!?!?!?");
+		await this.getMoreTokens();
+		next = this.curTok();
+	}
+	if (!this.isCommandStart(next)){
+		this.tokNum = tok_num_hold;
+		return {term: seq};
+	}
 	seq.push(use_sep);
-}
-else if (next.isRes){
-	this.tokNum = hold_tok_num;
-	return {term: seq};
-}
-else{
-	this.unexp(next);
-}
-return this.parseTerm(seq);
-
+	return this.parseTerm(seq);
 }//»
 async parseCompoundList(){//«
 	let err = this.fatal;
@@ -2693,7 +2676,6 @@ async parseDoGroup(){//«
 
 	let err = this.fatal;
 	let tok = this.curTok();
-
 	if (!(tok&&tok.isDo)){
 		err(`'do' token not found!`);
 	}
@@ -2740,7 +2722,12 @@ async parseWhileClause(){//«
 //log(list);
 ///*
 	tok = this.curTok();
-	if (!(tok && tok.isDo)){
+	if (!tok){
+		if (!this.isInteractive) this.unexpeof();
+		await this.getMoreTokens();
+		tok = this.curTok();
+	}
+	if (!tok.isDo){
 		this.unexp(tok);
 	}
 	let do_group = await this.parseDoGroup();
@@ -3106,7 +3093,8 @@ async parseCompleteCommand(){/*«*/
 	let list = await this.parseList();
 	let next = this.curTok();
 	if (next && next.isOp && (next.val===";"||next.val==="&")){
-		list.push(next.val);
+//log(list);
+		list.list.push(next.val);
 		this.tokNum++;
 	}
 	return {complete_command: list};
