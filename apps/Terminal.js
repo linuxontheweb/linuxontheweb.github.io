@@ -3175,13 +3175,13 @@ if (tok.isElse){
 	return {elif_seq: seq, else_list};
 }
 let elif_list = await this.parseCompoundList();
-seq.push(elif_list);
 tok = this.curTok();
 if (!(tok && tok.isThen)){
 	err(`'then' token not found!`);
 }
 this.tokNum++;
 let then_list = await this.parseCompoundList();
+seq.push({elif: elif_list, then: then_list});
 tok = this.curTok();
 
 if (tok&&(tok.isElif || tok.isElse || tok.isFi)){}
@@ -3189,14 +3189,15 @@ else{
 	err(`could not find "elif", "else" or "fi"`);
 }
 
-if (tok.isElse || tok.isFi){
-	return {elif_seq: seq, else_list};
+if (tok.isFi){
+	return {elif_seq: seq, then_list};
 }
 
 return this.parseElsePart(seq);
 
 }//»
 async parseIfClause(){//«
+
 let err = this.fatal;
 let tok = this.curTok();
 
@@ -3221,6 +3222,7 @@ if (!(tok && (tok.isFi || tok.isElse || tok.isElif))){
 let else_part;
 if (!tok.isFi){
 	else_part = await this.parseElsePart();
+log(else_part);
 	tok = this.curTok();
 	if (!tok){
 		err(`unexpected EOF while looking for "fi"`);
