@@ -1,10 +1,19 @@
-/*@KUYDHYET: _Parser.compile
-*/
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
-const MAX_TOKS_TO_PASS_THROUGH=0;
-//let PARSER_PASS_THRU_MODE = false;
-/*Allow up this many tokens to send through the old parsing and execution stuff, so: 
+/*To keep the integrity of this thing, I want _Parser.end() @SLKIURUJ to be«
+return(this.tokNum===this.numToks);
+... rather than
+return(this.tokNum>=this.numToks);
+
+So we need to make sure that this.numToks is always set to: tokens.length.
+So, whenever we do stuff like pushNewline, we need to update that variable,
+like @LCMJHFUEM.
+
+@DYUTYDHFK: Need to make 'isCommandStart' a property of individual tokens
+»*/
+//@KUYDHYET: _Parser.compile
+const MAX_TOKS_TO_PASS_THROUGH=2;
+/*Allow up this many tokens to send through the old parsing and execution stuff, so: «
 $ ./some_script.sh
   ...and:
 $ vim some_script.sh
@@ -14,7 +23,8 @@ $ echo 1 2
 The point is to do the "real" parsing (using LALR, etc) of whatever craziness
 might be in files like "some_script.sh".
 
-*/
+»*/
+
 /*«Notes*/
 /*12/5/24: An example of the weird case of Arrays vs Strings«
 1) @WPRLKUT, we are calling make_sh_error_com(comword, `command not found`, com_env),
@@ -2099,7 +2109,7 @@ scanOperator(){/*«*/
 	switch(str){
 	case '(':/*«*/
 		obj.isSubStart = true;
-		obj.isComStart = true;
+		obj.isCommandStart = true;
 		++this.index;
 		break;
 	case ')':
@@ -2174,6 +2184,7 @@ scanOperator(){/*«*/
 		obj.type="r_op";
 		obj.r_op = str;
 		obj.isRedir = true;
+		obj.isCommandStart = true;
 	}
 	else{
 		obj.type="c_op";
@@ -2265,9 +2276,11 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		if (RESERVERD_WORDS.includes(wrd)) {
 			_word.isRes = true;
 			if (RESERVED_START_WORDS.includes(wrd)) {
+				_word.isCommandStart = true;
 				_word.isResStart = true;
-				_word.isComStart = true;
-
+			}
+			else{
+				_word.isCommandStart = false;
 			}
 //	if then else elif fi do done case esac while until for { } in
 			switch(wrd){
@@ -2294,7 +2307,14 @@ log(wrd);
 
 			}
 		}
+		else{//Not reserverd word (is_plain_chars == true)
+			_word.isCommandStart = true;
+		}
 	}//»
+	else{
+//is_plain_chars == false
+		_word.isCommandStart = true;
+	}
 	return _word;
 }/*»*/
 scanNewlines(par, env, heredoc_flag){/*«*/
@@ -2432,7 +2452,10 @@ haveBang(){//«
 }//»
 unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
 unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
-end(){return(this.tokNum===this.numToks);}
+end(){
+//SLKIURUJ
+	return(this.tokNum===this.numToks);
+}
 dumpTokens(){//«
 
 let toks = this.tokens;
@@ -2489,6 +2512,8 @@ pushNewline(){/*«*/
 	let nl = new Newlines();
 	nl.inserted = true;
 	this.tokens.push(nl);
+//LCMJHFUEM
+	this.numToks++;
 }/*»*/
 getWordSeq(){//«
 	let list=[];
@@ -2503,6 +2528,7 @@ getWordSeq(){//«
 	this.tokNum+=iter;
 	return list;
 }//»
+curTok(add_num=0){return this.tokens[this.tokNum+add_num];}
 
 nextLinesUntilDelim(delim){//«
 	let out='';
@@ -2524,13 +2550,11 @@ getNextNonNewlinesTok(){//«
 	}
 	return tok;
 }//»
-curTok(add_num=0){return this.tokens[this.tokNum+add_num];}
 async getNonEmptyLineFromTerminal(){/*«*/
 	let rv;
 	while ((rv = await this.terminal.read_line("> ")).match(/^[\x20\t]*(#.+)?$/)){}
 	return rv;
 }/*»*/
-
 async getMoreTokens(){/*«*/
 	let rv = await this.getNonEmptyLineFromTerminal();
 	let newtoks = await this.parseContinueStr(rv);
@@ -2539,25 +2563,15 @@ async getMoreTokens(){/*«*/
 	this.pushNewline();
 	this.numToks = this.tokens.length;
 }/*»*/
-matchWord(val, tok){//«
-	if (!tok) return false;
-	let len = val.length;
-	let tokval = tok.val;
-	if (len !== tokval.length) return false;
-	let iter=0;
-	for (let iter=0; iter < len; iter++){
-		if (tokval[iter]!==val[iter]) return false;
-	}
-	return val;
-}//»
 badTokenLogger(tok, mess){//«
 if (!mess) mess = "FATAL TOKEN!!! (see console)";
 cwarn("HERE IS THE BAD TOKEN BELOW:");
 log(tok);
 this.fatal(mess);
 }//»
+/*
 isCommandStart(tok_arg){//«
-
+//DYUTYDHFK
 let wrd;
 let tok = tok_arg || this.curTok();
 //We are at the end, so nothing can start
@@ -2585,6 +2599,7 @@ if (tok.isRes) return false;
 return true;
 
 }//»
+*/
 logCurTokStr(tokarg){//«
 	let tok = tokarg || this.curTok();
 	if (!tok){
@@ -2613,10 +2628,12 @@ eatRedirects(){/*«*/
 
 async parseList(seq_arg){//«
 	let seq = seq_arg || [];
-	let andor = await this.parseAndOr();
+	let andor = await this.parseAndOr(undefined, 2);
 	seq.push(andor);
 	let next = this.curTok();
-	if (!(next && next.isSeqSep && this.isCommandStart(this.curTok(1)))) return {list: seq};
+	let next1 = this.curTok(1);
+//	if (!(next && next.isSeqSep && this.isCommandStart(this.curTok(1)))) return {list: seq};
+	if (!(next && next.isSeqSep && next1 && next1.isCommandStart)) return {list: seq};
 	seq.push(next.val);
 	this.tokNum++;
 	return this.parseList(seq);
@@ -2629,7 +2646,7 @@ If we are interactive here, and we are at the end of the line with tokens,
 shouldn't we insert a NEWLINE at the end???
 */
 
-	let andor = await this.parseAndOr();
+	let andor = await this.parseAndOr(undefined, 3);
 	seq.push(andor);
 	let tok_num_hold = this.tokNum;
 	let next = this.curTok();
@@ -2660,7 +2677,8 @@ log(this.tokens);
 		await this.getMoreTokens();
 		next = this.curTok();
 	}
-	if (!this.isCommandStart(next)){
+	if (!next.isCommandStart){
+//	if (!this.isCommandStart(next)){
 		this.tokNum = tok_num_hold;
 		return {term: seq};
 	}
@@ -3166,7 +3184,7 @@ async parsePipeline(){/*«*/
 	let pipeline = await this.parsePipeSequence();
 	return {bang , pipeline};
 }/*»*/
-async parseAndOr(seq_arg){/*«*/
+async parseAndOr(seq_arg, which){/*«*/
 	let err = this.fatal;
 	let seq = seq_arg || [];
 	let pipe = await this.parsePipeline();
@@ -3194,7 +3212,7 @@ async parseAndOr(seq_arg){/*«*/
 		err(`syntax error: unexpected end of file`);
 	}
 //	else: We are interactive and have more tokens on this line
-	return await this.parseAndOr(seq);
+	return await this.parseAndOr(seq, 1);
 }/*»*/
 async parseCompleteCommand(){/*«*/
 	let toks = this.tokens;
@@ -3269,11 +3287,6 @@ this.skipNewlines();
 if (!this.end()){
 	this.fatal("compilation failed");
 }
-
-cwarn("COMPCOMS");
-//let str = JSON.stringify(complete_coms, (val)=>{
-//log(val);
-//}, " ");
 log(complete_coms);
 
 //log(toks);
@@ -3419,8 +3432,6 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 
 let len = toks.length;
 //Or if we are doing a "sub parse"
-//if (this.isContinue || len<=MAX_TOKS_TO_PASS_THROUGH) return {tokens: toks, source: this.scanner.source.join("")};
-//if (this.isContinue || !dev_mode || (dev_mode && PARSER_PASS_THRU_MODE && len <= MAX_TOKS_TO_PASS_THROUGH)) {
 if (this.isContinue || !dev_mode || (dev_mode && len <= MAX_TOKS_TO_PASS_THROUGH)) {
 	return {tokens: toks, source: this.scanner.source.join("")};
 }
@@ -8103,26 +8114,6 @@ else if (sym=="d_CAS"){
 
 }
 else if (sym=="s_CA"){
-//if (!dev_mode) return;
-//PARSER_PASS_THRU_MODE = !PARSER_PASS_THRU_MODE
-//do_overlay(`Parser\xa0Pass-Thru:\xa0${PARSER_PASS_THRU_MODE}`);
-/*
-if (!dev_mode){
-cwarn("Not dev_mode");
-return;
-}
-if (parser === Parser){
-parser = DevParser;
-//	this.shell_class = DevShell;
-do_overlay("Using DevParser");
-}
-else {
-//	this.shell_class = Shell;
-parser = Parser;
-do_overlay("Using Parser");
-}
-*/
-//log(this.shell);
 }
 };
 //»
@@ -8230,7 +8221,6 @@ const init = async(appargs={})=>{
 	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`
 	if(dev_mode){
 		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-//		init_prompt+=`\nPass-Thru: ${PARSER_PASS_THRU_MODE}`
 	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
