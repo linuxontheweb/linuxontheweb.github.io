@@ -2452,10 +2452,10 @@ haveBang(){//«
 }//»
 unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
 unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
-end(){
+end(){//«
 //SLKIURUJ
 	return(this.tokNum===this.numToks);
-}
+}//»
 dumpTokens(){//«
 
 let toks = this.tokens;
@@ -2716,14 +2716,15 @@ async parseCompoundList(){//«
 }//»
 
 async parseFuncBody(){//«
-let comp_com = await this.parseCommand(true);
-if (comp_com===false){
-	let tok = this.curTok();
-	this.unexp(tok);
-}
-let redirs = this.eatRedirects();
+//let comp_com = await this.parseCommand(true);
+let comp_com = await this.parseCompoundCommand();
+//if (comp_com===false){
+//	let tok = this.curTok();
+//	this.unexp(tok);
+//}
+//let redirs = this.eatRedirects();
 //Then get the bunch of redirections after it
-return {function_body: {command: comp_com, redirs}};
+return {function_body: {command: comp_com}};
 }//»
 async parseFuncDef(){//«
 //log("PARSEFUNCDEF!?!?!?");
@@ -3086,6 +3087,50 @@ else if (pref){
 else return {simple_command: {name: have_comword, suffix: suf}};
 
 }/*»*/
+async parseCompoundCommand(){//«
+
+let tok = this.curTok();
+let com;
+
+if (tok.isOp){/*«*/
+	if (!tok.isSubStart) this.unexp(tok);;
+	com = await this.parseSubshell();
+}/*»*/
+else if (tok.isResStart){/*«*/
+	let wrd = tok.toString();
+	switch (wrd){
+		case "if":
+			com = await this.parseIfClause();
+			break;
+		case "{":
+			com = await this.parseBraceGroup();
+			break;
+		case "for":
+			com = await this.parseForClause();
+			break;
+		case "while":
+			com = await this.parseWhileClause();
+			break;
+		case "until":
+			com = await this.parseUntilClause();
+			break;
+		case "case":
+			com = await this.parseCaseClause();
+			break;
+		default:
+			this.fatal(`unknown reserved 'start' word: ${wrd} &^*^$#*& HKHJKH`);
+//			this.unexp(tok);
+	}
+}/*»*/
+else{/*«*/
+	this.unexp(tok);
+}/*»*/
+
+let redirs = this.eatRedirects();
+com.redirs = redirs;
+return com;
+
+}//»
 async parseCommand(force_compound){/*«*/
 let toks = this.tokens;
 let err = this.fatal;
@@ -3093,34 +3138,9 @@ let tok = this.curTok();
 //log("PARSECOM", force_compound, tok.toString());
 if (tok.isWord) {/*«*/
 	let wrd;
-//"{","for","if","while","until","case"
 	if (tok.isRes) {
-		let wrd = tok.toString();
-		if (tok.isResStart) {/*«*/
-			switch (wrd){
-				case "if":
-					return this.parseIfClause();
-					break;
-				case "{":
-					return this.parseBraceGroup();
-					break;
-				case "for":
-					return this.parseForClause();
-					break;
-				case "while":
-					return this.parseWhileClause();
-					break;
-				case "until":
-					return this.parseUntilClause();
-					break;
-				case "case":
-					return this.parseCaseClause();
-					break;
-				default:
-					this.fatal(`unknown reserved 'start' word: ${wrd}`);
-			}
-		}/*»*/
-		this.unexp(wrd);
+		if (tok.isResStart) return this.parseCompoundCommand();
+		this.unexp(tok);
 	}
 	if (tok.isAssignment) {
 		if (force_compound) return false;
@@ -3137,7 +3157,8 @@ if (tok.isWord) {/*«*/
 	return this.parseSimpleCommand();
 }/*»*/
 else if(tok.isOp){/*«*/
-	if (tok.isSubStart) return this.parseSubshell();
+//	if (tok.isSubStart) return this.parseSubshell();
+	if (tok.isSubStart) return this.parseCompoundCommand();
 	if (tok.isRedir){
 		if (force_compound) return false;
 		return this.parseSimpleCommand();
