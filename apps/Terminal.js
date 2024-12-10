@@ -12,7 +12,7 @@ like @LCMJHFUEM.
 @DYUTYDHFK: Need to make 'isCommandStart' a property of individual tokens
 »*/
 //@KUYDHYET: _Parser.compile
-const MAX_TOKS_TO_PASS_THROUGH=2;
+const MAX_TOKS_TO_PASS_THROUGH=0;
 /*Allow up this many tokens to send through the old parsing and execution stuff, so: «
 $ ./some_script.sh
   ...and:
@@ -228,7 +228,9 @@ const OPERATOR_CHARS=[//«
 ];//»
 //const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
 const UNSUPPORTED_OPERATOR_CHARS=[];
-const UNSUPPORTED_OPERATOR_TOKS=[/*«*/
+///*
+const UNSUPPORTED_DEV_OPERATOR_TOKS = [];
+const UNSUPPORTED_OPERATOR_TOKS=[//«
 	'&',
 //	'<',
 	';;',
@@ -240,7 +242,8 @@ const UNSUPPORTED_OPERATOR_TOKS=[/*«*/
 	'<>',
 	'<<-',
 //	'<<<'
-];/*»*/
+];//»
+//*/
 const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 //const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 
@@ -2166,12 +2169,26 @@ scanOperator(){/*«*/
 		break;/*»*/
 	case ';':
 		++this.index;
+		if (src[this.index]===";"){
+			this.index++;
+			str=";;";
+			obj.isDSemi = true;
+			obj.isCaseItemEnd = true;
+		}
+		else if (src[this.index]==="&"){
+			this.index++;
+			str=";&";
+			obj.isSemiAnd = true;
+			obj.isCaseItemEnd = true;
+		}
 		break;
 	}
 	if (this.index === start) {
 		this.throwUnexpectedToken(`Unexpected token ${str}`);
 	}
-	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
+	let check_unsupported_toks = dev_mode ? UNSUPPORTED_DEV_OPERATOR_TOKS : UNSUPPORTED_OPERATOR_TOKS;
+	if (check_unsupported_toks.includes(str)) this.throwUnexpectedToken(`unsupported operator '${str}'`);
+//	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
 
 //	let obj = {val: str, isOp: true};
 	obj.val=str;
@@ -2685,7 +2702,7 @@ log(this.tokens);
 	seq.push(use_sep);
 	return this.parseTerm(seq);
 }//»
-async parseCompoundList(){//«
+async parseCompoundList(opts={}){//«
 	let err = this.fatal;
 	this.skipNewlines();
 	if (this.isInteractive){
@@ -2706,6 +2723,9 @@ async parseCompoundList(){//«
 		this.tokNum++;
 	}
 	else if (isNLs(next)){
+		term.term.push(";");
+	}
+	else if (opts.isCase && next.isCaseItemEnd){
 		term.term.push(";");
 	}
 	else{
@@ -2803,7 +2823,215 @@ async parseSubshell(){//«
 	return {subshell: list};
 }//»
 
+async parseCasePatternList(seq_arg){/*«*/
+
+/*«
+4. [Case statement termination]
+When the TOKEN is exactly the reserved word esac, the token identifier for esac
+shall result. Otherwise, the token WORD shall be returned.
+
+pattern_list     :                  WORD    // Apply rule 4
+                 |              '(' WORD    // Do not apply rule 4
+                 | pattern_list '|' WORD    // Do not apply rule 4
+                 ;
+
+If you are just beginning a pattern list without a "(", then "esac" necessarily ends
+the entire case_clause;
+
+»*/
+	let seq = seq_arg || [];
+	let tok = this.curTok();
+	if (!tok) this.unexpeof();
+	if (!seq.length && tok.isEsac) return true;
+
+	if (tok.isSubStart){
+		if (seq.length){
+			this.unexp(tok);
+		}
+		seq.push(tok);
+		this.tokNum++;
+	}
+	tok = this.curTok();
+	if (!tok){
+		this.unexpeof();
+	}
+	if (!tok.isWord){
+		return {pattern_list: seq}
+	}
+	seq.push(tok);
+	this.tokNum++;
+	return this.parseCasePatternList(seq);
+
+}/*»*/
+async parseCaseItem(){//«
+
+//isDSemi
+//DSEMI ";;"
+
+//isSemiAnd
+//SEMI_AND ";&"
+
+//case_item        : pattern_list ')' linebreak     DSEMI linebreak//«
+//                 | pattern_list ')' compound_list DSEMI linebreak
+//                 | pattern_list ')' linebreak     SEMI_AND linebreak
+//                 | pattern_list ')' compound_list SEMI_AND linebreak
+//                 ;//»
+
+//case_item_ns     : pattern_list ')' linebreak//«
+//                 | pattern_list ')' compound_list
+//                 ;//»
+
+let pat_list = await this.parseCasePatternList();
+if (pat_list===true) return true;
+
+let tok = this.curTok();
+if (!tok){
+	this.unexpeof();
+}
+if (!tok.isSubEnd){
+	this.unexp(tok);
+}
+this.tokNum++;
+this.skipNewlines();
+tok = this.curTok();
+if (!tok){
+	if (this.eos()) this.unexpeof();
+	else if (!this.isInteractive) this.fatal("WUT NOT EOS AND NOT INTERACTIVE JFD&*^#(");
+	await this.getMoreTokens();
+	tok = this.curTok();
+}
+
+let comp_list;
+if (tok.isCommandStart){
+//This one can end with a ";;" or ";&"
+	comp_list = await this.parseCompoundList({isCase: true});
+}
+tok = this.curTok();
+if (!tok){
+	this.unexpeof();
+}
+if (tok.isCaseItemEnd){
+	this.tokNum++;
+	this.skipNewlines();
+	return {case_item: {pattern_list: pat_list, compound_list: comp_list, end: tok}};
+}
+return {case_item: {pattern_list: pat_list, compound_list: comp_list}};
+
+}//»
+async parseCaseList(seq_arg){/*«*/
+//case_list        : case_list case_item//«
+//                 |           case_item
+//                 ;//»
+//case_list_ns     : case_list case_item_ns//«
+//                 |           case_item_ns
+//                 ;//»
+let seq = seq_arg || [];
+let item = await this.parseCaseItem();
+if (item===true){//This *must* be a lone "esac"
+	return {case_list: seq};
+}
+else if (!item){
+//This *probably* should already be an error in parseCaseItem
+	this.fatal("WUT NO ITEM GOTTEN FROM PARSECASEITEM?!?!");
+}
+seq.push(item);
+return this.parseCaseList(seq);
+
+}/*»*/
 async parseCaseClause(){//«
+
+//case_clause      : Case WORD linebreak in linebreak case_list    Esac//«
+//                 | Case WORD linebreak in linebreak case_list_ns Esac
+//                 | Case WORD linebreak in linebreak              Esac
+//                 ;//»
+
+/*«
+
+The conditional construct case shall execute the compound-list corresponding to
+the first pattern (see 2.14 Pattern Matching Notation ), if any are present,
+that is matched by the string resulting from the tilde expansion, parameter
+expansion, command substitution, arithmetic expansion, and quote removal of the
+given word. The reserved word "in" shall denote the beginning of the patterns to
+be matched. Multiple patterns with the same compound-list shall be delimited by
+the '|' symbol. The control operator ')' terminates a list of patterns
+corresponding to a given action. The terminated pattern list and the following
+compound-list is called a case statement clause. Each case statement clause,
+with the possible exception of the last, shall be terminated with either ";;"
+or ";&". The case construct terminates with the reserved word esac (case
+reversed).
+
+The format for the case construct is as follows:
+
+case word in
+    [[(] pattern[ | pattern] ... ) compound-list terminator] ...
+    [[(] pattern[ | pattern] ... ) compound-list]
+esac
+
+Where terminator is either ";;" or ";&" and is optional for the last compound-list.
+
+In order from the beginning to the end of the case statement, each pattern that
+labels a compound-list shall be subjected to tilde expansion, parameter
+expansion, command substitution, and arithmetic expansion, and the result of
+these expansions shall be compared against the expansion of word, according to
+the rules described in 2.14 Pattern Matching Notation (which also describes the
+effect of quoting parts of the pattern). After the first match, no more
+patterns in the case statement shall be expanded, and the compound-list of the
+matching clause shall be executed. If the case statement clause is terminated
+by ";;", no further clauses shall be examined. If the case statement clause is
+terminated by ";&", then the compound-list (if any) of each subsequent clause
+shall be executed, in order, until either a clause terminated by ";;" is
+reached and its compound-list (if any) executed or there are no further clauses
+in the case statement. The order of expansion and comparison of multiple
+patterns that label a compound-list statement is unspecified.
+
+Exit Status
+
+The exit status of case shall be zero if no patterns are matched. Otherwise, the exit status shall be the exit status of the compound-list of the last clause to be executed.
+
+»*/
+
+
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isCase)){
+		err(`'case' token not found!`);
+	}
+	this.tokNum++;
+	tok = this.curTok();
+	if (!tok || tok.isNLs){
+		this.unexp("newline");
+	}
+	if (!tok.isWord) {
+		this.unexp(tok);
+	}
+	let word = tok;
+	this.tokNum++;
+	this.skipNewlines();
+	tok = this.curTok();
+	if (!tok){
+		if (this.eos()) this.unexpeof();
+		if (!this.isInteractive) err("WHAT NOT EOS AND NOT INTERACTIVE WUT");
+		await this.getMoreTokens();
+		tok = this.curTok();
+	}
+	if (!tok.isIn) this.unexp(tok);
+	this.tokNum++;
+	this.skipNewlines();
+	if (this.end()){
+		if (this.eos()){
+			this.unexpeof();
+		}
+		else if (!this.isInteractive) this.fatal("WUT NOT THIS EOS AND NOT THIS INTERACTIVE WUT UMMM");
+		await this.getMoreTokens();
+	}
+	let list = await this.parseCaseList();
+	tok = await this.curTok();
+	if (!tok){
+		this.unexpeof();
+	}
+	if (!tok.isEsac) this.unexp(tok);
+	this.tokNum++;
+	return {case_clause: {word, list}};
 }//»
 
 async parseUntilClause(){//«
