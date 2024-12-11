@@ -6,6 +6,12 @@ interfacing (debugging, etc.) with non-interactive shell scripting.
 Now we don't need to worry about "namespace collisions" with all of the keysyms
 that the terminal uses to do its CLI stuff...
 
+In the terminal, need an 'onautokeydown', 'onautokeypress', and 'onautokeyup'
+which are used for external agents (humans from other apps like this or
+"automated" programs) to control the terminal app, and that block the "normal" versions
+('onkeydown', 'onkeypress', 'onkeyup'). The point of this is to be able to automate
+interactive types of terminal-based workflows.
+
 »*/
 /*«Imports*/
 const util = LOTW.api.util;
@@ -212,6 +218,9 @@ const BAD_LINK_TYPE = "b";
 const IDB_DATA_TYPE = "i";//Data structures that are stored directly in the indexedDB Nodes table
 
 //»
+
+//«Shell
+
 //class ShellProgram«
 class ShellProgram{
 
@@ -232,7 +241,6 @@ return E_SUC;
 }//»
 
 }//»
-//«Shell
 
 const Shell = (()=>{
 
@@ -3516,11 +3524,19 @@ this.cancel=()=>{//«
 /*»*/
 
 //«Obj/CB
+
 this.onappinit=()=>{//«
 
 let cur_shell = new Shell({response:log, response_end:NOOP});
 
-cur_shell.execute("<><><><><>", {isInteractive: false});
+cur_shell.execute(`cat<<eof && echo har har har
+111
+222
+333
+eof
+lar | gunk | zzloom; 
+
+`, {isInteractive: false});
 //log(cur_shell);
 
 }//»
@@ -3528,6 +3544,7 @@ this.onkeydown=(e,k)=>{//«
 //cwarn(k);
 //log(e);
 }//»
+
 //»
 
 }
