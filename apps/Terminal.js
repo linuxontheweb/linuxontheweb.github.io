@@ -1820,11 +1820,14 @@ eof() {//«
 eol(){//«
 	return this.isInteractive && (this.index >= this.length);
 }//»
-async more(){/*«*/
+async more(no_nl){/*«*/
 	if (!this.eol()){
 		throw new Error("more() was call, but NOT at eol()");
 	}
-	let rv = "\n"+(await this.terminal.read_line("> "));
+	let nl;
+	if (no_nl) nl="";
+	else nl="\n";
+	let rv = nl+(await this.terminal.read_line("> "));
 //log(RV, `${rv}`);
 	this.source = this.source.concat(...rv);
 	this.length = this.source.length;
@@ -1922,14 +1925,21 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 		if (ch==="`" && in_backquote){
 			return `unexpected EOF while looking for matching '${which}'`;
 		}
-		if (check_subs&&ch==="$"&&src[cur+1]==="(") {//«
+		if (check_subs&&ch==="$"&&(src[cur+1]==="("||src[cur+1]==="{")) {//«
 			this.index=cur;
 			if (src[cur+2]==="("){
-				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
+//				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
+				rv = await this.scanSub(quote, {isMath: true, inBack: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			}
+			else if (src[cur+1]==="{"){
+//				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
+				rv = await this.scanSub(quote, {isParam: true, inBack: is_bq||in_backquote});
+				if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
+			}
 			else{
-				rv = await this.scanComSub(quote, null, is_bq||in_backquote);
+//				rv = await this.scanComSub(quote, null, is_bq||in_backquote);
+				rv = await this.scanSub(quote, {isComSub: true, inBack: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			}
 			if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -1948,7 +1958,15 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 			cur++;
 			ch = src[cur];
 //log("HICH", ch);
-			if (!ch) this.throwUnexpectedToken("unsupported line continuation");
+/*
+if (this.isInteractive){
+log("GET MOAR...");
+}
+else{
+cwarn("SKIP OIMPET");
+}
+*/
+			if (!ch) this.throwUnexpectedToken("unsupported line continuation (2)");
 			let c = ch;
 			ch = new String(c);
 			ch.escaped = true;
@@ -1993,7 +2011,15 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 	}
 	return quote;
 }//»
-async scanComSub(par, is_math, in_backquote, cont_sub){//«
+async scanSub(par, opts={}){//«
+
+let is_math = opts.isMath;
+let is_param = opts.isParam;
+let is_comsub = opts.isComSub;
+let in_backquote = opts.inBack;
+let cont_sub = opts.contSub;
+
+////async scanComSub(par, is_math, in_backquote, cont_sub){
 /*
 We need to collect words rather than chars if:
 If par is a top-level word, then 
@@ -2003,7 +2029,10 @@ If we are not embedded in any kind of quote
 //log("scanComSub", this.index);
 
 let start = this.index;
-const sub = cont_sub || (is_math ? new MathSub(start, par) : new ComSub(start, par));
+//const sub = cont_sub || (is_math ? new MathSub(start, par) : new ComSub(start, par));
+const sub = cont_sub || (is_math ? new MathSub(start, par) : 
+	(is_param ? new ParamSub(start, par) : new ComSub(start, par))
+	);
 const out = sub.val;
 if (!cont_sub) {
 	this.index+=2;
@@ -2046,18 +2075,29 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 	cur=this.index;
 	have_space = false;
 }//»
-else if (ch==="$"&&this.source[cur+1]==="("){//«
+else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 	if (this.source[cur+2]==="("){
 		this.index=cur;
-		let rv = await this.scanComSub(sub, true, in_backquote);
+//		let rv = await this.scanComSub(sub, true, in_backquote);
+		let rv = await this.scanSub(sub, {isMath: true, inBack: in_backquote});
 		if (rv===null) return `unterminated math expansion`;
+		if (isStr(rv)) return rv;
+		out.push(rv);
+		cur=this.index;
+	}
+	else if (this.source[cur+1]==="{"){
+		this.index=cur;
+		let rv = await this.scanSub(sub, {isParam: true, inBack: in_backquote});
+		if (rv===null) return `unterminated parameter expansion`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
 		cur=this.index;
 	}
 	else{
 		this.index=cur;
-		let rv = await this.scanComSub(sub, false, in_backquote);
+////async scanComSub(par, is_math, in_backquote, cont_sub){
+//		let rv = await this.scanComSub(sub, false, in_backquote);
+		let rv = await this.scanSub(sub, {isComSub: true, inBack: true});
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -2065,13 +2105,13 @@ else if (ch==="$"&&this.source[cur+1]==="("){//«
 	}
 	have_space = false;
 }//»
-else if (ch===")"){//«
+else if (((is_math || is_comsub) && ch===")") || (is_param && ch === "}")){//«
 	if (is_math){
 		if (this.source[cur+1] !== ")") return "expected a final '))'";
 		cur++;
 	}
 	this.index = cur;
-//	log(`scanComSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
+//	log(`scanSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
 	return sub;
 }//»
 else if (ch===" " || ch==="\t"){//«
@@ -2095,7 +2135,8 @@ this.index = cur;
 if (this.eol()){
 	sub.val = out;
 	await this.more();
-	return await this.scanComSub(par, is_math, in_backquote, sub);
+//	return await this.scanComSub(par, is_math, in_backquote, sub);
+	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBack: in_backquote, contSub: sub});
 }
 
 
@@ -2246,12 +2287,38 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let _word = new Word(start, par, env);
 	let word = _word.val;
 	let is_plain_chars = true;
+// Simple means there are only plain chars, escapes, '...', $'...' and 
+// "..." with no embedded substitutions
+	let is_simple = true;
 	while (!this.eof()) {
 		let ch = this.source[this.index];
 		let next1 = this.source[this.index+1];
 		let next2 = this.source[this.index+2];
 		if (ch==="\\"){//«
-			if (!next1 || next1 === "\n") this.throwUnexpectedToken("unsupported line continuation");
+			if (!next1) {//«
+				if (this.isInteractive){
+//We treat the escape character as if it doesn't exist, and everything continues on the same line
+//with the ps1 prompt
+					this.index++;
+					await this.more(true);
+					continue;
+				}
+				else{
+//In a script and it ends like:
+//echo hi\
+					break;
+				}
+			}//»
+			else if (next1 === "\n") {//«
+				if (this.isInteractive){
+//Newlines *are* added in interactive mode when calling 'await this.more()' while
+//scanning a string that was not terminated.
+					throw new Error("HOW IS THERE AN ACTUAL NEWLINE CHARACTER WHILE WE ARE INTERACTIVE?!?!");
+				}
+//In a script, just treat the 2 character sequence <escape> <newline> as if they don't exist
+				this.index+=2;
+				continue;
+			}//»
 			is_plain_chars = false;
 			ch = new String(next1);
 			ch.escaped = true;
@@ -2260,15 +2327,24 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		}//»
 		else if (ch==="$" && next1 === "(" && next2==="("){//«
 			is_plain_chars = false;
-			rv = await this.scanComSub(_word, true);
+//			rv = await this.scanComSub(_word, true);
+			rv = await this.scanSub(_word, {isMath: true});
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
 		}//»
 		else if (ch==="$" && next1 === "("){//«
 			is_plain_chars = false;
-			rv = await this.scanComSub(_word);
+//			rv = await this.scanComSub(_word);
+			rv = await this.scanSub(_word, {isComSub: true});
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
+			else if (isStr(rv)) this.throwUnexpectedToken(rv);
+			word.push(rv);
+		}//»
+		else if (ch==="$" && next1 === "{"){//«
+			is_plain_chars = false;
+			rv = await this.scanSub(_word, {isParam: true});
+			if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			word.push(rv);
 		}//»
@@ -2457,10 +2533,6 @@ NO async/await in constructors.
 fatal(mess){//«
 throw new Error(mess);
 }//»
-nextTok(){//«
-	this.tokNum++;
-	return this.tokens[this.tokNum];
-}//»
 eol(){//«
 	return (
 		(this.isInteractive && this.tokNum === this.numToks) || 
@@ -2553,6 +2625,18 @@ getWordSeq(){//«
 	return list;
 }//»
 curTok(add_num=0){return this.tokens[this.tokNum+add_num];}
+nextTok(){//«
+	this.tokNum++;
+	return this.tokens[this.tokNum];
+}//»
+async scanNextTok(heredoc_flag) {//«
+	let token = this.lookahead;
+	this.scanner.scanComments();
+	let next = await this.scanner.lex(heredoc_flag);
+	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
+	this.lookahead = next;
+	return token;
+};//»
 
 nextLinesUntilDelim(delim){//«
 	let out='';
@@ -2574,65 +2658,20 @@ getNextNonNewlinesTok(){//«
 	}
 	return tok;
 }//»
-async getNonEmptyLineFromTerminal(){/*«*/
+async getNonEmptyLineFromTerminal(){//«
 	let rv;
 	while ((rv = await this.terminal.read_line("> ")).match(/^[\x20\t]*(#.+)?$/)){}
 	return rv;
-}/*»*/
-async getMoreTokens(){/*«*/
+}//»
+async getMoreTokens(){//«
 	let rv = await this.getNonEmptyLineFromTerminal();
 	let newtoks = await this.parseContinueStr(rv);
 	if (isStr(newtoks)) this.fatal(newtoks);
 	this.tokens = this.tokens.concat(newtoks);
 	this.pushNewline();
 	this.numToks = this.tokens.length;
-}/*»*/
-badTokenLogger(tok, mess){//«
-if (!mess) mess = "FATAL TOKEN!!! (see console)";
-cwarn("HERE IS THE BAD TOKEN BELOW:");
-log(tok);
-this.fatal(mess);
 }//»
-/*
-isCommandStart(tok_arg){//«
-//DYUTYDHFK
-let wrd;
-let tok = tok_arg || this.curTok();
-//We are at the end, so nothing can start
-if (!tok) return false;
-
-//If anybody wants to check beyond any newlines, they should have done that themselves
-//with this.skipNewlines() rather than assuming we would do that here. We are just 
-//worried about the current token here.
-if (isNLs(tok)) return false;
-
-//All redirections operators and "("
-if (tok.isRedir || tok.isSubStart) return true;
-//Any other operators CANNOT start a command
-if (tok.isOp) return false;
-
-if (!tok.isWord){
-this.badTokenLogger(tok, "WHAT TOKEN IS NOT NLs, OP, or WORD???");
-}
-//We have a reserved start word token like "if" or "{"
-if (tok.isResStart) return true;
-//All other reserved words like "fi" or "}" are bad
-if (tok.isRes) return false;
-
-//Any other word (including assignments) are good
-return true;
-
-}//»
-*/
-logCurTokStr(tokarg){//«
-	let tok = tokarg || this.curTok();
-	if (!tok){
-	cerr("No next token");
-	return;
-	}
-	log(tok.toString());
-}//»
-eatRedirects(){/*«*/
+eatRedirects(){//«
 	let err = this.fatal;
 	let tok = this.curTok();
 	let list=[];
@@ -2648,7 +2687,7 @@ eatRedirects(){/*«*/
 		tok = this.curTok();
 	}
 	return list;
-}/*»*/
+}//»
 
 async parseList(seq_arg){//«
 	let seq = seq_arg || [];
@@ -3550,7 +3589,8 @@ this.skipNewlines();
 if (!this.end()){
 	this.fatal("compilation failed");
 }
-log(complete_coms);
+let program = {program: complete_coms};
+log(program);
 
 //log(toks);
 //Diagnosis stuff
@@ -3609,14 +3649,6 @@ catch(e){
 }
 
 }/*»*/
-async scanNextTok(heredoc_flag) {//«
-	let token = this.lookahead;
-	this.scanner.scanComments();
-	let next = await this.scanner.lex(heredoc_flag);
-	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
-	this.lookahead = next;
-	return token;
-};//»
 async parse() {//«
 	let toks = [];
 	let next = this.lookahead;
@@ -4177,6 +4209,20 @@ dup(){//«
 	return bq;
 }//»
 
+}//»
+const ParamSub = class extends Sequence{//«
+expand(shell, term){
+cwarn("EXPAND PARAMSUB!!!");
+}
+dup(){//«
+	let param = new ParamSub(this.start, this.par, this.env);
+	let arr = param.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return param;
+}//»
 }//»
 const ComSub = class extends Sequence{//«
 expand(shell, term){
