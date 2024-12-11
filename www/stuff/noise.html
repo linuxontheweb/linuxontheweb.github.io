@@ -1,9 +1,18 @@
 <html>
 <head>
 <script>
-
+const log=(...args)=>{console.log(...args);};
 let is_on = false;
-let ctx, node;
+let ctx, node, gain;
+const VOL_INC=0.1;
+const volume=(delt)=>{
+if (!gain) return;
+let val = gain.gain.value;
+val+=delt;
+if (val<0) val=0;
+else if (val>1) val=1;
+gain.gain.value = val;
+};
 const do_toggle=e=>{
 if (node) {
 	if (is_on){
@@ -11,7 +20,7 @@ if (node) {
 		document.body.innerHTML = '<center><h1>Click or Spacebar for noise!</h1></center>'
 	}
 	else{
-		node.connect(ctx.destination);
+		node.connect(gain);
 		document.body.innerHTML = '<center><h1>Click or Spacebar to stop</h1></center>'
 	}
 	is_on = !is_on;
@@ -40,12 +49,26 @@ node = ctx.createBufferSource();
 node.buffer = buf;
 node.loop=true;
 node.start();
-node.connect(ctx.destination);
+gain = ctx.createGain();
+gain.gain.value = 1.0;
+node.connect(gain);
+gain.connect(ctx.destination);
 
 is_on = true;
 document.body.innerHTML = '<center><h1>Click or Spacebar to stop</h1></center>'
 }
-document.onkeypress=do_toggle;
+
+document.onkeydown=e=>{
+let code = e.code;
+if (code==="ArrowDown") volume(-VOL_INC);
+else if (code==="ArrowUp") volume(VOL_INC);
+
+};
+document.onkeypress=e=>{
+let code = e.code;
+if (code==="Space") do_toggle();
+
+};
 document.onclick=do_toggle;
 
 </script>
