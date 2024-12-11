@@ -1,5 +1,19 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
 
+/*12/11/24 Now we are sitting with an ast in a new ShellProgram class's execute
+method (@KDRTIOP). Maybe we should just take a breather at this point (perhaps just till
+the end of the day). It is now 11 am.
+
+Other than doing the compound commands, there is really nothing different we
+need to do, expect for stuff like making the word expansion process more
+class-based (object-oriented).
+
+I'm seriously thinking about creating an application that receives the ShellProgram
+object, and offers all of the debugging/stepping options that you might want in order 
+to understand the shell's dynamics.
+
+*/
+
 /*To keep the integrity of this thing, I want _Parser.end() @SLKIURUJ to be«
 return(this.tokNum===this.numToks);
 ... rather than
@@ -12,7 +26,7 @@ like @LCMJHFUEM.
 @DYUTYDHFK: Need to make 'isCommandStart' a property of individual tokens
 »*/
 //@KUYDHYET: _Parser.compile
-const MAX_TOKS_TO_PASS_THROUGH=0;
+const MAX_TOKS_TO_PASS_THROUGH=2;
 /*Allow up this many tokens to send through the old parsing and execution stuff, so: «
 $ ./some_script.sh
   ...and:
@@ -1687,6 +1701,27 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 //»
 
+//class ShellProgram«
+class ShellProgram{
+
+constructor(shell, terminal, ast){//«
+this.shell = shell;
+this.terminal = terminal;
+this.ast = ast;
+}//»
+
+async execute(){//«
+//KDRTIOP
+cwarn("EXECUTE SHELL PROGRAM");
+//log(this.shell);
+//log(this.terminal);
+log(this.ast);
+
+return E_SUC;
+}//»
+
+}//»
+
 //«Shell
 
 const Shell = (()=>{
@@ -2016,6 +2051,9 @@ async scanSub(par, opts={}){//«
 let is_math = opts.isMath;
 let is_param = opts.isParam;
 let is_comsub = opts.isComSub;
+if (!(is_math||is_param||is_comsub)){
+throw new Error("NOT is_comsub || is_math || is_param ?!?!? HJKHFDK^&*^$*&#");
+}
 let in_backquote = opts.inBack;
 let cont_sub = opts.contSub;
 
@@ -2065,7 +2103,12 @@ else if (ch==="$"&&this.source[cur+1]==="'"){//«
 }//»
 else if (ch==="'"||ch==='"'||ch==='`'){//«
 	if (ch==="`"&& in_backquote){
-		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
+		let say_ch;
+		if (is_comsub) say_ch=")";
+		else if (is_math) say_ch="))";
+		else if (is_param) say_ch = "}";
+//		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
+		return `unexpected EOF while looking for matching '${say_ch}'`;
 	}
 	this.index=cur;
 	let rv = await this.scanQuote(sub, ch, in_backquote);
@@ -2542,10 +2585,6 @@ eol(){//«
 eos(){//end-of-script«
 	return (!this.isInteractive && this.tokNum === this.numToks);
 }//»
-haveBang(){//«
-	let tok = this.tokens[this.tokNum];
-	return (tok.isWord && tok.val.length===1 && tok.val[0]==="!");
-}//»
 unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
 unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
 end(){//«
@@ -2638,6 +2677,14 @@ async scanNextTok(heredoc_flag) {//«
 	return token;
 };//»
 
+eatBang(){//«
+	let tok = this.tokens[this.tokNum];
+	if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
+		this.tokNum++;
+		return true;
+	}
+	return false;
+}//»
 nextLinesUntilDelim(delim){//«
 	let out='';
 	let rv = this.scanner.scanNextLineNot(delim);
@@ -2663,7 +2710,7 @@ async getNonEmptyLineFromTerminal(){//«
 	while ((rv = await this.terminal.read_line("> ")).match(/^[\x20\t]*(#.+)?$/)){}
 	return rv;
 }//»
-async getMoreTokens(){//«
+async getMoreTokensFromTerminal(){//«
 	let rv = await this.getNonEmptyLineFromTerminal();
 	let newtoks = await this.parseContinueStr(rv);
 	if (isStr(newtoks)) this.fatal(newtoks);
@@ -2737,7 +2784,7 @@ log(this.tokens);
 	if (!next){
 		if (this.eos()) this.unexpeof();
 		else if (!this.isInteractive) this.fatal("!NEXT && !isInteractive!?!?!?");
-		await this.getMoreTokens();
+		await this.getMoreTokensFromTerminal();
 		next = this.curTok();
 	}
 	if (!next.isCommandStart){
@@ -2754,7 +2801,7 @@ async parseCompoundList(opts={}){//«
 	if (this.isInteractive){
 		if (this.eol()){
 //Get more token...
-			await this.getMoreTokens();
+			await this.getMoreTokensFromTerminal();
 		}
 	}
 	else if (this.eos()){
@@ -2815,7 +2862,7 @@ async parseFuncDef(){//«
 	if (!tok){
 		if (this.eos()) this.unexpeof();
 		if (!this.isInteractive) err("WTFFFFFF NOTTTTT INNNNTERRACTIVEEEEEEE &*(&*(");
-		await this.getMoreTokens();
+		await this.getMoreTokensFromTerminal();
 		tok = this.curTok();
 	}
 	let body = await this.parseFuncBody();
@@ -2948,7 +2995,7 @@ tok = this.curTok();
 if (!tok){
 	if (this.eos()) this.unexpeof();
 	else if (!this.isInteractive) this.fatal("WUT NOT EOS AND NOT INTERACTIVE JFD&*^#(");
-	await this.getMoreTokens();
+	await this.getMoreTokensFromTerminal();
 	tok = this.curTok();
 }
 
@@ -3062,7 +3109,7 @@ The exit status of case shall be zero if no patterns are matched. Otherwise, the
 	if (!tok){
 		if (this.eos()) this.unexpeof();
 		if (!this.isInteractive) err("WHAT NOT EOS AND NOT INTERACTIVE WUT");
-		await this.getMoreTokens();
+		await this.getMoreTokensFromTerminal();
 		tok = this.curTok();
 	}
 	if (!tok.isIn) this.unexp(tok);
@@ -3073,7 +3120,7 @@ The exit status of case shall be zero if no patterns are matched. Otherwise, the
 			this.unexpeof();
 		}
 		else if (!this.isInteractive) this.fatal("WUT NOT THIS EOS AND NOT THIS INTERACTIVE WUT UMMM");
-		await this.getMoreTokens();
+		await this.getMoreTokensFromTerminal();
 	}
 	let list = await this.parseCaseList();
 	tok = await this.curTok();
@@ -3098,7 +3145,7 @@ async parseUntilClause(){//«
 /*«
 	if (!tok){
 		if (!this.isInteractive) this.unexpeof();
-		await this.getMoreTokens();
+		await this.getMoreTokensFromTerminal();
 		tok = this.curTok();
 	}
 *»*/
@@ -3122,7 +3169,7 @@ async parseWhileClause(){//«
 /*«
 	if (!tok){
 		if (!this.isInteractive) this.unexpeof();
-		await this.getMoreTokens();
+		await this.getMoreTokensFromTerminal();
 		tok = this.curTok();
 	}
 »*/
@@ -3160,7 +3207,7 @@ if (!tok) {//«
 	else if (!this.isInteractive){
 		err("NO CURTOK && NOT EOS && NOT INTERACTIVE?!?!?!?!? #(&**()");
 	}
-	else await this.getMoreTokens();
+	else await this.getMoreTokensFromTerminal();
 	tok = this.curTok();
 }//»
 let do_group;
@@ -3173,7 +3220,7 @@ else if (tok.isSemi){//«
 	//for name sequential_sep(";") do_group
 	this.tokNum++;
 	this.skipNewlines();
-	if (this.isInteractive && this.eol()) await this.getMoreTokens();
+	if (this.isInteractive && this.eol()) await this.getMoreTokensFromTerminal();
 	tok = this.curTok();
 	if (!tok.isDo){
 		this.unexp(tok);
@@ -3192,7 +3239,7 @@ else if (!tok.isNLs){//«
 }//»
 else{//«
 	this.skipNewlines();
-	if (this.isInteractive && this.eol()) await this.getMoreTokens();
+	if (this.isInteractive && this.eol()) await this.getMoreTokensFromTerminal();
 	else if (this.eos()) this.unexpeof();
 	tok = this.curTok();
 	if (tok.isDo){//«
@@ -3257,7 +3304,7 @@ if (!(tok&&tok.isIf)){
 }
 this.tokNum++;
 
-//Is there a this.getMoreTokens in here???
+//Is there a this.getMoreTokensFromTerminal in here???
 let if_list = await this.parseCompoundList();
 tok = this.curTok();
 if (!(tok && tok.isThen)){
@@ -3288,7 +3335,7 @@ return {if_clause: {if_list, then_list, else_part}};
 
 }//»
 
-async parseSimpleCommand(){/*«*/
+async parseSimpleCommand(){//«
 
 /*Get all 
 - assignment words, plus 
@@ -3308,7 +3355,7 @@ let suf;
 let have_comword;
 let tok = toks[this.tokNum];
 while(tok){
-	if (tok.isHeredoc){/*«*/
+	if (tok.isHeredoc){//«
 		if (!have_comword){
 			if (!pref) pref = [];
 			pref.push({heredoc: tok});
@@ -3317,8 +3364,8 @@ while(tok){
 			if (!suf) suf = [];
 			suf.push({heredoc: tok});
 		}
-	}/*»*/
-	else if (tok.r_op){/*«*/
+	}//»
+	else if (tok.r_op){//«
 		let rop = tok;
 //		toks.shift();
 		this.tokNum++;
@@ -3335,8 +3382,8 @@ log("REDIRECT TO", fname);
 			if (!suf) suf = [];
 			suf.push({redir: [rop, fname]});
 		}
-	}/*»*/
-	else if (tok.isWord){/*«*/
+	}//»
+	else if (tok.isWord){//«
 		if (!have_comword) {
 			if (tok.isAssignment){
 				if (!pref) pref = [];
@@ -3350,7 +3397,7 @@ log("REDIRECT TO", fname);
 			if (!suf) suf = [];
 			suf.push({word: tok});
 		}
-	}/*»*/
+	}//»
 	else{
 		break;
 	}
@@ -3367,7 +3414,7 @@ else if (pref){
 }
 else return {simple_command: {name: have_comword, suffix: suf}};
 
-}/*»*/
+}//»
 async parseCompoundCommand(){//«
 
 let tok = this.curTok();
@@ -3412,12 +3459,12 @@ com.redirs = redirs;
 return com;
 
 }//»
-async parseCommand(force_compound){/*«*/
+async parseCommand(force_compound){//«
 let toks = this.tokens;
 let err = this.fatal;
 let tok = this.curTok();
 //log("PARSECOM", force_compound, tok.toString());
-if (tok.isWord) {/*«*/
+if (tok.isWord) {//«
 	let wrd;
 	if (tok.isRes) {
 		if (tok.isResStart) return this.parseCompoundCommand();
@@ -3436,8 +3483,8 @@ if (tok.isWord) {/*«*/
 	}
 	if (force_compound) return false;
 	return this.parseSimpleCommand();
-}/*»*/
-else if(tok.isOp){/*«*/
+}//»
+else if(tok.isOp){//«
 //	if (tok.isSubStart) return this.parseSubshell();
 	if (tok.isSubStart) return this.parseCompoundCommand();
 	if (tok.isRedir){
@@ -3445,16 +3492,16 @@ else if(tok.isOp){/*«*/
 		return this.parseSimpleCommand();
 	}
 	this.unexp(tok.c_op);
-}/*»*/
-else{/*«*/
+}//»
+else{//«
 cwarn("WUD IS THIS BELOW!?!?!?!");
 log(tok);
 err("WHAT IS THIS NOT NEWLINE OR WORD OR OPERATOR?????????");
-}/*»*/
+}//»
 
-}/*»*/
+}//»
 
-async parsePipeSequence(seq_arg){/*«*/
+async parsePipeSequence(seq_arg){//«
 	let err = this.fatal;
 	let toks = this.tokens;
 	let seq = seq_arg || [];
@@ -3465,7 +3512,7 @@ async parsePipeSequence(seq_arg){/*«*/
 	this.tokNum++;
 	if (this.eol()){
 		if (this.isInteractive){//refill our tank with new tokens
-			await this.getMoreTokens();
+			await this.getMoreTokensFromTerminal();
 		}
 		else{//There are newlines in some kind of prewritten thing
 			this.skipNewlines();
@@ -3479,14 +3526,13 @@ async parsePipeSequence(seq_arg){/*«*/
 //	}
 //	else: We are interactive and have more tokens on this line
 	return await this.parsePipeSequence(seq);
-}/*»*/
-async parsePipeline(){/*«*/
-	let bang = this.haveBang();
-	if (bang) this.tokNum++;
+}//»
+async parsePipeline(){//«
+	let bang = this.eatBang();
 	let pipeline = await this.parsePipeSequence();
 	return {bang , pipeline};
-}/*»*/
-async parseAndOr(seq_arg, which){/*«*/
+}//»
+async parseAndOr(seq_arg, which){//«
 	let err = this.fatal;
 	let seq = seq_arg || [];
 	let pipe = await this.parsePipeline();
@@ -3503,7 +3549,7 @@ async parseAndOr(seq_arg, which){/*«*/
 	this.tokNum++;
 	if (this.eol()){
 		if (this.isInteractive){//refill our tank with new tokens
-			await this.getMoreTokens();
+			await this.getMoreTokensFromTerminal();
 		}
 		else{//There are newlines in some kind of prewritten thing
 			this.skipNewlines();
@@ -3515,8 +3561,8 @@ async parseAndOr(seq_arg, which){/*«*/
 	}
 //	else: We are interactive and have more tokens on this line
 	return await this.parseAndOr(seq, 1);
-}/*»*/
-async parseCompleteCommand(){/*«*/
+}//»
+async parseCompleteCommand(){//«
 	let toks = this.tokens;
 	let list = await this.parseList();
 	let next = this.curTok();
@@ -3526,8 +3572,8 @@ async parseCompleteCommand(){/*«*/
 		this.tokNum++;
 	}
 	return {complete_command: list};
-}/*»*/
-async parseCompleteCommands(){/*«*/
+}//»
+async parseCompleteCommands(){//«
 	let toks = this.tokens;
 	let comp_com = await this.parseCompleteCommand();
 	let comp_coms = [comp_com];
@@ -3538,7 +3584,7 @@ async parseCompleteCommands(){/*«*/
 		this.skipNewlines();
 	}
 	return {complete_commands: comp_coms};
-}/*»*/
+}//»
 
 async compile(){/*«*/
 //KUYDHYET
@@ -3589,8 +3635,8 @@ this.skipNewlines();
 if (!this.end()){
 	this.fatal("compilation failed");
 }
-let program = {program: complete_coms};
-log(program);
+return {program: complete_coms};
+//log(program);
 
 //log(toks);
 //Diagnosis stuff
@@ -3733,8 +3779,9 @@ if (this.isContinue || !dev_mode || (dev_mode && len <= MAX_TOKS_TO_PASS_THROUGH
 
 this.tokens = toks;
 this.numToks = toks.length;
-await this.compile();
-return {tokens:[]};
+return await this.compile();
+
+//return {tokens:[]};
 
 //return {err: };
 //if (!dev_mode) {
@@ -3752,10 +3799,11 @@ parse:async(command_str, opts={})=>{//«
 
 let parser = new _Parser(command_str.split(""), opts);
 let toks, comstr_out;
+let program;
 try {
 	let errmess;
 	await parser.scanNextTok();
-	({err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
+	({program, err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
 	if (errmess) return errmess;
 	command_str = comstr_out;
 }
@@ -3763,7 +3811,12 @@ catch(e){
 	cerr(e);
 	return e.message;
 }
-
+if (program) {
+//cwarn("YARM");
+//log(program);
+//toks = [];
+return program;
+}
 //Collect commands with their arguments«
 let com = [];
 let coms = [];
@@ -4987,31 +5040,10 @@ this.cancelled_time = 0;
 //»
 const FATAL = mess => {term.topwin._fatal(new Error(mess));};
 this.cancelled = false;
+
 this.execute=async(command_str, opts={})=>{//«
-/*Instead of trying to create a theoretically beautiful shell.execute algorithm, I//«
-wanted to instead provide explicit commentary on the one that should hopefully "just work"
 
-Support for: 
-- Comment stripping #THIS IS INVISIBLE TO THE SHELL
-- parsing long and short options
-- single quote escaping via '$': echo $'1\n2\n3'
-- escaping spaces: touch some\ file.txt
-- environment variable setting and substitution
-- redirects: '>', '>>' (currently for the "out" stream only)
-- pipelines (currently for the "out" stream only)
-- file globbing
-- curly brace expansion: touch file{1..10}.txt
-- backquote command substitution
-
-Bottom line:
-
-For anything that doesn't quite work, try to get it to work without creating
-too much confusion in the code or breaking any functionality that is more
-worthy
-
-»*/
-
-//Init/Var«
+//Init/Var
 //WIMNNUYDKL
 
 let started_time = (new Date).getTime();
@@ -5035,12 +5067,7 @@ const can=()=>{//«
 //Cancel test function
 	return started_time < this.cancelled_time;
 };//»
-//Refuse and enter command that seems too long for our taste
-//log(command_str);
-//if (command_str.length > MAX_LINE_LEN) return terr(`'${command_str.slice(0,10)} ...': line length > MAX_LINE_LEN(${MAX_LINE_LEN})`, script_out);
 command_str = command_str.replace(/^ +/,"");
-
-//»
 
 let statements;
 try{
@@ -5051,13 +5078,29 @@ catch(e){
 }
 if (isStr(statements)) return terr("sh: "+statements);
 
+if (statements.complete_commands){//New way«
+let program = new ShellProgram(shell, term, statements);
+let rv = await program.execute();
+term.response_end();
+return rv;
+//cwarn("HI COMPLETE_COMMANDS");
+//log(statements);
+//return E_SUC;
+
+}//»
+
+//Old pathway (no compiling)«
+
+
 let lastcomcode;
-STATEMENT_LOOP: for (let state of statements){//«A 'statement' is a list of boolean-separated pipelines.
+
+STATEMENT_LOOP: for (let state of statements){//A 'statement' is a list of boolean-separated pipelines.
 
 let loglist = state.statement;
 if (!loglist){
 	return terr(`sh: logic list not found!`);
 }
+
 LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	let pipe = loglist[i];
 	let pipelist = pipe.pipe;
@@ -5068,6 +5111,7 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 	let pipetype = pipe.type;
 	let pipeline = [];
 	let screen_grab_com;
+
 	for (let j=0; j < pipelist.length; j++) {//«
 		let arr = pipelist[j].com;
 {
@@ -5083,8 +5127,8 @@ LOGLIST_LOOP: for (let i=0; i < loglist.length; i++){//«
 //		let redir;
 		let in_redir, out_redir;
 
-/*«Expansions*/
-//For each word within a command, the shell processes <backslash>-escape«
+/*Expansions*/
+//For each word within a command, the shell processes <backslash>-escape
 //sequences inside dollar-single-quotes (See 2.2.4 Dollar-Single-Quotes)
 for (let k=0; k < arr.length; k++){
 	let tok = arr[k];
@@ -5092,10 +5136,10 @@ for (let k=0; k < arr.length; k++){
 		tok.dsSQuoteExpansion();
 	}
 }
-//»
+//Expansions (Doc)«
 
-//and then performs various word expansions (see 2.6 Word Expansions ). «
-/*2.6 Word Expansions«
+//and then performs various word expansions (see 2.6 Word Expansions ). 
+/*2.6 Word Expansions
 
 This section describes the various expansions that are performed on words. Not
 all expansions are performed on every word, as explained in the following
@@ -5177,8 +5221,8 @@ escaped by a <backslash> is immediately followed by a <space>, <tab>, or a
 <newline>, or is not followed by any character, the '$' shall be treated as a
 literal character.
 
-»*/
-/*«When we find a: 
+*/
+/*When we find a: 
 1) '{' ? "," ? '}' (ignore embedded curlies or give a syntax error)
 2) '{' \d .. \d '}'
 3) '{' \[a-z] .. \[a-z] '}'
@@ -5190,7 +5234,7 @@ If there is a strict '..' pattern, use it
 Else if there is an internal unquoted (unescaped) comma, use it
 Else, let it pass through
 
-»*/
+*/
 //»
 
 for (let k=0; k < arr.length; k++){//curlies«
@@ -5279,27 +5323,22 @@ if (tok.isWord) {
 }
 
 }//»
-for (let k=0; k < arr.length; k++){//«quote removal
+for (let k=0; k < arr.length; k++){//quote removal«
 	let tok = arr[k];
 	if (tok.isWord) {
 		quote_removal(tok);
 	}
 }//»
 
-/*»*/
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
 		let rv = add_to_env(arr, env, {term});
 		if (rv.length) term.response(rv, {isErr: true});
-//Command response callbacks«
+
+//Command response callbacks
 
 //Everything that gets sent to redirects, pipes, and script output must be collected
 //By default, only the 'out' stream will be collected.
-//let save_lns;
-//if (pipeTo || script_out || (redir && redir.length)){
-//if ((redir && redir.length)){
-//save_lns = [];
-//}
 
 const out_cb = (val, opts={})=>{//«
 
@@ -5376,7 +5415,6 @@ term.scroll_into_view();
 term.refresh();
 };//»
 
-//»
 
 const com_env = {/*«*/
 //	redir,
@@ -5514,11 +5552,11 @@ cerr(e);
 			pipeline.push(comobj);
 			continue;
 		}//»
-		if (screen_grab_com && com.grabsScreen){
+		if (screen_grab_com && com.grabsScreen){/*«*/
 			pipeline.push(make_sh_error_com(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env));
 			last_exit_code = E_ERR;
 			continue;
-		}
+		}/*»*/
 		screen_grab_com = com.grabsScreen?comword: false;
 		let opts;
 		let gotopts = active_options[usecomword];
@@ -5533,7 +5571,7 @@ cerr(e);
 		opts = rv[0];
 
 		let stdin;
-		if (in_redir) {
+		if (in_redir) {/*«*/
 //The only point for a heredocScanner is during tokenization while in interactive mode
 //So there is NO POINT for it here!!!
 //			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
@@ -5551,9 +5589,9 @@ log(stdin);
 				continue;
 			}
 			com_env.stdin = stdin;
-		}
+		}/*»*/
 
-		try{
+		try{//«new Com
 			comobj = new com(usecomword, arr, opts, com_env);
 			pipeline.push(comobj);
 		}
@@ -5563,9 +5601,9 @@ cerr(e);
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
 			pipeline.push(make_sh_error_com(usecomword, e.message, com_env));
-		}
+		}//»
 //SKIOPRHJT
-	}//
+	}//»
 
 this.pipeline = pipeline;
 
@@ -5579,7 +5617,7 @@ for (let com of pipeline){
 log(`Not running (was killed): ${com.name}`);	
 	}
 }
-for (let com of pipeline){
+for (let com of pipeline){/*«*/
 	lastcomcode = await com.awaitEnd;
 
 	if (this.cancelled) return;
@@ -5600,8 +5638,7 @@ for (let com of pipeline){
 			term.response(`sh: ${err}`, {isErr: true});
 		}
 	}
-
-}
+}/*»*/
 if (pipeline._hasBang){
 	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
 	else lastcomcode = E_SUC;
@@ -5640,7 +5677,7 @@ last_exit_code = lastcomcode;
 
 }//»
 
-}//»
+}//
 
 //In a script, refresh rather than returning to the prompt
 if (no_end) {
@@ -5651,15 +5688,20 @@ if (no_end) {
 //Command line input returns to prompt
 term.response_end();
 return lastcomcode;
+/*»*/
+
 
 }//»
-this.cancel=()=>{
+
+this.cancel=()=>{//«
 	this.cancelled = true;
 	let pipe = this.pipeline;
 	if (!pipe) return;
 	for (let com of pipe) com.cancel();
-};
 };//»
+
+};//
+
 })();
 /*»*/
 
