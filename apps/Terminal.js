@@ -2117,6 +2117,7 @@ scanOperator(){/*«*/
 		break;
 	case ')':
 		obj.isSubEnd = true;
+		obj.isPatListEnd = true;
 		++this.index;
 		break;/*»*/
 	case '&':/*«*/
@@ -2124,6 +2125,7 @@ scanOperator(){/*«*/
 		if (src[this.index]==="&"){
 			this.index++;
 			str="&&";
+			obj.isAndIf = true;
 		}
 		break;/*»*/
 	case '|':/*«*/
@@ -2131,6 +2133,11 @@ scanOperator(){/*«*/
 		if (src[this.index]==="|"){
 			this.index++;
 			str="||";
+			obj.isOrIf = true;
+		}
+		else{
+			obj.isPipe = true;
+			obj.isPatListSep = true;
 		}
 		break;/*»*/
 	case '>'://«
@@ -2729,7 +2736,8 @@ async parseCompoundList(opts={}){//«
 		term.term.push(";");
 	}
 	else{
-		err(`could not find ";", "&" or <newlines> to complete the compound list!`);
+//		err(`could not find ";", "&" or <newlines> to complete the compound list!`);
+		this.unexp(next);
 	}
 	this.skipNewlines();
 	return {compound_list: term};
@@ -2856,9 +2864,13 @@ the entire case_clause;
 		this.unexpeof();
 	}
 	if (!tok.isWord){
-		return {pattern_list: seq}
+		this.unexp(tok);
 	}
 	seq.push(tok);
+	tok = this.nextTok();
+	if (!tok) this.unexp("newline");
+	if (tok.isPatListEnd) return {pattern_list: seq}// ')'
+	if (!tok.isPatListSep) this.unexp(tok);
 	this.tokNum++;
 	return this.parseCasePatternList(seq);
 
