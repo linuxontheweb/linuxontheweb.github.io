@@ -3382,6 +3382,128 @@ of this file, given my interest in restarting shell development over and over an
 over and over... . My main interest is to continue refactoring into more and more
 understandable (i.e. objective, rather than algorithmic) constructs.
 »*/
+
+/*12/11/24 Now we are sitting with an ast in a new ShellProgram class's execute«
+method (@KDRTIOP). Maybe we should just take a breather at this point (perhaps just till
+the end of the day). It is now 11 am.
+
+Other than doing the compound commands, there is really nothing different we
+need to do, expect for stuff like making the word expansion process more
+class-based (object-oriented).
+
+I'm seriously thinking about creating an application that receives the ShellProgram
+object, and offers all of the debugging/stepping options that you might want in order 
+to understand the shell's dynamics.
+
+»*/
+
+/*To keep the integrity of this thing, I want _Parser.end() @SLKIURUJ to«
+return(this.tokNum===this.numToks);
+... rather than
+return(this.tokNum>=this.numToks);
+
+So we need to make sure that this.numToks is always set to: tokens.length.
+So, whenever we do stuff like pushNewline, we need to update that variable,
+like @LCMJHFUEM.
+
+@DYUTYDHFK: Need to make 'isCommandStart' a property of individual tokens
+»*/
+
+/*12/5/24: An example of the weird case of Arrays vs Strings«
+1) @WPRLKUT, we are calling make_sh_error_com(comword, `command not found`, com_env),
+2) in that function @SPOIRUTM, we use to do:
+	com.errorMessage = `sh: ${name}: ${mess}`;
+...but at the out_cb (@WLKUIYDP), we do testing for isStr, without checking for
+embedded newlines, so now we do:
+	com.errorMessage = `sh: ${name}: ${mess}`.split("\n");
+...in order to get the correct output in the terminal for the case when comword
+has embedded newlines
+»*/
+/*12/4/24: At this late date, we still needed to add the line @DPORUTIH !!!«
+»*/
+/*12/2/24: Lexing and Parsing the Shell Command Language«
+1) The lexer just spits out these tokens:
+ - Words
+ - Operators
+ - Newline lists
+
+The tricky part is a Word:
+
+A sequence of non-whitespace separated:
+ - Chars (plus Escaped Chars)
+ - Substitutions ( $(...), $((...)) or ${...} )
+ - Strings ( "...", $'...', '...' or `...` )
+  ) Strings must be recorded faithfully as an array of Chars or Escaped Chars
+  ) "...": 
+   > can include embedded Substitutions and `...`
+  ) `...`:
+   > can include embedded Substitutions and Strings (expect itself)
+   > all scans for embedded entities must end when an unescaped '`' is detected
+
+To "be in the top-level" means that you are not inside of a String
+ - at the appropriate point, top-level Strings can be turned into sequences of 
+   Chars, Substitutions and Strings
+ - there can be an 'unflatten' or 'objectify' class method to do this
+
+»*/
+/*11/30/24: Heredocs: Instead of passing a string into execute, perhaps we should«
+pass in a object with a "scan for eof marker", in order to allow heredocs to be
+collected.
+
+We are passing in heredocScanner's in from the terminal's shell.execute call, and
+the call in class ScriptCom.
+
+We are not currently doing anything past tilde expansion for the redir words (including
+herestrings),
+and we are not currently expanding anything in the heredocs. So, the herestrings
+themselves only get tilde expanded.
+»*/
+//11/27/24: We are silently skipping file glob patterns with slashes in them//«
+//@EJUTIOPB, so only globs in the current directory will work.
+//$ echo */* *
+// -> */* [...all files in the current directory]
+
+/*Also, we are using Old_curly_expansion, which does NOT do comma expansions, but
+the new curly_expansion @QXDPOLIT DOES do them (but that one uses the newer 
+parsing algorithm in the DevShell in /doc/dev/TERMINAL @SOTFKL).
+*/
+
+//»
+/*11/26/24: No calls to com.out in the 'init' phase please!«
+Migrate to the new 'class extends Com{...}' notation or get the error message @VKJEOKJ.
+com.init is mainly for doing all the the async stuff that your command needs to work
+(like loading modules), and also for checking the sanity of the particular combination
+of arguments and options that are given to you. Outputting error messages (or other kinds
+of messages like warning or info) is always okay because these always go to the terminal.
+So we want to be sure that everyone in the pipeline is totally "ready to rumble" before 
+any calls to com.out(...) are made.
+»*/
+/*11/25/24: New 'Com class{...}' and 'Com_whatever extends Com{...}'«
+
+class Com {
+	constructor(args, opts, _){
+		this.args=args;
+		this.opts=opts;
+		for (k in _) {
+			this[k]=_[k];
+		}
+	}
+}
+
+const Com_blah = class extends Com {
+
+async init(){
+//Parse the options
+}
+async run(){
+}
+pipeIn(val){
+}
+
+}
+
+»*/
+
 //«DevShell
 const DevShell = (()=>{
 
@@ -4046,3 +4168,56 @@ const com_pokerhands = async(args, o)=>{//«
 	return {out: JSON.stringify(out)};
 };//»
 */
+
+/*@GYWJNFGHXP: Just started on a "solution" to the issue referenced on the Bug below.«
+
+For now, we are doing replacements for open paren, open square brace and plus sign.
+What about period, asterisk and question mark?
+
+
+We now allow for the tab completion like:
+
+$ cat 'Some (weird) f<TAB>
+
+to become:
+
+$ cat 'Some (weird) filename.txt'
+
+But this also actually works when we are at the beginning:
+
+$ 'Some (weird) f<TAB>
+
+becomes:
+
+$ 'Some (weird) filename.txt'
+
+...this is *really* only supposed to search in the command pathway.
+
+»*/
+/*Bug found on Feb. 14, 2023://«
+
+There seems to be an issue with commands that wrap around that have long
+arguments (like filenames) with embedded spaces that are escaped. Say
+the terminal is only like 40 chars wide:
+
+$ ls /home/me/videos/This\ is\ a\ video\
+with\ embedded\ spaces.mp4
+
+There was actually a line break inserted here in the command history, probably
+related to doing a tab completion that had to wrap around.
+
+I want to implement tab completions that are inside of quotes (like bash does).
+Given a file named "file with spaces.txt", doing:
+
+$ cat 'file w<TAB>
+
+...should complete to:
+
+$ cat 'file with spaces.txt'
+
+There needs to be some basic parsing done to ensure that this does not work,
+i.e. there should be an odd number of non-escaped quotes.
+
+$ cat ' 'file w<TAB>
+
+//»*/

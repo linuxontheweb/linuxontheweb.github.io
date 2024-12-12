@@ -1,129 +1,9 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
+/*12/12/24: JUST:
 
-/*12/11/24 Now we are sitting with an ast in a new ShellProgram class's execute
-method (@KDRTIOP). Maybe we should just take a breather at this point (perhaps just till
-the end of the day). It is now 11 am.
-
-Other than doing the compound commands, there is really nothing different we
-need to do, expect for stuff like making the word expansion process more
-class-based (object-oriented).
-
-I'm seriously thinking about creating an application that receives the ShellProgram
-object, and offers all of the debugging/stepping options that you might want in order 
-to understand the shell's dynamics.
+...rebuild a new terminal app from ground 0.
 
 */
-
-/*To keep the integrity of this thing, I want _Parser.end() @SLKIURUJ to be«
-return(this.tokNum===this.numToks);
-... rather than
-return(this.tokNum>=this.numToks);
-
-So we need to make sure that this.numToks is always set to: tokens.length.
-So, whenever we do stuff like pushNewline, we need to update that variable,
-like @LCMJHFUEM.
-
-@DYUTYDHFK: Need to make 'isCommandStart' a property of individual tokens
-»*/
-//@KUYDHYET: _Parser.compile
-
-//«Notes
-/*12/5/24: An example of the weird case of Arrays vs Strings«
-1) @WPRLKUT, we are calling make_sh_error_com(comword, `command not found`, com_env),
-2) in that function @SPOIRUTM, we use to do:
-	com.errorMessage = `sh: ${name}: ${mess}`;
-...but at the out_cb (@WLKUIYDP), we do testing for isStr, without checking for
-embedded newlines, so now we do:
-	com.errorMessage = `sh: ${name}: ${mess}`.split("\n");
-...in order to get the correct output in the terminal for the case when comword
-has embedded newlines
-»*/
-/*12/4/24: At this late date, we still needed to add the line @DPORUTIH !!!«
-»*/
-/*12/2/24: Lexing and Parsing the Shell Command Language«
-1) The lexer just spits out these tokens:
- - Words
- - Operators
- - Newline lists
-
-The tricky part is a Word:
-
-A sequence of non-whitespace separated:
- - Chars (plus Escaped Chars)
- - Substitutions ( $(...), $((...)) or ${...} )
- - Strings ( "...", $'...', '...' or `...` )
-  ) Strings must be recorded faithfully as an array of Chars or Escaped Chars
-  ) "...": 
-   > can include embedded Substitutions and `...`
-  ) `...`:
-   > can include embedded Substitutions and Strings (expect itself)
-   > all scans for embedded entities must end when an unescaped '`' is detected
-
-To "be in the top-level" means that you are not inside of a String
- - at the appropriate point, top-level Strings can be turned into sequences of 
-   Chars, Substitutions and Strings
- - there can be an 'unflatten' or 'objectify' class method to do this
-
-»*/
-/*11/30/24: Heredocs: Instead of passing a string into execute, perhaps we should«
-pass in a object with a "scan for eof marker", in order to allow heredocs to be
-collected.
-
-We are passing in heredocScanner's in from the terminal's shell.execute call, and
-the call in class ScriptCom.
-
-We are not currently doing anything past tilde expansion for the redir words (including
-herestrings),
-and we are not currently expanding anything in the heredocs. So, the herestrings
-themselves only get tilde expanded.
-»*/
-//11/27/24: We are silently skipping file glob patterns with slashes in them//«
-//@EJUTIOPB, so only globs in the current directory will work.
-//$ echo */* *
-// -> */* [...all files in the current directory]
-
-/*Also, we are using Old_curly_expansion, which does NOT do comma expansions, but
-the new curly_expansion @QXDPOLIT DOES do them (but that one uses the newer 
-parsing algorithm in the DevShell in /doc/dev/TERMINAL @SOTFKL).
-*/
-
-//»
-/*11/26/24: No calls to com.out in the 'init' phase please!«
-Migrate to the new 'class extends Com{...}' notation or get the error message @VKJEOKJ.
-com.init is mainly for doing all the the async stuff that your command needs to work
-(like loading modules), and also for checking the sanity of the particular combination
-of arguments and options that are given to you. Outputting error messages (or other kinds
-of messages like warning or info) is always okay because these always go to the terminal.
-So we want to be sure that everyone in the pipeline is totally "ready to rumble" before 
-any calls to com.out(...) are made.
-»*/
-/*11/25/24: New 'Com class{...}' and 'Com_whatever extends Com{...}'«
-
-class Com {
-	constructor(args, opts, _){
-		this.args=args;
-		this.opts=opts;
-		for (k in _) {
-			this[k]=_[k];
-		}
-	}
-}
-
-const Com_blah = class extends Com {
-
-async init(){
-//Parse the options
-}
-async run(){
-}
-pipeIn(val){
-}
-
-}
-
-»*/
-//»
-
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
 //let DEBUG = false;
@@ -247,7 +127,6 @@ const UNSUPPORTED_OPERATOR_TOKS=[//«
 ];//»
 //*/
 const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
-//const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 
 const INVSUB="invalid/unsupported substitution";
 const START_NAME_CHARS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "_"];
@@ -278,12 +157,7 @@ const OK_OUT_REDIR_TOKS=[">",">>"];
 const OK_IN_REDIR_TOKS=["<","<<","<<<","<<-"];
 const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 
-const HEX_CHARS=[ "a","A","b","B","c","C","d","D","e","E","f","F",...DECIMAL_CHARS_0_to_9 ];
-
 const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
-const shell_metas = [" ", "\t", "|", "&", ";", "(", ")", "<", ">"];
-const shell_c_op = [";;&", "||", "&&", ";;", ";&", "|&", "((", "&", ";", "|", "(", ")"];
-const shell_r_op = ["<<<", "&>>", "<>", ">>", "<<", "<&", "&>", ">&", ">", "<"];
 
 const NO_SET_ENV_VARS = ["USER"];
 
@@ -345,14 +219,8 @@ for (let k in PRELOAD_LIBS){
 //log(ALL_LIBS);
 const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 
-//Maximum length of a line entered into the terminal (including lines in scripts)
-const MAX_LINE_LEN = 256;
-
 //To allow writing of files even if there is an external lock on it, change this to true
 //const allow_write_locked = false;
-
-const NOOP=()=>{return TERM_ERR;};
-//const TERM_ERR = 1;
 
 const DIRECTORY_TYPE = "d";
 const LINK_TYPE = "l";
@@ -526,38 +394,6 @@ const add_to_env = (arr, env, opts)=>{//«
 	}
 	return err;
 };//»
-const term_error=(term, arg)=>{//«
-//	if (isStr(arg)) arg = term.fmt2(arg);
-	term.response(arg);
-};//»
-const term_out=(term, arg)=>{//«
-	if (isStr(arg)) arg = term.fmt(arg);
-	term.response(arg);
-};//»
-const get_libs = async()=>{//«
-	let coms = await "/site/coms".toNode();
-	let all = [];
-	const getkids = dir =>{
-		for (let nm in dir){
-			if (nm.match(/^\./)) continue;
-			let kid = dir[nm];
-			if (kid.kids) getkids(kid.kids);
-			else{
-				let parts = kid.fullpath.split("/");
-				parts.pop();
-				parts.shift();
-				parts.shift();
-				parts.shift();
-				parts.shift();
-				if (parts.length) all.push(parts.join(".")+`.${kid.baseName}`);
-				else all.push(kid.baseName);
-			}
-		}
-	};
-	getkids(coms.kids);
-	return all;
-};//»
-
 const import_coms = async libname => {//«
 
 	let modpath = libname.replace(/\./g,"/");
@@ -1587,21 +1423,6 @@ Long options may be given an argument like this:
 
 //FWPORUITJ
 const shell_commands={//«
-/*
-badret: com_badret,
-badobj: com_badobj,
-badarrobj: com_badarrobj,
-oktypedarr: com_oktypedarr,
-badtypedarr: com_badtypedarr,
-weirdarr: com_weirdarr,
-noret: com_noret,
-nullret: com_nullret,
-hang: com_hang,
-norun: com_norun,
-deadpipe: com_deadpipe,
-pipe: com_pipe,
-echoasync: com_echoasync,
-*/
 math: com_math,
 inspect: com_inspect,
 curcol: com_curcol, 
@@ -1613,7 +1434,6 @@ true: com_true,
 false: com_false,
 epoch: com_epoch,
 hist: com_hist,
-//help: com_help,
 import: com_import,
 libs: com_libs,
 lib: com_lib,
@@ -1629,27 +1449,8 @@ app: com_app,
 appicon: com_appicon,
 open: com_open,
 msleep: com_msleep,
-//email: com_email,
-//imap: com_imap,
-//smtp: com_smtp,
-//pokerruns: com_pokerruns,
-//pokerhands: com_pokerhands,
-//termlines: com_termlines,
-//hi: com_hi,
-//ssh: com_ssh,
-//meta: com_meta,
 };
 
-/*
-for (let coms in NS.coms){
-	for (let com in coms){
-		if (!shell_commands[com]){
-			shell_commands[com] = coms[com];
-			continue;
-		}
-	}
-}
-*/
 //»
 
 //Init«
@@ -2549,19 +2350,9 @@ eol(){//«
 		(!this.isInteractive && isNLs(this.tokens[this.tokNum]))
 	)
 }//»
-eos(){//end-of-script«
-	return (!this.isInteractive && this.tokNum === this.numToks);
-}//»
-unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
-unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
 end(){//«
 //SLKIURUJ
 	return(this.tokNum===this.numToks);
-}//»
-curTok(add_num=0){return this.tokens[this.tokNum+add_num];}
-nextTok(){//«
-	this.tokNum++;
-	return this.tokens[this.tokNum];
 }//»
 async scanNextTok(heredoc_flag) {//«
 	let token = this.lookahead;
@@ -2797,7 +2588,6 @@ return statements;
 }
 
 })();//»
-
 /*Sequence Classes (Words, Quotes, Subs)«*/
 
 const Sequence = class {/*«*/
@@ -2808,10 +2598,10 @@ const Sequence = class {/*«*/
 		this.start = start;
 	}
 }/*»*/
-const Newlines = class extends Sequence{
+const Newlines = class extends Sequence{/*«*/
 	get isNLs(){ return true; }
 	toString(){ return "newline"; }
-}
+}/*»*/
 const Word = class extends Sequence{//«
 async expandSubs(shell, term){//«
 
@@ -3200,6 +2990,7 @@ dup(){//«
 }//»
 
 /*»*/
+/*«Expansions*/
 
 const isNLs=val=>{return val instanceof Newlines;};
 
@@ -3608,7 +3399,6 @@ const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${
 				if (!ANY_DIGIT_CHARS.includes(next)){
 		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
 					return BADSUB(numstr, next);
-		//			return INVSUB;
 				}
 				numstr+=next;
 				i++;
@@ -3885,6 +3675,7 @@ else if (red==="<<"){
 }
 return stdin;
 }/*»*/
+/*»*/
 
 return function(term){
 
@@ -3907,11 +3698,9 @@ if (started_time < cancelled_time) return;
 
 »*/
 this.cancelled_time = 0;
-
-//»
-const FATAL = mess => {term.topwin._fatal(new Error(mess));};
 this.cancelled = false;
 
+//»
 this.execute=async(command_str, opts={})=>{//«
 
 //Init/Var
@@ -3951,7 +3740,8 @@ if (isStr(statements)) return terr("sh: "+statements);
 
 let lastcomcode;
 
-STATEMENT_LOOP: for (let state of statements){//A 'statement' is a list of boolean-separated pipelines.
+//A 'statement' is a list of boolean-separated pipelines.
+STATEMENT_LOOP: for (let state of statements){
 
 let loglist = state.statement;
 if (!loglist){
@@ -4547,8 +4337,7 @@ term.response_end();
 return lastcomcode;
 /*»*/
 
-
-}//»
+}
 
 this.cancel=()=>{//«
 	this.cancelled = true;
@@ -4557,67 +4346,12 @@ this.cancel=()=>{//«
 	for (let com of pipe) com.cancel();
 };//»
 
-};//
+};
 
 })();
-/*»*/
+//»
 
 //Terminal«
-
-//Issues«
-/*@GYWJNFGHXP: Just started on a "solution" to the issue referenced on the Bug below.«
-
-For now, we are doing replacements for open paren, open square brace and plus sign.
-What about period, asterisk and question mark?
-
-
-We now allow for the tab completion like:
-
-$ cat 'Some (weird) f<TAB>
-
-to become:
-
-$ cat 'Some (weird) filename.txt'
-
-But this also actually works when we are at the beginning:
-
-$ 'Some (weird) f<TAB>
-
-becomes:
-
-$ 'Some (weird) filename.txt'
-
-...this is *really* only supposed to search in the command pathway.
-
-»*/
-/*Bug found on Feb. 14, 2023://«
-
-There seems to be an issue with commands that wrap around that have long
-arguments (like filenames) with embedded spaces that are escaped. Say
-the terminal is only like 40 chars wide:
-
-$ ls /home/me/videos/This\ is\ a\ video\
-with\ embedded\ spaces.mp4
-
-There was actually a line break inserted here in the command history, probably
-related to doing a tab completion that had to wrap around.
-
-I want to implement tab completions that are inside of quotes (like bash does).
-Given a file named "file with spaces.txt", doing:
-
-$ cat 'file w<TAB>
-
-...should complete to:
-
-$ cat 'file with spaces.txt'
-
-There needs to be some basic parsing done to ensure that this does not work,
-i.e. there should be an odd number of non-escaped quotes.
-
-$ cat ' 'file w<TAB>
-
-//»*/
-//»
 
 export const app = function(Win) {
 
@@ -4811,6 +4545,7 @@ let hold_terminal_screen;
 //let cur_dir;
 
 //»
+
 //DOM«
 let BGCOL = "#080808";
 let overdiv = make('div');//«
@@ -7413,8 +7148,6 @@ const init = async(appargs={})=>{
 	if (!reInit) reInit = {};
 	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
-//cwarn("Reload the terminal:", !USE_ONDEVRELOAD);
-//	let gotbuf = reInit.termBuffer;
 	if (termBuffer) history = termBuffer;
 	else {
 		let arr = await get_history();
@@ -7456,7 +7189,6 @@ const init = async(appargs={})=>{
 		for (let c of commandStr) handle_letter_press(c); 
 		handle_enter();
 	};
-
 	if (USE_ONDEVRELOAD) Term.ondevreload = ondevreload;
 
 };
