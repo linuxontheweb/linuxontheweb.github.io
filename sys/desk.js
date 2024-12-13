@@ -2272,13 +2272,9 @@ let fromtype = fromnode.type;
 let scrl = desk.scrollLeft;
 let scrt = desk.scrollTop;
 
-//Fake parser.shell_exports object for fs.com_mv:serr cbok werr wclerr path2obj cwd is_root term.kill_register get_var_str
+//Fake parser.shell_exports object for fs.com_mv:cbok werr wclerr path2obj cwd is_root 
 let shell_exports = {//«
 	cbok: do_end,
-	serr: arg => {
-		cerr(arg);
-		if (cb) cb();
-	},
 	no_move_cb:(icn)=>{
 		if (!icn) return;
 		NO_MOVE_ICONS.push(icn);
@@ -2294,24 +2290,9 @@ let shell_exports = {//«
 		if (mess) err += `: ${mess}`;
 		ERROR_MSGS.push(err);
 		do_end();
-//		shell_moving_done = true;
-//		check_no_move_icons();
-//		if (cb) cb();
 	},
-//		wclerr: log,
 	cwd: "/",
 	is_root: false,
-	termobj: {
-		kill_register: func => {
-//				cwarn("Got kill_register call");
-		},
-		kill_unregister: func => {
-//				cwarn("Got kill_unregister call");
-		}
-	},
-	get_var_str: () => {
-		return null;
-	}
 };//»
 
 //»
@@ -2530,10 +2511,6 @@ Promise.all(proms).then(()=>{//«
 	check_no_move_icons();
 });//»
 //Do the "real" system moving
-//fs.com_mv(shell_exports, paths, do_copy, {//«
-//	win: usewin,
-//	icons: icon_obj
-//});//»
 
 fs.com_mv(paths, {
 	shell_exports,

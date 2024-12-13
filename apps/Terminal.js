@@ -6,6 +6,7 @@
 let USE_ONDEVRELOAD = false;
 
 //»
+
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -89,7 +90,16 @@ if (dev_mode){
 }
 //»
 
-/*«Shell*/
+//«Shell
+
+/*«ShellNS: This function/"namespace" is our way to start bundling *everything* 
+that is relevant to the thing called the "shell" (as opposed to the thing called 
+the "terminal") into a singular thing. We want to do this in a totally 
+methodical/non-destrutive kind of way, so we can be very assured of the fact that 
+everything always works as ever.»*/
+
+const ShellNS = function(){}
+
 //Var«
 
 let last_exit_code = 0;
@@ -106,7 +116,6 @@ const OPERATOR_CHARS=[//«
 ];//»
 //const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
 const UNSUPPORTED_OPERATOR_CHARS=[];
-///*
 const UNSUPPORTED_DEV_OPERATOR_TOKS = [];
 const UNSUPPORTED_OPERATOR_TOKS=[//«
 	'&',
@@ -121,7 +130,6 @@ const UNSUPPORTED_OPERATOR_TOKS=[//«
 	'<<-',
 //	'<<<'
 ];//»
-//*/
 const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 
 const INVSUB="invalid/unsupported substitution";
@@ -532,8 +540,8 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 
 //Command Classes«
 
-const Com = class {/*«*/
-	constructor(name, args, opts, env={}){/*«*/
+const Com = class {//«
+	constructor(name, args, opts, env={}){//«
 		this.name =name;
 		this.args=args;
 		this.opts=opts;
@@ -566,9 +574,9 @@ const Com = class {/*«*/
 				this.numErrors?this.no(mess):this.ok(mess);
 			};
 		});
-	}/*»*/
+	}//»
 	static grabsScreen = false;
-	async nextArgAsNode(opts={}){/*«*/
+	async nextArgAsNode(opts={}){//«
 		let {noErr, noneIsErr} = opts;
 		let e, f, node;
 		f = this.args.shift();
@@ -586,8 +594,8 @@ const Com = class {/*«*/
 			this.numErrors++;
 		}
 		return new Error(e);
-	}/*»*/
-	async nextArgAsFile(opts={}){/*«*/
+	}//»
+	async nextArgAsFile(opts={}){//«
 		let file = await this.nextArgAsNode(opts);
 		if (!isNode(file) || file.isFile) return file;
 		let e = `${file.name}: not a regular file`;
@@ -596,8 +604,8 @@ const Com = class {/*«*/
 			this.numErrors++;
 		}
 		return new Error(e);
-	}/*»*/
-	async nextArgAsDir(opts={}){/*«*/
+	}//»
+	async nextArgAsDir(opts={}){//«
 		let dir = await this.nextArgAsNode(opts);
 		if (!isNode(dir) || dir.isDir) return dir;
 		let e = `${dir.name}: not a directory`;
@@ -606,8 +614,8 @@ const Com = class {/*«*/
 			this.numErrors++;
 		}
 		return new Error(e);
-	}/*»*/
-	async nextArgAsText(opts={}){/*«*/
+	}//»
+	async nextArgAsText(opts={}){//«
 		let {noErr, noneIsErr, asStr} = opts;
 		let f = await this.nextArgAsFile(opts);
 		if (!isFile(f)) return f;
@@ -622,10 +630,10 @@ const Com = class {/*«*/
 		}
 		if (asStr) return str;
 		return str.split("\n");;
-	}/*»*/
+	}//»
 	get noStdin(){return(!(this.pipeFrom || this.stdin));}
 	get noArgs(){return(this.args.length===0);}
-	expectArgs(num){/*«*/
+	expectArgs(num){//«
 		if (!isNum(num)) {
 			this.err(`invalid argument given to expectArgs (see console)`);
 			this.numErrors++;
@@ -640,16 +648,16 @@ log(num);
 			return;
 		}
 		return true;
-	}/*»*/
+	}//»
 	maybeSetNoPipe(){if(this.args.length || this.stdin)this.noPipe=true;}
-	noInputOrArgs(opts={}){/*«*/
+	noInputOrArgs(opts={}){//«
 		let have_none = !(this.args.length || this.pipeFrom || this.stdin);
 		if (have_none && !opts.noErr){
 			this.err("no args or input received");
 			this.numErrors++;
 		}
 		return have_none;
-	}/*»*/
+	}//»
 	eof(){this.out(EOF);}
 	init(){}
 	run(){
@@ -660,7 +668,7 @@ log(num);
 cwarn(`${this.name}: cancelled`);
 	}
 
-}/*»*/
+}//»
 const ScriptCom = class extends Com{//«
 	constructor(shell, name, text, args, env){
 		super(name, args, {}, env);
@@ -668,53 +676,14 @@ const ScriptCom = class extends Com{//«
 		this.shell = shell;
 	}
 	async run(){
-//		let code;
-//		let execute = this.shell.execute;
 		let scriptOut = this.out;
 		let scriptArgs = this.args;
 		let scriptName = this.name;
-//		let text = this.text;
-//		let lns = text.split("\n");
-//		let len = lns.length;
-//«
-//		let i=0;
-/*
-		let heredocScanner = (marker, iter) => {
-			let doc = [];
-//			i++;
-			if (i===len) return `end-of-heredoc marker not found (found unexpected newline, looking for '${which}')`;
-			while (i < len){
-				let ln = lns[iter];
-				if (ln === marker) {
-//cwarn("HEREDOCOUT");
-//log(doc);
-					return doc.join("\n");
-				}
-				doc.push(ln);
-				iter++;
-			}
-			return `end-of-heredoc marker not found (looking for '${which}')`
-		};
-»*/
-//		let rv = await execute(text, {scriptOut, scriptName, scriptArgs, heredocScanner});
 		let code = await this.shell.execute(this.text, {scriptOut, scriptName, scriptArgs});
-//		if (Number.isFinite(rv)) code = rv;
-/*«
-		for (i=0; i < len; i++){
-			let ln = lns[i];
-			if (this.killed) return;
-			let rv = await execute(ln, {scriptOut, scriptName, scriptArgs, heredocScanner});
-			if(rv instanceof Number && rv.isExit){
-				code = rv.valueOf();
-				break;
-			}
-			if (Number.isFinite(rv)) code = rv;
-		}
-»*/
 		this.end(code);
 	}
 }//»
-const NoCom=class{/*«*/
+const NoCom=class{//«
 	init(){
 		this.awaitEnd=new Promise((Y,N)=>{
 			this.ok=()=>{
@@ -727,19 +696,19 @@ const NoCom=class{/*«*/
 		this.ok();
 	}
 	cancel(){}
-}/*»*/
-const ErrCom = class extends Com{/*«*/
+}//»
+const ErrCom = class extends Com{//«
 	run(){
 		this.no(this.errorMessage);
 	}
-}/*»*/
+}//»
 const make_sh_error_com = (name, mess, com_env)=>{//«
 
 	let com = new ErrCom(name, null,null,com_env);
 //SPOIRUTM
 	com.errorMessage = `sh: ${name}: ${mess}`;
 	return com;
-};/*»*/
+};//»
 globals.comClasses={Com, ErrCom};
 
 //»
@@ -1463,16 +1432,12 @@ continue;
 const active_commands = globals.shell_commands || shell_commands;
 if (!globals.shell_commands) {
 	globals.shell_commands = shell_commands;
-//log(globals.shell_commands);
 }
-//const active_commands = globals.shell_commands ? (globals.shell_commands) :
 if (dev_mode){
 
 active_commands.test = com_test;
 
 }
-//log(active_commands);
-//let BUILTINS = active_commands._keys;
 
 const active_options = globals.shell_command_options || command_options;
 if (!globals.shell_command_options) globals.shell_command_options = command_options;
@@ -1482,7 +1447,9 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 //«Shell
 
-const Shell = (()=>{
+//const Shell = (()=>{
+
+ShellNS.Shell = (()=>{
 
 //Scanner/Parser«
 
@@ -4117,7 +4084,7 @@ const com_env = {/*«*/
 			code.isExit = true;
 			return code;
 		}//»
-		let com = active_commands[usecomword];
+		let com = Shell.activeCommands[usecomword];
 		if (isStr(com)){//QKIUTOPLK«
 //If we have a string rather than a function, do the command library importing routine.
 //The string is always the name of the library (rather than the command)
@@ -4133,7 +4100,7 @@ cerr(e);
 				terr(`sh: command library: '${com}' could not be loaded`);
 				return;
 			}
-			let gotcom = active_commands[usecomword];
+			let gotcom = Shell.activeCommands[usecomword];
 			if (!(gotcom instanceof Function)){
 				terr(`sh: '${usecomword}' is invalid or missing in command library: '${com}'`);
 				return;
@@ -4198,8 +4165,7 @@ cerr(e);
 		}/*»*/
 		screen_grab_com = com.grabsScreen?comword: false;
 		let opts;
-		let gotopts = active_options[usecomword];
-
+		let gotopts = Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
 		rv = get_options(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
@@ -4341,7 +4307,16 @@ this.cancel=()=>{//«
 
 })();
 //»
-/*»*/
+
+//Shell«
+
+const Shell = ShellNS.Shell;
+Shell.activeCommands = active_commands;
+Shell.activeOptions = active_options;
+
+//»
+
+//»
 
 //Terminal«
 
@@ -6436,11 +6411,11 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 	if (!(!got_path && (tokpos==1||(tokpos>1 && com_completers.includes(tok0))))) return do_get_dir_contents(use_dir, tok, tok0, arr_pos);
 	if (tokpos==1) {
 //		contents = await get_command_arr(use_dir, BUILTINS, tok)
-		contents = await get_command_arr(use_dir, Object.keys(active_commands), tok)
+		contents = await get_command_arr(use_dir, Object.keys(Shell.activeCommands), tok)
 	}
 	else {
 		if (tok0 == "help"){
-			contents = await get_command_arr(use_dir, Object.keys(active_commands), tok)
+			contents = await get_command_arr(use_dir, Object.keys(Shell.activeCommands), tok)
 		}
 		else if (tok0 == "lib" || tok0 == "import"){
 			contents = await get_command_arr(use_dir, await util.getList("/site/coms/"), tok)
@@ -7221,15 +7196,6 @@ this.read_line = async(promptarg)=>{//«
 		read_line_cb = Y;
 	});
 };//»
-this.kill_register = (funcarg)=>{kill_funcs.push(funcarg);}
-this.kill_unregister = (funcarg)=>{//«
-	let which = kill_funcs.indexOf(funcarg);
-	if (which < 0) {
-cerr("Could not find the funcarg");
-		return;
-	}       
-	kill_funcs.splice(which, 1);
-}//» 
 this.onappinit = init;
 
 const onescape = () => {//«

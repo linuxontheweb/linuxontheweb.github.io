@@ -1098,9 +1098,6 @@ let {
 	cur_dir,
 	failopts,
 	is_root,
-	get_var_str,
-	termobj,
-	kill_register,
 	pathToNode,
 	no_move_cb
 } = shell_exports;
@@ -1128,15 +1125,6 @@ if (dom_objects) {
 	towin = dom_objects.win;
 }
 
-//»
-
-let killed = false;//«
-if (kill_register){
-	kill_register(cb=>{
-		killed = true;
-		cb&&cb();
-	});
-}
 //»
 
 let sws;
@@ -1264,10 +1252,6 @@ for (let arr of mvarr) {//«
 	let gotfrom, gotto;
 	let savedirpath;
 	let savename;
-	if (killed) {
-		werr("Killed!");
-		break;
-	}
 
 	if (destret) {//«
 		if (destret.appName == FOLDER_APP) {
