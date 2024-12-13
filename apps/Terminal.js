@@ -1,9 +1,4 @@
 //Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
-/*12/12/24: JUST:
-
-...rebuild a new terminal app from ground 0.
-
-*/
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
 //let DEBUG = false;
@@ -94,6 +89,7 @@ if (dev_mode){
 }
 //»
 
+/*«Shell*/
 //Var«
 
 let last_exit_code = 0;
@@ -230,14 +226,7 @@ const IDB_DATA_TYPE = "i";//Data structures that are stored directly in the inde
 //»
 
 //Helper funcs«
-/*
-const sleep = (ms)=>{//«
-	if (!Number.isFinite(ms)) ms = 0;
-	return new Promise((Y,N)=>{
-		setTimeout(Y, ms);
-	});
-};//»
-*/
+
 const hang=()=>{return new Promise((Y,N)=>{});};
 const get_options = (args, com, opts={}) => {//«
 	const getlong = opt => {
@@ -503,9 +492,9 @@ cwarn(`Deleted module: ${m}`);
 
 const write_to_redir = async(term, out, redir, env)=>{//«
 //let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
-	if (!(out instanceof Uint8Array || isStr(out))){
-		if (!isArr(out)) return {err: "the redirection output is not a String, Uint8Array or JS array!"}
-		if (out.length && !isStr(out[0])) return {err: "the redirection output does not seem to be an array of Strings!"};
+	if (!isArr(out)) return {err: "the redirection output is not a Uint8Array or JS array!"}
+	if (!(out instanceof Uint8Array)) {
+		 if (!isStr(out[0])) return {err: "the redirection output does not seem to be an array of Strings!"};
 		out = out.join("\n");
 	}
 	let op = redir.shift();
@@ -1453,7 +1442,10 @@ msleep: com_msleep,
 
 //»
 
-//Init«
+
+//»
+
+//Shell Init«
 
 //MYKLJDHFK
 for (let k in PRELOAD_LIBS){
@@ -1485,8 +1477,6 @@ active_commands.test = com_test;
 const active_options = globals.shell_command_options || command_options;
 if (!globals.shell_command_options) globals.shell_command_options = command_options;
 
-
-//»
 
 //»
 
@@ -3677,7 +3667,7 @@ return stdin;
 }/*»*/
 /*»*/
 
-return function(term){
+return function(term){//«
 
 //Var«
 const shell = this;
@@ -3701,21 +3691,10 @@ this.cancelled_time = 0;
 this.cancelled = false;
 
 //»
+
 this.execute=async(command_str, opts={})=>{//«
 
 //Init/Var
-//WIMNNUYDKL
-
-let started_time = (new Date).getTime();
-
-//let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
-let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-//let {scriptOut, subLines, env}=opts;
-let rv;
-let is_top_level = !(scriptOut||subLines);
-let heredocs;
-let no_end = !is_top_level;
-
 const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});
 //	if (!scriptOut) term.response_end();
@@ -3727,6 +3706,18 @@ const can=()=>{//«
 //Cancel test function
 	return started_time < this.cancelled_time;
 };//»
+//WIMNNUYDKL
+//«
+let started_time = (new Date).getTime();
+
+//let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
+let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+//let {scriptOut, subLines, env}=opts;
+let rv;
+let is_top_level = !(scriptOut||subLines);
+let heredocs;
+let no_end = !is_top_level;
+
 command_str = command_str.replace(/^ +/,"");
 
 let statements;
@@ -3739,9 +3730,10 @@ catch(e){
 if (isStr(statements)) return terr("sh: "+statements);
 
 let lastcomcode;
+//»
 
 //A 'statement' is a list of boolean-separated pipelines.
-STATEMENT_LOOP: for (let state of statements){
+STATEMENT_LOOP: for (let state of statements){//«
 
 let loglist = state.statement;
 if (!loglist){
@@ -4017,7 +4009,7 @@ if (redir_lns) {
 		comobj.redirLines = redir_lns;
 		return;
 	}
-	redir_lns.push(...val);
+	redir_lns.push(val);
 	return;
 }
 if (scriptOut) return scriptOut(val);
@@ -4324,7 +4316,7 @@ last_exit_code = lastcomcode;
 
 }//»
 
-}//
+}//»
 
 //In a script, refresh rather than returning to the prompt
 if (no_end) {
@@ -4335,9 +4327,8 @@ if (no_end) {
 //Command line input returns to prompt
 term.response_end();
 return lastcomcode;
-/*»*/
 
-}
+}//»
 
 this.cancel=()=>{//«
 	this.cancelled = true;
@@ -4346,10 +4337,11 @@ this.cancel=()=>{//«
 	for (let com of pipe) com.cancel();
 };//»
 
-};
+};//»
 
 })();
 //»
+/*»*/
 
 //Terminal«
 
