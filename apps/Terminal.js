@@ -1,8 +1,6 @@
-//Older terminal development notes and (maybe newer) code are stored in doc/dev/TERMINAL
+
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
-//let DEBUG = false;
-//let DEBUG = true;
 let USE_ONDEVRELOAD = false;
 
 //»
@@ -92,90 +90,16 @@ if (dev_mode){
 
 //«Shell
 
-/*«ShellNS: This function/"namespace" is our way to start bundling *everything* 
+const ShellNS = new function(){
+
+/*ShellNS: This function/"namespace" is our way to bundle *everything* 
 that is relevant to the thing called the "shell" (as opposed to the thing called 
 the "terminal") into a singular thing. We want to do this in a totally 
 methodical/non-destrutive kind of way, so we can be very assured of the fact that 
-everything always works as ever.»*/
-
-const ShellNS = function(){}
+everything always works as ever.*/
 
 //Var«
-
-let last_exit_code = 0;
-
-const EOF_Type = 1;
-const OPERATOR_CHARS=[//«
-"|",
-"&",
-";",
-"<",
-">",
-"(",
-")",
-];//»
-//const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
-const UNSUPPORTED_OPERATOR_CHARS=[];
-const UNSUPPORTED_DEV_OPERATOR_TOKS = [];
-const UNSUPPORTED_OPERATOR_TOKS=[//«
-	'&',
-//	'<',
-	';;',
-	';&',
-	'>&',
-	'>|',
-	'<&',
-//	'<<',
-	'<>',
-	'<<-',
-//	'<<<'
-];//»
-const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
-
-const INVSUB="invalid/unsupported substitution";
-const START_NAME_CHARS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "_"];
-//const START_NAME_CHARS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","_"];
-const DIGIT_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
-const DECIMAL_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
-const DECIMAL_CHARS_0_to_9=["0", "1","2","3","4","5","6","7","8","9"];
-const ANY_DIGIT_CHARS=["0", "1","2","3","4","5","6","7","8","9"];
-const ANY_NAME_CHARS = [...START_NAME_CHARS, ...ANY_DIGIT_CHARS];
-//const ANY_NAME_CHARS = [...START_NAME_CHARS, ...DECIMAL_CHARS_0_to_9];
-const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
-
-const OPERATOR_TOKS=[//«
-'&&',
-'||',
-';;',
-';&',
-'>&',
-'>>',
-'>|',
-'<&',
-'<<',
-'<>',
-'<<-',
-'<<<',
-];//»
-const OK_OUT_REDIR_TOKS=[">",">>"];
-const OK_IN_REDIR_TOKS=["<","<<","<<<","<<-"];
-const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
-
-const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
-
-const NO_SET_ENV_VARS = ["USER"];
-
-const ALIASES={
-	c: "clear",
-	la: "ls -a",
-//	com2 : "frugg --gamnich 1 2 3"
-//	ai: "appicon"
-};
-
-const ALLOW_REDIRECT_CLOBBER = false;
-//const ALLOW_REDIRECT_CLOBBER = true;
-
-const FS_COMS=[//«
+const fs_coms=[//«
 	"_purge",
 	"_clearstorage",
 	"_blobs",
@@ -197,45 +121,21 @@ const FS_COMS=[//«
 //	"mount",
 //	"unmount",
 ];//»
-
-/*«
-const TEST_COMS=[
-	"test"
-];
-const YT_COMS=[
-	"ytsrch",
-	"ytthing",
-	"ytvid",
-	"ytdl"
-];
-»*/
-const PRELOAD_LIBS = {fs: FS_COMS};
-//const ALL_LIBS = {
-//	audio:["midiup"],
-//	fs: FS_COMS,
-//	test: TEST_COMS,
-//	yt: YT_COMS
-//};
-const ALL_LIBS = NS.libs;
-for (let k in PRELOAD_LIBS){
-	ALL_LIBS[k] = PRELOAD_LIBS[k];
-}
-//log(ALL_LIBS);
-const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
-
-//To allow writing of files even if there is an external lock on it, change this to true
-//const allow_write_locked = false;
-
-const DIRECTORY_TYPE = "d";
-const LINK_TYPE = "l";
-const BAD_LINK_TYPE = "b";
-const IDB_DATA_TYPE = "i";//Data structures that are stored directly in the indexedDB Nodes table
-
+const preload_libs={fs: fs_coms};
 //»
 
-//Helper funcs«
+//Helper funcs (this.util)«
+{
 
-const hang=()=>{return new Promise((Y,N)=>{});};
+const make_sh_error_com = (name, mess, com_env)=>{//«
+
+//	let com = new ErrCom(name, null,null,com_env);
+	let com = new this.comClasses.ErrCom(name, null,null,com_env);
+//SPOIRUTM
+	com.errorMessage = `sh: ${name}: ${mess}`;
+	return com;
+};//»
+
 const get_options = (args, com, opts={}) => {//«
 	const getlong = opt => {
 		let re = new RegExp("^" + opt);
@@ -364,7 +264,7 @@ const add_to_env = (arr, env, opts)=>{//«
 			if (arr[0]===" ") arr.shift();
 			use = arr[0];
 		};
-		marr = ASSIGN_RE.exec(use);
+		marr = this.var.assignRE.exec(use);
 		if (!marr){
 			if (!if_export) break;
 			else{
@@ -374,7 +274,7 @@ const add_to_env = (arr, env, opts)=>{//«
 			}
 		}
 		which = marr[1];
-		if (NO_SET_ENV_VARS.includes(which)){
+		if (this.var.noSetEnvVars.includes(which)){
 			err.push(`sh: ${which}: cannot set the constant environment variable`);
 			next();
 			continue;
@@ -409,7 +309,7 @@ cwarn(`The command ${com} already exists!`);
 		sh_coms[com] = coms[com];
 		ok_coms.push(com);
 	}
-	ALL_LIBS[libname] = ok_coms;
+	this.var.allLibs[libname] = ok_coms;
 cwarn(`Added: ${ok_coms.length} commands from '${libname}'`);
 	let opts = imp.opts||{};
 	let sh_opts = globals.shell_command_options;
@@ -429,12 +329,12 @@ cwarn(`The option ${opt} already exists!`);
 const do_imports = async(arr, err_cb) => {//«
 	if (!err_cb) err_cb = ()=>{};
 	for (let arg of arr){
-		if (ALL_LIBS[arg]) {
+		if (this.var.allLibs[arg]) {
 			err_cb(`${arg}: already loaded`);
 			continue;
 		}   
 		try{
-			await import_coms(arg);
+			await this.util.importComs(arg);
 		}catch(e){
 			err_cb(`${arg}: error importing the module`);
 cerr(e);
@@ -447,14 +347,14 @@ const delete_coms = arr => {//«
 	let sh_opts = globals.shell_command_options;
 	for (let libname of arr){
 
-if (!ALL_LIBS[libname]){
+if (!this.var.allLibs[libname]){
 cwarn(`The command library: ${libname} is not loaded`);
 continue;
 }
 
 		let lib = NS.coms[libname];
 		if (!lib){
-//cwarn(`The command library: ${libname} was in ALL_LIBS, but not in NS.coms!?!?!`);
+//cwarn(`The command library: ${libname} was in this.var.allLibs, but not in NS.coms!?!?!`);
 			continue;
 		}
 		let coms = lib.coms;
@@ -479,7 +379,7 @@ cwarn(`Deleted: ${num_deleted} commands from '${libname}'`);
 			}
 			delete sh_opts[opt];
 		}
-		delete ALL_LIBS[libname];
+		delete this.var.allLibs[libname];
 		delete NS.coms[libname];
 	}
 };//»
@@ -511,9 +411,9 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 	let fullpath = normPath(fname, term.cur_dir);
 	let node = await fsapi.pathToNode(fullpath);
 	if (node) {
-		if (node.type == FS_TYPE && op===">" && !ALLOW_REDIRECT_CLOBBER) {
+		if (node.type == FS_TYPE && op===">" && !this.var.allowRedirClobber) {
 			if (env.CLOBBER_OK==="true"){}
-			else return {err: `not clobbering '${fname}' (ALLOW_REDIRECT_CLOBBER==${ALLOW_REDIRECT_CLOBBER})`};
+			else return {err: `not clobbering '${fname}' (this.var.allowRedirClobber==${this.var.allowRedirClobber})`};
 		}
 		if (node.writeLocked()){
 			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
@@ -536,9 +436,42 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 	return {};
 };//»
 
+this.util={/*«*/
+	makeShErrCom: make_sh_error_com,
+	getOptions:get_options,
+	addToEnv:add_to_env,
+	importComs:import_coms,
+	doImports:do_imports,
+	deleteComs:delete_coms,
+	deleteMods:delete_mods,
+	writeToRedir:write_to_redir
+}/*»*/
+
+}
 //»
 
-//Command Classes«
+//«Exported variables (this.var)
+this.var={//«
+
+dirType:"d",
+linkType:"l",
+badLinkType:"b",
+idbDataType:"i",
+allowRedirClobber: false,
+lastExitCode: 0,
+aliases: {
+	c: "clear",
+	la: "ls -a",
+},
+noSetEnvVars: ["USER"],
+preloadLibs: preload_libs,
+allLibs: LOTW.libs,
+assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/,
+
+}//»
+//»
+
+//Command Classes (Com, ErrCom, ScriptCom)«
 
 const Com = class {//«
 	constructor(name, args, opts, env={}){//«
@@ -702,20 +635,16 @@ const ErrCom = class extends Com{//«
 		this.no(this.errorMessage);
 	}
 }//»
-const make_sh_error_com = (name, mess, com_env)=>{//«
 
-	let com = new ErrCom(name, null,null,com_env);
-//SPOIRUTM
-	com.errorMessage = `sh: ${name}: ${mess}`;
-	return com;
-};//»
-globals.comClasses={Com, ErrCom};
+this.comClasses={
+	Com, ScriptCom, NoCom, ErrCom,
+}
+
+//globals.comClasses={Com, ErrCom};
 
 //»
 
-//Shell Builtins«
-
-//Command functions«
+{//Builtin functions/options«
 
 /*
 const com_ = class extends Com{
@@ -725,6 +654,8 @@ run(){
 }
 }
 */
+//const {Com} = ShellNS.comClasses;
+
 const com_echo = class extends Com{//«
 	run(){
 		this.out(this.args.join(" "));
@@ -849,13 +780,13 @@ async run(){//«
 					nm=`'${nm}'`;
 				}
 				if (n.appName===FOLDER_APP) {
-					types.push(DIRECTORY_TYPE);
+					types.push(ShellNS.var.dirType);
 				}
 				else if (n.appName==="Link") {
-					if (!await n.ref) types.push(BAD_LINK_TYPE);
-					else types.push(LINK_TYPE);
+					if (!await n.ref) types.push(ShellNS.var.badLinkType);
+					else types.push(ShellNS.var.linkType);
 				}
-				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
+				else if (n.blobId === ShellNS.var.idbDataType) types.push(ShellNS.var.idbDataType);
 				else types.push(null);
 			}
 			let name_lens = [];
@@ -1056,7 +987,7 @@ async run(){
 	if (this.killed) return;
 	let lib = this.args.shift();
 	let hold = lib;
-	let got = ALL_LIBS[lib] || NS.coms[lib];
+	let got = ShellNS.var.allLibs[lib] || NS.coms[lib];
 	if (got){
 		if (!isArr(got)) got = Object.keys(got);
 		this.out(got.join("\n"));
@@ -1123,9 +1054,9 @@ async run(){
 }//»
 const com_export = class extends Com{/*«*/
 	run(){
-		let rv = add_to_env(this.args, this.term.ENV, {if_export: true});
+		let rv = ShellNS.util.addToEnv(this.args, this.term.ENV, {if_export: true});
 		if (rv.length){
-			this.err(rv);
+			this.err(rv.join("\n"));
 			this.no();
 		}
 		else this.ok();
@@ -1166,7 +1097,7 @@ async run(){
 	let vals = ln.trim().split(/ +/);
 	while (args.length){
 		let arg = args.shift();
-		if (NO_SET_ENV_VARS.includes(arg)) {
+		if (ShellNS.var.noSetEnvVars.includes(arg)) {
 			err(`refusing to modify read-only variable: ${arg}`);
 			vals.shift();
 			continue;
@@ -1265,11 +1196,11 @@ async run(){
 		have_error = true;
 	};
 	if (opts.delete || opts.d){
-		delete_coms(args);
+		ShellNS.util.deleteComs(args);
 		this.ok();
 		return;
 	}
-	await do_imports(args, err);
+	await ShellNS.util.doImports(args, err);
 	have_error?this.no():this.ok();
 }
 }/*»*/
@@ -1323,9 +1254,40 @@ this.ok("NOT MUCH HERE!!!");
 	}//»
 };//»
 
+this.defShellCommands={//«
+//const shell_commands={
+math: com_math,
+inspect: com_inspect,
+curcol: com_curcol, 
+parse: com_parse,
+stringify: com_stringify,
+getch: com_getch,
+read: com_read,
+true: com_true,
+false: com_false,
+epoch: com_epoch,
+hist: com_hist,
+import: com_import,
+libs: com_libs,
+lib: com_lib,
+export: com_export,
+pwd: com_pwd,
+clear: com_clear,
+cd: com_cd,
+ls: com_ls,
+echo: com_echo,
+echodelay: com_echodelay,
+env: com_env,
+app: com_app,
+appicon: com_appicon,
+open: com_open,
+msleep: com_msleep,
+};
+
 //»
 
-const command_options = {//«
+this.defCommandOptions = {//«
+//const command_options = {
 
 /*«
 l: long options
@@ -1361,101 +1323,71 @@ Long options may be given an argument like this:
 	read:{l:{prompt:3}},
 	import:{s:{d:1},l:{delete: 1}},
 	echodelay:{s:{d: 3}}
-
-/*«
-//	ssh:{//«
-//		s:{c:1, s:1, x:1, i: 1},
-//		l:{client: 1, server: 1}
-//	},//»
-	email:{
-		s:{a:1,d:1},
-		l:{add:1,del:1},
-	},
-	smtp:{
-		s:{p:1},
-		l:{"to-paras":1}
-	}
-»*/
-
 };//»
 
-//FWPORUITJ
-const shell_commands={//«
-math: com_math,
-inspect: com_inspect,
-curcol: com_curcol, 
-parse: com_parse,
-stringify: com_stringify,
-getch: com_getch,
-read: com_read,
-true: com_true,
-false: com_false,
-epoch: com_epoch,
-hist: com_hist,
-import: com_import,
-libs: com_libs,
-lib: com_lib,
-export: com_export,
-pwd: com_pwd,
-clear: com_clear,
-cd: com_cd,
-ls: com_ls,
-echo: com_echo,
-echodelay: com_echodelay,
-env: com_env,
-app: com_app,
-appicon: com_appicon,
-open: com_open,
-msleep: com_msleep,
-};
+}//»
 
-//»
+//«Shell (this.Shell)
 
+this.Shell = (()=>{
 
-//»
+const OPERATOR_CHARS=[//«
+"|",
+"&",
+";",
+"<",
+">",
+"(",
+")",
+];//»
+//const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
+const UNSUPPORTED_OPERATOR_CHARS=[];
+const UNSUPPORTED_DEV_OPERATOR_TOKS = [];
+const UNSUPPORTED_OPERATOR_TOKS=[//«
+	'&',
+//	'<',
+	';;',
+	';&',
+	'>&',
+	'>|',
+	'<&',
+//	'<<',
+	'<>',
+	'<<-',
+//	'<<<'
+];//»
+const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 
-//Shell Init«
+const INVSUB="invalid/unsupported substitution";
+const START_NAME_CHARS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "_"];
+//const START_NAME_CHARS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","_"];
+const DIGIT_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
+const DECIMAL_CHARS_1_to_9=["1","2","3","4","5","6","7","8","9"];
+const DECIMAL_CHARS_0_to_9=["0", "1","2","3","4","5","6","7","8","9"];
+const ANY_DIGIT_CHARS=["0", "1","2","3","4","5","6","7","8","9"];
+const ANY_NAME_CHARS = [...START_NAME_CHARS, ...ANY_DIGIT_CHARS];
+//const ANY_NAME_CHARS = [...START_NAME_CHARS, ...DECIMAL_CHARS_0_to_9];
+const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
 
-/*«"Preload Libs" are libraries of commands whose values for their key names 
-(on the shell_commands object) are strings (representing the command library
-that they "live" in) rather than functions. So, the value for the key, "vim"
-will be "fs", which points to the coms/fs.js file.  Upon finding this string
-@QKIUTOPLK, the import_coms function is used in order to replace the library
-name strings with the proper command functions.
-»*/
+const OPERATOR_TOKS=[//«
+'&&',
+'||',
+';;',
+';&',
+'>&',
+'>>',
+'>|',
+'<&',
+'<<',
+'<>',
+'<<-',
+'<<<',
+];//»
+const OK_OUT_REDIR_TOKS=[">",">>"];
+const OK_IN_REDIR_TOKS=["<","<<","<<<","<<-"];
+const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 
-//MYKLJDHFK
-for (let k in PRELOAD_LIBS){
-
-	let arr = PRELOAD_LIBS[k];
-	for (let com of arr) {
-if (shell_commands[com]){
-cwarn(`The shell command: ${com} already exists (also defined in PRELOAD_LIBS: ${k})`);
-continue;
-}
-		shell_commands[com]=k;
-	}
-
-}
-const active_commands = globals.shell_commands || shell_commands;
-if (!globals.shell_commands) {
-	globals.shell_commands = shell_commands;
-}
-if (dev_mode){
-
-active_commands.test = com_test;
-
-}
-
-const active_options = globals.shell_command_options || command_options;
-if (!globals.shell_command_options) globals.shell_command_options = command_options;
-
-
-//»
-
-//«Shell
-
-ShellNS.Shell = (()=>{
+const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
 
 /*
 The actual "machinery" (algorithms and data structures/classes) are kept in here.
@@ -1569,6 +1501,8 @@ const RESERVED_START_WORDS = [/*«*/
 	"until",
 	"case"
 ];/*»*/
+
+const EOF_Type = 1;
 
 const Scanner = class {
 
@@ -3318,7 +3252,7 @@ switch(sym){
 	case "@":
 		val = script_args.join(" ");
 		break;
-	case "?": val = last_exit_code+""; break;
+	case "?": val = ShellNS.var.lastExitCode+""; break;
 	default: val = "$"+sym;
 }
 word.splice(start_i, end_i-start_i+1, ...val);
@@ -3676,8 +3610,8 @@ const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});
 //	if (!scriptOut) term.response_end();
 	if (!no_end) term.response_end();
-	last_exit_code = code||E_ERR;
-	return last_exit_code;
+	ShellNS.var.lastExitCode = code||E_ERR;
+	return ShellNS.var.lastExitCode;
 };//»
 const can=()=>{//«
 //Cancel test function
@@ -3948,8 +3882,9 @@ for (let k=0; k < arr.length; k++){//quote removal«
 
 
 //Set environment variables (exports to terminal's environment if there is nothing left)
-		let rv = add_to_env(arr, env, {term});
-		if (rv.length) term.response(rv, {isErr: true});
+		let rv = ShellNS.util.addToEnv(arr, env, {term});
+//This is an "error" array
+		if (rv.length) term.response(rv.join("\n"), {isErr: true});
 
 //Command response callbacks
 
@@ -4063,7 +3998,7 @@ const com_env = {/*«*/
 			for (let arg of hold) arr.push(arg.toString());
 		}
 //Replace with an alias if we can«
-		let alias = ALIASES[comword];
+		let alias = ShellNS.var.aliases[comword];
 		if (alias){
 //This should allow aliases that expand with options...
 			let ar = alias.split(/\x20+/);
@@ -4099,10 +4034,10 @@ const com_env = {/*«*/
 //If we have a string rather than a function, do the command library importing routine.
 //The string is always the name of the library (rather than the command)
 //This happens when: 
-//1) libraries are defined in PRELOAD_LIBS, and 
+//1) libraries are defined in ShellNS.var.preloadLibs, and 
 //2) this is the first invocation of a command from one of those libraries.
 			try{
-				await import_coms(com);//com is the library name
+				await ShellNS.util.importComs(com);//com is the library name
 				if (this.cancelled) return;
 			}catch(e){
 				if (this.cancelled) return;
@@ -4131,37 +4066,37 @@ cerr(e);
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
 //WPRLKUT
-				pipeline.push(make_sh_error_com(comword, `command not found`, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, `command not found`, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 
 			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
 			if (!node) {
-				pipeline.push(make_sh_error_com(comword, `file not found`, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, `file not found`, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			let app = node.appName;
 			if (app===FOLDER_APP) {
-				pipeline.push(make_sh_error_com(comword, `is a directory`, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, `is a directory`, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			if (app!==TEXT_EDITOR_APP) {
-				pipeline.push(make_sh_error_com(comword, `not a text file`, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, `not a text file`, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			if (!comword.match(/\.sh$/i)){
-				pipeline.push(make_sh_error_com(comword, `only executing files with '.sh' extension`, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, `only executing files with '.sh' extension`, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			let text = await node.text;
 			if (!text) {
-				pipeline.push(make_sh_error_com(comword, `no text returned`, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, `no text returned`, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			comobj = new ScriptCom(this, comword, text, arr, com_env);
@@ -4169,18 +4104,18 @@ cerr(e);
 			continue;
 		}//»
 		if (screen_grab_com && com.grabsScreen){/*«*/
-			pipeline.push(make_sh_error_com(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env));
-			last_exit_code = E_ERR;
+			pipeline.push(ShellNS.util.makeShErrCom(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env));
+			ShellNS.var.lastExitCode = E_ERR;
 			continue;
 		}/*»*/
 		screen_grab_com = com.grabsScreen?comword: false;
 		let opts;
 		let gotopts = Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
-		rv = get_options(arr, usecomword, gotopts);
+		rv = ShellNS.util.getOptions(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
 			term.response(rv[1][0], {isErr: true});
-			last_exit_code = E_ERR;
+			ShellNS.var.lastExitCode = E_ERR;
 			continue;
 		}
 		opts = rv[0];
@@ -4192,15 +4127,15 @@ cerr(e);
 //			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
 			stdin = await get_stdin_lines(in_redir, term, !!subLines);
 			if (isStr(stdin)){
-				pipeline.push(make_sh_error_com(comword, stdin, com_env));
-				last_exit_code = E_ERR;
+				pipeline.push(ShellNS.util.makeShErrCom(comword, stdin, com_env));
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			else if (!isArr(stdin)){
-				pipeline.push(make_sh_error_com(comword, "an invalid value was returned from get_stdin_lines (see console)", com_env));
+				pipeline.push(ShellNS.util.makeShErrCom(comword, "an invalid value was returned from get_stdin_lines (see console)", com_env));
 cwarn("Here is the non-array value");
 log(stdin);
-				last_exit_code = E_ERR;
+				ShellNS.var.lastExitCode = E_ERR;
 				continue;
 			}
 			com_env.stdin = stdin;
@@ -4215,7 +4150,7 @@ cerr(e);
 //VKJEOKJ
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
-			pipeline.push(make_sh_error_com(usecomword, e.message, com_env));
+			pipeline.push(ShellNS.util.makeShErrCom(usecomword, e.message, com_env));
 		}//»
 //SKIOPRHJT
 	}//»
@@ -4247,7 +4182,7 @@ for (let com of pipeline){/*«*/
 	}
 
 	if (com.redirLines) {
-		let {err} = await write_to_redir(term, com.redirLines, com.out_redir, com.env);
+		let {err} = await ShellNS.util.writeToRedir(term, com.redirLines, com.out_redir, com.env);
 		if (this.cancelled) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
@@ -4258,7 +4193,7 @@ if (pipeline._hasBang){
 	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
 	else lastcomcode = E_SUC;
 }
-last_exit_code = lastcomcode;
+ShellNS.var.lastExitCode = lastcomcode;
 
 //LEUIKJHX
 	if (lastcomcode==E_SUC){//SUCCESS«
@@ -4316,15 +4251,52 @@ this.cancel=()=>{//«
 };//»
 
 })();
+
+const Shell = this.Shell;
+
 //»
 
-//Shell«
+{//«Initialize (preload) command libraries
 
-const Shell = ShellNS.Shell;
+/*«"Preload Libs" are libraries of commands whose values for their key names 
+(on the shell_commands object) are strings (representing the command library
+that they "live" in) rather than functions. So, the value for the key, "vim"
+will be "fs", which points to the coms/fs.js file.  Upon finding this string
+@QKIUTOPLK, the import_coms function is used in order to replace the library
+name strings with the proper command functions.
+»*/
+
+for (let k in preload_libs){
+	this.var.allLibs[k] = preload_libs[k];
+}
+
+for (let k in this.var.preloadLibs){
+	let arr = this.var.preloadLibs[k];
+	for (let com of arr) {
+//if (shell_commands[com]){
+if (this.defShellCommands[com]){
+cwarn(`The shell command: ${com} already exists (also defined in this.var.preloadLibs: ${k})`);
+continue;
+}
+		this.defShellCommands[com]=k;
+	}
+}
+const active_commands = globals.shell_commands || this.defShellCommands;
+if (!globals.shell_commands) {
+	globals.shell_commands = this.defShellCommands;
+}
+
+const active_options = globals.shell_command_options || this.defCommandOptions;
+if (!globals.shell_command_options) globals.shell_command_options = this.defCommandOptions;
+
 Shell.activeCommands = active_commands;
 Shell.activeOptions = active_options;
 
-//»
+}//»
+
+}
+
+globals.ShellNS = ShellNS;
 
 //»
 
@@ -4333,6 +4305,8 @@ Shell.activeOptions = active_options;
 export const app = function(Win) {
 
 //Var«
+
+const Shell = ShellNS.Shell;
 
 const TABSIZE = 4;
 const TABSIZE_MIN_1 = TABSIZE-1;
@@ -4878,10 +4852,10 @@ efficiently) is an outstanding issue...*/
 		let typ;
 		if (types) typ = types[i];
 		let color;
-		if (typ==DIRECTORY_TYPE) color="#909fff";
-		else if (typ==LINK_TYPE) color="#0cc";
-		else if (typ==BAD_LINK_TYPE) color="#f00";
-		else if (typ==IDB_DATA_TYPE) color="#cc0";
+		if (typ==ShellNS.var.dirType) color="#909fff";
+		else if (typ==ShellNS.var.linkType) color="#0cc";
+		else if (typ==ShellNS.var.badLinkType) color="#f00";
+		else if (typ==ShellNS.var.idbDataType) color="#cc0";
 		col_num = Math.floor(i%num_cols);
 		row_num = Math.floor(i/num_cols);
 
@@ -7029,8 +7003,6 @@ else Term.ondevreload = ondevreload;
 do_overlay(`Reload terminal: ${!Term.ondevreload}`);
 	}
 else if (sym=="d_CAS"){
-//DEBUG = !DEBUG;
-//do_overlay(`Debug: ${DEBUG}`);
 
 }
 else if (sym=="s_CA"){
@@ -7147,7 +7119,7 @@ const init = async(appargs={})=>{
 	let env_file_path = `${this.cur_dir}/.env`; 
 	let env_lines = await env_file_path.toLines();
 	if (env_lines) {
-		let rv = add_to_env(env_lines, ENV, {if_export: true});
+		let rv = ShellNS.util.addToEnv(env_lines, ENV, {if_export: true});
 		if (rv.length){
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
@@ -7161,7 +7133,7 @@ const init = async(appargs={})=>{
 	sleeping = false;
 	set_prompt();
 	render();
-	await do_imports(ADD_COMS, cwarn);
+	await ShellNS.util.doImports(ADD_COMS, cwarn);
 	if (commandStr) {
 		for (let c of commandStr) handle_letter_press(c); 
 		handle_enter();
@@ -7228,8 +7200,8 @@ const ondevreload = async() => {//«
 //log(DEL_COMS);
 //stat("");
 	do_overlay("ondevreload: start");
-	delete_coms(DEL_COMS);
-	await do_imports(ADD_COMS, cerr);
+	ShellNS.util.deleteComs(DEL_COMS);
+	await ShellNS.util.doImports(ADD_COMS, cerr);
 	do_overlay("ondevreload: done");
 };//»
 
@@ -7249,8 +7221,8 @@ this.onkill = (if_dev_reload)=>{//«
 		this.reInit.commandStr = actor.command_str;
 	}
 
-	delete_mods(DEL_MODS);
-	delete_coms(DEL_COMS);
+	ShellNS.util.deleteMods(DEL_MODS);
+	ShellNS.util.deleteComs(DEL_COMS);
 
 	delete globals.shell_commands;
 	delete globals.shell_command_options;
