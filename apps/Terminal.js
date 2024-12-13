@@ -655,6 +655,25 @@ run(){
 }
 */
 //const {Com} = ShellNS.comClasses;
+const com_devparse = class extends Com{
+init(){
+if (!this.args.length) this.no("need a file arg");
+}
+async run(){
+let fname = this.args.shift();
+let text = await fname.toText(this.term);
+if (!text) return this.no(`${fname}: NOTEXT`);
+let str = text.join("\n");
+let shell = new ShellNS.Shell(this.term);
+let rv = await shell.devExecute(str);
+if (isStr(rv)){
+return this.no(rv);
+}
+log(rv);
+//log(shell);
+this.ok();
+}
+}
 
 const com_echo = class extends Com{//«
 	run(){
@@ -1256,6 +1275,7 @@ this.ok("NOT MUCH HERE!!!");
 
 this.defShellCommands={//«
 //const shell_commands={
+devparse: com_devparse,
 math: com_math,
 inspect: com_inspect,
 curcol: com_curcol, 
@@ -1389,11 +1409,7 @@ const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 
 const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
 
-/*
-The actual "machinery" (algorithms and data structures/classes) are kept in here.
-*/
-
-//Scanner/Parser«
+//Scanner/OldParser/DevParser«
 
 const Parser=(()=>{
 
@@ -2209,7 +2225,1172 @@ return await this.scanWord(null, this.env);
 };
 
 //»
-//Parser«
+//DevParser«
+
+const _DevParser = class {
+
+constructor(code, opts={}) {//«
+	this.env = opts.env;
+	this.terminal = opts.terminal;
+	this.isInteractive = opts.isInteractive;
+	this.isContinue = opts.isContinue;
+	this.heredocScanner = opts.heredocScanner;
+	this.errorHandler = new ErrorHandler();
+	this.scanner = new Scanner(code, opts, this.errorHandler);
+//	this.isInteractive = opts.isInteractive;
+	this.lookahead = {//«
+		type: EOF_Type,
+		value: '',
+		lineNumber: this.scanner.lineNumber,
+		lineStart: 0,
+		start: 0,
+		end: 0
+	};//»
+	this.hasLineTerminator = false;
+	this.tokNum = 0;
+	this.numToks = 0;
+	this.tokens = [];
+/*
+Since this is async (because we might need to get more lines from 'await terminal.read_line()'),
+then we need to do 'await this.scanNextTok()' **outside** of the constructor, since there is
+NO async/await in constructors.
+*/
+//	this.scanNextTok();
+}//»
+
+fatal(mess){//«
+throw new Error(mess);
+}//»
+eol(){//«
+	return (
+		(this.isInteractive && this.tokNum === this.numToks) || 
+		(!this.isInteractive && isNLs(this.tokens[this.tokNum]))
+	)
+}//»
+eos(){//end-of-script«
+	return (!this.isInteractive && this.tokNum === this.numToks);
+}//»
+unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
+unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
+end(){//«
+//SLKIURUJ
+	return(this.tokNum===this.numToks);
+}//»
+dumpTokens(){//«
+
+let toks = this.tokens;
+let tok = toks[this.tokNum];
+
+while(tok){
+	if (isNLs(tok)){
+cwarn("NL");
+	//	tok = toks.shift();
+		this.tokNum++;
+		while (isNLs(toks[this.tokNum])) {
+			this.tokNum++;
+		}
+	}
+	else {
+		if (tok.isWord){
+			log(tok.toString());
+		}
+		else{
+			if (tok.isHeredoc){
+				cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
+			}
+			else {
+				cwarn(tok[tok.type]);
+			}
+		}
+		this.tokNum++;
+	}
+	tok=toks[this.tokNum];
+}
+
+}//»
+skipNewlines(){//«
+	let toks = this.tokens;
+	if (!isNLs(toks[this.tokNum])) return false;
+	while (isNLs(toks[this.tokNum])){
+		this.tokNum++;
+	}
+	return true;
+}//»
+eatSeqSep(){//«
+	this.eatSemicolon();
+	this.skipNewlines();
+}//»
+eatSemicolon(){//«
+	let tok = this.tokens[this.tokNum];
+	if (tok && tok.isSemi){
+		this.tokNum++;
+		return true;
+	}
+	return false;
+}//»
+pushNewline(){/*«*/
+	let nl = new Newlines();
+	nl.inserted = true;
+	this.tokens.push(nl);
+//LCMJHFUEM
+	this.numToks++;
+}/*»*/
+getWordSeq(){//«
+	let list=[];
+	let toks = this.tokens;
+	let curnum = this.tokNum;
+	let iter = 0;
+	let tok;
+	while((tok = toks[curnum+iter]) && tok.isWord){
+		list.push(tok);
+		iter++;
+	}
+	this.tokNum+=iter;
+	return list;
+}//»
+curTok(add_num=0){return this.tokens[this.tokNum+add_num];}
+nextTok(){//«
+	this.tokNum++;
+	return this.tokens[this.tokNum];
+}//»
+async scanNextTok(heredoc_flag) {//«
+	let token = this.lookahead;
+	this.scanner.scanComments();
+	let next = await this.scanner.lex(heredoc_flag);
+	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
+	this.lookahead = next;
+	return token;
+};//»
+
+eatBang(){//«
+	let tok = this.tokens[this.tokNum];
+	if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
+		this.tokNum++;
+		return true;
+	}
+	return false;
+}//»
+nextLinesUntilDelim(delim){//«
+	let out='';
+	let rv = this.scanner.scanNextLineNot(delim);
+	while (isStr(rv)){
+		out+=rv+"\n";
+		rv = this.scanner.scanNextLineNot(delim);
+	}
+	if (rv===true) return out;
+	return false;
+}//»
+getNextNonNewlinesTok(){//«
+	let iter=0;
+	let curnum = this.tokNum;
+	let tok = toks[curnum];
+	while (isNLs(tok)){
+		iter++;
+		tok = toks[curnum+iter];
+	}
+	return tok;
+}//»
+async getNonEmptyLineFromTerminal(){//«
+	let rv;
+	while ((rv = await this.terminal.read_line("> ")).match(/^[\x20\t]*(#.+)?$/)){}
+	return rv;
+}//»
+async getMoreTokensFromTerminal(){//«
+	let rv = await this.getNonEmptyLineFromTerminal();
+	let newtoks = await this.parseContinueStr(rv);
+	if (isStr(newtoks)) this.fatal(newtoks);
+	this.tokens = this.tokens.concat(newtoks);
+	this.pushNewline();
+	this.numToks = this.tokens.length;
+}//»
+eatRedirects(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	let list=[];
+	while(tok && tok.isRedir){
+		let rop = tok;
+		this.tokNum++;
+		let fname = toks[this.tokNum];
+		if (!fname) err("syntax error near unexpected token 'newline'");
+		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
+		if (!fname.isChars) err(`wanted characters only in the filename`);
+		list.push({redir: [rop, fname]});
+		this.tokNum++;
+		tok = this.curTok();
+	}
+	return list;
+}//»
+
+async parseList(seq_arg){//«
+	let seq = seq_arg || [];
+	let andor = await this.parseAndOr(undefined, 2);
+	seq.push(andor);
+	let next = this.curTok();
+	let next1 = this.curTok(1);
+//	if (!(next && next.isSeqSep && this.isCommandStart(this.curTok(1)))) return {list: seq};
+	if (!(next && next.isSeqSep && next1 && next1.isCommandStart)) return {list: seq};
+	seq.push(next.val);
+	this.tokNum++;
+	return this.parseList(seq);
+}//»
+async parseTerm(seq_arg){//«
+	let seq = seq_arg || [];
+
+/*
+If we are interactive here, and we are at the end of the line with tokens,
+shouldn't we insert a NEWLINE at the end???
+*/
+
+	let andor = await this.parseAndOr(undefined, 3);
+	seq.push(andor);
+	let tok_num_hold = this.tokNum;
+	let next = this.curTok();
+	let use_sep;
+
+	if (!next){
+		if (this.eos()) this.unexpeof();
+		else {
+log(this.tokens);
+			this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
+		}
+	}
+	if (next.isSeqSep) {
+		use_sep = next.val;
+		this.tokNum++;
+	}
+	else if (next.isNLs) {
+		use_sep = ";";
+	}
+	else {
+		return {term: seq};
+	}
+	this.skipNewlines();
+	next = this.curTok();
+	if (!next){
+		if (this.eos()) this.unexpeof();
+		else if (!this.isInteractive) this.fatal("!NEXT && !isInteractive!?!?!?");
+		await this.getMoreTokensFromTerminal();
+		next = this.curTok();
+	}
+	if (!next.isCommandStart){
+//	if (!this.isCommandStart(next)){
+		this.tokNum = tok_num_hold;
+		return {term: seq};
+	}
+	seq.push(use_sep);
+	return this.parseTerm(seq);
+}//»
+async parseCompoundList(opts={}){//«
+	let err = this.fatal;
+	this.skipNewlines();
+	if (this.isInteractive){
+		if (this.eol()){
+//Get more token...
+			await this.getMoreTokensFromTerminal();
+		}
+	}
+	else if (this.eos()){
+		err(`syntax error: unexpected end of file`);
+	}
+
+	let term = await this.parseTerm();
+	let next = this.curTok();
+	if (!next) return {compound_list: term}
+	if (next.isSeqSep){
+		term.term.push(next.val);
+		this.tokNum++;
+	}
+	else if (isNLs(next)){
+		term.term.push(";");
+	}
+	else if (opts.isCase && next.isCaseItemEnd){
+		term.term.push(";");
+	}
+	else{
+//		err(`could not find ";", "&" or <newlines> to complete the compound list!`);
+		this.unexp(next);
+	}
+	this.skipNewlines();
+	return {compound_list: term};
+}//»
+
+async parseFuncBody(){//«
+//let comp_com = await this.parseCommand(true);
+let comp_com = await this.parseCompoundCommand();
+//if (comp_com===false){
+//	let tok = this.curTok();
+//	this.unexp(tok);
+//}
+//let redirs = this.eatRedirects();
+//Then get the bunch of redirections after it
+return {function_body: {command: comp_com}};
+}//»
+async parseFuncDef(){//«
+//log("PARSEFUNCDEF!?!?!?");
+	let err=this.fatal;
+	let fname = this.curTok();
+	if (!(fname && fname.isWord)) err("function name token not found");
+	this.tokNum++;
+	let lparen = this.curTok();
+//log("LPAREN", lparen);
+	if (!(lparen && lparen.isSubStart)) err("'(' token not found");
+	this.tokNum++;
+	let rparen = this.curTok();
+	if (!rparen){
+		this.unexp("newline");
+	}
+	if (!rparen.isSubEnd) this.unexp(rparen);
+//log("RPAREN", lparen);
+	this.tokNum++;
+	this.skipNewlines();
+	let tok = this.curTok();
+	if (!tok){
+		if (this.eos()) this.unexpeof();
+		if (!this.isInteractive) err("WTFFFFFF NOTTTTT INNNNTERRACTIVEEEEEEE &*(&*(");
+		await this.getMoreTokensFromTerminal();
+		tok = this.curTok();
+	}
+	let body = await this.parseFuncBody();
+	return {function_def: {name: fname, body}};
+
+}//»
+
+async parseDoGroup(){//«
+
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isDo)){
+		err(`'do' token not found!`);
+	}
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!(tok && tok.isDone)){
+		err(`'done' token not found!`);
+	}
+	this.tokNum++;
+	return {do_group: list};
+
+}//»
+
+async parseBraceGroup(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok && tok.isLBrace)) err(`'{' token not found!`);
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!tok) this.unexpeof();
+	if (!tok.isRBrace){
+		this.unexp(tok);
+	}
+	this.tokNum++;
+	return {brace_group: list};
+}//»
+async parseSubshell(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok && tok.isSubStart)) err(`'(' token not found!`);
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!tok) this.unexpeof();
+	if (!tok.isSubEnd){
+		this.unexp(tok);
+	}
+	this.tokNum++;
+	return {subshell: list};
+}//»
+
+async parseCasePatternList(seq_arg){/*«*/
+
+/*«
+4. [Case statement termination]
+When the TOKEN is exactly the reserved word esac, the token identifier for esac
+shall result. Otherwise, the token WORD shall be returned.
+
+pattern_list     :                  WORD    // Apply rule 4
+                 |              '(' WORD    // Do not apply rule 4
+                 | pattern_list '|' WORD    // Do not apply rule 4
+                 ;
+
+If you are just beginning a pattern list without a "(", then "esac" necessarily ends
+the entire case_clause;
+
+»*/
+	let seq = seq_arg || [];
+	let tok = this.curTok();
+	if (!tok) this.unexpeof();
+	if (!seq.length && tok.isEsac) return true;
+
+	if (tok.isSubStart){
+		if (seq.length){
+			this.unexp(tok);
+		}
+		seq.push(tok);
+		this.tokNum++;
+	}
+	tok = this.curTok();
+	if (!tok){
+		this.unexpeof();
+	}
+	if (!tok.isWord){
+		this.unexp(tok);
+	}
+	seq.push(tok);
+	tok = this.nextTok();
+	if (!tok) this.unexp("newline");
+	if (tok.isPatListEnd) return {pattern_list: seq}// ')'
+	if (!tok.isPatListSep) this.unexp(tok);
+	this.tokNum++;
+	return this.parseCasePatternList(seq);
+
+}/*»*/
+async parseCaseItem(){//«
+
+//isDSemi
+//DSEMI ";;"
+
+//isSemiAnd
+//SEMI_AND ";&"
+
+//case_item        : pattern_list ')' linebreak     DSEMI linebreak//«
+//                 | pattern_list ')' compound_list DSEMI linebreak
+//                 | pattern_list ')' linebreak     SEMI_AND linebreak
+//                 | pattern_list ')' compound_list SEMI_AND linebreak
+//                 ;//»
+
+//case_item_ns     : pattern_list ')' linebreak//«
+//                 | pattern_list ')' compound_list
+//                 ;//»
+
+let pat_list = await this.parseCasePatternList();
+if (pat_list===true) return true;
+
+let tok = this.curTok();
+if (!tok){
+	this.unexpeof();
+}
+if (!tok.isSubEnd){
+	this.unexp(tok);
+}
+this.tokNum++;
+this.skipNewlines();
+tok = this.curTok();
+if (!tok){
+	if (this.eos()) this.unexpeof();
+	else if (!this.isInteractive) this.fatal("WUT NOT EOS AND NOT INTERACTIVE JFD&*^#(");
+	await this.getMoreTokensFromTerminal();
+	tok = this.curTok();
+}
+
+let comp_list;
+if (tok.isCommandStart){
+//This one can end with a ";;" or ";&"
+	comp_list = await this.parseCompoundList({isCase: true});
+}
+tok = this.curTok();
+if (!tok){
+	this.unexpeof();
+}
+if (tok.isCaseItemEnd){
+	this.tokNum++;
+	this.skipNewlines();
+	return {case_item: {pattern_list: pat_list, compound_list: comp_list, end: tok}};
+}
+return {case_item: {pattern_list: pat_list, compound_list: comp_list}};
+
+}//»
+async parseCaseList(seq_arg){/*«*/
+//case_list        : case_list case_item//«
+//                 |           case_item
+//                 ;//»
+//case_list_ns     : case_list case_item_ns//«
+//                 |           case_item_ns
+//                 ;//»
+let seq = seq_arg || [];
+let item = await this.parseCaseItem();
+if (item===true){//This *must* be a lone "esac"
+	return {case_list: seq};
+}
+else if (!item){
+//This *probably* should already be an error in parseCaseItem
+	this.fatal("WUT NO ITEM GOTTEN FROM PARSECASEITEM?!?!");
+}
+seq.push(item);
+return this.parseCaseList(seq);
+
+}/*»*/
+async parseCaseClause(){//«
+
+//case_clause      : Case WORD linebreak in linebreak case_list    Esac//«
+//                 | Case WORD linebreak in linebreak case_list_ns Esac
+//                 | Case WORD linebreak in linebreak              Esac
+//                 ;//»
+
+/*«
+
+The conditional construct case shall execute the compound-list corresponding to
+the first pattern (see 2.14 Pattern Matching Notation ), if any are present,
+that is matched by the string resulting from the tilde expansion, parameter
+expansion, command substitution, arithmetic expansion, and quote removal of the
+given word. The reserved word "in" shall denote the beginning of the patterns to
+be matched. Multiple patterns with the same compound-list shall be delimited by
+the '|' symbol. The control operator ')' terminates a list of patterns
+corresponding to a given action. The terminated pattern list and the following
+compound-list is called a case statement clause. Each case statement clause,
+with the possible exception of the last, shall be terminated with either ";;"
+or ";&". The case construct terminates with the reserved word esac (case
+reversed).
+
+The format for the case construct is as follows:
+
+case word in
+    [[(] pattern[ | pattern] ... ) compound-list terminator] ...
+    [[(] pattern[ | pattern] ... ) compound-list]
+esac
+
+Where terminator is either ";;" or ";&" and is optional for the last compound-list.
+
+In order from the beginning to the end of the case statement, each pattern that
+labels a compound-list shall be subjected to tilde expansion, parameter
+expansion, command substitution, and arithmetic expansion, and the result of
+these expansions shall be compared against the expansion of word, according to
+the rules described in 2.14 Pattern Matching Notation (which also describes the
+effect of quoting parts of the pattern). After the first match, no more
+patterns in the case statement shall be expanded, and the compound-list of the
+matching clause shall be executed. If the case statement clause is terminated
+by ";;", no further clauses shall be examined. If the case statement clause is
+terminated by ";&", then the compound-list (if any) of each subsequent clause
+shall be executed, in order, until either a clause terminated by ";;" is
+reached and its compound-list (if any) executed or there are no further clauses
+in the case statement. The order of expansion and comparison of multiple
+patterns that label a compound-list statement is unspecified.
+
+Exit Status
+
+The exit status of case shall be zero if no patterns are matched. Otherwise, the exit status shall be the exit status of the compound-list of the last clause to be executed.
+
+»*/
+
+
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isCase)){
+		err(`'case' token not found!`);
+	}
+	this.tokNum++;
+	tok = this.curTok();
+	if (!tok || tok.isNLs){
+		this.unexp("newline");
+	}
+	if (!tok.isWord) {
+		this.unexp(tok);
+	}
+	let word = tok;
+	this.tokNum++;
+	this.skipNewlines();
+	tok = this.curTok();
+	if (!tok){
+		if (this.eos()) this.unexpeof();
+		if (!this.isInteractive) err("WHAT NOT EOS AND NOT INTERACTIVE WUT");
+		await this.getMoreTokensFromTerminal();
+		tok = this.curTok();
+	}
+	if (!tok.isIn) this.unexp(tok);
+	this.tokNum++;
+	this.skipNewlines();
+	if (this.end()){
+		if (this.eos()){
+			this.unexpeof();
+		}
+		else if (!this.isInteractive) this.fatal("WUT NOT THIS EOS AND NOT THIS INTERACTIVE WUT UMMM");
+		await this.getMoreTokensFromTerminal();
+	}
+	let list = await this.parseCaseList();
+	tok = await this.curTok();
+	if (!tok){
+		this.unexpeof();
+	}
+	if (!tok.isEsac) this.unexp(tok);
+	this.tokNum++;
+	return {case_clause: {word, list}};
+}//»
+
+async parseUntilClause(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isUntil)){
+		err(`'until' token not found!`);
+	}
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!tok) this.unexpeof();
+/*«
+	if (!tok){
+		if (!this.isInteractive) this.unexpeof();
+		await this.getMoreTokensFromTerminal();
+		tok = this.curTok();
+	}
+*»*/
+	if (!tok.isDo){
+		this.unexp(tok);
+	}
+	let do_group = await this.parseDoGroup();
+	return {until_clause: {condition: list, do_group}};
+//*/
+}//»
+async parseWhileClause(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	if (!(tok&&tok.isWhile)){
+		err(`'while' token not found!`);
+	}
+	this.tokNum++;
+	let list = await this.parseCompoundList();
+	tok = this.curTok();
+	if (!tok) this.unexpeof();
+/*«
+	if (!tok){
+		if (!this.isInteractive) this.unexpeof();
+		await this.getMoreTokensFromTerminal();
+		tok = this.curTok();
+	}
+»*/
+	if (!tok.isDo){
+		this.unexp(tok);
+	}
+	let do_group = await this.parseDoGroup();
+	return {while_clause: {condition: list, do_group}};
+//*/
+}//»
+async parseForClause(){//«
+
+let err = this.fatal;
+let tok = this.curTok();
+
+if (!(tok&&tok.isFor)){
+	err(`'for' token not found!`);
+}
+this.tokNum++;
+
+tok = this.curTok();
+if (!tok || tok.isNLs){
+this.unexp("newline");
+}
+if (!tok.isWord){
+	this.unexp(tok);
+}
+let name = tok;
+this.tokNum++;
+tok = this.curTok();
+if (!tok) {//«
+	if (this.eos()){
+		this.unexpeof();
+	}
+	else if (!this.isInteractive){
+		err("NO CURTOK && NOT EOS && NOT INTERACTIVE?!?!?!?!? #(&**()");
+	}
+	else await this.getMoreTokensFromTerminal();
+	tok = this.curTok();
+}//»
+let do_group;
+let in_list;
+if (tok.isDo){//«
+	//for name do_group
+	do_group = await this.parseDoGroup();
+}//»
+else if (tok.isSemi){//«
+	//for name sequential_sep(";") do_group
+	this.tokNum++;
+	this.skipNewlines();
+	if (this.isInteractive && this.eol()) await this.getMoreTokensFromTerminal();
+	tok = this.curTok();
+	if (!tok.isDo){
+		this.unexp(tok);
+	}
+	do_group = await this.parseDoGroup();
+}//»
+else if (tok.isIn){//«
+//for name linebreak(0 newlines) "in" [wordlist] sequential_sep do_group
+	this.tokNum++;
+	in_list = this.getWordSeq();
+	this.eatSeqSep();
+	do_group = await this.parseDoGroup();
+}//»
+else if (!tok.isNLs){//«
+	this.unexp(tok);
+}//»
+else{//«
+	this.skipNewlines();
+	if (this.isInteractive && this.eol()) await this.getMoreTokensFromTerminal();
+	else if (this.eos()) this.unexpeof();
+	tok = this.curTok();
+	if (tok.isDo){//«
+		do_group = await this.parseDoGroup();
+	}//»
+	else if (tok.isIn){//«
+		this.tokNum++;
+		in_list = this.getWordSeq();
+		this.eatSeqSep();
+		do_group = await this.parseDoGroup();
+	}//»
+	else{//«
+		this.unexp(tok);
+	}//»
+}//»
+
+return {for_clause: {name, in_list, do_group}};
+
+}//»
+async parseElsePart(seq_arg){//«
+
+let seq = seq_arg || [];
+let err = this.fatal;
+let tok = this.curTok();
+if (!(tok && (tok.isElse||tok.isElif))){
+	err(`could not find "elif" or "else"`);
+}
+this.tokNum++;
+if (tok.isElse){
+	let else_list = await this.parseCompoundList();
+	return {elif_seq: seq, else_list};
+}
+let elif_list = await this.parseCompoundList();
+tok = this.curTok();
+if (!(tok && tok.isThen)){
+	err(`'then' token not found!`);
+}
+this.tokNum++;
+let then_list = await this.parseCompoundList();
+seq.push({elif: elif_list, then: then_list});
+tok = this.curTok();
+
+if (tok&&(tok.isElif || tok.isElse || tok.isFi)){}
+else{
+	err(`could not find "elif", "else" or "fi"`);
+}
+
+if (tok.isFi){
+	return {elif_seq: seq, then_list};
+}
+
+return this.parseElsePart(seq);
+
+}//»
+async parseIfClause(){//«
+
+let err = this.fatal;
+let tok = this.curTok();
+
+if (!(tok&&tok.isIf)){
+	err(`'if' token not found!`);
+}
+this.tokNum++;
+
+//Is there a this.getMoreTokensFromTerminal in here???
+let if_list = await this.parseCompoundList();
+tok = this.curTok();
+if (!(tok && tok.isThen)){
+	err(`'then' token not found!`);
+}
+this.tokNum++;
+let then_list = await this.parseCompoundList();
+tok = this.curTok();
+if (!(tok && (tok.isFi || tok.isElse || tok.isElif))){
+	if (!tok) err(`unexpected EOF while looking for "fi", "elif" or "else"`);
+	this.unexp(tok);
+}
+let else_part;
+if (!tok.isFi){
+	else_part = await this.parseElsePart();
+log(else_part);
+	tok = this.curTok();
+	if (!tok){
+		err(`unexpected EOF while looking for "fi"`);
+	}
+	else if (!tok.isFi){
+		this.unexp(tok);
+	}
+}
+//curTok *MUST* be "fi"!?!?
+this.tokNum++;
+return {if_clause: {if_list, then_list, else_part}};
+
+}//»
+
+async parseSimpleCommand(){//«
+
+/*Get all 
+- assignment words, plus 
+- isHeredoc toks
+- All other io_file: 
+  one of: "<" "<&" ">" ">&" ">>" "<>" ">|"
+  plus: word
+
+*/
+
+let err = this.fatal;
+let toks = this.tokens;
+let pref;
+let word;
+let name;
+let suf;
+let have_comword;
+let tok = toks[this.tokNum];
+while(tok){
+	if (tok.isHeredoc){//«
+		if (!have_comword){
+			if (!pref) pref = [];
+			pref.push({heredoc: tok});
+		}
+		else{
+			if (!suf) suf = [];
+			suf.push({heredoc: tok});
+		}
+	}//»
+	else if (tok.r_op){//«
+		let rop = tok;
+//		toks.shift();
+		this.tokNum++;
+		let fname = toks[this.tokNum];
+		if (!fname) err("syntax error near unexpected token 'newline'");
+		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
+		if (!fname.isChars) err(`wanted characters only in the filename`);
+log("REDIRECT TO", fname);
+		if (!have_comword){
+			if (!pref) pref = [];
+			pref.push({redir: [rop, fname]});
+		}
+		else{
+			if (!suf) suf = [];
+			suf.push({redir: [rop, fname]});
+		}
+	}//»
+	else if (tok.isWord){//«
+		if (!have_comword) {
+			if (tok.isAssignment){
+				if (!pref) pref = [];
+				pref.push(tok);
+			}
+			else{
+				have_comword = tok;
+			}
+		}
+		else{
+			if (!suf) suf = [];
+			suf.push({word: tok});
+		}
+	}//»
+	else{
+		break;
+	}
+//	toks.shift();
+	this.tokNum++;
+	tok = toks[this.tokNum];
+}
+if (!have_comword){
+	if (!pref) err("NO COMWORD && NO PREFIX!?!?");
+	return {simple_command: {prefix: pref}};
+}
+else if (pref){
+	return {simple_command: {prefix: pref, word: have_comword, suffix: suf}};
+}
+else return {simple_command: {name: have_comword, suffix: suf}};
+
+}//»
+async parseCompoundCommand(){//«
+
+let tok = this.curTok();
+let com;
+
+if (tok.isOp){/*«*/
+	if (!tok.isSubStart) this.unexp(tok);;
+	com = await this.parseSubshell();
+}/*»*/
+else if (tok.isResStart){/*«*/
+	let wrd = tok.toString();
+	switch (wrd){
+		case "if":
+			com = await this.parseIfClause();
+			break;
+		case "{":
+			com = await this.parseBraceGroup();
+			break;
+		case "for":
+			com = await this.parseForClause();
+			break;
+		case "while":
+			com = await this.parseWhileClause();
+			break;
+		case "until":
+			com = await this.parseUntilClause();
+			break;
+		case "case":
+			com = await this.parseCaseClause();
+			break;
+		default:
+			this.fatal(`unknown reserved 'start' word: ${wrd} &^*^$#*& HKHJKH`);
+//			this.unexp(tok);
+	}
+}/*»*/
+else{/*«*/
+	this.unexp(tok);
+}/*»*/
+
+let redirs = this.eatRedirects();
+com.redirs = redirs;
+return com;
+
+}//»
+async parseCommand(force_compound){//«
+let toks = this.tokens;
+let err = this.fatal;
+let tok = this.curTok();
+//log("PARSECOM", force_compound, tok.toString());
+if (tok.isWord) {//«
+	let wrd;
+	if (tok.isRes) {
+		if (tok.isResStart) return this.parseCompoundCommand();
+		this.unexp(tok);
+	}
+	if (tok.isAssignment) {
+		if (force_compound) return false;
+		return this.parseSimpleCommand();
+	}
+	let tok1 = this.curTok(1);
+	if (tok1 && tok1.isSubStart) {
+//Want to ensure a certain level of "simplicity" to function names, i.e. they have
+//no substitutions or newlines (maybe disallow $'...')
+		if (force_compound) return false;
+		return this.parseFuncDef();// blah(  or foo  (
+	}
+	if (force_compound) return false;
+	return this.parseSimpleCommand();
+}//»
+else if(tok.isOp){//«
+//	if (tok.isSubStart) return this.parseSubshell();
+	if (tok.isSubStart) return this.parseCompoundCommand();
+	if (tok.isRedir){
+		if (force_compound) return false;
+		return this.parseSimpleCommand();
+	}
+	this.unexp(tok.c_op);
+}//»
+else{//«
+cwarn("WUD IS THIS BELOW!?!?!?!");
+log(tok);
+err("WHAT IS THIS NOT NEWLINE OR WORD OR OPERATOR?????????");
+}//»
+
+}//»
+
+async parsePipeSequence(seq_arg){//«
+	let err = this.fatal;
+	let toks = this.tokens;
+	let seq = seq_arg || [];
+	let com = await this.parseCommand();
+	seq.push(com);
+	let next = this.curTok();
+	if (!next||!next.isOp||next.val!=="|") return {pipe_sequence: seq};
+	this.tokNum++;
+	if (this.eol()){
+		if (this.isInteractive){//refill our tank with new tokens
+			await this.getMoreTokensFromTerminal();
+		}
+		else{//There are newlines in some kind of prewritten thing
+			this.skipNewlines();
+		}
+	}
+	else if (this.eos()){
+		err(`syntax error: unexpected end of file`);
+	}
+//	else if (!this.isInteractive){//Bad: script or command substitution has ended...
+//		err(`syntax error: unexpected end of file`);
+//	}
+//	else: We are interactive and have more tokens on this line
+	return await this.parsePipeSequence(seq);
+}//»
+async parsePipeline(){//«
+	let bang = this.eatBang();
+	let pipeline = await this.parsePipeSequence();
+	return {bang , pipeline};
+}//»
+async parseAndOr(seq_arg, which){//«
+	let err = this.fatal;
+	let seq = seq_arg || [];
+	let pipe = await this.parsePipeline();
+	seq.push(pipe);
+	let next = this.curTok();
+	if (next && next.isOp && (next.val==="&&"||next.val==="||")){}
+	else {
+		if (!next && this.isInteractive) {
+			this.pushNewline();
+		}
+		return {andor: seq};
+	}
+	seq.push(next.val);
+	this.tokNum++;
+	if (this.eol()){
+		if (this.isInteractive){//refill our tank with new tokens
+			await this.getMoreTokensFromTerminal();
+		}
+		else{//There are newlines in some kind of prewritten thing
+			this.skipNewlines();
+		}
+	}
+//	else if (!this.isInteractive){//Bad: script or command substitution has ended...
+	else if (this.eos()){//Bad: script or command substitution has ended...
+		err(`syntax error: unexpected end of file`);
+	}
+//	else: We are interactive and have more tokens on this line
+	return await this.parseAndOr(seq, 1);
+}//»
+async parseCompleteCommand(){//«
+	let toks = this.tokens;
+	let list = await this.parseList();
+	let next = this.curTok();
+	if (next && next.isOp && (next.val===";"||next.val==="&")){
+//log(list);
+		list.list.push(next.val);
+		this.tokNum++;
+	}
+	return {complete_command: list};
+}//»
+async parseCompleteCommands(){//«
+	let toks = this.tokens;
+	let comp_com = await this.parseCompleteCommand();
+	let comp_coms = [comp_com];
+	this.skipNewlines();
+	while (!this.end()){
+		comp_com = await this.parseCompleteCommand();
+		comp_coms.push(comp_com);
+		this.skipNewlines();
+	}
+	return {complete_commands: comp_coms};
+}//»
+
+async compile(){//«
+let toks = this.tokens;
+
+this.skipNewlines();
+let complete_coms = await this.parseCompleteCommands();
+this.skipNewlines();
+if (!this.end()){
+	this.fatal("compilation failed");
+}
+return {program: complete_coms};
+
+}//»
+async parseContinueStr(str){//«
+
+let parser = new _Parser(str.split(""), {
+	terminal: this.terminal,
+	heredocScanner: this.heredocScanner,
+	env: this.env,
+	isInteractive: true,
+	isContinue: true,
+});
+let newtoks, comstr_out;
+try {
+	let errmess;
+	await parser.scanNextTok();
+	({err: errmess, tokens: newtoks, source: comstr_out} = await parser.parse());
+	if (errmess) return errmess;
+	return newtoks;
+//	this.tokens = this.tokens.concat(newtoks);
+//	toks = this.tokens;
+}
+catch(e){
+	return e.message;
+}
+
+}//»
+async parse() {//«
+	let toks = [];
+	let next = this.lookahead;
+	let cur_iohere_tok;
+	let heredocs;
+	let heredoc_num;
+	let cur_heredoc_tok;
+	let cur_heredoc;
+	let interactive = this.isInteractive;
+	while (next.type !== EOF_Type) {
+
+//If !heredocs && next is "<<" or "<<-", we need to:
+		if (heredocs && isNLs(next)){//«
+if (interactive){
+throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
+}
+			for (let i=0; i < heredocs.length; i++){
+				let heredoc = heredocs[i];
+				let rv = this.nextLinesUntilDelim(heredoc.delim);
+				if (!isStr(rv)){
+					return {err: "warning: here-document at line ? delimited by end-of-file"}
+				}
+				heredoc.tok.value = rv;
+			}
+			this.scanner.index--;
+			heredocs = null;
+		}//»
+		else if (cur_heredoc_tok){//«
+			if (next.isWord){//«
+				if (!heredocs) {
+					heredocs = [];
+					heredoc_num = 0;
+				}
+				cur_heredoc_tok.delim = next.toString();
+				heredocs.push({tok: cur_heredoc_tok, delim: next.toString()});	
+				cur_heredoc_tok = null;
+			}//»
+			else{//«
+				if (isNLs(next)){
+					return "syntax error near unexpected token 'newline'";
+				}
+				else if (next.r_op || next.c_op){
+					return `syntax error near unexpected token '${next.r_op||next.c_op}'`;
+				}
+				else{
+cwarn("Whis this non-NLs or r_op or c_op????");
+					log(next);
+					throw new Error("WUUTTTTTTTTT IZZZZZZZZZ THISSSSSSSSS JKFD^&*$% (see console)");
+				}
+			}//»
+		}//»
+		else if (next.type==="r_op" && (next.r_op==="<<" || next.r_op==="<<-")){//«
+			toks.push(next);
+			cur_heredoc_tok = next;
+//			cur_heredoc_tok.isHeredoc = true;
+		}//»
+		else {//«
+				toks.push(next);
+		}//»
+		await this.scanNextTok(!!heredocs);
+		next = this.lookahead;
+	}
+	if (heredocs){//«
+		if (!interactive) return {err: "warning: here-document at line ? delimited by end-of-file"}
+		for (let i=0; i < heredocs.length; i++){
+			let heredoc = heredocs[i];
+			let rv = await this.heredocScanner(heredoc.delim);
+			heredoc.tok.value = rv.join("\n");
+		}
+		heredocs = null;
+	}//»
+	if (cur_heredoc_tok){//«
+		return {err: "syntax error near unexpected token 'newline'"};
+	}//»
+
+	this.tokens = toks;
+	this.numToks = toks.length;
+	return await this.compile();
+
+};//»
+
+};
+//»
+//OldParser«
 
 const _Parser = class {
 
@@ -2274,7 +3455,6 @@ nextLinesUntilDelim(delim){//«
 	if (rv===true) return out;
 	return false;
 }//»
-
 
 async parse() {//«
 	let toks = [];
@@ -2358,6 +3538,24 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 
 return {
 
+devparse:async(command_str, opts={})=>{//«
+
+let parser = new _DevParser(command_str.split(""), opts);
+let program;
+try {
+	let errmess;
+	await parser.scanNextTok();
+	({program, err: errmess } = await parser.parse());
+	if (errmess) return errmess;
+	return program;
+}
+catch(e){
+	cerr(e);
+	return e.message;
+}
+
+},//»
+
 parse:async(command_str, opts={})=>{//«
 
 let parser = new _Parser(command_str.split(""), opts);
@@ -2380,6 +3578,7 @@ if (program) {
 //toks = [];
 return program;
 }
+
 //Collect commands with their arguments«
 let com = [];
 let coms = [];
@@ -3603,6 +4802,19 @@ this.cancelled = false;
 
 //»
 
+this.devExecute=async(command_str)=>{//«
+
+try{
+	let statements = await Parser.devparse(command_str, {terminal: term, isInteractive: false});
+	return statements;
+}
+catch(e){
+cerr(e);
+	return 
+}
+
+},/*»*/
+
 this.execute=async(command_str, opts={})=>{//«
 
 //Init/Var
@@ -3632,6 +4844,7 @@ let no_end = !is_top_level;
 command_str = command_str.replace(/^ +/,"");
 
 let statements;
+
 try{
 	statements = await Parser.parse(command_str, {env, terminal: term, isInteractive, heredocScanner});
 }

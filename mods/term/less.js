@@ -318,6 +318,7 @@ this.onkeydown=(e, sym, code)=>{//«
 		}
 	}//»
 	else if (sym=="DOWN_") {//«
+//log(y+scroll_num);
 		if (line_select_mode && y+num_stat_lines < termobj.h-1){
 			if (y+scroll_num === lines.length-1) return;
 			y++;
@@ -431,7 +432,6 @@ Object.defineProperty(this, "stat_message", {
 //»
 
 this.init = (linesarg, fname, o={})=>{//«
-
 let {opts}=o;
 this.command_str = o.command_str;
 this.parSel = opts.parsel;
@@ -506,13 +506,15 @@ lines = [];
 
 }//»
 this.addLines=(linesarg)=>{//«
+	if (isStr(linesarg)) linesarg = linesarg.split("\n");
 	if (isArr(linesarg)) {
 		for (let i = 0; i < linesarg.length; i++) {
 			lines.push(linesarg[i].split(""));
 		}
 	}
-	else if (isStr(linesarg)) lines.push(linesarg.split(""));
-	else if (isEOF(linesarg)) return;
+	else if (isEOF(linesarg)) {
+		return;
+	}
 	else {
 cwarn("WHAT KINDA LINESARGGGGG????");
 log(linesarg);
