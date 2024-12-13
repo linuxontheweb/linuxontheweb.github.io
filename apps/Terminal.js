@@ -1416,6 +1416,14 @@ msleep: com_msleep,
 
 //Shell Init«
 
+/*«"Preload Libs" are libraries of commands whose values for their key names 
+(on the shell_commands object) are strings (representing the command library
+that they "live" in) rather than functions. So, the value for the key, "vim"
+will be "fs", which points to the coms/fs.js file.  Upon finding this string
+@QKIUTOPLK, the import_coms function is used in order to replace the library
+name strings with the proper command functions.
+»*/
+
 //MYKLJDHFK
 for (let k in PRELOAD_LIBS){
 
@@ -1447,9 +1455,11 @@ if (!globals.shell_command_options) globals.shell_command_options = command_opti
 
 //«Shell
 
-//const Shell = (()=>{
-
 ShellNS.Shell = (()=>{
+
+/*
+The actual "machinery" (algorithms and data structures/classes) are kept in here.
+*/
 
 //Scanner/Parser«
 
