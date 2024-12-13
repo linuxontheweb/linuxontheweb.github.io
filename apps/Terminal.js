@@ -1,3 +1,37 @@
+/*@DLOPOEIRU: Why is there a scroll_into_view here? This messes up the line that«
+the cursor is on, when we are inside of a multi-line command line:
+<---   TERMINAL WIDTH   ----->
+
+~$ echo blah blah blah hahah h
+ooo hoooo thing in the place i
+s something that is
+
+Say the cursor is editing the "echo" command at the very beginning. Every time
+you do keydown, the scroll_into_view causes the cursor to jump to the last line
+(where "something" is). The x-position will be whatever position it was on
+the first line (or at the end of the last line if the x was past it).
+
+We *still do* need to do a scroll_into_view, when the lines are at the bottom
+of the screen (which I see now that simply doing Ctrl+e, or even just holding
+down the left arrow still does the proper scrolling.) So, it might be just the
+best to keep everything as it is for now (so we don't have to worry about the
+case when doing scroll_into_view would put the cursor in an
+offscreen/negative-y position).
+
+»*/
+/*12/13/24: 
+
+Now with our shell logic nicely "bundled up", we can start thinking about it as
+a "real" object with various parts (like methods) that we can add to it from
+the outside, in order to develop our own logic that gets added onto it, for
+example, in our own vim. ShellNS is like a "top level" LOTW module (like under
+lotw/mods), and the ShellNS.Shell 'new function()' keeps all the nitty-gritty
+implementation details nicely bundled up. This function has an execute method
+that does the old style of "flat" (naive) parsing, while the devparse method is the
+interface into the new _DevParser class (it currently just "compiles" to an
+ast... with no executing of anything).
+
+*/
 
 //«Shell Options
 //let USE_ONDEVRELOAD = true;
@@ -471,7 +505,7 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/,
 }//»
 //»
 
-//Command Classes (Com, ErrCom, ScriptCom)«
+//Command Classes (this.comClasses: Com, ErrCom, ScriptCom)«
 
 const Com = class {//«
 	constructor(name, args, opts, env={}){//«
@@ -1203,7 +1237,7 @@ async run(){
 		this.out(JSON.stringify({app: this.args.shift()}));
 	}
 	else {
-		this.out(await util.getList("/site/apps/"));
+		this.out((await util.getList("/site/apps/")).join("\n"));
 	}
 	this.ok();
 }
@@ -1348,9 +1382,9 @@ Long options may be given an argument like this:
 	echodelay:{s:{d: 3}}
 };//»
 
-}//»
+}//»Builtin commands
 
-//«Shell (Scanner, Parer)
+//«this.Shell (Scanner, Parser)
 
 this.Shell = (()=>{
 
@@ -2628,7 +2662,7 @@ return await this.scanWord(null, this.env);
 };
 
 //»
-/*«Parser*/
+
 //DevParser«
 
 const _DevParser = class {
@@ -3794,6 +3828,24 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 
 };
 //»
+const devparse=async(command_str, opts={})=>{//«
+
+let parser = new _DevParser(command_str.split(""), opts);
+let program;
+try {
+	let errmess;
+	await parser.scanNextTok();
+	({program, err: errmess } = await parser.parse());
+	if (errmess) return errmess;
+	return program;
+}
+catch(e){
+	cerr(e);
+	return e.message;
+}
+
+};//»
+
 //OldParser«
 
 const _Parser = class {
@@ -3939,31 +3991,7 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 
 };
 //»
-
-//Parser interface«
-
-
-const Parser = {
-
-devparse:async(command_str, opts={})=>{//«
-
-let parser = new _DevParser(command_str.split(""), opts);
-let program;
-try {
-	let errmess;
-	await parser.scanNextTok();
-	({program, err: errmess } = await parser.parse());
-	if (errmess) return errmess;
-	return program;
-}
-catch(e){
-	cerr(e);
-	return e.message;
-}
-
-},//»
-
-parse:async(command_str, opts={})=>{//«
+const parse=async(command_str, opts={})=>{//«
 
 let parser = new _Parser(command_str.split(""), opts);
 let toks, comstr_out;
@@ -4090,12 +4118,8 @@ if (statement.length) statements.push({statement});
 //»
 return statements;
 
-}//»
+};//»
 
-}
-
-//»
-/*»*/
 //«Expansions
 
 const isNLs=val=>{return val instanceof Newlines;};
@@ -4811,7 +4835,7 @@ this.cancelled = false;
 this.devparse=async(command_str)=>{//«
 
 try{
-	let statements = await Parser.devparse(command_str, {terminal: term, isInteractive: false});
+	let statements = await devparse(command_str, {terminal: term, isInteractive: false});
 	return statements;
 }
 catch(e){
@@ -4852,7 +4876,7 @@ command_str = command_str.replace(/^ +/,"");
 let statements;
 
 try{
-	statements = await Parser.parse(command_str, {env, terminal: term, isInteractive, heredocScanner});
+	statements = await parse(command_str, {env, terminal: term, isInteractive, heredocScanner});
 }
 catch(e){
 	return terr("sh: "+e.message);
@@ -5470,13 +5494,11 @@ this.cancel=()=>{//«
 };//»
 
 })();
+//»this.Shell
 
 const Shell = this.Shell;
 
-//»
-
-{//«Initialize (preload) command libraries
-
+this.init=()=>{//«Initialize (preload) command libraries
 
 /*«"Preload Libs" are libraries of commands whose values for their key names 
 (on the shell_commands object) are strings (representing the command library
@@ -5514,11 +5536,12 @@ Shell.activeOptions = active_options;
 
 }//»
 
-}
+}//ShellNS
 
+ShellNS.init();
 globals.ShellNS = ShellNS;
 
-//»
+//»Shell
 
 //Terminal«
 
@@ -8064,7 +8087,8 @@ const handle_letter_press=(char_arg, if_no_render)=>{//«
 	x = usex;
 	y = usey;
 	dounshift(lines);
-	scroll_into_view(8);
+//DLOPOEIRU
+//	scroll_into_view(8);
 	if (!if_no_render) render();
 	if (textarea) textarea.value = "";
 };

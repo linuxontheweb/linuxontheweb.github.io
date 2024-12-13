@@ -854,7 +854,7 @@ pipeIn(val){
 		this.ok();
 		return;
 	}
-	this.#doWC(val);
+	this.#doWC(val.split("\n"));
 }
 
 }//»
