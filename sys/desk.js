@@ -414,8 +414,8 @@ DDIE=WDIE=DDX=DDY=null;
 //»
 //Protos/Props«
 
-Object.defineProperty(Object.prototype,'_keys',{get:function(){return Object.keys(this);},set:function(){}});
-Object.defineProperty(Object.prototype,'_vals',{get:function(){let arr=[];let keys=Object.keys(this);for(let k of keys){arr.push(this[k]);}return arr;},set:function(){}});
+//Object.defineProperty(Object.prototype,'_keys',{get:function(){return Object.keys(this);},set:function(){}});
+//Object.defineProperty(Object.prototype,'_vals',{get:function(){let arr=[];let keys=Object.keys(this);for(let k of keys){arr.push(this[k]);}return arr;},set:function(){}});
 Object.defineProperty(this,"CWIN",{get:()=>CWIN});
 Object.defineProperty(this,"WINS",{get:()=>windows});
 

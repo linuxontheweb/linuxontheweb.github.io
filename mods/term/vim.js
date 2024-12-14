@@ -1,5 +1,5 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
-
+//«Notes
 /*11/30/24: While doing "visual line select" in "file mode", it gave an«
 error like: "yank_buffer is not iterable" when trying to do a weird
 operation like do_line_wrap, so @WUIOPHMDL, we are checking for the
@@ -62,7 +62,7 @@ and keyup events (will just need to wait until that specific keys has another
 keyup with that key while the browser window is in focus).
 
 »*/
-
+//»
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -70,7 +70,8 @@ const util = LOTW.api.util;
 //import { globals } from "config";
 const globals = LOTW.globals;
 const{
-dev_mode
+dev_mode,
+ShellMod,
 }=globals;
 const{isArr, isStr, isEOF, log, jlog, cwarn, cerr}=LOTW.api.util;
 const{fs,FS_TYPE,SHM_TYPE,NS}=globals;
@@ -81,7 +82,9 @@ const LO2HI = (a, b)=>{if(a>b)return 1;else if (a<b)return -1;return 0;};
 const HI2LO = (a, b)=>{if(a>b)return -1;else if (a<b)return 1;return 0;};
 const NOOP=()=>{};
 const NUM=(v)=>Number.isFinite(v);
-//log(popkey);
+
+log(ShellMod);
+
 //»
 
 //Vim«

@@ -331,7 +331,7 @@ const reload = async(newpath)=>{//«
 	Main.scrollTop=0;
 	icondv.innerHTML="";
 	await init(true);
-	_stat_num(`${dir.kids._keys.length-2} entries`);
+	_stat_num(`${Object.keys(dir.kids).length-2} entries`);
 	if (Win.cursor) Win.cursor.set();
 };//»
 
@@ -475,7 +475,7 @@ this.onappinit=(arg, prevpaths)=>{//«
 	if (!path) cerr("No path in onappinit!");
 	init();
 };//»
-this.update=()=>{_stat_num(`${dir.kids._keys.length-2} entries`);};
+this.update=()=>{_stat_num(`${Object.keys(dir.kids).length-2} entries`);};
 this.add_icon=(icn)=>{Main.scrollTop=0;};
 this.stat=stat_cur;
 

@@ -29,7 +29,7 @@ const {
 	DEF_PAGER_MOD_NAME,
 	SHELL_ERROR_CODES,
 //	comClasses,
-	ShellNS,
+	ShellMod,
 	admin_mode
 } = globals;
 //const{comClasses}
@@ -38,7 +38,7 @@ const widgets = NS.api.widgets;
 const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //const {Com, ErrCom, make_error_com} = comClasses;
-const {Com} = ShellNS.comClasses;
+const {Com} = ShellMod.comClasses;
 const{Desk}=LOTW;
 const{make_icon_if_new}=Desk;
 const ADMIN_COM = class extends Com{run(){this.no("must be in 'admin mode'!");}};
