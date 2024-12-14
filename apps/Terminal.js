@@ -20,8 +20,43 @@ offscreen/negative-y position).
 
 »*/
 
-/*12/14/24: !!!IMPORTANT!!!: Putting the choice for sh.devexecute or sh.execute«
+/*12/14/24: IMPORTANT: In-vim dev and putting the choice for sh.devexecute or sh.execute«
 on the level of the ScriptCom @WLKUIYDP rather than in the Terminal @PLDYHJKU.
+So now everything manually entered into the terminal passes through to the old school
+parsing/execution engine.
+
+Let's just do the development in vim for a Runtime class by way of doing a
+URL.createObjectURL script.
+
+We will just put text like this into vim:
+
+<----------------------   START   ----------------------->
+
+LOTW.globals.ShellMod.Runtime = class {
+
+	constructor(ast, term, opts={}){
+		this.ast = ast;
+		this.term = term;
+		this.opts = opts;
+	}
+
+	async execute(){
+
+		//Do stuff with this.ast
+
+	}
+
+}
+
+<----------------------    END    ----------------------->
+
+Then a certain function in vim will get the string, and do:
+let url = Object.createObjectURL(new Blob([str]));
+
+Then we can make a script with this, which we can hold in a variable like:
+cur_shellmod_dev_script, and then delete it from the DOM tree whenever we
+do it again.
+
 »*/
 /*12/13/24: Now with our shell logic nicely "bundled up", we can start thinking about it as«
 a "real" object with various parts (like methods) that we can add to it from
@@ -38,9 +73,9 @@ ast... with no executing of anything).
 
 //let USE_ONDEVRELOAD = true;
 let USE_ONDEVRELOAD = false;
+
 //let USE_DEVPARSER = false;
 let USE_DEVPARSER = true;
-let MAX_TOKS_TO_PASS_THRU = 2;
 
 //»
 
@@ -3355,15 +3390,22 @@ this.Runtime = class{
 constructor(ast, term, opts={}){
 	this.ast = ast;
 	this.term = term;
+/*
+Here we can set policies about, for example whether we allow '&'-ended statements.
+*/
 	this.opts = opts;
 }
 
 async execute(){
 /*
-program->complete_commands[]->complete_command->list[]
+
+Array brackets means it is a list of the next type
+program->complete_commands[]->complete_command->list[]->andor[]->pipeline->pipe_sequence[]->command
 
 Every list should have an even number of elements:
 andor_1, sep_1 [ ,andor_2, sep_2 [, andor_3, sep_3 [,... [ ,andor_n, sep_n ] ] ] ]
+
+The same is true for terms (which are the lists of andors of compound commands).
 
 */
 //log("WHAT ME EXECUTE", this.ast, this.term, this.opts);
@@ -3645,7 +3687,10 @@ async parseCompoundList(opts={}){//«
 
 	let term = await this.parseTerm();
 	let next = this.curTok();
-	if (!next) return {compound_list: term}
+	if (!next) {
+		term.term.push(";");
+		return {compound_list: term}
+	}
 	if (next.isSepOp){
 		term.term.push(next.val);
 		this.tokNum++;
@@ -6987,8 +7032,6 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 	};
 
 //PLDYHJKU
-//	if (dev_mode && USE_DEVPARSER) await cur_shell.devexecute(str,{env, heredocScanner, isInteractive: true});
-//	else await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
 	await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
 
 	let ind = history.indexOf(gotstr);
