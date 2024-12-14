@@ -19,20 +19,9 @@ case when doing scroll_into_view would put the cursor in an
 offscreen/negative-y position).
 
 »*/
-/*12/14/24:«
 
-I am in the process of completely giving up my attempts to "try" here, in the
-sense of getting something done/ making something work/ being productive/ etc.
-It is all about meditating on the large-scale structures, and allowing
-*them* to gradually morph into the kinds of Object classes that *they* want to be.
-
-I will be doing this by continuing with 8-ish hour "workdays" of being on my
-computer everyday from ~7->~3. I guess I will alternating between:
-1) Browsing the web and getting sick of (myself about doing) that
-...and:
-2) Looking at/fiddling with this source text/ making these comments
-and getting bored of that.
-
+/*12/14/24: !!!IMPORTANT!!!: Putting the choice for sh.devexecute or sh.execute«
+on the level of the ScriptCom @WLKUIYDP rather than in the Terminal @PLDYHJKU.
 »*/
 /*12/13/24: Now with our shell logic nicely "bundled up", we can start thinking about it as«
 a "real" object with various parts (like methods) that we can add to it from
@@ -49,7 +38,9 @@ ast... with no executing of anything).
 
 //let USE_ONDEVRELOAD = true;
 let USE_ONDEVRELOAD = false;
-let USE_DEVPARSER = false;
+//let USE_DEVPARSER = false;
+let USE_DEVPARSER = true;
+let MAX_TOKS_TO_PASS_THRU = 2;
 
 //»
 
@@ -144,6 +135,7 @@ methodical/non-destrutive kind of way, so we can be very assured of the fact tha
 everything always works as ever.»*/
 globals.ShellMod = new function() {
 //Var«
+const shellmod = this;
 const fs_coms=[//«
 	"_purge",
 	"_clearstorage",
@@ -1404,7 +1396,11 @@ const ScriptCom = class extends Com{//«
 		let scriptOut = this.out;
 		let scriptArgs = this.args;
 		let scriptName = this.name;
-		let code = await this.shell.execute(this.text, {scriptOut, scriptName, scriptArgs});
+		let code;
+//WLKGDMNH
+		if (dev_mode && USE_DEVPARSER) code = await this.shell.devexecute(this.text, {scriptOut, scriptName, scriptArgs});
+		else code = await this.shell.execute(this.text, {scriptOut, scriptName, scriptArgs});
+//		let code = await this.shell.execute(this.text, {scriptOut, scriptName, scriptArgs});
 		this.end(code);
 	}
 }//»
@@ -3094,9 +3090,7 @@ scanOperator(){/*«*/
 	}
 	let check_unsupported_toks = dev_mode ? UNSUPPORTED_DEV_OPERATOR_TOKS : UNSUPPORTED_OPERATOR_TOKS;
 	if (check_unsupported_toks.includes(str)) this.throwUnexpectedToken(`unsupported operator '${str}'`);
-//	if (UNSUPPORTED_OPERATOR_TOKS.includes(str)) this.throwUnexpectedToken(`unsupported token '${str}'`);
 
-//	let obj = {val: str, isOp: true};
 	obj.val=str;
 	obj.isOp = true;
 	obj.toString=()=>{
@@ -3114,11 +3108,11 @@ scanOperator(){/*«*/
 		obj.c_op = str;
 		obj.isControl = true;
 		if (str===";"){
-			obj.isSeqSep = true;
+			obj.isSepOp = true;
 			obj.isSemi = true;
 		}
 		else if (str==="&") {
-			obj.isSeqSep = true;
+			obj.isSepOp = true;
 			obj.isAmper = true;
 		}
 	}
@@ -3355,6 +3349,32 @@ return await this.scanWord(null, this.env);
 };
 
 //»
+//Runtime«
+this.Runtime = class{
+
+constructor(ast, term, opts={}){
+	this.ast = ast;
+	this.term = term;
+	this.opts = opts;
+}
+
+async execute(){
+/*
+program->complete_commands[]->complete_command->list[]
+
+Every list should have an even number of elements:
+andor_1, sep_1 [ ,andor_2, sep_2 [, andor_3, sep_3 [,... [ ,andor_n, sep_n ] ] ] ]
+
+*/
+//log("WHAT ME EXECUTE", this.ast, this.term, this.opts);
+cwarn("EXEC!");
+log(this.ast);
+
+}
+
+}
+
+//»
 //Dev Parser«
 
 const _DevParser = class {
@@ -3553,12 +3573,12 @@ eatRedirects(){//«
 
 async parseList(seq_arg){//«
 	let seq = seq_arg || [];
-	let andor = await this.parseAndOr(undefined, 2);
+	let andor = await this.parseAndOr();
 	seq.push(andor);
 	let next = this.curTok();
 	let next1 = this.curTok(1);
-//	if (!(next && next.isSeqSep && this.isCommandStart(this.curTok(1)))) return {list: seq};
-	if (!(next && next.isSeqSep && next1 && next1.isCommandStart)) return {list: seq};
+//	if (!(next && next.isSepOp && this.isCommandStart(this.curTok(1)))) return {list: seq};
+	if (!(next && next.isSepOp && next1 && next1.isCommandStart)) return {list: seq};
 	seq.push(next.val);
 	this.tokNum++;
 	return this.parseList(seq);
@@ -3571,7 +3591,7 @@ If we are interactive here, and we are at the end of the line with tokens,
 shouldn't we insert a NEWLINE at the end???
 */
 
-	let andor = await this.parseAndOr(undefined, 3);
+	let andor = await this.parseAndOr();
 	seq.push(andor);
 	let tok_num_hold = this.tokNum;
 	let next = this.curTok();
@@ -3584,7 +3604,7 @@ log(this.tokens);
 			this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
 		}
 	}
-	if (next.isSeqSep) {
+	if (next.isSepOp) {
 		use_sep = next.val;
 		this.tokNum++;
 	}
@@ -3626,7 +3646,7 @@ async parseCompoundList(opts={}){//«
 	let term = await this.parseTerm();
 	let next = this.curTok();
 	if (!next) return {compound_list: term}
-	if (next.isSeqSep){
+	if (next.isSepOp){
 		term.term.push(next.val);
 		this.tokNum++;
 	}
@@ -4347,7 +4367,7 @@ async parsePipeline(){//«
 	let pipeline = await this.parsePipeSequence();
 	return {bang , pipeline};
 }//»
-async parseAndOr(seq_arg, which){//«
+async parseAndOr(seq_arg){//«
 	let err = this.fatal;
 	let seq = seq_arg || [];
 	let pipe = await this.parsePipeline();
@@ -4375,16 +4395,21 @@ async parseAndOr(seq_arg, which){//«
 		err(`syntax error: unexpected end of file`);
 	}
 //	else: We are interactive and have more tokens on this line
-	return await this.parseAndOr(seq, 1);
+	return await this.parseAndOr(seq);
 }//»
 async parseCompleteCommand(){//«
 	let toks = this.tokens;
 	let list = await this.parseList();
+	let listarr = list.list;
 	let next = this.curTok();
-	if (next && next.isOp && (next.val===";"||next.val==="&")){
-//log(list);
-		list.list.push(next.val);
+	if (next && next.isSepOp){
+		listarr.push(next.val);
 		this.tokNum++;
+	}
+	else if (listarr.length){
+//Semi-colon insertion
+		let val = listarr[list.length-1];
+		if (!(val===";"||val==="&")) listarr.push(";");
 	}
 	return {complete_command: list};
 }//»
@@ -4799,11 +4824,11 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 };
 
 //»
-const Shell = function(term){//«
+class Shell {//«
 
-//Var«
-const shell = this;
+constructor(term){//«
 
+this.term = term;
 /*Very dumbhack to implement cancellations of hanging commands, e.g. that might do fetching,«
 so that no output from a cancelled command is sent to the terminal, although
 whatever the command might be doing to keep it busy is still happening, so it
@@ -4822,31 +4847,32 @@ if (started_time < cancelled_time) return;
 this.cancelled_time = 0;
 this.cancelled = false;
 
-//»
+}//»
 
-this.devexecute=async(command_str)=>{//«
-
+async devexecute(command_str){//«
+	const{term}=this;
 	let parser = new _DevParser(command_str.split(""), {terminal: term, isInteractive: false});
 	try{
+
 		let errmess;
 //Must use await because it could possibly need more lines from the terminal, so we can't do
 //this in the constructor (like esprima does)
 		await parser.scanNextTok();
 		await parser.tokenize();
 		let program = await parser.compile();
-		if (program){
-log(program);
-		}
+		if (!program) return;
+//So, we can put this Runtime property onto the ShellMod object anywhere we want (like vim).
+		let runtime = new shellmod.Runtime(program, term, {});
+		await runtime.execute();
 	}
 	catch(e){
 cerr(e);
 term.resperr(e.message);
 	}
-	term.response_end();
+//	term.response_end();
 
-},/*»*/
-
-this.execute=async(command_str, opts={})=>{//«
+}/*»*/
+async execute(command_str, opts={}){//«
 
 //Init/Var
 const terr=(arg, code)=>{//«
@@ -4862,6 +4888,7 @@ const can=()=>{//«
 };//»
 //WIMNNUYDKL
 //«
+const{term}=this;
 let started_time = (new Date).getTime();
 
 //let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
@@ -5485,17 +5512,18 @@ return lastcomcode;
 
 }//»
 
-this.cancel=()=>{//«
+cancel(){//«
 	this.cancelled = true;
 	let pipe = this.pipeline;
 	if (!pipe) return;
 	for (let com of pipe) com.cancel();
-};//»
+}//»
 
 };
 this.Shell = Shell;
+
 //»
-//«init: preload command libraries
+//«init: preload libraries
 this.init=()=>{
 
 /*«"Preload Libs" are libraries of commands whose values for their key names 
@@ -6958,8 +6986,10 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 		return doc;
 	};
 
-	if (dev_mode && USE_DEVPARSER) await cur_shell.devexecute(str,{env, heredocScanner, isInteractive: true});
-	else await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
+//PLDYHJKU
+//	if (dev_mode && USE_DEVPARSER) await cur_shell.devexecute(str,{env, heredocScanner, isInteractive: true});
+//	else await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
+	await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
 
 	let ind = history.indexOf(gotstr);
 	if (ind >= 0) {
