@@ -19,14 +19,21 @@ case when doing scroll_into_view would put the cursor in an
 offscreen/negative-y position).
 
 »*/
-/*12/14/24: 
+/*12/14/24:«
 
 I am in the process of completely giving up my attempts to "try" here, in the
 sense of getting something done/ making something work/ being productive/ etc.
-It is all about meditating on the large-scale structures, and slowly allowing
-*them* to morph into the kinds of Object classes that *they* want to be.
+It is all about meditating on the large-scale structures, and allowing
+*them* to gradually morph into the kinds of Object classes that *they* want to be.
 
-*/
+I will be doing this by continuing with 8-ish hour "workdays" of being on my
+computer everyday from ~7->~3. I guess I will alternating between:
+1) Browsing the web and getting sick of (myself about doing) that
+...and:
+2) Looking at/fiddling with this source text/ making these comments
+and getting bored of that.
+
+»*/
 /*12/13/24: Now with our shell logic nicely "bundled up", we can start thinking about it as«
 a "real" object with various parts (like methods) that we can add to it from
 the outside, in order to develop our own logic that gets added onto it, for
@@ -38,9 +45,11 @@ the interface into the new _DevParser class (it currently just "compiles" to an
 ast... with no executing of anything).
 »*/
 
-//«Shell Options
+//«Global Shell Options
+
 //let USE_ONDEVRELOAD = true;
 let USE_ONDEVRELOAD = false;
+let USE_DEVPARSER = false;
 
 //»
 
@@ -128,15 +137,12 @@ if (dev_mode){
 //»
 
 //«Shell
-
 /*ShellMod: This function/"namespace" is our way to bundle *everything* «
 that is relevant to the thing called the "shell" (as opposed to the thing called 
 the "terminal") into a singular thing. We want to do this in a totally 
 methodical/non-destrutive kind of way, so we can be very assured of the fact that 
 everything always works as ever.»*/
-
 globals.ShellMod = new function() {
-
 //Var«
 const fs_coms=[//«
 	"_purge",
@@ -1429,17 +1435,17 @@ this.comClasses={
 //globals.comClasses={Com, ErrCom};
 
 //»
-//Builtin commands/options: this.defCommand[Opt]s (ls, cd, echo)«
+//Builtin commands/options: this.defCommand(Opt)s (ls, cd, echo, etc...)«
 {
 
-/*
+/*«
 const com_ = class extends Com{
 init(){
 }
 run(){
 }
 }
-*/
+»*/
 //const {Com} = ShellMod.comClasses;
 const com_devparse = class extends Com{//«
 
@@ -1453,7 +1459,7 @@ async run(){//«
 	if (!text) return this.no(`${fname}: NOTEXT`);
 	let str = text.join("\n");
 	let shell = new ShellMod.Shell(this.term);
-	let rv = await shell.devparse(str);
+	let rv = await shell.devexecute(str);
 	if (isStr(rv)){
 		return this.no(rv);
 	}
@@ -2190,7 +2196,7 @@ const ErrorHandler = class {
 	};//»
 
 };//»
-/*Sequence Classes (Words, Quotes, Subs)«*/
+/*Token Classes (Words, Quotes, Subs)«*/
 
 const Sequence = class {/*«*/
 	constructor(start, par, env){
@@ -3349,9 +3355,7 @@ return await this.scanWord(null, this.env);
 };
 
 //»
-//«Parsers
-
-//DevParser«
+//Dev Parser«
 
 const _DevParser = class {
 
@@ -4433,7 +4437,7 @@ catch(e){
 }
 
 }//»
-async parse() {//«
+async tokenize(){/*«*/
 	let toks = [];
 	let next = this.lookahead;
 	let cur_iohere_tok;
@@ -4453,7 +4457,7 @@ throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
 				let heredoc = heredocs[i];
 				let rv = this.nextLinesUntilDelim(heredoc.delim);
 				if (!isStr(rv)){
-					return {err: "warning: here-document at line ? delimited by end-of-file"}
+					this.fatal("warning: here-document at line ? delimited by end-of-file");
 				}
 				heredoc.tok.value = rv;
 			}
@@ -4472,10 +4476,10 @@ throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
 			}//»
 			else{//«
 				if (isNLs(next)){
-					return "syntax error near unexpected token 'newline'";
+					this.unexp("newline");
 				}
 				else if (next.r_op || next.c_op){
-					return `syntax error near unexpected token '${next.r_op||next.c_op}'`;
+					this.unexp(next);
 				}
 				else{
 cwarn("Whis this non-NLs or r_op or c_op????");
@@ -4487,16 +4491,16 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		else if (next.type==="r_op" && (next.r_op==="<<" || next.r_op==="<<-")){//«
 			toks.push(next);
 			cur_heredoc_tok = next;
-//			cur_heredoc_tok.isHeredoc = true;
 		}//»
 		else {//«
 				toks.push(next);
 		}//»
 		await this.scanNextTok(!!heredocs);
 		next = this.lookahead;
+
 	}
 	if (heredocs){//«
-		if (!interactive) return {err: "warning: here-document at line ? delimited by end-of-file"}
+		if (!interactive) this.fatal("warning: here-document at line ? delimited by end-of-file");
 		for (let i=0; i < heredocs.length; i++){
 			let heredoc = heredocs[i];
 			let rv = await this.heredocScanner(heredoc.delim);
@@ -4505,36 +4509,151 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		heredocs = null;
 	}//»
 	if (cur_heredoc_tok){//«
-		return {err: "syntax error near unexpected token 'newline'"};
+		this.fatal("syntax error near unexpected token 'newline'");
 	}//»
 
 	this.tokens = toks;
 	this.numToks = toks.length;
-	return await this.compile();
-
-};//»
+	return true;
+}/*»*/
+//async parse() {//«
+//	return await this.compile();
+//
+//};//»
 
 };
-//»
-const devparse=async(command_str, opts={})=>{//«
 
-let parser = new _DevParser(command_str.split(""), opts);
+//»
+//Old Parser«
+
+const parse=async(command_str, opts={})=>{//«
+
+let parser = new _Parser(command_str.split(""), opts);
+let toks, comstr_out;
 let program;
 try {
 	let errmess;
 	await parser.scanNextTok();
-	({program, err: errmess } = await parser.parse());
+	({program, err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
 	if (errmess) return errmess;
-	return program;
+	command_str = comstr_out;
 }
 catch(e){
 	cerr(e);
 	return e.message;
 }
+if (program) {
+//cwarn("YARM");
+//log(program);
+//toks = [];
+return program;
+}
+
+//Collect commands with their arguments«
+let com = [];
+let coms = [];
+let have_neg = false;
+for (let tok of toks){
+	if (tok.c_op){
+		if (!com.length) return `unexpected empty command (found: '${tok.c_op}')`;
+		coms.push({com});
+		com = [];
+		coms.push(tok);
+	}
+	else if (isNLs(tok)){
+		if (com.length){
+			coms.push({com});
+			com = [];
+		}
+	}
+	else{
+		let old_have_neg  = have_neg;
+		if (!com.length){
+			if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
+				have_neg = true;
+				continue;
+			}
+			else have_neg = false;
+		}
+		else have_neg = false;
+		if (old_have_neg){
+			tok.hasBang = true;
+		}
+		com.push(tok);
+	}
+}
+if (com.length) coms.push({com});
+//»
+//Collect pipelines with their subsequent logic operators (if any)«
+let pipes = [];
+let pipe = [];
+for (let i=0; i < coms.length; i++){
+	let tok = coms[i];
+//log(tok);
+	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here«
+		if (tok.c_op==="&&"||tok.c_op==="||") {/*«*/
+			if (!coms[i+1]) {
+				if (opts.isInteractive){
+					let rv;
+					while ((rv = await opts.terminal.read_line("> ")).match(/^ *$/)) {
+						command_str+="\n";
+					}
+					return Parser.parse(command_str+"\n"+rv, opts);
+				}
+				return "malformed logic list";
+			}
+			pipes.push({pipe, type: tok.c_op});
+		}/*»*/
+		else {
+			pipes.push({pipe}, tok);
+		}
+		pipe = [];
+	}/*»*/
+	else if (!tok.c_op){//Commands and redirects
+//log("WUT1", tok);
+		pipe.push(tok);
+	}
+	else if (pipe.length && coms[i+1]){//noop: This token "must" be a '|'
+//log("WUT2", coms[i+1]);
+	}
+	else {
+		if (opts.isInteractive && !coms[i+1]){
+			let rv;
+			while ((rv = await opts.terminal.read_line("> ")).match(/^ *$/)) {
+				command_str+="\n";
+			}
+			return Parser.parse(command_str+"\n"+rv, opts);
+		}
+		return "malformed pipeline";
+	}
+
+}
+if (pipe.length) pipes.push({pipe});
+//»
+//Collect ';' separated lists of pipelines+logic operators (if any)«
+let statements=[];
+let statement=[];
+for (let tok of pipes){
+	let cop = tok.c_op;
+	if (cop) {
+		if (cop==="&"||cop===";"){
+			statements.push({statement, type: cop});
+			statement = [];
+		}
+		else{
+			return `unknown control operator: ${cop}`;
+		}
+	}
+	else{
+		statement.push(tok);
+	}
+}
+if (statement.length) statements.push({statement});
+
+//»
+return statements;
 
 };//»
-
-//OldParser«
 
 const _Parser = class {
 
@@ -4678,138 +4797,9 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 };//»
 
 };
-//»
-const parse=async(command_str, opts={})=>{//«
-
-let parser = new _Parser(command_str.split(""), opts);
-let toks, comstr_out;
-let program;
-try {
-	let errmess;
-	await parser.scanNextTok();
-	({program, err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
-	if (errmess) return errmess;
-	command_str = comstr_out;
-}
-catch(e){
-	cerr(e);
-	return e.message;
-}
-if (program) {
-//cwarn("YARM");
-//log(program);
-//toks = [];
-return program;
-}
-
-//Collect commands with their arguments«
-let com = [];
-let coms = [];
-let have_neg = false;
-for (let tok of toks){
-	if (tok.c_op){
-		if (!com.length) return `unexpected empty command (found: '${tok.c_op}')`;
-		coms.push({com});
-		com = [];
-		coms.push(tok);
-	}
-	else if (isNLs(tok)){
-		if (com.length){
-			coms.push({com});
-			com = [];
-		}
-	}
-	else{
-		let old_have_neg  = have_neg;
-		if (!com.length){
-			if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
-				have_neg = true;
-				continue;
-			}
-			else have_neg = false;
-		}
-		else have_neg = false;
-		if (old_have_neg){
-			tok.hasBang = true;
-		}
-		com.push(tok);
-	}
-}
-if (com.length) coms.push({com});
-//»
-//Collect pipelines with their subsequent logic operators (if any)«
-let pipes = [];
-let pipe = [];
-for (let i=0; i < coms.length; i++){
-	let tok = coms[i];
-//log(tok);
-	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here«
-		if (tok.c_op==="&&"||tok.c_op==="||") {/*«*/
-			if (!coms[i+1]) {
-				if (opts.isInteractive){
-					let rv;
-					while ((rv = await opts.terminal.read_line("> ")).match(/^ *$/)) {
-						command_str+="\n";
-					}
-					return Parser.parse(command_str+"\n"+rv, opts);
-				}
-				return "malformed logic list";
-			}
-			pipes.push({pipe, type: tok.c_op});
-		}/*»*/
-		else {
-			pipes.push({pipe}, tok);
-		}
-		pipe = [];
-	}/*»*/
-	else if (!tok.c_op){//Commands and redirects
-//log("WUT1", tok);
-		pipe.push(tok);
-	}
-	else if (pipe.length && coms[i+1]){//noop: This token "must" be a '|'
-//log("WUT2", coms[i+1]);
-	}
-	else {
-		if (opts.isInteractive && !coms[i+1]){
-			let rv;
-			while ((rv = await opts.terminal.read_line("> ")).match(/^ *$/)) {
-				command_str+="\n";
-			}
-			return Parser.parse(command_str+"\n"+rv, opts);
-		}
-		return "malformed pipeline";
-	}
-
-}
-if (pipe.length) pipes.push({pipe});
-//»
-//Collect ';' separated lists of pipelines+logic operators (if any)«
-let statements=[];
-let statement=[];
-for (let tok of pipes){
-	let cop = tok.c_op;
-	if (cop) {
-		if (cop==="&"||cop===";"){
-			statements.push({statement, type: cop});
-			statement = [];
-		}
-		else{
-			return `unknown control operator: ${cop}`;
-		}
-	}
-	else{
-		statement.push(tok);
-	}
-}
-if (statement.length) statements.push({statement});
 
 //»
-return statements;
-
-};//»
-
-//»
-this.Shell = function(term){//«
+const Shell = function(term){//«
 
 //Var«
 const shell = this;
@@ -4834,16 +4824,25 @@ this.cancelled = false;
 
 //»
 
-this.devparse=async(command_str)=>{//«
+this.devexecute=async(command_str)=>{//«
 
-try{
-	let statements = await devparse(command_str, {terminal: term, isInteractive: false});
-	return statements;
-}
-catch(e){
+	let parser = new _DevParser(command_str.split(""), {terminal: term, isInteractive: false});
+	try{
+		let errmess;
+//Must use await because it could possibly need more lines from the terminal, so we can't do
+//this in the constructor (like esprima does)
+		await parser.scanNextTok();
+		await parser.tokenize();
+		let program = await parser.compile();
+		if (program){
+log(program);
+		}
+	}
+	catch(e){
 cerr(e);
-	return 
-}
+term.resperr(e.message);
+	}
+	term.response_end();
 
 },/*»*/
 
@@ -5493,8 +5492,9 @@ this.cancel=()=>{//«
 	for (let com of pipe) com.cancel();
 };//»
 
-};//»
-const Shell = this.Shell;
+};
+this.Shell = Shell;
+//»
 //«init: preload command libraries
 this.init=()=>{
 
@@ -5533,12 +5533,9 @@ Shell.activeCommands = active_commands;
 Shell.activeOptions = active_options;
 
 }//»
-
 }
 globals.ShellMod.init();
-//globals.ShellMod = ShellMod;
 const ShellMod = globals.ShellMod;
-
 //»
 
 //Terminal«
@@ -6933,7 +6930,48 @@ const resize = () => {//«
 //»
 
 //»
-//Parse/Prompt«
+//Execute/Parse/Prompt«
+
+const execute = async(str, if_init, halt_on_fail)=>{//«
+	ENV['USER'] = globals.CURRENT_USER;
+//	cur_shell = this.shell;
+	cur_shell = new Shell(this);
+	let gotstr = str.trim();
+
+	str = str.replace(/\x7f/g, "");
+
+	let env = {};
+	for (let k in ENV){
+		env[k]=ENV[k];
+	}
+	let heredocScanner=async(eof_tok)=>{
+		let doc = [];
+		let didone = false;
+		let prmpt="> ";
+		let rv;
+		while (true){
+			let rv = await this.read_line(prmpt);
+			if (rv===eof_tok) break;
+			doc.push(rv);
+			didone = true;
+		}
+		return doc;
+	};
+
+	if (dev_mode && USE_DEVPARSER) await cur_shell.devexecute(str,{env, heredocScanner, isInteractive: true});
+	else await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
+
+	let ind = history.indexOf(gotstr);
+	if (ind >= 0) {
+		history.splice(ind, 1);
+	}
+	else{
+		write_to_history(gotstr);
+	}
+	history.push(gotstr);
+
+};
+//»
 
 const get_com_pos=()=>{//«
 	let add_x=0;
@@ -6982,49 +7020,6 @@ const get_command_arr=async (dir, arr, pattern)=>{//«
 	}
 	return match_arr;
 };//»
-const execute = async(str, if_init, halt_on_fail)=>{//«
-	ENV['USER'] = globals.CURRENT_USER;
-//	cur_shell = this.shell;
-	cur_shell = new Shell(this);
-	let gotstr = str.trim();
-
-	str = str.replace(/\x7f/g, "");
-
-	let env = {};
-	for (let k in ENV){
-		env[k]=ENV[k];
-	}
-	let heredocScanner=async(eof_tok)=>{
-		let doc = [];
-//		sleeping = false;
-		let didone = false;
-		let prmpt="> ";
-		let rv;
-		while (true){
-//log("SCAN", eof_tok);
-			let rv = await this.read_line(prmpt);
-			if (rv===eof_tok) break;
-			doc.push(rv);
-			didone = true;
-		}
-//		sleeping = true;
-		return doc;
-	};
-	await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
-
-//log("RV", rv);
-
-	let ind = history.indexOf(gotstr);
-	if (ind >= 0) {
-		history.splice(ind, 1);
-	}
-	else{
-		write_to_history(gotstr);
-	}
-	history.push(gotstr);
-
-};
-//»
 const get_prompt_str=()=>{//«
 	let str;
 	let user = ENV.USER;
@@ -8248,6 +8243,10 @@ else if (sym=="d_CAS"){
 
 }
 else if (sym=="s_CA"){
+if (!dev_mode) return;
+USE_DEVPARSER = !USE_DEVPARSER;
+do_overlay(`Use Dev Parser: ${USE_DEVPARSER}`);
+
 }
 };
 //»
@@ -8353,6 +8352,7 @@ const init = async(appargs={})=>{
 	let init_prompt = `LOTW shell\x20(${winid.replace("_","#")})`
 	if(dev_mode){
 		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+		init_prompt+=`\nDev Parser: ${USE_DEVPARSER}`;
 	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;

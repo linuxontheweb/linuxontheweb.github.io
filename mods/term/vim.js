@@ -83,7 +83,6 @@ const HI2LO = (a, b)=>{if(a>b)return -1;else if (a<b)return 1;return 0;};
 const NOOP=()=>{};
 const NUM=(v)=>Number.isFinite(v);
 
-log(ShellMod);
 
 //»
 
