@@ -3409,8 +3409,8 @@ The same is true for terms (which are the lists of andors of compound commands).
 
 */
 //log("WHAT ME EXECUTE", this.ast, this.term, this.opts);
-cwarn("EXEC!");
-log(this.ast);
+cwarn("GIVE ME ANOTHER RUNTIME");
+//log(this.ast);
 
 }
 

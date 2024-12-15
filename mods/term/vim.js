@@ -1,4 +1,9 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
+/*12/15/24: Now, need to create a hotkey to add a class called 'Runtime'
+on LOTW.globals.ShellMod. We'll do this by doing URL.createObjectURL
+on the text in here...
+
+*/
 //«Notes
 /*11/30/24: While doing "visual line select" in "file mode", it gave an«
 error like: "yank_buffer is not iterable" when trying to do a weird
@@ -3686,6 +3691,7 @@ const JS_SYNTAX=1;
 let SYNTAX=NO_SYNTAX;
 //let SYNTAX=JS_SYNTAX;
 const KEYWORDS=[
+"async",
 "await",
 "break",
 "case",
@@ -3693,6 +3699,7 @@ const KEYWORDS=[
 "class",
 "const",
 "continue",
+"constructor",
 "debugger",
 "default",
 "delete",
@@ -3742,7 +3749,7 @@ let KEYWORD_STR='';
 for (let c of KEYWORDS) KEYWORD_STR+="\\b"+c+"\\b"+"|";
 KEYWORD_STR=KEYWORD_STR.slice(0,KEYWORD_STR.length-1);
 
-const DECS = ["function","this","var","let"];
+const DECS = ["LOTW","function","this","var","let"];
 let DEC_STR='';
 for (let c of DECS) DEC_STR+="\\b"+c+"\\b"+"|";
 DEC_STR=DEC_STR.slice(0,DEC_STR.length-1);
@@ -5501,6 +5508,29 @@ u_C: do_changecase,
 u_CA: ()=>{do_changecase(true);},
 
 //Non-editing (No Action needed below)
+w_CAS:()=>{
+get_all_words();
+cwarn(`GOT: ${ALLWORDS.length} WORDS`);
+},
+s_CAS:()=>{//«
+	let vimvars = globals.vim || {};
+	if (!globals.vim) globals.vim = vimvars;
+	let val = get_edit_str()
+	let url = URL.createObjectURL(new Blob([val]));
+	let scr = document.createElement('script');
+	scr.src = url;
+	scr.onload=()=>{
+		if (vimvars.curDevScript) {
+			document.head.removeChild(vimvars.curDevScript);
+		}
+		vimvars.curDevScript = scr;
+cwarn("LOADOKAY!");
+	};
+	scr.onerror=(e)=>{
+cerr(e);
+	};
+	document.head.appendChild(scr);
+},/*»*/
 
 //Init/Toggle modes
 p_C: init_complete_mode,
