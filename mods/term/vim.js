@@ -1,9 +1,23 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
-/*12/15/24: Now, need to create a hotkey to add a class called 'Runtime'
+/*12/15/24: Now, need to create a hotkey to add a class called 'Runtime'«
 on LOTW.globals.ShellMod. We'll do this by doing URL.createObjectURL
 on the text in here...
 
-*/
+Down in KEY_DOWN_FUNCS @KSJTUSHF, I just made a command to refresh the
+"completer words" list (via w_CAS) and another to do that thing I just talked
+about above (via s_CAS). Then it puts the curDevScript var onto it. Putting
+this onto global was because we are often changing/reloading/refreshing vim.js
+(this file) itself while working all this stuff out.
+
+I'm also going to want a hotkey here to run commands into a terminal. By doing
+it *that* way we can send the commands directly into a "dev" pathway in the
+terminal. 
+
+Now I'm thinking about using my console only for "major" errors like (SyntaxError),
+and using other pathways (in-line with the LOTW system) to do debugging of complex 
+objects that are currently output through console.log(...).
+
+»*/
 //«Notes
 /*11/30/24: While doing "visual line select" in "file mode", it gave an«
 error like: "yank_buffer is not iterable" when trying to do a weird
@@ -197,7 +211,6 @@ let scroll_hold_x=0;
 //let x_scroll = 0;
 let num_lines;
 
-if (!globals.vim) globals.vim={};
 let histories = globals.vim.histories;
 if (!histories){
 	histories = {command: [], search: []};
@@ -5508,13 +5521,14 @@ u_C: do_changecase,
 u_CA: ()=>{do_changecase(true);},
 
 //Non-editing (No Action needed below)
-w_CAS:()=>{
+
+//KSJTUSHF
+w_CAS:()=>{//«
 get_all_words();
-cwarn(`GOT: ${ALLWORDS.length} WORDS`);
-},
+cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
+},//»
 s_CAS:()=>{//«
-	let vimvars = globals.vim || {};
-	if (!globals.vim) globals.vim = vimvars;
+	let vimvars = globals.vim;
 	let val = get_edit_str()
 	let url = URL.createObjectURL(new Blob([val]));
 	let scr = document.createElement('script');
@@ -5527,6 +5541,7 @@ s_CAS:()=>{//«
 cwarn("LOADOKAY!");
 	};
 	scr.onerror=(e)=>{
+log("GOT SYNTAX ERROR???");
 cerr(e);
 	};
 	document.head.appendChild(scr);

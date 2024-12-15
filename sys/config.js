@@ -452,6 +452,7 @@ export const globals = {//«
 	shell_libs: {},
 	audio:{},
 	lists:{},
+	vim:{},
 	api
 
 };//»
