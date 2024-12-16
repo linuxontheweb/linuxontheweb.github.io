@@ -25,6 +25,10 @@ Then we can start getting to work on our own internal development of our own
 Shell. Eventually, we are going to want to use this stuff in a desktop
 initialization script (possibly with our shell implementation or some kind of
 *VERY* simple language we can work on, for the purpose of commanding the GUI).
+
+Just created a 'bindwin' command, e.g.:
+~$ bindwin <win_id_num> <key_num[1-9]>
+
 »*/
 /*11/25/24: @WJKNMTYT: When trying to 'mv' a file like this:«
 $ mv blah.txt FOOFOOFOO
@@ -3671,6 +3675,10 @@ makeDOMElem(arg){//«
 		}
 		if (node && node.unlockFile) node.unlockFile();
 		top_win_on();
+		if (this.bindNum){
+			delete globals.boundWins[this.bindNum];
+			show_overlay(`${this.bindNum}: the key has been unbound`);
+		}
 	};//»
 	const onhover=function(){//«
 		if (CDL) return;
@@ -5545,6 +5553,11 @@ log(CWIN.ownedBy);
 		return true;
 	}
 	return false;
+};//»
+const raise_bound_win=(num)=>{//«
+	let win = globals.boundWins[num];
+	if (!win) return show_overlay(`key '${num}': not bound to a window`);
+	win.on();
 };//»
 
 //»
@@ -8181,8 +8194,7 @@ if (!qObj["no-switcher"]) {
 
 //XKLEUIM
 	if (marr = kstr.match(/^([1-9])_CA$/)){
-cwarn("WIN BINDING",marr[1]);
-return;
+		return raise_bound_win(marr[1]);
 	}
 if (kstr==="0_CA"){
 cwarn("WIN MANAGER");

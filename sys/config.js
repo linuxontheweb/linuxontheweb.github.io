@@ -449,10 +449,10 @@ export const globals = {//«
 	dbs:{},//database handles
 	mods: {},
 	apps: {},
-	shell_libs: {},
 	audio:{},
 	lists:{},
 	vim:{},
+	boundWins:{},
 	api
 
 };//»

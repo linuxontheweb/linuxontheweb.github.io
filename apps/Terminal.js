@@ -121,7 +121,6 @@ const {
 	SHM_TYPE,
 	fs,
 	isMobile,
-//	shell_libs,
 	SHELL_ERROR_CODES,
 	dev_mode,
 	admin_mode,
@@ -1479,11 +1478,9 @@ run(){
 »*/
 //const {Com} = ShellMod.comClasses;
 const com_devparse = class extends Com{//«
-
 init(){//«
 	if (!this.args.length) this.no("need a file arg");
 }//»
-
 async run(){//«
 	let fname = this.args.shift();
 	let text = await fname.toText(this.term);
@@ -1498,7 +1495,26 @@ log(rv);
 	//log(shell);
 	this.ok();
 }//»
-
+}//»
+const com_bindwin = class extends Com{//«
+	init(){
+	}
+	run(){
+		const{args, no}=this;
+		let numstr = args.shift();
+		if (!numstr) return no(`expected a window id arg`);
+		if (!numstr.match(/[0-9]+/)) return no(`${numstr}: invalid numerical argument`);
+		let num = parseInt(numstr);
+		let elem = document.getElementById(`win_${num}`);
+		if (!elem) return no(`${numstr}: window not found`);
+		let win = elem._winObj;
+		if (!win) return no(`${numstr}: the window doesn't have an associated object!?!?`);
+		let use_key = args.shift();
+		if (!(use_key && use_key.match(/^[1-9]$/))) return no(`expected a 'key' arg (1-9)`);
+		globals.boundWins[use_key] = win;
+		win.bindNum = use_key;
+		this.ok(`Ctrl+Alt+${use_key} -> win_${numstr}`);
+	}
 }//»
 
 const com_echo = class extends Com{//«
@@ -2102,6 +2118,7 @@ this.ok("NOT MUCH HERE!!!");
 this.defCommands={//«
 //const shell_commands={
 devparse: com_devparse,
+bindwin: com_bindwin,
 math: com_math,
 inspect: com_inspect,
 curcol: com_curcol, 
