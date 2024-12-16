@@ -1,8 +1,6 @@
-/*12/16/24: 
-
-DumHack @FSKEUSHFK to "fit" a little window number indicator into the bottom
-left corner without breaking all of the delicately balanced (vis-a-vis css
-display and positioning) stuff in the footer. We had to give the 'footer_wrap'
+/*12/16/24: DumHack @FSKEUSHFK to "fit" a little window number indicator into «
+the bottom left corner without breaking all of the delicately balanced (vis-a-vis 
+css display and positioning) stuff in the footer. We had to give the 'footer_wrap'
 a relative positioning, and then create a 'numdiv' with abolute positioning, in
 order to keep things simple (i.e. without having to get into a whole bunch of
 head-scratching about how to work with the flex-display nature of the 'statdiv'
@@ -10,7 +8,24 @@ down on the footer). Putting the number indiscretely here on the bottom left
 adds a sort of "balancing," fung-shui quality to the whole thing, especially
 when the application shows nothing on the statdiv.
 
-*/
+The motivation here is to make it trivial to locate the global handle to
+windows, so it can be used by, i.e. the new [1-9]_CA shortcut @XKLEUIM
+or by some kind of Window Manager App (WMA) that can be invoked by 0_CA.
+
+Then we can use the CLI or the WMA to bind our windows to these keysyms. I
+see the WMA version of this as being a kind of "macro", such that there can
+be a two-chord sequence in order to bring up lesser used windows than the
+ones in the quick/easy [1-9]_CA slots. The combination might be as simple
+as 0_CA + a (pressing Ctrl+Alt+0, letting go, and then pressing "a").
+
+This is my quick/dirty way of greatly increasing the available keystrokes that
+exist for the purpose of "random-accessibly" bringing your windows into focus.
+
+Then we can start getting to work on our own internal development of our own
+Shell. Eventually, we are going to want to use this stuff in a desktop
+initialization script (possibly with our shell implementation or some kind of
+*VERY* simple language we can work on, for the purpose of commanding the GUI).
+»*/
 /*11/25/24: @WJKNMTYT: When trying to 'mv' a file like this:«
 $ mv blah.txt FOOFOOFOO
 
@@ -8164,10 +8179,16 @@ if (!qObj["no-switcher"]) {
 	}
 }
 
+//XKLEUIM
 	if (marr = kstr.match(/^([1-9])_CA$/)){
 cwarn("WIN BINDING",marr[1]);
 return;
 	}
+if (kstr==="0_CA"){
+cwarn("WIN MANAGER");
+return;
+}
+
 	if (kstr=="l_CAS") return console.clear();
 	if (kstr=="t_CAS") return keysym_funcs.toggle_tiling_mode();
 	if (kstr=="e_CAS") taskbar.toggle_expert_mode();
