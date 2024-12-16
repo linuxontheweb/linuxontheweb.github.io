@@ -1,3 +1,16 @@
+/*12/16/24: 
+
+DumHack @FSKEUSHFK to "fit" a little window number indicator into the bottom
+left corner without breaking all of the delicately balanced (vis-a-vis css
+display and positioning) stuff in the footer. We had to give the 'footer_wrap'
+a relative positioning, and then create a 'numdiv' with abolute positioning, in
+order to keep things simple (i.e. without having to get into a whole bunch of
+head-scratching about how to work with the flex-display nature of the 'statdiv'
+down on the footer). Putting the number indiscretely here on the bottom left
+adds a sort of "balancing," fung-shui quality to the whole thing, especially
+when the application shows nothing on the statdiv.
+
+*/
 /*11/25/24: @WJKNMTYT: When trying to 'mv' a file like this:«
 $ mv blah.txt FOOFOOFOO
 
@@ -3438,11 +3451,10 @@ constructor(arg){//«
 	this.appName = arg.appName;
 	let is_folder = app === FOLDER_APP;
 	this.isFolder = is_folder;
+	this.winNum = ++win_num;
 
-	this.winId = winargs.ID || `win_${++win_num}`;
+	this.winId = winargs.ID || "win_"+this.winNum;
 	this.id=this.winId;
-
-//	winid = win.id;
 
 	this.Desk = Desk;
 	this.workspaceNum = current_workspace_num;
@@ -3586,14 +3598,7 @@ makeDOMElem(arg){//«
 
 	img_div.onclick = ()=>{this.contextMenuOn()};
 	title._add(img_div);
-	let useimg = winargs.WINTITLEIMG;
-	if (useimg) {
-		img_div.img = useimg;
-		img_div._add(useimg);
-	}
-	else {
-		img_div.innerText = getAppIcon(app?app.split(".").pop():DEF_BIN_APP);
-	}
+	img_div.innerText = getAppIcon(app?app.split(".").pop():DEF_BIN_APP);
 	img_div.id="titleimgdiv_"+winid;
 	img_div._fs=12;
 	img_div._tcol="#a7a7a7";
@@ -3769,7 +3774,7 @@ cwarn("this!==CWIN ????");
 //»
 	let footer = make('div');//«
 	let footer_wrap=make('div');
-
+	footer_wrap._pos="relative";
 //«
 //The BOTTOMPAD property is ultimately given to us via a WINARG argument, so
 //that, for example, from Desk.api.saveAs (@DWEUNFKL), a folder window can be
@@ -3789,7 +3794,6 @@ cwarn("this!==CWIN ????");
 		bottom_div._h=botpad-2;
 		footer_wrap._add(bottom_div);
 	}
-
 	footer._dis="flex";
 	footer.style.justifyContent="space-between";
 	footer._h=18;
@@ -3803,7 +3807,7 @@ cwarn("this!==CWIN ????");
 	statdiv.oncontextmenu=noprop;
 	statdiv._tcol="#ddd";
 	statdiv._fs=14;
-	statdiv._padl=3;
+	statdiv._padl=15;
 	statdiv._padt=1;
 	statdiv._over="hidden";
 	let rsdiv = make('div');
@@ -3812,7 +3816,6 @@ cwarn("this!==CWIN ????");
 	rsdiv.style.flex="0 0 15px";
 	rsdiv._bgcol="#778";
 	rsdiv._bor="2px inset #99a";
-//	rsdiv._bor="1px solid #333";
 	rsdiv.onmouseover=e=>{
 		if (CDL) rsdiv.style.cursor = "";
 		else rsdiv.style.cursor = "nwse-resize";
@@ -3833,6 +3836,17 @@ cwarn("this!==CWIN ????");
 	footer._add(statdiv);
 	footer._add(rsdiv);
 	footer_wrap._add(footer);
+//FSKEUSHFK
+	let numdiv = mkdv();
+	numdiv.style.cssText=`
+position: absolute;
+color: #aaa;
+font-size: 12.5px;
+left: 1.5px;
+top: 2.75px;
+	`;
+	numdiv.innerHTML=`${this.winNum}`;
+	footer_wrap._add(numdiv);
 //»
 
 	win._add(titlebar);
@@ -4603,8 +4617,8 @@ cwarn(`No script found for app: ${appName}`);
 //	});
 };//»
 
-//DIOLMTNY
 loadApp(){//Old make_app«
+//DIOLMTNY
 
 return new Promise((Y,N)=>{
 
@@ -8130,8 +8144,7 @@ cwarn("There was an unattached icon in ICONS!");
 		}
 	}//»
 
-//Various harcoded keysyms that *just* intercept the current window
-//«
+//«Various harcoded keysyms that *just* intercept the current window
 if (!qObj["no-switcher"]) {
 	if (kstr.match(/^[1-9]_CAS$/)){
 		switch_to_workspace(parseInt(kstr.split("_")[0])-1);
@@ -8151,6 +8164,10 @@ if (!qObj["no-switcher"]) {
 	}
 }
 
+	if (marr = kstr.match(/^([1-9])_CA$/)){
+cwarn("WIN BINDING",marr[1]);
+return;
+	}
 	if (kstr=="l_CAS") return console.clear();
 	if (kstr=="t_CAS") return keysym_funcs.toggle_tiling_mode();
 	if (kstr=="e_CAS") taskbar.toggle_expert_mode();
@@ -8215,7 +8232,7 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 //These keys are "free" for the desktop to do what it wants
 //«
 	if (kstr == "ESC_") return handle_ESC();
-	else if (kstr=="1_CA") return open_text_editor();
+//	else if (kstr=="1_CA") return open_text_editor();
 	else if (kstr=="w_CAS"){
 		for (let w of windows){
 			log(w.fullpath);
