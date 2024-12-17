@@ -1,7 +1,7 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
 /*12/17/24: Yesterday I created the 'goto_matching_brace' functionality«
 that attempts to find the matching "}","]" or ")" when a "{", "[", or "("
-is under the cursor (and vice versa).
+is under the cursor (and vice versa). Use it with the "'" key.
 »*/
 /*12/15/24: Now, need to create a hotkey to add a class called 'Runtime'«
 on LOTW.globals.ShellMod. We'll do this by doing URL.createObjectURL
@@ -3112,6 +3112,7 @@ THROW("What is the return value from get_confirmation?");
 };//»
 
 const goto_matching_brace=()=>{//«
+
 let lnarr = curarr();
 if (lnarr._fold) return;
 const OK_CHARS=["{","}","(",")","[","]"];
@@ -3132,12 +3133,18 @@ let lnslen = lines.length;
 let stack_num = 0;
 let ok_y, ok_x;
 let start_y = scroll_num+y;
-if (is_forward) {/*«*/
+if (is_forward) {//«
+
+let use_y; 
+let use_x;
 
 let addy=0;
 if (x+1 === lnarr.length){
-	x=-1;
+	use_x=-1;
 	addy=1;
+}
+else{
+	use_x = x;
 }
 OUTERLOOP1: for(let i=y+scroll_num+addy; i < lnslen; i++){
 	let ln = lines[i];
@@ -3147,7 +3154,7 @@ OUTERLOOP1: for(let i=y+scroll_num+addy; i < lnslen; i++){
 	let lnlen = ln.length;
 	let j;
 	if (i===y+scroll_num+addy){
-		j = x+1;
+		j = use_x+1;
 	}
 	else j = 0;
 	for (; j < lnlen; j++){
@@ -3167,8 +3174,8 @@ OUTERLOOP1: for(let i=y+scroll_num+addy; i < lnslen; i++){
 		}
 	}
 }
-}/*»*/
-else{/*«*/
+}//»
+else{//«
 
 let use_y; 
 let use_x;
@@ -3210,9 +3217,7 @@ OUTERLOOP2: for(let i=use_y; i >= 0; i--){
 			else if (c===ch) stack_num++;
 		}
 	}
-
-}/*»*/
-//log(ok_x, ok_y);
+}//»
 if (Number.isFinite(ok_x)){
 	if (start_y!==ok_y) {
 		scroll_to(realy(ok_y));
@@ -3220,7 +3225,9 @@ if (Number.isFinite(ok_x)){
 	x=ok_x;
 	render();
 }
-
+else{
+stat_warn(`matching '${match}' not found`);
+}
 };//»
 
 //»

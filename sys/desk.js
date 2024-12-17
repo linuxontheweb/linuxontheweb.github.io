@@ -1,9 +1,13 @@
-/*12/17/24: Window Manager time!!! Want an app called WinMan that gives us a graphical
+/*12/17/24: Window Manager time! Want an app called WinMan that gives us a graphical«
 interface into what I starting working on yesterday with the bindwin command.
 Need to give an option to bindwin to allow a string description.
 
-
-*/
+You open it up with Ctrl+Alt+0. Then you just pick the window you want to rearrange
+by pressing the associated number key (without modifiers). Then you move it around
+with the arrow keys (left/right if the window are arranged horizontally, up/down if
+vertically). Toggle between row-wise or column-wise alignment via "/". Escape
+"deselects" the currently selected window.
+»*/
 /*12/16/24: DumHack @FSKEUSHFK to "fit" a little window number indicator into «
 the bottom left corner without breaking all of the delicately balanced (vis-a-vis 
 css display and positioning) stuff in the footer. We had to give the 'footer_wrap'
