@@ -3680,11 +3680,11 @@ makeDOMElem(arg){//«
 			icn.win = null;
 		}
 		if (node && node.unlockFile) node.unlockFile();
-		top_win_on();
 		if (this.bindNum){
 			delete globals.boundWins[this.bindNum];
 			show_overlay(`${this.bindNum}: the key has been unbound`);
 		}
+		top_win_on();
 	};//»
 	const onhover=function(){//«
 		if (CDL) return;
