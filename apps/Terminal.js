@@ -1500,7 +1500,6 @@ const com_bindwin = class extends Com{//«
 	init(){
 	}
 	run(){
-		let desc = this.opts.desc || this.opts.d;
 		const{args, no}=this;
 		let numstr = args.shift();
 		if (!numstr) return no(`expected a window id arg`);
@@ -1512,6 +1511,7 @@ const com_bindwin = class extends Com{//«
 		if (!win) return no(`${numstr}: the window doesn't have an associated object!?!?`);
 		let use_key = args.shift();
 		if (!(use_key && use_key.match(/^[1-9]$/))) return no(`expected a 'key' arg (1-9)`);
+		let desc = this.opts.desc || this.opts.d || win.appName;
 		globals.boundWins[use_key] = {win, desc};
 		win.bindNum = use_key;
 		this.ok(`Ctrl+Alt+${use_key} -> win_${numstr}`);

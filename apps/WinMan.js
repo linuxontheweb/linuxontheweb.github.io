@@ -65,9 +65,14 @@ border: 1px dotted gray;
 margin: 3px;
 `;
 	let mess;
-	if (!obj) mess="<i>[None]</i>";
-	else mess = obj.desc;
-	dv.innerHTML=`<span style="font-size: 21px;"><b>${n}</b></span><br>${mess}`;
+	if (!obj) {
+		mess="&nbsp;&nbsp;&nbsp;&nbsp;";
+		dv.innerHTML=`<span style="font-size: 21px;"><i>${n}</i></span><br>${mess}`;
+	}
+	else {
+		mess = obj.desc;
+		dv.innerHTML=`<span style="font-size: 21px;"><b>${n}</b></span><br>${mess}`;
+	}
 	win_div._add(dv);
 	dv._obj
 	if (obj) {
