@@ -1,4 +1,8 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
+/*12/17/24: Yesterday I created the 'goto_matching_brace' functionality«
+that attempts to find the matching "}","]" or ")" when a "{", "[", or "("
+is under the cursor (and vice versa).
+»*/
 /*12/15/24: Now, need to create a hotkey to add a class called 'Runtime'«
 on LOTW.globals.ShellMod. We'll do this by doing URL.createObjectURL
 on the text in here...
@@ -3107,6 +3111,118 @@ THROW("What is the return value from get_confirmation?");
 
 };//»
 
+const goto_matching_brace=()=>{//«
+let lnarr = curarr();
+if (lnarr._fold) return;
+const OK_CHARS=["{","}","(",")","[","]"];
+let ch = curch();
+if (!ch) return;
+let ind = OK_CHARS.indexOf(ch);
+if (ind < 0) return;
+let match;
+let is_forward;
+if (!(ind%2)) {
+	match = OK_CHARS[ind+1];
+	is_forward = true;
+}
+else {
+	match = OK_CHARS[ind-1];
+}
+let lnslen = lines.length;
+let stack_num = 0;
+let ok_y, ok_x;
+let start_y = scroll_num+y;
+if (is_forward) {/*«*/
+
+let addy=0;
+if (x+1 === lnarr.length){
+	x=-1;
+	addy=1;
+}
+OUTERLOOP1: for(let i=y+scroll_num+addy; i < lnslen; i++){
+	let ln = lines[i];
+	if (ln._fold) {
+		continue;
+	}
+	let lnlen = ln.length;
+	let j;
+	if (i===y+scroll_num+addy){
+		j = x+1;
+	}
+	else j = 0;
+	for (; j < lnlen; j++){
+		let c = ln[j];
+		if (c === match){
+			if (stack_num) {
+				stack_num--;
+			}
+			else {
+				ok_y = i;
+				ok_x = j;
+				break OUTERLOOP1;
+			}
+		}
+		else if (c===ch) {
+			stack_num++;
+		}
+	}
+}
+}/*»*/
+else{/*«*/
+
+let use_y; 
+let use_x;
+if (x === 0){
+	let iter=1;
+	let startx;
+	for (let i=y+scroll_num-iter; i >= 0; iter++, i--){
+		let ar = curarr(-iter);
+		if (!ar._fold && ar.length){
+			startx = curarr(-iter).length - 1;
+			use_y = y+scroll_num-iter;
+			use_x = startx;
+			break;
+		}
+	}
+}
+else{
+	use_y = y+scroll_num;
+	use_x = x-1;
+}
+
+OUTERLOOP2: for(let i=use_y; i >= 0; i--){
+	let ln = lines[i];
+	if (ln._fold) continue;
+	let lnlen = ln.length;
+	let j;
+	if (i===use_y) j = use_x;
+	else j = ln.length-1;
+		for (; j >=0 ; j--){
+			let c = ln[j];
+			if (c === match){
+				if (stack_num) stack_num--;
+				else {
+					ok_y = i;
+					ok_x = j;
+					break OUTERLOOP2;
+				}
+			}
+			else if (c===ch) stack_num++;
+		}
+	}
+
+}/*»*/
+//log(ok_x, ok_y);
+if (Number.isFinite(ok_x)){
+	if (start_y!==ok_y) {
+		scroll_to(realy(ok_y));
+	}
+	x=ok_x;
+	render();
+}
+
+};//»
+
 //»
 //Undo/Redo«
 
@@ -5394,118 +5510,9 @@ const handle_visual_key=ch=>{//«
 
 };//»
 
+
 const KEY_CHAR_FUNCS={//«
-"'":()=>{
-let lnarr = curarr();
-if (lnarr._fold) return;
-const OK_CHARS=["{","}","(",")","[","]"];
-let ch = curch();
-if (!ch) return;
-let ind = OK_CHARS.indexOf(ch);
-if (ind < 0) return;
-let match;
-let is_forward;
-if (!(ind%2)) {
-	match = OK_CHARS[ind+1];
-	is_forward = true;
-}
-else {
-	match = OK_CHARS[ind-1];
-}
-let lnslen = lines.length;
-let stack_num = 0;
-let ok_y, ok_x;
-let start_y = scroll_num+y;
-if (is_forward) {/*«*/
 
-let addy=0;
-if (x+1 === lnarr.length){
-	x=-1;
-	addy=1;
-}
-OUTERLOOP1: for(let i=y+scroll_num+addy; i < lnslen; i++){
-	let ln = lines[i];
-	if (ln._fold) {
-		continue;
-	}
-	let lnlen = ln.length;
-	let j;
-	if (i===y+scroll_num+addy){
-		j = x+1;
-	}
-	else j = 0;
-	for (; j < lnlen; j++){
-		let c = ln[j];
-		if (c === match){
-			if (stack_num) {
-				stack_num--;
-			}
-			else {
-				ok_y = i;
-				ok_x = j;
-				break OUTERLOOP1;
-			}
-		}
-		else if (c===ch) {
-			stack_num++;
-		}
-	}
-}
-}/*»*/
-else{/*«*/
-
-let use_y; 
-let use_x;
-if (x === 0){
-	let iter=1;
-	let startx;
-	for (let i=y+scroll_num-iter; i >= 0; iter++, i--){
-		let ar = curarr(-iter);
-		if (!ar._fold && ar.length){
-			startx = curarr(-iter).length - 1;
-			use_y = y+scroll_num-iter;
-			use_x = startx;
-			break;
-		}
-	}
-}
-else{
-	use_y = y+scroll_num;
-	use_x = x-1;
-}
-
-OUTERLOOP2: for(let i=use_y; i >= 0; i--){
-	let ln = lines[i];
-	if (ln._fold) continue;
-	let lnlen = ln.length;
-	let j;
-	if (i===use_y) j = use_x;
-	else j = ln.length-1;
-		for (; j >=0 ; j--){
-			let c = ln[j];
-			if (c === match){
-				if (stack_num) stack_num--;
-				else {
-					ok_y = i;
-					ok_x = j;
-					break OUTERLOOP2;
-				}
-			}
-			else if (c===ch) stack_num++;
-		}
-	}
-
-}/*»*/
-//log(ok_x, ok_y);
-if (Number.isFinite(ok_x)){
-	if (start_y!==ok_y) {
-		scroll_to(realy(ok_y));
-	}
-	x=ok_x;
-	render();
-}
-
-},
 //	X: do_null_del,
 //Edit (Action needed)
 	x: handle_ch_del,
@@ -5565,6 +5572,7 @@ if (Number.isFinite(ok_x)){
 	"&":()=>{
 		find_word(get_cur_word().word, {exact: true, reverse: true});
 	},
+	"'":goto_matching_brace,
 
 //Cursor
 	"0":()=>{seek_line_start();render();},

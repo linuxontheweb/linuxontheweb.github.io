@@ -1,3 +1,9 @@
+/*12/17/24: Window Manager time!!! Want an app called WinMan that gives us a graphical
+interface into what I starting working on yesterday with the bindwin command.
+Need to give an option to bindwin to allow a string description.
+
+
+*/
 /*12/16/24: DumHack @FSKEUSHFK to "fit" a little window number indicator into «
 the bottom left corner without breaking all of the delicately balanced (vis-a-vis 
 css display and positioning) stuff in the footer. We had to give the 'footer_wrap'
@@ -5555,9 +5561,9 @@ log(CWIN.ownedBy);
 	return false;
 };//»
 const raise_bound_win=(num)=>{//«
-	let win = globals.boundWins[num];
-	if (!win) return show_overlay(`key '${num}': not bound to a window`);
-	win.on();
+	let obj = globals.boundWins[num];
+	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
+	obj.win.on();
 };//»
 
 //»
@@ -8197,7 +8203,8 @@ if (!qObj["no-switcher"]) {
 		return raise_bound_win(marr[1]);
 	}
 if (kstr==="0_CA"){
-cwarn("WIN MANAGER");
+//cwarn("WIN MANAGER");
+open_app("WinMan");
 return;
 }
 
