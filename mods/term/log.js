@@ -55,14 +55,14 @@ let lines=[], line_colors=[];
 //}
 
 let x=0,y=0,scroll_num=0;
+let stack = [];
+let path = [];
 
 let stat_message, stat_message_type;
 let stat_input_mode;
 let stat_com_arr;
 let num_stat_lines = 1;
 
-let stack = [];
-let path = [];
 let curobj;
 let min_key_len;
 const NEW_LOGS_MESS = "!!! New logs !!!";
@@ -72,10 +72,18 @@ let is_message;
 //Funcs«
 
 
-const log_cb=()=>{
-//cwarn("LOG CB!!!");
+const log_cb=(if_clear)=>{
+if (if_clear) {
+	curobj = menu;
+	x=0;
+	y=0;
+	scroll_num=0;
+	stack = [];
+	path = [];
+}
 if (curobj===menu){
-set_main_menu();
+set_main_menu({clear: if_clear});
+render();
 }
 else{
 stat_message = NEW_LOGS_MESS;
@@ -105,15 +113,16 @@ const render = () => {//«
 const set_main_menu=(opts={})=>{//«
 
 curobj = menu;
-if (!curobj.length) {
-stat_message="[Empty]";
-is_message = false;
-render();
-	return;
-}
 lines.splice(0, lines.length);
 line_colors.splice(0, line_colors.length);
 min_key_len = 0;
+if (!curobj.length) {
+	if (opts.clear) stat_message = "[Cleared]";
+	else stat_message="[Empty]";
+	is_message = false;
+	render();
+	return;
+}
 let keys=[];
 let vals=[];
 for (let o of menu){
@@ -250,6 +259,11 @@ const cur_val=(key)=>{//«
 	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
 };//»
 const stat_val=()=>{//«
+if (curobj===menu && !menu.length){
+stat_message = "[Empty]";
+render();
+return;
+}
 	let val;
 	let k = cur_key();
 	if (curobj===menu){
@@ -413,14 +427,14 @@ return;
 		stat_val();
 		render();
 	}//»
-	else if (sym=="HOME_") {//«
+	else if (sym=="HOME_"||sym===",_") {//«
 		if (scroll_num == 0) return;
 		scroll_num = 0;
 		y=0;
 		stat_val();
 		render();
 	}//»
-	else if (sym=="END_") {//«
+	else if (sym=="END_"||sym==="._") {//«
 		if (scroll_num + termobj.h - num_stat_lines >= lines.length) {
 			return;
 		}
@@ -476,6 +490,11 @@ else if (sym=="LEFT_"){/*«*/
 	if (!path.length) set_main_menu();
 	else set_menu(arr[0], {statVal: true});
 }/*»*/
+else if (sym==="c_CAS"){
+//cwarn("CLEAR");
+consoleLog.clear();
+//render();
+}
 }//»
 this.onkeypress=(e, sym, code)=>{//«
 	if (sym==="q"){

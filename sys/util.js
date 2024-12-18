@@ -368,10 +368,10 @@ return;
 }//»
 clear(){//«
 this.#data.splice(0, this.#data.length);
-this.refresh();
+this.refresh(true);
 }//»
-refresh(){//«
-for (let cb of this.#cbs) cb();
+refresh(if_clear){//«
+for (let cb of this.#cbs) cb(if_clear);
 }//»
 getLog(){return this.#data;}
 
