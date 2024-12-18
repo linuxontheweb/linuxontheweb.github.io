@@ -29,13 +29,13 @@ const globals = LOTW.globals;
 const{consoleLog, strNum, isArr, isStr, isObj, isBool, isNum, log, jlog, cwarn, cerr}=util;
 //»
 
-let MAX_NAME_CHARS = 8;
-
 export const mod = function(termobj) {
 
 //Var«
+let MAX_NAME_CHARS = 8;
+let SHOW_MAX_OBJ_KEYS = 5;
 
-const MAIN_STAT_STR = "Console";
+//const MAIN_STAT_STR = "Console";
 
 const menu = consoleLog.getLog()
 
@@ -65,11 +65,25 @@ let stack = [];
 let path = [];
 let curobj;
 let min_key_len;
-
+const NEW_LOGS_MESS = "!!! New logs !!!";
+let is_message;
 //»
 
 //Funcs«
 
+
+const log_cb=()=>{
+//cwarn("LOG CB!!!");
+if (curobj===menu){
+set_main_menu();
+}
+else{
+stat_message = NEW_LOGS_MESS;
+is_message = true;
+render();
+}
+};
+consoleLog.addCb(log_cb);
 const okint = val=>{//«
     if (typeof val == "number") return true;
     if (typeof val == "string") {
@@ -78,7 +92,7 @@ const okint = val=>{//«
     return false;
 };//»        
 const quit=(rv)=>{//«
-
+	consoleLog.rmCb(log_cb);
 	delete this.command_str;
 	this.killed = true;
 	quit_new_screen(hold_screen_state);
@@ -91,6 +105,12 @@ const render = () => {//«
 const set_main_menu=(opts={})=>{//«
 
 curobj = menu;
+if (!curobj.length) {
+stat_message="[Empty]";
+is_message = false;
+render();
+	return;
+}
 lines.splice(0, lines.length);
 line_colors.splice(0, line_colors.length);
 min_key_len = 0;
@@ -114,7 +134,14 @@ for (let iter=0; iter < keys.length; iter++){
 	let val = vals[iter];
 	let col;
 	if (isObj(val)) {
-		val = ` {${Object.keys(val).length}}`;
+		let keys=Object.keys(val);
+		let use_keys = keys.slice(0, SHOW_MAX_OBJ_KEYS);
+		if (keys.length > SHOW_MAX_OBJ_KEYS){
+			val = ` {${use_keys.join(",")},[+${keys.length-SHOW_MAX_OBJ_KEYS}]}`;
+		}
+		else{
+			val = ` {${use_keys.join(",")}}`;
+		}
 	}
 	else if (isArr(val)) val = ` [${Object.keys(val).length}]`;
 	else if (isStr(val)) {
@@ -137,7 +164,8 @@ log(val)
 	lines.push([...k,":", ...val]);
 if (col) line_colors[iter]={[k.length+1]: [val.length, col]};
 }
-if (opts.statVal) stat_val();
+//if (opts.statVal) stat_val();
+stat_val();
 render();
 
 };//»
@@ -161,8 +189,16 @@ const set_menu=(obj,opts={})=>{//«
 		let col;
 		if (isObj(val)&&val.hasOwnProperty("_val")) val = val._val;
 		if (isObj(val)) {
-			val = ` {${Object.keys(val).length}}`;
+			let keys=Object.keys(val);
+			let use_keys = keys.slice(0, SHOW_MAX_OBJ_KEYS);
+			if (keys.length > SHOW_MAX_OBJ_KEYS){
+				val = ` {${use_keys.join(",")},[+${keys.length-SHOW_MAX_OBJ_KEYS}]}`;
+			}
+			else{
+				val = ` {${use_keys.join(",")}}`;
+			}
 		}
+
 		else if (isArr(val)) val = ` [${Object.keys(val).length}]`;
 		else if (isStr(val)) {
 			val = ` "${val}"`;
@@ -193,14 +229,16 @@ const menu_key=(num)=>{//«
 	if (Number.isFinite(num)) use_num = num;
 	else use_num = y+scroll_num;
 	let o = menu[use_num];
+//if (!o) return "";
 	let nm = o.n;
 	if (Number.isFinite(o.i)) nm+=`[${o.i+1}]`;
 	return nm;
 };/*»*/
 const path_str=(no_root)=>{//«
-	if (!path.length) return no_root?"":"/";
-	if (path.length===1) return "/"+path[0];
-	return "/"+path.join("/");
+//	if (!path.length) return no_root?"":"/";
+	if (!path.length) return "";
+	if (path.length===1) return path[0];
+	return path.join(" / ");
 };//»
 const cur_key=()=>{//«
 	if (curobj===menu) return menu_key();
@@ -212,8 +250,6 @@ const cur_val=(key)=>{//«
 	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
 };//»
 const stat_val=()=>{//«
-//	let k = cur_key();
-//	let val = curobj[k];
 	let val;
 	let k = cur_key();
 	if (curobj===menu){
@@ -230,22 +266,30 @@ const stat_val=()=>{//«
 	else if (isObj(val)) which="object";
 	else if (isArr(val)) which="array";
 	else which="?";
-	stat_message = `${path_str(true)}/${k} (${which})`;
+	if (!path.length) stat_message = `${k} (${which})`
+	else stat_message = `${path_str()} / ${k} (${which})`;
+	is_message = false;
 };//»
 
 //»
 //Obj/CB«
 
 const onescape=()=>{//«
-	if (stat_message!==MAIN_STAT_STR) {
-		stat_message=MAIN_STAT_STR;
-		render();
-		return true;
-	}
+if (is_message){
+stat_message = null;
+stat_val();
+render();
+return true;
+}
+//	if (stat_message!==MAIN_STAT_STR) {
+//		stat_message=MAIN_STAT_STR;
+//		render();
+//		return true;
+//	}
 	return false;
 };//»
 this.onkeydown=(e, sym, code)=>{//«
-
+	if (curobj===menu && !curobj.length) return;
 	if (this.stat_input_type) {//«
 		if (sym=="ENTER_") {//«
 			this.stat_input_type = false;
@@ -308,7 +352,7 @@ this.onkeydown=(e, sym, code)=>{//«
 		render();
 	}//»
 	else if (sym=="SPACE_"){//«
-
+/*
 		let k = cur_key();
 		let val = curobj[k];
 		let isobj=false;
@@ -329,6 +373,7 @@ return;
 		if(isobj) curobj[k]._val = val;
 		else curobj[k]=val;
 		set_menu(curobj);	
+*/
 	}//»
 	else if (sym=="PGUP_") {//«
 		e.preventDefault();
@@ -401,10 +446,11 @@ else if (sym=="ENTER_"){//«
 	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
 	if (isObj(v)||isArr(v)){
 		stack.push([curobj, k, y, scroll_num]);
-		y=scroll_num=0;
 		if (curobj===menu) path.push(menu_key());
 		else path.push(k);
 		stat_message = path_str();
+		is_message = false;
+		y=scroll_num=0;
 		set_menu(v,{statVal: true});
 	}
 	else{
@@ -415,6 +461,7 @@ else if (sym=="LEFT_"){/*«*/
 	let arr = stack.pop();
 	if (!arr){
 		stat_message = "Can't go back";
+		is_message = true;
 		stat_message_type = 2;
 		render();
 		return;
@@ -425,6 +472,7 @@ else if (sym=="LEFT_"){/*«*/
 	else stat_message = "/ "+path.join(" / ");
 	y=arr[2];
 	scroll_num=arr[3];
+	is_message = false;
 	if (!path.length) set_main_menu();
 	else set_menu(arr[0], {statVal: true});
 }/*»*/
@@ -461,7 +509,7 @@ return new Promise((Y,N)=>{
 	this.cb=Y;
 	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, onescape);
 //	stat_message="/";
-	stat_message = MAIN_STAT_STR;
+//	stat_message = MAIN_STAT_STR;
 	set_main_menu();
 });
 

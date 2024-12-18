@@ -270,12 +270,12 @@ const toBuf=dat=>{if(!dat)return null;if(dat instanceof ArrayBuffer)return dat;i
 const blobToStr=b=>{return new Promise(async(Y,N)=>{Y(bufToStr(await blobToBuf(b)));});};
 const bytesToStr=bytearg=>{let bytes2str=(bytes)=>{let arr=[];for(let i=0;i<bytes.length;i++)arr[i]=String.fromCharCode(bytes[i]);return arr.join("");};if(bytearg instanceof ArrayBuffer){let tmp=new Uint8Array(bytearg);bytearg=tmp;}if(bytearg.buffer){try{var decoder=new TextDecoder('utf-8');var view=new DataView(bytearg.buffer);return decoder.decode(view);}catch(e){return bytes2str(bytearg);}}else if(typeof bytearg==="string")return bytearg;};
 const toStr=dat=>{if(typeof dat==="string" || dat instanceof String)return dat;if(dat instanceof ArrayBuffer || dat.buffer instanceof ArrayBuffer)return bytesToStr(dat);if(dat instanceof Blob)return blobToStr(dat);try{return dat.toString();}catch(e){}console.error("Unknown object in to capi.toStr");};
-const sharedStart=(array)=>{
+const sharedStart=(array)=>{//«
 	let A= array.concat().sort(), 
 	a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
 	while(i<L && a1.charAt(i)=== a2.charAt(i)) i++;
 	return a1.substring(0, i);
-};
+};//»
 const linesToParas = lns => {//«
 	let paras = [];
 	let curln = "";
@@ -295,16 +295,17 @@ const linesToParas = lns => {//«
 	if (curln) paras.push(curln);
 	return paras;
 }//»
-
 const consoleLog = new class{//«
 
 #data;
 #cbs;
 constructor(){//«
+	this.#data=[];
+/*
 	this.#data=[
 {n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 0, v:true},
 {n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 1, v:"Funkemp Oimpt"},
-{n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 2, v:{slorch: 12345}},
+{n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 2, v:{a: 1, b: "fruit", c: false, d: [1,2,3], slorch: 12345, grampannyyy: "ZZVLUG"}},
 {n: "#4", v:[1,2,3,{hwanj: "Fladdd or naddd"}]},
 {n: "#5", i: 0, v:false},
 {n: "#5", i: 1, v:"Cherngeee hernjjjj"},
@@ -314,6 +315,7 @@ constructor(){//«
 {n: "#10", v:[true, false, "har", "ho"]},
 {n: "#11", v:12345.678}
 	];
+*/
 	this.#cbs=[];
 }//»
 nlog(name, ...args){//«
@@ -333,7 +335,7 @@ nlog(name, ...args){//«
 	this.refresh();
 }//»
 log(...args){//«
-	let len_str = `${this.#data.length+2}`;
+	let len_str = `#${this.#data.length+1}`;
 	if (args.length===1){
 		this.#data.push({n: len_str, v: args[0]});
 	}
