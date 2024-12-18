@@ -19,7 +19,19 @@ case when doing scroll_into_view would put the cursor in an
 offscreen/negative-y position).
 
 »*/
+/*12/18/24:«
 
+A "log" is an array inside the consoleLog object of util. If we call nlog, this
+is a "named log", such that the first arg is the "name", which will show up
+after the array subscript on the screen. It might be truncated here, but the
+whole name will go on the bottom when it is highlighted. So we can have a log
+command that uses the current "inspect" command in order to show an easily
+keyboard-traversable array of logged objects.  I think we are going to want to
+"auto refresh"
+
+[0]<Opt Name here>: <value>...
+
+»*/
 /*12/14/24: IMPORTANT: In-vim dev and putting the choice for sh.devexecute or sh.execute«
 on the level of the ScriptCom @WLKUIYDP rather than in the Terminal @PLDYHJKU.
 So now everything manually entered into the terminal passes through to the old school
@@ -141,13 +153,13 @@ const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const DEL_MODS=[
 //	"util.less",
 	"term.vim",
-//	"term.menu"
+	"term.log"
 ];
 const DEL_COMS=[
 //	"audio"
 //	"yt",
 //	"test",
-	"fs",
+//	"fs",
 //	"mail"
 //	"esprima",
 //"shell"
@@ -2067,44 +2079,24 @@ async run(){
 }
 }/*»*/
 
-const com_inspect = class extends Com{/*«*/
+const com_log = class extends Com{//«
 
-#menu;
-#thing;
-#addThing;
 #promise;
-async init(){
-	if (!this.pipeFrom) return this.no("expecting piped input");
-	if (!await util.loadMod("term.menu")) {
-		this.no("could not load the editor module");
-		return;
-	}
-	let menu = new NS.mods["term.menu"](this.term);
-	this.#thing = [];
-	this.#promise = menu.init(this.#thing,{opts: this.opts, command_str: this.command_str});
-	this.#addThing = menu.addThing;
-	this.#menu = menu;
-}
-async run(){
-	await this.#promise;
-	if (this.pipeTo) this.out(this.#thing,join("\n"));
-	this.ok();
-}
-pipeIn(val){
-	if (this.#menu.killed) return;
-	if (isEOF(val)){
-		return;
-	}
-	let add = this.#addThing;
-	if (isArr(val)) {
-		for (let v of val) add(v);
-	}
-	else add(val);
-}
-
 static grabsScreen = true;
-//static get grabsScreen(){return true;}
-}/*»*/
+async init(){//«
+	if (!await util.loadMod("term.log")) {
+		this.no("could not load the 'log' module");
+		return;
+	}
+	let log = new NS.mods["term.log"](this.term);
+	this.#promise = log.init({opts: this.opts, command_str: this.command_str});
+}//»
+async run(){//«
+	await this.#promise;
+	this.ok();
+}//»
+
+}//»
 
 const com_test = class extends Com{//«
 	init(){
@@ -2121,7 +2113,7 @@ this.defCommands={//«
 devparse: com_devparse,
 bindwin: com_bindwin,
 math: com_math,
-inspect: com_inspect,
+log: com_log,
 curcol: com_curcol, 
 parse: com_parse,
 stringify: com_stringify,

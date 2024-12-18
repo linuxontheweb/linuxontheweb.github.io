@@ -295,9 +295,90 @@ const linesToParas = lns => {//«
 	if (curln) paras.push(curln);
 	return paras;
 }//»
+
+const consoleLog = new class{//«
+
+#data;
+#cbs;
+constructor(){//«
+	this.#data=[
+{n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 0, v:true},
+{n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 1, v:"Funkemp Oimpt"},
+{n: "Glark Is Good!!! (wuz 'ROOM ROOM ROOM')", i: 2, v:{slorch: 12345}},
+{n: "#4", v:[1,2,3,{hwanj: "Fladdd or naddd"}]},
+{n: "#5", i: 0, v:false},
+{n: "#5", i: 1, v:"Cherngeee hernjjjj"},
+{n: "#5", i: 2, v:{slumpch: -12345}},
+{n: "#8", v:[1,2,3,4,5]},
+{n: "#9", v:"GWUBBBBBB!!!!!!! GWUBBBBBBBB!!!!!!!!!!!!"},
+{n: "#10", v:[true, false, "har", "ho"]},
+{n: "#11", v:12345.678}
+	];
+	this.#cbs=[];
+}//»
+nlog(name, ...args){//«
+	if (!(isStr(name) && name.length && name.match(/[a-z]+/i))){
+		cwarn("String name not given or invalid");
+		return;
+	}
+	let len = args.length;
+	if (len===1){
+		this.#data.push({n: name, v: args[0]});
+	}
+	else{
+		for (let i=0; i < args.length; i++){
+			this.#data.push({n: name, i, v: args[i]});
+		}
+	}
+	this.refresh();
+}//»
+log(...args){//«
+	let len_str = `${this.#data.length+2}`;
+	if (args.length===1){
+		this.#data.push({n: len_str, v: args[0]});
+	}
+	else {
+		for (let i=0; i < args.length; i++){
+			this.#data.push({n: len_str , i, v: args[i]});
+		}
+	}
+	this.refresh();
+}//»
+rmCb(cb){//«
+if (!(cb instanceof Function)){
+cerr("The provided argument is not a Function");
+return;
+}
+	let ind = this.#cbs.indexOf(cb);
+	if (ind < 0){
+cerr("The callback is not registered");
+log(cb);
+		return;
+	}
+	this.#cbs.splice(cb, 1);
+}//»
+addCb(cb){//«
+if (!(cb instanceof Function)){
+cerr("The provided argument is not a Function");
+return;
+}
+	this.#cbs.push(cb);
+}//»
+clear(){//«
+this.#data.splice(0, this.#data.length);
+this.refresh();
+}//»
+refresh(){//«
+for (let cb of this.#cbs) cb();
+}//»
+getLog(){return this.#data;}
+
+};//»
+
 export const util = (()=>{//«
 
 return {
+consoleLog,
 isEOF:arg=>arg===EOF,
 getList: async(path)=>{//«
 	if (globals.lists[path]) {

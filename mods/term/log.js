@@ -1,4 +1,10 @@
-/*11/6/24: 
+/*12/18/24: Each item in the log at least has a 'v'alue, and possibly an 'i'teration 
+(a sequence number based on a single log invocation) and a 'n'ame. If there is a
+name, we want to use up to MAX_NAME_CHARS in the side menu, and put the whole thing
+(up to the screen width) in the bottom, whenever it is highlighted (in the main menu
+screen).
+*/
+/*11/6/24: «
 
 This was conceived as a basic menuing scheme (a main menu with submenus with
 subsubmenus, etc), but morphed into a general object/array viewer/analyzer. It
@@ -16,18 +22,22 @@ of extracting keys, we just look for Node.childNodes. Then, using the efficient
 document introspection methods we develop, we can do mapping functions between
 "well-known" HTML idioms (i.e. from popular internet domains) and JS objects.
 
-*/
+»*/
 //Imports«
 const util = LOTW.api.util;
 const globals = LOTW.globals;
-const{strNum, isArr, isStr, isObj, isBool, isNum, log, jlog, cwarn, cerr}=util;
+const{consoleLog, strNum, isArr, isStr, isObj, isBool, isNum, log, jlog, cwarn, cerr}=util;
 //»
+
+let MAX_NAME_CHARS = 8;
 
 export const mod = function(termobj) {
 
 //Var«
 
-const MAIN_STAT_STR = "Settings for: vim";
+const MAIN_STAT_STR = "Console";
+
+const menu = consoleLog.getLog()
 
 const {//«
 	wrap_line,
@@ -67,7 +77,6 @@ const okint = val=>{//«
     }
     return false;
 };//»        
-
 const quit=(rv)=>{//«
 
 	delete this.command_str;
@@ -77,6 +86,60 @@ const quit=(rv)=>{//«
 };//»
 const render = () => {//«
 	refresh();
+};//»
+
+const set_main_menu=(opts={})=>{//«
+
+curobj = menu;
+lines.splice(0, lines.length);
+line_colors.splice(0, line_colors.length);
+min_key_len = 0;
+let keys=[];
+let vals=[];
+for (let o of menu){
+	let addlen;
+	let nm;
+	if (o.n < MAX_NAME_CHARS) nm = o.n;
+	else nm = o.n.slice(0, MAX_NAME_CHARS);
+	if (Number.isFinite(o.i)) {
+		nm+=`[${o.i+1}]`;
+	}
+	else addlen = 0;
+	if (nm.length > min_key_len) min_key_len = nm.length;
+	keys.push(nm);
+	vals.push(o.v);
+}
+for (let iter=0; iter < keys.length; iter++){
+	let k = keys[iter];
+	let val = vals[iter];
+	let col;
+	if (isObj(val)) {
+		val = ` {${Object.keys(val).length}}`;
+	}
+	else if (isArr(val)) val = ` [${Object.keys(val).length}]`;
+	else if (isStr(val)) {
+		val = ` "${val}"`;
+		col="#f99";
+	}
+	else if (isBool(val)){
+		val = ` ${val}`;
+		col="#9f9";
+	}
+	else if (isNum(val)){
+		val = ` ${val}`;
+		col="#bbf";
+	}
+	else{
+cerr("What in the hell is this thing???");
+log(val)
+	}
+	k = k.padEnd(min_key_len, " ");
+	lines.push([...k,":", ...val]);
+if (col) line_colors[iter]={[k.length+1]: [val.length, col]};
+}
+if (opts.statVal) stat_val();
+render();
+
 };//»
 const set_menu=(obj,opts={})=>{//«
 	curobj = obj;
@@ -125,12 +188,22 @@ if (col) line_colors[iter]={[k.length+1]: [val.length, col]};
 	if (opts.statVal) stat_val();
 	render();
 };//»
+const menu_key=(num)=>{//«
+	let use_num;
+	if (Number.isFinite(num)) use_num = num;
+	else use_num = y+scroll_num;
+	let o = menu[use_num];
+	let nm = o.n;
+	if (Number.isFinite(o.i)) nm+=`[${o.i+1}]`;
+	return nm;
+};/*»*/
 const path_str=(no_root)=>{//«
 	if (!path.length) return no_root?"":"/";
 	if (path.length===1) return "/"+path[0];
 	return "/"+path.join("/");
 };//»
 const cur_key=()=>{//«
+	if (curobj===menu) return menu_key();
 	return lines[y+scroll_num].join("").slice(0, min_key_len).trim();
 }//»
 const cur_val=(key)=>{//«
@@ -139,8 +212,16 @@ const cur_val=(key)=>{//«
 	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
 };//»
 const stat_val=()=>{//«
+//	let k = cur_key();
+//	let val = curobj[k];
+	let val;
 	let k = cur_key();
-	let val = curobj[k];
+	if (curobj===menu){
+		val = menu[y+scroll_num].v;
+	}
+	else{
+		val = curobj[k];
+	}
 	if (isObj(val)&&val.hasOwnProperty("_val")) val = val._val;
 	let which;
 	if (isStr(val)) which = "string";
@@ -151,6 +232,7 @@ const stat_val=()=>{//«
 	else which="?";
 	stat_message = `${path_str(true)}/${k} (${which})`;
 };//»
+
 //»
 //Obj/CB«
 
@@ -214,6 +296,17 @@ this.onkeydown=(e, sym, code)=>{//«
 		stat_val();
 		render();
 	}//»
+	else if (sym=="DOWN_") {//«
+		if (y+scroll_num === lines.length-1) return;
+		if (y<termobj.h - num_stat_lines-1){
+			y++;
+		}
+		else if (y+scroll_num+num_stat_lines < lines.length){
+			scroll_num++;
+		}
+		stat_val();
+		render();
+	}//»
 	else if (sym=="SPACE_"){//«
 
 		let k = cur_key();
@@ -236,17 +329,6 @@ return;
 		if(isobj) curobj[k]._val = val;
 		else curobj[k]=val;
 		set_menu(curobj);	
-	}//»
-	else if (sym=="DOWN_") {//«
-		if (y+scroll_num === lines.length-1) return;
-		if (y<termobj.h - num_stat_lines-1){
-			y++;
-		}
-		else if (y+scroll_num+num_stat_lines < lines.length){
-			scroll_num++;
-		}
-		stat_val();
-		render();
 	}//»
 	else if (sym=="PGUP_") {//«
 		e.preventDefault();
@@ -305,20 +387,29 @@ return;
 		render();
 	}//»
 else if (sym=="ENTER_"){//«
-	let k = cur_key();
-	let v = curobj[k];
+//	let k = cur_key();
+//	let v = curobj[k];
+	let k, v;
+	if (curobj===menu) {
+		k = y+scroll_num;
+		v = menu[k].v;
+	}
+	else {
+		k = cur_key();
+		v = curobj[k];
+	}
 	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
 	if (isObj(v)||isArr(v)){
 		stack.push([curobj, k, y, scroll_num]);
 		y=scroll_num=0;
-		path.push(k);
+		if (curobj===menu) path.push(menu_key());
+		else path.push(k);
 		stat_message = path_str();
 		set_menu(v,{statVal: true});
 	}
 	else{
 cwarn(k, v);
 	}
-
 }//»
 else if (sym=="LEFT_"){/*«*/
 	let arr = stack.pop();
@@ -334,7 +425,8 @@ else if (sym=="LEFT_"){/*«*/
 	else stat_message = "/ "+path.join(" / ");
 	y=arr[2];
 	scroll_num=arr[3];
-	set_menu(arr[0], {statVal: true});
+	if (!path.length) set_main_menu();
+	else set_menu(arr[0], {statVal: true});
 }/*»*/
 }//»
 this.onkeypress=(e, sym, code)=>{//«
@@ -359,8 +451,8 @@ Object.defineProperty(this, "stat_message_type", {
 Object.defineProperty(this,"line_select_mode",{get:()=>true});
 //»
 
-this.init = (menuobj, o={})=>{//«
-this.topMenu = menuobj;
+this.init = (o={})=>{//«
+//this.topMenu = menuobj;
 //this.init = (linesarg, fname, o={})=>{
 //jlog(menuobj);
 let {opts}=o;
@@ -370,18 +462,13 @@ return new Promise((Y,N)=>{
 	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, onescape);
 //	stat_message="/";
 	stat_message = MAIN_STAT_STR;
-	set_menu(menuobj);
+	set_main_menu();
 });
 
 
 
 }//»
-this.addThing=(thing)=>{
-if (this.topMenu.push) {
-	this.topMenu.push(thing);
-	if (curobj === this.topMenu) set_menu(this.topMenu);
-}
-};
+
 }
 
 

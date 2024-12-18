@@ -45,7 +45,6 @@ if (srch) {
 		window.history.pushState({newstate: 1}, "System", window.location.origin + window.location.pathname + q + userep);
 	}//»
 }//»
-//console.log(qObj);
 //FS«
 
 //const PROJECT_ROOT_MOUNT_NAME = "this";
@@ -453,7 +452,7 @@ export const globals = {//«
 	lists:{},
 	vim:{},
 	boundWins:{},
-	api
+	api,
 
 };//»
 NS.globals = globals;

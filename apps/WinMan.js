@@ -26,19 +26,14 @@ const{boundWins}=globals;
 export const app = function(Win, Desk) {
 
 //Var«
-//»
-
-//Dom«
-
-const Main = Win.Main;
-
 const DEF_FLEX_DIR = "row";
 let FLEX_DIR=DEF_FLEX_DIR;
 
 let win_div;
 let win_divs;
 let cur_win;
-//boundWins = [<1-9>: {win: Window, desc: "Something here"},...];
+
+const Main = Win.Main;
 
 //»
 
@@ -107,6 +102,7 @@ else{//«
 
 //»
 
+//«Obj/CB
 this.onappinit=()=>{//«
 render();
 }//»
@@ -120,7 +116,7 @@ render();
 return true;
 }
 return false;
-}/*»*/
+}//»
 this.onblur=()=>{//«
 	if (!cur_win) return;
 	cur_win.elem._bgcol="";
@@ -182,5 +178,6 @@ else if (k==="ENTER_"){//«
 }//»
 
 };//»
+//»
 
 }
