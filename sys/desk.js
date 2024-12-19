@@ -1,3 +1,7 @@
+/*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the
+desktop that its on. Where is raise_bound_win
+
+*/
 /*12/17/24: Window Manager time! Want an app called WinMan that gives us a graphical«
 interface into what I starting working on yesterday with the bindwin command.
 Need to give an option to bindwin to allow a string description.
@@ -288,7 +292,7 @@ const api={};
 Desk.api=api;
 //let win_overflow={t:0,b:1,l:1,r:1};
 //let win_overflow={top:0,bottom:0,left:0,right:0};
-let win_overflow={top:0,bottom:1,left:0,right:0};
+let win_overflow={top:0,bottom:0,left:0,right:0};
 let keysym_map, keysym_funcs;
 let std_keysym_map={
 	f_A:{"n":"fullscreen_window"},
@@ -783,7 +787,7 @@ const set_desk_styles = () => {//«
 //Tiling underlay«
 {
 	let tul = tiling_underlay;
-	tul._bgcol="#000";
+	tul._bgcol="#272727";
 	tul._dis="block";
 	tul.id="tiling_underlay";
 	tul._z=ICON_Z+1;
@@ -4127,11 +4131,7 @@ setWinArgs(args){//«
 		this.winElem.style.zIndex = ++HI_WIN_Z;
 		if (this.overdiv) this.overdiv.style.zIndex = ++HI_WIN_Z;
 	};//»
-	on(which,if_no_zup){//«
-//		if (this.killed) {
-//cwarn("This window has been killed. Who is calling the 'on' method?");
-//			return;
-//		}
+	on(opts={}){//«
 		if (!windows_showing) toggle_show_windows();
 		if (CPR) return;
 		if (CWIN) {
@@ -4139,9 +4139,15 @@ setWinArgs(args){//«
 			CWIN&&CWIN.off();
 		}
 		if (this.workspaceNum !== current_workspace_num) {
-			switch_win_to_workspace(this, current_workspace_num);
-			if (this.childWin){
-				switch_win_to_workspace(this.childWin, current_workspace_num);
+			if (opts.switchToWorkspace){
+				switch_to_workspace(this.workspaceNum);
+				if (CWIN) CWIN.off();
+			}
+			else {
+				switch_win_to_workspace(this, current_workspace_num);
+				if (this.childWin){
+					switch_win_to_workspace(this.childWin, current_workspace_num);
+				}
 			}
 		}
 		if (this.isFolder && !this.isMinimized) {
@@ -4160,8 +4166,7 @@ setWinArgs(args){//«
 			CUR.on();
 		}
 		this.winElem._dis= "block";
-		if (if_no_zup){}
-		else if (this.winElem._z && this.winElem._z < 10000000) this.up();
+		if (this.winElem._z && this.winElem._z < 10000000) this.up();
 		
 		if (!this.noShadow) this.winElem.style.boxShadow = window_boxshadow;
 		document.activeElement.blur();
@@ -4562,7 +4567,7 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		this.noChromeMode = !this.noChromeMode;
 		let bar = this.titleBar;
 		let foot = this.footer;
-		let m = main;
+		let m = this.Main;
 		if (this.noChromeMode) {
 			let h = bar._gbcr().height + foot._gbcr().height;
 			this.borHold = this._bor;
@@ -4889,7 +4894,7 @@ const toggle_layout_mode = () => {//«
 const toggle_tiling_mode = () => {//«
 
 //0 overlap leaves a gap
-	let TILING_OVERLAP=1;
+	let TILING_OVERLAP=-0.5;
 
 	const reset_wins=()=>{//«
 		for (let _w of arr) _w.isTiled = false;
@@ -5567,7 +5572,7 @@ log(CWIN.ownedBy);
 const raise_bound_win=(num)=>{//«
 	let obj = globals.boundWins[num];
 	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
-	obj.win.on();
+	obj.win.on({switchToWorkspace: true});
 };//»
 
 //»

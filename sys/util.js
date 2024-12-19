@@ -325,11 +325,13 @@ nlog(name, ...args){//«
 	}
 	let len = args.length;
 	if (len===1){
-		this.#data.push({n: name, v: args[0]});
+//		this.#data.push({n: name, v: args[0]});
+		this.#data.unshift({n: name, v: args[0]});
 	}
 	else{
 		for (let i=0; i < args.length; i++){
-			this.#data.push({n: name, i, v: args[i]});
+//			this.#data.push({n: name, i, v: args[i]});
+			this.#data.unshift({n: name, i, v: args[i]});
 		}
 	}
 	this.refresh();
@@ -337,11 +339,13 @@ nlog(name, ...args){//«
 log(...args){//«
 	let len_str = `#${this.#data.length+1}`;
 	if (args.length===1){
-		this.#data.push({n: len_str, v: args[0]});
+//		this.#data.push({n: len_str, v: args[0]});
+		this.#data.unshift({n: len_str, v: args[0]});
 	}
 	else {
 		for (let i=0; i < args.length; i++){
-			this.#data.push({n: len_str , i, v: args[i]});
+//			this.#data.push({n: len_str , i, v: args[i]});
+			this.#data.unshift({n: len_str , i, v: args[i]});
 		}
 	}
 	this.refresh();

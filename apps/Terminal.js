@@ -1,24 +1,6 @@
-/*@DLOPOEIRU: Why is there a scroll_into_view here? This messes up the line that«
-the cursor is on, when we are inside of a multi-line command line:
-<---   TERMINAL WIDTH   ----->
-
-~$ echo blah blah blah hahah h
-ooo hoooo thing in the place i
-s something that is
-
-Say the cursor is editing the "echo" command at the very beginning. Every time
-you do keydown, the scroll_into_view causes the cursor to jump to the last line
-(where "something" is). The x-position will be whatever position it was on
-the first line (or at the end of the last line if the x was past it).
-
-We *still do* need to do a scroll_into_view, when the lines are at the bottom
-of the screen (which I see now that simply doing Ctrl+e, or even just holding
-down the left arrow still does the proper scrolling.) So, it might be just the
-best to keep everything as it is for now (so we don't have to worry about the
-case when doing scroll_into_view would put the cursor in an
-offscreen/negative-y position).
-
-»*/
+/*12/19/24: @EIOFJKL: In ondevreload, need a way to "refresh" command modules like 
+vim (and log) that are currently running.
+*/
 /*12/18/24:«
 
 A "log" is an array inside the consoleLog object of util. If we call nlog, this
@@ -80,11 +62,32 @@ that does the old style of "flat" (naive) parsing, while the devparse method is
 the interface into the new _DevParser class (it currently just "compiles" to an
 ast... with no executing of anything).
 »*/
+/*@DLOPOEIRU: Why is there a scroll_into_view here? This messes up the line that«
+the cursor is on, when we are inside of a multi-line command line:
+<---   TERMINAL WIDTH   ----->
+
+~$ echo blah blah blah hahah h
+ooo hoooo thing in the place i
+s something that is
+
+Say the cursor is editing the "echo" command at the very beginning. Every time
+you do keydown, the scroll_into_view causes the cursor to jump to the last line
+(where "something" is). The x-position will be whatever position it was on
+the first line (or at the end of the last line if the x was past it).
+
+We *still do* need to do a scroll_into_view, when the lines are at the bottom
+of the screen (which I see now that simply doing Ctrl+e, or even just holding
+down the left arrow still does the proper scrolling.) So, it might be just the
+best to keep everything as it is for now (so we don't have to worry about the
+case when doing scroll_into_view would put the cursor in an
+offscreen/negative-y position).
+
+»*/
 
 //«Global Shell Options
 
-//let USE_ONDEVRELOAD = true;
-let USE_ONDEVRELOAD = false;
+let USE_ONDEVRELOAD = true;
+//let USE_ONDEVRELOAD = false;
 
 //let USE_DEVPARSER = false;
 let USE_DEVPARSER = true;
@@ -1430,7 +1433,6 @@ log(num);
 		this.killed = true;
 cwarn(`${this.name}: cancelled`);
 	}
-
 }//»
 const ScriptCom = class extends Com{//«
 	constructor(shell, name, text, args, env){
@@ -1489,6 +1491,28 @@ run(){
 }
 »*/
 //const {Com} = ShellMod.comClasses;
+const com_log = class extends Com{//«
+
+#promise;
+static grabsScreen = true;
+async init(){//«
+	if (!await util.loadMod("term.log")) {
+		this.no("could not load the 'log' module");
+		return;
+	}
+	let log = new NS.mods["term.log"](this.term);
+	this.log = log;
+	this.#promise = log.init({opts: this.opts, command_str: this.command_str});
+}//»
+async run(){//«
+	await this.#promise;
+	this.ok();
+}//»
+cancel(){
+this.log.quit();
+this.ok();
+}
+}//»
 const com_devparse = class extends Com{//«
 init(){//«
 	if (!this.args.length) this.no("need a file arg");
@@ -1529,7 +1553,6 @@ const com_bindwin = class extends Com{//«
 		this.ok(`Ctrl+Alt+${use_key} -> win_${numstr}`);
 	}
 }//»
-
 const com_echo = class extends Com{//«
 	run(){
 		this.out(this.args.join(" "));
@@ -2079,25 +2102,6 @@ async run(){
 }
 }/*»*/
 
-const com_log = class extends Com{//«
-
-#promise;
-static grabsScreen = true;
-async init(){//«
-	if (!await util.loadMod("term.log")) {
-		this.no("could not load the 'log' module");
-		return;
-	}
-	let log = new NS.mods["term.log"](this.term);
-	this.#promise = log.init({opts: this.opts, command_str: this.command_str});
-}//»
-async run(){//«
-	await this.#promise;
-	this.ok();
-}//»
-
-}//»
-
 const com_test = class extends Com{//«
 	init(){
 	}
@@ -2638,6 +2642,9 @@ dup(){//«
 }//»
 
 }//»
+this.seqClasses={
+	Sequence, Newlines, Word, SQuote, DSQuote, DQuote, BQuote, ParamSub, ComSub, MathSub
+}
 
 /*»*/
 //Scanner«
@@ -4930,6 +4937,7 @@ term.resperr(e.message);
 }/*»*/
 async execute(command_str, opts={}){//«
 
+this.commandStr = command_str;
 //Init/Var
 const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});
@@ -7053,7 +7061,6 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 		write_to_history(gotstr);
 	}
 	history.push(gotstr);
-
 };
 //»
 
@@ -7239,7 +7246,7 @@ this.continue = (str) => {//«
 	setTimeout(()=>{cur_shell = null;},10);
 	render();
 };//»
-const response_end = () => {//«
+const response_end = (opts={}) => {//«
 	if (!did_init) return;
 
 //Why does this line exist???
@@ -7251,7 +7258,9 @@ const response_end = () => {//«
 	scroll_into_view();
 	sleeping = null;
 	bufpos = 0;
-	setTimeout(()=>{cur_shell = null;},10);
+//if (!opts.)
+//	setTimeout(()=>{cur_shell = null;},10);
+	cur_shell = null;
 	render();
 };
 this.response_end = response_end;
@@ -8522,12 +8531,22 @@ this.onsave=()=>{//«
 	if (actor && actor.save) actor.save();
 }//»
 const ondevreload = async() => {//«
-//cwarn("Deleting coms...", DEL_COMS);
-//log(DEL_COMS);
-//stat("");
 	do_overlay("ondevreload: start");
-	ShellMod.util.deleteComs(DEL_COMS);
-	await ShellMod.util.doImports(ADD_COMS, cerr);
+
+//EIOFJKL
+	let use_str;
+	if (cur_shell){
+		use_str = cur_shell.commandStr;
+		cur_shell.cancel();
+		response_end();
+	}
+	ShellMod.util.deleteMods(DEL_MODS);
+	if (use_str){
+		handle_line_str(use_str);
+		handle_enter();
+	}
+//	ShellMod.util.deleteComs(DEL_COMS);
+//	await ShellMod.util.doImports(ADD_COMS, cerr);
 	do_overlay("ondevreload: done");
 };//»
 

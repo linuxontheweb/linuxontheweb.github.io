@@ -27,6 +27,9 @@ document introspection methods we develop, we can do mapping functions between
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{consoleLog, strNum, isArr, isStr, isObj, isBool, isNum, log, jlog, cwarn, cerr}=util;
+const{Word}=globals.ShellMod.seqClasses;
+const isWord=val=>{return val instanceof Word;};
+
 //»
 
 export const mod = function(termobj) {
@@ -72,7 +75,7 @@ let is_message;
 //Funcs«
 
 
-const log_cb=(if_clear)=>{
+const log_cb=(if_clear)=>{//«
 if (if_clear) {
 	curobj = menu;
 	x=0;
@@ -92,6 +95,7 @@ render();
 }
 };
 consoleLog.addCb(log_cb);
+//»
 const okint = val=>{//«
     if (typeof val == "number") return true;
     if (typeof val == "string") {
@@ -104,7 +108,6 @@ const quit=(rv)=>{//«
 	delete this.command_str;
 	this.killed = true;
 	quit_new_screen(hold_screen_state);
-
 };//»
 const render = () => {//«
 	refresh();
@@ -196,8 +199,10 @@ const set_menu=(obj,opts={})=>{//«
 	for (let k of keys) {
 		let val = obj[k];
 		let col;
-		if (isObj(val)&&val.hasOwnProperty("_val")) val = val._val;
-		if (isObj(val)) {
+		if (isWord(val)){
+			val = ` Word(${val.val.join("")})`;
+		}
+		else if (isObj(val)) {
 			let keys=Object.keys(val);
 			let use_keys = keys.slice(0, SHOW_MAX_OBJ_KEYS);
 			if (keys.length > SHOW_MAX_OBJ_KEYS){
@@ -207,7 +212,6 @@ const set_menu=(obj,opts={})=>{//«
 				val = ` {${use_keys.join(",")}}`;
 			}
 		}
-
 		else if (isArr(val)) val = ` [${Object.keys(val).length}]`;
 		else if (isStr(val)) {
 			val = ` "${val}"`;
@@ -222,7 +226,7 @@ const set_menu=(obj,opts={})=>{//«
 			col="#bbf";
 		}
 		else{
-cerr("What in the hell is this thing???");
+cerr(`WHAT IS THIS KEY: '${k}'`);
 log(val)
 		}
 		k = k.padEnd(min_key_len, " ");
@@ -253,11 +257,6 @@ const cur_key=()=>{//«
 	if (curobj===menu) return menu_key();
 	return lines[y+scroll_num].join("").slice(0, min_key_len).trim();
 }//»
-const cur_val=(key)=>{//«
-	let k = key||cur_key();
-	let v = curobj[k];
-	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
-};//»
 const stat_val=()=>{//«
 if (curobj===menu && !menu.length){
 stat_message = "[Empty]";
@@ -272,7 +271,6 @@ return;
 	else{
 		val = curobj[k];
 	}
-	if (isObj(val)&&val.hasOwnProperty("_val")) val = val._val;
 	let which;
 	if (isStr(val)) which = "string";
 	else if (isBool(val)) which="boolean";
@@ -304,15 +302,15 @@ return true;
 };//»
 this.onkeydown=(e, sym, code)=>{//«
 	if (curobj===menu && !curobj.length) return;
+
+/*
 	if (this.stat_input_type) {//«
 		if (sym=="ENTER_") {//«
 			this.stat_input_type = false;
-/*«
-			if (stat_com_arr.length) {
-				line_colors.splice(0,line_colors.length)
-				do_scroll_search(true);
-			}
-»*/
+//			if (stat_com_arr.length) {
+//				line_colors.splice(0,line_colors.length)
+//				do_scroll_search(true);
+//			}
 			return;
 		}//»
 		else if (sym=="LEFT_") {//«
@@ -346,6 +344,7 @@ this.onkeydown=(e, sym, code)=>{//«
 		render();
 		return;
 	}//»
+*/
 
 	if (sym=="UP_") {//«
 		if (y>0)y--
@@ -428,7 +427,7 @@ return;
 		render();
 	}//»
 	else if (sym=="HOME_"||sym===",_") {//«
-		if (scroll_num == 0) return;
+//		if (scroll_num == 0) return;
 		scroll_num = 0;
 		y=0;
 		stat_val();
@@ -436,6 +435,11 @@ return;
 	}//»
 	else if (sym=="END_"||sym==="._") {//«
 		if (scroll_num + termobj.h - num_stat_lines >= lines.length) {
+			if (y < lines.length-1){
+				y = lines.length-1;
+				stat_val();
+				render();
+			}
 			return;
 		}
 		scroll_num = lines.length - termobj.h + num_stat_lines;
@@ -457,8 +461,10 @@ else if (sym=="ENTER_"){//«
 		k = cur_key();
 		v = curobj[k];
 	}
-	if (isObj(v)&&v.hasOwnProperty("_val")) v = v._val;
-	if (isObj(v)||isArr(v)){
+	if (isWord(v)){
+cwarn(k, v);
+	}
+	else if (isObj(v)||isArr(v)){
 		stack.push([curobj, k, y, scroll_num]);
 		if (curobj===menu) path.push(menu_key());
 		else path.push(k);
@@ -471,7 +477,7 @@ else if (sym=="ENTER_"){//«
 cwarn(k, v);
 	}
 }//»
-else if (sym=="LEFT_"){/*«*/
+else if (sym=="LEFT_"){//«
 	let arr = stack.pop();
 	if (!arr){
 		stat_message = "Can't go back";
@@ -489,7 +495,7 @@ else if (sym=="LEFT_"){/*«*/
 	is_message = false;
 	if (!path.length) set_main_menu();
 	else set_menu(arr[0], {statVal: true});
-}/*»*/
+}//»
 else if (sym==="c_CAS"){
 //cwarn("CLEAR");
 consoleLog.clear();
@@ -517,7 +523,7 @@ Object.defineProperty(this, "stat_message_type", {
 });
 Object.defineProperty(this,"line_select_mode",{get:()=>true});
 //»
-
+this.quit = quit;
 this.init = (o={})=>{//«
 //this.topMenu = menuobj;
 //this.init = (linesarg, fname, o={})=>{

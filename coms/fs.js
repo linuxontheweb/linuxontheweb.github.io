@@ -318,7 +318,6 @@ async init(){//«
 	let typ;
 	let linkNode;
 	let symbols;
-
 	if (opts.symbols){//«
 		let rv = await opts.symbols.toText(term);
 		if (!rv) return this.no(`${opts.symbols}: symbol file not found`);
@@ -386,6 +385,11 @@ async run(){
 pipeIn(val){
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
+}
+cancel(){
+//this.killed = true;
+this.editor.quit();
+this.ok();
 }
 }//»
 

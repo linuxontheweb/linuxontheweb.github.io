@@ -96,7 +96,8 @@ const{
 dev_mode,
 ShellMod,
 }=globals;
-const{isArr, isStr, isEOF, log, jlog, cwarn, cerr}=LOTW.api.util;
+const{isArr, isStr, isEOF, log, jlog, cwarn, cerr, consoleLog: con}=LOTW.api.util;
+//const{log:clog, nlog: cnlog}=consoleLog;
 const{fs,FS_TYPE,SHM_TYPE,NS}=globals;
 const fsapi = fs.api;
 const {widgets} = NS.api;
@@ -555,6 +556,7 @@ const quit=()=>{//«
 	}
 	if (reload_win) delete reload_win.ownedBy;
 	quit_new_screen(hold_screen_state);
+//log(quit_new_screen);
 };//»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
 const onescape=()=>{//«
@@ -5654,21 +5656,22 @@ cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
 },//»
 s_CAS:()=>{//«
 	let vimvars = globals.vim;
-	let val = get_edit_str()
+	let val = get_edit_str();
+	val=`(function(){"use strict";${val}})()`;
 	let url = URL.createObjectURL(new Blob([val]));
 	let scr = document.createElement('script');
-	scr.src = url;
 	scr.onload=()=>{
 		if (vimvars.curDevScript) {
 			document.head.removeChild(vimvars.curDevScript);
 		}
 		vimvars.curDevScript = scr;
-cwarn("LOADOKAY!");
+con.log("LOADOKAY!");
 	};
 	scr.onerror=(e)=>{
 log("GOT SYNTAX ERROR???");
 cerr(e);
 	};
+	scr.src = url;
 	document.head.appendChild(scr);
 },/*»*/
 
@@ -5993,7 +5996,7 @@ return;
 	else stdin_lines.push(...newlines);
 */
 };/*»*/
-
+this.quit = quit;
 //}; End vim mod«
 }
 //»
