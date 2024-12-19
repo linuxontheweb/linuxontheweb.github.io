@@ -6668,7 +6668,6 @@ if (num2 > w) {
 			}
 		}//»
 
-
 		if (!(is_pager||stat_input_type||is_scrolling)) {//«
 //		if (!(is_pager||is_buf_scroll||stat_input_type||is_scrolling)) {
 			if (docursor && i==y) {
@@ -8576,12 +8575,14 @@ this.onkill = (if_dev_reload)=>{//«
 
 }//»
 this.onfocus=()=>{//«
+	this.isFocused = true;
 	topwin_focused=true;
 	if (cur_scroll_command) insert_cur_scroll();
 	render();
 	textarea&&textarea.focus();
 }//»
 this.onblur=()=>{//«
+	this.isFocused = false;
 	topwin_focused=false;
 	render();
 	if (cur_scroll_command) insert_cur_scroll();

@@ -521,7 +521,11 @@ Object.defineProperty(this, "stat_message", {
 Object.defineProperty(this, "stat_message_type", {
 	get: () => stat_message_type
 });
-Object.defineProperty(this,"line_select_mode",{get:()=>true});
+Object.defineProperty(this,"line_select_mode",{
+	get:()=>{
+		return termobj.isFocused;
+	}
+});
 //»
 this.quit = quit;
 this.init = (o={})=>{//«
