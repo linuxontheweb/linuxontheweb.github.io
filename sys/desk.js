@@ -1759,7 +1759,7 @@ wrapper.onmouseup = async e => {//«
 		DDD._h = 0;
 	}
 	if (this.parWin === desk) return;
-	this.parWin.clear_drag();
+	this.parWin.clearDrag();
 };//»
 wrapper.ondragover=e=>{//«
 	e.stopPropagation();
@@ -2876,6 +2876,10 @@ cerr("Where is the minimized window?");
 	if (app==FOLDER_APP) {//«
 		let w = icn.parWin;
 		if (w && (w.saver || (w!==desk && !force && folders_open_in_same_window))){
+			delete w.app.prevPaths;
+			await w.app.reload(icn.fullpath);
+			win = w;
+/*
 			let obj;
 			if (w.saver) obj={SAVER: w.saver};
 			let args = {};
@@ -2883,6 +2887,8 @@ cerr("Where is the minimized window?");
 			icn.winArgs = args;
 			w.easyKill();
 			win = await open_new_window(icn, obj);
+
+*/
 		}
 		else win = await open_new_window(icn);
 //		if(winCb) winCb(win);
@@ -3505,7 +3511,8 @@ constructor(arg){//«
 
 	arg.topWin = this;
 	if (arg.SAVER) {
-		this.bottomPad = botpad;
+//		this.bottomPad = botpad;
+		this.bottomPad = winargs.BOTTOMPAD;
 		this.saver = arg.SAVER;
 		arg.SAVER.folderCb(this);
 	}
@@ -3898,6 +3905,7 @@ top: 2.75px;
 	this.imgDiv = img_div;
 	this.nameSpan = namespan;
 	this.bottomDiv = bottom_div;
+//log(this.bottomDiv);
 	this.statusBar = statdiv;
 	this.rsDiv = rsdiv;
 	this.footer=footer_wrap;
@@ -4758,8 +4766,8 @@ return new Promise((Y,N)=>{
 
 //»
 
-/*«Properties*/
-get fullpath(){/*«*/
+//«Properties
+get fullpath(){//«
 	if (!this.name) {
 //cwarn("This window has no name!!!");
 		return null;
@@ -4767,13 +4775,13 @@ get fullpath(){/*«*/
 	let path = (this.path ? this.path : "/") + "/" + this.name;
 	if (this.ext) path = path + "." + this.ext;
 	return path.regpath();
-}/*»*/
+}//»
 get title(){return this.nameSpan.innerText.trim();}
-set title(arg){/*«*/
+set title(arg){//«
 	this.nameSpan.innerText = arg;
 	if (this.isMinimized) this.minTitle.innerText = arg
-}/*»*/
-/*»*/
+}//»
+//»
 
 }//»
 

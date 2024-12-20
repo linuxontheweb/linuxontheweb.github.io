@@ -150,7 +150,7 @@ const do_save = ()=>{//«
 };//»
 
 //»
-
+/*
 const go_back = ()=>{//«
 	if (path.match(/^\x2f+$/)) return;
 
@@ -181,6 +181,39 @@ cwarn("Cannot go forward with goto_path ===", goto_path);
 	}
 	Win.easyKill();
 	Desk.open_file_by_path(goto_path, opts);
+};//»
+*/
+const go_back = async()=>{//«
+	if (path.match(/^\x2f+$/)) return;
+	let arr = path.split("/");
+	arr.pop();
+	prev_paths = this.prevPaths;
+	if (!prev_paths) {
+		prev_paths=[Win.fullpath];
+		this.prevPaths = prev_paths;
+	}
+	else prev_paths.unshift(Win.fullpath);
+	if (Win.icon){
+		delete Win.icon.win;
+		delete Win.icon;
+	}
+	if (arr.length===1) await reload("/");
+	else await reload(arr.join("/"));
+};//»
+
+const go_forth=async()=>{//«
+	if (!prev_paths) return;
+	let goto_path = prev_paths.shift();
+	if (!goto_path){
+cwarn("Cannot go forward with goto_path ===", goto_path);
+		return;
+	}
+	if (!prev_paths.length) prev_paths = undefined;
+	if (Win.icon){
+		delete Win.icon.win;
+		delete Win.icon;
+	}
+	await reload(goto_path);
 };//»
 
 const load_dir=()=>{//«
@@ -264,12 +297,13 @@ cwarn("Not found in kids: "+ kid.dataset.name);
 }//»
 
 const make_save_dom = ()=>{//«
-
+if (picker_mode){
+return;
+}
 picker_mode = true;
 Win.title = `Save\xa0Location\xa0:\xa0'${Win.title}'`;
-let botdiv = Win.bottom_div;
+let botdiv = Win.bottomDiv;
 let both = botdiv.getBoundingClientRect().height-4;
-
 let sp = mk('span');
 sp._marl=5;
 sp._fs=18;
@@ -310,7 +344,7 @@ savebut.onclick=()=>{
 	savebut.disabled = true;
 };
 canbut.onclick=()=>{
-	Win.close_button.click();
+	Win.closeButton.click();
 };
 
 botdiv._add(sp);
@@ -326,19 +360,35 @@ tab_order = [inp, savebut, canbut];
 
 const reload = async(newpath)=>{//«
 	if (is_loading) return;
-	if (newpath) path = newpath;
+	prev_paths = this.prevPaths;
+	if (newpath) {
+		path = newpath;
+		if (path==="/") {
+			delete Win.path;
+			Win.name="/";
+			Win.title="/";
+		}
+		else{
+			let arr = path.split("/");
+			Win.name = arr.pop();
+			Win.title = Win.name;
+			Win.path=arr.join("/");
+		}
+	}
 	is_loading = true;
 	Main.scrollTop=0;
 	icondv.innerHTML="";
 	await init(true);
 	_stat_num(`${Object.keys(dir.kids).length-2} entries`);
-	if (Win.cursor) Win.cursor.set();
+	if (Win.cursor) {
+		delete Main.lasticon;
+		Win.cursor.set();
+	}
 };//»
 
 const init=(if_reinit)=>{//«
 
 return new Promise(async(Y,N)=>{
-
 	if (Win.saver) {
 		make_save_dom();
 	}
@@ -352,10 +402,6 @@ cwarn("No path given (Win._fullpath)");
 		else cwarn("Opening in 'app mode'");
 		return;
 	}
-//	if (dir.fullpath=="/mnt") {
-//		await fs.mountDir("www");
-//		await fs.mountDir("apps");
-//	}
     if (!dir.done){//«
         _stat_num("Getting entries...");
         let cb=(ents)=>{
