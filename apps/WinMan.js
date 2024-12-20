@@ -33,6 +33,7 @@ let win_div;
 let win_divs;
 let cur_win;
 
+Win.makeScrollable();
 const Main = Win.Main;
 
 //»

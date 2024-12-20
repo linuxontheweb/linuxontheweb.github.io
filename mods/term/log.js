@@ -182,6 +182,7 @@ render();
 
 };//»
 const set_menu=(obj,opts={})=>{//«
+	if (isArr(obj) && obj.length===1) obj = obj[0];
 	curobj = obj;
 	lines.splice(0, lines.length);
 	line_colors.splice(0, line_colors.length);
@@ -515,7 +516,11 @@ Object.defineProperty(this,"y",{get:()=>y});
 Object.defineProperty(this,"scroll_num",{get:()=>scroll_num});
 Object.defineProperty(this,"stat_com_arr",{get:()=>stat_com_arr});
 Object.defineProperty(this, "stat_message", {
-	get: () => stat_message,
+get: () => {
+	let diff = stat_message.length - termobj.w;
+	if (diff > 0) return "<"+(stat_message.slice(diff+1));
+	return stat_message;
+},
 	set: (s) => stat_message = s
 });
 Object.defineProperty(this, "stat_message_type", {

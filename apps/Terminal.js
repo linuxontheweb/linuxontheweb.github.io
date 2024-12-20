@@ -1,6 +1,6 @@
-/*12/19/24: @EIOFJKL: In ondevreload, need a way to "refresh" command modules like 
+/*12/19/24: @EIOFJKL: In ondevreload, need a way to "refresh" command modules like «
 vim (and log) that are currently running.
-*/
+»*/
 /*12/18/24:«
 
 A "log" is an array inside the consoleLog object of util. If we call nlog, this
@@ -6799,12 +6799,15 @@ if (num2 > w) {
 		}//»
 		else if (stat_message){//«
 			usestr = stat_message;
+			usestr = usestr.replace(/&/g,"&amp;");
+			usestr = usestr.replace(/</g,"&lt;");
 			stat_message = null;
 		}//»
 		else if(is_pager){//«
 			let per = Math.floor(100*(usescroll+donum)/lines.length);
 			if (per > 100) per = 100;
-			usestr = `${actor.fname} ${per}% of ${lines.length} lines (press q to quit)`;
+			let usename = (actor.fname+" ")||"";
+			usestr = `${usename}${per}% of ${lines.length} lines (press q to quit)`;
 			if (!stat_input_type) usestr = '<span style=background-color:#aaa;color:#000>'+usestr+'</span>'
 		}//»
 		update_stat_lines([usestr]);

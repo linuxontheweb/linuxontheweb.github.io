@@ -787,7 +787,7 @@ const set_desk_styles = () => {//«
 //Tiling underlay«
 {
 	let tul = tiling_underlay;
-	tul._bgcol="#272727";
+	tul._bgcol="#101010";
 	tul._dis="block";
 	tul.id="tiling_underlay";
 	tul._z=ICON_Z+1;
@@ -3499,8 +3499,22 @@ constructor(arg){//«
 	else this.noSave = null;
 	this.ownedBy = undefined;
 
+
+	this.makeDOMElem(arg);
+	this.addDOMListeners();
+
+	arg.topWin = this;
+	if (arg.SAVER) {
+		this.bottomPad = botpad;
+		this.saver = arg.SAVER;
+		arg.SAVER.folderCb(this);
+	}
+	windows.push(this);
+	this.arg = arg;
+
 	if (winargs.isMaxed){
-		max.innerText="\u{1f5d7}";
+//		max.innerText="\u{1f5d7}";
+		this.maxButton.innerText="\u{1f5d7}";
 		this.isMaxed = true;
 		let dims = winargs.holdDims;
 		this.maxHoldX=dims.X;
@@ -3516,19 +3530,6 @@ constructor(arg){//«
 		this.fsHoldW=dims.W;
 		this.fsHoldH=dims.H;
 	}
-
-	this.makeDOMElem(arg);
-	this.addDOMListeners();
-
-	arg.topWin = this;
-	if (arg.SAVER) {
-		this.bottomPad = botpad;
-		this.saver = arg.SAVER;
-		arg.SAVER.folderCb(this);
-	}
-	windows.push(this);
-	this.arg = arg;
-
 }//»
 
 //Methods«
