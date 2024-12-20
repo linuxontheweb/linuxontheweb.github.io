@@ -1,7 +1,17 @@
-/*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the
-desktop that its on. Where is raise_bound_win
+/*12/20/24: Just got rid of the idea that new folder windows are created whenever you
+navigate to another folder using one of the following methods:
+
+1) Pressing the 'b' key: to navigate to the parent folder (if the fullpath of
+the current folder isn't '/')
+2) Pressing the 'f' key: to navigate to the implicit "next child folder" (this
+is only possible when the 'b' key has previously been used)
+3) When double-clicking or using the folder's icon Cursor: to navigate to an
+explicit "next child folder" (this currently clears away the Folder app's prevPaths array)
 
 */
+/*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the«
+desktop that its on. Where is raise_bound_win
+»*/
 /*12/17/24: Window Manager time! Want an app called WinMan that gives us a graphical«
 interface into what I starting working on yesterday with the bindwin command.
 Need to give an option to bindwin to allow a string description.
@@ -2872,29 +2882,25 @@ cerr("Where is the minimized window?");
 		}
 		return;
 	}//»
-
 	if (app==FOLDER_APP) {//«
 		let w = icn.parWin;
 		if (w && (w.saver || (w!==desk && !force && folders_open_in_same_window))){
-			delete w.app.prevPaths;
+			if (w.app.prevPaths){
+/*If the icon we are clicking is in the "next up" position in the folder's prevPaths, then
+the prevPaths array still holds good.*/
+				if (w.app.prevPaths[0]===icn.fullpath){
+					w.app.prevPaths.shift();
+					if (!w.app.prevPaths.length) delete w.app.prevPaths;
+				}
+//Otherwise, get rid of it.
+				else delete w.app.prevPaths;
+			}
 			await w.app.reload(icn.fullpath);
 			win = w;
-/*
-			let obj;
-			if (w.saver) obj={SAVER: w.saver};
-			let args = {};
-			w.setWinArgs(args);
-			icn.winArgs = args;
-			w.easyKill();
-			win = await open_new_window(icn, obj);
-
-*/
 		}
 		else win = await open_new_window(icn);
-//		if(winCb) winCb(win);
 		return win;
 	}//»
-
 	let link = icn.link;
 	let node = await pathToNode(fullpath);
 	if (!node) {
