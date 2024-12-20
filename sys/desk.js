@@ -1,5 +1,7 @@
 /*12/20/24: Just got rid of the idea that new folder windows are created whenever «
-you navigate to another folder using one of the following methods:
+you navigate to another folder using one of the following methods (such that the
+new windows perfectly "replace" the old ones by copying the dimensions of the
+old ones, making it merely seem like the same window is being used):
 
 1) Pressing the 'b' key: to navigate to the parent folder (if the fullpath of
 the current folder isn't '/')
@@ -7,6 +9,8 @@ the current folder isn't '/')
 is only possible when the 'b' key has previously been used)
 3) When double-clicking or using the folder's icon Cursor: to navigate to an
 explicit "next child folder" (this currently clears away the Folder app's prevPaths array)
+
+That was a really embarrasing aspect of how I used to enable folder navigation.
 
 * * * * * * *
 
@@ -90,6 +94,8 @@ thing that I've created.
 
 I actually *really* want a command that opens windows in a given workspace, and
 then tiles them according to a certain layout "prescription".
+
+How about looking for an ~/.init/desk.js during the init phase???
 
 »*/
 /*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the«
@@ -179,6 +185,7 @@ deleting anything that might already be there as well, and adding whatever "fril
 are necessary like those 'txt' things in the upper left corners...).
 
 »*/
+
 //Imports«
 
 const NS = LOTW;
@@ -250,7 +257,8 @@ const {
 	getAppIcon,
 //	detectClick,
 	fsUrl,
-	isFin
+	isFin,
+	makeScript
 } = NS.api.util;
 
 //»
@@ -782,7 +790,9 @@ set_workspace_num(current_workspace_num);
 taskbar.renderSwitcher();
 top_win_on();
 
-};//»
+};
+api.switchToWorkspace = switch_to_workspace;
+//»
 const fit_desktop = ()=>{//«
 	let _h = winh(true)+1;
 	let _w = winw()+1;
@@ -1324,7 +1334,40 @@ const cldragimg = if_hard => {//«
 	CDL = null;
 	desk.style.cursor = "";
 };//»
+/*
+const desk_init = ()=>{//«
+return new Promise(async(Y,N)=>{
 
+	let path = `${globals.home_path}/.init/desk.js`;
+	let node = await path.toNode();
+	if (!node) return Y(true);
+	let text = await node.text;
+	if (!isStr(text)){
+cerr("What is the text???");
+log(text);
+
+		return Y(false);
+	}
+	text=`(function(){"use strict";${text}})()`;
+	let url = URL.createObjectURL(new Blob([text]));
+	let scr = document.createElement('script');
+	scr.onload=()=>{
+		Y(true);
+	};
+	scr.onerror=(e)=>{
+log("GOT SYNTAX ERROR???");
+cerr(e);
+		Y(false);
+	};
+	scr.src = url;
+	document.head.appendChild(scr);
+
+});
+}//»
+*/
+const desk_init = async()=>{
+await makeScript("/sys/init.js", {module: true});
+};
 //»
 //Taskbar«
 
@@ -5705,9 +5748,6 @@ const open_app = async(appname, opts={}) => {//«
 We only need fullpath in case of a "dev reloaded" window that has a path but is not associated with an icon.
 This happens when reloading a folder window.
 */
-//log("OPEN", appname, opts);
-//	let {force, winCb=NOOP, winArgs, appArgs={}, icon, fullpath, fsUrl, dataUrl} = opts;
-//	let {force, winCb=NOOP, winArgs, appArgs={}, icon, fullpath, dataUrl} = opts;
 	let {force, winArgs, appArgs={}, icon, fullpath, dataUrl} = opts;
 	let usename, usepath, useext;
 	if (fullpath){
@@ -8685,6 +8725,11 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	setsyskeys();
 	if (localStorage[`taskbar_hidden:${globals.current_user}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
+
+	if (dev_mode && !qObj["nodeskinit"]) {
+		await desk_init();
+	}
+
 	document.onkeypress = dokeypress;
 	document.onkeydown = dokeydown;
 	document.onkeyup = dokeyup;

@@ -8736,14 +8736,16 @@ cwarn("TRY_KILL CALLED BUT is_editor == false!");
 this.toggle_paste = toggle_paste;
 this.cur_white=()=>{CURBG="#ddd";CURFG="#000";}
 this.cur_blue=()=>{CURBG="#00f";CURFG="#fff";}
-this.execute = (s)=>{//«
+this.execute = async (s)=>{//«
 	if (cur_shell){
 cwarn("Sleeping");
 		return false;
 	}
-	response_end();
-	handle_line_str(s);
-	handle_enter();
+	await execute(s);
+	cur_shell = null;
+//	response_end();
+//log();
+//	sleeping = null;
 	return true;
 };//»
 Object.defineProperty(this,"lines",{//«

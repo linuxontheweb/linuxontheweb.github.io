@@ -121,7 +121,7 @@ const getMod = async(which, opts = {}) => {//«
 };//»
 const loadMod = (name, opts) => {return load_mod(name, opts);};
 
-const makeScript=path=>{return new Promise((Y,N)=>{make_script(path,Y,N);});};
+const makeScript=(path, opts)=>{return new Promise((Y,N)=>{make_script(path,Y,N,opts);});};
 const fsUrl = (path) => {//«
 	if (path) path = path.replace(/^\/+/, "");
 	else path = "";
@@ -170,10 +170,12 @@ return new Promise((cb,N)=>{
 });
 };
 //»
-const make_script = (path, load, err, ifrand, win) => {//«
+const make_script = (path, load, err, opts={}) => {//«
 	let scr = make('script');
+	if (opts.module) {
+		scr.type="module";
+	}
 	document.head.appendChild(scr);
-	if (win) win.scr = scr;
 	if (load) {
 		scr.onload = _ => {
 			load(scr);
@@ -594,183 +596,11 @@ cwarn("NO detectClick");
 detectSwipe:()=>{
 cwarn("NO detectSwipe");
 },
-/*
-sleep:api.sleep,
-log:api.log,
-wrn:api.wrn,
-err:api.err,
-cwarn:api.cwarn,
-cerr:api.cerr,
-kc:api.kc,
-gbid:api.gbid,
-jlog:api.jlog,
-isnotneg:api.isNotNeg,
-isint:api.isInt,
-isnum:api.isNum,
-ispos:api.isPos,
-isneg:api.isNeg,
-isfunc:api.isFunc,
-isblob:api.isBlob,
-isobj:api.isObj,
-isarr:api.isArr,
-isstr:api.isStr,
-isbool:api.isBool,
-isnull:api.isNull,
-strnum:api.strNum,
-strnum_minex:api.strNumMinEx,
-isid:api.isId,
-typeof:api.typeOf,
-mk:api.mk,
-make:api.mk,
-mkbut:api.mkbut,
-mkdv:api.mkdv,
-mkbr:api.mkbr,
-mksp:api.mksp,
-mktxt:api.mktxt,
-text:api.text,
-bodyact:api.bodyact,
-clear:api.clear,
-//winw:api.winw,
-//winh:api.winh,
-noprop:api.noprop,
-center:api.center
-*/
 }
 
 })();
 NS.api.util = util;
-//globals.util=util;
 //»
 NS.api.util = util;
 
-//NS.api.util = api;
-//globals.api.util = api;
-
-/*Old/Unused«
-
-//What, we REALLY want the complexity of supporting touch events???
-const detectSwipe=(el, callback)=>{//«
-	let touchsurface = el,
-	swipedir="none",
-	startX,
-	startY,
-	distX,
-	distY,
-	threshold = 150, //required min distance traveled to be considered swipe
-	restraint = 100, // maximum distance allowed at the same time in perpendicular direction
-	allowedTime = 300, // maximum time allowed to travel that distance
-	elapsedTime,
-	startTime;
-	let scrLeftStart, scrTopStart;
-//	handleswipe = callback || function(swipedir){}
-	let didstart = false;
-//let didend = false;
-	touchsurface.addEventListener('touchstart',e =>{
-		if (didstart) return;
-		didstart = true;
-		let touch0 = e.touches[0];
-		scrLeftStart = el.scrollLeft;
-		scrTopStart = el.scrollTop;
-		startX = touch0.pageX;
-		startY = touch0.pageY;
-		startTime = new Date().getTime();
-	});
-	touchsurface.addEventListener('touchmove', e => {
-//		e.preventDefault() // prevent scrolling when inside DIV
-	});
-	touchsurface.addEventListener('touchend', e => {
-
-		let touchobj = e.changedTouches[0];
-		distX = touchobj.pageX - startX; // get horizontal dist traveled by finger while in contact with surface
-		distY = touchobj.pageY - startY; // get vertical dist traveled by finger while in contact with surface
-		elapsedTime = new Date().getTime() - startTime; // get time elapsed
-		if (elapsedTime <= allowedTime){ // first condition for awipe met
-			if (Math.abs(distX) >= threshold && Math.abs(distY) <= restraint){ // 2nd condition for horizontal swipe met
-				swipedir = (distX < 0)? 'left' : 'right' // if dist traveled is negative, it indicates left swipe
-			}
-			else if (Math.abs(distY) >= threshold && Math.abs(distX) <= restraint){ // 2nd condition for vertical swipe met
-				swipedir = (distY < 0)? 'up' : 'down' // if dist traveled is negative, it indicates up swipe
-			}
-		}
-		if (swipedir!="none") callback(`${swipedir}`);
-		swipedir = "none";
-//		e.preventDefault()
-		didstart = false;
-	});
-}//»
-const detectClick=(elem, ms_delay, cb)=>{//«
-	elem.addEventListener('touchstart', (e)=>{
-//		e.stopPropagation();
-		elem._clickStart = Date.now();
-		let tch = e.touches[0];
-		elem._clickStartX = tch.pageX;elem._clickStartY = tch.pageY;
-	});
-	elem.addEventListener('touchend', (e)=>{
-//		e.stopPropagation();
-		let start = elem._clickStart;
-		let sx = elem._clickStartX;
-		let sy = elem._clickStartY;
-		if (!Number.isFinite(start)&&Number.isFinite(sx)&&Number.isFinite(sy)) return;
-		let tch = e.changedTouches[0];
-		let d = dist(tch.pageX, tch.pageY, sx, sy)
-		let diff = Date.now()-start;
-		if (d < 10 && diff > ms_delay) cb();
-		delete elem._clickStart;
-		delete elem._clickStartX;
-		delete elem._clickStartY;
-	});
-};//»
-
-mkAudio:()=>{//«
-
-if (globals.audio) return;
-
-globals.audio = (()=>{
-let ctx = new AudioContext();
-const Mixer = function() {
-    let plugs = [];
-    const master = ctx.createGain();
-	const compressor = ctx.createDynamicsCompressor();
-//	compressor.threshold.value=-50;
-	master.connect(compressor);
-	compressor.connect(ctx.destination);
-//  master.connect(ctx.destination);
-    const Plug = function(elm) {
-        let gain = ctx.createGain();
-        elm.connect(gain);
-        gain.connect(master);
-        this.elm = elm;
-        this.set_volume = val => {
-            gain.gain.value = val;
-        };
-        this.disconnect = _ => {
-            gain.disconnect();
-            let num = plugs.indexOf(this);
-            if (num < 0) {
-                cerr("Could not find the plug in plugs", this);
-                return;
-            }
-            plugs.splice(num, 1);
-        };
-    };
-    this.set_volume = val => {
-        master.gain.value = val;
-    };
-    this.plugs = plugs;
-    this.plug_in = elm => {
-        let plug = new Plug(elm);
-        plugs.push(plug);
-        return plug;
-    };
-	this.plugin=this.plug_in;
-};
-return {
-mixer: new Mixer(),
-ctx: ctx
-}
-})();
-
-},//»
-
-»*/
 
