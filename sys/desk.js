@@ -1,5 +1,5 @@
-/*12/20/24: Just got rid of the idea that new folder windows are created whenever you
-navigate to another folder using one of the following methods:
+/*12/20/24: Just got rid of the idea that new folder windows are created whenever «
+you navigate to another folder using one of the following methods:
 
 1) Pressing the 'b' key: to navigate to the parent folder (if the fullpath of
 the current folder isn't '/')
@@ -8,7 +8,90 @@ is only possible when the 'b' key has previously been used)
 3) When double-clicking or using the folder's icon Cursor: to navigate to an
 explicit "next child folder" (this currently clears away the Folder app's prevPaths array)
 
-*/
+* * * * * * *
+
+Now, the last thing I can really think about in order to really start using this thing
+is better window/application opening and layout management, particularly, I think, via
+the tiling paradigm. I want a command to define the tiling of a given workspace, based
+on layout modes and percentages of filling the browser window's width/height.
+
+Starting with 2 windows, there are only two modes:
+
+1) 2 rows:
+|---------|
+|---------|
+|_________|
+
+2) 2 columns
+_________
+|	|	|
+|	|	|
+|	|	|
+---------
+
+Then with 3 windows, we have 6 modes:
+
+1) 3 columns
+_____________
+|	|	|	|
+|	|	|	|
+|	|	|	|
+-------------
+
+2) 3 rows
+|---------|
+|---------|
+|---------|
+|_________|
+
+3) 1 column and 2 rows, such that each row's width is the browser width - the column's width
+
+	a) With the column on the left
+	____________
+	|	|	   |
+	|	|______|
+	|	|	   |
+	------------
+
+	b) With the column on the right
+	_____________
+	|	   |	|
+	|______|	|
+	|	   |	|
+	-------------
+
+4) 1 row and 2 column, such that each column's height is the browser height - the row's height
+
+	a) With the row on the bottom
+	___________
+	|    |    |
+	|    |    |
+	|---------|
+	|_________|
+
+
+	a) With the row on the top
+	|---------|
+	|_________|
+	|    |    |
+	|____|____|
+
+As long as these are defined in terms of percentages, then we can resize all of
+the windows whenever the browser's dimension's change, via either 
+1) browser window magnification
+2) opening/closing the developer console
+
+So this gives us 8 distinct layout formats (2 w/ 2 windows; 6 w/ 3 windows)
+
+We can also give a minimum height/width for certain "minor" windows that we don't want
+to shrink any smaller than any absolute value (so that it will take up a larger percentage
+than its given percentage indicates). I am mainly thinking here about the new "term.log"
+thing that I've created.
+
+I actually *really* want a command that opens windows in a given workspace, and
+then tiles them according to a certain layout "prescription".
+
+»*/
 /*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the«
 desktop that its on. Where is raise_bound_win
 »*/

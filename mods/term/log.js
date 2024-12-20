@@ -143,6 +143,7 @@ for (let o of menu){
 }
 for (let iter=0; iter < keys.length; iter++){
 	let k = keys[iter];
+	if (k.match(/^_/)) continue;
 	let val = vals[iter];
 	let col;
 	if (isObj(val)) {
@@ -155,7 +156,12 @@ for (let iter=0; iter < keys.length; iter++){
 			val = ` {${use_keys.join(",")}}`;
 		}
 	}
-	else if (isArr(val)) val = ` [${Object.keys(val).length}]`;
+	else if (isArr(val)) {
+		if (val._type){
+			val = ` ${val._type}[${Object.keys(val).length}]`;
+		}
+		else val = ` [${Object.keys(val).length}]`;
+	}
 	else if (isStr(val)) {
 		val = ` "${val}"`;
 		col="#f99";
@@ -198,6 +204,7 @@ const set_menu=(obj,opts={})=>{//«
 	}
 	let iter=0;
 	for (let k of keys) {
+		if (k.match(/^_/)) continue;
 		let val = obj[k];
 		let col;
 		if (isWord(val)){
@@ -213,7 +220,18 @@ const set_menu=(obj,opts={})=>{//«
 				val = ` {${use_keys.join(",")}}`;
 			}
 		}
-		else if (isArr(val)) val = ` [${Object.keys(val).length}]`;
+		else if (isArr(val)) {
+/*
+Would like to show this with more information than just the length. If this
+is an array of all the same things, want to show it like (given 6 FooBarThings):
+FooBarThing[6]. For arrays that are all of the same type, let's just put a "._type"
+property on them....
+*/
+			if (val._type){
+				val = ` ${val._type}[${Object.keys(val).length}]`;
+			}
+			else val = ` [${Object.keys(val).length}]`;
+		}
 		else if (isStr(val)) {
 			val = ` "${val}"`;
 			col="#f99";

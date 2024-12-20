@@ -1,3 +1,5 @@
+
+//«Notes
 /*12/19/24: @EIOFJKL: In ondevreload, need a way to "refresh" command modules like «
 vim (and log) that are currently running.
 »*/
@@ -83,7 +85,7 @@ case when doing scroll_into_view would put the cursor in an
 offscreen/negative-y position).
 
 »*/
-
+//»
 //«Global Shell Options
 
 let USE_ONDEVRELOAD = true;
@@ -4428,7 +4430,7 @@ async parsePipeSequence(seq_arg){//«
 async parsePipeline(){//«
 	let bang = this.eatBang();
 	let pipeline = await this.parsePipeSequence();
-	return {bang , pipeline};
+	return {pipeline, bang};
 }//»
 async parseAndOr(seq_arg){//«
 	let err = this.fatal;
