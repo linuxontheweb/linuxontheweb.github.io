@@ -88,8 +88,8 @@ offscreen/negative-y position).
 //»
 //«Global Shell Options
 
-let USE_ONDEVRELOAD = true;
-//let USE_ONDEVRELOAD = false;
+//let USE_ONDEVRELOAD = true;
+let USE_ONDEVRELOAD = false;
 
 //let USE_DEVPARSER = false;
 let USE_DEVPARSER = true;
@@ -1483,7 +1483,6 @@ this.comClasses={
 //»
 //Builtin commands/options: this.defCommand(Opt)s (ls, cd, echo, etc...)«
 {
-
 /*«
 const com_ = class extends Com{
 init(){
@@ -1493,6 +1492,64 @@ run(){
 }
 »*/
 //const {Com} = ShellMod.comClasses;
+const com_winman = class extends Com{//«
+init(){}
+run(){//«
+
+const OK_COMS=["close","move","resize","minimize"];
+const OK_VALS=["0","1","true","false"];
+const{args, no}=this;
+let type = args.shift();
+if (!type) return no("Need a 'type' arg!");
+if (!(type==="w"||type==="s")){
+	return no("The 'type' arg  must be [w]indow or work[s]pace!");
+}
+let num = args.shift();
+let say_num = num;
+if (!num){
+return no("Need a 'number' arg!");
+}
+if (!num.match(/^[0-9]+$/)){
+	return no(`Invalid number arg`);
+}
+let com = args.shift();
+if (!com) return no("Need a 'com' arg!");
+if (!OK_COMS.includes(com)){
+	return no(`${com}: invalid 'com' arg`);
+}
+let val = args.shift();
+if (!val) return no("Need a 'val' arg!");
+if (!OK_VALS.includes(val)){
+	return no(`${val}: invalid 'val' arg`);
+}
+if (val==="1"||val==="true") val = true;
+else val = false;
+com = "allow"+(com[0].toUpperCase() + com.slice(1));
+let say_type;
+if (type==="w"){//«
+
+let elem = document.getElementById(`win_${num}`);
+if (!elem) return no(`${num}: window not found`);
+let win = elem._winObj;
+win[com] = val;
+say_type="Window";
+}//»
+else{//«
+num = parseInt(num);
+let workspaces = Desk.workspaces;
+if (num < 1 || num > workspaces.length){
+	return no(`Need a workspace number 1->${workspaces.length}`);
+}
+let workspace = workspaces[num-1];
+if (!workspace) return no(`COULD NOT GET WORKSPACES[${num-1}]`);
+workspace[com] = val;
+say_type="Workspace";
+}//»
+
+this.ok(`${say_type}[${say_num}].${com} = ${val}`);
+
+}//»
+}//»
 const com_log = class extends Com{//«
 
 #promise;
@@ -2116,6 +2173,7 @@ this.ok("NOT MUCH HERE!!!");
 
 this.defCommands={//«
 //const shell_commands={
+winman: com_winman,
 devparse: com_devparse,
 bindwin: com_bindwin,
 math: com_math,

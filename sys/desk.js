@@ -1,3 +1,12 @@
+/*12/21/24: Now we have Workspace objects that get key events routed to them if there
+is a focused window. Otherwise, the desktop itself gets to decide what to do with
+the given key event.
+
+I mainly want to make it trivial to set flags on a given workspace, via the WinMan
+app or the command line, so as to disallow ad-hoc changes to window layout.
+
+*/
+/*«Notes*/
 /*12/20/24: Just got rid of the idea that new folder windows are created whenever «
 you navigate to another folder using one of the following methods (such that the
 new windows perfectly "replace" the old ones by copying the dimensions of the
@@ -185,7 +194,7 @@ deleting anything that might already be there as well, and adding whatever "fril
 are necessary like those 'txt' things in the upper left corners...).
 
 »*/
-
+/*»*/
 //Imports«
 
 const NS = LOTW;
@@ -1312,6 +1321,19 @@ await makeScript("/sys/init.js", {module: true});
 /*
 In a workspace, we can keep state related to "Workspace global states", such as tiled
 windows or having them be "locked down", such that hotkeys and/or clicks don't work. 
+
+What kinds of flags can we have here?
+
+allowClose
+allowMove
+allowResize//including maximize, fullscreen
+allowMinimize
+
+How about a "winman" command?
+
+We can set these move/close/resize properties on the individual windows and/or
+the workspaces.
+
 */
 
 class Workspace{//«
@@ -1321,6 +1343,16 @@ constructor(num){//«
 	this.windows=[];
 	this.tilingMode = false;
 	this.layoutMode = false;
+	this.allowClose = true;
+	this.allowMove = true;
+	this.allowResize = true;
+	this.allowMinimize = true;
+}//»
+checkProp(which){//«
+	let prop = "allow"+which;
+	if (this[prop]) return true;
+	show_overlay(`Workspace[${this.num+1}].${prop} == false`);
+	return false;
 }//»
 keyDown(e,kstr,mod_str){//«
 		if (!CWIN) return;
@@ -1332,6 +1364,31 @@ keyDown(e,kstr,mod_str){//«
 //and <arrow>_CS hotkeys for basic window moving and resizing (of non
 //maxed/fullscreened wins).
 		if (!(cobj.overrides && cobj.overrides[kstr])){
+
+			if (kstr==="f_A"){//«
+				e.preventDefault();
+				if (!this.checkProp("Resize")) return;
+				if (!CWIN.checkProp("Resize")) return;
+				CWIN.fullscreen();
+				return;
+			}//»
+			if (kstr==="n_A"){//«
+				e.preventDefault();
+				if (!this.checkProp("Minimize")) return;
+				if (!CWIN.checkProp("Minimize")) return;
+				CWIN.minimize();
+				return;
+			}//»
+			if (kstr==="x_A"){//«
+				e.preventDefault();
+				if (!this.checkProp("Close")) return;
+				if (!CWIN.checkProp("Close")) return;
+				if (check_cwin_owned()) return;
+				CWIN.close();
+//				CWIN.minimize();
+				return;
+			}//»
+
 			if (kstr==="r_A") {
 				if (!globals.dev_mode) {
 cwarn(`win_reload: "dev mode" is not enabled!`);
@@ -1347,12 +1404,19 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 			if (!(is_full||is_max)) {
 				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
 					if (is_max) return;
+					if (!this.checkProp("Move")) return;
+					if (!CWIN.checkProp("Move")) return;
 					return move_window(kstr[0]);
 				}
-				if (kstr=="RIGHT_CS") resize_window("R");
-				else if (kstr=="LEFT_CS") resize_window("R", true);
-				else if (kstr=="DOWN_CS") resize_window("D");
-				else if (kstr=="UP_CS") resize_window("D", true);
+				const OK_RESIZE_KEYS=[ "RIGHT_CS","LEFT_CS","DOWN_CS","UP_CS" ];
+				if (OK_RESIZE_KEYS.includes(kstr)) {
+					if (!this.checkProp("Resize")) return;
+					if (!CWIN.checkProp("Resize")) return;
+					if (kstr=="RIGHT_CS") resize_window("R");
+					else if (kstr=="LEFT_CS") resize_window("R", true);
+					else if (kstr=="DOWN_CS") resize_window("D");
+					else if (kstr=="UP_CS") resize_window("D", true);
+				}
 			}
 		}
 		if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
@@ -1374,7 +1438,7 @@ let workspaces = [];
 for (let i = current_workspace_num; i < num_workspaces; i++ ){
 	workspaces.push(new Workspace(i));
 }
-
+this.workspaces = workspaces;
 let workspace = workspaces[current_workspace_num];
 let windows = workspace.windows;
 /*»*/
@@ -3666,6 +3730,11 @@ class Window {/*«*/
 
 constructor(arg){//«
 
+	this.allowClose = true;
+	this.allowMove = true;
+	this.allowResize = true;
+	this.allowMinimize = true;
+
 	let winargs = arg.WINARGS||{};
 	this.winArgs = winargs;
 	let app = arg.appName;
@@ -3723,6 +3792,12 @@ constructor(arg){//«
 
 //Methods«
 
+checkProp(which){//«
+	let prop = "allow"+which;
+	if (this[prop]) return true;
+	show_overlay(`Window[${this.winNum}].${prop} == false`);
+	return false;
+}//»
 makeDOMElem(arg){//«
 
 	let marr;
@@ -7924,14 +7999,14 @@ return new Promise(async(y,n)=>{
 		if (iter >= files.length) return y();
 		let f = files[iter];
 		if (!(f && f.name)) return dofile();
-		let saver = new fs.FileSaver();
-		saver.set_cb("error", mess => {
+		let filesaver = new fs.FileSaver();
+		filesaver.set_cb("error", mess => {
 cerr(mess);
 			dofile();
 		});
-		let parobj = await saver.set_cwd(usepath);
+		let parobj = await filesaver.set_cwd(usepath);
 		if (!parobj) return dofile();
-		let nameret = await saver.set_filename(f.name);
+		let nameret = await filesaver.set_filename(f.name);
 		if (!nameret) return dofile();
 		const writer_func = async(r3, errmess) => {//«
 			if (!r3) {
@@ -7952,18 +8027,18 @@ cerr(mess);
 			curicon.cancel_func = () => {
 				fObj.unlockFile();
 			};
-			saver.set_cb("update", per => {
+			filesaver.set_cb("update", per => {
 				odiv.innerHTML = per + "%";
 			});
-			saver.set_cb("done", () => {
+			filesaver.set_cb("done", () => {
 				if (odiv.context_menu) odiv.context_menu.kill();
 				curicon.activate();
 				fObj.unlockFile();
 				dofile();
 			});
-			saver.save_from_file(f);
+			filesaver.save_from_file(f);
 		};//»
-		saver.set_fent(writer_func);
+		filesaver.set_fent(writer_func);
 	};
 	dofile();
 });
@@ -8545,7 +8620,7 @@ cwarn("There was an unattached icon in ICONS!");
 
 //«Various harcoded keysyms that *just* intercept the current window
 
-	if (!qObj["no-switcher"]) {/*«*/
+	if (!qObj["no-switcher"]) {//«
 		if (kstr.match(/^[1-9]_CAS$/)){
 			switch_to_workspace(parseInt(kstr.split("_")[0])-1);
 			return;
@@ -8562,7 +8637,7 @@ cwarn("There was an unattached icon in ICONS!");
 			switch_to_workspace(current_workspace_num, true);
 			return;
 		}
-	}/*»*/
+	}//»
 
 //XKLEUIM
 	if (marr = kstr.match(/^([1-9])_AS$/)){
@@ -8602,9 +8677,8 @@ cwarn("There was an unattached icon in ICONS!");
 
 	}//»
 	else if (kstr=="r_") return reload_desk_icons_cb();
-//	t_A:{n:"open_terminal"},
-//	e_A:{n:"open_explorer"},
 //»
+
 };
 //»
 const dokeypress = function(e) {//«
