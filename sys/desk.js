@@ -14,6 +14,7 @@ allowClose
 allowMove
 allowResize//including maximize, fullscreen
 allowMinimize
+allowNone
 
 How about a "winman" command?
 
@@ -1340,6 +1341,141 @@ await makeScript("/sys/init.js", {module: true});
 //»
 //«Workspaces
 
+const tile_windows=()=>{//«
+/*«
+
+Tiling algorithm?
+
+First we check that there are no overlapping windows.
+Then we visit every side of every window and try to extend them to the window boundary
+or the first window, whichever comes first. If there is a window first, we should extend
+both of the sides till they meet in the middle.
+
+If we are extending a window's TOP, then we need to find all window (X) bottoms, vis-a-viv
+our current_win (CW), such that:
+
+!(X.left > CW.right) && !(X.right < CW.left)		(1)
+
+For all of these windows, we need to find whichever has the largest bottom value that is
+less than our top value (with the smallest positive delta, CW.top - X.bottom).
+
+For extending its BOTTOM, we use formula (1), but then:
+
+For all of these windows, we need to find whichever has the least top value that is
+greater than our bottom value (with the smallest positive delta, X.top - CW.bottom).
+
+Say we are extending a window's LEFT. Then we need to find all window rights (X), vis-a-viv
+our current_win (CW).
+
+!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
+
+For all of these windows, we need to find whichever has the largest right value that is
+less than our left value (with the smallest positive delta, CW.left - X.right).
+
+For extending its RIGHT, we use formula (2), but then:
+
+For all of these windows, we need to find whichever has the least left value that is
+greater than our right value (with the smallest positive delta, X.left - CW.right).
+
+For each of these cases, if there are no windows that satisfy formula (1) or (2) as
+the case may be, we extend the given side all the way to the browser's edge.
+
+»*/
+
+let wid = winw();
+let hgt = winh();
+const intersects = (w1, w2) => {//«
+	let rect1 = w1.winElem.getBoundingClientRect();
+	let rect2 = w2.winElem.getBoundingClientRect();
+
+	let t1 = rect1.top;
+	let b1 = rect1.bottom;
+	let l1 = rect1.left;
+	let r1 = rect1.right;
+	let t2 = rect2.top;
+	let b2 = rect2.bottom;
+	let l2 = rect2.left;
+	let r2 = rect2.right;
+
+	if (t1 < 0 || t2 < 0) return true;
+	if (b1 > hgt || b2 > hgt) return true;
+	if (l1 < 0 || l2 < 0) return true;
+	if (r1 > wid || r2 > wid) return true;
+	if (!(l1 > r2 || r1 < l2 || t1 > b2 || b1 < t2)) {
+		return true;
+	}
+	return false;
+};//»
+const get_bottom = win =>{//«
+
+//!(X.left > CW.right) && !(X.right < CW.left)		(1)
+let r1 = win.winElem.getBoundingClientRect();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.winElem.getBoundingClientRect();
+	if (!(r2.left > cr) && !(r2.right < cl)) {
+//For all of these windows, we need to find whichever has the largest bottom value that is
+//less than our top value (with the smallest positive delta, CW.top - X.bottom).
+		let diff = ct - r2.bottom;
+		if (diff > 0) all.push({win: w, diff});
+	}
+}//»
+log("ALL",all);
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}/*»*/
+let wins = workspace.windows;
+let got=[];
+for (let w of wins){
+	if (w.isMinimized) continue;
+	if (!w.checkProp("Resize")) return;
+	got.push(w);
+}
+if (!got.length) return;
+if (got.length===1){
+	if (!got[0].isFullscreen) got[0].fullscreen();
+	return;
+}
+let arr = got;
+for (let j = 0; j < arr.length; j++) {//«
+	let w1 = arr[j];
+	for (let i = j + 1; i < arr.length; i++) {
+		let w2 = arr[i];
+		if (intersects(w1, w2)) {
+			show_overlay("Intersecting windows detected");
+			return;
+		}
+	}
+}//»
+
+//log("CHECKING FOR BOTTOMS", arr[0].winElem);
+let usewin = arr[0];
+let gotbot = get_bottom(usewin);
+if (!gotbot){
+cwarn("BRING THIS TOP TO 0");
+log(usewin.winElem);
+}
+else{
+cwarn("BRING THIS TOP");
+log(usewin.winElem);
+log("TO THE BOTTOM OF");
+log(gotbot.winElem);
+}
+
+};//»
+
 class Workspace{//«
 
 constructor(num){//«
@@ -1357,6 +1493,11 @@ constructor(num){//«
 keyDown(e,kstr,mod_str){//«
 		if (kstr==="l_CA"){
 			toggle_layout_mode();
+			return;
+		}
+		if (kstr==="t_CAS"){
+//			toggle_layout_mode();
+			tile_windows();
 			return;
 		}
 		if (!CWIN) return;
@@ -5179,6 +5320,7 @@ const toggle_layout_mode = () => {//«
 	}
 	return true;
 };//»
+/*
 const toggle_tiling_mode = () => {//«
 
 //0 overlap leaves a gap
@@ -5359,7 +5501,7 @@ const toggle_tiling_mode = () => {//«
 //log(tiling_underlay);
 //},100);
 };//»
-
+*/
 const window_cycle = () => {//«
 
 	if (window.performance.now() - last_win_cycle < 150) {
@@ -5862,13 +6004,13 @@ const raise_bound_win=(num)=>{//«
 	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
 	obj.win.on({switchToWorkspace: true});
 };//»
-const get_all_windows=()=>{
+const get_all_windows=()=>{//«
 	let wins=[];
 	for (let wspace of workspaces){
 		wins.push(...wspace.windows);
 	}
 	return wins;
-};
+};//»
 
 //»
 //File/App«
