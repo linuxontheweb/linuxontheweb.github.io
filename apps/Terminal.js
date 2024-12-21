@@ -1491,13 +1491,13 @@ run(){
 }
 }
 »*/
-//const {Com} = ShellMod.comClasses;
+
 const com_winman = class extends Com{//«
 init(){}
 run(){//«
 
-const OK_COMS=["close","move","resize","minimize"];
-const OK_VALS=["0","1","true","false"];
+const OK_COMS=["close","move","resize","minimize","none"];
+const OK_VALS=["1","0","true","false","yes","no","okay","nope"];
 const{args, no}=this;
 let type = args.shift();
 if (!type) return no("Need a 'type' arg!");
@@ -1522,7 +1522,7 @@ if (!val) return no("Need a 'val' arg!");
 if (!OK_VALS.includes(val)){
 	return no(`${val}: invalid 'val' arg`);
 }
-if (val==="1"||val==="true") val = true;
+if (val==="1"||val==="true"||val==="yes"||val==="okay") val = true;
 else val = false;
 com = "allow"+(com[0].toUpperCase() + com.slice(1));
 let say_type;

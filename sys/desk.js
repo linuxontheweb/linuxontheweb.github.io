@@ -1,11 +1,33 @@
-/*12/21/24: Now we have Workspace objects that get key events routed to them if there
+/*12/21/24: Now we have Workspace objects that get key events sent to them if there«
 is a focused window. Otherwise, the desktop itself gets to decide what to do with
 the given key event.
 
 I mainly want to make it trivial to set flags on a given workspace, via the WinMan
 app or the command line, so as to disallow ad-hoc changes to window layout.
 
-*/
+In a workspace, we can keep state related to "Workspace global states", such as tiled
+windows or having them be "locked down", such that hotkeys and/or clicks don't work. 
+
+What kinds of flags can we have here?
+
+allowClose
+allowMove
+allowResize//including maximize, fullscreen
+allowMinimize
+
+How about a "winman" command?
+
+We can set these move/close/resize properties on the individual windows and/or
+the workspaces.
+
+Now there are more simplified/ more objective/ more granular methods for allowing/
+blocking window management functions, now we are in a better position to enable higher 
+order methods like various tiling arrangements.
+
+Now that we are checking the key events for these window management functions, we need
+to apply this to the mouse movements as well.
+
+»*/
 /*«Notes*/
 /*12/20/24: Just got rid of the idea that new folder windows are created whenever «
 you navigate to another folder using one of the following methods (such that the
@@ -1318,24 +1340,6 @@ await makeScript("/sys/init.js", {module: true});
 //»
 //«Workspaces
 
-/*
-In a workspace, we can keep state related to "Workspace global states", such as tiled
-windows or having them be "locked down", such that hotkeys and/or clicks don't work. 
-
-What kinds of flags can we have here?
-
-allowClose
-allowMove
-allowResize//including maximize, fullscreen
-allowMinimize
-
-How about a "winman" command?
-
-We can set these move/close/resize properties on the individual windows and/or
-the workspaces.
-
-*/
-
 class Workspace{//«
 
 constructor(num){//«
@@ -1347,49 +1351,50 @@ constructor(num){//«
 	this.allowMove = true;
 	this.allowResize = true;
 	this.allowMinimize = true;
-}//»
-checkProp(which){//«
-	let prop = "allow"+which;
-	if (this[prop]) return true;
-	show_overlay(`Workspace[${this.num+1}].${prop} == false`);
-	return false;
+	this.allowNone = false;
+
 }//»
 keyDown(e,kstr,mod_str){//«
+		if (kstr==="l_CA"){
+			toggle_layout_mode();
+			return;
+		}
 		if (!CWIN) return;
 		let is_full=CWIN.isFullscreen;
 		let is_max=CWIN.isMaxed;
 		let cobj = CWIN.app;
 		if (!cobj) return;
+		if (!(cobj.overrides && cobj.overrides[kstr])){//«
 //Unless your app explicitly overrides them, the system intercepts the <arrow>_S
 //and <arrow>_CS hotkeys for basic window moving and resizing (of non
 //maxed/fullscreened wins).
-		if (!(cobj.overrides && cobj.overrides[kstr])){
-
 			if (kstr==="f_A"){//«
 				e.preventDefault();
-				if (!this.checkProp("Resize")) return;
 				if (!CWIN.checkProp("Resize")) return;
 				CWIN.fullscreen();
 				return;
 			}//»
+			if (kstr==="m_A"){//«
+				e.preventDefault();
+				if (!CWIN.checkProp("Resize")) return;
+				CWIN.maximize();
+				return;
+			}//»
 			if (kstr==="n_A"){//«
 				e.preventDefault();
-				if (!this.checkProp("Minimize")) return;
 				if (!CWIN.checkProp("Minimize")) return;
 				CWIN.minimize();
 				return;
 			}//»
 			if (kstr==="x_A"){//«
 				e.preventDefault();
-				if (!this.checkProp("Close")) return;
 				if (!CWIN.checkProp("Close")) return;
 				if (check_cwin_owned()) return;
 				CWIN.close();
 //				CWIN.minimize();
 				return;
 			}//»
-
-			if (kstr==="r_A") {
+			if (kstr==="r_A") {//«
 				if (!globals.dev_mode) {
 cwarn(`win_reload: "dev mode" is not enabled!`);
 					return;
@@ -1399,26 +1404,25 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 //				CWIN.reload();
 				win_reload();
 				return;
-			}
+			}//»
 			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();
-			if (!(is_full||is_max)) {
+			if (!(is_full||is_max)) {//«
 				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
 					if (is_max) return;
-					if (!this.checkProp("Move")) return;
 					if (!CWIN.checkProp("Move")) return;
 					return move_window(kstr[0]);
 				}
 				const OK_RESIZE_KEYS=[ "RIGHT_CS","LEFT_CS","DOWN_CS","UP_CS" ];
 				if (OK_RESIZE_KEYS.includes(kstr)) {
-					if (!this.checkProp("Resize")) return;
 					if (!CWIN.checkProp("Resize")) return;
 					if (kstr=="RIGHT_CS") resize_window("R");
 					else if (kstr=="LEFT_CS") resize_window("R", true);
 					else if (kstr=="DOWN_CS") resize_window("D");
 					else if (kstr=="UP_CS") resize_window("D", true);
+					return;
 				}
-			}
-		}
+			}//»
+		}//»
 		if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
 		if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
 }//»
@@ -3726,7 +3730,7 @@ throw new Error("WHAT THE IN THE EVERLIVING CRAP IS THIS?????");
 //»
 //Windows«
 
-class Window {/*«*/
+class Window {//«
 
 constructor(arg){//«
 
@@ -3734,6 +3738,7 @@ constructor(arg){//«
 	this.allowMove = true;
 	this.allowResize = true;
 	this.allowMinimize = true;
+	this.allowNone = false;
 
 	let winargs = arg.WINARGS||{};
 	this.winArgs = winargs;
@@ -3793,7 +3798,20 @@ constructor(arg){//«
 //Methods«
 
 checkProp(which){//«
+	let workspace = workspaces[this.workspaceNum];
+	if (workspace.allowNone){
+		show_overlay(`Workspace[${this.workspaceNum+1}].allowNone == true`);
+		return false;
+	}
+	if (this.allowNone){
+		show_overlay(`Window[${this.winNum}].allowNone == true`);
+		return;
+	}
 	let prop = "allow"+which;
+	if (!workspace[prop]){
+		show_overlay(`Workspace[${this.workspaceNum+1}].${prop} == false`);
+		return false;
+	}
 	if (this[prop]) return true;
 	show_overlay(`Window[${this.winNum}].${prop} == false`);
 	return false;
@@ -3928,7 +3946,7 @@ makeDOMElem(arg){//«
 	};//»
 	const doclose = (force, if_dev_reload)=>{//«
 //	const doclose = function(evt, thisarg, force, if_dev_reload) {
-
+		if (!this.checkProp("Close")) return;
 		if (this.isMinimized||this.isTiled) return;
 		if (!force && (this != CWIN)) return;
 		if (this.no_events) return;
@@ -4031,22 +4049,21 @@ makeDOMElem(arg){//«
 		win.style.boxShadow = window_boxshadow;
 	};
 	max.onclick = () => {
+		if (!this.checkProp("Resize")) return;
 		close.unhover();
 		max.unhover();
 		min.unhover();
-//		toggle_max_window(win);
-//		maximize_window(this);
 		this.maximize();
 	};
 	max.reset();
 //»
 	let min = mkbut("14px");//«
 	min.id="minbut_"+winid;
-//	min.innerText="\u{1f5d5}"; 
 	min.innerText="\u{2b07}"; //Solid down arrow
 	min.style.lineHeight="135%";
 	min.title="Minimize";
 	min.onclick=()=>{
+		if (!this.checkProp("Minimize")) return;
 		if (this.isFullscreen) {
 			if (this!==CWIN) {
 cwarn("this!==CWIN ????");
@@ -4073,7 +4090,6 @@ cwarn("this!==CWIN ????");
 	min.onmouseleave=onunhover;
 //»
 	title._add(butdiv);
-
 //»
 	let footer = make('div');//«
 	let footer_wrap=make('div');
@@ -4126,6 +4142,7 @@ cwarn("this!==CWIN ????");
 	rsdiv.draggable=true;
 	rsdiv.ondragstart=e=>{
 		e.preventDefault();
+		if (!this.checkProp("Resize")) return;
 		if (this.isMaxed) {
 			max.reset();
 			this.isMaxed = false;
@@ -4296,6 +4313,7 @@ cwarn("No drop on main window");
 	titlebar.ondragstart=e=>{//«
 		e.preventDefault();
 //		if (this.isMaxed) this.max_button.reset();
+		if (!this.checkProp("Move")) return;
 		if (this.isMaxed) return;
 		win.style.boxShadow = "";
 		CDW = this;
@@ -4776,13 +4794,14 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 //	being overlapped, then we can comment out this.
 			}
 			if (sty == "move") {
+				if (!this.checkProp("Move")) return;
 				CDW = this;
 				DDX = e.clientX - pi(win.offsetLeft);
 				DDY = e.clientY - pi(win.offsetTop);
 				return;
 			}
+			if (!this.checkProp("Resize")) return;
 			CRW = this;
-	//log(CRW);
 			CRW.startx = e.clientX;
 			CRW.starty = e.clientY;
 			CRW.startw = this.main._w;
@@ -5144,18 +5163,19 @@ tiling_underlay.on();
 }//»
 const toggle_layout_mode = () => {//«
 	let gotwins=[];
-	for (let w of windows){
+	for (let w of workspace.windows){
 		if (w.isMaxed || w.isFullscreen) {
 			popup("Cannot initiate layout mode!");
 			return true;
 		}
 		if (!w.isMinimized) gotwins.push(w);
 	}
-	windows.layout_mode = !windows.layout_mode;
+//	windows.layout_mode = !windows.layout_mode;
+	workspace.layoutMode = !workspace.layoutMode;
 	for (let w of gotwins){
-		if (windows.layout_mode && w.isLayout) continue;
-		if (!windows.layout_mode && !w.isLayout) continue;
-		w.toggleLayout(windows.layout_mode);
+		if (workspace.layoutMode && w.isLayout) continue;
+		if (!workspace.layoutMode && !w.isLayout) continue;
+		w.toggleLayout(workspace.layoutMode);
 	}
 	return true;
 };//»
