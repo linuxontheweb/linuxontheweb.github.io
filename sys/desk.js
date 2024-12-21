@@ -266,7 +266,7 @@ const {
 //Desk«
 
 //new Desk(){«
-  new   (function(){
+  new  (function(){
 //»
 
 //Var«
@@ -342,16 +342,6 @@ let alt_tab_presses = 1;
 
 //»
 //DOM Elements/Objects/Arrays«
-
-let workspaces = [];
-for (let i = current_workspace_num; i < num_workspaces; i++ ){
-	let wins = [];
-	wins.layout_mode = false;
-	wins.tiling_mode = false;
-	workspaces.push(wins);
-}
-let windows = workspaces[current_workspace_num];
-
 let CPR;
 let CWIN;
 let taskbar;
@@ -394,25 +384,6 @@ Desk.api=api;
 //let win_overflow={t:0,b:1,l:1,r:1};
 //let win_overflow={top:0,bottom:0,left:0,right:0};
 let win_overflow={top:0,bottom:0,left:0,right:0};
-let keysym_map, keysym_funcs;
-let std_keysym_map={
-	f_A:{"n":"fullscreen_window"},
-//	f_CA:{"n":"open_root_folder"},
-	d_CA:{"n":"make_folder"},
-	f_CA:{"n":"make_file"},
-	"`_A":{"n":"window_cycle"},
-	x_A:{"n":"close_window"},
-	m_A:{"n":"maximize_window"},
-	d_A:{"n":"toggle_desktop"},
-	l_CA:{"n":"toggle_layout_mode"},
-	w_CA:{"n":"toggle_win_chrome"},
-	n_A:{"n":"minimize_window"},
-//	"f_CAS":{"n":"toggle_fullscreen"},
-	"b_A":{"n":"toggle_taskbar"},
-	t_A:{n:"open_terminal"},
-	e_A:{n:"open_explorer"},
-	h_A:{n:"open_help"},
-};
 
 //»
 //Style/CSS Values«
@@ -760,39 +731,6 @@ const DESK_CONTEXT_MENU=[
 
 //Desktop«
 
-const switch_to_workspace = (num, if_force) => {//«
-
-if (!if_force && num == current_workspace_num){
-	cwarn("ALREADY ON IT");
-	return;
-}
-
-for (let w of windows){
-	if (!w.isMinimized) w.winElem._dis="none";//was block
-	else {
-		w.taskbarButton._dis="none";//was flex
-	}
-}
-if (windows.tiling_mode) tiling_underlay.off();
-if (CWIN) CWIN.off();
-if (ICONS.length && ICONS[0].parWin !==desk){
-	icon_array_off();
-}
-current_workspace_num = num;
-windows = workspaces[current_workspace_num];
-if (windows.tiling_mode) tiling_underlay.on();
-for (let w of windows){
-	if (!w.isMinimized) w.winElem._dis="block";
-	else w.taskbarButton._dis="flex";
-}
-show_overlay(`Current workspace: ${current_workspace_num+1}`);
-set_workspace_num(current_workspace_num);
-taskbar.renderSwitcher();
-top_win_on();
-
-};
-api.switchToWorkspace = switch_to_workspace;
-//»
 const fit_desktop = ()=>{//«
 	let _h = winh(true)+1;
 	let _w = winw()+1;
@@ -1369,6 +1307,115 @@ const desk_init = async()=>{
 await makeScript("/sys/init.js", {module: true});
 };
 //»
+//«Workspaces
+
+/*
+In a workspace, we can keep state related to "Workspace global states", such as tiled
+windows or having them be "locked down", such that hotkeys and/or clicks don't work. 
+*/
+
+class Workspace{//«
+
+constructor(num){//«
+	this.num=num;
+	this.windows=[];
+	this.tilingMode = false;
+	this.layoutMode = false;
+}//»
+keyDown(e,kstr,mod_str){//«
+		if (!CWIN) return;
+		let is_full=CWIN.isFullscreen;
+		let is_max=CWIN.isMaxed;
+		let cobj = CWIN.app;
+		if (!cobj) return;
+//Unless your app explicitly overrides them, the system intercepts the <arrow>_S
+//and <arrow>_CS hotkeys for basic window moving and resizing (of non
+//maxed/fullscreened wins).
+		if (!(cobj.overrides && cobj.overrides[kstr])){
+			if (kstr==="r_A") {
+				if (!globals.dev_mode) {
+cwarn(`win_reload: "dev mode" is not enabled!`);
+					return;
+				}
+				if (!CWIN) return;
+				if (check_cwin_owned()) return;
+//				CWIN.reload();
+				win_reload();
+				return;
+			}
+			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();
+			if (!(is_full||is_max)) {
+				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
+					if (is_max) return;
+					return move_window(kstr[0]);
+				}
+				if (kstr=="RIGHT_CS") resize_window("R");
+				else if (kstr=="LEFT_CS") resize_window("R", true);
+				else if (kstr=="DOWN_CS") resize_window("D");
+				else if (kstr=="UP_CS") resize_window("D", true);
+			}
+		}
+		if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
+		if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
+}//»
+keyUp(e){//«
+	if (!CWIN) return;
+	if (CWIN.app.onkeyup) CWIN.app.onkeyup(e, evt2Sym(e));
+}//»
+keyPress(e){//«
+	if (!CWIN) return;
+	let code = e.charCode;
+	if (code >= 32 && code <= 126 && CWIN.app.onkeypress) CWIN.app.onkeypress(e);
+}//»
+
+}//»
+/*«Init*/
+let workspaces = [];
+for (let i = current_workspace_num; i < num_workspaces; i++ ){
+	workspaces.push(new Workspace(i));
+}
+
+let workspace = workspaces[current_workspace_num];
+let windows = workspace.windows;
+/*»*/
+const switch_to_workspace = (num, if_force) => {//«
+
+if (!if_force && num == current_workspace_num){
+	cwarn("ALREADY ON IT");
+	return;
+}
+
+for (let w of windows){
+	if (!w.isMinimized) w.winElem._dis="none";//was block
+	else {
+		w.taskbarButton._dis="none";//was flex
+	}
+}
+if (workspace.tilingMode) tiling_underlay.off();
+if (CWIN) CWIN.off();
+if (ICONS.length && ICONS[0].parWin !==desk){
+	icon_array_off();
+}
+current_workspace_num = num;
+workspace = workspaces[current_workspace_num];
+if (workspace.tilingMode) tiling_underlay.on();
+windows = workspace.windows;
+//windows = workspaces[current_workspace_num].windows;
+
+for (let w of windows){
+	if (!w.isMinimized) w.winElem._dis="block";
+	else w.taskbarButton._dis="flex";
+}
+show_overlay(`Current workspace: ${current_workspace_num+1}`);
+set_workspace_num(current_workspace_num);
+taskbar.renderSwitcher();
+top_win_on();
+
+};
+api.switchToWorkspace = switch_to_workspace;
+//»
+
+//»
 //Taskbar«
 
 const Taskbar = function(){
@@ -1763,6 +1810,7 @@ setTimeout(()=>{
 
 };
 
+const toggle_taskbar=()=>{if(taskbar_hidden)taskbar.show();else taskbar.hide();};
 
 //»
 //Icons«
@@ -2978,7 +3026,8 @@ const open_icon = async(icn, opts={}) => {//«
 
 	let fullpath = icn.fullpath;
 	if (!icn.win){
-		OUTERLOOP: for (let wins of workspaces) {
+		OUTERLOOP: for (let wspace of workspaces) {
+			let wins = wspace.windows;
 			for (let w of wins){
 				if (!w.icon && w.fullpath===fullpath){
 					icn.win = w;
@@ -3341,7 +3390,8 @@ const update_all_paths = (oldpath, newpath) => {//«
 	oldpath = oldpath.regpath();
 	newpath = newpath.regpath();
 	let re = new RegExp("^" + oldpath + "/");
-	for (let wins of workspaces) {
+	for (let wspace of workspaces) {
+		let wins = wspace.windows;
 		for (let w of wins) {
 			if (w.fullpath === oldpath) {
 				let newarr = newpath.split("/");
@@ -3809,7 +3859,8 @@ makeDOMElem(arg){//«
 		if (this.no_events) return;
 		if (this.nobuttons && !force) return;
 		if (this.app.onkill) this.app.onkill(if_dev_reload, force);
-		OUTERLOOP2: for (let wins of workspaces) {
+		OUTERLOOP2: for (let wspace of workspaces) {
+			let wins = wspace.windows;
 			for (let i = 0; i < wins.length; i++) {
 				if (wins[i] == this) {
 					wins.splice(i, 1);
@@ -4937,7 +4988,8 @@ const get_wins_by_path = (path,opts={}) => {//«
 	let {getDesk, extArg}=opts;
 	let ret = [];
 	path = path.regpath();
-	for (let wins of workspaces) {
+	for (let wspace of workspaces) {
+		let wins = wspace.windows;
 		for (let w of wins) {
 			let ext = w.ext;
 			let winpath = (w.path + "/" + w.name).regpath();
@@ -4989,7 +5041,7 @@ const toggle_show_windows = (if_no_current) => {//«
 		CWIN && CWIN.off();
 		CWIN = null;
 		CUR.todesk();
-if (windows.tiling_mode){
+if (workspace.tilingMode){
 tiling_underlay.off();
 }
 	} else {
@@ -5008,7 +5060,7 @@ tiling_underlay.off();
 			}
 		}
 		if (!CWIN && !if_no_current) top_win_on();
-if (windows.tiling_mode){
+if (workspace.tilingMode){
 tiling_underlay.on();
 }
 	}
@@ -5143,7 +5195,7 @@ const toggle_tiling_mode = () => {//«
 	}//»
 	if (has_tile_holds) {
 		window_boxshadow = window_boxshadow_hold;
-		windows.tiling_mode = false;
+		workspace.tilingMode = false;
 		tiling_underlay.off();
 		return;
 	}
@@ -5206,7 +5258,7 @@ const toggle_tiling_mode = () => {//«
 	}//»
 	window_boxshadow_hold = window_boxshadow;
 	window_boxshadow = "";
-	windows.tiling_mode = true;
+	workspace.tilingMode = true;
 	tiling_underlay.on();
 //setTimeout(()=>{
 //log(tiling_underlay);
@@ -5688,7 +5740,7 @@ this.cleanup_deleted_wins_and_icons = path => {//«
 }//»
 
 const switch_win_to_workspace = (w, num) => {//«
-	let oldwins = workspaces[w.workspaceNum];
+	let oldwins = workspaces[w.workspaceNum].windows;
 //log(12345);
 	let which = oldwins.indexOf(w);
 	if (which < 0){
@@ -5696,7 +5748,7 @@ const switch_win_to_workspace = (w, num) => {//«
 		return;
 	}
 	oldwins.splice(which, 1);
-	let newwins = workspaces[num];
+	let newwins = workspaces[num].windows;
 	newwins.push(w);
 	w.workspaceNum = num;
 	return true;
@@ -5715,9 +5767,17 @@ const raise_bound_win=(num)=>{//«
 	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
 	obj.win.on({switchToWorkspace: true});
 };//»
+const get_all_windows=()=>{
+	let wins=[];
+	for (let wspace of workspaces){
+		wins.push(...wspace.windows);
+	}
+	return wins;
+};
 
 //»
 //File/App«
+
 
 const open_text_editor = () => {//«
 	return open_app(TEXT_EDITOR_APP, {force: true});
@@ -5732,7 +5792,8 @@ const make_file = () => {//«
 };//»
 
 const raise_app_if_open=(appname)=>{//«
-	for (let w of workspaces.flat()){
+//	for (let w of workspaces.flat()){
+	for (let w of get_all_windows()){
 		if (w.appName==appname){
 			if (w.isMinimized) w.unminimize();
 			else w.on();
@@ -6574,7 +6635,7 @@ log(icn);
 }//»
 const reloadIcons = win => {return reload_icons();}
 const update_folder_statuses = usepath => {//«
-	for (let wins of workspaces) {
+	for (let wins of get_all_windows()) {
 		for (let w of wins) {
 			if (w.appName !== FOLDER_APP) continue;
 			if (usepath) {
@@ -7941,6 +8002,156 @@ open_file_by_path(globals.home_path, {
 };//»
 
 //»
+//«Context Menu
+const set_context_menu = (loc, opts={}) => {//«
+	CG.on();
+	let dx = 0;
+	let usex = loc.X - winx();
+	let usey = loc.Y - winy();
+	if (usex + 200 > winw()) dx = usex + 200 - winw();
+	desk_menu = new WDG.ContextMenu({
+		X: usex-dx,
+		Y: usey,
+		BREL:opts.BREL,
+		RREL:opts.RREL
+	});
+	let items = opts.items || get_desk_context();
+	for (let i = 0; i < items.length; i += 2) {
+		desk_menu.add_item(items[i], items[i + 1]);
+	}
+	desk_menu.adjust_y();
+	return desk_menu;
+};
+this.set_context_menu=set_context_menu;
+//»
+const get_desk_context=()=>{//«
+	let menu = DESK_CONTEXT_MENU.slice();
+	if (globals.read_only) {
+		menu.shift();
+		menu.shift();
+	}
+	let apps_arr = globals.APPLICATIONS_MENU;
+	let apps_menu = [];
+	menu.unshift('Applications', apps_menu);
+	for (let i=0; i < apps_arr.length; i+=2){
+		apps_menu.push(apps_arr[i]);
+		let app = apps_arr[i+1];
+		if (isStr(app)) apps_menu.push(()=>{open_app(app)});
+		else apps_menu.push(app);
+	}
+	return menu;
+};//»
+//»
+//Util«
+
+window.onblur=(e)=>{//«
+	for (let w of get_all_windows()){
+		if (w.app && w.app.onwinblur) w.app.onwinblur();
+	}
+};//»
+window.onfocus=(e)=>{//«
+	for (let w of get_all_windows()){
+		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
+	}
+};//»
+
+const set_workspace_num = which => {//«
+	workspace_num_div.innerHTML=`${which+1}`;
+	workspace_num_div.title = `Current workspace: ${which+1}\nCtrl+Alt+Shift+[1-${num_workspaces}]\nto switch workspaces`;
+};//»
+const check_for_desktops_in_other_tabs=()=>{//«
+	if ('BroadcastChannel' in window) {
+		let syschan;
+		syschan = new BroadcastChannel("system");
+		syschan.postMessage("init:"+FS_PREF);
+		syschan.onmessage = e=>{
+			let mess = e.data;
+			if (mess=="init:"+FS_PREF) {
+				if (globals.read_only) return;
+				syschan.postMessage("ack:"+FS_PREF);
+			}
+			else if (mess=="ack:"+FS_PREF) globals.read_only = true;
+			else if (mess.match && mess.match(/^(init|ack):/)){
+cwarn("Dropping: " + mess);
+			}
+			else {
+cwarn("Message received on the broadcast channel...");
+log(mess);
+			}
+		}
+	}
+	else{
+cwarn("No BroadcastChannel! Cannot ensure system integrity!!!");
+	}
+};//»
+const focus_editing=e=>{//«
+	if(e)nopropdef(e);
+	if(CEDICN){
+		CEDICN._namearea.focus();
+	}
+}//»
+const make_mode_dom = str => {//«
+	let d = mkdv();
+	d._z=-1;
+	d._ta="center";
+	d.style.userSelect="none";
+	d._bgcol=BEWARE_RED;
+	d._tcol="#eee";
+	d.innerText=str;
+	d._fs=32;
+	d._fw=900;
+	d._padb=10;
+	desk._add(d);
+}//»
+const check_rs_timer = () => {//«
+	if (rs_timer) clearTimeout(rs_timer);
+	rs_timer = setTimeout(() => {
+		rs_timer = null;
+		if (!CWIN) return;
+		CWIN.statusBar.resize();
+		CWIN.app.onresize();
+	}, RS_TIMEOUT);
+}//»
+const show_overlay=(str)=>{//«
+	if (str.length > MAX_OVERLAY_LENGTH) str = str.slice(0,MAX_OVERLAY_LENGTH)+"...";
+	overlay.innerText = str;
+	if (overlay_timer) clearTimeout(overlay_timer);
+	else desk.appendChild(overlay);
+	center(overlay, desk);
+	overlay_timer = setTimeout(()=>{
+		overlay_timer = null;
+		overlay._del();
+	}, OVERLAY_MS);
+};
+api.showOverlay = show_overlay;
+//»
+const winx=()=>{return 0;};
+this.winx=winx;
+const winy=()=>{return 0;};
+this.winy=winy;
+const winw=()=>{return window.innerWidth;}
+this.winw = winw;
+const winarea = ()=>{return window.innerWidth * window.innerHeight;};
+const winh = (if_no_taskbar) => {//«
+	if (taskbar_hidden||if_no_taskbar) return window.innerHeight;
+	return window.innerHeight - taskbar.taskbarElem.getBoundingClientRect().height;
+}
+this.winh = winh;//»
+const get_desk_grid=()=>{DESK_GRID_W=Math.floor((winw()-desk_grid_start_x)/IGSX);DESK_GRID_H=Math.floor((winh()-desk_grid_start_y)/IGSY);};
+const toggle_cursor = () => {//«
+	if (cur_showing) CUR.off(true);
+	else CUR.on(true);
+};//»
+const FATAL=s=>{throw new Error(s)};
+const z_compare=(a,b)=>{if(pi(a.style.zIndex)<pi(b.style.zIndex))return 1;else if(pi(a.style.zIndex)>pi(b.style.zIndex))return-1;return 0;};
+const gbid=(id)=>{return document.getElementById(id)}
+const pi=x=>{return parseInt(x, 10)}
+const noprop=e=>{e.stopPropagation()}
+const nopropdef=e=>{e.preventDefault();e.stopPropagation()}
+const no_select=(elm)=>{elm.style.userSelect="none"}
+
+
+//»
 //Keyboard«
 
 const handle_ESC = (if_alt) => {//«
@@ -7963,6 +8174,58 @@ const handle_ESC = (if_alt) => {//«
 	if (windows.layout_mode) return toggle_layout_mode();
 	if (windows_showing) toggle_show_windows();
 };//»
+
+/*
+//This is all an abstraction
+const KEYSYM_MAP={//«
+	f_A:{"n":"fullscreen_window"},
+	d_CA:{"n":"make_folder"},
+	f_CA:{"n":"make_file"},
+	"`_A":{"n":"window_cycle"},
+	x_A:{"n":"close_window"},
+	m_A:{"n":"maximize_window"},
+	d_A:{"n":"toggle_desktop"},
+	l_CA:{"n":"toggle_layout_mode"},
+	w_CA:{"n":"toggle_win_chrome"},
+	n_A:{"n":"minimize_window"},
+	"b_A":{"n":"toggle_taskbar"},
+	t_A:{n:"open_terminal"},
+	e_A:{n:"open_explorer"},
+	h_A:{n:"open_help"},
+};//»
+const KEYSYM_FUNCS = {//«
+focus_desktop:()=>{let w=CWIN;if(w&&(w.isFullscreen||w.isMaxed))return;CWIN&&CWIN.off();CUR.todesk();},
+toggle_tiling_mode,
+make_folder,
+make_file,
+toggle_taskbar,
+open_terminal,
+open_help,
+toggle_win_chrome:()=>{CWIN&&CWIN.toggleChrome()},
+toggle_layout_mode:toggle_layout_mode,
+save_window:()=>{let w=CWIN;if(!w||w.isMinimized)return true;w.app.onsave();return true;},
+delete_selected_files: ()=>{return delete_selected_files();},
+window_cycle: ()=>{return window_cycle();},
+reset: ()=>{return handle_ESC();},
+toggle_desktop: ()=>{return toggle_show_windows();},
+close_window: ()=>{
+	if (!CWIN) return;
+	if (check_cwin_owned()) return;
+	CWIN.close();
+},
+fullscreen_window: ()=>{CWIN&&CWIN.fullscreen()},
+minimize_window: ()=>{CWIN&&CWIN.minimize()},
+maximize_window: ()=>{CWIN&&CWIN.maximize();},
+popmacro:()=>{WDG.popmacro();return true;},
+//reload_app_window:()=>{return win_reload(CWIN)},
+reload_desk_icons:reload_desk_icons_cb,
+open_explorer: open_home_folder,
+open_root_folder:()=>{
+open_file_by_path("/")
+},
+open_app:(name,if_force)=>{open_app(name||"None",{force: if_force});},
+}//»
+*/
 
 //«Detect if all keys are up
 const KEYS_PRESSED={};
@@ -8050,17 +8313,11 @@ const check_input = ()=>{//«
 	let cwin = CWIN;
 	let is_full;
 	let is_max;
-	if (cwin){
-		is_full=cwin.isFullscreen;
-		is_max=cwin.isMaxed;
-	}
 	let cobj;
 	let overrides;
 	if (cwin) {
 		cobj = cwin.app;
-		overrides = cobj.overrides || {};
 	}
-	else overrides = {};
 
 	let cpr = CPR;
 	let code = e.keyCode;
@@ -8099,18 +8356,8 @@ const check_input = ()=>{//«
 
 //»
 
-/*Old«
-//Macros gobble everything.
-	if (macro_cb && kstr !== "ESC_") {
-		let str = Core.macro_key_down(code);
-		if (str === null) return;
-		macro_cb(str);
-		return;
-	}
-//»*/
 //If there is a system prompt, it takes precedence over everything below.
 	if (cpr) return check_prompt(cpr);
-
 /*What is the "click guard", and how does it relate to the following conditions???//«
 I'm pretty sure it is only activated when there is an icon's name being edited,
 or when there is an active context menu.
@@ -8156,15 +8403,6 @@ or when there is an active context menu.
 		if (kstr == "ESC_") desk_menu.kill();
 		return;
 	}//» 
-/*//«
-	else if (CG.style.display == "block") {//«
-		if (kstr == "ESC_") {
-			if (desk_menu) {
-				return desk_menu.kill();
-			}
-		} else if (desk_menu) return;
-	}//» 
-»*/
 //If there's a click guard, don't window escape things below.
 	else if (CG.style.display == "block") {//«
 //This branch is reached during window cycling "`_A"
@@ -8185,11 +8423,7 @@ or when there is an active context menu.
 			icon_array_off(12);
 			return;
 		}
-//		if (cwin.isFullscreen) return cwin.fullscreen();
-//		if (cwin.isMaxed) return cwin.maximize();
 		cwin.off();
-//		CUR.todesk();
-//		toggle_show_windows();
 		return;
 	}//»
 //A "soft escape", use on a window means its escape handler is not called
@@ -8212,25 +8446,11 @@ or when there is an active context menu.
 		if (code >= 33 && code <= 40 && text_inactive) e.preventDefault();
 	} 
 //»
-//System hotkeys
-	let mapobj;
-	if (overrides[kstr]){}
-	else mapobj = keysym_map[kstr];//«
-	if (mapobj) {
-		let args = mapobj.args||mapobj.a;
-		if (!args) args = [];
-		let nm = mapobj.name||mapobj.n;
-		let gotfunc = keysym_funcs[nm];
-		if (!gotfunc) return poperr(`There is nothing named '${nm}' in keysym_funcs using the sym: ${kstr}`);
-		gotfunc.apply(null, args);
-		return p();
-	}//» 
 
 //Open context menu of selected icon, desktop or current window
 
 //Desktop and folder specific functions dealing with icons or the icon cursor:
 	if (!cwin || cwin.appName==FOLDER_APP){//«
-
 		if (kstr == "c_A") {//«
 			let curicon;
 			if (CUR.ison()) curicon = CUR.geticon();
@@ -8261,8 +8481,6 @@ cwarn("There was an unattached icon in ICONS!");
 				}
 			}
 		}//»
-
-//		if (kstr == "f_CAS") return toggle_fullscreen();
 		if (cwin && cwin.saver && kstr.match(/^TAB_S?$/)){
 			e.preventDefault();
 			cobj.onkeydown(e, kstr, mod_str);
@@ -8326,93 +8544,45 @@ cwarn("There was an unattached icon in ICONS!");
 	}//»
 
 //«Various harcoded keysyms that *just* intercept the current window
-if (!qObj["no-switcher"]) {
-	if (kstr.match(/^[1-9]_CAS$/)){
-		switch_to_workspace(parseInt(kstr.split("_")[0])-1);
-		return;
-	}
-	if (kstr=="LEFT_CAS"){
-		current_workspace_num--;
-		if (current_workspace_num<0) current_workspace_num = num_workspaces-1;
-		switch_to_workspace(current_workspace_num, true);
-		return;
-	}
-	if (kstr=="RIGHT_CAS"){
-		current_workspace_num++;
-		if (current_workspace_num>=num_workspaces) current_workspace_num = 0;
-		switch_to_workspace(current_workspace_num, true);
-		return;
-	}
-}
+
+	if (!qObj["no-switcher"]) {/*«*/
+		if (kstr.match(/^[1-9]_CAS$/)){
+			switch_to_workspace(parseInt(kstr.split("_")[0])-1);
+			return;
+		}
+		if (kstr=="LEFT_CAS"){
+			current_workspace_num--;
+			if (current_workspace_num<0) current_workspace_num = num_workspaces-1;
+			switch_to_workspace(current_workspace_num, true);
+			return;
+		}
+		if (kstr=="RIGHT_CAS"){
+			current_workspace_num++;
+			if (current_workspace_num>=num_workspaces) current_workspace_num = 0;
+			switch_to_workspace(current_workspace_num, true);
+			return;
+		}
+	}/*»*/
 
 //XKLEUIM
-	if (marr = kstr.match(/^([1-9])_CA$/)){
+	if (marr = kstr.match(/^([1-9])_AS$/)){
 		return raise_bound_win(marr[1]);
 	}
-if (kstr==="0_CA"){
-//cwarn("WIN MANAGER");
-open_app("WinMan");
-return;
-}
-
-	if (kstr=="l_CAS") return console.clear();
-	if (kstr=="t_CAS") return keysym_funcs.toggle_tiling_mode();
-	if (kstr=="e_CAS") taskbar.toggle_expert_mode();
-//	if (kstr=="t_CAS") return keysym_funcs.open_app("util.Titles");
-	if (kstr=="k_CAS") {
-		return (debug_keydown = !debug_keydown);
+	switch(kstr){
+		case "`_A": return window_cycle();
+		case "d_A": return (e.preventDefault(), toggle_show_windows());
+		case "t_A": return open_terminal();
+		case "e_A": return (e.preventDefault(), open_home_folder());
+		case "0_AS": return open_app("WinMan");
+		case "l_CAS": return console.clear();
 	}
-/*
-	if (kstr == "d_CAS") {
-		if (cwin) {
-log(cwin);
-let r = cwin.winElem.getBoundingClientRect();
-log(`[${r.width}, ${r.height}, ${r.left}, ${r.top}]`);
-		}
-//		PREV_DEF_ALL_KEYS = !PREV_DEF_ALL_KEYS;
-//		show_overlay(`Prevent default for all keys: ${PREV_DEF_ALL_KEYS}`);
-		return;
-	}
-*/
 //»
 
 //Send to the current window
+//Change this to send to current workspace
 	if (cwin) {//«
 		if (cwin.popup) return check_prompt(cwin.popup);
-		if (!cobj) return;
-/*
-
-Unless your app explicitly overrides them, the system intercepts the <arrow>_S
-and <arrow>_CS hotkeys for basic window moving and resizing (of non
-maxed/fullscreened wins).
-
-*/
-		if (!(cobj.overrides && cobj.overrides[kstr])){
-			if (kstr==="r_A") {
-				if (!globals.dev_mode) {
-cwarn(`win_reload: "dev mode" is not enabled!`);
-					return;
-				}
-				if (!CWIN) return;
-				if (check_cwin_owned()) return;
-//				CWIN.reload();
-				win_reload();
-				return;
-			}
-			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();
-			if (!(is_full||is_max)) {
-				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
-					if (is_max) return;
-					return move_window(kstr[0]);
-				}
-				if (kstr=="RIGHT_CS") resize_window("R");
-				else if (kstr=="LEFT_CS") resize_window("R", true);
-				else if (kstr=="DOWN_CS") resize_window("D");
-				else if (kstr=="UP_CS") resize_window("D", true);
-			}
-		}
-		if (cwin.isLayout || cwin.isMinimized || cwin.killed) return;
-		if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
+		workspace.keyDown(e, kstr, mod_str);
 		return;
 	}//»
 
@@ -8432,9 +8602,10 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 
 	}//»
 	else if (kstr=="r_") return reload_desk_icons_cb();
+//	t_A:{n:"open_terminal"},
+//	e_A:{n:"open_explorer"},
 //»
-
-}
+};
 //»
 const dokeypress = function(e) {//«
 	if (PREV_DEF_ALL_KEYS) e.preventDefault();
@@ -8450,9 +8621,8 @@ const dokeypress = function(e) {//«
 //if (w.killed){
 //return;
 //}
-	if (code >= 32 && code <= 126 && w.app.onkeypress) w.app.onkeypress(e);
-}
-//this.keypress=dokeypress;
+	workspace.keyPress(e);
+};
 //»
 const dokeyup = function(e) {//«
 	delete KEYS_PRESSED[e.key];
@@ -8465,7 +8635,7 @@ const dokeyup = function(e) {//«
 	};
 	let code = e.keyCode; 
 
-	if (code == 18) {
+	if (code == 18) {/*«*/
 		alt_tab_presses = 1;
 		alt_is_up = true;
 		if (num_win_cycles){
@@ -8486,217 +8656,12 @@ const dokeyup = function(e) {//«
 		num_win_cycles = 0;
 		have_window_cycle = false;
 		CWCW=null;
-	}
+	}/*»*/
 	if (!w) return;
 	if (w.isMinimized||w.popup) return;
-	if (w.app.onkeyup) w.app.onkeyup(e, evt2Sym(e));
-}
-//this.keyup=dokeyup;
-//»
-
-const setsyskeys=()=>{//«
-
-keysym_funcs = {
-
-focus_desktop:()=>{let w=CWIN;if(w&&(w.isFullscreen||w.isMaxed))return;CWIN&&CWIN.off();CUR.todesk();},
-//test_function:async()=>{
-//let win = await api.openApp("dev.Launcher", {force: true});
-//if (!globals.dev_mode) return popup("The test function requires expert mode!");
-//toggle_tiling_mode();
-//},
-toggle_tiling_mode,
-make_folder,
-make_file,
-toggle_taskbar,
-toggle_fullscreen,
-open_terminal,
-open_help,
-toggle_win_chrome:()=>{CWIN&&CWIN.toggleChrome()},
-toggle_layout_mode:toggle_layout_mode,
-save_window:()=>{let w=CWIN;if(!w||w.isMinimized)return true;w.app.onsave();return true;},
-delete_selected_files: ()=>{return delete_selected_files();},
-window_cycle: ()=>{return window_cycle();},
-reset: ()=>{return handle_ESC();},
-toggle_desktop: ()=>{return toggle_show_windows();},
-close_window: ()=>{
-	if (!CWIN) return;
-	if (check_cwin_owned()) return;
-	CWIN.close();
-},
-fullscreen_window: ()=>{CWIN&&CWIN.fullscreen()},
-minimize_window: ()=>{CWIN&&CWIN.minimize()},
-maximize_window: ()=>{CWIN&&CWIN.maximize();},
-popmacro:()=>{WDG.popmacro();return true;},
-//reload_app_window:()=>{return win_reload(CWIN)},
-reload_desk_icons:reload_desk_icons_cb,
-open_explorer: open_home_folder,
-open_root_folder:()=>{
-open_file_by_path("/")
-},
-open_app:(name,if_force)=>{open_app(name||"None",{force: if_force});},
-}
-
-Desk.keysym_funcs = keysym_funcs;
-keysym_map = std_keysym_map;
-
-}
-//»
-
-//»
-//«Context Menu
-const set_context_menu = (loc, opts={}) => {//«
-	CG.on();
-	let dx = 0;
-	let usex = loc.X - winx();
-	let usey = loc.Y - winy();
-	if (usex + 200 > winw()) dx = usex + 200 - winw();
-	desk_menu = new WDG.ContextMenu({
-		X: usex-dx,
-		Y: usey,
-		BREL:opts.BREL,
-		RREL:opts.RREL
-	});
-	let items = opts.items || get_desk_context();
-	for (let i = 0; i < items.length; i += 2) {
-		desk_menu.add_item(items[i], items[i + 1]);
-	}
-	desk_menu.adjust_y();
-	return desk_menu;
+	workspace.keyUp(e);
 };
-this.set_context_menu=set_context_menu;
 //»
-const get_desk_context=()=>{//«
-	let menu = DESK_CONTEXT_MENU.slice();
-	if (globals.read_only) {
-		menu.shift();
-		menu.shift();
-	}
-	let apps_arr = globals.APPLICATIONS_MENU;
-	let apps_menu = [];
-	menu.unshift('Applications', apps_menu);
-	for (let i=0; i < apps_arr.length; i+=2){
-		apps_menu.push(apps_arr[i]);
-		let app = apps_arr[i+1];
-		if (isStr(app)) apps_menu.push(()=>{open_app(app)});
-		else apps_menu.push(app);
-	}
-	return menu;
-};//»
-//»
-//Util«
-
-window.onblur=(e)=>{//«
-	let wins = workspaces.flat();
-	for (let w of wins){
-		if (w.app && w.app.onwinblur) w.app.onwinblur();
-	}
-};//»
-window.onfocus=(e)=>{//«
-	let wins = workspaces.flat();
-	for (let w of wins){
-		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
-	}
-};//»
-
-const set_workspace_num = which => {//«
-	workspace_num_div.innerHTML=`${which+1}`;
-	workspace_num_div.title = `Current workspace: ${which+1}\nCtrl+Alt+Shift+[1-${num_workspaces}]\nto switch workspaces`;
-};//»
-const check_for_desktops_in_other_tabs=()=>{//«
-	if ('BroadcastChannel' in window) {
-		let syschan;
-		syschan = new BroadcastChannel("system");
-		syschan.postMessage("init:"+FS_PREF);
-		syschan.onmessage = e=>{
-			let mess = e.data;
-			if (mess=="init:"+FS_PREF) {
-				if (globals.read_only) return;
-				syschan.postMessage("ack:"+FS_PREF);
-			}
-			else if (mess=="ack:"+FS_PREF) globals.read_only = true;
-			else if (mess.match && mess.match(/^(init|ack):/)){
-cwarn("Dropping: " + mess);
-			}
-			else {
-cwarn("Message received on the broadcast channel...");
-log(mess);
-			}
-		}
-	}
-	else{
-cwarn("No BroadcastChannel! Cannot ensure system integrity!!!");
-	}
-};//»
-const focus_editing=e=>{//«
-	if(e)nopropdef(e);
-	if(CEDICN){
-		CEDICN._namearea.focus();
-	}
-}//»
-const make_mode_dom = str => {//«
-	let d = mkdv();
-	d._z=-1;
-	d._ta="center";
-	d.style.userSelect="none";
-	d._bgcol=BEWARE_RED;
-	d._tcol="#eee";
-	d.innerText=str;
-	d._fs=32;
-	d._fw=900;
-	d._padb=10;
-	desk._add(d);
-}//»
-const check_rs_timer = () => {//«
-	if (rs_timer) clearTimeout(rs_timer);
-	rs_timer = setTimeout(() => {
-		rs_timer = null;
-		if (!CWIN) return;
-		CWIN.statusBar.resize();
-		CWIN.app.onresize();
-	}, RS_TIMEOUT);
-}//»
-const show_overlay=(str)=>{//«
-	if (str.length > MAX_OVERLAY_LENGTH) str = str.slice(0,MAX_OVERLAY_LENGTH)+"...";
-	overlay.innerText = str;
-	if (overlay_timer) clearTimeout(overlay_timer);
-	else desk.appendChild(overlay);
-	center(overlay, desk);
-	overlay_timer = setTimeout(()=>{
-		overlay_timer = null;
-		overlay._del();
-	}, OVERLAY_MS);
-};
-api.showOverlay = show_overlay;
-//»
-const winx=()=>{return 0;};
-this.winx=winx;
-const winy=()=>{return 0;};
-this.winy=winy;
-const winw=()=>{return window.innerWidth;}
-this.winw = winw;
-const winarea = ()=>{return window.innerWidth * window.innerHeight;};
-const winh = (if_no_taskbar) => {//«
-	if (taskbar_hidden||if_no_taskbar) return window.innerHeight;
-	return window.innerHeight - taskbar.taskbarElem.getBoundingClientRect().height;
-}
-this.winh = winh;//»
-const toggle_fullscreen=()=>{//«
-	if (!document.fullscreenElement) document.body.requestFullscreen();
-	else document.exitFullscreen();
-};//»
-const get_desk_grid=()=>{DESK_GRID_W=Math.floor((winw()-desk_grid_start_x)/IGSX);DESK_GRID_H=Math.floor((winh()-desk_grid_start_y)/IGSY);};
-const toggle_taskbar=()=>{if(taskbar_hidden)taskbar.show();else taskbar.hide();};
-const toggle_cursor = () => {//«
-	if (cur_showing) CUR.off(true);
-	else CUR.on(true);
-};//»
-const FATAL=s=>{throw new Error(s)};
-const z_compare=(a,b)=>{if(pi(a.style.zIndex)<pi(b.style.zIndex))return 1;else if(pi(a.style.zIndex)>pi(b.style.zIndex))return-1;return 0;};
-const gbid=(id)=>{return document.getElementById(id)}
-const pi=x=>{return parseInt(x, 10)}
-const noprop=e=>{e.stopPropagation()}
-const nopropdef=e=>{e.preventDefault();e.stopPropagation()}
-const no_select=(elm)=>{elm.style.userSelect="none"}
 
 //»
 
@@ -8722,7 +8687,6 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 	CUR.set(0);
 	if (!isMobile && !qObj.nocursor && globals.is_local) CUR.on(true);
 	await reloadIcons();
-	setsyskeys();
 	if (localStorage[`taskbar_hidden:${globals.current_user}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
 
@@ -8737,7 +8701,7 @@ const no_select=(elm)=>{elm.style.userSelect="none"}
 		fit_desktop();
 	};//»
 	window.onbeforeunload = () => {//«
-		for (let wins of workspaces) {
+		for (let wins of get_all_windows()) {
 			for (let w of wins){
 				if (w.app) {
 					if (w.app.is_dirty) return true;
