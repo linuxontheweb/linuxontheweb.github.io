@@ -1,4 +1,59 @@
-/*12/22/24: Need to finish up tile_windows, and allow for Workspaces to "own" their own«
+/*12/22/24: 
+
+Just doing a simple desktop icon toggling routine.
+
+I'm pretty sure that all icons that are being added to the desktop *MUST*
+got through placeInIconSlot, so I'm cutting everything off about icon
+visibility @LCIUDHJ.
+
+So now each workspace can define what it wants for the background color
+and image just by updating the body element for color (solid or gradient)
+and updating the desk_imgdiv with the image url.
+
+The body is what has the color and desk_imgdiv has the image.
+
+Now I want each workspace to have its own background divs for
+desktop color, bgimg, and whether the icon div is on or off.
+We can put this old tiling_underlay thing just above ICON_Z in order for it to
+be an icon-less desktop.
+
+Want to start putting desktop icons onto their own div!!!
+
+//Tiling underlay«
+{
+	let tul = tiling_underlay;
+	tul._bgcol="#101010";
+	tul._dis="block";
+	tul.id="tiling_underlay";
+	tul._z=ICON_Z+1;
+	tul._pos="fixed";
+	tul.onmousedown=e=>{
+e.stopPropagation();
+e.preventDefault();
+	};
+	tul.onmousemove=e=>{
+		if (CRW) {
+			handle_resize_event(e);
+		}
+	};
+	tul.oncontextmenu=nopropdef;
+	tul.ondblclick=nopropdef;
+	tul._w=0;
+	tul._h=0;
+	tul._loc(0,0);
+	tul.on=()=>{
+		tul._w=winw();
+		tul._h=winh();
+	};
+	tul.off=()=>{
+		tul._w=0;
+		tul._h=0;
+	};
+}
+//»
+//	desk._add(tiling_underlay);
+
+Need to finish up tile_windows, and allow for Workspaces to "own" their own
 background color and image divs, and decide whether to have the icon_div visible or not.
 
 OKAY: I'm not saying the algorithm @PMNTYJ is perfect, but it seems to work decently
@@ -9,7 +64,7 @@ You can call tile_windows multiple times, with the fit becoming more "snug" each
 until it finally detects window overlap, and finally refuses to do the tiling algorithm
 again.
 
-»*/
+*/
 /*«Notes*/
 /*12/21/24: Now we have Workspace objects that get key events sent to them if there«
 is a focused window. Otherwise, the desktop itself gets to decide what to do with
@@ -340,7 +395,6 @@ const {
 
 //FS«
 const fs = new fsmod();
-fs.set_desk(this);
 globals.fs = fs;
 const fsapi = fs.api;
 const{pathToNode}=fsapi;
@@ -412,11 +466,12 @@ let CWIN;
 let taskbar;
 const body = document.body;
 const desk = mkdv();
+
 const desk_imgdiv=mkdv();
 const start_button=mkdv();
 const workspace_num_div=mkdv();
 const workspace_switcher_div=mkdv();
-const tiling_underlay = mkdv();
+//const tiling_underlay = mkdv();
 
 //A "fake" window object that gets put into the window stack during
 //keyboard window cycling when show_desktop_during_win_cycle=true.
@@ -779,9 +834,15 @@ const open_help=()=>{open_app("Help");}
 const DESK_CONTEXT_MENU=[
 	"New",[
 		"Folder::Ctrl+Alt+d",
-		()=>{make_new_icon(desk, FOLDER_APP)},
+		()=>{
+			if (!SHOW_ICONS) return show_overlay(`SHOW_ICONS == ${SHOW_ICONS}`);
+			make_new_icon(desk, FOLDER_APP)
+		},
 		"Text File::Ctrl+Alt+f",
-		()=>{make_new_icon(desk, "Text")}
+		()=>{
+			if (!SHOW_ICONS) return show_overlay(`SHOW_ICONS == ${SHOW_ICONS}`);
+			make_new_icon(desk, "Text")
+		}
 	],
 	"Explorer::Alt+e",open_home_folder,
 	"Terminal::Alt+t", open_terminal,
@@ -811,6 +872,21 @@ const fit_desktop = ()=>{//«
 	CG._h = _h;
 	get_desk_grid();
 };//»
+const set_desk_bgcol=()=>{//«
+	let bgcol = qObj.bgcol;//Solid background color or gradient with backgroundImage«
+	if (admin_mode) bgcol=BEWARE_RED;
+	if (bgcol) {
+		if (bgcol.match(/^[a-f0-9]+$/i) && (bgcol.length==3 || bgcol.length==6)){
+			body._bgcol= `#${bgcol}`;
+		}
+		else {
+			body._bgcol= `${bgcol}`;
+		}
+	}
+	else {
+		body.style.backgroundImage=BACKGROUND_GRADIENT;
+	}//»
+};//»
 const set_desk_styles = () => {//«
 	desk._tcol= "#000";//Main desktop layer«
 	desk._pos= "relative";
@@ -821,8 +897,9 @@ const set_desk_styles = () => {//«
 	desk.style.backgroundSize = winw() + " " + winh();
 //»
 
-//Need a separate image layer for fine-grained opacity«
+set_desk_bgcol();
 
+//Need a separate image layer for fine-grained opacity
 	desk_imgdiv._pos= "absolute";//Image layer«
 	desk_imgdiv._loc(0, 0);
 	desk_imgdiv._w= winw();
@@ -839,7 +916,7 @@ const set_desk_styles = () => {//«
 //	if (!qObj.bgcol) body.style.backgroundImage = DEF_DESK_GRADIENT;
 
 //»
-//»
+
 
 	DDD = make('div');//Desk Drag Div = The icon "lasso"«
 	DDD._z = CG_Z - 1;
@@ -891,49 +968,6 @@ const set_desk_styles = () => {//«
 	})();
 	overlay._z=CG_Z+1;
 //»
-//Tiling underlay«
-{
-	let tul = tiling_underlay;
-	tul._bgcol="#101010";
-	tul._dis="block";
-	tul.id="tiling_underlay";
-	tul._z=ICON_Z+1;
-	tul._pos="fixed";
-	tul.onmousedown=e=>{
-e.stopPropagation();
-e.preventDefault();
-
-	};
-	tul.onmousemove=e=>{
-//e.stopPropagation();
-//e.preventDefault();
-
-		if (CRW) {
-//log(e);
-			handle_resize_event(e);
-		}
-
-	};
-
-	tul.oncontextmenu=nopropdef;
-	tul.ondblclick=nopropdef;
-//	tul.dims(0,0);
-	tul._w=0;
-	tul._h=0;
-	tul._loc(0,0);
-//log(tul);
-	tul.on=()=>{
-		tul._w=winw();
-		tul._h=winh();
-	};
-	tul.off=()=>{
-		tul._w=0;
-		tul._h=0;
-	};
-}
-//»
-
-	desk._add(tiling_underlay);
 	desk._add(CG);
 	body._add(desk);
 	if (!admin_mode) body._add(desk_imgdiv);
@@ -942,19 +976,22 @@ e.preventDefault();
 //»
 const set_desk_events = () => {//«
 
+//didleave/on/off«
 	let didleave = false;
-	let on = () => {
+	const on = () => {
 		if (!CDL) return;
 		CDL.into(desk.name);
 	};
-	let off = () => {
+	const off = () => {
 		if (!CDL) return;
 		CDL.reset();
 	};
+//»
 	desk.onmousemove = e => {//«
 
 		ev = e;
 		if (CDL) {//«
+//log(CDL);
 if (!ICONS[0]){
 CDICN = null;
 cldragimg();
@@ -978,10 +1015,6 @@ return;
 				CDL._y=e.clientY+CDL_OFFSET-winy();
 			}
 		}//»
-//		else if (CDA){
-//			let r = CDA.getBoundingClientRect();
-//			CDA._loc(e.clientX+(CDA._offx), e.clientY-(r.height+CDA._offy));
-//		}
 		else if (CRW) handle_resize_event(e);
 		else if (CDW) {//«
 			let x = e.clientX-DDX;
@@ -1128,6 +1161,7 @@ drag_timeout = setTimeout(()=>{
 				CDICN = null;
 				return;
 			}
+			if (SHOW_ICONS) {
 			if (CDICN.parWin == desk) { /*Back where we started:just move icon*/
 				let proms = [];
 //				for(let i=0;i<ICONS.length;i++)icon_off(ICONS[i]);
@@ -1147,10 +1181,12 @@ drag_timeout = setTimeout(()=>{
 				CG.off();
 			}
 //			else if (CDICN.parWin.fullpath == desk.fullpath) no_move_all_icons();
+//			else if (CDICN.parWin.fullpath != desk.fullpath) {
 			else if (CDICN.parWin.fullpath != desk.fullpath) {
 				await move_icons(DESK_PATH, {e});
 				CDICN = null;
 				return;
+			}
 			}
 			CDICN = null;
 		}
@@ -1235,6 +1271,7 @@ drag_timeout = setTimeout(()=>{
 		if (CDL && CDL.clearFromStorage) CDL.clearFromStorage();
 	};//»
 	desk.onmouseover = e => {//«
+		if (!SHOW_ICONS) return;
 		if (CDL && CDL.copyto) CDL.copyto("Desktop");
 		if (!CDICN) {
 			return;
@@ -1260,9 +1297,9 @@ drag_timeout = setTimeout(()=>{
 	};//»
 	desk.ondrop = async e => {//«
 		e.preventDefault();
+		if (!SHOW_ICONS) return;
 		save_dropped_files(e, desk);
 	};//»
-
 	desk.ondragover = async e => {//«
 //log("desk over");
 	};//»
@@ -1280,20 +1317,6 @@ const make_desktop = () => {//«
 	get_desk_grid();
 	set_desk_styles();
 	set_desk_events();
-
-	let bgcol = qObj.bgcol;
-	if (admin_mode) bgcol=BEWARE_RED;
-	if (bgcol) {
-		if (bgcol.match(/^[a-f0-9]+$/i) && (bgcol.length==3 || bgcol.length==6)){
-			body._bgcol= `#${bgcol}`;
-		}
-		else {
-			body._bgcol= `${bgcol}`;
-		}
-	}
-	else {
-		body.style.backgroundImage=BACKGROUND_GRADIENT;
-	}
 
 }//»
 const desk_drag_off=()=>{DDIE=null;DDD._loc(-1,-1);DDD._w=0;DDD._h=0;}
@@ -1338,40 +1361,10 @@ const cldragimg = if_hard => {//«
 	CDL = null;
 	desk.style.cursor = "";
 };//»
-/*
-const desk_init = ()=>{//«
-return new Promise(async(Y,N)=>{
-
-	let path = `${globals.home_path}/.init/desk.js`;
-	let node = await path.toNode();
-	if (!node) return Y(true);
-	let text = await node.text;
-	if (!isStr(text)){
-cerr("What is the text???");
-log(text);
-
-		return Y(false);
-	}
-	text=`(function(){"use strict";${text}})()`;
-	let url = URL.createObjectURL(new Blob([text]));
-	let scr = document.createElement('script');
-	scr.onload=()=>{
-		Y(true);
-	};
-	scr.onerror=(e)=>{
-log("GOT SYNTAX ERROR???");
-cerr(e);
-		Y(false);
-	};
-	scr.src = url;
-	document.head.appendChild(scr);
-
-});
-}//»
-*/
-const desk_init = async()=>{
+const desk_init = async()=>{//«
 await makeScript("/sys/init.js", {module: true});
-};
+};//»
+
 //»
 //«Workspaces
 
@@ -1477,7 +1470,7 @@ keyPress(e){//«
 	if (code >= 32 && code <= 126 && CWIN.app.onkeypress) CWIN.app.onkeypress(e);
 }//»
 on(){//«
-	if (this.tilingMode) tiling_underlay.on();
+//	if (this.tilingMode) tiling_underlay.on();
 	windows = this.windows;
 	for (let w of windows){
 		if (!w.isMinimized) w.winElem._dis="block";
@@ -1492,7 +1485,7 @@ off(){//«
 			w.taskbarButton._dis="none";//was flex
 		}
 	}
-	if (workspace.tilingMode) tiling_underlay.off();
+//	if (workspace.tilingMode) tiling_underlay.off();
 	if (CWIN) CWIN.off();
 	if (ICONS.length && ICONS[0].parWin !==desk){
 		icon_array_off();
@@ -3270,9 +3263,8 @@ const toggle_show_windows = (if_no_current) => {//«
 		CWIN && CWIN.off();
 		CWIN = null;
 		CUR.todesk();
-if (workspace.tilingMode){
-tiling_underlay.off();
-}
+//if (workspace.tilingMode)tiling_underlay.off();
+
 	} else {
 		windows_showing = true;
 		CWIN && CWIN.off();
@@ -3289,9 +3281,8 @@ tiling_underlay.off();
 			}
 		}
 		if (!CWIN && !if_no_current) top_win_on();
-if (workspace.tilingMode){
-tiling_underlay.on();
-}
+//if (workspace.tilingMode) tiling_underlay.on();
+
 	}
 //	Desk.update_windows_showing();
 	return true;
@@ -3774,28 +3765,27 @@ cerr("No icn.name && icn.parWin", icn);
 const placeInIconSlot = (icn, opts={}) => {//«
 //const place_in_icon_slot = (icn, pos, if_create, if_load, if_no_vacate, if_no_clear)
 	const do_add=()=>{//«
-		if (elem.iconDiv) {
-			icn.parWin = elem.iconDiv.win;
-			elem.iconDiv._add(icn);
-		} else {
-			icn.parWin = desk;
-			elem._add(iconelm);
-			icn.saveToStorage();
-		}
+		icn.parWin = desk;
+		desk._add(iconelm);
+		icn.saveToStorage();
 	};//»
 	let{
 		pos, create, load, noVacate, noClear, doMove
 	}= opts;
 	let startx = desk_grid_start_x;
 	let starty = desk_grid_start_y;
-	let elem = desk;
+//	let elem = desk;
 	if (icn.name && !create && !noVacate) vacate_icon_slot(icn, noClear);
-	let arr = get_icon_array(elem);
+	let arr = get_icon_array(desk);
 	let iconelm = icn.iconElem;
+//LCIUDHJ
+	if (!SHOW_ICONS){
+		iconelm.style.visibility="hidden";
+	}
 	if (create){//«
 		iconelm._pos="absolute";
 		icn.parWin = desk;
-		elem._add(iconelm);
+		desk._add(iconelm);
 
 /*In desk.css,«
 .iconl {
@@ -3852,8 +3842,8 @@ log(icn);
 		let i = 0;
 		let x, y;
 		let doit = () => {
-			let xnum = i % elem.cols;
-			let ynum = Math.floor(i / elem.cols);
+			let xnum = i % desk.cols;
+			let ynum = Math.floor(i / desk.cols);
 			x = startx + (xnum * IGSX);
 			y = starty + (ynum * IGSY);
 			icn.col = xnum;
@@ -3882,16 +3872,16 @@ log(icn);
 	if (grid_x < 0) grid_x = 0;
 	let grid_y = Math.floor((posY - starty) / IGSY);
 	if (grid_y < 0) grid_y = 0;
-	let grid_pos = (grid_y * elem.cols) + grid_x;
-	if (!arr[grid_pos] && (grid_x < elem.cols)) {//«
+	let grid_pos = (grid_y * desk.cols) + grid_x;
+	if (!arr[grid_pos] && (grid_x < desk.cols)) {//«
 		good_it = grid_pos;
 		low_x = startx + (grid_x * IGSX);
 		low_y = starty + (grid_y * IGSY);
 	}//»
 	else {//«
 		let check_low = () => {
-			let ynum = Math.floor(i / elem.cols);
-			let xnum = i % elem.cols;
+			let ynum = Math.floor(i / desk.cols);
+			let xnum = i % desk.cols;
 			let x = startx + (xnum * IGSX);
 			let y = starty + (ynum * IGSY);
 			let got_dist = dist(x + 40, y + 40, posX, posY);
@@ -3909,8 +3899,8 @@ log(icn);
 		if (!(low_x && low_y)) check_low();
 	}//»
 	if (low_x && low_y) {
-		icn.col = good_it % elem.cols;
-		icn.row = Math.floor(good_it / elem.cols);
+		icn.col = good_it % desk.cols;
+		icn.row = Math.floor(good_it / desk.cols);
 		iconelm._z= ICON_Z;
 		arr[good_it] = icn;
 		do_add();
@@ -3937,6 +3927,8 @@ this.update_folder_statuses=update_folder_statuses;
 
 //»
 //Icons«
+
+let SHOW_ICONS = true;
 
 class Icon {//«
 
@@ -4461,6 +4453,24 @@ get name(){return this.node.baseName;}
 api.Icon = Icon;
 //»
 
+const toggle_icon_display = () => {//«
+	if (!dev_mode) return;
+	SHOW_ICONS = !SHOW_ICONS;
+	for (let icn of desk.icons){
+		if (!icn) continue;
+		if (SHOW_ICONS){
+			icn.iconElem.style.visibility="";
+			desk_imgdiv.style.backgroundImage=`url("${BACKGROUND_IMAGE_URL}")`;
+			set_desk_bgcol();
+		}
+		else{
+			icn.iconElem.style.visibility="hidden";
+			desk_imgdiv.style.backgroundImage="";
+			body._bgcol= "#000";
+			body.style.backgroundImage="";
+		}
+	}
+};//»
 const show_node_props=async(node)=>{//«
 
 	const pop=()=>{popup(s+"</div>",{title: "File node properties", wide: true});};
@@ -4510,6 +4520,7 @@ const do_end=async()=>{//«
 				icn.parWin = desk;
 				icn.iconElem._pos="absolute";
 				if(!icn.iconElem.parentNode) {
+//					if (!SHOW_ICONS) icn.iconElem.style.visibility="hidden";
 					desk._add(icn.iconElem);
 				}
 			}
@@ -8679,6 +8690,9 @@ cwarn("There was an unattached icon in ICONS!");
 		case "e_A": return (e.preventDefault(), open_home_folder());
 		case "0_AS": return open_app("WinMan");
 		case "l_CAS": return console.clear();
+		case "b_A": return toggle_taskbar();
+		case "e_CAS": return taskbar.toggle_expert_mode();
+		case "i_CAS": return toggle_icon_display();
 	}
 //»
 
@@ -8770,6 +8784,7 @@ const dokeyup = function(e) {//«
 
 //Init«
 (async () => {
+	fs.set_desk(this);
 	let winorig = window.location.origin;
 	if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) globals.is_local = true;
 	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;
