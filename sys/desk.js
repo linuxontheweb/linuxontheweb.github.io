@@ -1,3 +1,7 @@
+/*12/22/24: Need to finish up tile_windows, and allow for Workspaces to "own" their own
+background color and image divs, and decide whether to have the icon_div visible or not.
+*/
+/*«Notes*/
 /*12/21/24: Now we have Workspace objects that get key events sent to them if there«
 is a focused window. Otherwise, the desktop itself gets to decide what to do with
 the given key event.
@@ -28,8 +32,24 @@ order methods like various tiling arrangements.
 Now that we are checking the key events for these window management functions, we need
 to apply this to the mouse movements as well.
 
+Now we have a new kind of tile_windows @JDURKJS. Here we just have the algorithm
+to find us the closest window with a bottom edge that stops our top edge from going
+all the way to the top of the browser window.
+
+So now we just have to actually extend the edge as necessary, and then do the same
+thing for the remaining edges (bottom, left, right) of all the windows.
+
+We can save on cycles here by "remembering" all of the edges that we've already extended,
+if in fact we are going to bring two edges together to meet in the middle, which 
+seems the most "just" thing for a tiling algorithm to do.
+
+We can set these as flags on our window object, or a sub-object within it, like:
+
+win.tiledEdges = {left: false, right: false, top: false, bottom: false}.
+
+We can also just check of the given edge to see if it is flush with the browser edge.
+
 »*/
-/*«Notes*/
 /*12/20/24: Just got rid of the idea that new folder windows are created whenever «
 you navigate to another folder using one of the following methods (such that the
 new windows perfectly "replace" the old ones by copying the dimensions of the
@@ -299,19 +319,23 @@ const {
 
 //new Desk(){«
   new  (function(){
+
+	const Desk = this;
+	NS.Desk = this;
+	Object.freeze(NS);
+	this.globals = globals;
+
 //»
 
 //Var«
 
-const Desk = this;
-NS.Desk = this;
-Object.freeze(NS);
-this.globals = globals;
-
-const body = document.body;
-let fs, fsapi;
-let pathToNode;
-const NOOP=()=>{}
+//FS«
+const fs = new fsmod();
+fs.set_desk(this);
+globals.fs = fs;
+const fsapi = fs.api;
+const{pathToNode}=fsapi;
+//»
 //Flags/Modes«
 let dev_mode;
 let admin_mode;
@@ -377,6 +401,7 @@ let alt_tab_presses = 1;
 let CPR;
 let CWIN;
 let taskbar;
+const body = document.body;
 const desk = mkdv();
 const desk_imgdiv=mkdv();
 const start_button=mkdv();
@@ -734,6 +759,7 @@ _.del = function() {if (this.parentNode) this.parentNode.removeChild(this);}
 //»
 
 //»
+
 //Context Menu«
 const open_home_folder=()=>{open_file_by_path(globals.home_path);};
 const open_terminal = () => {
@@ -760,7 +786,6 @@ const DESK_CONTEXT_MENU=[
 ];
 
 //»
-
 //Desktop«
 
 const fit_desktop = ()=>{//«
@@ -1341,7 +1366,8 @@ await makeScript("/sys/init.js", {module: true});
 //»
 //«Workspaces
 
-const tile_windows=()=>{//«
+//JDURKJS
+const tile_windows = () => {//«
 /*«
 
 Tiling algorithm?
@@ -1406,9 +1432,9 @@ const intersects = (w1, w2) => {//«
 	}
 	return false;
 };//»
-const get_bottom = win =>{//«
 
-//!(X.left > CW.right) && !(X.right < CW.left)		(1)
+const get_nearest_bottom = win =>{//«
+
 let r1 = win.winElem.getBoundingClientRect();
 let cr = r1.right;
 let cl = r1.left;
@@ -1418,6 +1444,7 @@ let all=[];
 for (let w of arr){//«
 	if (win===w) continue;
 	let r2 = w.winElem.getBoundingClientRect();
+//!(X.left > CW.right) && !(X.right < CW.left)		(1)
 	if (!(r2.left > cr) && !(r2.right < cl)) {
 //For all of these windows, we need to find whichever has the largest bottom value that is
 //less than our top value (with the smallest positive delta, CW.top - X.bottom).
@@ -1425,7 +1452,6 @@ for (let w of arr){//«
 		if (diff > 0) all.push({win: w, diff});
 	}
 }//»
-log("ALL",all);
 if (!all.length) return;
 if (all.length===1) return all[0].win;
 all.sort((a, b)=>{
@@ -1435,12 +1461,103 @@ all.sort((a, b)=>{
 });
 return all[0].win;
 
-}/*»*/
+}//»
+const get_nearest_top = win =>{//«
+
+let r1 = win.winElem.getBoundingClientRect();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.winElem.getBoundingClientRect();
+//!(X.left > CW.right) && !(X.right < CW.left)		(1)
+	if (!(r2.left > cr) && !(r2.right < cl)) {
+//For all of these windows, we need to find whichever has the least top value that is
+//greater than our bottom value (with the smallest positive delta, X.top - CW.bottom).
+		let diff = r2.top - cb;
+		if (diff > 0) all.push({win: w, diff});
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+
+const get_nearest_right = win =>{//«
+
+let r1 = win.winElem.getBoundingClientRect();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.winElem.getBoundingClientRect();
+//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
+	if (!(r2.bottom < ct) && !(r2.top > cb)) {
+//For all of these windows, we need to find whichever has the largest right value that is
+//less than our left value (with the smallest positive delta, CW.left - X.right).
+		let diff = cl - r2.right;
+		if (diff > 0) all.push({win: w, diff});
+
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+const get_nearest_left = win =>{//«
+
+let r1 = win.winElem.getBoundingClientRect();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.winElem.getBoundingClientRect();
+//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
+	if (!(r2.bottom < ct) && !(r2.top > cb)) {
+//For all of these windows, we need to find whichever has the least left value that is
+//greater than our right value (with the smallest positive delta, X.left - CW.right).
+		let diff = r2.left - cr;
+		if (diff > 0) all.push({win: w, diff});
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+
 let wins = workspace.windows;
 let got=[];
 for (let w of wins){
 	if (w.isMinimized) continue;
 	if (!w.checkProp("Resize")) return;
+	w.tiledEdges = {};
 	got.push(w);
 }
 if (!got.length) return;
@@ -1448,7 +1565,11 @@ if (got.length===1){
 	if (!got[0].isFullscreen) got[0].fullscreen();
 	return;
 }
+
 let arr = got;
+for (let win of arr){
+	if (!win.noChromeMode) win.toggleChrome();
+}
 for (let j = 0; j < arr.length; j++) {//«
 	let w1 = arr[j];
 	for (let i = j + 1; i < arr.length; i++) {
@@ -1459,19 +1580,91 @@ for (let j = 0; j < arr.length; j++) {//«
 		}
 	}
 }//»
+//Tile all the tops
+for (let j = 0; j < arr.length; j++) {//«
+	let w1 = arr[j];
+	if (w1.y === 0 || w1.tiledEdges.top) {
+		continue;
+	}
+	let w2 = get_nearest_bottom(w1);
+	if (!w2){
+		w1.y = 0;
+	}
+	else if (w2.tiledEdges.bottom){
+		w1.y = w2.b;
+	}
+	else{
+		let mid = (w1.y+w2.b)/2;
+		w1.y = mid;
+		w2.b = mid;
+		w2.tiledEdges.bottom = true;
+	}
+	w1.tiledEdges.top = true;
+}//»
+//Tile all the bottoms
+for (let j = 0; j < arr.length; j++) {//«
+	let w1 = arr[j];
+	if ((Math.abs(w1.b-hgt) < 1)  || w1.tiledEdges.bottom) continue;
+	let w2 = get_nearest_top(w1);
+	if (!w2){
+		w1.b = hgt;
+	}
+	else if (w2.tiledEdges.top){
+		w1.b = w2.y;
+	}
+	else{
+		let mid = (w1.b+w2.t)/2;
+		w1.b = mid;
+		w2.y = mid;
+		w2.tiledEdges.top= true;
+	}
+	w1.tiledEdges.bottom= true;
+}//»
+//Tile all the lefts
+for (let j = 0; j < arr.length; j++) {//«
+	let w1 = arr[j];
+	if (w1.x === 0 || w1.tiledEdges.left) {
+		continue;
+	}
+	let w2 = get_nearest_right(w1);
+	if (!w2){
+		w1.l = 0;
+	}
+	else if (w2.tiledEdges.right){
+		w1.l = w2.r;
+	}
+	else{
+		let mid = (w1.x+w2.r)/2;
+		w1.l = mid;
+		w2.r = mid;
+		w2.tiledEdges.right = true;
+	}
+	w1.tiledEdges.left = true;
+}//»
+//Tile all the rights
+for (let j = 0; j < arr.length; j++) {//«
+	let w1 = arr[j];
+	if ((Math.abs(w1.r-wid) < 1)  || w1.tiledEdges.right) continue;
 
-//log("CHECKING FOR BOTTOMS", arr[0].winElem);
-let usewin = arr[0];
-let gotbot = get_bottom(usewin);
-if (!gotbot){
-cwarn("BRING THIS TOP TO 0");
-log(usewin.winElem);
-}
-else{
-cwarn("BRING THIS TOP");
-log(usewin.winElem);
-log("TO THE BOTTOM OF");
-log(gotbot.winElem);
+	let w2 = get_nearest_left(w1);
+	if (!w2){
+		w1.r = wid;
+	}
+	else if (w2.tiledEdges.left){
+		w1.r = w2.x;
+	}
+	else{
+		let mid = (w1.r+w2.x)/2;
+		w1.r = mid;
+		w2.x = mid;
+		w2.tiledEdges.left = true;
+	}
+	w1.tiledEdges.right = true;
+}//»
+
+//set to chromeMode
+for (let win of arr){
+	win.app.onresize();
 }
 
 };//»
@@ -1491,81 +1684,80 @@ constructor(num){//«
 
 }//»
 keyDown(e,kstr,mod_str){//«
-		if (kstr==="l_CA"){
-			toggle_layout_mode();
-			return;
-		}
-		if (kstr==="t_CAS"){
-//			toggle_layout_mode();
-			tile_windows();
-			return;
-		}
-		if (!CWIN) return;
-		let is_full=CWIN.isFullscreen;
-		let is_max=CWIN.isMaxed;
-		let cobj = CWIN.app;
-		if (!cobj) return;
-		if (!(cobj.overrides && cobj.overrides[kstr])){//«
+	if (kstr==="l_CA"){
+		toggle_layout_mode();
+		return;
+	}
+	if (kstr==="t_CAS"){
+		tile_windows();
+		return;
+	}
+	if (!CWIN) return;
+	let is_full=CWIN.isFullscreen;
+	let is_max=CWIN.isMaxed;
+	let cobj = CWIN.app;
+	if (!cobj) return;
+	if (!(cobj.overrides && cobj.overrides[kstr])){//«
 //Unless your app explicitly overrides them, the system intercepts the <arrow>_S
 //and <arrow>_CS hotkeys for basic window moving and resizing (of non
 //maxed/fullscreened wins).
-			if (kstr==="f_A"){//«
-				e.preventDefault();
-				if (!CWIN.checkProp("Resize")) return;
-				CWIN.fullscreen();
-				return;
-			}//»
-			if (kstr==="m_A"){//«
-				e.preventDefault();
-				if (!CWIN.checkProp("Resize")) return;
-				CWIN.maximize();
-				return;
-			}//»
-			if (kstr==="n_A"){//«
-				e.preventDefault();
-				if (!CWIN.checkProp("Minimize")) return;
-				CWIN.minimize();
-				return;
-			}//»
-			if (kstr==="x_A"){//«
-				e.preventDefault();
-				if (!CWIN.checkProp("Close")) return;
-				if (check_cwin_owned()) return;
-				CWIN.close();
-//				CWIN.minimize();
-				return;
-			}//»
-			if (kstr==="r_A") {//«
-				if (!globals.dev_mode) {
-cwarn(`win_reload: "dev mode" is not enabled!`);
-					return;
-				}
-				if (!CWIN) return;
-				if (check_cwin_owned()) return;
-//				CWIN.reload();
-				win_reload();
-				return;
-			}//»
-			if (kstr=="c_A"&&cwin.appName!==FOLDER_APP) return cwin.contextMenuOn();
-			if (!(is_full||is_max)) {//«
-				if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
-					if (is_max) return;
-					if (!CWIN.checkProp("Move")) return;
-					return move_window(kstr[0]);
-				}
-				const OK_RESIZE_KEYS=[ "RIGHT_CS","LEFT_CS","DOWN_CS","UP_CS" ];
-				if (OK_RESIZE_KEYS.includes(kstr)) {
-					if (!CWIN.checkProp("Resize")) return;
-					if (kstr=="RIGHT_CS") resize_window("R");
-					else if (kstr=="LEFT_CS") resize_window("R", true);
-					else if (kstr=="DOWN_CS") resize_window("D");
-					else if (kstr=="UP_CS") resize_window("D", true);
-					return;
-				}
-			}//»
+		if (kstr==="f_A"){//«
+			e.preventDefault();
+			if (!CWIN.checkProp("Resize")) return;
+			CWIN.fullscreen();
+			return;
 		}//»
-		if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
-		if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
+		if (kstr==="m_A"){//«
+			e.preventDefault();
+			if (!CWIN.checkProp("Resize")) return;
+			CWIN.maximize();
+			return;
+		}//»
+		if (kstr==="n_A"){//«
+			e.preventDefault();
+			if (!CWIN.checkProp("Minimize")) return;
+			CWIN.minimize();
+			return;
+		}//»
+		if (kstr==="x_A"){//«
+			e.preventDefault();
+			if (!CWIN.checkProp("Close")) return;
+			if (check_cwin_owned()) return;
+			CWIN.close();
+//				CWIN.minimize();
+			return;
+		}//»
+		if (kstr==="r_A") {//«
+			if (!globals.dev_mode) {
+cwarn(`win_reload: "dev mode" is not enabled!`);
+				return;
+			}
+			if (!CWIN) return;
+			if (check_cwin_owned()) return;
+//				CWIN.reload();
+			win_reload();
+			return;
+		}//»
+		if (kstr=="c_A"&&CWIN.appName!==FOLDER_APP) return CWIN.contextMenuOn();
+		if (!(is_full||is_max)) {//«
+			if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
+				if (is_max) return;
+				if (!CWIN.checkProp("Move")) return;
+				return move_window(kstr[0]);
+			}
+			const OK_RESIZE_KEYS=[ "RIGHT_CS","LEFT_CS","DOWN_CS","UP_CS" ];
+			if (OK_RESIZE_KEYS.includes(kstr)) {
+				if (!CWIN.checkProp("Resize")) return;
+				if (kstr=="RIGHT_CS") resize_window("R");
+				else if (kstr=="LEFT_CS") resize_window("R", true);
+				else if (kstr=="DOWN_CS") resize_window("D");
+				else if (kstr=="UP_CS") resize_window("D", true);
+				return;
+			}
+		}//»
+	}//»
+	if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
+	if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
 }//»
 keyUp(e){//«
 	if (!CWIN) return;
@@ -1575,6 +1767,28 @@ keyPress(e){//«
 	if (!CWIN) return;
 	let code = e.charCode;
 	if (code >= 32 && code <= 126 && CWIN.app.onkeypress) CWIN.app.onkeypress(e);
+}//»
+on(){//«
+	if (this.tilingMode) tiling_underlay.on();
+	windows = this.windows;
+	for (let w of windows){
+		if (!w.isMinimized) w.winElem._dis="block";
+		else w.taskbarButton._dis="flex";
+	}
+	top_win_on();
+}//»
+off(){//«
+	for (let w of windows){
+		if (!w.isMinimized) w.winElem._dis="none";//was block
+		else {
+			w.taskbarButton._dis="none";//was flex
+		}
+	}
+	if (workspace.tilingMode) tiling_underlay.off();
+	if (CWIN) CWIN.off();
+	if (ICONS.length && ICONS[0].parWin !==desk){
+		icon_array_off();
+	}
 }//»
 
 }//»
@@ -1594,6 +1808,17 @@ if (!if_force && num == current_workspace_num){
 	return;
 }
 
+workspace.off();
+current_workspace_num = num;
+
+workspace = workspaces[current_workspace_num];
+workspace.on();
+
+show_overlay(`Current workspace: ${current_workspace_num+1}`);
+set_workspace_num(current_workspace_num);
+taskbar.renderSwitcher();
+
+/*«
 for (let w of windows){
 	if (!w.isMinimized) w.winElem._dis="none";//was block
 	else {
@@ -1619,407 +1844,2475 @@ show_overlay(`Current workspace: ${current_workspace_num+1}`);
 set_workspace_num(current_workspace_num);
 taskbar.renderSwitcher();
 top_win_on();
-
+*»*/
 };
 api.switchToWorkspace = switch_to_workspace;
 //»
 
 //»
-//Taskbar«
+//Windows«
 
-const Taskbar = function(){
+class Window {//«
 
-//DOM«
+constructor(arg){//«
 
-let bar = mkdv();//«
-this.taskbarElem=bar;
-bar.style.justifyContent="space-between";
-bar.style.userSelect="none";
-bar.onmousedown=noprop;
-bar._padt=3;
-bar._padb=1;
-bar._h=TASKBAR_HGT;
-if (qObj.nobar) bar._dis="none";
-else bar._dis="flex";
-bar._pos="fixed";
-bar._b=0;
-bar._x="-0.5px";
-bar._w="100%";
-bar._op=0;
-bar._z=MIN_WIN_Z-1;
-bar._bgcol=TASKBAR_BG_COL;
-bar._bor=TASKBAR_BOR;
-bar.id="taskbar";
-bar._tcol="#999";
-//»
-let mwb = mkdv();//«
-mwb._marr=mwb._marl=3;
-mwb._dis="flex";
-//»
-let st = start_button;//«
-//st._padt=st._padb=3;
-st._padr=st._padl=5;
-//st._bgcol="#222";
+	this.allowClose = true;
+	this.allowMove = true;
+	this.allowResize = true;
+	this.allowMinimize = true;
+	this.allowNone = false;
 
-st._ff="arial";
-st._dis="flex";
-st.style.alignItems="center";
-st.style.justifyContent="center";
-st._fs=16;
-st.innerText="Begin";
-st._bor = TASKBAR_BOR;
+	let winargs = arg.WINARGS||{};
+	this.winArgs = winargs;
+	let app = arg.appName;
+	this.appName = arg.appName;
+	let is_folder = app === FOLDER_APP;
+	this.isFolder = is_folder;
+	this.winNum = ++win_num;
 
-//»
+	this.winId = winargs.ID || "win_"+this.winNum;
+	this.id=this.winId;
 
-let wn = workspace_num_div;//«
-let ws = workspace_switcher_div;
-wn.style.cursor="pointer";
-wn._marr = wn._marl = 3;
-wn._dis="flex";
-wn.style.justifyContent="center";
-wn.style.alignItems = "center";
-wn._fs = 18;
-wn._bor=TASKBAR_BOR;
-wn.style.cssFloat="right";
-wn._ta="center";
-wn._w=TASKBAR_HGT;
-wn.onclick=(e)=>{
-	e.stopPropagation();
-	this.toggleSwitcher();
-};
-set_workspace_num(current_workspace_num);
-//»
+	this.Desk = Desk;
+	this.workspaceNum = current_workspace_num;
 
-let wsbs = WORKSPACE_SWITCHER_BOX_SZ;//«
-ws._bgcol="#fff";
-ws._pos="absolute";
-ws._dis="none";
-ws.style.gridTemplateRows=`${wsbs}px ${wsbs}px ${wsbs}px`;
-ws.style.gridTemplateColumns=`${wsbs}px ${wsbs}px ${wsbs}px`;
-ws._r=0;
-ws._b=TASKBAR_HGT+7;
-ws._z=CG_Z-1;
-//»
+	this.app = {onresize:NOOP};
+	this.appName = app;
+	this.type = "window";
+	if (arg.APPARGS) this.noSave = true;
+	else this.noSave = null;
+	this.ownedBy = undefined;
 
 
-//»
+	this.makeDOMElem(arg);
+	this.addDOMListeners();
+
+	arg.topWin = this;
+	if (arg.SAVER) {
+//		this.bottomPad = botpad;
+		this.bottomPad = winargs.BOTTOMPAD;
+		this.saver = arg.SAVER;
+		arg.SAVER.folderCb(this);
+	}
+	windows.push(this);
+	this.arg = arg;
+
+	if (winargs.isMaxed){
+//		max.innerText="\u{1f5d7}";
+		this.maxButton.innerText="\u{1f5d7}";
+		this.isMaxed = true;
+		let dims = winargs.holdDims;
+		this.maxHoldX=dims.X;
+		this.maxHoldY=dims.Y;
+		this.maxHoldW=dims.W;
+		this.maxHoldH=dims.H;
+	}
+	if (winargs.isFullscreen){
+		this.isFullscreen = true;
+		let dims = winargs.holdDims;
+		this.fsHoldX=dims.X;
+		this.fsHoldY=dims.Y;
+		this.fsHoldW=dims.W;
+		this.fsHoldH=dims.H;
+	}
+}//»
 
 //Methods«
 
-this.hide=(if_temp)=>{//«
-	bar._z = CG_Z-1;
-	bar._b = -bar._gbcr().height;
-	if (if_temp) return;
-	taskbar_hidden=true;
-	if (!globals.read_only) localStorage[lst_hidden]="true";
-};//»
-this.show=(if_temp)=>{//«
-	bar._b=0;
-	if (if_temp) {
-		bar._z=CG_Z+2;
+checkProp(which){//«
+	let workspace = workspaces[this.workspaceNum];
+	if (workspace.allowNone){
+		show_overlay(`Workspace[${this.workspaceNum+1}].allowNone == true`);
+		return false;
+	}
+	if (this.allowNone){
+		show_overlay(`Window[${this.winNum}].allowNone == true`);
 		return;
 	}
-	bar._z=MIN_WIN_Z-1;
-	taskbar_hidden=false;
-	if (!globals.read_only){
-		delete localStorage[lst_hidden];
+	let prop = "allow"+which;
+	if (!workspace[prop]){
+		show_overlay(`Workspace[${this.workspaceNum+1}].${prop} == false`);
+		return false;
 	}
-};//»
-this.toggle_expert_mode = ()=>{//«
-	if (!globals.dev_mode) return;
-	if (taskbar_expert_mode){
-		taskbar_expert_mode = false;
-		delete localStorage[lst_expert];
-		st._dis="flex";
-		wn._dis="flex";
-	}
-	else{
-		taskbar_expert_mode = true;
-		localStorage[lst_expert]="true";
-		st._dis="none";
-		wn._dis="none";
-	}
-	show_overlay(`Expert mode is ${taskbar_expert_mode?"on":"off"}`);
+	if (this[prop]) return true;
+	show_overlay(`Window[${this.winNum}].${prop} == false`);
+	return false;
 }//»
-this.addwin=(w)=>{//«
-	const dounmin=(if_instant)=>{//«
-		w.winElem._dis="";
-		let rect = d._gbcr();
-		d._del();
-		const done=()=>{//«
-			delete w.isMinimized;
-			delete w.taskbarButton;
-			w.winElem._op=1;
-			num_minimized_wins--;
-			delete w.unminimize;
-			if (w===CWIN) CWIN=null;
-			w.checkLoc();
-			w.checkSize();
-			w.on();
-		}//»
-		if (if_instant) return done();
-		w.winElem._op=0;
-		let t = mkdv();
-		t._pos="fixed";
-		t._w=rect.width;
-		t._h=rect.height;
-		t._loc(rect.left,rect.top);
-		t._bor="1px solid #ccc";
-		t._z=CG_Z-1;
-		desk._add(t);
-		rect = w.winElem._gbcr();
-		t.style.transition = `transform ${WIN_TRANS_SECS} ease 0s, left ${WIN_TRANS_SECS} ease 0s, top ${WIN_TRANS_SECS} ease 0s, width ${WIN_TRANS_SECS} ease 0s`;
-		requestAnimationFrame(()=>{
-			t.ontransitionend=()=>{
-				w.winElem._op=1;
-				t._del();
-				done();
-			};
-			t._loc(rect.left, rect.top);
-			t._w=rect.width;
-			t._h=rect.height;
-		});
-	};//»
-	let max_wid = "300px";
+makeDOMElem(arg){//«
 
-	let rect = w.winElem._gbcr();
-	let t = mkdv();
-	t._pos="fixed";
-	t._w=rect.width;
-	t._h=rect.height;
-	t._loc(rect.left,rect.top);
-	t._bor="1px solid #ccc";
-	t._z=CG_Z-1;
-	t.style.transition = `transform ${WIN_TRANS_SECS} ease 0s, left ${WIN_TRANS_SECS} ease 0s, top ${WIN_TRANS_SECS} ease 0s, width ${WIN_TRANS_SECS} ease 0s`;
-	requestAnimationFrame(()=>{
-		let c = mwb.lastChild;
-		let x = c._gbcr().left;
-		let wid = c._gbcr().width;
-		t.ontransitionend=()=>{
-			d._op=1;
-			t._del();
+	let marr;
+	let {winId: winid, winArgs: winargs, appName: app} = this;
+	let wintitle;
+//	let winargs = this.winArgs;
+
+	if (arg.name) wintitle = arg.name;
+	else if (winargs.TITLE) wintitle = winargs.TITLE;
+	else wintitle = "Untitled";
+
+	let usex, usey, usew, useh;
+	let defwinargs = get_newwin_obj();
+	if (isFin(winargs.X)) usex = winargs.X;
+	else usex = defwinargs.X;
+
+	if (isFin(winargs.Y)) usey = winargs.Y;
+	else usey = defwinargs.Y;
+
+	if (isFin(winargs.WID)) usew = winargs.WID;
+	else if (winargs.WID === "100%") usew = winw();
+	else usew = defwinargs.WID;
+
+	let botpad = winargs.BOTTOMPAD;
+	if (isFin(winargs.HGT)) useh = winargs.HGT;
+	else if (winargs.HGT === "100%") useh = winh();
+	else {
+		useh = defwinargs.HGT;
+		if (botpad) useh -= botpad;
+	}
+	let win = make("div");//The top level window«
+	win.id = winid;
+	no_select(win);
+
+//I guess this is here so the app name shows up in the Elements view of devtools
+	win.dataset.app = app;
+	win._pos= "fixed";
+	win._bor= "1px solid #333";
+	win._x=usex;
+	win._y=usey;
+	win._z=HI_WIN_Z+1;
+	win.className="topwin";
+	win.style.boxShadow = window_boxshadow;
+	win._winObj = this;
+
+//»
+	let main = make("div");//The application area«
+	no_select(main);
+	main.top = this;
+	main.id = "main_"+winid;
+	main._w=usew;
+	main._h=useh;
+	main._bgcol= APP_BG_COL;
+	main._tcol= APP_TEXT_COL;
+	main._bor= "0px solid transparent";
+	main._pos= "relative";
+	main.className="mainwin";
+	main.type = "window";
+//»
+	let titlebar = make('div');//«
+	titlebar.id="titlebar_"+winid;
+	titlebar._h = 18;
+	no_select(titlebar);
+	titlebar.className = "titlebar";
+	titlebar.win = win;
+	main.titleBar = titlebar;
+	main.appName = app;
+	let title = make("div");
+	title.id="title_"+winid;
+	title._padt=1.25;
+	title._ta= "center";
+	title._pos= "relative";
+	title._tcol= "black";
+	title._ff= "sans-serif";
+	titlebar._add(title);
+
+	let namespan = make('span');
+	namespan._dis="block";
+	namespan.id="namespan_"+winid;
+	namespan._fs= 12;
+	namespan.title = winid;
+	titlebar.label = namespan;
+	title._add(namespan);
+	main._over="hidden";
+
+	let img_div = make('div');
+	img_div._pos= "absolute";
+	img_div._bor= "0px solid transparent";
+	img_div._x= 0;
+	img_div._y= 0;
+	img_div._padb= 3;
+	img_div.style.cursor = "default";
+
+	img_div.draggable=true;
+	img_div.ondragstart=nopropdef;
+
+	img_div.onclick = ()=>{this.contextMenuOn()};
+	title._add(img_div);
+	img_div.innerText = getAppIcon(app?app.split(".").pop():DEF_BIN_APP);
+	img_div.id="titleimgdiv_"+winid;
+	img_div._fs=12;
+	img_div._tcol="#a7a7a7";
+	img_div.title = app.split(".").pop();
+//»
+//«Min/Max/Close buttons
+
+	const mkbut = (sz) => {//«
+//	const mkbut = (col, sz) => {
+		let b = make('div');
+		b._over= "hidden";
+		b._padl=b._padr=2;
+		b._ta= "center";
+		b._fs= sz;
+		b._w= 16;
+		b._h = 16;
+		b._bor="1px solid #000";
+		b._bgcol= WINBUT_OFF_COL;
+		b.onmousedown=e=>{e.stopPropagation();};
+		b.hover = () => {
+			b._bgcol=WINBUT_ON_COL;
 		};
-		t._loc(x, winh());
-		t._w=wid;
-	});
-
-	desk._add(t);
-
-	w.winElem._dis="none";
-	w.isMinimized=true;
-	w.winElem._op = MIN_WIN_OP;
-	num_minimized_wins++;
-	w.winElem._z= MIN_WIN_Z;
-	let d = mkdv();
-	d.style.flexShrink=1;
-	d._op=0;
-	d.style.flexBasis=max_wid;
-	d._padt=d._padb=1;
-	d._padl=d._padr=5;
-	d._marr=d._marl=1.5
-	d.style.maxWidth=max_wid;
-	d._fs=15;
-	d._dis="flex";
-	d.style.alignItems="center";
-	d._pos="relative";
-	d._tcol="#999";
-	d._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
-	d._over="hidden";
-	let imdiv = w.imgDiv.cloneNode(true);
-	imdiv._marr=5;
-	imdiv._pos="";
-	imdiv._padb="";
-	imdiv._padt=1.5;
-	d._add(imdiv);
-	let titstr = w.title;
-	let tit = mkdv();
-	tit._w="100%";
-	tit.innerText=titstr;
-	w.mintitle = tit;
-	d._add(tit);
-	let fdv = mkdv();
-	fdv._pos="absolute";
-	fdv._loc(0,0);
-	fdv._w="100%";
-	fdv._h="100%";
-	fdv.style.backgroundImage=MIN_WIN_LIN_GRAD;
-	d._add(fdv);
-	d.onmousedown=(e)=>{
-		if (e&&e.button!==0) return;
-		d.is_active = true;
-		d._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
-	};
-	d.onmouseup=()=>{
-		d.is_active = false;
-		d._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
-	};
-	d.onmouseout=()=>{
-		d.is_active = false;
-		d._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
-	};
-
-	d.oncontextmenu=nopropdef;
-	d.onclick=()=>{dounmin()};
-	w.unminimize=(if_instant)=>{
-		if (if_instant) return dounmin(true);
-		d._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
-		setTimeout(() => {
-			dounmin();
-			d._bor = `${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
-		}, 200);
-	};
-	w.taskbarButton=d;
-	mwb._add(d);
-	if (w===CWIN) {
-		CWIN=null;
+		b.unhover = () => {
+			b._bgcol=WINBUT_OFF_COL;
+		};
+		b.top = win;
+		butdiv._add(b);
+		return b;
+	};//»
+	const doclose = (force, if_dev_reload)=>{//«
+//	const doclose = function(evt, thisarg, force, if_dev_reload) {
+		if (!this.checkProp("Close")) return;
+		if (this.isMinimized||this.isTiled) return;
+		if (!force && (this != CWIN)) return;
+		if (this.no_events) return;
+		if (this.nobuttons && !force) return;
+		if (this.app.onkill) this.app.onkill(if_dev_reload, force);
+		OUTERLOOP2: for (let wspace of workspaces) {
+			let wins = wspace.windows;
+			for (let i = 0; i < wins.length; i++) {
+				if (wins[i] == this) {
+					wins.splice(i, 1);
+					break OUTERLOOP2;
+				}
+			}
+		}
+		if (this.isFolder) icon_array_off(3);
+		this.killed = true;
+		this.app.killed = true;
+		win._del();
+		let icn = this.icon;
+		let node = this.node;
+		if (icn) {
+			if (!node) node = icn.node;
+			icn.win = null;
+		}
+		if (node && node.unlockFile) node.unlockFile();
+		if (this.bindNum){
+			delete globals.boundWins[this.bindNum];
+			show_overlay(`${this.bindNum}: the key has been unbound`);
+		}
 		top_win_on();
+	};//»
+	const onhover=function(){//«
+		if (CDL) return;
+		butdiv._op= 1;
+		this.hover();
+	};//»
+	const onunhover=function(){//«
+		if (CDL) return;
+		if (this !== CWIN) butdiv._op=0.5;
+		else butdiv._op= 0.75;
+		this.unhover();
+	};//»
+
+	let butdiv = make('div');//«
+	butdiv.style.cursor = "default";
+	butdiv.off = () => {
+		butdiv._op= 0.5;
+	};
+	butdiv.on = () => {
+		butdiv._op= 0.75;
+	};
+	butdiv._pos= "absolute";
+	butdiv._r= 3;
+	butdiv._y= 0;
+	butdiv._dis= "flex";
+	butdiv.style.flexDirection = "row-reverse";
+	butdiv._h = 16;
+	butdiv._z=1000000;
+	butdiv._tcol= "#000";
+	butdiv.win = this;
+//»
+	let close = mkbut("15px");//«
+	close.id="closebut_"+winid;
+	close.innerHTML="<b>X</b>";
+	close.title="Close";
+	close.style.lineHeight = "110%";
+	butdiv.close = close;
+	titlebar.close = close;
+	this.easyKill=()=>{
+//		doclose(null, close);
+		doclose();
 	}
-};//»
-this.resize=()=>{mwb._w=winw()};
-this.renderSwitcher=()=>{//«
-	ws.innerHTML="";
-	for (let i=0; i < num_workspaces; i++){
-		let d = mkdv();
-		if (i===current_workspace_num){
-			d._fw="bold";
-			d.title=`Active workspace: ${i+1}`;
-			d._bgcol="#fff";
-			d._bor="1px solid #aaa";
-		}
-		else{
-			d._bor="1px dotted #aaa";
-			d._tcol="#333";
-			d._bgcol="#eee";
-			d.title=`Switch to workspace: ${i+1}`;
-			d.onclick=(e)=>{
-				e.stopPropagation();
-				if (switcher_off_timeout) clearTimeout(switcher_off_timeout);
-				switch_to_workspace(i);
-				switcher_off_timeout = setTimeout(()=>{
-					this.switcherOff();
-					switcher_off_timeout = null;
-				}, SWITCHER_OFF_DELAY_MS);
-			};
-		}
-		d._dis="flex";
-		d.style.alignItems="center";
-		d.style.justifyContent="center";
-		d.innerHTML=`${i+1}`;
-		d.style.cursor="pointer";
-		ws._add(d);
+	this.forceKill = if_dev_reload => {
+		if (this.isMinimized) this.unminimize(true);
+//		doclose(null, close, true, if_dev_reload);
+		doclose(true, if_dev_reload);
+	};
+	close.onclick=()=>{
+		if (check_cwin_owned()) return;
+//		if (this._savecb) this._savecb();
+		this.forceKill();
 	}
-};//»
-this.switcherOn=()=>{
-	ws._dis="grid";
-};
-this.switcherOff=()=>{
-	ws._dis="none";
-};
-this.switcherIsOn=()=>{
-	return ws._dis==="grid";
-};
-this.toggleSwitcher=()=>{
-	if (this.switcherIsOn()) this.switcherOff();
-	else this.switcherOn();
-};
+	this.keyKill = () => {
+		if (this.app && this.app.is_editing) {
+			if (this.app.try_kill) this.app.try_kill();
+			else cwarn("Dropping close signal");
+		} 
+		else {
+//			doclose(null, close, true);
+			doclose(true);
+		}
+	};
+//»
+	let max = mkbut("14px");//«
+	max.id="maxbut_"+winid;
+	max.style.lineHeight = "16px";
+	max.reset=()=>{
+		max.innerText="\u{1f5d6}";
+		max.title="Maximize";
+		win.style.boxShadow = window_boxshadow;
+	};
+	max.onclick = () => {
+		if (!this.checkProp("Resize")) return;
+		close.unhover();
+		max.unhover();
+		min.unhover();
+		this.maximize();
+	};
+	max.reset();
+//»
+	let min = mkbut("14px");//«
+	min.id="minbut_"+winid;
+	min.innerText="\u{2b07}"; //Solid down arrow
+	min.style.lineHeight="135%";
+	min.title="Minimize";
+	min.onclick=()=>{
+		if (!this.checkProp("Minimize")) return;
+		if (this.isFullscreen) {
+			if (this!==CWIN) {
+cwarn("this!==CWIN ????");
+				return;
+			}
+			this.fullscreen(true);
+		}
+		if (this.isMinimized||this.isTiled) return;
+		if (ICONS.length && ICONS[0].parWin==this) icon_array_off();
+		taskbar.addwin(this);
+	};
+//»
+//Button event listeners«
+	close.draggable=max.draggable=min.draggable=true;
+	close.ondragstart=max.ondragstart=min.ondragstart=(e)=>nopropdef;
+	close.onmousedown=max.onmousedown=min.onmousedown=(e)=>{
+		icon_array_off();
+	}
+	close.onmouseenter=onhover;
+	close.onmouseleave=onunhover;
+	max.onmouseenter=onhover;
+	max.onmouseleave=onunhover;
+	min.onmouseenter=onhover;
+	min.onmouseleave=onunhover;
+//»
+	title._add(butdiv);
+//»
+	let footer = make('div');//«
+	let footer_wrap=make('div');
+	footer_wrap._pos="relative";
+//«
+//The BOTTOMPAD property is ultimately given to us via a WINARG argument, so
+//that, for example, from Desk.api.saveAs (@DWEUNFKL), a folder window can be
+//opened up that has a Main window with a smaller height than normal (shrunken by
+//the amount of SAVEAS_BOTTOM_HGT), so that buttons (like Save and Cancel) can be
+//put on the bottom. The point is that this bottom area is considered to be part
+//of the system's "window chrome" (like the titlebar), and the application
+//doesn't have to worry about changing anything about the logic of it's own
+//layout.
+//»
+	let bottom_div = make('div');
+	if (botpad){
+		bottom_div._bgcol="#373747";
+		bottom_div._tcol="#ddd";
+		bottom_div.style.borderTop="1px solid #556";
+		bottom_div.style.borderBottom="1px solid #556";
+		bottom_div._h=botpad-2;
+		footer_wrap._add(bottom_div);
+	}
+	footer._dis="flex";
+	footer.style.justifyContent="space-between";
+	footer._h=18;
+	let statdiv=make('div');
+	statdiv.id="stat_"+winid;
+	statdiv.onmousedown=e=>{
+		e.stopPropagation();
+		icon_array_off();
+	};
+	statdiv.onclick=noprop;
+	statdiv.oncontextmenu=noprop;
+	statdiv._tcol="#ddd";
+	statdiv._fs=14;
+	statdiv._padl=15;
+	statdiv._padt=1;
+	statdiv._over="hidden";
+	let rsdiv = make('div');
+	rsdiv.id="rsdiv_"+winid;
+	rsdiv.win = this;
+	rsdiv.style.flex="0 0 15px";
+	rsdiv._bgcol="#778";
+	rsdiv._bor="2px inset #99a";
+	rsdiv.onmouseover=e=>{
+		if (CDL) rsdiv.style.cursor = "";
+		else rsdiv.style.cursor = "nwse-resize";
+	};
+	rsdiv.draggable=true;
+	rsdiv.ondragstart=e=>{
+		e.preventDefault();
+		if (!this.checkProp("Resize")) return;
+		if (this.isMaxed) {
+			max.reset();
+			this.isMaxed = false;
+		}
+		CRW = this;
+		if (CRW != CWIN) CRW.on();
+		desk.style.cursor = "nwse-resize";
+	};
+	statdiv.resize=()=>{statdiv.style.maxWidth = main._w - 20;};
+
+	footer._add(statdiv);
+	footer._add(rsdiv);
+	footer_wrap._add(footer);
+//FSKEUSHFK
+	let numdiv = mkdv();
+	numdiv.style.cssText=`
+position: absolute;
+color: #aaa;
+font-size: 12.5px;
+left: 1.5px;
+top: 2.75px;
+	`;
+	numdiv.innerHTML=`${this.winNum}`;
+	footer_wrap._add(numdiv);
 //»
 
-//Listeners«
-bar.onmousedown=e=>{
-	if (CWIN) {
-		CWIN.off();
+	win._add(titlebar);
+	win._add(main);
+	win._add(footer_wrap);
+	desk._add(win);
+
+	this.Main = main;
+	this.main = main;
+
+	this.imgDiv = img_div;
+	this.nameSpan = namespan;
+	this.bottomDiv = bottom_div;
+//log(this.bottomDiv);
+	this.statusBar = statdiv;
+	this.rsDiv = rsdiv;
+	this.footer=footer_wrap;
+	this.butDiv = butdiv;
+	this.closeButton = close;
+	this.maxButton = max;
+	this.minButton = min;
+	this.titleBar = titlebar;
+	this.titleDiv = title;
+	this.title = wintitle;
+	this.winElem = win;
+
+}//»
+addDOMListeners(){//«
+	let {winElem: win, main, titleDiv: title, titleBar: titlebar}=this;
+
+	if (this.isFolder) {//«
+		let didleave;
+		const clear_drag = () => {//«
+			WDIE = null;
+			let dd = this.dragDiv;
+			dd._loc(-1, -1);
+			dd._w = 0;
+			dd._h = 0;
+		};//»
+		const nogo=()=>{//«
+			if (!CDL) return;
+			CDL.nogo();
+			main.style.cursor = "not-allowed";
+		};//»
+		const on = () => {//«
+			if (!CDL) return;
+			main.style.cursor = "copy";
+			CDL.into(this.name);
+		};//»
+		const off = () => {//«
+			main.style.cursor = "";
+			if (CDL) CDL.reset();
+		};//»
+		main.onmousedown=e=>{//«
+			e.stopPropagation();
+			icon_array_off(20);
+			if (e.clientX < win.offsetLeft + main.clientWidth + winx() && e.clientY < win.offsetTop + main.clientHeight + this.titleBar._h + winy()) {
+				this.on();
+				WDIE = e;
+				WDIE.scrtop = main.scrollTop;
+				WDIE.scrleft = main.scrollLeft;
+				let gotw = main.scrollWidth - (e.clientX - win.offsetLeft + main.scrollLeft);
+				WDIE._maxWidth = gotw - 1 + winw();
+			}
+			if (CWIN == this) return;
+			CWIN&&CWIN.off();
+			this.on();
+		};//»
+		main.onmouseover=async e=>{//«
+			e.stopPropagation();
+			if (CDICN){
+				let thispath = this.fullpath;
+				if (CDICN.path === thispath) return nogo();
+				if (!await fsapi.checkDirPerm(thispath)||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
+				didleave = false;
+				if (!CDICN) return;
+				if (!didleave) on();
+			}
+		};//»
+		main.onmouseout=e=>{//«
+			e.stopPropagation();
+			off();
+			if (CDICN) {
+				didleave = true;
+			}
+		};//»
+		main.onmouseup=async e=>{//«
+			e.stopPropagation();
+			if (CDICN){
+				desk.style.cursor = "";
+				await move_icons(this.fullpath, {e, win: this});
+				off();
+				CWIN&&CWIN.off();
+				CDICN = null;
+				cldragimg();
+			}
+			else {
+				CRW = null;
+				CRWINS = null;
+				CDW = null;
+				clear_drag();
+			}
+		};//»
+		main.ondrop=e=>{//«
+			e.stopPropagation();
+			e.preventDefault();
+			save_dropped_files(e, this);
+		};//»
+		main.onmouseleave=e=>{clear_drag();};
+		main.ondragover=e=>{};
+		this.clearDrag = clear_drag;
+		win.onmouseover=noprop;
+		win.onmouseout=noprop;
+	}//»
+	else{//«
+		main.onmouseup=e=>{
+			CRW = null;
+			CRWINS = null;
+			CDW = null;
+		};
+		main.ondrop=e=>{
+cwarn("No drop on main window");
+		};
+		win.onmouseover=()=>{
+			if (!CDL) return;
+			CDL.nogo();
+			win.style.cursor = "not-allowed";
+			main.style.cursor = "not-allowed";
+		};
+		win.onmouseout=()=>{
+			if (!CDL) return;
+			CDL.reset();
+			win.style.cursor = "";
+			main.style.cursor = "";
+		};
+	}//»
+	title.ael('mouseover',()=>{body.style.cursor="default";});
+	titlebar.onmouseover=e=>{//«
+		if (CDL) titlebar.style.cursor = "";
+		else titlebar.style.cursor = "move";
+	};//»
+	titlebar.oncontextmenu = nopropdef;
+	titlebar.draggable=true;
+	titlebar.ondragstart=e=>{//«
+		e.preventDefault();
+//		if (this.isMaxed) this.max_button.reset();
+		if (!this.checkProp("Move")) return;
+		if (this.isMaxed) return;
+		win.style.boxShadow = "";
+		CDW = this;
+		DDX = e.clientX - pi(win.offsetLeft);
+		DDY = e.clientY - pi(win.offsetTop);
+	};//»
+	main.oncontextmenu = e => {//«
+		e.preventDefault();
+		e.stopPropagation();
+	};//»
+	win.ondrop = e => {//«
+		e.stopPropagation();
+		e.preventDefault();
+	};//»
+	win.onclick=noprop;
+	win.ondblclick=noprop;
+	win.onmousedown=e=>{//«
+		e.stopPropagation();
+		icon_array_off(21);
+		this.on();
+	};//»
+	win.ondrop = nopropdef;
+	win.ondragover = nopropdef;
+
+}//»
+contextMenuOn(e){//«
+	let {imgDiv: img_div, winElem: win, winId: winid} = this;
+
+	if (!this.app.get_context) return;
+	let items = this.app.get_context();
+	if (!items) items = [];
+	items.push("Switch\xa0to\xa0workspace");
+	let choices = [];
+	for (let i=0; i < num_workspaces; i++){
+		if (i!=current_workspace_num){
+			choices.push(`${i+1}`);
+			choices.push(()=>{
+				if (windows.layout_mode) toggle_layout_mode();
+				switch_win_to_workspace(this, i);
+				this.off();
+				win._dis="none";
+				top_win_on();
+			});
+		}
+	}
+	items.push(choices);
+	items.push(`Window ${winid.replace(/^win_/,"")} properties...`, ()=>{
+		let rect = win._gbcr();
+		let str = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
+		popup(str);
+	});
+//		items.push(`Window id: ${winid.replace(/^win_/,"")}`, null);
+	CG.on();
+	let op_hold = img_div._op;
+	let usex,usey;
+	if (e) {
+		usex = e.clientX;
+		usey = e.clientY;
+	}
+	else{
+		img_div._bgcol= "#fff";
+		img_div._tcol= "#000";
+		img_div._op=1;
+		let rect = win._gbcr();
+		usex = rect.left;
+		usey = rect.top+this.titleBar._h;
+	}
+	set_context_menu({X:usex,Y:usey},{items: items});
+	desk_menu.kill_cb = () => {
+		img_div._op=op_hold;
+		img_div._bgcol= "";
+		img_div._tcol="#a7a7a7";
+	};
+};//»
+setWinArgs(args){//«
+//	let args={BOTTOMPAD: w.bottompad, X: w.winElem._x, Y:w.winElem._y, WID: w.main._w, HGT: w.main._h};
+	let {main, winElem: win} = this;
+	args.BOTTOMPAD = this.bottompad;
+	args.X = win._x;
+	args.Y = win._y;
+	args.WID = main._w;
+	args.HGT = main._h;
+	if (this.isMaxed){
+		args.isMaxed = true;
+		args.holdDims={W: this.maxHoldW, H: this.maxHoldH, X: this.maxHoldY, Y: this.maxHoldY};
+	}
+	if (this.isFullscreen){
+		args.isFullscreen = true;
+		args.holdDims={W: this.fsHoldW, H: this.fsHoldH, X: this.fsHoldX, Y: this.fsHoldY, BOR: this.bor_hold};
+	}
+};//»
+	makeScrollable(){//«
+		let{main} = this;
+		main._overy="auto";
+		main.tabIndex="-1";
+		this.isScrollable = true;
+	};//»
+	up(){//«
+		if (this.isMinimized) this.unminimize(true);
+		this.winElem.style.zIndex = ++HI_WIN_Z;
+		if (this.overdiv) this.overdiv.style.zIndex = ++HI_WIN_Z;
+	};//»
+	on(opts={}){//«
+		if (!windows_showing) toggle_show_windows();
+		if (CPR) return;
+		if (CWIN) {
+			if (this === CWIN) return;
+			CWIN&&CWIN.off();
+		}
+		if (this.workspaceNum !== current_workspace_num) {
+			if (opts.switchToWorkspace){
+				switch_to_workspace(this.workspaceNum);
+				if (CWIN) CWIN.off();
+			}
+			else {
+				switch_win_to_workspace(this, current_workspace_num);
+				if (this.childWin){
+					switch_win_to_workspace(this.childWin, current_workspace_num);
+				}
+			}
+		}
+		if (this.isFolder && !this.isMinimized) {
+//VKUIOKL
+			if (CUR.curElem.parentNode === desk) {
+				let icn = CUR.geticon();
+				if (icn) icn.hideLabelName();
+				desk.lastcurpos = CUR.getpos();
+			}
+			this.main.focus();
+			CUR.iconDiv = this.main.iconDiv;
+			CUR.main = this.main;
+			this.main._add(CUR.curElem);
+			this.cursor = CUR;
+//			CUR.set(2);
+			CUR.on();
+		}
+		this.winElem._dis= "block";
+		if (this.winElem._z && this.winElem._z < 10000000) this.up();
+		
+		if (!this.noShadow) this.winElem.style.boxShadow = window_boxshadow;
+		document.activeElement.blur();
+		this.imgDiv._op= 0.75;
+		this.nameSpan._fw = "bold";
+		this.nameSpan._tcol= WINNAME_COL_ON;
+		this.winElem._bgcol= WIN_COL_ON;
+		if (this.butDiv) this.butDiv.on();
+		if (this.moveDiv) this.moveDiv.on();
+		let winobj = this.app;
+		if (winobj) {
+			if (winobj.onfocus&&!this.popup) {
+				winobj.onfocus();
+			}
+		}
+		else{
+cwarn(`window_on(): NO WINOBJ for this`, this);
+		}
+		if (this.isScrollable) this.main.focus();
+		if (this.isMinimized) this.taskbarButton.onmousedown();
+		if (this.childWin) this.childWin.on();
+		CWIN = this;
+	};
+	//»
+	off(){//«
+		if (this.isFolder) {
+			delete this.cursor;
+			this.cursor = null;
+		}
+		this.imgDiv._op= 0.5;
+		this.nameSpan._fw = "";
+		this.nameSpan._tcol= WINNAME_COL_OFF;
+		this.winElem._bgcol = WIN_COL_OFF;
+		if (this.butDiv) this.butDiv.off();
+		if (this.moveDiv) this.moveDiv.off();
+		if (this.area) {
+			this.area.selectionEnd = this.area.selectionStart;
+			this.area.blur();
+		}
+		this.winElem.style.boxShadow = "";
+		if (this.app && this.app.onblur) this.app.onblur();
+		if (this.isScrollable) this.main.blur();
+		if (this === CWIN) CWIN = null;
+		if (this.isMinimized) {
+			this.taskbarButton.onmouseup();
+			this.winElem._dis="none";
+		}
+	};
+	//»
+	setDefs(){//«
+		if (isMobile) this.fullscreen(true);
+		let a = this.app;
+		a.winid = this.id;
+		a.topwin = this;
+		if (!a.onresize) a.onresize = NOOP;
+		if (!a.onappinit) a.onappinit = NOOP;
+		if (!a.onkill) a.onkill = NOOP;
+		if (!a.onsave) a.onsave = NOOP;
+		if (!a.onloadfile) a.onloadfile = NOOP;
+		if (!a.onfocus) a.onfocus = NOOP;
+		if (!a.onblur) a.onblur = NOOP;
+		if (!a.onkeydown) a.onkeydown = NOOP;
+		if (!a.onkeyup) a.onkeyup = NOOP;
+		if (!a.onkeypress) a.onkeypress = NOOP;
+		if (!a.get_context) a.get_context = ()=>{return [];}
+	//	check_win_visible(this);
+
+	};//»
+	checkVisible(){//«
+		let{winElem: win}=this;
+		let rect = win.getBoundingClientRect();
+		if (!rect) return;
+		if ((rect.left > winw()) || (rect.right < 0) || (rect.top > winh()) || rect.bottom < 0) {
+cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
+			win._loc(0, 0);
+		}
+	};
+	//»
+	checkLoc(){//«
+		let {winElem: win} = this;
+		let rect = win._gbcr();
+		let w = rect.width,
+			h = rect.height;
+		let miny = 0;
+		if (win._x < 0) {
+			if (!win_overflow.left) win._x= 0;
+			else if (win._x + w < 0) win._x += 2 * win_move_inc;
+		} else if (win._x + w > winw()) {
+			if (!win_overflow.right) win._x= winw() - w;
+			else if (win._x > winw()) win._x -= 2 * win_move_inc;
+		}
+		if (win._y < miny) {
+			if (!win_overflow.top) win._y= miny;
+			else if (win._y + h < 0) win._y += 2 * win_move_inc;
+		} else if (win._y > miny && win._y + h > winh()) {
+			if (!win_overflow.bottom) {
+				let usey = winh() - h;
+				if (usey < miny) usey = miny;
+				win._y= usey;
+			} else if (win._y > winh()) win._y -= 2 * win_move_inc;
+		}
+	}//»
+	checkSize(){//«
+		let {winElem: win, main} = this;
+
+		let wid = main._w;
+		if (wid < win.clientWidth){
+			main._w = win.clientWidth;
+		}
+		else if (wid < min_win_width) {
+			main._w = min_win_width;
+		}
+//		if (main._w < min_win_width) main._w= min_win_width;
+		else if (win._x + win.clientWidth > winw()) {
+			if (!win_overflow.right) main._w= winw() - win._x;
+		}
+		if (win._h < 1) win._h = 1;
+		else if (win._y + win.clientHeight > winh()) {
+			if (!win_overflow.bottom) {
+				let menu_hgt = 0;
+				let winfrills = this.titleBar._h + 15;
+				let calc_hgt = winh() - win._y - winfrills - 3;
+				if (calc_hgt < 1) calc_hgt = 1;
+				main._h = calc_hgt;
+			}
+		}
+	}//»
+	addToResizeWins(){//«
+		if (!CRWINS) CRWINS=[];
+		if (CRWINS.indexOf(this)<0) {
+			CRWINS.push(this);
+		}
+	};//»
+	setFullscreenDims(){//«
+		let {winElem: win, main} = this;
+		let usepl = 0;
+		let usepr = 0;
+		let pl = main._padl;
+		let pr = main._padr;
+		if (pl) usepl = pi(pl);
+		if (pr) usepr = pi(pr);
+		win._bor="";
+		win._x= 0;
+		if (this.noChromeMode) win._y=0;
+		else win._y= "-" + (this.titleBar._h) + "px";
+		main._w= winw() - usepl - usepr;
+		main._h = winh(true);
+	};//»
+	fullscreen(if_instant){//«
+		let {winElem: win, main} = this;
+		if (this.isTransitioning) return;
+		const transend = e => {
+			win.style.transition = "";
+			main.style.transition = "";
+			this.statusBar.resize();
+			this.app.onresize();
+			if (this.moveDiv) this.moveDiv.update();
+			win.removeEventListener('transitionend', transend);
+			delete this.isTransitioning;
+		};
+		if (this.isTiled || this.isMinimized) return;
+		win.style.transition = `left ${WIN_TRANS_SECS},top ${WIN_TRANS_SECS}`;
+		main.style.transition = `width ${WIN_TRANS_SECS},height ${WIN_TRANS_SECS}`;
+
+		if (this.isFullscreen) {
+			win._bor= this.borHold;
+			delete this.borHold;
+			win._x= this.fsHoldX;
+			win._y= this.fsHoldY;
+			main._w= this.fsHoldW;
+			main._h = this.fsHoldH;
+			this.isFullscreen = false;
+		} else {
+			this.fsHoldW = main._w;
+			this.fsHoldH = main._h;
+			this.fsHoldX = win._x;
+			this.fsHoldY = win._y;
+			this.borHold = win._bor;
+			this.setFullscreenDims();
+			this.isFullscreen = true;
+		}
+
+		if (if_instant) transend();
+		else {
+			this.isTransitioning = true;
+			win.addEventListener('transitionend', transend);
+		}
+
+	}//»
+	setMaxDims(){//«
+		let{main, winElem: win, maxButton: max}=this;
+		let usepl = 0;
+		let usepr = 0;
+		let pl = main._padl;
+		let pr = main._padr;
+		if (pl) usepl = pi(pl);
+		if (pr) usepr = pi(pr);
+		win._loc(1,0);
+		main.style.width = winw() - usepl - usepr - 2 + "px";
+		main.style.height = winh() - this.titleBar._gbcr().height - this.footer._gbcr().height + "px";
+		win.style.boxShadow = "";
+		max.innerText="\u{1f5d7}";
+		max.title="Unmaximize";
+	};//»
+	maximize(if_instant){//«
+		let{winElem: win, main, maxButton: max}=this;
+		if (this.isTiled||this.isTransitioning||this.isMinimized||this.isFullscreen) return;
+		let transend = e =>{
+			win.style.transition = "";
+			main.style.transition = "";
+			this.statusBar.resize();
+			this.app.onresize();
+			win.removeEventListener('transitionend', transend);
+			this.isTransitioning = null;
+			delete this.isTransitioning;
+		};
+		win.style.transition = `left ${WIN_TRANS_SECS}, top ${WIN_TRANS_SECS}`;
+		main.style.transition = `width ${WIN_TRANS_SECS}, height ${WIN_TRANS_SECS}`;
+//		let max = this.max_button;
+		if (!this.isMaxed) {
+			this.maxHoldW = main._w;
+			this.maxHoldH = main._h;
+			this.maxHoldX = win._x;
+			this.maxHoldY = win._y;
+			this.isMaxed = true;
+			this.setMaxDims();
+		} else {
+			this.isMaxed = false;
+			main._w = this.maxHoldW;
+			main._h = this.maxHoldH;
+			win._x= this.maxHoldX;
+			win._y= this.maxHoldY;
+			win.style.boxShadow = window_boxshadow;
+			max.innerText="\u{1f5d6}";
+			max.title="Maximize";
+		}
+		if (if_instant) transend();
+		else {
+			this.isTransitioning = true;
+			win.addEventListener('transitionend', transend);
+//			this.isTransitioning = true;
+//			win.addEventListener('transitionend', transend);
+		}
+	};//»
+	minimize(){this.minButton.click();};
+	close(){this.keyKill();}
+	toggleLayout(if_set){//«
+		const get_cursor = (e, rect) => {//«
+			let lr_pad = rect.width * 0.25;
+			let tb_pad = rect.height * 0.25;
+			let lhit = false;
+			let rhit = false;
+			let thit = false;
+			let bhit = false;
+			let ret;
+			if (e.clientX < rect.left + lr_pad) lhit = true;
+			else if (e.clientX > rect.right - lr_pad) rhit = true;
+			if (e.clientY < rect.top + tb_pad) thit = true;
+			else if (e.clientY > rect.bottom - tb_pad) bhit = true;;
+			if (rhit && bhit) ret = ["nwse-resize", "se"];
+			else if (lhit && thit) ret = ["nwse-resize", "nw"];
+			else if (rhit && thit) ret = ["nesw-resize", "ne"];
+			else if (lhit && bhit) ret = ["nesw-resize", "sw"];
+			else if (rhit) ret = ["ew-resize", "e"];
+			else if (lhit) ret = ["ew-resize", "w"];
+			else if (thit) ret = ["ns-resize", "n"];
+			else if (bhit) ret = ["ns-resize", "s"];
+			else ret = ["move"];
+	//log(ret);
+			if (this.isTiled) {
+				if (ret[0][2]!=="-"||num_tiled_wins>MAX_TILED_WINS_FOR_RESIZING) return [""];
+
+	//Comment this to allow the more difficult case of north and west resizing...
+	//			if (ret[1]=="w"||ret[1]=="n") return [""];
+
+	//Need to figure out if this is an interior edge.
+
+				if ((lhit && rect.left <= 0)||
+					(thit && rect.top <= 0)||
+					(rhit && rect.right + 3 > winw())||
+					(bhit && rect.bottom + 3 > winh())) return[""];
+
+	//				if (bhit && rect.top > 0) return [""];
+
+			}
+			return ret;
+		};//»
+		const mkhandle = (wid, hgt, x, y) => {//«
+			let div = make('div');
+			div._bor= "1px solid black";
+			div._pos= "absolute";
+			div._w= wid;
+			div._h = hgt;
+			if (x) div._x= 0;
+			else div._r= 0;
+			if (y) div._y= 0;
+			else div._b= 0;
+			odiv._add(div);
+		};//»
+		let {winElem: win}=this;
+		if (this.isLayout) {
+			desk.style.cursor = "default";
+			this.moveDiv._del();
+			delete this.moveDiv;
+			delete this.rsDir;
+			this.isLayout = false;
+			return;
+		}
+		let odiv;
+		let dsty = document.body.style;
+		let rect = win.getBoundingClientRect();
+		odiv = make('div');
+		let osty = odiv.style;
+		odiv._pos= "absolute";
+		odiv._w= rect.width;
+		odiv._h = rect.height; 
+		odiv._x= 0;
+		odiv._y= 0;
+		odiv._z= 10000000;
+		odiv.class = "titlebar";
+		odiv.win = this;
+		odiv.onmousemove = (e) => {
+			if (CDICN || CRW) return;
+	//		if (this.isLayout) return;
+			osty.cursor = get_cursor(e, odiv.getBoundingClientRect())[0];
+		};
+
+		odiv.oncontextmenu = nopropdef;
+
+		odiv.onmousedown = (e) => {//«
+			e.stopPropagation();
+			if (this != CWIN) this.on();
+			let arr = get_cursor(e, odiv.getBoundingClientRect());
+			let sty = arr[0];
+			osty.cursor = sty;
+			if (this.isTiled) {
+			if (!sty) return;
+
+//	Once we figure out the logic of how to resize the other windows that are 
+//	being overlapped, then we can comment out this.
+			}
+			if (sty == "move") {
+				if (!this.checkProp("Move")) return;
+				CDW = this;
+				DDX = e.clientX - pi(win.offsetLeft);
+				DDY = e.clientY - pi(win.offsetTop);
+				return;
+			}
+			if (!this.checkProp("Resize")) return;
+			CRW = this;
+			CRW.startx = e.clientX;
+			CRW.starty = e.clientY;
+			CRW.startw = this.main._w;
+			CRW.starth = this.main._h;
+			CRW.rsDir = arr[1];
+			CRW.startl = win._x;
+			CRW.startt = win._y;
+		};//»
+		odiv.onmouseup = e => {//«
+			update_and_clear_resize_wins();
+			CDW = null
+		};//»
+		odiv.update = () => {//«
+			let rect = win._gbcr();
+			odiv._w= rect.width;
+			odiv._h = rect.height;
+			statdiv.innerHTML = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
+		};//»
+		odiv.on=()=>{
+			statdiv._tcol= "#ccc";
+			odiv._bgcol= "rgba(224,224,224,0.4)";
+		};
+		odiv.off=()=>{
+			statdiv._tcol= "#999";
+			odiv._bgcol= "rgba(176,176,176,0.4)";
+		};
+		win._add(odiv);
+		this.moveDiv = odiv;
+		let statdiv = make('div');
+		statdiv._bgcol= "#000";
+		statdiv._fs= 21;
+		statdiv.vcenter();
+		statdiv._ta= "center";
+		statdiv._over="hidden";
+		odiv._add(statdiv);
+		odiv.update();
+		mkhandle("100%", "25%", 1, 1);
+		mkhandle("100%", "25%", 1, 0);
+		mkhandle("25%", "100%", 1, 1);
+		mkhandle("25%", "100%", 0, 1);
+		this.isLayout = true;
+		if (CWIN == this) odiv.on();
+		else odiv.off();
+
+	};//»
+	toggleChrome(){//«
+//let {winElem: win}
+		if (this.isFullscreen || this.isMaxed || this.isMinimized) return;
+		this.noChromeMode = !this.noChromeMode;
+		let bar = this.titleBar;
+		let foot = this.footer;
+		let m = this.Main;
+		if (this.noChromeMode) {
+			let h = bar._gbcr().height + foot._gbcr().height;
+			this.borHold = this._bor;
+			this.winElem._bor= "";
+			m.diffH = h;
+			bar._dis= "none";
+			foot._dis= "none";
+			m._h += h;
+
+		} else {
+			bar._dis= "block";
+			foot._dis= "";
+			this.winElem._bor= this.borHold;
+			delete this.borHold;
+			m._h -= m.diffH;
+		}
+		this.statusBar.resize();
+		this.app.onresize();
+		return true;
+	}//»
+selectIcons(){//«
+let drect = this.dragDiv.getBoundingClientRect();
+let dr = drect.right;
+let dl = drect.left;
+let dt = drect.top;
+let db = drect.bottom;
+let OK=[];
+
+let icons = this.getIcons();
+
+for (let icn of icons) {
+	let wrap = icn.wrapper;
+	if (!wrap) continue;
+	let rect = wrap.getBoundingClientRect();
+	if (rect.left > dr || rect.right < dl || rect.top > db || rect.bottom < dt) {
+		icn.off();
+	}
+	else {
+		OK.push(icn);
+//		icon_on(icn);
+		icn.on();
+	}
+	
+}
+ICONS = OK;
+};//»
+	getIcons(){//«
+		let _icons = this.main.getElementsByClassName("icon");
+		let ret = [];
+		for (let icn of _icons) ret.push(icn.icon);
+		return ret;
+	};//»
+reload(opts={}){//«
+	let {app, appName, main} = this;
+	if (this.killed){
+		poperr("This window has been killed");
+		return;
+	}
+	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
+	if (app.ondevreload) return app.ondevreload();
+	if (appName.match(/^local\./)&&!opts.dataUrl){
+		return popup("'local' (development) applications cannot be independently reloaded!");
+	}
+	main.innerHTML=`<center><h2 style="background-color: #000; color: #aaa;">Reloading...</h2></center>`;
+	this.statusBar.innerHTML="";
+	let scr = gbid(`script_${appName}`);
+	if (scr) {
+		scr._del();
+	}
+	else{
+cwarn(`No script found for app: ${appName}`);
+	}
+	delete LOTW.apps[appName];
+
+	app.onkill&&app.onkill(true);
+	let arg = this.arg;
+	arg.APPARGS = {reInit: app.reInit};
+	arg.noShow = opts.noShow;
+	arg.dataUrl = opts.dataUrl;
+	main.innerHTML="";
+	return this.loadApp();
+//	return new Promise((Y,N)=>{
+//		arg.CB = Y;
+//		make_app(arg);
+//	});
+};//»
+
+loadApp(){//Old make_app«
+//DIOLMTNY
+
+return new Promise((Y,N)=>{
+
+//Var«
+	let cb = Y;
+	let win = this;
+	let {arg, main: mainwin, appName: winapp} = this;
+	let {noShow: no_show, dataUrl: data_url}=arg;
+	this.viewOnly = arg.viewOnly;
+	if (data_url) {
+		this._data_url = data_url
+	}
+//BGEIUOP
+	let scrpath;
+	let str, marr;
+	let script_path;
+//»
+	const barferror = e => {//«
+//		this.killed = true;
+		mainwin._pad= 10;
+		mainwin._bgcol= "#000";
+		mainwin._tcol= "#aaa";
+		mainwin._fs= "18px";
+		mainwin.style.userSelect="text";
+		mainwin._over="auto";
+		let mess = e.stack||`The script could not be loaded<br>(Url: ${script_path})`;
+		mainwin.innerHTML = `<br><div style='text-align:center;color:#f55;font-size:34;font-weight:bold;'>Error</div><br><pre style="font-size:18;"><b>${mess}</b></pre>`;
+		if (!no_show) this.on();
+		cb(this);
+	};//»
+	this._fatal = barferror;
+	const loadit = async() => {//«
+		this.setDefs();
+		if (!no_show) {
+			this.checkVisible();
+			this.statusBar.resize();
+			this.on();
+		}
+		if (winapp===FOLDER_APP) {
+			this.app.onappinit(arg.FULLPATH, arg.PREVPATHS);
+		}
+		else if (arg.APPARGS) this.app.onappinit(arg.APPARGS);
+		cb(this);
+	};//»
+	const load_cb = async() => {//«
+		try {
+			if (data_url){
+				this.app = new NS.apps[winapp](this, Desk);
+			}
+			else {
+				const { app } = await import(script_path);
+				NS.apps[winapp] = app;
+				this.app = new app(this, Desk);
+			}
+			this.app.arg = arg;
+			loadit();
+		} catch (e) {
+			barferror(e);
+		}
+	};//»
+	const make_it = async () => {//«
+		let scr = make('script');
+		scr.onload = load_cb;
+		scr.onerror = e => {
+			barferror(e);
+		};
+		if (data_url) script_path = data_url;
+		else {
+			scr.type = "module";
+			script_path = `/apps/${winapp.replace(/\./g, "/")}.js`;
+			if (globals.dev_mode) {
+				let v = (Math.random()+"").slice(2,9);
+				script_path += `?v=${v}`;
+			}
+		}
+		scr.src = script_path;
+		scr.id = `script_${winapp}`;
+		document.head._add(scr);
+	};//»
+	if (winapp=="None"){//«
+		this.setDefs();
+		this.checkVisible();
+		this.statusBar.resize();
+		this.on();
+		cb(this);
+		return;
+	}//»
+	if (!NS.apps[winapp]) return make_it();
+	this.app = new NS.apps[winapp](this, Desk);
+	this.app.arg = arg;
+	loadit();
+
+});
+
+
+
+}//»
+
+//»
+
+//«Properties
+
+get x(){return parseInt(this.winElem.style.left);}
+get y(){return parseInt(this.winElem.style.top);}
+
+set x(val){if(Number.isFinite)val=`${val}px`;this.winElem.style.left=val;}
+set y(val){if(Number.isFinite)val=`${val}px`;this.winElem.style.top=val;}
+
+set l(val){
+	let diff = this.winElem.getBoundingClientRect().left - parseInt(val);
+	this.Main._w += diff;
+	this.winElem._x = val;
+}
+
+get w(){return this.winElem.getBoundingClientRect().width;}
+get h(){return this.winElem.getBoundingClientRect().height;}
+set w(val){this.Main._w += parseInt(val) - this.winElem.getBoundingClientRect().width;}
+set h(val){this.Main._h += parseInt(val) - this.winElem.getBoundingClientRect().height;}
+
+get r(){return this.winElem.getBoundingClientRect().right;}
+set r(val){this.Main._w += parseInt(val) - this.winElem.getBoundingClientRect().right;}
+get b(){return this.winElem.getBoundingClientRect().bottom;}
+set b(val){this.Main._h += parseInt(val) - this.winElem.getBoundingClientRect().bottom;}
+
+
+get fullpath(){//«
+	if (!this.name) {
+//cwarn("This window has no name!!!");
+		return null;
+	}
+	let path = (this.path ? this.path : "/") + "/" + this.name;
+	if (this.ext) path = path + "." + this.ext;
+	return path.regpath();
+}//»
+get title(){return this.nameSpan.innerText.trim();}
+set title(arg){//«
+	this.nameSpan.innerText = arg;
+	if (this.isMinimized) this.minTitle.innerText = arg
+}//»
+//»
+
+}//»
+
+const win_reload = async () => {//«
+	if (!CWIN) return;
+	if (!await CWIN.reload()) return;
+	let bytes = CWIN._bytes;
+	if (bytes) CWIN.app.onloadfile(bytes);
+}//»
+const get_newwin_obj = (app) => {//«
+	let X = DEF_NEW_WIN_X;
+	let Y = DEF_NEW_WIN_Y;
+	let WID = DEF_NEW_WIN_W_PER * winw();
+	if (WID < 0) WID = winw();
+	let HGT = DEF_NEW_WIN_H_PER * winh();
+	if (HGT < 0) HGT = winh();
+	return {WID, HGT, X, Y};
+}//»
+const get_wins_by_path = (path,opts={}) => {//«
+
+	let {getDesk, extArg}=opts;
+	let ret = [];
+	path = path.regpath();
+	for (let wspace of workspaces) {
+		let wins = wspace.windows;
+		for (let w of wins) {
+			let ext = w.ext;
+			let winpath = (w.path + "/" + w.name).regpath();
+			if (winpath !== path) continue;
+			if (extArg) {
+				if (ext === extArg) ret.push(w);
+			} else if (!ext) ret.push(w);
+		}
+	}
+	if (path === DESK_PATH && getDesk) ret.push(desk);
+	return ret;
+};
+api.getWinsByPath = get_wins_by_path;
+//»
+const get_active_windows = () => {//«
+	let wins = [];
+	for (let i = 0; i < windows.length; i++) {
+		let w = windows[i];
+//		if (w.killed) {
+//			windows.splice(i, 1);
+//			i--;
+//		} else if (!w.isMinimized) wins.push(w);
+		if (!w.isMinimized) wins.push(w);
+	}
+	return wins;
+}//»
+
+const fit_all_windows=()=>{//«
+	let w = document.body.clientWidth;
+	let h = document.body.clientHeight;
+
+	for (let win of windows){
+		win.main._w = w;
+		win.main._h = h;
+		win.app.onresize();
+	}
+
+}//»
+const toggle_show_windows = (if_no_current) => {//«
+	let wins = get_active_windows();
+	if (windows_showing) {
+		windows_showing = false;
+		for (let i = 0; i < wins.length; i++) {
+			let w = wins[i];
+			if (w == CWIN) w.is_current = true;
+			w.winElem._dis= "none";
+			if (w.overdiv) w.overdiv._dis= "none";
+		}
+		CWIN && CWIN.off();
+		CWIN = null;
+		CUR.todesk();
+if (workspace.tilingMode){
+tiling_underlay.off();
+}
+	} else {
+		windows_showing = true;
+		CWIN && CWIN.off();
+		for (let i = 0; i < wins.length; i++) {
+			let w = wins[i];
+			w.winElem._dis= "";
+			if (w.overdiv) w.overdiv._dis= "";
+			if (w.is_current) {
+				if (!if_no_current) {
+					if (w.isMinimized) w.overdiv.on();
+					else w.on();
+				}
+				w.is_current = null;
+			}
+		}
+		if (!CWIN && !if_no_current) top_win_on();
+if (workspace.tilingMode){
+tiling_underlay.on();
+}
+	}
+//	Desk.update_windows_showing();
+	return true;
+}//»
+const toggle_layout_mode = () => {//«
+	let gotwins=[];
+	for (let w of workspace.windows){
+		if (w.isMaxed || w.isFullscreen) {
+			popup("Cannot initiate layout mode!");
+			return true;
+		}
+		if (!w.isMinimized) gotwins.push(w);
+	}
+//	windows.layout_mode = !windows.layout_mode;
+	workspace.layoutMode = !workspace.layoutMode;
+	for (let w of gotwins){
+		if (workspace.layoutMode && w.isLayout) continue;
+		if (!workspace.layoutMode && !w.isLayout) continue;
+		w.toggleLayout(workspace.layoutMode);
+	}
+	return true;
+};//»
+/*
+const toggle_tiling_mode = () => {//«
+
+//0 overlap leaves a gap
+	let TILING_OVERLAP=-0.5;
+
+	const reset_wins=()=>{//«
+		for (let _w of arr) _w.isTiled = false;
+	};//»
+	const intersects = (w1, w2) => {//«
+		let t1 = w1.T;
+		let b1 = w1.B;
+		let l1 = w1.L;
+		let r1 = w1.R;
+		let t2 = w2.T;
+		let b2 = w2.B;
+		let l2 = w2.L;
+		let r2 = w2.R;
+		if (t1 < 0 || t2 < 0) return true;
+		if (b1 > hgt || b2 > hgt) return true;
+		if (l1 < 0 || l2 < 0) return true;
+		if (r1 > wid || r2 > wid) return true;
+		if (!(l1 > r2 || r1 < l2 || t1 > b2 || b1 < t2)) {
+			return true;
+		}
+		return false;
+	};//»
+	const intersects_any = w1 => {//«
+		for (let w2 of arr) {
+			if (w1.win === w2.win) continue;
+			if (intersects(w1, w2)) return true;
+		}
+		return false;
+	};//»
+	const do_step = (step_sz) => {//«
+		for (let w of arr) {
+			if (w.isTiled) continue;
+			let got_change = false;
+			for (let i = 0; i < 4; i++) {
+				if (i == 0) {
+					if (!intersects_any({win: w.win,L:w.L-step_sz,R:w.R,T:w.T,B:w.B})) {
+						w.L-=step_sz;
+						got_change = true;
+					}
+				} else if (i == 1) {
+					if(!intersects_any({win:w.win,L:w.L,R:w.R+step_sz,T:w.T,B:w.B})){
+						w.R+=step_sz;
+						got_change = true;
+					}
+				} else if (i == 2) {
+					if(!intersects_any({win:w.win,L:w.L,R:w.R,T:w.T-step_sz,B:w.B})){
+						w.T-=step_sz;
+						got_change = true;
+					}
+				} else if (i == 3) {
+					if(!intersects_any({win:w.win,L:w.L,R:w.R,T:w.T,B:w.B+step_sz})){
+						w.B+=step_sz;
+						got_change = true;
+					}
+				}
+			}
+			if (!got_change) w.isTiled = true;
+		}
+	};//»
+	const do_steps=(step_sz)=>{//«
+		let max_steps = 2*((winw()>winh())?winw():winh());
+		for (let iters = 0; iters < max_steps; iters++) {//«
+			let got_all_maxed = true;
+			for (let _w of arr) {
+				if (!_w.isTiled) {
+					got_all_maxed = false;
+					break;
+				}
+			}
+			if (!got_all_maxed) do_step(step_sz);
+			else break;
+		}//»
+	}//»
+	let wid = winw();
+	let hgt = winh();
+	let arr = [];
+	let if_intersects = false;
+	let has_tile_holds = false;
+	for (let win of windows) {//«
+		if (!win.isMinimized) {
+			let rect = win.winElem._gbcr();
+			arr.push({win:win,T:rect.top,B:rect.bottom,L:rect.left,R:rect.right});
+			if (win.noChromeMode) win.toggleChrome();
+			if (isFinite(win.tileholdw) && isFinite(win.tileholdh) && isFinite(win.tileholdx) && isFinite(win.tileholdy)) {
+				has_tile_holds = true;
+				win.main._w= win.tileholdw;
+				win.main._h = win.tileholdh;
+				win.winElem._x= win.tileholdx;
+				win.winElem._y= win.tileholdy;
+			}
+			else if (win.isTiled) has_tile_holds = true;
+
+			if (win._bor_hold){
+				win.winElem._bor = win._bor_hold;
+				delete win._bor_hold;
+			}
+			win.app.onresize();
+			if (win.moveDiv) win.moveDiv.update();
+			delete win.tileholdw;
+			delete win.tileholdh;
+			delete win.tileholdx;
+			delete win.tileholdy;
+			delete win.isTiled;
+		}
+	}//»
+	if (has_tile_holds) {
+		window_boxshadow = window_boxshadow_hold;
+		workspace.tilingMode = false;
+		tiling_underlay.off();
+		return;
+	}
+
+	if (!arr.length) return popup("Nothing to do!");
+	if (arr.length == 1) return popup("The max button should work,\x20no?");
+	num_tiled_wins = arr.length;
+	LOOP1: for (let j = 0; j < arr.length; j++) {//«
+		let w1 = arr[j];
+		for (let i = j + 1; i < arr.length; i++) {
+			let w2 = arr[i];
+			if (intersects(w1, w2)) {
+//log(w1.win, w2.win);
+				if_intersects = true;
+				break LOOP1;
+			}
+		}
+	}//»
+	if (if_intersects) {
+		popup("Can't do window tiling!\x20(Overlapping windows detected)");
+		return;
+	}
+//}
+//	do_steps(100);
+//	reset_wins();
+	do_steps(10);
+	reset_wins();
+	do_steps(1);
+	let tot_area=0;
+	let wins=[];
+	for (let _w of arr) {//«
+		let win = _w.win;
+		wins.push(win);
+		win.isTiled = true;
+		let rect = win.winElem._gbcr();
+		let main = win.main;
+		let dl = TILING_OVERLAP + rect.left - _w.L;
+		let dr = TILING_OVERLAP + _w.R - rect.right;
+		let dt = TILING_OVERLAP + rect.top - _w.T;
+		let db = TILING_OVERLAP + _w.B - rect.bottom;
+		win.tileholdw = main._w;
+		win.tileholdh = main._h;
+		win.tileholdx = win.winElem._x;
+		win.tileholdy = win.winElem._y;
+		main._w += (dl + dr);
+		win.winElem._x -= dl;
+		main._h += (dt + db);
+		win.winElem._y -= dt;
+		win.winElem.style.boxShadow = "";
+		if (!win.noChromeMode) win.toggleChrome();
+		else win.app.onresize();
+//		win.app.onresize();
+		if (win.moveDiv) win.moveDiv.update();
+
+		win._bor_hold = win._bor;
+		win.winElem._bor = "0px solid #000";
+
+		let rect2 = win.winElem.getBoundingClientRect();
+		tot_area+=rect2.width*rect2.height;
+	}//»
+	window_boxshadow_hold = window_boxshadow;
+	window_boxshadow = "";
+	workspace.tilingMode = true;
+	tiling_underlay.on();
+//setTimeout(()=>{
+//log(tiling_underlay);
+//},100);
+};//»
+*/
+const window_cycle = () => {//«
+
+	if (window.performance.now() - last_win_cycle < 150) {
+//Throttle the speed of window cycling when the hotkey is held down
+		return;
+	}
+	last_win_cycle = window.performance.now();
+	let wins = windows;
+	let len = wins.length;
+	if (!len) return;
+
+	if (!num_win_cycles){
+//		if (taskbar_hidden&&num_minimized_wins) taskbar.show(true);
+
+		CWIN_HOLD = CWIN;
+		wins.sort((a,b)=>{
+			if (pi(a.winElem.style.zIndex) < pi(b.winElem.style.zIndex)) return 1;
+			else if (pi(a.winElem.style.zIndex) > pi(b.winElem.style.zIndex)) return -1;
+			return 0;
+		});
+		let samelen = num_minimized_wins === wins.length;
+		let first;
+		if (!(!CWIN_HOLD && !samelen)) first = wins.shift();
+		if (show_desktop_during_win_cycle) {
+			wins.push(NOWINDOW);
+			len++;
+		}
+		if (first) wins.push(first);
+		if (samelen && wins.includes(NOWINDOW)){
+			windows.splice(windows.indexOf(NOWINDOW),1)
+			wins.push(NOWINDOW);
+		}
+		nowindow_pos = wins.indexOf(NOWINDOW);
+		CG.on(WIN_CYCLE_CG_OP);
+	}
+
+	if (CWCW){//Current Win Cycle Win
+		CWCW.winElem._z= CWCW.z_hold;
+		delete CWCW.z_hold;
+		CWCW.off();
+		if (CWCW.isMinimized && taskbar_hidden) taskbar.hide(true);
+		CWCW = null;
+	}
+	let w = wins[num_win_cycles%len];
+	if (w===NOWINDOW){
+		have_window_cycle = true;
+		win_cycle_wins_hidden = true;
+		toggle_show_windows();
+		num_win_cycles=nowindow_pos+1;
+		CG.off();
+		return;
+	}
+
+	if (win_cycle_wins_hidden){
+		win_cycle_wins_hidden = false;
+		toggle_show_windows();
+		CG.on(WIN_CYCLE_CG_OP);
+	}
+
+/*«
+	if (show_desktop_during_win_cycle) {
+		if (!win_cycle_wins_hidden){ 
+			if ((w===CWIN_HOLD) || (num_win_cycles && (!(num_win_cycles%len)))){
+				if (w===CWIN_HOLD) num_win_cycles++;
+				CWIN_HOLD=null;
+				have_window_cycle = true;
+				win_cycle_wins_hidden = true;
+				toggle_show_windows();
+				CG.off();
+				return;
+			}
+		}
+		if (win_cycle_wins_hidden){
+			win_cycle_wins_hidden = false;
+			toggle_show_windows();
+			CG.on(WIN_CYCLE_CG_OP);
+		}
+	}
+»*/
+	CWCW = w;
+	CWCW.z_hold = CWCW.winElem._z;
+	CWCW.winElem._z= CG_Z+1;
+	CWCW.on(true);
+	if (CWCW.isMinimized && taskbar_hidden) taskbar.show(true);
+	num_win_cycles++;
+
+}//»
+const top_win_on = () => {//«
+	let gothi = -1;
+	let gotwin = null;
+	let wins = get_active_windows();
+	for (let w of wins){
+		if (w.winElem._z > gothi) {
+			gothi = w.winElem._z;
+			gotwin = w;
+		}
+	}
+	if (gotwin) gotwin.on();
+	else {
 		CWIN = null;
 		CUR.todesk();
 	}
-//log(e);
-};
-bar.oncontextmenu=e=>{//«
-	e.preventDefault();
-	e.stopPropagation();
-
-	CWIN&&CWIN.off();
-
-	let items_arr=[];
-	if (taskbar_hidden){
-		items_arr.push("Show\x20Taskbar");
-		items_arr.push(()=>{
-			this.show();
-		});
-	}
-	else{
-		items_arr.push("Hide\x20Taskbar");
-		items_arr.push(()=>{
-			this.hide();
-		});
-	}
-	if (taskbar_expert_mode){
-		items_arr.push("Expert\x20Mode __CHECK__");
-		items_arr.push(taskbar.toggle_expert_mode);
-	}
-	else{
-		items_arr.push("Expert\x20Mode __XMARK__");
-		items_arr.push(taskbar.toggle_expert_mode);
-	}
-
-	set_context_menu({
-		X: e.clientX,
-		Y: e.clientY
-	}, {items: items_arr});
-
 }//»
-bar.onmouseleave=()=>{//«
-	if (taskbar_hidden){
-		this.hide();
+const move_window = (which, if_small) => {//«
+	let w = CWIN;
+	if (!w) return;
+	if (w.isMinimized) {} else if (w.isMaxed) w.max_button.reset();
+	let elem = w.winElem;
+	let useinc;
+	if (if_small) useinc = win_move_inc_small;
+	else useinc = win_move_inc;
+	if (which == "R") elem._x= elem._x + useinc;
+	else if (which == "L") elem._x= elem._x - useinc;
+	else if (which == "D") elem._y= elem._y + useinc;
+	else if (which == "U") elem._y= elem._y - useinc;
+	w.checkLoc();
+	if (w.overdiv) w.overdiv._loc(elem._x, elem._y);
+	if (w.moveDiv) w.moveDiv.update();
+	if (w.isMinimized) {
+		w.last_min_x = elem._x;
+		w.last_min_y = elem._y;
 	}
 }//»
-bar.onmousemove=noprop;
-st.onmousedown = (e) => {
-	if (e.button !== 0) return;
-	st._bor = `${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
-};
-st.onmouseup=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
-st.onmouseout=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
-st.oncontextmenu=nopropdef;
-st.onclick=(e)=>{//«
-	const doit=()=>{set_context_menu({X:0,Y:bar.clientHeight+3},{BREL:true});}
-	if (e.isTrusted) return doit();
-	st._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
-	setTimeout(()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;doit();},200);
+const resize_window = (which, if_reverse, if_small) => {//«
+	const w2r = () => {
+		w.main._w= w.main._w - useinc;
+		w.winElem._x += useinc;
+	};
+	const w2l = () => {
+		let dx = w.winElem._x - useinc;
+		if (dx < 0) useinc += dx;
+		w.main._w= w.main._w + useinc;
+		w.winElem._x -= useinc;
+	};
+	const n2d = () => {
+		w.main._h = w.main._h - useinc;
+		w.winElem._y += useinc;
+	};
+	const n2u = () => {
+		let dy = w.winElem._y - useinc;
+		if (dy < 0) useinc += dy;
+		w.main._h = w.main._h + useinc;
+		w.winElem._y -= useinc;
+	};
+	const e2r = () => {
+		let dx = w.winElem._x + w.winElem._gbcr().width + useinc - winw();
+		if (dx > 0) useinc -= dx;
+		w.main._w= w.main._w + useinc;
+	};
+	const e2l = () => {
+		w.main._w= w.main._w - useinc;
+	};
+	const s2d = () => {
+		let dy = w.winElem._y + w.winElem._gbcr().height + useinc - winh();
+		if (dy > 0) useinc -= dy;
+		w.main._h = w.main._h + useinc;
+	};
+	const s2u = () => {
+		w.main._h = w.main._h - useinc;
+	};
+	let w = CWIN;
+	if (w.dialog) return;
+	if (w.isMinimized) return;
+	if (w.isMaxed) w.max_button.reset();
+	let useinc;
+	if (if_small) useinc = win_resize_inc_small;
+	else useinc = win_resize_inc;
+	if (if_reverse) {
+		if (which == "R") e2l();
+		else if (which == "L") w2r();
+		else if (which == "D") s2u();
+		else if (which == "U") n2d();
+	} else {
+		if (which == "R") e2r();
+		else if (which == "L") w2l();
+		else if (which == "D") s2d();
+		else if (which == "U") n2u();
+	}
+	w.checkLoc();
+	w.checkSize();
+	check_rs_timer();
+	if (w.moveDiv) w.moveDiv.update();
+}//»
+const handle_resize_event = e => {//«
+
+const getorresize = (dir, val, rect, selfarg, if_resize)=>{//«
+	let all = windows;
+	let wins=[];
+	all.map(win => {
+		if (win.isTiled && win !== selfarg) {
+			wins.push(win)
+		}
+	});
+	let low = Infinity;
+	let lowwin;
+	for (let win of wins){
+//let id = win.id;
+		let rct = win.winElem.getBoundingClientRect();
+//let l = rct.left;
+		let val2 = rct[dir];
+		if (dir=="left"||dir=="right"){
+			if (rct.top > rect.bottom || rct.bottom < rect.top) {
+				continue;
+			}
+		}
+		else{
+ 			if (rct.left > rect.right || rct.right < rect.left) {
+//log("");
+//log("BAD", win, win.id);
+				continue;
+			}
+		}
+		let diff = val-val2;
+		if (if_resize){
+			if (diff > 0){//«
+				if (dir==="left") {
+					win.winElem._x+=diff;
+					let diff2 = win.winElem.getBoundingClientRect().right - winw();
+					if (diff2 > 0) {
+						win.main._w-= diff2;
+						win.addToResizeWins();
+					}
+				}
+				else if (dir==="right") {
+					let diff2 = win.winElem.getBoundingClientRect().right - val;
+					if (diff2 > 0) {
+						win.main._w-= diff2;
+						win.addToResizeWins();
+					}
+				}
+				else if (dir==="top"){
+					win.winElem._y+=diff;
+					let diff2 = win.winElem.getBoundingClientRect().bottom - winh();
+					if (diff2 > 0) {
+						win.main._h-= diff2;
+						win.addToResizeWins();
+					}
+				}
+				else if (dir==="bottom"){
+					let diff2 = win.winElem.getBoundingClientRect().bottom - val;
+					if (diff2 > 0) {
+						win.main._h-= diff2;
+						win.addToResizeWins();
+					}
+				}
+				if (win.moveDiv) win.moveDiv.update();
+			}//»
+			else{
+				if (dir=="bottom") {
+					win.main._h+=diff;
+					win.addToResizeWins();
+				}
+				else if (dir=="right") {
+					win.main._w+=diff;
+					win.addToResizeWins();
+				}
+				if (win.moveDiv) win.moveDiv.update();
+			}
+		}
+		else {
+			diff = Math.abs(diff);
+			if ((diff) < low) {
+				low = diff;
+				lowwin = win;
+			}
+		}
+	}
+	return lowwin;
+};//»
+
+/*
+The rs_dir property is set in "window layout mode", which puts a div over
+window that gives highly accessible "handles" for each of the directions
+(n,s,e,w,ne,nw,se,sw) and a central handle for moving (not handled here).
+*/
+
+let dir = CRW.rsDir;
+//The user is dragging the tiny handle at the bottom right of every window
+if (!dir){//«
+	let elem = CRW.winElem;
+	CRW.main._w = CRW.main._w + (e.clientX - (pi(CRW.main.offsetWidth) + elem._x)) - winx();
+	CRW.main._h = CRW.main._h + (e.clientY - (pi(CRW.main.offsetHeight) + elem._y + CRW.titleBar._h + CRW.footer.getBoundingClientRect().height)) - winy();
+	CRW.checkSize();
+	CRW.statusBar.resize();
+	return;
+}//»
+
+let tul = tiling_underlay;
+
+//The user is dragging one of the 8 "window layout" handles described above
+//Var«
+let w = CRW;
+let rect = w.winElem.getBoundingClientRect();
+let odiv = w.moveDiv;
+let m = w.main;
+let ex = e.clientX;
+let ey = e.clientY;
+let sx = w.startx;
+let sy = w.starty;
+let sw = w.startw;
+let sh = w.starth;
+let sl = w.startl;
+let st = w.startt;
+let tiled = w.isTiled;
+//»
+
+if (dir.match(/s/)) {//«
+	let goth = sh + ey - sy;
+//Tiled
+	let lft, rgt;//«
+	if (tiled){
+		if (goth < rect.height) return;
+		if (goth < sh) return;
+		let bot = rect.bottom+2;
+		lft = rect.left+5;
+		rgt = rect.right-5;
+		let gotwin;
+		if (document.elementFromPoint(lft, bot)==tul) gotwin = getorresize("top", bot, {left: lft, right: rgt}, w);
+		else if (document.elementFromPoint(rgt, bot)==tul) gotwin = getorresize("top", bot, {left: lft, right: rgt}, w);
+		if (!gotwin) return;
+		let torect = gotwin.winElem.getBoundingClientRect();
+//		let totop = gotwin.top;
+		let totop = torect.top;
+		if (e.clientY > totop) return;
+	}//»
+
+	if (goth > min_win_hgt) {
+		m._h = goth;
+		let dy = w.winElem._gbcr().bottom - winh();
+		if (dy > 0 && !win_overflow.bottom) m._h -= dy;
+	}
+	if (tiled) getorresize("top", rect.bottom, {left: lft, right: rgt}, w, true);
+} //»
+else if (dir.match(/n/)) {//«
+	let dy = e.clientY - sy;
+	let goth = sh - dy;
+
+//Tiled
+
+	let lft, rgt;//«
+	if (tiled){
+		if (goth < rect.height) return;
+		if (goth < sh) return;
+		let _top = rect.top-1;
+		lft = rect.left+5;
+		rgt = rect.right-5;
+		let gotwin;
+		if (document.elementFromPoint(lft, _top)==tul) gotwin = getorresize("bottom", _top, {left: lft, right: rgt}, w);
+		else if (document.elementFromPoint(rgt, _top)==tul) gotwin = getorresize("bottom", _top, {left: lft, right: rgt}, w);
+		if (!gotwin) return;
+		let torect = gotwin.winElem.getBoundingClientRect();
+//		let tobot = gotwin.bottom;
+		let tobot = torect.bottom;
+		if (e.clientY < tobot) return;
+	}//»
+
+	if (goth > min_win_hgt) {
+		let goty = st + dy;
+		if (goty >= 0 || win_overflow.top) {
+			m._h = goth;
+			w.winElem._y= goty;
+		}
+	}
+	if (tiled) {
+//log(rect.top, lft, rgt);
+		getorresize("bottom", rect.top, {left: lft, right: rgt}, w, true);
+	}
+}//»
+if (dir.match(/e/)) {//«
+	let gotw = sw + ex - sx;
+
+//Tiled
+	let _top, bot;//«
+	if (tiled){
+		if (gotw < rect.width) return;
+		if (gotw < sw) return;
+		let rgt = rect.right+2;
+		_top = rect.top+5;
+		bot = rect.bottom-5;
+		let gotwin;
+		if (document.elementFromPoint(rgt, _top)==tul) gotwin = getorresize("left", rgt, {top: _top, bottom: _top}, w);
+		else if (document.elementFromPoint(rgt, bot)==tul) gotwin = getorresize("left", rgt, {top: bot, bottom: bot}, w);
+		if (!gotwin) return;
+		let torect = gotwin.winElem.getBoundingClientRect();
+//		let toleft = gotwin.left;
+		let toright = torect.left;
+		if (e.clientX > toright) return;
+	}//»
+
+	if (gotw > min_win_width) m._w= gotw;
+	let dx = w.winElem._gbcr().right - winw();
+	if (dx > 0 && !win_overflow.right) m._w -= dx;
+	if (tiled) getorresize("left", rect.right, {top: _top, bottom: bot}, w, true);
+}//»
+else if (dir.match(/w/)) {//«
+	let dx = e.clientX - sx;
+	let gotw = sw - dx;
+//Tiled
+	let _top, bot;//«
+	if (tiled){
+
+		if (gotw < rect.width) return;
+		if (gotw < sw) return;
+		let lft = rect.left-1;
+		_top = rect.top+5;
+		bot = rect.bottom-5;
+		let gotwin;
+		if (document.elementFromPoint(lft, _top)==tul) gotwin = getorresize("right", lft, {top: _top, bottom: _top}, w);
+		else if (document.elementFromPoint(lft, bot)==tul) gotwin = getorresize("right", lft, {top: bot, bottom: bot}, w);
+		if (!gotwin) return;
+		let torect = gotwin.winElem.getBoundingClientRect();
+//		let toleft = gotwin.left;
+		let toleft = torect.right;
+//log(gotwin);
+//log(e.clientX, toleft);
+		if (e.clientX < toleft) return;
+	}//»
+
+	if (gotw > min_win_width) {
+		let gotx = sl + dx;
+		if (gotx >= 0 || win_overflow.left) {
+			m._w= gotw;
+			w.winElem._x= gotx;
+		}
+		if (tiled) getorresize("right", rect.left, {top: _top, bottom: bot}, w, true);
+	}
+}//» 
+
+//XXX TODO odiv can be undefined here (can it though?) TODO XXX//«
+if (!odiv) {
+	cerr("Hi,no odiv with CRW in Gen_mousemove");
+} else {
+	odiv._w= w.winElem.offsetWidth;
+	odiv._h = w.winElem.offsetHeight;
+	odiv.update();
+}
+//»
+
+CRW.statusBar.resize();
+
+
+};//»
+
+const update_and_clear_resize_wins = () => {//«
+	if (CRW) {
+		CRW.app.onresize();
+		CRW.statusBar.resize();
+	}
+	if (CRWINS){
+		for (let win of CRWINS){
+			if (win) {
+				win.statusBar.resize();
+				win.app.onresize();
+			}
+		}
+	}
+	CRW = null;
+	CRWINS = null;
+};//»
+this.cleanup_deleted_wins_and_icons = path => {//«
+    let namearr = getNameExt(path, null, true);
+    let usepath = `${namearr[0]}/${namearr[1]}`;
+    let useext = namearr[2];
+    let wins = get_wins_by_path(usepath, {extArg: useext});
+	for (let win of wins){
+	    if (win && win.forceKill) win.forceKill();
+	}
+    let icons = get_icons_by_path(usepath, useext);
+    for (let icn of icons) {
+		if (icn.cancel_func) icn.cancel_func();
+		icn.del();
+    }  
+}//»
+
+const switch_win_to_workspace = (w, num) => {//«
+	let oldwins = workspaces[w.workspaceNum].windows;
+//log(12345);
+	let which = oldwins.indexOf(w);
+	if (which < 0){
+		poperr("Could not find the window in the windows array!");
+		return;
+	}
+	oldwins.splice(which, 1);
+	let newwins = workspaces[num].windows;
+	newwins.push(w);
+	w.workspaceNum = num;
+	return true;
+};//»
+const check_cwin_owned=()=>{//«
+	if (CWIN && CWIN.ownedBy){
+cwarn("Here is the owning window");
+log(CWIN.ownedBy);
+		popup("The window is owned! (check console)");
+		return true;
+	}
+	return false;
+};//»
+const raise_bound_win=(num)=>{//«
+	let obj = globals.boundWins[num];
+	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
+	obj.win.on({switchToWorkspace: true});
+};//»
+const get_all_windows=()=>{//«
+	let wins=[];
+	for (let wspace of workspaces){
+		wins.push(...wspace.windows);
+	}
+	return wins;
 };//»
 
 //»
+//Folders«
 
-//Init«
+const make_folder = () => {//«
 
-let curuser = globals.current_user;
-let lst_hidden = `taskbar_hidden:${curuser}`;
-let lst_expert = `taskbar_expert:${curuser}`;
+	if (!CWIN || CWIN.appName != FOLDER_APP){
+		make_new_icon(desk, FOLDER_APP);
+	}
+	else {
+		make_new_icon(CWIN, FOLDER_APP);
+	}
+};//»
 
-taskbar_hidden = localStorage[lst_hidden];
-taskbar_expert_mode = localStorage[lst_expert];
-
-if (taskbar_hidden) this.hide();
-if (taskbar_expert_mode) {
-	st._dis="none";
-	wn._dis="none";
-}
-
-bar._add(st);
-bar._add(mwb);
-if (!qObj["no-switcher"]) {
-	bar._add(wn);
-	desk._add(ws);
-}
-if (!isMobile) desk._add(bar);
-
-setTimeout(()=>{
-	bar.style.transition = `bottom ${TASKBAR_TRANS_SECS}s ease 0s`;
-},500);
-//»
-
+const reload_desk_icons_cb = async () => {//«
+	CG.on();
+	Desk.clear_desk_icons();
+	await reloadIcons();
+	CG.off();
 };
+this.clear_desk_icons = ()=>{
+	let nodes = Array.from(desk.childNodes);
+	let arr = nodes.filter(n => n.className === "icon");
+	while (arr.length) arr.pop()._del();
+};
+//»
+const reload_desk_icons = async(arr) => {//«
+	if (desk.icons) {
+		for (let icn of desk.icons) {
+			if (icn) icn.del();
+		}
+		desk.icons = [];
+	}
+	arr = arr.sort((a, b)=>{
+		if (a.name > b.name) return 1;
+		else if (a.name < b.name) return -1;
+		return 0;
+	});
+	for(let node of arr){
+		let ref;
+		if (node.link) ref = await node.ref;
+		let icn = new Icon(node, {ref});
+		icn.parWin = desk;
+		placeInIconSlot(icn, {create: true, load: true});
+	}
+	desk.loaded = true;
+}//»
+const reload_icons = async(is_refresh) => {//«
+	let fullpath = DESK_PATH;
+	let usemain = desk;
+	let ret = await pathToNode(fullpath);
+	if (!ret) {
+cerr("Nothing returned from pathToNode:\x20"+fullpath);
+		return;
+	}
+	if (!ret.done) await fsapi.popDir(ret);
+	let kids = ret.kids;
+	let keys = getKeys(kids);
+	let kid;
+	let arr = [];
+	for (let i = 0; i < keys.length; i++) {
+		let name = keys[i];
+		if (name == "." || name == "..") continue;
+		kid = kids[name];
+		if (kid.perm===false) continue;
+		arr.push(kid);
+	}
+	reload_desk_icons(arr);
+};//»
+const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {//«
 
-const toggle_taskbar=()=>{if(taskbar_hidden)taskbar.show();else taskbar.hide();};
+	let icn = iconarg ||{appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
+	icn.winArgs = winargs;
+	return open_new_window(icn, {SAVER: saverarg, PREVPATHS: prevpaths});
+}//»
+const check_name_exists = async(str, which, usepath) => {//«
+	let path;
+	if (which) path = which.fullpath;
+	else path = usepath;
+	let fullpath = `${path}/${str}`.regpath();
+	return pathToNode(fullpath);
+}//»
+const get_icon_array = (arg, if_compact) => {//«
+	if (arg!==desk) {
+		let out = [];
+		let arr = Array.from(arg.winElem.getElementsByClassName("icon"));
+		for (let icn of arr) out.push(icn.icon);
+		return out;
+	}
+	let icons;
+	if (desk.icons) {
+		icons = desk.icons;
+	}
+	else {
+		icons = set_icon_array_of_desk();
+	}
+	if (!if_compact) return icons;
+	let arr = [];
+	for (let i = 0; i < icons.length; i++) {
+		let icn = icons[i];
+		if (icn&&icn.parentNode) arr.push(icn);
+	}
+	return arr;
+}//»
+const set_icon_array_of_desk = () => {//«
+	let numx = DESK_GRID_W;
+	desk.cols = numx;
+	let arr = [];
+	let kids = desk.childNodes;
+	for (let i = 0; i < kids.length; i++) {
+		let kid = kids[i];
+		if (kid.className != "icon" || kid.path != DESK_PATH) continue;
+		let num = kid.col + (kid.row * numx);
+		arr[num] = kid;
+	}
+	desk.icons = arr;
+	return arr;
+}//»
+const vacate_icon_slot = (icn, if_no_clear) => {//«
+	if (icn.parWin!==desk) return;
+	if (!(icn.name && icn.parWin)) {
+cerr("No icn.name && icn.parWin", icn);
+		return;
+	}
+	let oldarr = icn.parWin.icons;
+	let ind = oldarr.indexOf(icn);
+	if (ind > -1) {
+		if (icn.parWin===desk){
+//			if (!globals.read_only) delete localStorage[FS_PREF+":"+icn.Fullpath()];
+			if (!(globals.read_only || if_no_clear)) icn.clearFromStorage(null,3);
+		}
+		oldarr[ind] = undefined;
+	} else cerr("The icon was not in the icons array!", icn);
+}//»
+const placeInIconSlot = (icn, opts={}) => {//«
+//const place_in_icon_slot = (icn, pos, if_create, if_load, if_no_vacate, if_no_clear)
+	const do_add=()=>{//«
+		if (elem.iconDiv) {
+			icn.parWin = elem.iconDiv.win;
+			elem.iconDiv._add(icn);
+		} else {
+			icn.parWin = desk;
+			elem._add(iconelm);
+			icn.saveToStorage();
+		}
+	};//»
+	let{
+		pos, create, load, noVacate, noClear, doMove
+	}= opts;
+	let startx = desk_grid_start_x;
+	let starty = desk_grid_start_y;
+	let elem = desk;
+	if (icn.name && !create && !noVacate) vacate_icon_slot(icn, noClear);
+	let arr = get_icon_array(elem);
+	let iconelm = icn.iconElem;
+	if (create){//«
+		iconelm._pos="absolute";
+		icn.parWin = desk;
+		elem._add(iconelm);
+
+/*In desk.css,«
+.iconl {
+    max-height:17px;
+    text-align: center;
+    overflow-wrap:break-word;
+    width:90px;
+    font-size:16px;
+    background-color:#000;
+    padding:1.5px;
+}
+»*/
+
+//If you want the overflowing icon names to be left justified rather than centered, uncomment below.
+//if (icn.label.clientHeight > 20) icn.label._ta = "left";
+
+		if (!pos) {
+//			let s = localStorage[FS_PREF+":"+icn.fullpath()];
+			let s = localStorage[FS_PREF+":"+icn.fullpath];
+			if (s){
+				let parr = s.split(" ");
+				let col = parseInt(parr[0]);
+				let row = parseInt(parr[1]);
+				let i = col + (row * DESK_GRID_W);
+				let dosave = false;
+				if (isNaN(i)||arr[i]){
+					i=0;
+					dosave=true;
+					for (let j = i+1; ;j++){
+						if (!arr[j]){
+							i=j;
+							row = Math.floor(i/DESK_GRID_W);
+							col = i % DESK_GRID_W;
+							break;
+						}
+					}
+				}
+				arr[i] = icn;
+				icn.col=col;
+				icn.row=row;
+				iconelm._z= ICON_Z;
+				iconelm._x=desk_grid_start_x + (col * IGSX);
+				iconelm._y=desk_grid_start_y + (row * IGSY);
+				if (dosave) icn.saveToStorage();
+				return;
+			}
+			else if(load){
+cwarn(`The icon (${icn.name}) was not found in localStorage!`);
+log(icn);
+			}
+		}
+	}//»
+	if (!pos) {//«
+		let i = 0;
+		let x, y;
+		let doit = () => {
+			let xnum = i % elem.cols;
+			let ynum = Math.floor(i / elem.cols);
+			x = startx + (xnum * IGSX);
+			y = starty + (ynum * IGSY);
+			icn.col = xnum;
+			icn.row = ynum;
+			iconelm._x= x;
+			iconelm._y= y;
+			arr[i] = icn;
+			iconelm._z= ICON_Z;
+			do_add();
+		};
+		for (; i < arr.length; i++) {
+			if (!(arr[i] && arr[i].iconElem.parentNode)) break;
+		}
+		doit();
+		return;
+	}//»
+	let low_dist = Infinity;
+	let low_x = null;
+	let low_y = null;
+	let good_it = null;
+	let i = 0;
+//EIUKLMY
+	let posX = Math.round(pos.X);
+	let posY = Math.round(pos.Y);
+	let grid_x = Math.floor((posX - startx) / IGSX);
+	if (grid_x < 0) grid_x = 0;
+	let grid_y = Math.floor((posY - starty) / IGSY);
+	if (grid_y < 0) grid_y = 0;
+	let grid_pos = (grid_y * elem.cols) + grid_x;
+	if (!arr[grid_pos] && (grid_x < elem.cols)) {//«
+		good_it = grid_pos;
+		low_x = startx + (grid_x * IGSX);
+		low_y = starty + (grid_y * IGSY);
+	}//»
+	else {//«
+		let check_low = () => {
+			let ynum = Math.floor(i / elem.cols);
+			let xnum = i % elem.cols;
+			let x = startx + (xnum * IGSX);
+			let y = starty + (ynum * IGSY);
+			let got_dist = dist(x + 40, y + 40, posX, posY);
+			if (got_dist < low_dist) {
+				low_dist = got_dist;
+				low_x = x;
+				low_y = y;
+				good_it = i;
+			}
+		};
+		for (i = 0; i < arr.length; i++) {
+			let icn = arr[i];
+			if (!icn) check_low();
+		}
+		if (!(low_x && low_y)) check_low();
+	}//»
+	if (low_x && low_y) {
+		icn.col = good_it % elem.cols;
+		icn.row = Math.floor(good_it / elem.cols);
+		iconelm._z= ICON_Z;
+		arr[good_it] = icn;
+		do_add();
+		if (doMove || !create) {
+			return move_icon(icn, low_x, low_y);
+		}
+		iconelm._x= low_x;
+		iconelm._y= low_y;
+		return;
+	}
+	throw new Error("failure");
+}//»
+const reloadIcons = win => {return reload_icons();}
+const update_folder_statuses = usepath => {//«
+	for (let w of get_all_windows()) {
+		if (w.appName !== FOLDER_APP) continue;
+		if (usepath) {
+			if (w.fullpath === usepath) w.app.update();
+		} else w.app.update();
+	}
+};
+this.update_folder_statuses=update_folder_statuses;
+//»
 
 //»
 //Icons«
@@ -3869,2148 +6162,401 @@ throw new Error("WHAT THE IN THE EVERLIVING CRAP IS THIS?????");
 };//»
 
 //»
-//Windows«
+//Taskbar«
 
-class Window {//«
+const Taskbar = function(){
 
-constructor(arg){//«
+//DOM«
 
-	this.allowClose = true;
-	this.allowMove = true;
-	this.allowResize = true;
-	this.allowMinimize = true;
-	this.allowNone = false;
+let bar = mkdv();//«
+this.taskbarElem=bar;
+bar.style.justifyContent="space-between";
+bar.style.userSelect="none";
+bar.onmousedown=noprop;
+bar._padt=3;
+bar._padb=1;
+bar._h=TASKBAR_HGT;
+if (qObj.nobar) bar._dis="none";
+else bar._dis="flex";
+bar._pos="fixed";
+bar._b=0;
+bar._x="-0.5px";
+bar._w="100%";
+bar._op=0;
+bar._z=MIN_WIN_Z-1;
+bar._bgcol=TASKBAR_BG_COL;
+bar._bor=TASKBAR_BOR;
+bar.id="taskbar";
+bar._tcol="#999";
+//»
+let mwb = mkdv();//«
+mwb._marr=mwb._marl=3;
+mwb._dis="flex";
+//»
+let st = start_button;//«
+//st._padt=st._padb=3;
+st._padr=st._padl=5;
+//st._bgcol="#222";
 
-	let winargs = arg.WINARGS||{};
-	this.winArgs = winargs;
-	let app = arg.appName;
-	this.appName = arg.appName;
-	let is_folder = app === FOLDER_APP;
-	this.isFolder = is_folder;
-	this.winNum = ++win_num;
+st._ff="arial";
+st._dis="flex";
+st.style.alignItems="center";
+st.style.justifyContent="center";
+st._fs=16;
+st.innerText="Begin";
+st._bor = TASKBAR_BOR;
 
-	this.winId = winargs.ID || "win_"+this.winNum;
-	this.id=this.winId;
+//»
 
-	this.Desk = Desk;
-	this.workspaceNum = current_workspace_num;
+let wn = workspace_num_div;//«
+let ws = workspace_switcher_div;
+wn.style.cursor="pointer";
+wn._marr = wn._marl = 3;
+wn._dis="flex";
+wn.style.justifyContent="center";
+wn.style.alignItems = "center";
+wn._fs = 18;
+wn._bor=TASKBAR_BOR;
+wn.style.cssFloat="right";
+wn._ta="center";
+wn._w=TASKBAR_HGT;
+wn.onclick=(e)=>{
+	e.stopPropagation();
+	this.toggleSwitcher();
+};
+set_workspace_num(current_workspace_num);
+//»
 
-	this.app = {onresize:NOOP};
-	this.appName = app;
-	this.type = "window";
-	if (arg.APPARGS) this.noSave = true;
-	else this.noSave = null;
-	this.ownedBy = undefined;
+let wsbs = WORKSPACE_SWITCHER_BOX_SZ;//«
+ws._bgcol="#fff";
+ws._pos="absolute";
+ws._dis="none";
+ws.style.gridTemplateRows=`${wsbs}px ${wsbs}px ${wsbs}px`;
+ws.style.gridTemplateColumns=`${wsbs}px ${wsbs}px ${wsbs}px`;
+ws._r=0;
+ws._b=TASKBAR_HGT+7;
+ws._z=CG_Z-1;
+//»
 
 
-	this.makeDOMElem(arg);
-	this.addDOMListeners();
-
-	arg.topWin = this;
-	if (arg.SAVER) {
-//		this.bottomPad = botpad;
-		this.bottomPad = winargs.BOTTOMPAD;
-		this.saver = arg.SAVER;
-		arg.SAVER.folderCb(this);
-	}
-	windows.push(this);
-	this.arg = arg;
-
-	if (winargs.isMaxed){
-//		max.innerText="\u{1f5d7}";
-		this.maxButton.innerText="\u{1f5d7}";
-		this.isMaxed = true;
-		let dims = winargs.holdDims;
-		this.maxHoldX=dims.X;
-		this.maxHoldY=dims.Y;
-		this.maxHoldW=dims.W;
-		this.maxHoldH=dims.H;
-	}
-	if (winargs.isFullscreen){
-		this.isFullscreen = true;
-		let dims = winargs.holdDims;
-		this.fsHoldX=dims.X;
-		this.fsHoldY=dims.Y;
-		this.fsHoldW=dims.W;
-		this.fsHoldH=dims.H;
-	}
-}//»
+//»
 
 //Methods«
 
-checkProp(which){//«
-	let workspace = workspaces[this.workspaceNum];
-	if (workspace.allowNone){
-		show_overlay(`Workspace[${this.workspaceNum+1}].allowNone == true`);
-		return false;
-	}
-	if (this.allowNone){
-		show_overlay(`Window[${this.winNum}].allowNone == true`);
+this.hide=(if_temp)=>{//«
+	bar._z = CG_Z-1;
+	bar._b = -bar._gbcr().height;
+	if (if_temp) return;
+	taskbar_hidden=true;
+	if (!globals.read_only) localStorage[lst_hidden]="true";
+};//»
+this.show=(if_temp)=>{//«
+	bar._b=0;
+	if (if_temp) {
+		bar._z=CG_Z+2;
 		return;
 	}
-	let prop = "allow"+which;
-	if (!workspace[prop]){
-		show_overlay(`Workspace[${this.workspaceNum+1}].${prop} == false`);
-		return false;
+	bar._z=MIN_WIN_Z-1;
+	taskbar_hidden=false;
+	if (!globals.read_only){
+		delete localStorage[lst_hidden];
 	}
-	if (this[prop]) return true;
-	show_overlay(`Window[${this.winNum}].${prop} == false`);
-	return false;
-}//»
-makeDOMElem(arg){//«
-
-	let marr;
-	let {winId: winid, winArgs: winargs, appName: app} = this;
-	let wintitle;
-//	let winargs = this.winArgs;
-
-	if (arg.name) wintitle = arg.name;
-	else if (winargs.TITLE) wintitle = winargs.TITLE;
-	else wintitle = "Untitled";
-
-	let usex, usey, usew, useh;
-	let defwinargs = get_newwin_obj();
-	if (isFin(winargs.X)) usex = winargs.X;
-	else usex = defwinargs.X;
-
-	if (isFin(winargs.Y)) usey = winargs.Y;
-	else usey = defwinargs.Y;
-
-	if (isFin(winargs.WID)) usew = winargs.WID;
-	else if (winargs.WID === "100%") usew = winw();
-	else usew = defwinargs.WID;
-
-	let botpad = winargs.BOTTOMPAD;
-	if (isFin(winargs.HGT)) useh = winargs.HGT;
-	else if (winargs.HGT === "100%") useh = winh();
-	else {
-		useh = defwinargs.HGT;
-		if (botpad) useh -= botpad;
-	}
-	let win = make("div");//The top level window«
-	win.id = winid;
-	no_select(win);
-
-//I guess this is here so the app name shows up in the Elements view of devtools
-	win.dataset.app = app;
-	win._pos= "fixed";
-	win._bor= "1px solid #333";
-	win._x=usex;
-	win._y=usey;
-	win._z=HI_WIN_Z+1;
-	win.className="topwin";
-	win.style.boxShadow = window_boxshadow;
-	win._winObj = this;
-
-//»
-	let main = make("div");//The application area«
-	no_select(main);
-	main.top = this;
-	main.id = "main_"+winid;
-	main._w=usew;
-	main._h=useh;
-	main._bgcol= APP_BG_COL;
-	main._tcol= APP_TEXT_COL;
-	main._bor= "0px solid transparent";
-	main._pos= "relative";
-	main.className="mainwin";
-	main.type = "window";
-//»
-	let titlebar = make('div');//«
-	titlebar.id="titlebar_"+winid;
-	titlebar._h = 18;
-	no_select(titlebar);
-	titlebar.className = "titlebar";
-	titlebar.win = win;
-	main.titleBar = titlebar;
-	main.appName = app;
-	let title = make("div");
-	title.id="title_"+winid;
-	title._padt=1.25;
-	title._ta= "center";
-	title._pos= "relative";
-	title._tcol= "black";
-	title._ff= "sans-serif";
-	titlebar._add(title);
-
-	let namespan = make('span');
-	namespan._dis="block";
-	namespan.id="namespan_"+winid;
-	namespan._fs= 12;
-	namespan.title = winid;
-	titlebar.label = namespan;
-	title._add(namespan);
-	main._over="hidden";
-
-	let img_div = make('div');
-	img_div._pos= "absolute";
-	img_div._bor= "0px solid transparent";
-	img_div._x= 0;
-	img_div._y= 0;
-	img_div._padb= 3;
-	img_div.style.cursor = "default";
-
-	img_div.draggable=true;
-	img_div.ondragstart=nopropdef;
-
-	img_div.onclick = ()=>{this.contextMenuOn()};
-	title._add(img_div);
-	img_div.innerText = getAppIcon(app?app.split(".").pop():DEF_BIN_APP);
-	img_div.id="titleimgdiv_"+winid;
-	img_div._fs=12;
-	img_div._tcol="#a7a7a7";
-	img_div.title = app.split(".").pop();
-//»
-//«Min/Max/Close buttons
-
-	const mkbut = (sz) => {//«
-//	const mkbut = (col, sz) => {
-		let b = make('div');
-		b._over= "hidden";
-		b._padl=b._padr=2;
-		b._ta= "center";
-		b._fs= sz;
-		b._w= 16;
-		b._h = 16;
-		b._bor="1px solid #000";
-		b._bgcol= WINBUT_OFF_COL;
-		b.onmousedown=e=>{e.stopPropagation();};
-		b.hover = () => {
-			b._bgcol=WINBUT_ON_COL;
-		};
-		b.unhover = () => {
-			b._bgcol=WINBUT_OFF_COL;
-		};
-		b.top = win;
-		butdiv._add(b);
-		return b;
-	};//»
-	const doclose = (force, if_dev_reload)=>{//«
-//	const doclose = function(evt, thisarg, force, if_dev_reload) {
-		if (!this.checkProp("Close")) return;
-		if (this.isMinimized||this.isTiled) return;
-		if (!force && (this != CWIN)) return;
-		if (this.no_events) return;
-		if (this.nobuttons && !force) return;
-		if (this.app.onkill) this.app.onkill(if_dev_reload, force);
-		OUTERLOOP2: for (let wspace of workspaces) {
-			let wins = wspace.windows;
-			for (let i = 0; i < wins.length; i++) {
-				if (wins[i] == this) {
-					wins.splice(i, 1);
-					break OUTERLOOP2;
-				}
-			}
-		}
-		if (this.isFolder) icon_array_off(3);
-		this.killed = true;
-		this.app.killed = true;
-		win._del();
-		let icn = this.icon;
-		let node = this.node;
-		if (icn) {
-			if (!node) node = icn.node;
-			icn.win = null;
-		}
-		if (node && node.unlockFile) node.unlockFile();
-		if (this.bindNum){
-			delete globals.boundWins[this.bindNum];
-			show_overlay(`${this.bindNum}: the key has been unbound`);
-		}
-		top_win_on();
-	};//»
-	const onhover=function(){//«
-		if (CDL) return;
-		butdiv._op= 1;
-		this.hover();
-	};//»
-	const onunhover=function(){//«
-		if (CDL) return;
-		if (this !== CWIN) butdiv._op=0.5;
-		else butdiv._op= 0.75;
-		this.unhover();
-	};//»
-
-	let butdiv = make('div');//«
-	butdiv.style.cursor = "default";
-	butdiv.off = () => {
-		butdiv._op= 0.5;
-	};
-	butdiv.on = () => {
-		butdiv._op= 0.75;
-	};
-	butdiv._pos= "absolute";
-	butdiv._r= 3;
-	butdiv._y= 0;
-	butdiv._dis= "flex";
-	butdiv.style.flexDirection = "row-reverse";
-	butdiv._h = 16;
-	butdiv._z=1000000;
-	butdiv._tcol= "#000";
-	butdiv.win = this;
-//»
-	let close = mkbut("15px");//«
-	close.id="closebut_"+winid;
-	close.innerHTML="<b>X</b>";
-	close.title="Close";
-	close.style.lineHeight = "110%";
-	butdiv.close = close;
-	titlebar.close = close;
-	this.easyKill=()=>{
-//		doclose(null, close);
-		doclose();
-	}
-	this.forceKill = if_dev_reload => {
-		if (this.isMinimized) this.unminimize(true);
-//		doclose(null, close, true, if_dev_reload);
-		doclose(true, if_dev_reload);
-	};
-	close.onclick=()=>{
-		if (check_cwin_owned()) return;
-//		if (this._savecb) this._savecb();
-		this.forceKill();
-	}
-	this.keyKill = () => {
-		if (this.app && this.app.is_editing) {
-			if (this.app.try_kill) this.app.try_kill();
-			else cwarn("Dropping close signal");
-		} 
-		else {
-//			doclose(null, close, true);
-			doclose(true);
-		}
-	};
-//»
-	let max = mkbut("14px");//«
-	max.id="maxbut_"+winid;
-	max.style.lineHeight = "16px";
-	max.reset=()=>{
-		max.innerText="\u{1f5d6}";
-		max.title="Maximize";
-		win.style.boxShadow = window_boxshadow;
-	};
-	max.onclick = () => {
-		if (!this.checkProp("Resize")) return;
-		close.unhover();
-		max.unhover();
-		min.unhover();
-		this.maximize();
-	};
-	max.reset();
-//»
-	let min = mkbut("14px");//«
-	min.id="minbut_"+winid;
-	min.innerText="\u{2b07}"; //Solid down arrow
-	min.style.lineHeight="135%";
-	min.title="Minimize";
-	min.onclick=()=>{
-		if (!this.checkProp("Minimize")) return;
-		if (this.isFullscreen) {
-			if (this!==CWIN) {
-cwarn("this!==CWIN ????");
-				return;
-			}
-			this.fullscreen(true);
-		}
-		if (this.isMinimized||this.isTiled) return;
-		if (ICONS.length && ICONS[0].parWin==this) icon_array_off();
-		taskbar.addwin(this);
-	};
-//»
-//Button event listeners«
-	close.draggable=max.draggable=min.draggable=true;
-	close.ondragstart=max.ondragstart=min.ondragstart=(e)=>nopropdef;
-	close.onmousedown=max.onmousedown=min.onmousedown=(e)=>{
-		icon_array_off();
-	}
-	close.onmouseenter=onhover;
-	close.onmouseleave=onunhover;
-	max.onmouseenter=onhover;
-	max.onmouseleave=onunhover;
-	min.onmouseenter=onhover;
-	min.onmouseleave=onunhover;
-//»
-	title._add(butdiv);
-//»
-	let footer = make('div');//«
-	let footer_wrap=make('div');
-	footer_wrap._pos="relative";
-//«
-//The BOTTOMPAD property is ultimately given to us via a WINARG argument, so
-//that, for example, from Desk.api.saveAs (@DWEUNFKL), a folder window can be
-//opened up that has a Main window with a smaller height than normal (shrunken by
-//the amount of SAVEAS_BOTTOM_HGT), so that buttons (like Save and Cancel) can be
-//put on the bottom. The point is that this bottom area is considered to be part
-//of the system's "window chrome" (like the titlebar), and the application
-//doesn't have to worry about changing anything about the logic of it's own
-//layout.
-//»
-	let bottom_div = make('div');
-	if (botpad){
-		bottom_div._bgcol="#373747";
-		bottom_div._tcol="#ddd";
-		bottom_div.style.borderTop="1px solid #556";
-		bottom_div.style.borderBottom="1px solid #556";
-		bottom_div._h=botpad-2;
-		footer_wrap._add(bottom_div);
-	}
-	footer._dis="flex";
-	footer.style.justifyContent="space-between";
-	footer._h=18;
-	let statdiv=make('div');
-	statdiv.id="stat_"+winid;
-	statdiv.onmousedown=e=>{
-		e.stopPropagation();
-		icon_array_off();
-	};
-	statdiv.onclick=noprop;
-	statdiv.oncontextmenu=noprop;
-	statdiv._tcol="#ddd";
-	statdiv._fs=14;
-	statdiv._padl=15;
-	statdiv._padt=1;
-	statdiv._over="hidden";
-	let rsdiv = make('div');
-	rsdiv.id="rsdiv_"+winid;
-	rsdiv.win = this;
-	rsdiv.style.flex="0 0 15px";
-	rsdiv._bgcol="#778";
-	rsdiv._bor="2px inset #99a";
-	rsdiv.onmouseover=e=>{
-		if (CDL) rsdiv.style.cursor = "";
-		else rsdiv.style.cursor = "nwse-resize";
-	};
-	rsdiv.draggable=true;
-	rsdiv.ondragstart=e=>{
-		e.preventDefault();
-		if (!this.checkProp("Resize")) return;
-		if (this.isMaxed) {
-			max.reset();
-			this.isMaxed = false;
-		}
-		CRW = this;
-		if (CRW != CWIN) CRW.on();
-		desk.style.cursor = "nwse-resize";
-	};
-	statdiv.resize=()=>{statdiv.style.maxWidth = main._w - 20;};
-
-	footer._add(statdiv);
-	footer._add(rsdiv);
-	footer_wrap._add(footer);
-//FSKEUSHFK
-	let numdiv = mkdv();
-	numdiv.style.cssText=`
-position: absolute;
-color: #aaa;
-font-size: 12.5px;
-left: 1.5px;
-top: 2.75px;
-	`;
-	numdiv.innerHTML=`${this.winNum}`;
-	footer_wrap._add(numdiv);
-//»
-
-	win._add(titlebar);
-	win._add(main);
-	win._add(footer_wrap);
-	desk._add(win);
-
-	this.Main = main;
-	this.main = main;
-
-	this.imgDiv = img_div;
-	this.nameSpan = namespan;
-	this.bottomDiv = bottom_div;
-//log(this.bottomDiv);
-	this.statusBar = statdiv;
-	this.rsDiv = rsdiv;
-	this.footer=footer_wrap;
-	this.butDiv = butdiv;
-	this.closeButton = close;
-	this.maxButton = max;
-	this.minButton = min;
-	this.titleBar = titlebar;
-	this.titleDiv = title;
-	this.title = wintitle;
-	this.winElem = win;
-
-}//»
-addDOMListeners(){//«
-	let {winElem: win, main, titleDiv: title, titleBar: titlebar}=this;
-
-	if (this.isFolder) {//«
-		let didleave;
-		const clear_drag = () => {//«
-			WDIE = null;
-			let dd = this.dragDiv;
-			dd._loc(-1, -1);
-			dd._w = 0;
-			dd._h = 0;
-		};//»
-		const nogo=()=>{//«
-			if (!CDL) return;
-			CDL.nogo();
-			main.style.cursor = "not-allowed";
-		};//»
-		const on = () => {//«
-			if (!CDL) return;
-			main.style.cursor = "copy";
-			CDL.into(this.name);
-		};//»
-		const off = () => {//«
-			main.style.cursor = "";
-			if (CDL) CDL.reset();
-		};//»
-		main.onmousedown=e=>{//«
-			e.stopPropagation();
-			icon_array_off(20);
-			if (e.clientX < win.offsetLeft + main.clientWidth + winx() && e.clientY < win.offsetTop + main.clientHeight + this.titleBar._h + winy()) {
-				this.on();
-				WDIE = e;
-				WDIE.scrtop = main.scrollTop;
-				WDIE.scrleft = main.scrollLeft;
-				let gotw = main.scrollWidth - (e.clientX - win.offsetLeft + main.scrollLeft);
-				WDIE._maxWidth = gotw - 1 + winw();
-			}
-			if (CWIN == this) return;
-			CWIN&&CWIN.off();
-			this.on();
-		};//»
-		main.onmouseover=async e=>{//«
-			e.stopPropagation();
-			if (CDICN){
-				let thispath = this.fullpath;
-				if (CDICN.path === thispath) return nogo();
-				if (!await fsapi.checkDirPerm(thispath)||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
-				didleave = false;
-				if (!CDICN) return;
-				if (!didleave) on();
-			}
-		};//»
-		main.onmouseout=e=>{//«
-			e.stopPropagation();
-			off();
-			if (CDICN) {
-				didleave = true;
-			}
-		};//»
-		main.onmouseup=async e=>{//«
-			e.stopPropagation();
-			if (CDICN){
-				desk.style.cursor = "";
-				await move_icons(this.fullpath, {e, win: this});
-				off();
-				CWIN&&CWIN.off();
-				CDICN = null;
-				cldragimg();
-			}
-			else {
-				CRW = null;
-				CRWINS = null;
-				CDW = null;
-				clear_drag();
-			}
-		};//»
-		main.ondrop=e=>{//«
-			e.stopPropagation();
-			e.preventDefault();
-			save_dropped_files(e, this);
-		};//»
-		main.onmouseleave=e=>{clear_drag();};
-		main.ondragover=e=>{};
-		this.clearDrag = clear_drag;
-		win.onmouseover=noprop;
-		win.onmouseout=noprop;
-	}//»
-	else{//«
-		main.onmouseup=e=>{
-			CRW = null;
-			CRWINS = null;
-			CDW = null;
-		};
-		main.ondrop=e=>{
-cwarn("No drop on main window");
-		};
-		win.onmouseover=()=>{
-			if (!CDL) return;
-			CDL.nogo();
-			win.style.cursor = "not-allowed";
-			main.style.cursor = "not-allowed";
-		};
-		win.onmouseout=()=>{
-			if (!CDL) return;
-			CDL.reset();
-			win.style.cursor = "";
-			main.style.cursor = "";
-		};
-	}//»
-	title.ael('mouseover',()=>{body.style.cursor="default";});
-	titlebar.onmouseover=e=>{//«
-		if (CDL) titlebar.style.cursor = "";
-		else titlebar.style.cursor = "move";
-	};//»
-	titlebar.oncontextmenu = nopropdef;
-	titlebar.draggable=true;
-	titlebar.ondragstart=e=>{//«
-		e.preventDefault();
-//		if (this.isMaxed) this.max_button.reset();
-		if (!this.checkProp("Move")) return;
-		if (this.isMaxed) return;
-		win.style.boxShadow = "";
-		CDW = this;
-		DDX = e.clientX - pi(win.offsetLeft);
-		DDY = e.clientY - pi(win.offsetTop);
-	};//»
-	main.oncontextmenu = e => {//«
-		e.preventDefault();
-		e.stopPropagation();
-	};//»
-	win.ondrop = e => {//«
-		e.stopPropagation();
-		e.preventDefault();
-	};//»
-	win.onclick=noprop;
-	win.ondblclick=noprop;
-	win.onmousedown=e=>{//«
-		e.stopPropagation();
-		icon_array_off(21);
-		this.on();
-	};//»
-	win.ondrop = nopropdef;
-	win.ondragover = nopropdef;
-
-}//»
-contextMenuOn(e){//«
-	let {imgDiv: img_div, winElem: win, winId: winid} = this;
-
-	if (!this.app.get_context) return;
-	let items = this.app.get_context();
-	if (!items) items = [];
-	items.push("Switch\xa0to\xa0workspace");
-	let choices = [];
-	for (let i=0; i < num_workspaces; i++){
-		if (i!=current_workspace_num){
-			choices.push(`${i+1}`);
-			choices.push(()=>{
-				if (windows.layout_mode) toggle_layout_mode();
-				switch_win_to_workspace(this, i);
-				this.off();
-				win._dis="none";
-				top_win_on();
-			});
-		}
-	}
-	items.push(choices);
-	items.push(`Window ${winid.replace(/^win_/,"")} properties...`, ()=>{
-		let rect = win._gbcr();
-		let str = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
-		popup(str);
-	});
-//		items.push(`Window id: ${winid.replace(/^win_/,"")}`, null);
-	CG.on();
-	let op_hold = img_div._op;
-	let usex,usey;
-	if (e) {
-		usex = e.clientX;
-		usey = e.clientY;
+};//»
+this.toggle_expert_mode = ()=>{//«
+	if (!globals.dev_mode) return;
+	if (taskbar_expert_mode){
+		taskbar_expert_mode = false;
+		delete localStorage[lst_expert];
+		st._dis="flex";
+		wn._dis="flex";
 	}
 	else{
-		img_div._bgcol= "#fff";
-		img_div._tcol= "#000";
-		img_div._op=1;
-		let rect = win._gbcr();
-		usex = rect.left;
-		usey = rect.top+this.titleBar._h;
+		taskbar_expert_mode = true;
+		localStorage[lst_expert]="true";
+		st._dis="none";
+		wn._dis="none";
 	}
-	set_context_menu({X:usex,Y:usey},{items: items});
-	desk_menu.kill_cb = () => {
-		img_div._op=op_hold;
-		img_div._bgcol= "";
-		img_div._tcol="#a7a7a7";
-	};
-};//»
-setWinArgs(args){//«
-//	let args={BOTTOMPAD: w.bottompad, X: w.winElem._x, Y:w.winElem._y, WID: w.main._w, HGT: w.main._h};
-	let {main, winElem: win} = this;
-	args.BOTTOMPAD = this.bottompad;
-	args.X = win._x;
-	args.Y = win._y;
-	args.WID = main._w;
-	args.HGT = main._h;
-	if (this.isMaxed){
-		args.isMaxed = true;
-		args.holdDims={W: this.maxHoldW, H: this.maxHoldH, X: this.maxHoldY, Y: this.maxHoldY};
-	}
-	if (this.isFullscreen){
-		args.isFullscreen = true;
-		args.holdDims={W: this.fsHoldW, H: this.fsHoldH, X: this.fsHoldX, Y: this.fsHoldY, BOR: this.bor_hold};
-	}
-};//»
-	makeScrollable(){//«
-		let{main} = this;
-		main._overy="auto";
-		main.tabIndex="-1";
-		this.isScrollable = true;
-	};//»
-	up(){//«
-		if (this.isMinimized) this.unminimize(true);
-		this.winElem.style.zIndex = ++HI_WIN_Z;
-		if (this.overdiv) this.overdiv.style.zIndex = ++HI_WIN_Z;
-	};//»
-	on(opts={}){//«
-		if (!windows_showing) toggle_show_windows();
-		if (CPR) return;
-		if (CWIN) {
-			if (this === CWIN) return;
-			CWIN&&CWIN.off();
-		}
-		if (this.workspaceNum !== current_workspace_num) {
-			if (opts.switchToWorkspace){
-				switch_to_workspace(this.workspaceNum);
-				if (CWIN) CWIN.off();
-			}
-			else {
-				switch_win_to_workspace(this, current_workspace_num);
-				if (this.childWin){
-					switch_win_to_workspace(this.childWin, current_workspace_num);
-				}
-			}
-		}
-		if (this.isFolder && !this.isMinimized) {
-//VKUIOKL
-			if (CUR.curElem.parentNode === desk) {
-				let icn = CUR.geticon();
-				if (icn) icn.hideLabelName();
-				desk.lastcurpos = CUR.getpos();
-			}
-			this.main.focus();
-			CUR.iconDiv = this.main.iconDiv;
-			CUR.main = this.main;
-			this.main._add(CUR.curElem);
-			this.cursor = CUR;
-//			CUR.set(2);
-			CUR.on();
-		}
-		this.winElem._dis= "block";
-		if (this.winElem._z && this.winElem._z < 10000000) this.up();
-		
-		if (!this.noShadow) this.winElem.style.boxShadow = window_boxshadow;
-		document.activeElement.blur();
-		this.imgDiv._op= 0.75;
-		this.nameSpan._fw = "bold";
-		this.nameSpan._tcol= WINNAME_COL_ON;
-		this.winElem._bgcol= WIN_COL_ON;
-		if (this.butDiv) this.butDiv.on();
-		if (this.moveDiv) this.moveDiv.on();
-		let winobj = this.app;
-		if (winobj) {
-			if (winobj.onfocus&&!this.popup) {
-				winobj.onfocus();
-			}
-		}
-		else{
-cwarn(`window_on(): NO WINOBJ for this`, this);
-		}
-		if (this.isScrollable) this.main.focus();
-		if (this.isMinimized) this.taskbarButton.onmousedown();
-		if (this.childWin) this.childWin.on();
-		CWIN = this;
-	};
-	//»
-	off(){//«
-		if (this.isFolder) {
-			delete this.cursor;
-			this.cursor = null;
-		}
-		this.imgDiv._op= 0.5;
-		this.nameSpan._fw = "";
-		this.nameSpan._tcol= WINNAME_COL_OFF;
-		this.winElem._bgcol = WIN_COL_OFF;
-		if (this.butDiv) this.butDiv.off();
-		if (this.moveDiv) this.moveDiv.off();
-		if (this.area) {
-			this.area.selectionEnd = this.area.selectionStart;
-			this.area.blur();
-		}
-		this.winElem.style.boxShadow = "";
-		if (this.app && this.app.onblur) this.app.onblur();
-		if (this.isScrollable) this.main.blur();
-		if (this === CWIN) CWIN = null;
-		if (this.isMinimized) {
-			this.taskbarButton.onmouseup();
-			this.winElem._dis="none";
-		}
-	};
-	//»
-	setDefs(){//«
-		if (isMobile) this.fullscreen(true);
-		let a = this.app;
-		a.winid = this.id;
-		a.topwin = this;
-		if (!a.onresize) a.onresize = NOOP;
-		if (!a.onappinit) a.onappinit = NOOP;
-		if (!a.onkill) a.onkill = NOOP;
-		if (!a.onsave) a.onsave = NOOP;
-		if (!a.onloadfile) a.onloadfile = NOOP;
-		if (!a.onfocus) a.onfocus = NOOP;
-		if (!a.onblur) a.onblur = NOOP;
-		if (!a.onkeydown) a.onkeydown = NOOP;
-		if (!a.onkeyup) a.onkeyup = NOOP;
-		if (!a.onkeypress) a.onkeypress = NOOP;
-		if (!a.get_context) a.get_context = ()=>{return [];}
-	//	check_win_visible(this);
-
-	};//»
-	checkVisible(){//«
-		let{winElem: win}=this;
-		let rect = win.getBoundingClientRect();
-		if (!rect) return;
-		if ((rect.left > winw()) || (rect.right < 0) || (rect.top > winh()) || rect.bottom < 0) {
-cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
-			win._loc(0, 0);
-		}
-	};
-	//»
-	checkLoc(){//«
-		let {winElem: win} = this;
-		let rect = win._gbcr();
-		let w = rect.width,
-			h = rect.height;
-		let miny = 0;
-		if (win._x < 0) {
-			if (!win_overflow.left) win._x= 0;
-			else if (win._x + w < 0) win._x += 2 * win_move_inc;
-		} else if (win._x + w > winw()) {
-			if (!win_overflow.right) win._x= winw() - w;
-			else if (win._x > winw()) win._x -= 2 * win_move_inc;
-		}
-		if (win._y < miny) {
-			if (!win_overflow.top) win._y= miny;
-			else if (win._y + h < 0) win._y += 2 * win_move_inc;
-		} else if (win._y > miny && win._y + h > winh()) {
-			if (!win_overflow.bottom) {
-				let usey = winh() - h;
-				if (usey < miny) usey = miny;
-				win._y= usey;
-			} else if (win._y > winh()) win._y -= 2 * win_move_inc;
-		}
-	}//»
-	checkSize(){//«
-		let {winElem: win, main} = this;
-
-		let wid = main._w;
-		if (wid < win.clientWidth){
-			main._w = win.clientWidth;
-		}
-		else if (wid < min_win_width) {
-			main._w = min_win_width;
-		}
-//		if (main._w < min_win_width) main._w= min_win_width;
-		else if (win._x + win.clientWidth > winw()) {
-			if (!win_overflow.right) main._w= winw() - win._x;
-		}
-		if (win._h < 1) win._h = 1;
-		else if (win._y + win.clientHeight > winh()) {
-			if (!win_overflow.bottom) {
-				let menu_hgt = 0;
-				let winfrills = this.titleBar._h + 15;
-				let calc_hgt = winh() - win._y - winfrills - 3;
-				if (calc_hgt < 1) calc_hgt = 1;
-				main._h = calc_hgt;
-			}
-		}
-	}//»
-	addToResizeWins(){//«
-		if (!CRWINS) CRWINS=[];
-		if (CRWINS.indexOf(this)<0) {
-			CRWINS.push(this);
-		}
-	};//»
-	setFullscreenDims(){//«
-		let {winElem: win, main} = this;
-		let usepl = 0;
-		let usepr = 0;
-		let pl = main._padl;
-		let pr = main._padr;
-		if (pl) usepl = pi(pl);
-		if (pr) usepr = pi(pr);
-		win._bor="";
-		win._x= 0;
-		if (this.noChromeMode) win._y=0;
-		else win._y= "-" + (this.titleBar._h) + "px";
-		main._w= winw() - usepl - usepr;
-		main._h = winh(true);
-	};//»
-	fullscreen(if_instant){//«
-		let {winElem: win, main} = this;
-		if (this.isTransitioning) return;
-		const transend = e => {
-			win.style.transition = "";
-			main.style.transition = "";
-			this.statusBar.resize();
-			this.app.onresize();
-			if (this.moveDiv) this.moveDiv.update();
-			win.removeEventListener('transitionend', transend);
-			delete this.isTransitioning;
-		};
-		if (this.isTiled || this.isMinimized) return;
-		win.style.transition = `left ${WIN_TRANS_SECS},top ${WIN_TRANS_SECS}`;
-		main.style.transition = `width ${WIN_TRANS_SECS},height ${WIN_TRANS_SECS}`;
-
-		if (this.isFullscreen) {
-			win._bor= this.borHold;
-			delete this.borHold;
-			win._x= this.fsHoldX;
-			win._y= this.fsHoldY;
-			main._w= this.fsHoldW;
-			main._h = this.fsHoldH;
-			this.isFullscreen = false;
-		} else {
-			this.fsHoldW = main._w;
-			this.fsHoldH = main._h;
-			this.fsHoldX = win._x;
-			this.fsHoldY = win._y;
-			this.borHold = win._bor;
-			this.setFullscreenDims();
-			this.isFullscreen = true;
-		}
-
-		if (if_instant) transend();
-		else {
-			this.isTransitioning = true;
-			win.addEventListener('transitionend', transend);
-		}
-
-	}//»
-	setMaxDims(){//«
-		let{main, winElem: win, maxButton: max}=this;
-		let usepl = 0;
-		let usepr = 0;
-		let pl = main._padl;
-		let pr = main._padr;
-		if (pl) usepl = pi(pl);
-		if (pr) usepr = pi(pr);
-		win._loc(1,0);
-		main.style.width = winw() - usepl - usepr - 2 + "px";
-		main.style.height = winh() - this.titleBar._gbcr().height - this.footer._gbcr().height + "px";
-		win.style.boxShadow = "";
-		max.innerText="\u{1f5d7}";
-		max.title="Unmaximize";
-	};//»
-	maximize(if_instant){//«
-		let{winElem: win, main, maxButton: max}=this;
-		if (this.isTiled||this.isTransitioning||this.isMinimized||this.isFullscreen) return;
-		let transend = e =>{
-			win.style.transition = "";
-			main.style.transition = "";
-			this.statusBar.resize();
-			this.app.onresize();
-			win.removeEventListener('transitionend', transend);
-			this.isTransitioning = null;
-			delete this.isTransitioning;
-		};
-		win.style.transition = `left ${WIN_TRANS_SECS}, top ${WIN_TRANS_SECS}`;
-		main.style.transition = `width ${WIN_TRANS_SECS}, height ${WIN_TRANS_SECS}`;
-//		let max = this.max_button;
-		if (!this.isMaxed) {
-			this.maxHoldW = main._w;
-			this.maxHoldH = main._h;
-			this.maxHoldX = win._x;
-			this.maxHoldY = win._y;
-			this.isMaxed = true;
-			this.setMaxDims();
-		} else {
-			this.isMaxed = false;
-			main._w = this.maxHoldW;
-			main._h = this.maxHoldH;
-			win._x= this.maxHoldX;
-			win._y= this.maxHoldY;
-			win.style.boxShadow = window_boxshadow;
-			max.innerText="\u{1f5d6}";
-			max.title="Maximize";
-		}
-		if (if_instant) transend();
-		else {
-			this.isTransitioning = true;
-			win.addEventListener('transitionend', transend);
-//			this.isTransitioning = true;
-//			win.addEventListener('transitionend', transend);
-		}
-	};//»
-	minimize(){this.minButton.click();};
-	close(){this.keyKill();}
-	toggleLayout(if_set){//«
-		const get_cursor = (e, rect) => {//«
-			let lr_pad = rect.width * 0.25;
-			let tb_pad = rect.height * 0.25;
-			let lhit = false;
-			let rhit = false;
-			let thit = false;
-			let bhit = false;
-			let ret;
-			if (e.clientX < rect.left + lr_pad) lhit = true;
-			else if (e.clientX > rect.right - lr_pad) rhit = true;
-			if (e.clientY < rect.top + tb_pad) thit = true;
-			else if (e.clientY > rect.bottom - tb_pad) bhit = true;;
-			if (rhit && bhit) ret = ["nwse-resize", "se"];
-			else if (lhit && thit) ret = ["nwse-resize", "nw"];
-			else if (rhit && thit) ret = ["nesw-resize", "ne"];
-			else if (lhit && bhit) ret = ["nesw-resize", "sw"];
-			else if (rhit) ret = ["ew-resize", "e"];
-			else if (lhit) ret = ["ew-resize", "w"];
-			else if (thit) ret = ["ns-resize", "n"];
-			else if (bhit) ret = ["ns-resize", "s"];
-			else ret = ["move"];
-	//log(ret);
-			if (this.isTiled) {
-				if (ret[0][2]!=="-"||num_tiled_wins>MAX_TILED_WINS_FOR_RESIZING) return [""];
-
-	//Comment this to allow the more difficult case of north and west resizing...
-	//			if (ret[1]=="w"||ret[1]=="n") return [""];
-
-	//Need to figure out if this is an interior edge.
-
-				if ((lhit && rect.left <= 0)||
-					(thit && rect.top <= 0)||
-					(rhit && rect.right + 3 > winw())||
-					(bhit && rect.bottom + 3 > winh())) return[""];
-
-	//				if (bhit && rect.top > 0) return [""];
-
-			}
-			return ret;
-		};//»
-		const mkhandle = (wid, hgt, x, y) => {//«
-			let div = make('div');
-			div._bor= "1px solid black";
-			div._pos= "absolute";
-			div._w= wid;
-			div._h = hgt;
-			if (x) div._x= 0;
-			else div._r= 0;
-			if (y) div._y= 0;
-			else div._b= 0;
-			odiv._add(div);
-		};//»
-		let {winElem: win}=this;
-		if (this.isLayout) {
-			desk.style.cursor = "default";
-			this.moveDiv._del();
-			delete this.moveDiv;
-			delete this.rsDir;
-			this.isLayout = false;
-			return;
-		}
-		let odiv;
-		let dsty = document.body.style;
-		let rect = win.getBoundingClientRect();
-		odiv = make('div');
-		let osty = odiv.style;
-		odiv._pos= "absolute";
-		odiv._w= rect.width;
-		odiv._h = rect.height; 
-		odiv._x= 0;
-		odiv._y= 0;
-		odiv._z= 10000000;
-		odiv.class = "titlebar";
-		odiv.win = this;
-		odiv.onmousemove = (e) => {
-			if (CDICN || CRW) return;
-	//		if (this.isLayout) return;
-			osty.cursor = get_cursor(e, odiv.getBoundingClientRect())[0];
-		};
-
-		odiv.oncontextmenu = nopropdef;
-
-		odiv.onmousedown = (e) => {//«
-			e.stopPropagation();
-			if (this != CWIN) this.on();
-			let arr = get_cursor(e, odiv.getBoundingClientRect());
-			let sty = arr[0];
-			osty.cursor = sty;
-			if (this.isTiled) {
-			if (!sty) return;
-
-//	Once we figure out the logic of how to resize the other windows that are 
-//	being overlapped, then we can comment out this.
-			}
-			if (sty == "move") {
-				if (!this.checkProp("Move")) return;
-				CDW = this;
-				DDX = e.clientX - pi(win.offsetLeft);
-				DDY = e.clientY - pi(win.offsetTop);
-				return;
-			}
-			if (!this.checkProp("Resize")) return;
-			CRW = this;
-			CRW.startx = e.clientX;
-			CRW.starty = e.clientY;
-			CRW.startw = this.main._w;
-			CRW.starth = this.main._h;
-			CRW.rsDir = arr[1];
-			CRW.startl = win._x;
-			CRW.startt = win._y;
-		};//»
-		odiv.onmouseup = e => {//«
-			update_and_clear_resize_wins();
-			CDW = null
-		};//»
-		odiv.update = () => {//«
-			let rect = win._gbcr();
-			odiv._w= rect.width;
-			odiv._h = rect.height;
-			statdiv.innerHTML = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
-		};//»
-		odiv.on=()=>{
-			statdiv._tcol= "#ccc";
-			odiv._bgcol= "rgba(224,224,224,0.4)";
-		};
-		odiv.off=()=>{
-			statdiv._tcol= "#999";
-			odiv._bgcol= "rgba(176,176,176,0.4)";
-		};
-		win._add(odiv);
-		this.moveDiv = odiv;
-		let statdiv = make('div');
-		statdiv._bgcol= "#000";
-		statdiv._fs= 21;
-		statdiv.vcenter();
-		statdiv._ta= "center";
-		statdiv._over="hidden";
-		odiv._add(statdiv);
-		odiv.update();
-		mkhandle("100%", "25%", 1, 1);
-		mkhandle("100%", "25%", 1, 0);
-		mkhandle("25%", "100%", 1, 1);
-		mkhandle("25%", "100%", 0, 1);
-		this.isLayout = true;
-		if (CWIN == this) odiv.on();
-		else odiv.off();
-
-	};//»
-	toggleChrome(){//«
-//let {winElem: win}
-		if (this.isFullscreen || this.isMaxed || this.isMinimized) return;
-		this.noChromeMode = !this.noChromeMode;
-		let bar = this.titleBar;
-		let foot = this.footer;
-		let m = this.Main;
-		if (this.noChromeMode) {
-			let h = bar._gbcr().height + foot._gbcr().height;
-			this.borHold = this._bor;
-			this.winElem._bor= "";
-			m.diffH = h;
-			bar._dis= "none";
-			foot._dis= "none";
-			m._h += h;
-
-		} else {
-			bar._dis= "block";
-			foot._dis= "";
-			this.winElem._bor= this.borHold;
-			delete this.borHold;
-			m._h -= m.diffH;
-		}
-		this.statusBar.resize();
-		this.app.onresize();
-		return true;
-	}//»
-selectIcons(){//«
-let drect = this.dragDiv.getBoundingClientRect();
-let dr = drect.right;
-let dl = drect.left;
-let dt = drect.top;
-let db = drect.bottom;
-let OK=[];
-
-let icons = this.getIcons();
-
-for (let icn of icons) {
-	let wrap = icn.wrapper;
-	if (!wrap) continue;
-	let rect = wrap.getBoundingClientRect();
-	if (rect.left > dr || rect.right < dl || rect.top > db || rect.bottom < dt) {
-		icn.off();
-	}
-	else {
-		OK.push(icn);
-//		icon_on(icn);
-		icn.on();
-	}
-	
-}
-ICONS = OK;
-};//»
-	getIcons(){//«
-		let _icons = this.main.getElementsByClassName("icon");
-		let ret = [];
-		for (let icn of _icons) ret.push(icn.icon);
-		return ret;
-	};//»
-reload(opts={}){//«
-	let {app, appName, main} = this;
-	if (this.killed){
-		poperr("This window has been killed");
-		return;
-	}
-	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
-	if (app.ondevreload) return app.ondevreload();
-	if (appName.match(/^local\./)&&!opts.dataUrl){
-		return popup("'local' (development) applications cannot be independently reloaded!");
-	}
-	main.innerHTML=`<center><h2 style="background-color: #000; color: #aaa;">Reloading...</h2></center>`;
-	this.statusBar.innerHTML="";
-	let scr = gbid(`script_${appName}`);
-	if (scr) {
-		scr._del();
-	}
-	else{
-cwarn(`No script found for app: ${appName}`);
-	}
-	delete LOTW.apps[appName];
-
-	app.onkill&&app.onkill(true);
-	let arg = this.arg;
-	arg.APPARGS = {reInit: app.reInit};
-	arg.noShow = opts.noShow;
-	arg.dataUrl = opts.dataUrl;
-	main.innerHTML="";
-	return this.loadApp();
-//	return new Promise((Y,N)=>{
-//		arg.CB = Y;
-//		make_app(arg);
-//	});
-};//»
-
-loadApp(){//Old make_app«
-//DIOLMTNY
-
-return new Promise((Y,N)=>{
-
-//Var«
-	let cb = Y;
-	let win = this;
-	let {arg, main: mainwin, appName: winapp} = this;
-	let {noShow: no_show, dataUrl: data_url}=arg;
-	this.viewOnly = arg.viewOnly;
-	if (data_url) {
-		this._data_url = data_url
-	}
-//BGEIUOP
-	let scrpath;
-	let str, marr;
-	let script_path;
-//»
-	const barferror = e => {//«
-//		this.killed = true;
-		mainwin._pad= 10;
-		mainwin._bgcol= "#000";
-		mainwin._tcol= "#aaa";
-		mainwin._fs= "18px";
-		mainwin.style.userSelect="text";
-		mainwin._over="auto";
-		let mess = e.stack||`The script could not be loaded<br>(Url: ${script_path})`;
-		mainwin.innerHTML = `<br><div style='text-align:center;color:#f55;font-size:34;font-weight:bold;'>Error</div><br><pre style="font-size:18;"><b>${mess}</b></pre>`;
-		if (!no_show) this.on();
-		cb(this);
-	};//»
-	this._fatal = barferror;
-	const loadit = async() => {//«
-		this.setDefs();
-		if (!no_show) {
-			this.checkVisible();
-			this.statusBar.resize();
-			this.on();
-		}
-		if (winapp===FOLDER_APP) {
-			this.app.onappinit(arg.FULLPATH, arg.PREVPATHS);
-		}
-		else if (arg.APPARGS) this.app.onappinit(arg.APPARGS);
-		cb(this);
-	};//»
-	const load_cb = async() => {//«
-		try {
-			if (data_url){
-				this.app = new NS.apps[winapp](this, Desk);
-			}
-			else {
-				const { app } = await import(script_path);
-				NS.apps[winapp] = app;
-				this.app = new app(this, Desk);
-			}
-			this.app.arg = arg;
-			loadit();
-		} catch (e) {
-			barferror(e);
-		}
-	};//»
-	const make_it = async () => {//«
-		let scr = make('script');
-		scr.onload = load_cb;
-		scr.onerror = e => {
-			barferror(e);
-		};
-		if (data_url) script_path = data_url;
-		else {
-			scr.type = "module";
-			script_path = `/apps/${winapp.replace(/\./g, "/")}.js`;
-			if (globals.dev_mode) {
-				let v = (Math.random()+"").slice(2,9);
-				script_path += `?v=${v}`;
-			}
-		}
-		scr.src = script_path;
-		scr.id = `script_${winapp}`;
-		document.head._add(scr);
-	};//»
-	if (winapp=="None"){//«
-		this.setDefs();
-		this.checkVisible();
-		this.statusBar.resize();
-		this.on();
-		cb(this);
-		return;
-	}//»
-	if (!NS.apps[winapp]) return make_it();
-	this.app = new NS.apps[winapp](this, Desk);
-	this.app.arg = arg;
-	loadit();
-
-});
-
-
-
+	show_overlay(`Expert mode is ${taskbar_expert_mode?"on":"off"}`);
 }//»
-
-//»
-
-//«Properties
-get fullpath(){//«
-	if (!this.name) {
-//cwarn("This window has no name!!!");
-		return null;
-	}
-	let path = (this.path ? this.path : "/") + "/" + this.name;
-	if (this.ext) path = path + "." + this.ext;
-	return path.regpath();
-}//»
-get title(){return this.nameSpan.innerText.trim();}
-set title(arg){//«
-	this.nameSpan.innerText = arg;
-	if (this.isMinimized) this.minTitle.innerText = arg
-}//»
-//»
-
-}//»
-
-const win_reload = async () => {//«
-	if (!CWIN) return;
-	if (!await CWIN.reload()) return;
-	let bytes = CWIN._bytes;
-	if (bytes) CWIN.app.onloadfile(bytes);
-}//»
-const get_newwin_obj = (app) => {//«
-	let X = DEF_NEW_WIN_X;
-	let Y = DEF_NEW_WIN_Y;
-	let WID = DEF_NEW_WIN_W_PER * winw();
-	if (WID < 0) WID = winw();
-	let HGT = DEF_NEW_WIN_H_PER * winh();
-	if (HGT < 0) HGT = winh();
-	return {WID, HGT, X, Y};
-}//»
-const get_wins_by_path = (path,opts={}) => {//«
-
-	let {getDesk, extArg}=opts;
-	let ret = [];
-	path = path.regpath();
-	for (let wspace of workspaces) {
-		let wins = wspace.windows;
-		for (let w of wins) {
-			let ext = w.ext;
-			let winpath = (w.path + "/" + w.name).regpath();
-			if (winpath !== path) continue;
-			if (extArg) {
-				if (ext === extArg) ret.push(w);
-			} else if (!ext) ret.push(w);
-		}
-	}
-	if (path === DESK_PATH && getDesk) ret.push(desk);
-	return ret;
-};
-api.getWinsByPath = get_wins_by_path;
-//»
-const get_active_windows = () => {//«
-	let wins = [];
-	for (let i = 0; i < windows.length; i++) {
-		let w = windows[i];
-//		if (w.killed) {
-//			windows.splice(i, 1);
-//			i--;
-//		} else if (!w.isMinimized) wins.push(w);
-		if (!w.isMinimized) wins.push(w);
-	}
-	return wins;
-}//»
-
-const fit_all_windows=()=>{//«
-	let w = document.body.clientWidth;
-	let h = document.body.clientHeight;
-
-	for (let win of windows){
-		win.main._w = w;
-		win.main._h = h;
-		win.app.onresize();
-	}
-
-}//»
-const toggle_show_windows = (if_no_current) => {//«
-	let wins = get_active_windows();
-	if (windows_showing) {
-		windows_showing = false;
-		for (let i = 0; i < wins.length; i++) {
-			let w = wins[i];
-			if (w == CWIN) w.is_current = true;
-			w.winElem._dis= "none";
-			if (w.overdiv) w.overdiv._dis= "none";
-		}
-		CWIN && CWIN.off();
-		CWIN = null;
-		CUR.todesk();
-if (workspace.tilingMode){
-tiling_underlay.off();
-}
-	} else {
-		windows_showing = true;
-		CWIN && CWIN.off();
-		for (let i = 0; i < wins.length; i++) {
-			let w = wins[i];
-			w.winElem._dis= "";
-			if (w.overdiv) w.overdiv._dis= "";
-			if (w.is_current) {
-				if (!if_no_current) {
-					if (w.isMinimized) w.overdiv.on();
-					else w.on();
-				}
-				w.is_current = null;
-			}
-		}
-		if (!CWIN && !if_no_current) top_win_on();
-if (workspace.tilingMode){
-tiling_underlay.on();
-}
-	}
-//	Desk.update_windows_showing();
-	return true;
-}//»
-const toggle_layout_mode = () => {//«
-	let gotwins=[];
-	for (let w of workspace.windows){
-		if (w.isMaxed || w.isFullscreen) {
-			popup("Cannot initiate layout mode!");
-			return true;
-		}
-		if (!w.isMinimized) gotwins.push(w);
-	}
-//	windows.layout_mode = !windows.layout_mode;
-	workspace.layoutMode = !workspace.layoutMode;
-	for (let w of gotwins){
-		if (workspace.layoutMode && w.isLayout) continue;
-		if (!workspace.layoutMode && !w.isLayout) continue;
-		w.toggleLayout(workspace.layoutMode);
-	}
-	return true;
-};//»
-/*
-const toggle_tiling_mode = () => {//«
-
-//0 overlap leaves a gap
-	let TILING_OVERLAP=-0.5;
-
-	const reset_wins=()=>{//«
-		for (let _w of arr) _w.isTiled = false;
-	};//»
-	const intersects = (w1, w2) => {//«
-		let t1 = w1.T;
-		let b1 = w1.B;
-		let l1 = w1.L;
-		let r1 = w1.R;
-		let t2 = w2.T;
-		let b2 = w2.B;
-		let l2 = w2.L;
-		let r2 = w2.R;
-		if (t1 < 0 || t2 < 0) return true;
-		if (b1 > hgt || b2 > hgt) return true;
-		if (l1 < 0 || l2 < 0) return true;
-		if (r1 > wid || r2 > wid) return true;
-		if (!(l1 > r2 || r1 < l2 || t1 > b2 || b1 < t2)) {
-			return true;
-		}
-		return false;
-	};//»
-	const intersects_any = w1 => {//«
-		for (let w2 of arr) {
-			if (w1.win === w2.win) continue;
-			if (intersects(w1, w2)) return true;
-		}
-		return false;
-	};//»
-	const do_step = (step_sz) => {//«
-		for (let w of arr) {
-			if (w.isTiled) continue;
-			let got_change = false;
-			for (let i = 0; i < 4; i++) {
-				if (i == 0) {
-					if (!intersects_any({win: w.win,L:w.L-step_sz,R:w.R,T:w.T,B:w.B})) {
-						w.L-=step_sz;
-						got_change = true;
-					}
-				} else if (i == 1) {
-					if(!intersects_any({win:w.win,L:w.L,R:w.R+step_sz,T:w.T,B:w.B})){
-						w.R+=step_sz;
-						got_change = true;
-					}
-				} else if (i == 2) {
-					if(!intersects_any({win:w.win,L:w.L,R:w.R,T:w.T-step_sz,B:w.B})){
-						w.T-=step_sz;
-						got_change = true;
-					}
-				} else if (i == 3) {
-					if(!intersects_any({win:w.win,L:w.L,R:w.R,T:w.T,B:w.B+step_sz})){
-						w.B+=step_sz;
-						got_change = true;
-					}
-				}
-			}
-			if (!got_change) w.isTiled = true;
-		}
-	};//»
-	const do_steps=(step_sz)=>{//«
-		let max_steps = 2*((winw()>winh())?winw():winh());
-		for (let iters = 0; iters < max_steps; iters++) {//«
-			let got_all_maxed = true;
-			for (let _w of arr) {
-				if (!_w.isTiled) {
-					got_all_maxed = false;
-					break;
-				}
-			}
-			if (!got_all_maxed) do_step(step_sz);
-			else break;
+this.addwin=(w)=>{//«
+	const dounmin=(if_instant)=>{//«
+		w.winElem._dis="";
+		let rect = d._gbcr();
+		d._del();
+		const done=()=>{//«
+			delete w.isMinimized;
+			delete w.taskbarButton;
+			w.winElem._op=1;
+			num_minimized_wins--;
+			delete w.unminimize;
+			if (w===CWIN) CWIN=null;
+			w.checkLoc();
+			w.checkSize();
+			w.on();
 		}//»
-	}//»
-	let wid = winw();
-	let hgt = winh();
-	let arr = [];
-	let if_intersects = false;
-	let has_tile_holds = false;
-	for (let win of windows) {//«
-		if (!win.isMinimized) {
-			let rect = win.winElem._gbcr();
-			arr.push({win:win,T:rect.top,B:rect.bottom,L:rect.left,R:rect.right});
-			if (win.noChromeMode) win.toggleChrome();
-			if (isFinite(win.tileholdw) && isFinite(win.tileholdh) && isFinite(win.tileholdx) && isFinite(win.tileholdy)) {
-				has_tile_holds = true;
-				win.main._w= win.tileholdw;
-				win.main._h = win.tileholdh;
-				win.winElem._x= win.tileholdx;
-				win.winElem._y= win.tileholdy;
-			}
-			else if (win.isTiled) has_tile_holds = true;
-
-			if (win._bor_hold){
-				win.winElem._bor = win._bor_hold;
-				delete win._bor_hold;
-			}
-			win.app.onresize();
-			if (win.moveDiv) win.moveDiv.update();
-			delete win.tileholdw;
-			delete win.tileholdh;
-			delete win.tileholdx;
-			delete win.tileholdy;
-			delete win.isTiled;
-		}
-	}//»
-	if (has_tile_holds) {
-		window_boxshadow = window_boxshadow_hold;
-		workspace.tilingMode = false;
-		tiling_underlay.off();
-		return;
-	}
-
-	if (!arr.length) return popup("Nothing to do!");
-	if (arr.length == 1) return popup("The max button should work,\x20no?");
-	num_tiled_wins = arr.length;
-	LOOP1: for (let j = 0; j < arr.length; j++) {//«
-		let w1 = arr[j];
-		for (let i = j + 1; i < arr.length; i++) {
-			let w2 = arr[i];
-			if (intersects(w1, w2)) {
-//log(w1.win, w2.win);
-				if_intersects = true;
-				break LOOP1;
-			}
-		}
-	}//»
-	if (if_intersects) {
-		popup("Can't do window tiling!\x20(Overlapping windows detected)");
-		return;
-	}
-//}
-//	do_steps(100);
-//	reset_wins();
-	do_steps(10);
-	reset_wins();
-	do_steps(1);
-	let tot_area=0;
-	let wins=[];
-	for (let _w of arr) {//«
-		let win = _w.win;
-		wins.push(win);
-		win.isTiled = true;
-		let rect = win.winElem._gbcr();
-		let main = win.main;
-		let dl = TILING_OVERLAP + rect.left - _w.L;
-		let dr = TILING_OVERLAP + _w.R - rect.right;
-		let dt = TILING_OVERLAP + rect.top - _w.T;
-		let db = TILING_OVERLAP + _w.B - rect.bottom;
-		win.tileholdw = main._w;
-		win.tileholdh = main._h;
-		win.tileholdx = win.winElem._x;
-		win.tileholdy = win.winElem._y;
-		main._w += (dl + dr);
-		win.winElem._x -= dl;
-		main._h += (dt + db);
-		win.winElem._y -= dt;
-		win.winElem.style.boxShadow = "";
-		if (!win.noChromeMode) win.toggleChrome();
-		else win.app.onresize();
-//		win.app.onresize();
-		if (win.moveDiv) win.moveDiv.update();
-
-		win._bor_hold = win._bor;
-		win.winElem._bor = "0px solid #000";
-
-		let rect2 = win.winElem.getBoundingClientRect();
-		tot_area+=rect2.width*rect2.height;
-	}//»
-	window_boxshadow_hold = window_boxshadow;
-	window_boxshadow = "";
-	workspace.tilingMode = true;
-	tiling_underlay.on();
-//setTimeout(()=>{
-//log(tiling_underlay);
-//},100);
-};//»
-*/
-const window_cycle = () => {//«
-
-	if (window.performance.now() - last_win_cycle < 150) {
-//Throttle the speed of window cycling when the hotkey is held down
-		return;
-	}
-	last_win_cycle = window.performance.now();
-	let wins = windows;
-	let len = wins.length;
-	if (!len) return;
-
-	if (!num_win_cycles){
-//		if (taskbar_hidden&&num_minimized_wins) taskbar.show(true);
-
-		CWIN_HOLD = CWIN;
-		wins.sort((a,b)=>{
-			if (pi(a.winElem.style.zIndex) < pi(b.winElem.style.zIndex)) return 1;
-			else if (pi(a.winElem.style.zIndex) > pi(b.winElem.style.zIndex)) return -1;
-			return 0;
+		if (if_instant) return done();
+		w.winElem._op=0;
+		let t = mkdv();
+		t._pos="fixed";
+		t._w=rect.width;
+		t._h=rect.height;
+		t._loc(rect.left,rect.top);
+		t._bor="1px solid #ccc";
+		t._z=CG_Z-1;
+		desk._add(t);
+		rect = w.winElem._gbcr();
+		t.style.transition = `transform ${WIN_TRANS_SECS} ease 0s, left ${WIN_TRANS_SECS} ease 0s, top ${WIN_TRANS_SECS} ease 0s, width ${WIN_TRANS_SECS} ease 0s`;
+		requestAnimationFrame(()=>{
+			t.ontransitionend=()=>{
+				w.winElem._op=1;
+				t._del();
+				done();
+			};
+			t._loc(rect.left, rect.top);
+			t._w=rect.width;
+			t._h=rect.height;
 		});
-		let samelen = num_minimized_wins === wins.length;
-		let first;
-		if (!(!CWIN_HOLD && !samelen)) first = wins.shift();
-		if (show_desktop_during_win_cycle) {
-			wins.push(NOWINDOW);
-			len++;
-		}
-		if (first) wins.push(first);
-		if (samelen && wins.includes(NOWINDOW)){
-			windows.splice(windows.indexOf(NOWINDOW),1)
-			wins.push(NOWINDOW);
-		}
-		nowindow_pos = wins.indexOf(NOWINDOW);
-		CG.on(WIN_CYCLE_CG_OP);
-	}
+	};//»
+	let max_wid = "300px";
 
-	if (CWCW){//Current Win Cycle Win
-		CWCW.winElem._z= CWCW.z_hold;
-		delete CWCW.z_hold;
-		CWCW.off();
-		if (CWCW.isMinimized && taskbar_hidden) taskbar.hide(true);
-		CWCW = null;
-	}
-	let w = wins[num_win_cycles%len];
-	if (w===NOWINDOW){
-		have_window_cycle = true;
-		win_cycle_wins_hidden = true;
-		toggle_show_windows();
-		num_win_cycles=nowindow_pos+1;
-		CG.off();
-		return;
-	}
+	let rect = w.winElem._gbcr();
+	let t = mkdv();
+	t._pos="fixed";
+	t._w=rect.width;
+	t._h=rect.height;
+	t._loc(rect.left,rect.top);
+	t._bor="1px solid #ccc";
+	t._z=CG_Z-1;
+	t.style.transition = `transform ${WIN_TRANS_SECS} ease 0s, left ${WIN_TRANS_SECS} ease 0s, top ${WIN_TRANS_SECS} ease 0s, width ${WIN_TRANS_SECS} ease 0s`;
+	requestAnimationFrame(()=>{
+		let c = mwb.lastChild;
+		let x = c._gbcr().left;
+		let wid = c._gbcr().width;
+		t.ontransitionend=()=>{
+			d._op=1;
+			t._del();
+		};
+		t._loc(x, winh());
+		t._w=wid;
+	});
 
-	if (win_cycle_wins_hidden){
-		win_cycle_wins_hidden = false;
-		toggle_show_windows();
-		CG.on(WIN_CYCLE_CG_OP);
-	}
+	desk._add(t);
 
-/*«
-	if (show_desktop_during_win_cycle) {
-		if (!win_cycle_wins_hidden){ 
-			if ((w===CWIN_HOLD) || (num_win_cycles && (!(num_win_cycles%len)))){
-				if (w===CWIN_HOLD) num_win_cycles++;
-				CWIN_HOLD=null;
-				have_window_cycle = true;
-				win_cycle_wins_hidden = true;
-				toggle_show_windows();
-				CG.off();
-				return;
-			}
-		}
-		if (win_cycle_wins_hidden){
-			win_cycle_wins_hidden = false;
-			toggle_show_windows();
-			CG.on(WIN_CYCLE_CG_OP);
-		}
-	}
-»*/
-	CWCW = w;
-	CWCW.z_hold = CWCW.winElem._z;
-	CWCW.winElem._z= CG_Z+1;
-	CWCW.on(true);
-	if (CWCW.isMinimized && taskbar_hidden) taskbar.show(true);
-	num_win_cycles++;
+	w.winElem._dis="none";
+	w.isMinimized=true;
+	w.winElem._op = MIN_WIN_OP;
+	num_minimized_wins++;
+	w.winElem._z= MIN_WIN_Z;
+	let d = mkdv();
+	d.style.flexShrink=1;
+	d._op=0;
+	d.style.flexBasis=max_wid;
+	d._padt=d._padb=1;
+	d._padl=d._padr=5;
+	d._marr=d._marl=1.5
+	d.style.maxWidth=max_wid;
+	d._fs=15;
+	d._dis="flex";
+	d.style.alignItems="center";
+	d._pos="relative";
+	d._tcol="#999";
+	d._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
+	d._over="hidden";
+	let imdiv = w.imgDiv.cloneNode(true);
+	imdiv._marr=5;
+	imdiv._pos="";
+	imdiv._padb="";
+	imdiv._padt=1.5;
+	d._add(imdiv);
+	let titstr = w.title;
+	let tit = mkdv();
+	tit._w="100%";
+	tit.innerText=titstr;
+	w.mintitle = tit;
+	d._add(tit);
+	let fdv = mkdv();
+	fdv._pos="absolute";
+	fdv._loc(0,0);
+	fdv._w="100%";
+	fdv._h="100%";
+	fdv.style.backgroundImage=MIN_WIN_LIN_GRAD;
+	d._add(fdv);
+	d.onmousedown=(e)=>{
+		if (e&&e.button!==0) return;
+		d.is_active = true;
+		d._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
+	};
+	d.onmouseup=()=>{
+		d.is_active = false;
+		d._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
+	};
+	d.onmouseout=()=>{
+		d.is_active = false;
+		d._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
+	};
 
-}//»
-const top_win_on = () => {//«
-	let gothi = -1;
-	let gotwin = null;
-	let wins = get_active_windows();
-	for (let w of wins){
-		if (w.winElem._z > gothi) {
-			gothi = w.winElem._z;
-			gotwin = w;
-		}
+	d.oncontextmenu=nopropdef;
+	d.onclick=()=>{dounmin()};
+	w.unminimize=(if_instant)=>{
+		if (if_instant) return dounmin(true);
+		d._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
+		setTimeout(() => {
+			dounmin();
+			d._bor = `${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;
+		}, 200);
+	};
+	w.taskbarButton=d;
+	mwb._add(d);
+	if (w===CWIN) {
+		CWIN=null;
+		top_win_on();
 	}
-	if (gotwin) gotwin.on();
-	else {
+};//»
+this.resize=()=>{mwb._w=winw()};
+this.renderSwitcher=()=>{//«
+	ws.innerHTML="";
+	for (let i=0; i < num_workspaces; i++){
+		let d = mkdv();
+		if (i===current_workspace_num){
+			d._fw="bold";
+			d.title=`Active workspace: ${i+1}`;
+			d._bgcol="#fff";
+			d._bor="1px solid #aaa";
+		}
+		else{
+			d._bor="1px dotted #aaa";
+			d._tcol="#333";
+			d._bgcol="#eee";
+			d.title=`Switch to workspace: ${i+1}`;
+			d.onclick=(e)=>{
+				e.stopPropagation();
+				if (switcher_off_timeout) clearTimeout(switcher_off_timeout);
+				switch_to_workspace(i);
+				switcher_off_timeout = setTimeout(()=>{
+					this.switcherOff();
+					switcher_off_timeout = null;
+				}, SWITCHER_OFF_DELAY_MS);
+			};
+		}
+		d._dis="flex";
+		d.style.alignItems="center";
+		d.style.justifyContent="center";
+		d.innerHTML=`${i+1}`;
+		d.style.cursor="pointer";
+		ws._add(d);
+	}
+};//»
+this.switcherOn=()=>{
+	ws._dis="grid";
+};
+this.switcherOff=()=>{
+	ws._dis="none";
+};
+this.switcherIsOn=()=>{
+	return ws._dis==="grid";
+};
+this.toggleSwitcher=()=>{
+	if (this.switcherIsOn()) this.switcherOff();
+	else this.switcherOn();
+};
+//»
+
+//Listeners«
+bar.onmousedown=e=>{
+	if (CWIN) {
+		CWIN.off();
 		CWIN = null;
 		CUR.todesk();
 	}
-}//»
-const move_window = (which, if_small) => {//«
-	let w = CWIN;
-	if (!w) return;
-	if (w.isMinimized) {} else if (w.isMaxed) w.max_button.reset();
-	let elem = w.winElem;
-	let useinc;
-	if (if_small) useinc = win_move_inc_small;
-	else useinc = win_move_inc;
-	if (which == "R") elem._x= elem._x + useinc;
-	else if (which == "L") elem._x= elem._x - useinc;
-	else if (which == "D") elem._y= elem._y + useinc;
-	else if (which == "U") elem._y= elem._y - useinc;
-	w.checkLoc();
-	if (w.overdiv) w.overdiv._loc(elem._x, elem._y);
-	if (w.moveDiv) w.moveDiv.update();
-	if (w.isMinimized) {
-		w.last_min_x = elem._x;
-		w.last_min_y = elem._y;
-	}
-}//»
-const resize_window = (which, if_reverse, if_small) => {//«
-	const w2r = () => {
-		w.main._w= w.main._w - useinc;
-		w.winElem._x += useinc;
-	};
-	const w2l = () => {
-		let dx = w.winElem._x - useinc;
-		if (dx < 0) useinc += dx;
-		w.main._w= w.main._w + useinc;
-		w.winElem._x -= useinc;
-	};
-	const n2d = () => {
-		w.main._h = w.main._h - useinc;
-		w.winElem._y += useinc;
-	};
-	const n2u = () => {
-		let dy = w.winElem._y - useinc;
-		if (dy < 0) useinc += dy;
-		w.main._h = w.main._h + useinc;
-		w.winElem._y -= useinc;
-	};
-	const e2r = () => {
-		let dx = w.winElem._x + w.winElem._gbcr().width + useinc - winw();
-		if (dx > 0) useinc -= dx;
-		w.main._w= w.main._w + useinc;
-	};
-	const e2l = () => {
-		w.main._w= w.main._w - useinc;
-	};
-	const s2d = () => {
-		let dy = w.winElem._y + w.winElem._gbcr().height + useinc - winh();
-		if (dy > 0) useinc -= dy;
-		w.main._h = w.main._h + useinc;
-	};
-	const s2u = () => {
-		w.main._h = w.main._h - useinc;
-	};
-	let w = CWIN;
-	if (w.dialog) return;
-	if (w.isMinimized) return;
-	if (w.isMaxed) w.max_button.reset();
-	let useinc;
-	if (if_small) useinc = win_resize_inc_small;
-	else useinc = win_resize_inc;
-	if (if_reverse) {
-		if (which == "R") e2l();
-		else if (which == "L") w2r();
-		else if (which == "D") s2u();
-		else if (which == "U") n2d();
-	} else {
-		if (which == "R") e2r();
-		else if (which == "L") w2l();
-		else if (which == "D") s2d();
-		else if (which == "U") n2u();
-	}
-	w.checkLoc();
-	w.checkSize();
-	check_rs_timer();
-	if (w.moveDiv) w.moveDiv.update();
-}//»
-const handle_resize_event = e => {//«
+//log(e);
+};
+bar.oncontextmenu=e=>{//«
+	e.preventDefault();
+	e.stopPropagation();
 
-const getorresize = (dir, val, rect, selfarg, if_resize)=>{//«
-	let all = windows;
-	let wins=[];
-	all.map(win => {
-		if (win.isTiled && win !== selfarg) {
-			wins.push(win)
-		}
-	});
-	let low = Infinity;
-	let lowwin;
-	for (let win of wins){
-//let id = win.id;
-		let rct = win.winElem.getBoundingClientRect();
-//let l = rct.left;
-		let val2 = rct[dir];
-		if (dir=="left"||dir=="right"){
-			if (rct.top > rect.bottom || rct.bottom < rect.top) {
-				continue;
-			}
-		}
-		else{
- 			if (rct.left > rect.right || rct.right < rect.left) {
-//log("");
-//log("BAD", win, win.id);
-				continue;
-			}
-		}
-		let diff = val-val2;
-		if (if_resize){
-			if (diff > 0){//«
-				if (dir==="left") {
-					win.winElem._x+=diff;
-					let diff2 = win.winElem.getBoundingClientRect().right - winw();
-					if (diff2 > 0) {
-						win.main._w-= diff2;
-						win.addToResizeWins();
-					}
-				}
-				else if (dir==="right") {
-					let diff2 = win.winElem.getBoundingClientRect().right - val;
-					if (diff2 > 0) {
-						win.main._w-= diff2;
-						win.addToResizeWins();
-					}
-				}
-				else if (dir==="top"){
-					win.winElem._y+=diff;
-					let diff2 = win.winElem.getBoundingClientRect().bottom - winh();
-					if (diff2 > 0) {
-						win.main._h-= diff2;
-						win.addToResizeWins();
-					}
-				}
-				else if (dir==="bottom"){
-					let diff2 = win.winElem.getBoundingClientRect().bottom - val;
-					if (diff2 > 0) {
-						win.main._h-= diff2;
-						win.addToResizeWins();
-					}
-				}
-				if (win.moveDiv) win.moveDiv.update();
-			}//»
-			else{
-				if (dir=="bottom") {
-					win.main._h+=diff;
-					win.addToResizeWins();
-				}
-				else if (dir=="right") {
-					win.main._w+=diff;
-					win.addToResizeWins();
-				}
-				if (win.moveDiv) win.moveDiv.update();
-			}
-		}
-		else {
-			diff = Math.abs(diff);
-			if ((diff) < low) {
-				low = diff;
-				lowwin = win;
-			}
-		}
+	CWIN&&CWIN.off();
+
+	let items_arr=[];
+	if (taskbar_hidden){
+		items_arr.push("Show\x20Taskbar");
+		items_arr.push(()=>{
+			this.show();
+		});
 	}
-	return lowwin;
+	else{
+		items_arr.push("Hide\x20Taskbar");
+		items_arr.push(()=>{
+			this.hide();
+		});
+	}
+	if (taskbar_expert_mode){
+		items_arr.push("Expert\x20Mode __CHECK__");
+		items_arr.push(taskbar.toggle_expert_mode);
+	}
+	else{
+		items_arr.push("Expert\x20Mode __XMARK__");
+		items_arr.push(taskbar.toggle_expert_mode);
+	}
+
+	set_context_menu({
+		X: e.clientX,
+		Y: e.clientY
+	}, {items: items_arr});
+
+}//»
+bar.onmouseleave=()=>{//«
+	if (taskbar_hidden){
+		this.hide();
+	}
+}//»
+bar.onmousemove=noprop;
+st.onmousedown = (e) => {
+	if (e.button !== 0) return;
+	st._bor = `${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
+};
+st.onmouseup=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
+st.onmouseout=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
+st.oncontextmenu=nopropdef;
+st.onclick=(e)=>{//«
+	const doit=()=>{set_context_menu({X:0,Y:bar.clientHeight+3},{BREL:true});}
+	if (e.isTrusted) return doit();
+	st._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
+	setTimeout(()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;doit();},200);
 };//»
 
-/*
-The rs_dir property is set in "window layout mode", which puts a div over
-window that gives highly accessible "handles" for each of the directions
-(n,s,e,w,ne,nw,se,sw) and a central handle for moving (not handled here).
-*/
-
-let dir = CRW.rsDir;
-//The user is dragging the tiny handle at the bottom right of every window
-if (!dir){//«
-	let elem = CRW.winElem;
-	CRW.main._w = CRW.main._w + (e.clientX - (pi(CRW.main.offsetWidth) + elem._x)) - winx();
-	CRW.main._h = CRW.main._h + (e.clientY - (pi(CRW.main.offsetHeight) + elem._y + CRW.titleBar._h + CRW.footer.getBoundingClientRect().height)) - winy();
-	CRW.checkSize();
-	CRW.statusBar.resize();
-	return;
-}//»
-
-let tul = tiling_underlay;
-
-//The user is dragging one of the 8 "window layout" handles described above
-//Var«
-let w = CRW;
-let rect = w.winElem.getBoundingClientRect();
-let odiv = w.moveDiv;
-let m = w.main;
-let ex = e.clientX;
-let ey = e.clientY;
-let sx = w.startx;
-let sy = w.starty;
-let sw = w.startw;
-let sh = w.starth;
-let sl = w.startl;
-let st = w.startt;
-let tiled = w.isTiled;
 //»
 
-if (dir.match(/s/)) {//«
-	let goth = sh + ey - sy;
-//Tiled
-	let lft, rgt;//«
-	if (tiled){
-		if (goth < rect.height) return;
-		if (goth < sh) return;
-		let bot = rect.bottom+2;
-		lft = rect.left+5;
-		rgt = rect.right-5;
-		let gotwin;
-		if (document.elementFromPoint(lft, bot)==tul) gotwin = getorresize("top", bot, {left: lft, right: rgt}, w);
-		else if (document.elementFromPoint(rgt, bot)==tul) gotwin = getorresize("top", bot, {left: lft, right: rgt}, w);
-		if (!gotwin) return;
-		let torect = gotwin.winElem.getBoundingClientRect();
-//		let totop = gotwin.top;
-		let totop = torect.top;
-		if (e.clientY > totop) return;
-	}//»
+//Init«
 
-	if (goth > min_win_hgt) {
-		m._h = goth;
-		let dy = w.winElem._gbcr().bottom - winh();
-		if (dy > 0 && !win_overflow.bottom) m._h -= dy;
-	}
-	if (tiled) getorresize("top", rect.bottom, {left: lft, right: rgt}, w, true);
-} //»
-else if (dir.match(/n/)) {//«
-	let dy = e.clientY - sy;
-	let goth = sh - dy;
+let curuser = globals.current_user;
+let lst_hidden = `taskbar_hidden:${curuser}`;
+let lst_expert = `taskbar_expert:${curuser}`;
 
-//Tiled
+taskbar_hidden = localStorage[lst_hidden];
+taskbar_expert_mode = localStorage[lst_expert];
 
-	let lft, rgt;//«
-	if (tiled){
-		if (goth < rect.height) return;
-		if (goth < sh) return;
-		let _top = rect.top-1;
-		lft = rect.left+5;
-		rgt = rect.right-5;
-		let gotwin;
-		if (document.elementFromPoint(lft, _top)==tul) gotwin = getorresize("bottom", _top, {left: lft, right: rgt}, w);
-		else if (document.elementFromPoint(rgt, _top)==tul) gotwin = getorresize("bottom", _top, {left: lft, right: rgt}, w);
-		if (!gotwin) return;
-		let torect = gotwin.winElem.getBoundingClientRect();
-//		let tobot = gotwin.bottom;
-		let tobot = torect.bottom;
-		if (e.clientY < tobot) return;
-	}//»
-
-	if (goth > min_win_hgt) {
-		let goty = st + dy;
-		if (goty >= 0 || win_overflow.top) {
-			m._h = goth;
-			w.winElem._y= goty;
-		}
-	}
-	if (tiled) {
-//log(rect.top, lft, rgt);
-		getorresize("bottom", rect.top, {left: lft, right: rgt}, w, true);
-	}
-}//»
-if (dir.match(/e/)) {//«
-	let gotw = sw + ex - sx;
-
-//Tiled
-	let _top, bot;//«
-	if (tiled){
-		if (gotw < rect.width) return;
-		if (gotw < sw) return;
-		let rgt = rect.right+2;
-		_top = rect.top+5;
-		bot = rect.bottom-5;
-		let gotwin;
-		if (document.elementFromPoint(rgt, _top)==tul) gotwin = getorresize("left", rgt, {top: _top, bottom: _top}, w);
-		else if (document.elementFromPoint(rgt, bot)==tul) gotwin = getorresize("left", rgt, {top: bot, bottom: bot}, w);
-		if (!gotwin) return;
-		let torect = gotwin.winElem.getBoundingClientRect();
-//		let toleft = gotwin.left;
-		let toright = torect.left;
-		if (e.clientX > toright) return;
-	}//»
-
-	if (gotw > min_win_width) m._w= gotw;
-	let dx = w.winElem._gbcr().right - winw();
-	if (dx > 0 && !win_overflow.right) m._w -= dx;
-	if (tiled) getorresize("left", rect.right, {top: _top, bottom: bot}, w, true);
-}//»
-else if (dir.match(/w/)) {//«
-	let dx = e.clientX - sx;
-	let gotw = sw - dx;
-//Tiled
-	let _top, bot;//«
-	if (tiled){
-
-		if (gotw < rect.width) return;
-		if (gotw < sw) return;
-		let lft = rect.left-1;
-		_top = rect.top+5;
-		bot = rect.bottom-5;
-		let gotwin;
-		if (document.elementFromPoint(lft, _top)==tul) gotwin = getorresize("right", lft, {top: _top, bottom: _top}, w);
-		else if (document.elementFromPoint(lft, bot)==tul) gotwin = getorresize("right", lft, {top: bot, bottom: bot}, w);
-		if (!gotwin) return;
-		let torect = gotwin.winElem.getBoundingClientRect();
-//		let toleft = gotwin.left;
-		let toleft = torect.right;
-//log(gotwin);
-//log(e.clientX, toleft);
-		if (e.clientX < toleft) return;
-	}//»
-
-	if (gotw > min_win_width) {
-		let gotx = sl + dx;
-		if (gotx >= 0 || win_overflow.left) {
-			m._w= gotw;
-			w.winElem._x= gotx;
-		}
-		if (tiled) getorresize("right", rect.left, {top: _top, bottom: bot}, w, true);
-	}
-}//» 
-
-//XXX TODO odiv can be undefined here (can it though?) TODO XXX//«
-if (!odiv) {
-	cerr("Hi,no odiv with CRW in Gen_mousemove");
-} else {
-	odiv._w= w.winElem.offsetWidth;
-	odiv._h = w.winElem.offsetHeight;
-	odiv.update();
+if (taskbar_hidden) this.hide();
+if (taskbar_expert_mode) {
+	st._dis="none";
+	wn._dis="none";
 }
+
+bar._add(st);
+bar._add(mwb);
+if (!qObj["no-switcher"]) {
+	bar._add(wn);
+	desk._add(ws);
+}
+if (!isMobile) desk._add(bar);
+
+setTimeout(()=>{
+	bar.style.transition = `bottom ${TASKBAR_TRANS_SECS}s ease 0s`;
+},500);
 //»
 
-CRW.statusBar.resize();
+};
 
-
-};//»
-
-const update_and_clear_resize_wins = () => {//«
-	if (CRW) {
-		CRW.app.onresize();
-		CRW.statusBar.resize();
-	}
-	if (CRWINS){
-		for (let win of CRWINS){
-			if (win) {
-				win.statusBar.resize();
-				win.app.onresize();
-			}
-		}
-	}
-	CRW = null;
-	CRWINS = null;
-};//»
-this.cleanup_deleted_wins_and_icons = path => {//«
-    let namearr = getNameExt(path, null, true);
-    let usepath = `${namearr[0]}/${namearr[1]}`;
-    let useext = namearr[2];
-    let wins = get_wins_by_path(usepath, {extArg: useext});
-	for (let win of wins){
-	    if (win && win.forceKill) win.forceKill();
-	}
-    let icons = get_icons_by_path(usepath, useext);
-    for (let icn of icons) {
-		if (icn.cancel_func) icn.cancel_func();
-		icn.del();
-    }  
-}//»
-
-const switch_win_to_workspace = (w, num) => {//«
-	let oldwins = workspaces[w.workspaceNum].windows;
-//log(12345);
-	let which = oldwins.indexOf(w);
-	if (which < 0){
-		poperr("Could not find the window in the windows array!");
-		return;
-	}
-	oldwins.splice(which, 1);
-	let newwins = workspaces[num].windows;
-	newwins.push(w);
-	w.workspaceNum = num;
-	return true;
-};//»
-const check_cwin_owned=()=>{//«
-	if (CWIN && CWIN.ownedBy){
-cwarn("Here is the owning window");
-log(CWIN.ownedBy);
-		popup("The window is owned! (check console)");
-		return true;
-	}
-	return false;
-};//»
-const raise_bound_win=(num)=>{//«
-	let obj = globals.boundWins[num];
-	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
-	obj.win.on({switchToWorkspace: true});
-};//»
-const get_all_windows=()=>{//«
-	let wins=[];
-	for (let wspace of workspaces){
-		wins.push(...wspace.windows);
-	}
-	return wins;
-};//»
+const toggle_taskbar=()=>{if(taskbar_hidden)taskbar.show();else taskbar.hide();};
 
 //»
 //File/App«
@@ -6029,7 +6575,6 @@ const make_file = () => {//«
 };//»
 
 const raise_app_if_open=(appname)=>{//«
-//	for (let w of workspaces.flat()){
 	for (let w of get_all_windows()){
 		if (w.appName==appname){
 			if (w.isMinimized) w.unminimize();
@@ -6584,305 +7129,6 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 };
 
 const CUR = new Cursor();
-
-//»
-//Folders«
-
-const make_folder = () => {//«
-
-	if (!CWIN || CWIN.appName != FOLDER_APP){
-		make_new_icon(desk, FOLDER_APP);
-	}
-	else {
-		make_new_icon(CWIN, FOLDER_APP);
-	}
-};//»
-
-const reload_desk_icons_cb = async () => {//«
-	CG.on();
-	Desk.clear_desk_icons();
-	await reloadIcons();
-	CG.off();
-};
-this.clear_desk_icons = ()=>{
-	let nodes = Array.from(desk.childNodes);
-	let arr = nodes.filter(n => n.className === "icon");
-	while (arr.length) arr.pop()._del();
-};
-//»
-const reload_desk_icons = async(arr) => {//«
-	if (desk.icons) {
-		for (let icn of desk.icons) {
-			if (icn) icn.del();
-		}
-		desk.icons = [];
-	}
-	arr = arr.sort((a, b)=>{
-		if (a.name > b.name) return 1;
-		else if (a.name < b.name) return -1;
-		return 0;
-	});
-	for(let node of arr){
-		let ref;
-		if (node.link) ref = await node.ref;
-		let icn = new Icon(node, {ref});
-		icn.parWin = desk;
-		placeInIconSlot(icn, {create: true, load: true});
-	}
-	desk.loaded = true;
-}//»
-const reload_icons = async(is_refresh) => {//«
-	let fullpath = DESK_PATH;
-	let usemain = desk;
-	let ret = await pathToNode(fullpath);
-	if (!ret) {
-cerr("Nothing returned from pathToNode:\x20"+fullpath);
-		return;
-	}
-	if (!ret.done) await fsapi.popDir(ret);
-	let kids = ret.kids;
-	let keys = getKeys(kids);
-	let kid;
-	let arr = [];
-	for (let i = 0; i < keys.length; i++) {
-		let name = keys[i];
-		if (name == "." || name == "..") continue;
-		kid = kids[name];
-		if (kid.perm===false) continue;
-		arr.push(kid);
-	}
-	reload_desk_icons(arr);
-};//»
-const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {//«
-
-	let icn = iconarg ||{appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
-	icn.winArgs = winargs;
-	return open_new_window(icn, {SAVER: saverarg, PREVPATHS: prevpaths});
-}//»
-const check_name_exists = async(str, which, usepath) => {//«
-	let path;
-	if (which) path = which.fullpath;
-	else path = usepath;
-	let fullpath = `${path}/${str}`.regpath();
-	return pathToNode(fullpath);
-}//»
-const get_icon_array = (arg, if_compact) => {//«
-	if (arg!==desk) {
-		let out = [];
-		let arr = Array.from(arg.winElem.getElementsByClassName("icon"));
-		for (let icn of arr) out.push(icn.icon);
-		return out;
-	}
-	let icons;
-	if (desk.icons) {
-		icons = desk.icons;
-	}
-	else {
-		icons = set_icon_array_of_desk();
-	}
-	if (!if_compact) return icons;
-	let arr = [];
-	for (let i = 0; i < icons.length; i++) {
-		let icn = icons[i];
-		if (icn&&icn.parentNode) arr.push(icn);
-	}
-	return arr;
-}//»
-const set_icon_array_of_desk = () => {//«
-	let numx = DESK_GRID_W;
-	desk.cols = numx;
-	let arr = [];
-	let kids = desk.childNodes;
-	for (let i = 0; i < kids.length; i++) {
-		let kid = kids[i];
-		if (kid.className != "icon" || kid.path != DESK_PATH) continue;
-		let num = kid.col + (kid.row * numx);
-		arr[num] = kid;
-	}
-	desk.icons = arr;
-	return arr;
-}//»
-const vacate_icon_slot = (icn, if_no_clear) => {//«
-	if (icn.parWin!==desk) return;
-	if (!(icn.name && icn.parWin)) {
-cerr("No icn.name && icn.parWin", icn);
-		return;
-	}
-	let oldarr = icn.parWin.icons;
-	let ind = oldarr.indexOf(icn);
-	if (ind > -1) {
-		if (icn.parWin===desk){
-//			if (!globals.read_only) delete localStorage[FS_PREF+":"+icn.Fullpath()];
-			if (!(globals.read_only || if_no_clear)) icn.clearFromStorage(null,3);
-		}
-		oldarr[ind] = undefined;
-	} else cerr("The icon was not in the icons array!", icn);
-}//»
-const placeInIconSlot = (icn, opts={}) => {//«
-//const place_in_icon_slot = (icn, pos, if_create, if_load, if_no_vacate, if_no_clear)
-	const do_add=()=>{//«
-		if (elem.iconDiv) {
-			icn.parWin = elem.iconDiv.win;
-			elem.iconDiv._add(icn);
-		} else {
-			icn.parWin = desk;
-			elem._add(iconelm);
-			icn.saveToStorage();
-		}
-	};//»
-	let{
-		pos, create, load, noVacate, noClear, doMove
-	}= opts;
-	let startx = desk_grid_start_x;
-	let starty = desk_grid_start_y;
-	let elem = desk;
-	if (icn.name && !create && !noVacate) vacate_icon_slot(icn, noClear);
-	let arr = get_icon_array(elem);
-	let iconelm = icn.iconElem;
-	if (create){//«
-		iconelm._pos="absolute";
-		icn.parWin = desk;
-		elem._add(iconelm);
-
-/*In desk.css,«
-.iconl {
-    max-height:17px;
-    text-align: center;
-    overflow-wrap:break-word;
-    width:90px;
-    font-size:16px;
-    background-color:#000;
-    padding:1.5px;
-}
-»*/
-
-//If you want the overflowing icon names to be left justified rather than centered, uncomment below.
-//if (icn.label.clientHeight > 20) icn.label._ta = "left";
-
-		if (!pos) {
-//			let s = localStorage[FS_PREF+":"+icn.fullpath()];
-			let s = localStorage[FS_PREF+":"+icn.fullpath];
-			if (s){
-				let parr = s.split(" ");
-				let col = parseInt(parr[0]);
-				let row = parseInt(parr[1]);
-				let i = col + (row * DESK_GRID_W);
-				let dosave = false;
-				if (isNaN(i)||arr[i]){
-					i=0;
-					dosave=true;
-					for (let j = i+1; ;j++){
-						if (!arr[j]){
-							i=j;
-							row = Math.floor(i/DESK_GRID_W);
-							col = i % DESK_GRID_W;
-							break;
-						}
-					}
-				}
-				arr[i] = icn;
-				icn.col=col;
-				icn.row=row;
-				iconelm._z= ICON_Z;
-				iconelm._x=desk_grid_start_x + (col * IGSX);
-				iconelm._y=desk_grid_start_y + (row * IGSY);
-				if (dosave) icn.saveToStorage();
-				return;
-			}
-			else if(load){
-cwarn(`The icon (${icn.name}) was not found in localStorage!`);
-log(icn);
-			}
-		}
-	}//»
-	if (!pos) {//«
-		let i = 0;
-		let x, y;
-		let doit = () => {
-			let xnum = i % elem.cols;
-			let ynum = Math.floor(i / elem.cols);
-			x = startx + (xnum * IGSX);
-			y = starty + (ynum * IGSY);
-			icn.col = xnum;
-			icn.row = ynum;
-			iconelm._x= x;
-			iconelm._y= y;
-			arr[i] = icn;
-			iconelm._z= ICON_Z;
-			do_add();
-		};
-		for (; i < arr.length; i++) {
-			if (!(arr[i] && arr[i].iconElem.parentNode)) break;
-		}
-		doit();
-		return;
-	}//»
-	let low_dist = Infinity;
-	let low_x = null;
-	let low_y = null;
-	let good_it = null;
-	let i = 0;
-//EIUKLMY
-	let posX = Math.round(pos.X);
-	let posY = Math.round(pos.Y);
-	let grid_x = Math.floor((posX - startx) / IGSX);
-	if (grid_x < 0) grid_x = 0;
-	let grid_y = Math.floor((posY - starty) / IGSY);
-	if (grid_y < 0) grid_y = 0;
-	let grid_pos = (grid_y * elem.cols) + grid_x;
-	if (!arr[grid_pos] && (grid_x < elem.cols)) {//«
-		good_it = grid_pos;
-		low_x = startx + (grid_x * IGSX);
-		low_y = starty + (grid_y * IGSY);
-	}//»
-	else {//«
-		let check_low = () => {
-			let ynum = Math.floor(i / elem.cols);
-			let xnum = i % elem.cols;
-			let x = startx + (xnum * IGSX);
-			let y = starty + (ynum * IGSY);
-			let got_dist = dist(x + 40, y + 40, posX, posY);
-			if (got_dist < low_dist) {
-				low_dist = got_dist;
-				low_x = x;
-				low_y = y;
-				good_it = i;
-			}
-		};
-		for (i = 0; i < arr.length; i++) {
-			let icn = arr[i];
-			if (!icn) check_low();
-		}
-		if (!(low_x && low_y)) check_low();
-	}//»
-	if (low_x && low_y) {
-		icn.col = good_it % elem.cols;
-		icn.row = Math.floor(good_it / elem.cols);
-		iconelm._z= ICON_Z;
-		arr[good_it] = icn;
-		do_add();
-		if (doMove || !create) {
-			return move_icon(icn, low_x, low_y);
-		}
-		iconelm._x= low_x;
-		iconelm._y= low_y;
-		return;
-	}
-	throw new Error("failure");
-}//»
-const reloadIcons = win => {return reload_icons();}
-const update_folder_statuses = usepath => {//«
-	for (let wins of get_all_windows()) {
-		for (let w of wins) {
-			if (w.appName !== FOLDER_APP) continue;
-			if (usepath) {
-				if (w.fullpath === usepath) w.app.update();
-			} else w.app.update();
-		}
-	}
-};
-this.update_folder_statuses=update_folder_statuses;
-//»
 
 //»
 //Widgets«
@@ -8281,6 +8527,7 @@ const get_desk_context=()=>{//«
 //»
 //Util«
 
+const NOOP=()=>{}
 window.onblur=(e)=>{//«
 	for (let w of get_all_windows()){
 		if (w.app && w.app.onwinblur) w.app.onwinblur();
@@ -8903,11 +9150,6 @@ const dokeyup = function(e) {//«
 
 //Init«
 (async () => {
-	fs = new fsmod();
-	fs.set_desk(this);
-	globals.fs = fs;
-	fsapi = fs.api;
-	pathToNode = fsapi.pathToNode;
 	let winorig = window.location.origin;
 	if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) globals.is_local = true;
 	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;
@@ -8937,12 +9179,10 @@ const dokeyup = function(e) {//«
 		fit_desktop();
 	};//»
 	window.onbeforeunload = () => {//«
-		for (let wins of get_all_windows()) {
-			for (let w of wins){
-				if (w.app) {
-					if (w.app.is_dirty) return true;
-					if (w.app.onkill) w.app.onkill();
-				}
+		for (let w of get_all_windows()) {
+			if (w.app) {
+				if (w.app.is_dirty) return true;
+				if (w.app.onkill) w.app.onkill();
 			}
 		}
 	};//»
