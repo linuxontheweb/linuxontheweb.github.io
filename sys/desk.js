@@ -1,10 +1,8 @@
-/*12/22/24: 
-
-Just doing a simple desktop icon toggling routine.
+/*12/22/24: Just doing a simple desktop icon toggling routine.«
 
 I'm pretty sure that all icons that are being added to the desktop *MUST*
 got through placeInIconSlot, so I'm cutting everything off about icon
-visibility @LCIUDHJ.
+visibility for newly created desktop icons @LCIUDHJ.
 
 So now each workspace can define what it wants for the background color
 and image just by updating the body element for color (solid or gradient)
@@ -12,46 +10,11 @@ and updating the desk_imgdiv with the image url.
 
 The body is what has the color and desk_imgdiv has the image.
 
-Now I want each workspace to have its own background divs for
-desktop color, bgimg, and whether the icon div is on or off.
-We can put this old tiling_underlay thing just above ICON_Z in order for it to
-be an icon-less desktop.
+toggle_icon_display @XKNFIUHJ is my working prototype for doing the kind of
+changing of desktop styles when switching to different workspaces that I have
+in mind.
 
-Want to start putting desktop icons onto their own div!!!
 
-//Tiling underlay«
-{
-	let tul = tiling_underlay;
-	tul._bgcol="#101010";
-	tul._dis="block";
-	tul.id="tiling_underlay";
-	tul._z=ICON_Z+1;
-	tul._pos="fixed";
-	tul.onmousedown=e=>{
-e.stopPropagation();
-e.preventDefault();
-	};
-	tul.onmousemove=e=>{
-		if (CRW) {
-			handle_resize_event(e);
-		}
-	};
-	tul.oncontextmenu=nopropdef;
-	tul.ondblclick=nopropdef;
-	tul._w=0;
-	tul._h=0;
-	tul._loc(0,0);
-	tul.on=()=>{
-		tul._w=winw();
-		tul._h=winh();
-	};
-	tul.off=()=>{
-		tul._w=0;
-		tul._h=0;
-	};
-}
-//»
-//	desk._add(tiling_underlay);
 
 Need to finish up tile_windows, and allow for Workspaces to "own" their own
 background color and image divs, and decide whether to have the icon_div visible or not.
@@ -64,7 +27,8 @@ You can call tile_windows multiple times, with the fit becoming more "snug" each
 until it finally detects window overlap, and finally refuses to do the tiling algorithm
 again.
 
-*/
+
+»*/
 /*«Notes*/
 /*12/21/24: Now we have Workspace objects that get key events sent to them if there«
 is a focused window. Otherwise, the desktop itself gets to decide what to do with
@@ -2271,6 +2235,8 @@ setWinArgs(args){//«
 			this.main._add(CUR.curElem);
 			this.cursor = CUR;
 //			CUR.set(2);
+
+			CUR.vizCheck();
 			CUR.on();
 		}
 		this.winElem._dis= "block";
@@ -4453,6 +4419,7 @@ get name(){return this.node.baseName;}
 api.Icon = Icon;
 //»
 
+//XKNFIUHJ
 const toggle_icon_display = () => {//«
 	if (!dev_mode) return;
 	SHOW_ICONS = !SHOW_ICONS;
@@ -4470,6 +4437,7 @@ const toggle_icon_display = () => {//«
 			body.style.backgroundImage="";
 		}
 	}
+	CUR.vizCheck();
 };//»
 const show_node_props=async(node)=>{//«
 
@@ -6444,7 +6412,6 @@ this.on=(is_tog)=>{//«
 	else if (!cur_showing) return;
 	curElem._op=1;
 	curElem._dis="";
-//log(curElem);
 	if (this.isdesk()){
 		let pos = desk.lastcurpos;
 		if (pos) return this.setpos(pos.X, pos.Y, null, is_tog);
@@ -6466,14 +6433,11 @@ this.off=(is_tog)=>{//«
 };//»
 this.setpos=(X,Y,icn, is_tog)=>{//«
 	if (this.isdesk()) {
-//log("HELLO!!!");
 		let icn1 = this.geticon(desk);
 		curElem._x= this.xoff()+IGSX*X;
 		curElem._y= this.yoff()+IGSY*Y;
 		let icn2 = this.geticon(desk);
 		if (icn1) icn1.hideLabelName();
-//log(1,icn1);
-//log(2,icn2);
 		if (icn2 && (is_tog || icn2 !== icn1)) {
 			icn2.showLabelName();
 		}
@@ -6523,17 +6487,20 @@ this.zero=()=>{//«
 };//»
 this.todesk=()=>{//«
 	if (curElem.parentNode===desk){
+		this.vizCheck();
 		return this.on();
 	}
 	desk._add(curElem);
 	let pos = desk.lastcurpos;
 	if (pos) this.setpos(pos.X, pos.Y);
 	else this.set(5);
+	this.vizCheck();
 };//»
 this.right=(if_ctrl)=>{//«
 	let {X:_x,Y:_y}=this.getpos();
 	if (if_ctrl) this.select(true);
 	if (this.isdesk()){
+		if (!SHOW_ICONS) return;
 		if (desk_grid_start_x+(IGSX*(_x+2)) < winw()) _x++;
 		else {
 			if (this.yoff()+(IGSY*(_y+2)) < winh()) {
@@ -6576,6 +6543,7 @@ this.left=(if_ctrl)=>{//«
 	let {X:_x,Y:_y}=this.getpos();
 	if (if_ctrl) this.select(true);
 	if (this.isdesk()){
+		if (!SHOW_ICONS) return;
 		if (_x > 0) _x--;
 		else if (_y > 0){
 			_x = DESK_GRID_W-1;
@@ -6617,6 +6585,7 @@ this.up=if_ctrl=>{//«
 	if (if_ctrl) this.select(true);
 	let {X:_x,Y:_y}=this.getpos();
 	if (this.isdesk()){
+		if (!SHOW_ICONS) return;
 		_y--;
 		if (_y<0) {
 			_y = Math.floor((winh()-this.yoff())/IGSY)-1;
@@ -6653,6 +6622,7 @@ this.down=if_ctrl=>{//«
 	let {X:_x,Y:_y}=this.getpos();
 	if (if_ctrl) this.select(true);
 	if (this.isdesk()) {
+		if (!SHOW_ICONS) return;
 		if (desk_grid_start_y+(IGSY*(_y+1.5)) < winh()) {
 			_y++;
 		}
@@ -6728,6 +6698,7 @@ this.geticon = (fromwhere) => {//«
 	return null;
 };//»
 this.select=(if_toggle,if_open,if_force_new_win)=>{//«
+	if (this.isdesk() && !SHOW_ICONS) return;
 	let openit=()=>{
 		if (!if_toggle&&ICONS.length==1) {
 			open_icon(ICONS[0]);
@@ -6741,8 +6712,6 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 	}
 	let icn = this.geticon();
 	if (!icn || icn.fake) return openit();
-
-
 	let haveit = ICONS.includes(icn);
 	if (if_toggle&&haveit){
 		icn.off(true);
@@ -6756,6 +6725,13 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 		icn.on(true);
 	}
 	else open_icon(icn, {force: if_force_new_win});
+};//»
+this.vizCheck=()=>{//«
+	if (this.isdesk()){
+		if (!SHOW_ICONS) curElem.style.visibility = "hidden";
+		else curElem.style.visibility = "";
+	}
+	else curElem.style.visibility = "";
 };//»
 
 };
