@@ -34,7 +34,7 @@ again.
 is a focused window. Otherwise, the desktop itself gets to decide what to do with
 the given key event.
 
-I mainly want to make it trivial to set flags on a given workspace, via the WinMan
+I mainly want to make it trivial to set flags on a given workspace, via the WorkMan
 app or the command line, so as to disallow ad-hoc changes to window layout.
 
 In a workspace, we can keep state related to "Workspace global states", such as tiled
@@ -181,7 +181,7 @@ How about looking for an ~/.init/desk.js during the init phase???
 /*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the«
 desktop that its on. Where is raise_bound_win
 »*/
-/*12/17/24: Window Manager time! Want an app called WinMan that gives us a graphical«
+/*12/17/24: Window Manager time! Want an app called WorkMan that gives us a graphical«
 interface into what I starting working on yesterday with the bindwin command.
 Need to give an option to bindwin to allow a string description.
 
@@ -271,7 +271,7 @@ are necessary like those 'txt' things in the upper left corners...).
 const NS = LOTW;
 const {globals} = NS;
 
-import {FS as fsmod} from "fs";
+//import {FS as fsmod} from "fs";
 
 //«
 const{
@@ -358,8 +358,9 @@ const {
 //Var«
 
 //FS«
-const fs = new fsmod();
-globals.fs = fs;
+//const fs = new fsmod();
+//globals.fs = fs;
+const fs = globals.fs;
 const fsapi = fs.api;
 const{pathToNode}=fsapi;
 //»
@@ -8663,7 +8664,7 @@ cwarn("There was an unattached icon in ICONS!");
 		case "d_A": return (e.preventDefault(), toggle_show_windows());
 		case "t_A": return open_terminal();
 		case "e_A": return (e.preventDefault(), open_home_folder());
-		case "0_AS": return open_app("WinMan");
+		case "0_AS": return open_app("WorkMan");
 		case "l_CAS": return console.clear();
 		case "b_A": return toggle_taskbar();
 		case "e_CAS": return taskbar.toggle_expert_mode();

@@ -365,7 +365,7 @@ cwarn("BLOCKED");
 //FS«
 
 //new FS(){«
-export const FS = function() {
+globals.fs = new function() {
 //»
 
 //Var«
@@ -1838,35 +1838,14 @@ const try_make_site_dir=async()=>{//«
 	mount_dir(list, root.kids.site);
 };//»
 
-/*
-const mountDir = async (name) => {//«
-    let mntdir = root.kids.mnt;
-    let mntkids = mntdir.kids
-    if (!name) return "Mount name not given!";
-    if (!name.match(/^[a-z][a-z0-9]*$/i)) return "Invalid mount name!";
-	if (mntkids[name]) return `${name}: Already mounted`;
-	let path = `/${name}`;
-	let rv = await fetch(`${path}/list.json`);
-	if (!rv.ok){
-		return `Could not get the listing for '${name}'`;
-	}
-	let list = await rv.json();
-	let mntroot = mk_dir_kid(mntdir, name, {isDir: true});
-	mntroot.root = mntroot;
-	mntroot._type = MOUNT_TYPE;
-	mntkids[name]=mntroot;
-	mount_dir(list, mntroot);
-	return true;
-}//»
-*/
-
 const init = async()=>{//«
 	if (!await db.init(root, FS_PREF)) {
 		throw new Error("Could not initialize the filesystem database");
 	}
 	rootId = root.id;
-//	mount_tree("mnt", "mnt");
 	await make_dev_tree();
+	mount_tree("loc", "data");
+	mount_tree("glb", "data");
 	for (let name of root_dirs){
 		let ret = await make_fs_tree(name);
 		if (!ret) return;
@@ -2678,6 +2657,7 @@ globals.api.fs=this.api;
 //}; end FS«
   }
 //»
+
 
 //»
 
