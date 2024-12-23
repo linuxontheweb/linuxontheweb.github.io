@@ -448,7 +448,6 @@ let CWCW;
 let ICONS=[];
 let CDL;
 let CDICN, CDW, CRW, CEDICN;
-let CRWINS;
 CDW = CDICN = CRW = CEDICN = null;
 let DDD;
 let CG;
@@ -1038,7 +1037,7 @@ drag_timeout = setTimeout(()=>{
 				WDIE = null;
 				return;
 			}
-			let m = w.main;
+			let m = w.Main;
 			let scrtopdiff = m.scrollTop - WDIE.scrtop;
 			let scrleftdiff = m.scrollLeft - WDIE.scrleft;
 			let d = w.dragDiv;
@@ -1128,7 +1127,6 @@ drag_timeout = setTimeout(()=>{
 			if (SHOW_ICONS) {
 			if (CDICN.parWin == desk) { /*Back where we started:just move icon*/
 				let proms = [];
-//				for(let i=0;i<ICONS.length;i++)icon_off(ICONS[i]);
 				for(let i=0;i<ICONS.length;i++) ICONS[i].off();
 				CG.on();
 				let pos={X:e.clientX+desk.scrollLeft,Y:e.clientY+desk.scrollTop};
@@ -1144,8 +1142,6 @@ drag_timeout = setTimeout(()=>{
 				ICONS = [];
 				CG.off();
 			}
-//			else if (CDICN.parWin.fullpath == desk.fullpath) no_move_all_icons();
-//			else if (CDICN.parWin.fullpath != desk.fullpath) {
 			else if (CDICN.parWin.fullpath != desk.fullpath) {
 				await move_icons(DESK_PATH, {e});
 				CDICN = null;
@@ -1154,28 +1150,18 @@ drag_timeout = setTimeout(()=>{
 			}
 			CDICN = null;
 		}
+		else clear_drag_resize_win();
+/*«
 		else if (CDW) {
 			CDW.winElem.style.boxShadow = window_boxshadow;
+			CDW.sbcr();
 			CDW = null;
-		} else if (CRW) {
+		} 
+		else if (CRW) {
+			CRW.sbcr();
 			delete CRW.rsDir;
 			delete CRW.startx;
 			delete CRW.starty;
-			update_and_clear_resize_wins();
-		}
-/*«
-		else if (CDA){
-			CDA._del();
-			let name = CDA.app.split(".").pop();
-			let path = `${globals.desk_path}/${name}.app`;
-			let gotnode = await pathToNode(path);
-			if (!gotnode){
-				let node = await fsapi.writeFile(path,`{"app":"${CDA.app}"}`, {noMakeIcon: true});
-				if (node){
-					make_icon(name, desk, {ext: "app", node , pos:{X:e.clientX, Y: e.clientY}});
-				}
-			}
-			CDA=null;
 		}
 »*/
 	};//»
@@ -1205,20 +1191,8 @@ drag_timeout = setTimeout(()=>{
 		desk.style.cursor = "default";
 		if (DDIE) desk_drag_off();
 		cldragimg();
-		update_and_clear_resize_wins();
-/*«
-		if (CRW && CRW.app) CRW.app.onresize();
-		if (CRWINS){
-			for (let win of CRWINS){
-				win.statusBar.resize();
-				win.app.onresize();
-			}
-		}
-		CRW = null;
-		CRWINS = null;
-»*/
 		CDICN = null;
-		CDW = null;
+		clear_drag_resize_win();
 		if (taskbar_hidden) taskbar.taskbarElem._b=-taskbar.taskbarElem._gbcr().height;
 		else taskbar.taskbarElem._z=MIN_WIN_Z-1;
 		if (taskbar_timer){
@@ -1349,14 +1323,6 @@ constructor(num){//«
 
 }//»
 keyDown(e,kstr,mod_str){//«
-	if (kstr==="l_CA"){
-		toggle_layout_mode();
-		return;
-	}
-	if (kstr==="t_CAS"){
-		tile_windows();
-		return;
-	}
 	if (!CWIN) return;
 	let is_full=CWIN.isFullscreen;
 	let is_max=CWIN.isMaxed;
@@ -1519,6 +1485,7 @@ api.switchToWorkspace = switch_to_workspace;
 
 class Window {//«
 
+#rect;
 constructor(arg){//«
 
 	this.allowClose = true;
@@ -1583,7 +1550,14 @@ constructor(arg){//«
 }//»
 
 //Methods«
-
+resize(){//«
+	this.sbcr();
+	this.statusBar.resize();
+	this.app.onresize();
+	if (this.moveDiv) this.moveDiv.update();
+}//»
+sbcr(){this.#rect=this.winElem.getBoundingClientRect();}
+gbcr(){return this.#rect;}
 checkProp(which){//«
 	let workspace = workspaces[this.workspaceNum];
 	if (workspace.allowNone){
@@ -1640,7 +1614,7 @@ makeDOMElem(arg){//«
 //I guess this is here so the app name shows up in the Elements view of devtools
 	win.dataset.app = app;
 	win._pos= "fixed";
-	win._bor= "1px solid #333";
+//	win._bor= "1px solid #333";
 	win._x=usex;
 	win._y=usey;
 	win._z=HI_WIN_Z+1;
@@ -1938,6 +1912,9 @@ cwarn("this!==CWIN ????");
 		if (CRW != CWIN) CRW.on();
 		desk.style.cursor = "nwse-resize";
 	};
+	rsdiv.onmouseup=(e)=>{
+		clear_drag_resize_win();
+	};
 	statdiv.resize=()=>{statdiv.style.maxWidth = main._w - 20;};
 
 	footer._add(statdiv);
@@ -1960,7 +1937,6 @@ top: 2.75px;
 	win._add(main);
 	win._add(footer_wrap);
 	desk._add(win);
-
 	this.Main = main;
 	this.main = main;
 
@@ -1979,6 +1955,8 @@ top: 2.75px;
 	this.titleDiv = title;
 	this.title = wintitle;
 	this.winElem = win;
+
+	this.sbcr();
 
 }//»
 addDOMListeners(){//«
@@ -2051,9 +2029,7 @@ addDOMListeners(){//«
 				cldragimg();
 			}
 			else {
-				CRW = null;
-				CRWINS = null;
-				CDW = null;
+				clear_drag_resize_win();
 				clear_drag();
 			}
 		};//»
@@ -2070,9 +2046,7 @@ addDOMListeners(){//«
 	}//»
 	else{//«
 		main.onmouseup=e=>{
-			CRW = null;
-			CRWINS = null;
-			CDW = null;
+			clear_drag_resize_win();
 		};
 		main.ondrop=e=>{
 cwarn("No drop on main window");
@@ -2311,7 +2285,8 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 	};//»
 	checkVisible(){//«
 		let{winElem: win}=this;
-		let rect = win.getBoundingClientRect();
+//		let rect = win.getBoundingClientRect();
+		let rect = this.gbcr();
 		if (!rect) return;
 		if ((rect.left > winw()) || (rect.right < 0) || (rect.top > winh()) || rect.bottom < 0) {
 cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
@@ -2368,12 +2343,6 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 			}
 		}
 	}//»
-	addToResizeWins(){//«
-		if (!CRWINS) CRWINS=[];
-		if (CRWINS.indexOf(this)<0) {
-			CRWINS.push(this);
-		}
-	};//»
 	setFullscreenDims(){//«
 		let {winElem: win, main} = this;
 		let usepl = 0;
@@ -2395,9 +2364,7 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		const transend = e => {
 			win.style.transition = "";
 			main.style.transition = "";
-			this.statusBar.resize();
-			this.app.onresize();
-			if (this.moveDiv) this.moveDiv.update();
+			this.resize();
 			win.removeEventListener('transitionend', transend);
 			delete this.isTransitioning;
 		};
@@ -2451,8 +2418,10 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		let transend = e =>{
 			win.style.transition = "";
 			main.style.transition = "";
-			this.statusBar.resize();
-			this.app.onresize();
+//			this.sbcr();
+//			this.statusBar.resize();
+//			this.app.onresize();
+			this.resize();
 			win.removeEventListener('transitionend', transend);
 			this.isTransitioning = null;
 			delete this.isTransitioning;
@@ -2536,7 +2505,8 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		}
 		let odiv;
 		let dsty = document.body.style;
-		let rect = win.getBoundingClientRect();
+//		let rect = win.getBoundingClientRect();
+		let rect = this.gbcr();
 		odiv = make('div');
 		let osty = odiv.style;
 		odiv._pos= "absolute";
@@ -2579,8 +2549,7 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 			CRW.startt = win._y;
 		};//»
 		odiv.onmouseup = e => {//«
-			update_and_clear_resize_wins();
-			CDW = null
+			clear_drag_resize_win();
 		};//»
 		odiv.update = () => {//«
 			let rect = win._gbcr();
@@ -2637,8 +2606,10 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 			delete this.borHold;
 			m._h -= m.diffH;
 		}
-		this.statusBar.resize();
-		this.app.onresize();
+//		this.sbcr();
+//		this.statusBar.resize();
+//		this.app.onresize();
+		this.resize();
 		return true;
 	}//»
 selectIcons(){//«
@@ -2815,25 +2786,47 @@ return new Promise((Y,N)=>{
 get x(){return parseInt(this.winElem.style.left);}
 get y(){return parseInt(this.winElem.style.top);}
 
-set x(val){if(Number.isFinite)val=`${val}px`;this.winElem.style.left=val;}
-set y(val){if(Number.isFinite)val=`${val}px`;this.winElem.style.top=val;}
-
-set l(val){
-	let diff = this.winElem.getBoundingClientRect().left - parseInt(val);
-	this.Main._w += diff;
-	this.winElem._x = val;
+set x(val){
+	if(Number.isFinite)val=`${val}px`;
+	this.winElem.style.left=val;
+	this.#rect=this.winElem.getBoundingClientRect();
+}
+set y(val){
+	if(Number.isFinite)val=`${val}px`;
+	this.winElem.style.top=val;
+	this.#rect=this.winElem.getBoundingClientRect();
 }
 
-get w(){return this.winElem.getBoundingClientRect().width;}
-get h(){return this.winElem.getBoundingClientRect().height;}
-set w(val){this.Main._w += parseInt(val) - this.winElem.getBoundingClientRect().width;}
-set h(val){this.Main._h += parseInt(val) - this.winElem.getBoundingClientRect().height;}
+set l(val){
+	let diff = this.gbcr().left - parseInt(val);
+	this.Main._w += diff;
+	this.winElem._x = val;
+	this.#rect=this.winElem.getBoundingClientRect();
+}
 
-get r(){return this.winElem.getBoundingClientRect().right;}
-set r(val){this.Main._w += parseInt(val) - this.winElem.getBoundingClientRect().right;}
-get b(){return this.winElem.getBoundingClientRect().bottom;}
-set b(val){this.Main._h += parseInt(val) - this.winElem.getBoundingClientRect().bottom;}
+get w(){return this.gbcr().width;}
+get h(){return this.gbcr().height;}
+set w(val){
+	this.Main._w += parseInt(val) - this.gbcr().width;
+	this.#rect=this.winElem.getBoundingClientRect();
+}
+set h(val){
+	this.Main._h += parseInt(val) - this.gbcr().height;
+	this.#rect=this.winElem.getBoundingClientRect();
+}
 
+get r(){return this.gbcr().right;}
+set r(val){
+	this.Main._w += parseInt(val) - this.gbcr().right;
+	this.#rect=this.winElem.getBoundingClientRect();
+}
+get b(){return this.gbcr().bottom;}
+set b(val){
+//let diff = parseInt(val) - this.gbcr().bottom;
+//log(diff);
+	this.Main._h += parseInt(val) - this.gbcr().bottom;
+	this.#rect=this.winElem.getBoundingClientRect();
+}
 
 get fullpath(){//«
 	if (!this.name) {
@@ -2901,7 +2894,20 @@ const get_active_windows = () => {//«
 	}
 	return wins;
 }//»
-
+const clear_drag_resize_win=()=>{//«
+	if (CRW){
+		delete CRW.rsDir;
+		delete CRW.startx;
+		delete CRW.starty;
+		CRW.resize();
+		CRW = null;
+	}
+	if (CDW){
+		CDW.winElem.style.boxShadow = window_boxshadow;
+		CDW.sbcr();
+		CDW = null;
+	}
+};//»
 const do_tile_windows = () => {//«
 /*«
 
@@ -2944,26 +2950,16 @@ For each of these cases, if there are no windows that satisfy formula (1) or (2)
 the case may be, we extend the given side all the way to the browser's edge.
 
 »*/
+const overlay_mess=(mess)=>{show_overlay(mess);}
+const OFFSCREEN_MESS = "Offscreen window detected";
+const INTERSECTING_MESS = "Intersecting windows detected";
+const NOT_ENOUGH_WINDOWS_MESS = "Tiling requires at least 2 windows";
 let wid = winw();
 let hgt = winh();
 const intersects = (w1, w2) => {//«
-	let rect1 = w1.winElem.getBoundingClientRect();
-	let rect2 = w2.winElem.getBoundingClientRect();
-
-	let t1 = rect1.top;
-	let b1 = rect1.bottom;
-	let l1 = rect1.left;
-	let r1 = rect1.right;
-	let t2 = rect2.top;
-	let b2 = rect2.bottom;
-	let l2 = rect2.left;
-	let r2 = rect2.right;
-
-	if (t1 < 0 || t2 < 0) return true;
-	if (b1 > hgt || b2 > hgt) return true;
-	if (l1 < 0 || l2 < 0) return true;
-	if (r1 > wid || r2 > wid) return true;
-	if (!(l1 > r2 || r1 < l2 || t1 > b2 || b1 < t2)) {
+	let rect1 = w1.gbcr();
+	let rect2 = w2.gbcr();
+	if (!(rect1.left > rect2.right || rect1.right < rect2.left || rect1.top > rect2.bottom || rect1.bottom < rect2.top)) {
 		return true;
 	}
 	return false;
@@ -2971,7 +2967,7 @@ const intersects = (w1, w2) => {//«
 
 const get_nearest_bottom = win =>{//«
 
-let r1 = win.winElem.getBoundingClientRect();
+let r1 = win.gbcr();
 let cr = r1.right;
 let cl = r1.left;
 let ct = r1.top;
@@ -2979,7 +2975,7 @@ let cb = r1.bottom;
 let all=[];
 for (let w of arr){//«
 	if (win===w) continue;
-	let r2 = w.winElem.getBoundingClientRect();
+	let r2 = w.gbcr();
 //!(X.left > CW.right) && !(X.right < CW.left)		(1)
 	if (!(r2.left > cr) && !(r2.right < cl)) {
 //For all of these windows, we need to find whichever has the largest bottom value that is
@@ -3000,7 +2996,7 @@ return all[0].win;
 }//»
 const get_nearest_top = win =>{//«
 
-let r1 = win.winElem.getBoundingClientRect();
+let r1 = win.gbcr();
 let cr = r1.right;
 let cl = r1.left;
 let ct = r1.top;
@@ -3008,7 +3004,7 @@ let cb = r1.bottom;
 let all=[];
 for (let w of arr){//«
 	if (win===w) continue;
-	let r2 = w.winElem.getBoundingClientRect();
+	let r2 = w.gbcr();
 //!(X.left > CW.right) && !(X.right < CW.left)		(1)
 	if (!(r2.left > cr) && !(r2.right < cl)) {
 //For all of these windows, we need to find whichever has the least top value that is
@@ -3029,7 +3025,7 @@ return all[0].win;
 }//»
 const get_nearest_right = win =>{//«
 
-let r1 = win.winElem.getBoundingClientRect();
+let r1 = win.gbcr();
 let cr = r1.right;
 let cl = r1.left;
 let ct = r1.top;
@@ -3037,7 +3033,7 @@ let cb = r1.bottom;
 let all=[];
 for (let w of arr){//«
 	if (win===w) continue;
-	let r2 = w.winElem.getBoundingClientRect();
+	let r2 = w.gbcr();
 //!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
 	if (!(r2.bottom < ct) && !(r2.top > cb)) {
 //For all of these windows, we need to find whichever has the largest right value that is
@@ -3059,7 +3055,7 @@ return all[0].win;
 }//»
 const get_nearest_left = win =>{//«
 
-let r1 = win.winElem.getBoundingClientRect();
+let r1 = win.gbcr();
 let cr = r1.right;
 let cl = r1.left;
 let ct = r1.top;
@@ -3067,7 +3063,7 @@ let cb = r1.bottom;
 let all=[];
 for (let w of arr){//«
 	if (win===w) continue;
-	let r2 = w.winElem.getBoundingClientRect();
+	let r2 = w.gbcr();
 //!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
 	if (!(r2.bottom < ct) && !(r2.top > cb)) {
 //For all of these windows, we need to find whichever has the least left value that is
@@ -3095,20 +3091,26 @@ for (let w of wins){
 	w.tiledEdges = {};
 	got.push(w);
 }
-if (!got.length) return;
-if (got.length===1){
-	if (!got[0].isFullscreen) got[0].fullscreen();
-	return;
+if (got.length<2){
+	return overlay_mess(NOT_ENOUGH_WINDOWS_MESS);
 }
 
 let arr = got;
+//Detect offscreen windows
+for (let win of arr){
+	let rect = win.gbcr();
+	if(rect.top<0 || rect.bottom>hgt || rect.left<0 || rect.right>wid) {
+		return overlay_mess(OFFSCREEN_MESS);
+	}
+}
 //Detect intersecting windows
 for (let j = 0; j < arr.length; j++) {//«
 	let w1 = arr[j];
 	for (let i = j + 1; i < arr.length; i++) {
 		let w2 = arr[i];
 		if (intersects(w1, w2)) {
-			show_overlay("Intersecting windows detected");
+//			show_overlay();
+			overlay_mess(INTERSECTING_MESS);
 			return;
 		}
 	}
@@ -3144,7 +3146,9 @@ for (let j = 0; j < arr.length; j++) {
 //Tile window bottom edges//«
 for (let j = 0; j < arr.length; j++) {
 	let w1 = arr[j];
-	if ((Math.abs(w1.b-hgt) < 1)  || w1.tiledEdges.bottom) continue;
+	if ((Math.abs(w1.b-hgt) < 1)  || w1.tiledEdges.bottom) {
+		continue;
+	}
 	let w2 = get_nearest_top(w1);
 	if (!w2){
 		w1.b = hgt;
@@ -3208,14 +3212,25 @@ for (let win of arr) win.app.onresize();
 */
 return arr;
 };//»
+const tile_windows = do_tile_windows;
+/*
 const tile_windows=()=>{//«
 	let arr;
 	let iter=0;
-	while (arr = do_tile_windows()){}
+	while (arr = do_tile_windows()){
+if (iter > 5){
+cerr("WTHELLLLL????????");
+break;
+}
+		iter++;
+	}
 	if (arr) {
-		for (let win of arr) win.app.onresize();
+		for (let win of arr) {
+			win.resize();
+		}
 	}
 };//»
+*/
 const toggle_show_windows = (if_no_current) => {//«
 	let wins = get_active_windows();
 	if (windows_showing) {
@@ -3387,6 +3402,7 @@ const move_window = (which, if_small) => {//«
 		w.last_min_x = elem._x;
 		w.last_min_y = elem._y;
 	}
+	w.sbcr();
 }//»
 const resize_window = (which, if_reverse, if_small) => {//«
 	const w2r = () => {
@@ -3445,7 +3461,9 @@ const resize_window = (which, if_reverse, if_small) => {//«
 	}
 	w.checkLoc();
 	w.checkSize();
+	w.sbcr();
 	check_rs_timer();
+//	w.resize();
 	if (w.moveDiv) w.moveDiv.update();
 }//»
 const handle_resize_event = e => {//«
@@ -3467,7 +3485,7 @@ if (!dir){//«
 //The user is dragging one of the 8 "window layout" handles described above
 //Var«
 let w = CRW;
-let rect = w.winElem.getBoundingClientRect();
+let rect = w.gbcr();
 let odiv = w.moveDiv;
 let m = w.main;
 let ex = e.clientX;
@@ -3528,22 +3546,6 @@ CRW.statusBar.resize();
 
 };//»
 
-const update_and_clear_resize_wins = () => {//«
-	if (CRW) {
-		CRW.app.onresize();
-		CRW.statusBar.resize();
-	}
-	if (CRWINS){
-		for (let win of CRWINS){
-			if (win) {
-				win.statusBar.resize();
-				win.app.onresize();
-			}
-		}
-	}
-	CRW = null;
-	CRWINS = null;
-};//»
 this.cleanup_deleted_wins_and_icons = path => {//«
     let namearr = getNameExt(path, null, true);
     let usepath = `${namearr[0]}/${namearr[1]}`;
@@ -5271,7 +5273,7 @@ const select_all_icons=()=>{//«
 };//»
 const select_first_visible_folder_icon=(win)=>{//«
 	if (!(win.main)) return;
-	let rect = win.main.getBoundingClientRect();
+	let rect = win.Main.getBoundingClientRect();
 	let x = rect.left+folder_grid_start_x+IGSX/2;
 	let y = rect.top+folder_grid_start_y;
 	let el = document.elementsFromPoint(x,y+0.75*IGSY)[0];
@@ -8200,8 +8202,7 @@ const check_rs_timer = () => {//«
 	rs_timer = setTimeout(() => {
 		rs_timer = null;
 		if (!CWIN) return;
-		CWIN.statusBar.resize();
-		CWIN.app.onresize();
+		CWIN.resize();
 	}, RS_TIMEOUT);
 }//»
 const show_overlay=(str)=>{//«
@@ -8256,9 +8257,7 @@ const handle_ESC = (if_alt) => {//«
 	DDD._h = 0;
 	WDIE = null;
 	CDICN = null;
-	CRW = null;
-	CRWINS = null;
-	CDW = null;
+	clear_drag_resize_win();
 	cldragimg(true);
 	CG.off();
 	if (taskbar.switcherIsOn()) return taskbar.switcherOff();
@@ -8669,6 +8668,8 @@ cwarn("There was an unattached icon in ICONS!");
 		case "b_A": return toggle_taskbar();
 		case "e_CAS": return taskbar.toggle_expert_mode();
 		case "i_CAS": return toggle_icon_display();
+		case "t_CAS": return tile_windows();
+		case "l_CA": return toggle_layout_mode();
 	}
 //»
 
@@ -8760,7 +8761,6 @@ const dokeyup = function(e) {//«
 
 //Init«
 (async () => {
-	fs.set_desk(this);
 	let winorig = window.location.origin;
 	if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) globals.is_local = true;
 	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;

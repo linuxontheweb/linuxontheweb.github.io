@@ -59,9 +59,8 @@ const {
 
 const sleep=()=>{return new Promise((Y,N)=>{});}
 
-
+const NS = LOTW;
 const {
-	NS,
 //	PROJECT_ROOT_MOUNT_NAME,
 	FS_PREF,
 	FS_TYPE,
@@ -393,7 +392,6 @@ let FILE_SAVER_SLICE_SZ = 1 * MB;
 let MAX_REMOTE_SIZE = 1 * MB;
 let MAX_FILE_SIZE = 256*MB;
 
-let Desk;
 const OK_WRITE_TYPES=[FS_TYPE];
 //const root_dirs = ["tmp", "usr", "home", "etc", "var"];
 const root_dirs = ["tmp", "home", "var"];
@@ -1016,7 +1014,7 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 		errcb(`not removing directory type: '${rtype}': ${path}`);
 		return;
 	}
-	if (Desk && (path == globals.desk_path)) {
+	if (NS.Desk && (path == globals.desk_path)) {
 		errcb(`not removing the working desktop path: ${path}`);
 		return;
 	} 
@@ -1053,7 +1051,7 @@ cerr(`Could not remove: ${node.fullpath} (${errmess})`);
 		return;
 	}
 	delete node.par.kids[node.name];
-	if (Desk) Desk.cleanup_deleted_wins_and_icons(path);
+	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
 	return true;
 };//»
 
@@ -1313,17 +1311,12 @@ for (let arr of mvarr) {//«
 			continue;
 		}
 		let newpath = `${savedir.fullpath}/${nm}`;
-//		if (savetype==FS_TYPE){
-//			werr(`Implement recursively copy remote folder '${nm}' to (${FS_TYPE}) '${savedir.fullpath}/'`);
-//			continue;
-//		}
-//		if (!await touchDirProm(newpath)){
 		if (!await mkDir(newpath, null, {root: is_root})){
 			gotfail=true;
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
-		if (Desk) Desk.make_icon_if_new(await pathToNode(newpath));
+		if (NS.Desk) NS.Desk.make_icon_if_new(await pathToNode(newpath));
 		werr(`Created: ${newpath}`);
 		if (!node.done) await popDir(node);
 		let arr = [];	
@@ -1410,7 +1403,7 @@ else{//«
 
 }//»
 
-if (Desk && !dom_objects) Desk.update_folder_statuses();
+if (NS.Desk && !dom_objects) NS.Desk.update_folder_statuses();
 if (gotfail) {
 	cberr && cberr();
 	return false;
@@ -1781,7 +1774,7 @@ log("PAROBJ",parobj);
 	kid.id = id;
 	parobj.kids[name] = kid;
 
-	if (Desk&&!if_no_make_icon) Desk.make_icon_if_new(kid);
+	if (NS.Desk&&!if_no_make_icon) NS.Desk.make_icon_if_new(kid);
 	return kid;
 
 };//»
@@ -1799,7 +1792,7 @@ const makeLink=async(parobj, name, target, fullpath)=>{//«
 	kid.symLink = target;
 	kid.id = id;
 	parobj.kids[name]=kid;
-	if (Desk) Desk.make_icon_if_new(kid);
+	if (NS.Desk) NS.Desk.make_icon_if_new(kid);
 	return kid;
 };//»
 
@@ -2640,11 +2633,6 @@ const path_to_par_and_name = (path) => {
 }
 */
 //»
-
-this.set_desk = function(arg) {//«
-	Desk = arg;
-	move_icon_by_path = Desk.move_icon_by_path;
-}//»
 
 //»
 
