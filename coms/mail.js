@@ -97,9 +97,6 @@ const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 
 //Var«
 
-const shell_commands = globals.shell_commands;
-const command_options = globals.shell_command_options;
-
 const DBNAME = "mail";
 
 const MAILDATA_PATH = `${APPDATA_PATH}/mail`;

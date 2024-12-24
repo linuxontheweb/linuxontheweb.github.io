@@ -39,6 +39,7 @@ let win4 = await openApp("Terminal",{force: true, appArgs: {reInit: {
 commandStr: `bindwin ${win1.winNum} 1 --desc="Shell Dev"; bindwin ${win2.winNum} 2 --desc="Console"; bindwin ${win3.winNum} 3;`
 }}});
 win4.close();
-//win3.app.execute(`bindwin ${win1.winNum} 1 --desc="Shell Dev"; bindwin ${win2.winNum} 2 --desc="Console"; bindwin ${win3.winNum} 3;`);
+win1.borb="0.5px solid #171717";
+win2.bort="0.5px solid #171717";
 
 

@@ -1,4 +1,10 @@
+/*12/24/24: How about a background console to be used for the outputs of:
+1)
+	~$ some_command.sh &
 
+2) Running scripts/commands in a "screen mode" application like vim?
+
+*/
 //«Notes
 /*12/19/24: @EIOFJKL: In ondevreload, need a way to "refresh" command modules like «
 vim (and log) that are currently running.
@@ -158,7 +164,7 @@ const DEL_COMS=[
 //	"audio"
 //	"yt",
 //	"test",
-//	"fs",
+	"fs",
 //	"mail"
 //	"esprima",
 //"shell"
@@ -177,6 +183,7 @@ if (dev_mode){
 export const app = function(Win) {
 
 //Var«
+
 const ShellMod = globals.ShellMod;
 const Shell = ShellMod.Shell;
 
@@ -262,7 +269,7 @@ this.topwin = topwin;
 
 let kill_funcs = []; 
 
-let MIN_TERM_WID = 20;
+let MIN_TERM_WID = 15;
 //let terminal_locked  = false;
 
 let is_scrolling = false;
@@ -1568,7 +1575,7 @@ const resize = () => {//«
 //»
 //Execute/Parse/Prompt«
 
-const execute = async(str, if_init, halt_on_fail)=>{//«
+const execute = async(str, opts={})=>{//«
 	ENV['USER'] = globals.CURRENT_USER;
 //	cur_shell = this.shell;
 	cur_shell = new Shell(this);
@@ -1596,6 +1603,7 @@ const execute = async(str, if_init, halt_on_fail)=>{//«
 
 //PLDYHJKU
 	await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
+	if (opts.noSave) return;
 
 	let ind = history.indexOf(gotstr);
 	if (ind >= 0) {
@@ -1815,6 +1823,19 @@ response(out, {isErr: true});
 this.resperr = response_err;
 const response = (out, opts={})=>{//«
 	if (!isStr(out)) Win._fatal(new Error("Non-string given to terminal.response"));
+	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack} = opts;
+if (inBack){
+if (isErr){
+cerr(out);
+}
+else if (isWrn){
+cwarn(out);
+}
+else{
+log(out);
+}
+return;
+}
 	out = out.split("\n");
 /*
 	else if (!out) return;
@@ -1825,7 +1846,6 @@ return;
 	}
 	else if (out instanceof Uint8Array) out = [`Uint8Array(${out.length})`];
 */
-	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf} = opts;
 //WOPIUTHSDKL
 	let use_color;
 	if (isErr) use_color = "#f99";
@@ -2608,7 +2628,7 @@ const handle_delete=(mod)=>{//«
 	}
 };
 //»
-const handle_enter = async(if_paste)=>{//«
+const handle_enter = async(opts={})=>{//«
 	if (!sleeping){
 		bufpos = 0;
 		command_hold = null;
@@ -2632,10 +2652,9 @@ const handle_enter = async(if_paste)=>{//«
 		if (str) {
 			last_com_str = str;
 		}
-		if (!if_paste) sleeping = true;
 		scroll_into_view();
 		render();
-		await execute(str);
+		await execute(str, opts);
 		sleeping = null;
 	}
 };//»
@@ -2809,12 +2828,6 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	}//»
 	if (sym == "d_C") return do_ctrl_D();
 	num_ctrl_d = 0;
-//	if (buffer_scroll_num!==null){
-//		buffer_scroll_num = null;
-//		x = hold_x;
-//		y = hold_y;
-//		render();
-//	}
 	if (code >= 37 && code <= 40) handle_arrow(code, mod, sym);
 	else if (sym == "HOME_"|| sym == "END_") handle_page(sym);
 	else if (code == KC['DEL']) handle_delete(mod);
@@ -2826,6 +2839,9 @@ const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	else if (sym == "k_C") do_clear_line();
 	else if (sym == "y_C") {
 		for (let i=0; i < current_cut_str.length; i++) handle_letter_press(current_cut_str[i]);
+	}
+	else if (sym == "b_CAS") {
+log("BGLINES");
 	}
 	else if (sym == "c_CAS") {
 		clear();
@@ -3015,7 +3031,7 @@ const init = async(appargs={})=>{
 	await ShellMod.util.doImports(ADD_COMS, cwarn);
 	if (commandStr) {
 		for (let c of commandStr) handle_letter_press(c); 
-		handle_enter();
+		handle_enter({noSave: true});
 	};
 	if (USE_ONDEVRELOAD) Term.ondevreload = ondevreload;
 
@@ -3113,8 +3129,8 @@ this.onkill = (if_dev_reload)=>{//«
 	ShellMod.util.deleteMods(DEL_MODS);
 	ShellMod.util.deleteComs(DEL_COMS);
 
-	delete globals.shell_commands;
-	delete globals.shell_command_options;
+//	delete globals.shell_commands;
+//	delete globals.shell_command_options;
 
 	save_history();
 
@@ -3276,6 +3292,16 @@ cwarn("TRY_KILL CALLED BUT is_editor == false!");
 this.toggle_paste = toggle_paste;
 this.cur_white=()=>{CURBG="#ddd";CURFG="#000";}
 this.cur_blue=()=>{CURBG="#00f";CURFG="#fff";}
+this.execute_background_command=s=>{
+
+	let shell = new Shell(this, true);
+	let env = {};
+	for (let k in ENV){
+		env[k]=ENV[k];
+	}
+	shell.execute(s,{env, noRespEnd: true});
+
+};
 this.execute = async (s)=>{//«
 	if (cur_shell){
 cwarn("Sleeping");

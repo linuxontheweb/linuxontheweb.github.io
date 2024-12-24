@@ -387,6 +387,12 @@ export const util = (()=>{//«
 
 return {
 consoleLog,
+getStrPer:val=>{
+	let marr;
+	if (isStr(val) && (marr = val.match(/^([0-9]+(\.[0-9]+)?)%$/))){
+		return parseFloat(marr[1])/100;
+	}
+},
 isEOF:arg=>arg===EOF,
 getList: async(path)=>{//«
 	if (globals.lists[path]) {

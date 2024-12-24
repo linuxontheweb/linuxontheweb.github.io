@@ -48,9 +48,6 @@ const ADMIN_COM = class extends Com{run(){this.no("must be in 'admin mode'!");}}
 //To allow writing of files even if there is an external lock on it, change this to true
 const allow_write_locked = false;
 
-const shell_commands = globals.shell_commands;
-const command_options = globals.shell_command_options;
-
 //»
 
 //Funcs«

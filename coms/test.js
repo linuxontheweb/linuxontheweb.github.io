@@ -4,9 +4,9 @@
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{isArr,isStr,isEOF,log,jlog,cwarn,cerr, sleep}=util;
-const{comClasses, SHELL_ERROR_CODES}=globals;
+const{ShellMod, SHELL_ERROR_CODES}=globals;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
-const {Com} = comClasses;
+const {Com} = ShellMod.comClasses;
 const{Desk}=LOTW;
 
 //»

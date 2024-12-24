@@ -315,6 +315,7 @@ const{
 
 const {
 	isStr,
+	getStrPer,
 	isObj,
 	mkdv,
 	mksp,
@@ -1299,9 +1300,6 @@ const cldragimg = if_hard => {//«
 	} else CDL && CDL._del();
 	CDL = null;
 	desk.style.cursor = "";
-};//»
-const desk_init = async()=>{//«
-await makeScript("/sys/init.js", {module: true});
 };//»
 
 //»
@@ -2783,6 +2781,11 @@ return new Promise((Y,N)=>{
 //»
 
 //«Properties
+set bort(val){this.winElem.style.borderTop = val;}
+set borb(val){this.winElem.style.borderBottom = val;}
+set borl(val){this.winElem.style.borderLeft = val;}
+set borr(val){this.winElem.style.borderRight = val;}
+set bor(val){this.winElem.style.border = val;}
 get rect(){return this.#rect;}
 get x(){return parseInt(this.winElem.style.left);}
 get y(){return parseInt(this.winElem.style.top);}
@@ -2808,19 +2811,19 @@ set l(val){
 get w(){return this.#rect.width;}
 get h(){return this.#rect.height;}
 set w(val){
-	let marr;
-	if (isStr(val) && (marr = val.match(/^([0-9]+(\.[0-9]+)?)%$/))){
-		this.Main._w = winw() * (parseFloat(marr[1])/100);
+	let per;
+	if (per = getStrPer(val)){
+		this.Main._w = winw() * per;
 	}
 	else this.Main._w += parseInt(val) - this.#rect.width;
 	this.#rect=this.winElem.getBoundingClientRect();
 }
 set h(val){
 //Chrome size
-	let marr;
-	if (isStr(val) && (marr = val.match(/^([0-9]+(\.[0-9]+)?)%$/))){
+	let per;
+	if (per = getStrPer(val)){
 		let diff = this.#rect.height - this.Main._h;
-		this.Main._h = (winh() * (parseFloat(marr[1])/100)) - diff;
+		this.Main._h = (winh() * per) - diff;
 	}
 	else this.Main._h += parseInt(val) - this.#rect.height;
 	this.#rect=this.winElem.getBoundingClientRect();
@@ -8792,8 +8795,8 @@ const dokeyup = function(e) {//«
 	if (localStorage[`taskbar_hidden:${globals.current_user}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
 
-	if (dev_mode && !qObj["nodeskinit"]) {
-		await desk_init();
+	if (dev_mode && !(qObj["no-desk-init"])) {
+		await makeScript("/init/my_setup.js", {module: true});
 	}
 
 	document.onkeypress = dokeypress;

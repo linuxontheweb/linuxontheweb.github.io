@@ -1,3 +1,15 @@
+/*12/24/24: 
+
+I've started trying to "fix" the old shell execution algorithm instead of
+working on the completely new Runtime. I started trying to figure out how
+to get backgrounding working, but only got pulled into a frenetic attempt
+to get the old crufty stuff to "just work".
+
+The problem is that I have loops-insideof-loops-insideof-loops.
+
+I've decided to just dump backgrounded output onto the JS console.
+
+*/
 /*12/23/24: Now editing this is like editing /sys/fs.js, and will require a system«
 reboot. That's okay because we want to export certain members of ShellMod
 such as Runtime, so that it can be locally developed. This plus the fact that we
@@ -848,10 +860,10 @@ return stdin;
 //Helpers (this.util)«
 {
 
-const make_sh_error_com = (name, mess, com_env)=>{//«
+const make_sh_error_com = (name, mess, com_env, in_background)=>{//«
 
 //	let com = new ErrCom(name, null,null,com_env);
-	let com = new this.comClasses.ErrCom(name, null,null,com_env);
+	let com = new this.comClasses.ErrCom(name, null,null, in_background, com_env);
 //SPOIRUTM
 	com.errorMessage = `sh: ${name}: ${mess}`;
 	return com;
@@ -1067,12 +1079,10 @@ const delete_coms = arr => {//«
 	let sh_coms = globals.shell_commands;
 	let sh_opts = globals.shell_command_options;
 	for (let libname of arr){
-
 if (!this.var.allLibs[libname]){
 cwarn(`The command library: ${libname} is not loaded`);
 continue;
 }
-
 		let lib = NS.coms[libname];
 		if (!lib){
 //cwarn(`The command library: ${libname} was in this.var.allLibs, but not in NS.coms!?!?!`);
@@ -1087,7 +1097,8 @@ continue;
 //cwarn(`The command ${com} is not owned by lib: ${libname}!!`);
 				continue;
 			}
-			delete sh_coms[com];
+//			delete sh_coms[com];
+			sh_coms[com] = libname;
 			num_deleted++;
 		}
 cwarn(`Deleted: ${num_deleted} commands from '${libname}'`);
@@ -1197,12 +1208,13 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/,
 //Command Classes: this.comClasses (Com, ErrCom, ScriptCom)«
 
 const Com = class {//«
-	constructor(name, args, opts, env={}){//«
+	constructor(name, args, opts, in_background, env={}){//«
 		this.name =name;
 		this.args=args;
 		this.opts=opts;
 		this.numErrors = 0;
 		this.noPipe = false;
+		this.inBack = in_background;
 		for (let k in env) {
 			this[k]=env[k];
 		}
@@ -1221,6 +1233,7 @@ const Com = class {//«
 				this.killed = true;
 			};
 			this.no=(mess)=>{
+log(this);
 				if (mess) this.err(mess);
 				if (this.inpipe) this.out(EOF);
 				Y(E_ERR);
@@ -1325,8 +1338,8 @@ cwarn(`${this.name}: cancelled`);
 	}
 }//»
 const ScriptCom = class extends Com{//«
-	constructor(shell, name, text, args, env){
-		super(name, args, {}, env);
+	constructor(shell, name, text, args, env, in_background){
+		super(name, args, {}, in_background, env);
 		this.text = text;
 		this.shell = shell;
 	}
@@ -4836,9 +4849,10 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 //»
 class Shell {//«
 
-constructor(term){//«
+constructor(term, in_background){//«
 
 this.term = term;
+this.inBackground = in_background;
 /*Very dumbhack to implement cancellations of hanging commands, e.g. that might do fetching,«
 so that no output from a cancelled command is sent to the terminal, although
 whatever the command might be doing to keep it busy is still happening, so it
@@ -4898,12 +4912,12 @@ const can=()=>{//«
 	return started_time < this.cancelled_time;
 };//»
 //WIMNNUYDKL
-//«
+
 const{term}=this;
 let started_time = (new Date).getTime();
 
 //let {scriptOut, scriptArgs, scriptName, subLines, script_args, script_name, env}=opts;
-let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive, noRespEnd}=opts;
 //let {scriptOut, subLines, env}=opts;
 let rv;
 let is_top_level = !(scriptOut||subLines);
@@ -4923,12 +4937,14 @@ catch(e){
 if (isStr(statements)) return terr("sh: "+statements);
 
 let lastcomcode;
-//»
 
 //A 'statement' is a list of boolean-separated pipelines.
 STATEMENT_LOOP: for (let state of statements){//«
 
 let loglist = state.statement;
+//let in_background = state.type === "&";
+let in_background = this.inBackground || state.type === "&";
+
 if (!loglist){
 	return terr(`sh: logic list not found!`);
 }
@@ -5217,6 +5233,7 @@ if (subLines){
 }
 
 //MDKLIOUTYH
+opts.inBack = in_background;
 term.response(val, opts);
 term.scroll_into_view();
 term.refresh();
@@ -5224,26 +5241,26 @@ term.refresh();
 };//»
 const err_cb=(str)=>{//«
 if (this.cancelled) return;
-term.response(str, {isErr: true});
+term.response(str, {isErr: true, inBack: in_background});
 term.scroll_into_view();
 term.refresh();
 
 };//»
 const suc_cb=(str)=>{//«
 if (this.cancelled) return;
-term.response(str, {isSuc: true});
+term.response(str, {isSuc: true, inBack: in_background});
 term.scroll_into_view();
 term.refresh();
 };//»
 const wrn_cb=(str)=>{//«
 if (this.cancelled) return;
-term.response(str, {isWrn: true});
+term.response(str, {isWrn: true, inBack: in_background});
 term.scroll_into_view();
 term.refresh();
 };//»
 const inf_cb=(str)=>{//«
 if (this.cancelled) return;
-term.response(str, {isInf: true});
+term.response(str, {isInf: true, inBack: in_background});
 term.scroll_into_view();
 term.refresh();
 };//»
@@ -5348,45 +5365,45 @@ cerr(e);
 //EOPIUYTLM
 			if (!comword.match(/\x2f/)) {
 //WPRLKUT
-				pipeline.push(ShellMod.util.makeShErrCom(comword, `command not found`, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, `command not found`, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
 
 			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
 			if (!node) {
-				pipeline.push(ShellMod.util.makeShErrCom(comword, `file not found`, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, `file not found`, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
 			let app = node.appName;
 			if (app===FOLDER_APP) {
-				pipeline.push(ShellMod.util.makeShErrCom(comword, `is a directory`, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, `is a directory`, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
 			if (app!==TEXT_EDITOR_APP) {
-				pipeline.push(ShellMod.util.makeShErrCom(comword, `not a text file`, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, `not a text file`, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
 			if (!comword.match(/\.sh$/i)){
-				pipeline.push(ShellMod.util.makeShErrCom(comword, `only executing files with '.sh' extension`, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, `only executing files with '.sh' extension`, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
 			let text = await node.text;
 			if (!text) {
-				pipeline.push(ShellMod.util.makeShErrCom(comword, `no text returned`, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, `no text returned`, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
-			comobj = new ScriptCom(this, comword, text, arr, com_env);
+			comobj = new ScriptCom(this, comword, text, arr, com_env, in_background);
 			pipeline.push(comobj);
 			continue;
 		}//»
 		if (screen_grab_com && com.grabsScreen){/*«*/
-			pipeline.push(ShellMod.util.makeShErrCom(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env));
+			pipeline.push(ShellMod.util.makeShErrCom(comword, `the screen has already been grabbed by: ${screen_grab_com}`, com_env, in_background));
 			ShellMod.var.lastExitCode = E_ERR;
 			continue;
 		}/*»*/
@@ -5409,12 +5426,12 @@ cerr(e);
 //			stdin = await get_stdin_lines(in_redir, term, heredocScanner, !!subLines);
 			stdin = await get_stdin_lines(in_redir, term, !!subLines);
 			if (isStr(stdin)){
-				pipeline.push(ShellMod.util.makeShErrCom(comword, stdin, com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, stdin, com_env, in_background));
 				ShellMod.var.lastExitCode = E_ERR;
 				continue;
 			}
 			else if (!isArr(stdin)){
-				pipeline.push(ShellMod.util.makeShErrCom(comword, "an invalid value was returned from get_stdin_lines (see console)", com_env));
+				pipeline.push(ShellMod.util.makeShErrCom(comword, "an invalid value was returned from get_stdin_lines (see console)", com_env, in_background));
 cwarn("Here is the non-array value");
 log(stdin);
 				ShellMod.var.lastExitCode = E_ERR;
@@ -5424,7 +5441,7 @@ log(stdin);
 		}/*»*/
 
 		try{//«new Com
-			comobj = new com(usecomword, arr, opts, com_env);
+			comobj = new com(usecomword, arr, opts, in_background, com_env);
 			pipeline.push(comobj);
 		}
 		catch(e){
@@ -5432,7 +5449,7 @@ cerr(e);
 //VKJEOKJ
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
-			pipeline.push(ShellMod.util.makeShErrCom(usecomword, e.message, com_env));
+			pipeline.push(ShellMod.util.makeShErrCom(usecomword, e.message, com_env, in_background));
 		}//»
 //SKIOPRHJT
 	}//»
@@ -5471,6 +5488,7 @@ for (let com of pipeline){/*«*/
 		}
 	}
 }/*»*/
+
 if (pipeline._hasBang){
 	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
 	else lastcomcode = E_SUC;
@@ -5511,6 +5529,8 @@ ShellMod.var.lastExitCode = lastcomcode;
 
 }//»
 
+if (noRespEnd) return;
+
 //In a script, refresh rather than returning to the prompt
 if (no_end) {
 	term.refresh();
@@ -5545,31 +5565,32 @@ will be "fs", which points to the coms/fs.js file.  Upon finding this string
 name strings with the proper command functions.
 »*/
 
-for (let k in preload_libs){
-	this.var.allLibs[k] = preload_libs[k];
+let preloads = this.var.preloadLibs;
+
+for (let k in preloads){
+	this.var.allLibs[k] = preloads[k];
 }
 
-for (let k in this.var.preloadLibs){
-	let arr = this.var.preloadLibs[k];
+for (let k in preloads){
+	let arr = preloads[k];
 	for (let com of arr) {
-//if (shell_commands[com]){
-if (this.defCommands[com]){
+		if (this.defCommands[com]){
 cwarn(`The shell command: ${com} already exists (also defined in this.var.preloadLibs: ${k})`);
-continue;
-}
+			continue;
+		}
 		this.defCommands[com]=k;
 	}
 }
-const active_commands = globals.shell_commands || this.defCommands;
+
+Shell.activeCommands = globals.shell_commands || this.defCommands;
 if (!globals.shell_commands) {
 	globals.shell_commands = this.defCommands;
 }
 
-const active_options = globals.shell_command_options || this.defCommandOpts;
-if (!globals.shell_command_options) globals.shell_command_options = this.defCommandOpts;
-
-Shell.activeCommands = active_commands;
-Shell.activeOptions = active_options;
+Shell.activeOptions = globals.shell_command_options || this.defCommandOpts;
+if (!globals.shell_command_options) {
+	globals.shell_command_options = this.defCommandOpts;
+}
 
 }//»
 }

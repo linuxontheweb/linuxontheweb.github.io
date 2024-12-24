@@ -1,4 +1,7 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
+/*12/24/24: I want to send backgrounded commands to the terminal here.
+
+*/
 /*12/17/24: Yesterday I created the 'goto_matching_brace' functionality«
 that attempts to find the matching "}","]" or ")" when a "{", "[", or "("
 is under the cursor (and vice versa). Use it with the "'" key.
@@ -1451,6 +1454,11 @@ if (marr = com.match(/^(%)?s\/(.*)$/)){//«
 			let n = parseInt(com)-1;
 			if (n < 0) return render();
 			scroll_to(n, {doRender: true});
+			return;
+		}
+		else if (marr = com.match(/^x +(.*)$/)){
+			Term.execute_background_command(marr[1]);
+			render();
 			return;
 		}
 		else if (marr = com.match(/^tab +(.*)$/)){
