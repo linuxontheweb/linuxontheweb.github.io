@@ -26,7 +26,7 @@ document introspection methods we develop, we can do mapping functions between
 //Imports«
 const util = LOTW.api.util;
 const globals = LOTW.globals;
-const{consoleLog, strNum, isArr, isStr, isObj, isBool, isNum, log, jlog, cwarn, cerr}=util;
+const{consoleLog, strNum, isFunc, isArr, isStr, isObj, isBool, isNum, log, jlog, cwarn, cerr}=util;
 const{Word}=globals.ShellMod.seqClasses;
 const isWord=val=>{return val instanceof Word;};
 
@@ -146,7 +146,10 @@ for (let iter=0; iter < keys.length; iter++){
 	if (k.match(/^_/)) continue;
 	let val = vals[iter];
 	let col;
-	if (isObj(val)) {
+	if (isFunc(val)){
+		val = ` ${val.constructor.name}()`;
+	}
+	else if (isObj(val)) {
 		let keys=Object.keys(val);
 		let use_keys = keys.slice(0, SHOW_MAX_OBJ_KEYS);
 		if (keys.length > SHOW_MAX_OBJ_KEYS){
@@ -207,7 +210,10 @@ const set_menu=(obj,opts={})=>{//«
 		if (k.match(/^_/)) continue;
 		let val = obj[k];
 		let col;
-		if (isWord(val)){
+		if (isFunc(val)){
+			val = ` ${val.constructor.name}()`;
+		}
+		else if (isWord(val)){
 			val = ` Word(${val.val.join("")})`;
 		}
 		else if (isObj(val)) {
@@ -244,9 +250,10 @@ property on them....
 			val = ` ${val}`;
 			col="#bbf";
 		}
-		else{
+		else if (!val){
 cerr(`WHAT IS THIS KEY: '${k}'`);
 log(val)
+			val = ` [${val}]`;
 		}
 		k = k.padEnd(min_key_len, " ");
 		lines.push([...k,":", ...val]);
@@ -276,9 +283,9 @@ const cur_key=()=>{//«
 	if (curobj===menu) return menu_key();
 	return lines[y+scroll_num].join("").slice(0, min_key_len).trim();
 }//»
-const stat_val=()=>{//«
+const stat_val=(opts={})=>{//«
 if (curobj===menu && !menu.length){
-stat_message = "[Empty]";
+if (!opts.isEscape) stat_message = "[Empty]";
 render();
 return;
 }
@@ -306,9 +313,10 @@ return;
 //Obj/CB«
 
 const onescape=()=>{//«
-if (is_message){
-stat_message = null;
-stat_val();
+//log("??", stat_message);
+if (stat_message){
+stat_message = " ";
+stat_val({isEscape: true});
 render();
 return true;
 }

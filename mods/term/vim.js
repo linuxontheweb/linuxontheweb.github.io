@@ -241,6 +241,7 @@ let alt_screen_escape_handler = null;
 let num_escapes = 0;
 let waiting = false;
 let pretty = null;
+let cur_background_command;
 
 //Any changes to the mode variables MUST be updated in Terminal.js @XKIUO
 //WKOIPUHN
@@ -366,7 +367,7 @@ const THROW=s=>{throw new Error(s);};
 const is_command_or_edit_mode=()=>{return COMMAND_OR_EDIT_MODES.includes(this.mode);};
 
 const write_to_host=async()=>{//«
-
+cwarn("WRITE_TO_HOST", dev_mode);
 if (!dev_mode){
 	return;
 }
@@ -1457,7 +1458,8 @@ if (marr = com.match(/^(%)?s\/(.*)$/)){//«
 			return;
 		}
 		else if (marr = com.match(/^x +(.*)$/)){
-			Term.execute_background_command(marr[1]);
+			cur_background_command = marr[1];
+			Term.execute_background_command(cur_background_command);
 			render();
 			return;
 		}
@@ -5658,6 +5660,10 @@ u_CA: ()=>{do_changecase(true);},
 //Non-editing (No Action needed below)
 
 //KSJTUSHF
+x_CAS:()=>{
+	if (!cur_background_command) return stat_err("No command (please use :x)");
+	Term.execute_background_command(cur_background_command);
+},
 w_CAS:()=>{//«
 get_all_words();
 cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);

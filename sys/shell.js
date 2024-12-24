@@ -109,7 +109,21 @@ const fs_coms=[//«
 //	"mount",
 //	"unmount",
 ];//»
-const preload_libs={fs: fs_coms};
+const test_coms = [
+"pipe",
+"deadpipe",
+"badret",
+"noret",
+"nullret",
+"badobj",
+"baddarrobj",
+"oktypedarr",
+"badtypedarr",
+"weirdarr",
+"hang",
+"norun"
+]
+const preload_libs={fs: fs_coms, test: test_coms};
 
 const OPERATOR_CHARS=[//«
 "|",
@@ -4231,7 +4245,6 @@ while(tok){
 		if (!fname) err("syntax error near unexpected token 'newline'");
 		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
 		if (!fname.isChars) err(`wanted characters only in the filename`);
-log("REDIRECT TO", fname);
 		if (!have_comword){
 			if (!pref) pref = [];
 			pref.push({redir: [rop, fname]});
@@ -5329,12 +5342,12 @@ const com_env = {/*«*/
 			return code;
 		}//»
 		let com = Shell.activeCommands[usecomword];
-		if (isStr(com)){//QKIUTOPLK«
 //If we have a string rather than a function, do the command library importing routine.
 //The string is always the name of the library (rather than the command)
 //This happens when: 
 //1) libraries are defined in ShellMod.var.preloadLibs, and 
 //2) this is the first invocation of a command from one of those libraries.
+		if (isStr(com)){//QKIUTOPLK«
 			try{
 				await ShellMod.util.importComs(com);//com is the library name
 				if (this.cancelled) return;
