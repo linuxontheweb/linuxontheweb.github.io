@@ -2783,7 +2783,7 @@ return new Promise((Y,N)=>{
 //»
 
 //«Properties
-
+get rect(){return this.#rect;}
 get x(){return parseInt(this.winElem.style.left);}
 get y(){return parseInt(this.winElem.style.top);}
 
@@ -2799,32 +2799,40 @@ set y(val){
 }
 
 set l(val){
-	let diff = this.gbcr().left - parseInt(val);
+	let diff = this.#rect.left - parseInt(val);
 	this.Main._w += diff;
 	this.winElem._x = val;
 	this.#rect=this.winElem.getBoundingClientRect();
 }
 
-get w(){return this.gbcr().width;}
-get h(){return this.gbcr().height;}
+get w(){return this.#rect.width;}
+get h(){return this.#rect.height;}
 set w(val){
-	this.Main._w += parseInt(val) - this.gbcr().width;
+	let marr;
+	if (isStr(val) && (marr = val.match(/^([0-9]+(\.[0-9]+)?)%$/))){
+		this.Main._w = winw() * (parseFloat(marr[1])/100);
+	}
+	else this.Main._w += parseInt(val) - this.#rect.width;
 	this.#rect=this.winElem.getBoundingClientRect();
 }
 set h(val){
-	this.Main._h += parseInt(val) - this.gbcr().height;
+//Chrome size
+	let marr;
+	if (isStr(val) && (marr = val.match(/^([0-9]+(\.[0-9]+)?)%$/))){
+		let diff = this.#rect.height - this.Main._h;
+		this.Main._h = (winh() * (parseFloat(marr[1])/100)) - diff;
+	}
+	else this.Main._h += parseInt(val) - this.#rect.height;
 	this.#rect=this.winElem.getBoundingClientRect();
 }
 
-get r(){return this.gbcr().right;}
+get r(){return this.#rect.right;}
 set r(val){
-	this.Main._w += parseInt(val) - this.gbcr().right;
+	this.Main._w += parseInt(val) - this.#rect.right;
 	this.#rect=this.winElem.getBoundingClientRect();
 }
-get b(){return this.gbcr().bottom;}
+get b(){return this.#rect.bottom;}
 set b(val){
-//let diff = parseInt(val) - this.gbcr().bottom;
-//log(diff);
 	this.Main._h += parseInt(val) - this.gbcr().bottom;
 	this.#rect=this.winElem.getBoundingClientRect();
 }
@@ -4442,6 +4450,10 @@ const toggle_icon_display = () => {//«
 	}
 	CUR.vizCheck();
 };//»
+api.toggleDeskIcons = toggle_icon_display;
+api.hideDeskIcons=()=>{if(SHOW_ICONS)toggle_icon_display();};
+api.showDeskIcons=()=>{if(!SHOW_ICONS)toggle_icon_display();};
+
 const show_node_props=async(node)=>{//«
 
 	const pop=()=>{popup(s+"</div>",{title: "File node properties", wide: true});};

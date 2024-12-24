@@ -22,6 +22,8 @@ WHAT TO DO ABOUT THE OUTPUT OF ASYNC COMMANDS, e.g.:
 I THINK IT IS A BUG RATHER THAN A FEATURE TO DO THIS AS IS CURRENTLY DOME IN LINUX,
 I.E. JUST BARFING THE OUTPUT INTO THE WORKING TERMINAL SCREEN.
 
+How about a background output console?
+
 »*/
 //Imports«
 
@@ -39,6 +41,7 @@ const {
     EOF,
 	fs
 } = globals;
+const util = LOTW.api.util;
 const {
 	log,
 	jlog,
@@ -55,7 +58,7 @@ const {
 	isEOF,
 	sleep,
 	normPath,
-} = LOTW.api.util;
+} = util;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const fsapi = globals.api.fs;
 const{pathToNode}=fsapi;
