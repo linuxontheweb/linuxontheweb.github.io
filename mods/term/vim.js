@@ -1,7 +1,39 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
-/*12/24/24: I want to send backgrounded commands to the terminal here.
 
-*/
+/*12/25/24: Just found out that you do r_CA in order to begin to create«
+an application while editing your file, which should at least have this:
+
+LOTW.apps["local.<AppNameHere>"] = function(Win){
+}
+
+If your file is named "Something.js", vim will figure out that <AppNameHere> is
+"Something". Otherwise, if you are in a new file state, you must explicitly pass 
+the "dev-name" flag, like so:
+~$ vim --dev-name="Something" 
+
+Then, I use "x_CA" to send a background command into the terminal, which is currently
+just the path to a shell script, because scripts are what get sent through the 
+development parsing pathway, which I'm using a local LOTW file (RUNTIME.js, now being
+saved in lotw/zzhold/writes, which can be done in dev_mode via i_CA=>write_to_host)
+in order to develop.
+
+To summarize:
+
+r_CA: to begin the process of local app development, with this module's 'reload_win' variable 
+set to the window under development.
+
+r_A: to use vim's own ondevreload in order to immediate call reload_win.reload().
+(This still works even if the terminal's own ON_DEVRELOAD == false.)
+
+x_CA: Sends either DEF_BACKGROUND_COMMAND or the most recent command line sent via
+the new ':x command --line here', which is really currently just for sending scripts
+into Term.execute_background_command.
+
+i_CA: Saves the currently edited file to lotw/zzhold/writes/<FileNameHere>.
+»*/
+//12/24/24: I want to send backgrounded commands to the terminal here.«
+let DEF_BACKGROUND_COMMAND = "./hoom.sh";
+//»
 /*12/17/24: Yesterday I created the 'goto_matching_brace' functionality«
 that attempts to find the matching "}","]" or ")" when a "{", "[", or "("
 is under the cursor (and vice versa). Use it with the "'" key.
@@ -113,7 +145,6 @@ const NUM=(v)=>Number.isFinite(v);
 
 //»
 
-let DEF_BACKGROUND_COMMAND = "./hoom.sh";
 
 //Vim«
 
@@ -369,7 +400,6 @@ const THROW=s=>{throw new Error(s);};
 const is_command_or_edit_mode=()=>{return COMMAND_OR_EDIT_MODES.includes(this.mode);};
 
 const write_to_host=async()=>{//«
-cwarn("WRITE_TO_HOST", dev_mode);
 if (!dev_mode){
 	return;
 }
@@ -562,6 +592,7 @@ const quit=()=>{//«
 	if (reload_win) {
 		delete LOTW.apps[reload_win.appName];
 		delete reload_win.ownedBy;
+		reload_win.close();
 	}
 	quit_new_screen(hold_screen_state);
 //log(quit_new_screen);

@@ -35,6 +35,8 @@ const isWord=val=>{return val instanceof Word;};
 export const mod = function(termobj) {
 
 //Var«
+
+let LINE_SELECT_MODE = true;
 let MAX_NAME_CHARS = 8;
 let SHOW_MAX_OBJ_KEYS = 5;
 
@@ -130,19 +132,21 @@ let keys=[];
 let vals=[];
 for (let o of menu){
 	let addlen;
-	let nm;
-	if (o.n < MAX_NAME_CHARS) nm = o.n;
-	else nm = o.n.slice(0, MAX_NAME_CHARS);
+	let nm = o.n;
+	let err = nm === "ERR";
+	let wrn = nm === "WRN";
+	if (nm > MAX_NAME_CHARS) nm = nm.slice(0, MAX_NAME_CHARS);
 	if (Number.isFinite(o.i)) {
 		nm+=`[${o.i+1}]`;
 	}
 	else addlen = 0;
 	if (nm.length > min_key_len) min_key_len = nm.length;
-	keys.push(nm);
+	keys.push({nm, err, wrn});
 	vals.push(o.v);
 }
 for (let iter=0; iter < keys.length; iter++){
-	let k = keys[iter];
+	let kobj = keys[iter];
+	let k = kobj.nm;
 	if (k.match(/^_/)) continue;
 	let val = vals[iter];
 	let col;
@@ -183,7 +187,20 @@ log(val)
 	}
 	k = k.padEnd(min_key_len, " ");
 	lines.push([...k,":", ...val]);
-if (col) line_colors[iter]={[k.length+1]: [val.length, col]};
+	let colobj;
+	if (col) {
+//		line_colors[iter]={[k.length+1]: [val.length, col]};
+		colobj = {[k.length+1]: [val.length, col]};
+	}
+	else colobj = {};
+	if (kobj.err){
+		colobj[0]=[k.length, "#d33"];
+	}
+	else if (kobj.wrn){
+		colobj[0]=[k.length, "#cc0"];
+	}
+	line_colors[iter]=colobj;
+
 }
 //if (opts.statVal) stat_val();
 stat_val();
@@ -392,28 +409,8 @@ this.onkeydown=(e, sym, code)=>{//«
 		render();
 	}//»
 	else if (sym=="SPACE_"){//«
-/*
-		let k = cur_key();
-		let val = curobj[k];
-		let isobj=false;
-		if (isObj(val)&&val.hasOwnProperty("_val")) {
-			isobj=true;
-			val = val._val;
-		}
-		if (isBool(val)) val = !val;
-		else if (isNum(val)){
-log("SET NUM");
-		}
-		else if (isStr(val)){
-log("SET STR");
-		}
-		else{
-return;
-		}
-		if(isobj) curobj[k]._val = val;
-		else curobj[k]=val;
-		set_menu(curobj);	
-*/
+		LINE_SELECT_MODE = !LINE_SELECT_MODE;
+		render();
 	}//»
 	else if (sym=="PGUP_") {//«
 		e.preventDefault();
@@ -554,6 +551,7 @@ Object.defineProperty(this, "stat_message_type", {
 });
 Object.defineProperty(this,"line_select_mode",{
 	get:()=>{
+		if (!LINE_SELECT_MODE) return false;
 		return termobj.isFocused;
 	}
 });
