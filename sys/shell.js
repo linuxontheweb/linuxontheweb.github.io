@@ -1560,7 +1560,6 @@ init(){
 	this.optRecur = opts.recursive || opts.R;
 }
 async run(){//«
-	let colors = [];
 	let {pipeTo, isSub, term, out, err, args} = this;
 	let no_fmt = pipeTo|| isSub;
 	let nargs = args.length;
@@ -1625,7 +1624,6 @@ async run(){//«
 				if (nm=="."||nm=="..") continue;
 				if (nm.match(/^\./)) continue;
 			}
-//			if (pipeTo) {
 			if (no_fmt) {
 				out(nm);
 			}
@@ -1639,7 +1637,6 @@ async run(){//«
 			}
 		}
 		dir_arr = dir_arr.sort();
-//		if (pipeTo||isSub) {
 		if (no_fmt) {
 			out(...dir_arr);
 		}
@@ -1660,11 +1657,14 @@ async run(){//«
 				else types.push(null);
 			}
 			let name_lens = [];
+			let colors = [];
 			for (let nm of dir_arr) name_lens.push(nm.length);
 			let ret = [];
 			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
 			if (!ret.length) out("");
-			else out(ret.join("\n"), {colors, didFmt: true});
+			else {
+				out(ret.join("\n"), {colors, didFmt: true});
+			}
 		}//»
 		if (recur) {
 			for (let dir of recur_dirs) await do_path(dir);

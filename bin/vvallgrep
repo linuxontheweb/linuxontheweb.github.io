@@ -12,7 +12,6 @@ elif [[ $2 ]]; then
 		$BASE/sys/* \
 		$BASE/mods/* \
 		$BASE/mods/*/* \
-		$BASE/mods/*/* \
 		$BASE/coms/* \
 		$BASE/coms/*/* \
 		2>/dev/null
@@ -25,7 +24,6 @@ else
 		$BASE/apps/*/*/* \
 		$BASE/sys/* \
 		$BASE/mods/* \
-		$BASE/mods/*/* \
 		$BASE/mods/*/* \
 		$BASE/coms/* \
 		$BASE/coms/*/* \

@@ -563,6 +563,11 @@ const quit=()=>{//«
 //log(quit_new_screen);
 };//»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
+const ondevreload=()=>{
+//Want to be able to pass in a command line flag to delete the local app/mod
+//that we are editing in this file.
+
+};
 const onescape=()=>{//«
 //	KEY_LOG.push("ESC");
 	if (stat_cb){
@@ -5962,7 +5967,8 @@ else{
 
 //Term.set_lines(lines, line_colors);
 //Term.init_edit_mode(this, num_stat_lines);
-hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
+//hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
+hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload});
 this.fname = edit_fname;
 if (opts.insert) set_edit_mode("i");
 else if (!edit_fname) {

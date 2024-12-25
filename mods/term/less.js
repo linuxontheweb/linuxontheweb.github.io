@@ -500,7 +500,8 @@ lines = [];
 		let wraparr = wrap_line(ln.join("")).split("\n");
 		for (let l of wraparr) fmt_lines.push(l.split(""));
 	}
-	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, onescape);
+//	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, onescape);
+	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, {onescape});
 	render();
 });
 

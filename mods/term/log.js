@@ -567,7 +567,8 @@ let {opts}=o;
 this.command_str = o.command_str;
 return new Promise((Y,N)=>{
 	this.cb=Y;
-	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, onescape);
+//	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, onescape);
+	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, {onescape});
 //	stat_message="/";
 //	stat_message = MAIN_STAT_STR;
 	set_main_menu();

@@ -1879,6 +1879,7 @@ log("response colors",colors);
 			Win._fatal(e);
 			throw e;
 		}
+
 	}
 	else colors = [];
 
@@ -3219,11 +3220,15 @@ this.set_lines = (linesarg, colorsarg)=>{//«
 	lines = linesarg;
 	line_colors = colorsarg;
 };//»
-this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {//«
-
-	let screen = {actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines, onescape: termobj.onescape};
+//this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {
+this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}) => {//«
+	let escape_fn = funcs.onescape;
+	let dev_reload_fn = funcs.ondevreload;
+//	let screen = {actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines, onescape: termobj.onescape};
+	let screen = {actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines, funcs: {onescape: termobj.onescape, ondevreload: termobj.ondevreload}};
 	if (!actor) hold_terminal_screen = screen;
 	termobj.onescape = escape_fn;
+	termobj.ondevreload = dev_reload_fn;
 	actor = actor_arg;
 
 	appclass = classarg;
@@ -3247,8 +3252,10 @@ let old_actor = actor;
 ({actor, appclass, lines, line_colors, x, y, scroll_num, num_stat_lines} = screen);
 is_editor = appclass == "editor";
 is_pager = appclass == "pager";
+if (!screen.funcs) screen.funcs = {};
+termobj.onescape = screen.funcs.onescape;
+termobj.ondevreload = screen.funcs.ondevreload;
 
-termobj.onescape = screen.onescape;
 if (!num_stat_lines){
 	statdiv._del();
 }
@@ -3256,7 +3263,6 @@ tabdiv._x = 0;
 if (old_actor&&old_actor.cb) {
 	old_actor.cb(screen);
 }
-//render();
 };//»
 
 //»
