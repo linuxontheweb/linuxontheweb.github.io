@@ -2649,7 +2649,7 @@ reload(opts={}){//«
 		poperr("This window has been killed");
 		return;
 	}
-	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
+//	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
 	if (app.ondevreload) return app.ondevreload();
 	if (appName.match(/^local\./)&&!opts.dataUrl){
 		return popup("'local' (development) applications cannot be independently reloaded!");

@@ -1289,6 +1289,7 @@ if (num2 > w) {
 
 //				editor.stat_message=null;
 				actor.stat_message=null;
+				actor.stat_message_type=null;
 			}//»
 			else {//«
 				if (mode === INSERT_MODE) mess = "-- INSERT --";

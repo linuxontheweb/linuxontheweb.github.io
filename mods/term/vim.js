@@ -460,7 +460,6 @@ return;
 log(`cy: ${_cy}, y: ${y}, scroll_num: ${scroll_num}`);
 cwarn(`_cy === lens.length: ${_cy === lens.length}`);
 log(lens);
-//save_keylogs();
 //EDPOPLKIUK
 		throw new Error("WHAT IS RY DOING BEING UNDEFINED???????");
 	}
@@ -566,7 +565,15 @@ const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
 const ondevreload=()=>{
 //Want to be able to pass in a command line flag to delete the local app/mod
 //that we are editing in this file.
-
+	if (!reload_win) return;
+	if (!reload_win._data_url){
+cwarn("NO RELOAD_WIN._DATA_URL!!?");
+	}
+	else{
+		URL.revokeObjectURL(reload_win._data_url);
+	}
+	let str = `(function(){"use strict";${get_edit_str()}})()`;
+	reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([str]))});
 };
 const onescape=()=>{//«
 //	KEY_LOG.push("ESC");
@@ -1544,29 +1551,28 @@ return;
 //Modes«
 
 const open_reload_win=async()=>{//«
+
 	if (reload_win){
 		delete reload_win.ownedBy;
-		delete this.ondevreload;
+//		delete this.ondevreload;
 		reload_win = null;
 		stat("'reload_win' deleted");
+		return;
 	}
-	else {
-		reload_win = await Desk.api.openApp("local.VimDev",{dataUrl: URL.createObjectURL(new Blob([get_edit_str()]))});
+//log(this.comOpts);
+//log(edit_fname);
+let devname = this.comOpts["dev-name"] || (edit_fobj && edit_fobj.baseName);
+if (!devname){
+stat_err("Must give 'dev-name' argument or save the file!");
+return;
+}
+	let str = `(function(){"use strict";${get_edit_str()}})()`;
+	reload_win = await Desk.api.openApp(`local.VimDev-${devname}`,{dataUrl: URL.createObjectURL(new Blob([str]))});
 if (!reload_win){
 stat_err("Could not get the window");
 return;
 }
-		reload_win.ownedBy = topwin;
-		this.ondevreload=()=>{
-			if (!reload_win._data_url){
-cwarn("NO RELOAD_WIN._DATA_URL!!?");
-			}
-			else{
-				URL.revokeObjectURL(reload_win._data_url);
-			}
-			reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([get_edit_str()]))});
-		};
-	}
+	reload_win.ownedBy = topwin;
 };//»
 
 //Visual Selection«
@@ -3349,7 +3355,6 @@ const do_undo = (chg)=>{//«
 					if (ln.length){
 //MVHUIJKO
 jlog(ln);
-save_keylogs();
 cerr(`Have ln.length with ${i}/${newlines} newlines`);
 break;
 					}
@@ -5866,7 +5871,12 @@ Object.defineProperty(this,"ry",{get:()=>{//«
 }});//»
 Object.defineProperty(this,"fullpath",{get:()=>edit_fullpath});
 Object.defineProperty(this,"num_lines",{get:()=>num_lines});
-Object.defineProperty(this,"stat_message_type",{get:()=>stat_message_type});
+Object.defineProperty(this,"stat_message_type",{
+	get:()=>stat_message_type,
+	set:(val)=>{
+		stat_message_type = val;
+	}
+});
 Object.defineProperty(this,"seltop",{get:()=>seltop});
 Object.defineProperty(this,"selbot",{get:()=>selbot});
 Object.defineProperty(this,"selleft",{get:()=>selleft});
@@ -5900,6 +5910,7 @@ if (symbols){
 SYMBOL_WORDS=symbols.map(w=>w.split(/\s+/)[0]);
 }
 this.command_str = o.command_str;
+this.comOpts = opts;
 this.parSel = opts.parsel;
 no_save_mode = opts.nosave;
 one_line_mode = opts.one;
@@ -5978,7 +5989,6 @@ else if (!edit_fname) {
 else if (lines.length==1 && !lines[0].length) stat(`"${edit_fname}" [New]`);
 else stat_file(linesarg.length, len);
 get_all_words();
-//replay_keylog(o);
 //log(System);
 });
 

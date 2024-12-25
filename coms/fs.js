@@ -1104,9 +1104,8 @@ const opts = {//«
 			"convert-markers": 1,
 			"reload-win": 3,
 			symbols: 3,
-			'keylog-file': 3,
-			'num-keylog-steps':3,
-"force-stdout": 1
+			"force-stdout": 1,
+			"dev-name": 3
 		}
 	},//»
 	less:{l:{parsel:1}},
