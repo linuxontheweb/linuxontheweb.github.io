@@ -113,6 +113,8 @@ const NUM=(v)=>Number.isFinite(v);
 
 //»
 
+let DEF_BACKGROUND_COMMAND = "./hoom.sh";
+
 //Vim«
 
 //export const mod = function(Term) {«
@@ -557,24 +559,14 @@ const quit=()=>{//«
 	if (edit_fobj) {
 		edit_fobj.unlockFile();
 	}
-	if (reload_win) delete reload_win.ownedBy;
+	if (reload_win) {
+		delete LOTW.apps[reload_win.appName];
+		delete reload_win.ownedBy;
+	}
 	quit_new_screen(hold_screen_state);
 //log(quit_new_screen);
 };//»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
-const ondevreload=()=>{
-//Want to be able to pass in a command line flag to delete the local app/mod
-//that we are editing in this file.
-	if (!reload_win) return;
-	if (!reload_win._data_url){
-cwarn("NO RELOAD_WIN._DATA_URL!!?");
-	}
-	else{
-		URL.revokeObjectURL(reload_win._data_url);
-	}
-	let str = `(function(){"use strict";${get_edit_str()}})()`;
-	reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([str]))});
-};
 const onescape=()=>{//«
 //	KEY_LOG.push("ESC");
 	if (stat_cb){
@@ -1046,7 +1038,48 @@ const copy_fold_lines=(lns, all)=>{//«
 };//»
 
 //»
-//Save«
+//Save/Devel«
+
+const toggle_reload_win=async()=>{//«
+	if (reload_win){
+		delete LOTW.apps[reload_win.appName];
+		delete reload_win.ownedBy;
+		reload_win = null;
+		stat("'reload_win' deleted");
+		return;
+	}
+
+	let devname = this.comOpts["dev-name"] || (edit_fobj && edit_fobj.baseName);
+	if (!devname){
+		stat_err("Must give 'dev-name' argument or save the file!");
+		return;
+	}
+	let appname = `local.${devname}`;
+	if (LOTW.apps[appname]){
+		stat_err(`The app name: ${appname} is already in use!`);
+		return;
+	}
+	reload_win = await Desk.api.openApp(appname, {dataUrl: URL.createObjectURL(new Blob([`(function(){"use strict";${get_edit_str()}})()`]))});
+	if (!reload_win){
+		stat_err("Could not get the window");
+		return;
+	}
+	reload_win.ownedBy = topwin;
+};//»
+const ondevreload=async()=>{//«
+//Want to be able to pass in a command line flag to delete the local app/mod
+//that we are editing in this file.
+	if (!reload_win) return;
+	if (!reload_win._data_url){
+cwarn("NO RELOAD_WIN._DATA_URL!!?");
+	}
+	else{
+		URL.revokeObjectURL(reload_win._data_url);
+	}
+	stat("Reloading...");
+	let rv = await reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([`(function(){"use strict";${get_edit_str()}})()`]))});
+	stat("Done!");
+};//»
 
 const get_edit_lines = (opts={})=>{//«
 	let {copy, str, from, to}=opts;
@@ -1549,31 +1582,6 @@ return;
 
 //»
 //Modes«
-
-const open_reload_win=async()=>{//«
-
-	if (reload_win){
-		delete reload_win.ownedBy;
-//		delete this.ondevreload;
-		reload_win = null;
-		stat("'reload_win' deleted");
-		return;
-	}
-//log(this.comOpts);
-//log(edit_fname);
-let devname = this.comOpts["dev-name"] || (edit_fobj && edit_fobj.baseName);
-if (!devname){
-stat_err("Must give 'dev-name' argument or save the file!");
-return;
-}
-	let str = `(function(){"use strict";${get_edit_str()}})()`;
-	reload_win = await Desk.api.openApp(`local.VimDev-${devname}`,{dataUrl: URL.createObjectURL(new Blob([str]))});
-if (!reload_win){
-stat_err("Could not get the window");
-return;
-}
-	reload_win.ownedBy = topwin;
-};//»
 
 //Visual Selection«
 
@@ -5670,8 +5678,9 @@ u_CA: ()=>{do_changecase(true);},
 //Non-editing (No Action needed below)
 
 //KSJTUSHF
-x_CAS:()=>{
-	if (!cur_background_command) return stat_err("No command (please use :x)");
+x_CA:()=>{
+	if (!cur_background_command) cur_background_command = DEF_BACKGROUND_COMMAND;
+//	if (!cur_background_command) return stat_err("No command (please use :x)");
 	Term.execute_background_command(cur_background_command);
 },
 w_CAS:()=>{//«
@@ -5718,10 +5727,10 @@ SPACE_C: scroll_screen_to_cursor,
 "[_C":scroll_left,
 
 //Open/Save/Quit/Dev
-i_CAS: write_to_host,
+i_CA: write_to_host,
 s_C: try_save,
 s_CS: try_save_as,
-r_CA:open_reload_win,
+r_CA:toggle_reload_win,
 o_C: ()=>{init_stat_input("Open: ")},
 x_C: maybe_quit,
 
