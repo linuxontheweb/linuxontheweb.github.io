@@ -30,6 +30,10 @@ the new ':x command --line here', which is really currently just for sending scr
 into Term.execute_background_command.
 
 i_CA: Saves the currently edited file to lotw/zzhold/writes/<FileNameHere>.
+
+j_CA: Attempts to create a non-evaluating script (wrapped in a ()=>{}) in order to check for syntax
+errors (via test_js), using window.onerror.
+
 »*/
 //12/24/24: I want to send backgrounded commands to the terminal here.«
 let DEF_BACKGROUND_COMMAND = "./hoom.sh";
@@ -1071,6 +1075,22 @@ const copy_fold_lines=(lns, all)=>{//«
 //»
 //Save/Devel«
 
+const test_js=()=>{//«
+	let scr = document.createElement('script');
+	if (stat_message_type) {
+		stat(" ");
+	}
+	document.head.appendChild(scr);
+	setTimeout(()=>{
+		scr._del();
+		delete window.onerror;
+	}, 500);
+	window.onerror=(e)=>{
+		stat_err(e);
+	};
+	let str = `()=>{\n${get_edit_str()}\n}`;;
+	scr.src = URL.createObjectURL(new Blob([str]));
+};//»
 const toggle_reload_win=async()=>{//«
 	if (reload_win){
 		delete LOTW.apps[reload_win.appName];
@@ -5718,6 +5738,7 @@ w_CAS:()=>{//«
 get_all_words();
 cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
 },//»
+/*
 s_CAS:()=>{//«
 	let vimvars = globals.vim;
 	let val = get_edit_str();
@@ -5737,8 +5758,8 @@ cerr(e);
 	};
 	scr.src = url;
 	document.head.appendChild(scr);
-},/*»*/
-
+},//»
+*/
 //Init/Toggle modes
 p_C: init_complete_mode,
 v_C: init_visual_block_mode,
@@ -5758,6 +5779,7 @@ SPACE_C: scroll_screen_to_cursor,
 "[_C":scroll_left,
 
 //Open/Save/Quit/Dev
+j_CA: test_js,
 i_CA: write_to_host,
 s_C: try_save,
 s_CS: try_save_as,
