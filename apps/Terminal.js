@@ -1704,6 +1704,7 @@ const execute = async(str, opts={})=>{//«
 
 //PLDYHJKU
 	await cur_shell.execute(str,{env, heredocScanner, isInteractive: true});
+	response_end();
 	if (opts.noSave) return;
 
 	let ind = history.indexOf(gotstr);
@@ -3484,7 +3485,7 @@ this.execute_background_command=s=>{
 	for (let k in ENV){
 		env[k]=ENV[k];
 	}
-	shell.execute(s,{env, noRespEnd: true});
+	shell.execute(s,{env});
 
 };
 refs.execute_background_command = this.execute_background_command;

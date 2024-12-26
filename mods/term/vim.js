@@ -1941,7 +1941,7 @@ const init_symbol_mode = (opts={})=>{//«
 				ln = ln.replace(/\/\/ *$/,"");
 				out.push(ln);
 			}
-			do_paste((`const ${nm} = `+out.join("\n")), {before: opts.before});
+			do_paste((`${nm} = `+out.join("\n")), {before: opts.before});
 			stat(`Using ref: '${nm}'`);
 		}
 	};//»
