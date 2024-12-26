@@ -1,4 +1,5 @@
-/*12/24/24: 
+
+/*12/24/24:«
 
 I've started trying to "fix" the old shell execution algorithm instead of
 working on the completely new Runtime. I started trying to figure out how
@@ -9,7 +10,7 @@ The problem is that I have loops-insideof-loops-insideof-loops.
 
 I've decided to just dump backgrounded output onto the JS console.
 
-*/
+»*/
 /*12/23/24: Now editing this is like editing /sys/fs.js, and will require a system«
 reboot. That's okay because we want to export certain members of ShellMod
 such as Runtime, so that it can be locally developed. This plus the fact that we
@@ -1247,7 +1248,6 @@ const Com = class {//«
 				this.killed = true;
 			};
 			this.no=(mess)=>{
-log(this);
 				if (mess) this.err(mess);
 				if (this.inpipe) this.out(EOF);
 				Y(E_ERR);
@@ -1624,9 +1624,9 @@ async run(){//«
 				if (nm=="."||nm=="..") continue;
 				if (nm.match(/^\./)) continue;
 			}
-			if (no_fmt) {
-				out(nm);
-			}
+//			if (no_fmt) {
+//				out(nm);
+//			}
 			dir_arr.push(nm);
 		}
 		if (recur){
@@ -1638,7 +1638,7 @@ async run(){//«
 		}
 		dir_arr = dir_arr.sort();
 		if (no_fmt) {
-			out(...dir_arr);
+			out(dir_arr.join("\n"));
 		}
 		else {//«
 			for (let nm of dir_arr){
@@ -1663,7 +1663,8 @@ async run(){//«
 			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
 			if (!ret.length) out("");
 			else {
-				out(ret.join("\n"), {colors, didFmt: true});
+				if (colors.length) out(ret.join("\n"), {colors, didFmt: true});
+				else out(ret.join("\n"), {didFmt: true});
 			}
 		}//»
 		if (recur) {
@@ -4912,6 +4913,7 @@ term.resperr(e.message);
 async execute(command_str, opts={}){//«
 
 this.commandStr = command_str;
+
 //Init/Var
 const terr=(arg, code)=>{//«
 	term.response(arg, {isErr: true});

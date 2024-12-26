@@ -94,8 +94,8 @@ offscreen/negative-y position).
 //»
 //«Global Shell Options
 
-//let USE_ONDEVRELOAD = true;
-let USE_ONDEVRELOAD = false;
+let USE_ONDEVRELOAD = true;
+//let USE_ONDEVRELOAD = false;
 
 //let USE_DEVPARSER = false;
 let USE_DEVPARSER = true;
@@ -522,7 +522,19 @@ main.appendChild(areadiv);
 //»
 
 //Util«
-
+/*
+const load_new_shell=async()=>{//«
+	let old_scr = document.getElementById("shell_script");
+	if (old_scr){
+		old_scr._del();
+	}
+	else{
+cwarn(`script.id == "shell_script" NOT FOUND!!!`);
+	}
+	let scr = await util.makeScript("/sys/shell.js",{module: true, random: true});
+	scr.id="shell_script";
+};//»
+*/
 const stat=mess=>{status_bar.innerText=mess;};
 
 const get_line_from_pager=async(arr, name)=>{//«
@@ -3093,6 +3105,7 @@ this.onsave=()=>{//«
 	if (actor && actor.save) actor.save();
 }//»
 const ondevreload = async() => {//«
+
 	do_overlay("ondevreload: start");
 
 //EIOFJKL
@@ -3102,6 +3115,7 @@ const ondevreload = async() => {//«
 		cur_shell.cancel();
 		response_end();
 	}
+//	await load_new_shell();
 	ShellMod.util.deleteMods(DEL_MODS);
 	if (use_str){
 		handle_line_str(use_str);
@@ -3110,6 +3124,7 @@ const ondevreload = async() => {//«
 //	ShellMod.util.deleteComs(DEL_COMS);
 //	await ShellMod.util.doImports(ADD_COMS, cerr);
 	do_overlay("ondevreload: done");
+
 };//»
 
 this.onkill = (if_dev_reload)=>{//«

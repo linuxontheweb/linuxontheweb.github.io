@@ -172,12 +172,18 @@ return new Promise((cb,N)=>{
 //»
 const make_script = (path, load, err, opts={}) => {//«
 	let scr = make('script');
+	if (opts.id) scr.id = opts.id;
+	if (opts.random){
+		if (path.match(/\?/)) path+="&";
+		else path+="?";
+		path += `v=${(Math.random()+"").slice(2,9)}`;
+	}
 	if (opts.module) {
 		scr.type="module";
 	}
 	document.head.appendChild(scr);
 	if (load) {
-		scr.onload = _ => {
+		scr.onload = () => {
 			load(scr);
 		};
 	}

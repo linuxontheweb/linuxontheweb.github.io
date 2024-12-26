@@ -452,6 +452,29 @@ export const globals = {//«
 	lists:{},
 	vim:{},
 	boundWins:{},
+
+/*Legacy code can put things here so vim can have a mode to import them as strings:«
+
+In Terminal.js: 
+globals.refs.Terminal={}
+const some_old_func = async(arg1, arg2)=>{...}
+this.some_old_func = some_old_func;
+globals.refs.Terminal.some_old_func = some_old_func
+
+Then invoke vim like:
+~$ vim NewFile.js --refs=Terminal:term,Cool,Whatever:what
+Such that "term" and "what" are the optional namespaces for their references, so that we have
+
+term.some_old_func
+//...rest of "term" namespace
+a_function_from_cool
+//...rest of things in non-namespaced "Cool" references
+what.another_old_func
+//...rest of "what" namespace
+
+»*/
+
+	refs:{},
 	api,
 
 };//»

@@ -22,17 +22,18 @@ To summarize:
 r_CA: to begin the process of local app development, with this module's 'reload_win' variable 
 set to the window under development.
 
-r_A: to use vim's own ondevreload in order to immediate call reload_win.reload().
+r_A: to use vim's own ondevreload in order to call reload_win.reload().
 (This still works even if the terminal's own ON_DEVRELOAD == false.)
 
-x_CA: Sends either DEF_BACKGROUND_COMMAND or the most recent command line sent via
-the new ':x command --line here', which is really currently just for sending scripts
-into Term.execute_background_command.
+x_CA: Sends either DEF_BACKGROUND_COMMAND or the most recent command line sent
+via the new ':x command --line here', which is really currently just for
+sending scripts (rather than actual command lines of internal JS commands) into
+Term.execute_background_command.
 
 i_CA: Saves the currently edited file to lotw/zzhold/writes/<FileNameHere>.
 
-j_CA: Attempts to create a non-evaluating script (wrapped in a ()=>{}) in order to check for syntax
-errors (via test_js), using window.onerror.
+j_CA: Attempts to create a non-evaluating script (wrapped in a ()=>{}) in order
+to check for syntax errors (via test_js), using window.onerror.
 
 »*/
 //12/24/24: I want to send backgrounded commands to the terminal here.«
@@ -1081,13 +1082,16 @@ const test_js=()=>{//«
 		stat(" ");
 	}
 	document.head.appendChild(scr);
-	setTimeout(()=>{
-		scr._del();
-		delete window.onerror;
-	}, 500);
-	window.onerror=(e)=>{
+	const onerror = (e)=>{
 		stat_err(e);
 	};
+	setTimeout(()=>{
+		scr._del();
+		if (window.onerror===onerror) {
+			delete window.onerror;
+		}
+	}, 500);
+	window.onerror=onerror;
 	let str = `()=>{\n${get_edit_str()}\n}`;;
 	scr.src = URL.createObjectURL(new Blob([str]));
 };//»

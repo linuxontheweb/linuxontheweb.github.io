@@ -1,18 +1,10 @@
 /*«Notes
 
-We are doing a URL.createObjectURL script inside of vim with "s_CAS".
-We can refresh the multi-line highlights with "q_C".
-
-If we quickly need the "real" console while it is detached, we can
-do this with "d_CS".
-
-To find the matching braces (for parens, curlies and square brackets),
-we can just use "'".
-
-Just getting used to the "[1-9]_CA" hotkey in order to go to the given
-windows that were bound via 'bindwin'.
-
-I only "sort of" have to force myself to use all of this as an actual system. 
+12/25/24: Now that I am getting a development "mise en place" working
+internally in LOTW, I will be able to stop worrying over all of those
+little details, and start to think specifically about stuff like
+turning the ast from the new parser into a runtime object that is
+actually able to do "real world" execution.
 
 »*/
 
@@ -22,8 +14,19 @@ const{ShellMod}=globals;
 const{Shell}=ShellMod;
 const{Word}=ShellMod.seqClasses;
 const isWord=val=>{return val instanceof Word;};
-const{consoleLog, isStr, isFunc, log, cwarn, cerr}=LOTW.api.util;
-//const log=(...args)=>{consoleLog.log(...args);} 
+const{consoleLog, isStr, isFunc, log: _log, cwarn: _cwarn, cerr: _cerr}=LOTW.api.util;
+const log=(...args)=>{
+	consoleLog.nlog("LOG",...args);
+	_log(...args);
+} 
+const cwarn=(...args)=>{
+	consoleLog.nlog("WRN",...args);
+	_cwarn(...args);
+}
+const cerr=(...args)=>{
+	consoleLog.nlog("ERR",...args);
+	_cerr(...args);
+}
 //const nlog=(name, ...args)=>{consoleLog.nlog(name, ...args);} 
 //»
 
@@ -171,6 +174,7 @@ class AndOr{//«
 }//»
 
 LOTW.globals.ShellMod.Runtime = class{
+
 constructor(ast, term, opts={}){//«
 	this.ast=ast;
 	this.term=term;
@@ -193,16 +197,18 @@ async extractAndors(cwd){//«
 async execute(){//«
 
 let andors = await this.extractAndors(this.term.cur_dir);
-log(andors);
+//log(andors);
 //nlog("AndOrs",andors)
 //nlog("COMS",Shell.activeCommands);
 
 }//»
+
 }
 
 LOTW.apps["local.RUNTIME"]=function(Win){
 
-
+//cwarn("GWUBJJJ",[1,2,3]);
+//cerr(12345, {thing: "crund"});
 
 }
 
