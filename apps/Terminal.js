@@ -1404,7 +1404,7 @@ if (num2 > w) {
 					per = Math.floor(100*ry/num_lines)+"%";
 				}
 				else {
-					let val = Math.floor(100*scroll_num/lines.length-1);
+					let val = Math.floor(100*(scroll_num/(num_lines-1)));
 					per = (val)+"%";
 				}
 			}

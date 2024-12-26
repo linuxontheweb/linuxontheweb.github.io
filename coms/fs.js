@@ -325,6 +325,9 @@ async init(){//«
 			if (s.match(/^\w/)) symbols.push(s);
 		}
 	}//»
+	if (opts.refs){
+		if (!globals.refs[opts.refs]) return this.no(`${opts.refs}: not found in globals.refs`);
+	}
 	if (!path) {
 		if (this.stdin) val = this.stdin.join("\n");
 		else val="";
@@ -1105,7 +1108,8 @@ const opts = {//«
 			"reload-win": 3,
 			symbols: 3,
 			"force-stdout": 1,
-			"dev-name": 3
+			"dev-name": 3,
+			refs: 3
 		}
 	},//»
 	less:{l:{parsel:1}},

@@ -1,5 +1,12 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
 
+/*12/26/24: Now, REF_MODE, invoked by 'e' (paste after)  or 'E' (paste before),«
+in order to insert functions (or anything else that allows for "stringification") 
+that are "exported" via globals.refs.<SOME_NS>. We currently flatten out all the
+namespaces of globals.refs onto cur_refs (which potentially overwrites
+references with the same name that are "exported" by other apps/mods/coms/etc).
+»*/
+
 /*12/25/24: Just found out that you do r_CA in order to begin to create«
 an application while editing your file, which should at least have this:
 
@@ -1874,34 +1881,21 @@ const handle_symbol_keydown=(sym)=>{//«
 let cur_refs;
 
 const init_symbol_mode = (opts={})=>{//«
-//const init_symbol_mode = (if_adv)=>{
 	let ln = curarr();//let ln = curln(true);
 	if (ln._fold) {
 		stat_warn("Fold detected");
 		return;
 	}
 	this.symbol="";
-	if (opts.ref){/*«*/
-//		this.mode = SYMBOL_MODE;
+
+	if (opts.ref){//«
+		if (!this.comOpts.refs) return stat_warn("Must use the --refs option!");
+		cur_refs = globals.refs[this.comOpts.refs];
+		if (!cur_refs) stat_err(`${this.comOpts.refs}: not found in globals.refs!?!?`);
+		SYMBOLS = Object.keys(cur_refs).sort();
 		this.mode = REF_MODE;
-		if (!cur_refs){
-			cur_refs={};
-		}
-		SYMBOLS=[];
-		let refs = globals.refs;
-		let ref_ns_names = Object.keys(refs);
-		for (let name of ref_ns_names){
-			let cur_ns = refs[name];
-			let ref_names = Object.keys(cur_ns); 
-			for (let ref_name of ref_names){
-//				let word = `${name}.${ref_name}`;
-				let word = ref_name;
-				SYMBOLS.push(word);
-				cur_refs[word] = cur_ns[ref_name];
-			}
-		}
-	}/*»*/
-	else{/*«*/
+	}//»
+	else{//«
 		this.mode = SYMBOL_MODE;
 		if (!ALLWORDS) get_all_words();
 		if (symbols){
@@ -1910,7 +1904,7 @@ const init_symbol_mode = (opts={})=>{//«
 		else{
 			SYMBOLS = ALLWORDS;
 		}
-	}/*»*/
+	}//»
 
 	hold_lines = lines;
 	let hold_colors = line_colors;
@@ -5968,7 +5962,8 @@ Object.defineProperty(this,"ry",{get:()=>{//«
 	return lens[y+scroll_num];
 }});//»
 Object.defineProperty(this,"fullpath",{get:()=>edit_fullpath});
-Object.defineProperty(this,"num_lines",{get:()=>num_lines});
+//Object.defineProperty(this,"num_lines",{get:()=>num_lines});
+Object.defineProperty(this,"num_lines",{get:()=>lines.length});
 Object.defineProperty(this,"stat_message_type",{
 	get:()=>stat_message_type,
 	set:(val)=>{
