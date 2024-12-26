@@ -179,6 +179,8 @@ if (dev_mode){
 //»
 
 //Terminal«
+const refs = {};
+globals.refs.term = refs;
 
 export const app = function(Win) {
 
@@ -220,6 +222,7 @@ const LINE_WRAP_MODE = 8;
 const SYMBOL_MODE = 9;
 const FILE_MODE = 10;
 const COMPLETE_MODE = 11;
+const REF_MODE = 12;
 
 //»
 
@@ -546,6 +549,7 @@ const get_line_from_pager=async(arr, name)=>{//«
 	if (await less.init(arr, name, {lineSelect: true, opts: {}})) return arr[less.y+less.scroll_num];
 
 }//»
+refs.get_line_from_pager = get_line_from_pager;
 const select_from_history = async path => {//«
 	let arr = await path.toLines();
 	if (!isArr(arr) && arr.length) {
@@ -555,7 +559,9 @@ cwarn("No history lines from", path);
 	cur_scroll_command = await get_line_from_pager(arr, path.split("/").pop());
 	if (cur_scroll_command) insert_cur_scroll();
 	render();
-}//»
+}
+refs.select_from_history = select_from_history;
+//»
 
 const save_special_command = async () => {//«
 	let s = get_com_arr().join("");
@@ -565,17 +571,23 @@ log("Not saving", s);
 	}
 	if (await fsapi.writeFile(HISTORY_PATH_SPECIAL, `${s}\n`, {append: true})) return do_overlay(`Saved special: ${s}`);
 	poperr(`Could not write to: ${HISTORY_PATH_SPECIAL}!`);
-};//»
+};
+refs.save_special_command = save_special_command;
+//»
 const write_to_history = async(str)=>{//«
 	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
 cwarn(`Could not write to history: ${HISTORY_PATH}`);
 	}
-};//»
+};
+refs.write_to_history = write_to_history;
+//»
 const save_history = async()=>{//«
 	if (!await fsapi.writeFile(HISTORY_PATH, history.join("\n")+"\n")){
 		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
 	}
-};//»
+};
+refs.save_history = save_history;
+//»
 const execute_kill_funcs=(cb)=>{//«
 	let iter = -1;
 	let dokill=()=>{
@@ -608,13 +620,16 @@ const toggle_paste=()=>{//«
 	textarea.focus();
 	do_overlay("Pasting is on");
 
-};//»
+};
+refs.toggle_paste = toggle_paste;
+//»
 
 const dopaste=()=>{//«
 	let val = textarea.value;
 	if (val && val.length) handle_insert(val);
 	textarea.value="";
-}
+};
+refs.dopaste = dopaste;
 //»
 const check_scrolling=()=>{//«
 	if (is_scrolling){
@@ -624,7 +639,9 @@ const check_scrolling=()=>{//«
 		return true;
 	}
 	return false;
-}//»
+};
+refs.check_scrolling = check_scrolling;
+//»
 
 const wrap_line = (str)=>{//«
 	str = str.replace(/\t/g,"\x20".rep(this.tabsize));
@@ -640,7 +657,9 @@ const wrap_line = (str)=>{//«
 		else out = out+"\n"+str;
 	}
 	return out;
-};//»
+};
+refs.wrap_line = wrap_line;
+//»
 
 const fmt_ls = (arr, lens, ret, types, color_ret, col_arg)=>{//«
 //const fmt_ls=(arr, lens, ret, types, color_ret, start_from, col_arg)=>{
@@ -770,7 +789,9 @@ efficiently) is an outstanding issue...*/
 	}
 	for (let i=0; i < matrix.length; i++) ret.push(matrix[i].join(""));
 	return;
-};//»
+};
+refs.fmt_ls = fmt_ls;
+//»
 const fmt2=(str, type, maxlen)=>{//«
     if (type) str = type + ": " + str;
     let ret = [];
@@ -800,7 +821,8 @@ const fmt2=(str, type, maxlen)=>{//«
         }
     }
     return ret;
-}
+};
+refs.fmt2 = fmt2;
 //»
 const fmt = (str, startx)=>{//«
 	if (str === this.EOF) return [];
@@ -843,7 +865,9 @@ const fmt = (str, startx)=>{//«
 	if (do_wide) ret.push(ln.replace(/\x03/g, ""));
 	else ret.push(ln);
 	return ret;
-};//»
+};
+refs.fmt = fmt;
+//»
 const fmt_lines_sync=(arr, startx)=>{//«
     let all = [];
 	let usestart = startx;
@@ -852,12 +876,16 @@ const fmt_lines_sync=(arr, startx)=>{//«
 		usestart = 0;
 	}
     return all;
-};//»
+};
+refs.fmt_lines_sync = fmt_lines_sync;
+//»
 
 const obj_to_string = obj =>{//«
 	if (obj.id) return `[object ${obj.constructor.name}(${obj.id})]`;
 	return `[object ${obj.constructor.name}]`;
-};//»
+};
+refs.obj_to_string = obj_to_string;
+//»
 const get_history=async(val)=>{//«
 	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
 	if (!fnode){
@@ -875,22 +903,30 @@ cerr("Could not make the .history folder!");
 	let text = await node.text;
 	if (!text) return;
 	return text.split("\n");
-}//»
+};
+refs.get_history = get_history;
+//»
 const scroll_middle=()=>{//«
 	let y1 = main.scrollTop;
 	main.scrollTop=(main.scrollHeight-main.clientHeight)/2;
 	let y2 = main.scrollTop;
-};//»
+};
+refs.scroll_middle = scroll_middle;
+//»
 const focus_or_copy=()=>{//«
 	let sel = window.getSelection();
 	if (sel.isCollapsed)textarea&&textarea.focus();
 	else do_clipboard_copy();
-};//»
+};
+refs.focus_or_copy = focus_or_copy;
+//»
 
 const get_homedir=()=>{//«
 	if (root_state) return "/";
 	return globals.HOME_PATH;
-};//»
+};
+refs.get_homedir = get_homedir;
+//»
 const get_buffer = (if_str)=>{//«
 //const get_buffer = (if_str, if_no_buf)=>{
 	let ret=[];
@@ -933,18 +969,23 @@ this.get_buffer=()=>{return get_buffer();}
 this.get_history = ()=>{
 	return history;
 };
+refs.get_buffer = get_buffer;
 //»
 const cur_date_str=()=>{//«
 	let d = new Date();
 	return (d.getMonth()+1) + "/" + d.getDate() + "/" + d.getFullYear().toString().substr(2);
-};//»
+};
+refs.cur_date_str = cur_date_str;
+//»
 const extract_prompt_from_str=(str)=>{//«
 	if (!DO_EXTRACT_PROMPT) return str;
 	let prstr = get_prompt_str();
 	let re = new RegExp("^"+prstr.replace("$","\\$"));
 	if (re.test(str)) str = str.substr(prstr.length);
 	return str;
-};//»
+};
+refs.extract_prompt_from_str = extract_prompt_from_str;
+//»
 const copy_text=(str, mess)=>{//«
 	const SCISSORS_ICON = "\u2702";
 	if (!textarea) return;
@@ -954,7 +995,9 @@ const copy_text=(str, mess)=>{//«
 	textarea.select();
 	document.execCommand("copy")
 	do_overlay(mess);
-};//»
+};
+refs.copy_text = copy_text;
+//»
 const do_clear_line=()=>{//«
 	if (cur_shell) return;
 	let str="";
@@ -968,8 +1011,14 @@ const do_clear_line=()=>{//«
 	}
 	current_cut_str = str;
 	render();
-};//»
-const do_copy_buffer = () => { copy_text(get_buffer(true), "Copied: entire buffer"); };
+};
+refs.do_clear_line = do_clear_line;
+//»
+const do_copy_buffer = () => {
+	copy_text(get_buffer(true), "Copied: entire buffer");
+};
+refs.do_copy_buffer = do_copy_buffer;
+
 const do_clipboard_copy=(if_buffer, strarg)=>{//«
 const do_copy=str=>{//«
     if (!str) return;
@@ -1007,12 +1056,16 @@ const do_copy=str=>{//«
 	do_copy(str);
 	textarea&&textarea.focus();
 	do_overlay(`Copied: ${str.slice(0,9)}...`);
-};//»
+};
+refs.do_clipboard_copy = do_clipboard_copy;
+//»
 const do_clipboard_paste=()=>{//«
 	if (!textarea) return;
 	textarea.value = "";
 	document.execCommand("paste")
-};//»
+};
+refs.do_clipboard_paste = do_clipboard_paste;
+//»
 const do_overlay=(strarg)=>{//«
 	let str;
 	if (strarg) {
@@ -1030,30 +1083,44 @@ const do_overlay=(strarg)=>{//«
 	}, 1500);
 };
 this.do_overlay = do_overlay;
+refs.do_overlay = do_overlay;
 //»
 const set_new_fs=(val)=>{//«
 	gr_fs = val;
 	localStorage.Terminal_fs = gr_fs;
 	wrapdiv._fs = gr_fs;
 	resize();
-};//»
+};
+refs.set_new_fs = set_new_fs;
+//»
 const get_max_len=()=>{//«
 	let max_len = max_fmt_len;
 	let maxlenarg = ENV['MAX_FMT_LEN'];
 	if (maxlenarg && maxlenarg.match(/^[0-9]+$/)) max_len = parseInt(maxlenarg);
 	return max_len;
-};//»
+};
+refs.get_max_len = get_max_len;
+//»
 const check_line_len=(dy)=>{//«
 	if (!dy) dy = 0;
 	if (lines[cy()+dy].length > w) {
 		let diff = lines[cy()+dy].length-w;
 		for (let i=0; i < diff; i++) lines[cy()+dy].pop();
 	}
-};//»
-const cx=()=>{return x;}
-const cy=()=>{return y + scroll_num;}
-const trim_lines=()=>{while (cur_prompt_line+1 != lines.length) lines.pop();};
+};
+refs.check_line_len = check_line_len;
+//»
+const cx=()=>{
+	return x;
+};
+refs.cx = cx;
 
+const cy=()=>{
+	return y + scroll_num;
+};
+refs.cy = cy;
+const trim_lines=()=>{while (cur_prompt_line+1 != lines.length) lines.pop();};
+refs.trim_lines=trim_lines;
 //»
 //Render«
 
@@ -1091,7 +1158,7 @@ const render = (opts={})=>{
 	let visual_line_mode = (mode===VIS_LINE_MODE) || line_select_mode;
 	if (line_select_mode) seltop = selbot = scroll_num+y;
 	
-	if (mode===SYMBOL_MODE||mode===COMPLETE_MODE){
+	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE){
 		visual_line_mode = true;
 		seltop = selbot = y+scroll_num;
 	}
@@ -1310,6 +1377,10 @@ if (num2 > w) {
 					if (symbol) mess = `-- SYMBOL: ${symbol} --`;
 					else mess = "-- SYMBOL --";
 				}
+				else if (mode == REF_MODE) {
+					if (symbol) mess = `-- REF: ${symbol} --`;
+					else mess = "-- REF --";
+				}
 				else if (mode === COMPLETE_MODE) {
 					mess = `-- COMPLETE: ${symbol} --`;
 				}
@@ -1381,6 +1452,7 @@ if (num2 > w) {
 		tabdiv.innerHTML = outarr.join("\n");
 	}
 };
+refs.render = render;
 
 const generate_stat_html=()=>{//«
 	stat_spans = [];
@@ -1398,7 +1470,9 @@ const generate_stat_html=()=>{//«
 		stat_spans.push(sp);
 		statdiv.appendChild(sp);
 	}
-};//»
+};
+refs.generate_stat_html = generate_stat_html;
+//»
 const update_stat_lines=(arr)=>{//«
 if (!num_stat_lines) return;
 	let arrlen = arr.length;
@@ -1411,7 +1485,9 @@ cerr("What is the array size different from the num_stat_lines????");
 		return;
 	}
 	for (let i=0; i < num_stat_lines; i++) stat_spans[i].innerHTML = arr[i];
-};//»
+};
+refs.update_stat_lines = update_stat_lines;
+//»
 
 //»
 //Curses«
@@ -1466,14 +1542,18 @@ log(wrapdiv);
 	}
 	tdiv.innerHTML="";
 	wrapdiv._over="hidden";
-};//»
+};
+refs.getgrid = getgrid;
+//»
 const clear_table=()=>{//«
 	lines = [];
 	line_colors = [];
 	y=0;
 	scroll_num = 0;
 	render();
-};//»
+};
+refs.clear_table = clear_table;
+//»
 const clear=()=>{//«
 //log("????");
 //const clear=(if_keep_buffer)=>{
@@ -1481,6 +1561,8 @@ const clear=()=>{//«
 	clear_table();
 //	if (if_keep_buffer) cur_prompt_line = y;
 };
+refs.clear = clear;
+
 //»
 const shift_line=(x1, y1, x2, y2)=>{//«
 	let uselines = lines;
@@ -1495,14 +1577,18 @@ const shift_line=(x1, y1, x2, y2)=>{//«
 		uselines.splice(y1 + scroll_num, 1);
 	}
 	return str_arr;
-};//»
+};
+refs.shift_line = shift_line;
+//»
 const line_break=()=>{//«
 	if (lines[lines.length-1] && !lines[lines.length-1].length) return;
 	lines.push([]);
 	y++;
 	scroll_into_view();
 	render();
-};//»
+};
+refs.line_break = line_break;
+//»
 const scroll_into_view=(which)=>{//«
 	if (!h) return;
 	const doscroll=()=>{//«
@@ -1525,6 +1611,7 @@ const scroll_into_view=(which)=>{//«
 	return did_scroll;
 };
 this.scroll_into_view = scroll_into_view;
+refs.scroll_into_view = scroll_into_view;
 //»
 const resize = () => {//«
 	if (topwin.killed) return;
@@ -1583,6 +1670,7 @@ const resize = () => {//«
 
 	render();
 };
+refs.resize = resize;
 //»
 
 //»
@@ -1627,6 +1715,7 @@ const execute = async(str, opts={})=>{//«
 	}
 	history.push(gotstr);
 };
+refs.execute = execute;
 //»
 
 const get_com_pos=()=>{//«
@@ -1637,7 +1726,9 @@ const get_com_pos=()=>{//«
 	}
 	else add_x = x - prompt_len;
 	return add_x;
-};//»
+};
+refs.get_com_pos = get_com_pos;
+//»
 const get_com_arr=(from_x)=>{//«
 	let uselines = lines;
 	let com_arr = [];
@@ -1652,6 +1743,7 @@ const get_com_arr=(from_x)=>{//«
 	}
 	return com_arr;
 };
+refs.get_com_arr = get_com_arr;
 //»
 const get_command_arr=async (dir, arr, pattern)=>{//«
 	const dokids = kids=>{
@@ -1675,7 +1767,9 @@ const get_command_arr=async (dir, arr, pattern)=>{//«
 		else if (re.test(com)) match_arr.push([arr[i], "Command"]);
 	}
 	return match_arr;
-};//»
+};
+refs.get_command_arr = get_command_arr;
+//»
 const get_prompt_str=()=>{//«
 	let str;
 	let user = ENV.USER;
@@ -1684,7 +1778,9 @@ const get_prompt_str=()=>{//«
 	if ((new RegExp("^/home/"+user+"\\$$")).test(str)) str = "~$";
 	else if ((new RegExp("^/home/"+user+"/")).test(str)) str = str.replace(/^\/home\/[^\/]+\x2f/,"~/");
 	return str + " ";
-};//»
+};
+refs.get_prompt_str = get_prompt_str;
+//»
 const set_prompt = (opts={}) => {//«
 	let use_str = opts.prompt || get_prompt_str();
 
@@ -1727,6 +1823,7 @@ const set_prompt = (opts={}) => {//«
 	x=prompt_len;
 	y=lines.length - 1 - scroll_num;
 };
+refs.set_prompt = set_prompt;
 //»
 const insert_cur_scroll = () => {//«
 	com_scroll_mode = false;
@@ -1748,7 +1845,9 @@ const insert_cur_scroll = () => {//«
 	}
 	cur_scroll_command = null;
 	return str;
-};//»
+};
+refs.insert_cur_scroll = insert_cur_scroll;
+//»
 const get_dir_contents = async(dir, pattern, opts={})=>{//«
 	let {if_cd, if_keep_ast} = opts;
 	const domatch=async()=>{//«
@@ -1795,6 +1894,7 @@ const get_dir_contents = async(dir, pattern, opts={})=>{//«
 	}
 	return domatch();
 };
+refs.get_dir_contents = get_dir_contents;
 //»
 
 //»
@@ -1810,7 +1910,9 @@ this.continue = (str) => {//«
 	bufpos = 0;
 	setTimeout(()=>{cur_shell = null;},10);
 	render();
-};//»
+};
+refs.continue = this.continue;
+//»
 const response_end = (opts={}) => {//«
 	if (!did_init) return;
 
@@ -1829,10 +1931,12 @@ const response_end = (opts={}) => {//«
 	render();
 };
 this.response_end = response_end;
+refs.response_end = response_end;
 //»
 const response_err=(out)=>{
 response(out, {isErr: true});
-}
+};
+refs.response_err = response_err;
 this.resperr = response_err;
 const response = (out, opts={})=>{//«
 	if (!isStr(out)) Win._fatal(new Error("Non-string given to terminal.response"));
@@ -1935,6 +2039,7 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 	}
 };
 this.response = response;
+refs.response = response;
 //»
 
 //»
@@ -1972,7 +2077,9 @@ const do_ctrl_C=()=>{//«
 		ENV['?'] = 0;
 		response_end();
 	}
-};//»
+};
+refs.do_ctrl_C = do_ctrl_C;
+//»
 
 const handle_insert=val=>{//«
 	let arr = val.split("");
@@ -1990,7 +2097,9 @@ const handle_insert=val=>{//«
 		else gotspace = false;
 		handle_priv(null,code, null, true);
 	}
-};//»
+};
+refs.handle_insert = handle_insert;
+//»
 const handle_line_str=(str, from_scroll, uselen, if_no_render)=>{//«
 	let did_fail = false;
 	const copy_lines=(arr, howmany)=>{//«
@@ -2057,12 +2166,15 @@ const handle_line_str=(str, from_scroll, uselen, if_no_render)=>{//«
 	}
 	if (!if_no_render) render();
 };
+refs.handle_line_str = handle_line_str;
 //»
 const do_get_dir_contents = async(use_dir, tok, tok0, arr_pos) => {//«
 	let ret = await get_dir_contents(use_dir, tok, {if_cd: tok0==="cd"});
 	if (!ret.length) return;
 	docontents(ret, use_dir, tok, arr_pos);
-};//»
+};
+refs.do_get_dir_contents = do_get_dir_contents;
+//»
 const response_com_names = arr => {//«
 	let arr_pos = get_com_pos();
 	let repeat_arr = get_com_arr();
@@ -2078,6 +2190,7 @@ const response_com_names = arr => {//«
 	render();
 };
 this.response_com_names=response_com_names;
+refs.response_com_names = response_com_names;
 //»
 const docontents = async(contents, use_dir, tok, arr_pos)=>{//«
 	if (contents.length == 1) {//«
@@ -2194,7 +2307,9 @@ cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
 			else await_next_tab = true;
 		}//»
 	}//»
-};//»
+};
+refs.docontents = docontents;
+//»
 const handle_tab = async(pos_arg, arr_arg)=>{//«
 	if (cur_scroll_command) insert_cur_scroll();
 	let contents;
@@ -2321,6 +2436,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 	else do_get_dir_contents(use_dir, tok, tok0, arr_pos);
 };
 this.handle_tab = handle_tab;
+refs.handle_tab = handle_tab;
 //»
 const handle_arrow=(code, mod, sym)=>{//«
 
@@ -2530,7 +2646,9 @@ break;
 		}//»
 	}//»
 
-};//»
+};
+refs.handle_arrow = handle_arrow;
+//»
 const handle_page=(sym)=>{//«
 	if (sym=="HOME_") {//«
 		if (cur_shell) return;
@@ -2558,7 +2676,9 @@ const handle_page=(sym)=>{//«
 			}
 		}
 	}//»
-};//»
+};
+refs.handle_page = handle_page;
+//»
 const handle_backspace=()=>{//«
 	let prevch = lines[cy()][cx()-1];
 	if (((y+scroll_num) ==  cur_prompt_line) && (x == prompt_len)) return;
@@ -2628,7 +2748,9 @@ const handle_backspace=()=>{//«
 		}//»
 	}
 	render();
-};//»
+};
+refs.handle_backspace = handle_backspace;
+//»
 const handle_delete=(mod)=>{//«
 	if (mod == "") {
 		if (lines[cy()+1]) {
@@ -2641,6 +2763,7 @@ const handle_delete=(mod)=>{//«
 		}
 	}
 };
+refs.handle_delete = handle_delete;
 //»
 const handle_enter = async(opts={})=>{//«
 	if (!sleeping){
@@ -2671,7 +2794,9 @@ const handle_enter = async(opts={})=>{//«
 		await execute(str, opts);
 		sleeping = null;
 	}
-};//»
+};
+refs.handle_enter = handle_enter;
+//»
 const handle_letter_press=(char_arg, if_no_render)=>{//«
 	const dounshift=(uselines)=>{//«
 		if ((uselines[cy()].length) > w) {
@@ -2756,6 +2881,7 @@ const handle_letter_press=(char_arg, if_no_render)=>{//«
 	if (textarea) textarea.value = "";
 };
 this.handle_letter_press = handle_letter_press;
+refs.handle_letter_press = handle_letter_press;
 //»
 const handle_priv=(sym, code, mod, ispress, e)=>{//«
 	if (sleeping) {
@@ -2916,6 +3042,7 @@ do_overlay(`Use Dev Parser: ${USE_DEVPARSER}`);
 
 }
 };
+refs.handle_priv = handle_priv;
 //»
 const handle=(sym, e, ispress, code, mod)=>{//«
 	let marr;
@@ -2980,6 +3107,7 @@ if (actor.onkeydown) actor.onkeydown(e ,sym, code);
 
 	handle_priv(sym, code, mod, ispress, e);
 };
+refs.handle = handle;
 //»
 
 //»
@@ -3050,6 +3178,7 @@ const init = async(appargs={})=>{
 	if (USE_ONDEVRELOAD) Term.ondevreload = ondevreload;
 
 };
+refs.init = init;
 
 //»
 //Obj/CB«
@@ -3069,7 +3198,9 @@ this.getch = async(promptarg, def_ch)=>{//«
 		getch_def_ch = def_ch;
 		getch_cb = Y;
 	});
-};//»
+};
+refs.getch = this.getch;
+//»
 this.read_line = async(promptarg)=>{//«
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		line_break();
@@ -3086,7 +3217,9 @@ this.read_line = async(promptarg)=>{//«
 	return new Promise((Y,N)=>{
 		read_line_cb = Y;
 	});
-};//»
+};
+refs.read_line = this.read_line;
+//»
 this.onappinit = init;
 
 const onescape = () => {//«
@@ -3099,11 +3232,14 @@ const onescape = () => {//«
 	return false;
 }
 this.onescape = onescape;
+refs.onescape = onescape;
 //»
 this.onsave=()=>{//«
 //	if (editor) editor.save();
 	if (actor && actor.save) actor.save();
-}//»
+};
+refs.onsave = this.onsave;
+//»
 const ondevreload = async() => {//«
 
 	do_overlay("ondevreload: start");
@@ -3125,7 +3261,9 @@ const ondevreload = async() => {//«
 //	await ShellMod.util.doImports(ADD_COMS, cerr);
 	do_overlay("ondevreload: done");
 
-};//»
+};
+refs.ondevreload = ondevreload;
+//»
 
 this.onkill = (if_dev_reload)=>{//«
 	execute_kill_funcs();
@@ -3151,27 +3289,36 @@ this.onkill = (if_dev_reload)=>{//«
 
 	save_history();
 
-}//»
+};
+refs.onkill = this.onkill;
+//»
 this.onfocus=()=>{//«
 	this.isFocused = true;
 	topwin_focused=true;
 	if (cur_scroll_command) insert_cur_scroll();
 	render();
 	textarea&&textarea.focus();
-}//»
+};
+refs.onfocus = this.onfocus;
+//»
 this.onblur=()=>{//«
 	this.isFocused = false;
 	topwin_focused=false;
 	render();
 	if (cur_scroll_command) insert_cur_scroll();
 	textarea && textarea.blur();
-}//»
+};
+refs.onblur = this.onblur;
+//»
 this.onresize = resize;
 this.onkeydown=(e,sym,mod)=>{handle(sym,e,false,e.keyCode,mod);};
+refs.onkeydown = this.onkeydown;
 this.onkeypress=(e)=>{handle(e.key,e,true,e.charCode,"");};
+refs.onkeypress = this.onkeypress;
 this.onkeyup=(e,sym)=>{
 if (actor&&actor.onkeyup) actor.onkeyup(e, sym);
 };
+refs.onkeyup = this.onkeyup;
 this.overrides = {//«
 	"UP_C": 1,
 	"DOWN_C": 1,
@@ -3194,6 +3341,7 @@ this.overrides = {//«
 
 //Editor/Pager specific«
 this.reset_x_scroll=()=>{tabdiv._x=0;};
+refs.reset_x_scroll = this.reset_x_scroll;
 this.x_scroll_terminal=(opts={})=>{//«
 
 let {amt, toRightEdge, toLeftEdge} = opts;
@@ -3229,13 +3377,18 @@ else {
 return cwarn("x_scroll_terminal: nothing to do!!!");
 }
 render();
-};//»
+};
+refs.x_scroll_terminal = this.x_scroll_terminal;
+//»
 this.clipboard_copy=(s)=>{do_clipboard_copy(null,s);};
+refs.clipboard_copy = this.clipboard_copy;
 
 this.set_lines = (linesarg, colorsarg)=>{//«
 	lines = linesarg;
 	line_colors = colorsarg;
-};//»
+};
+refs.set_lines = this.set_lines;
+//»
 //this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {
 this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}) => {//«
 	let escape_fn = funcs.onescape;
@@ -3261,7 +3414,9 @@ this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines
 	}
 	return screen;
 
-};//»
+};
+refs.init_new_screen = this.init_new_screen;
+//»
 this.quit_new_screen = (screen) => {//«
 if (screen === hold_terminal_screen) hold_terminal_screen = null;
 let old_actor = actor;
@@ -3279,7 +3434,9 @@ tabdiv._x = 0;
 if (old_actor&&old_actor.cb) {
 	old_actor.cb(screen);
 }
-};//»
+};
+refs.quit_new_screen = this.quit_new_screen;
+//»
 
 //»
 this.wrap_line = wrap_line;
@@ -3299,7 +3456,9 @@ this.set_tab_size = (s)=>{//«
 	tabdiv.style.tabSize = n;
 	this.tabsize = tabdiv.style.tabSize;
 	return true;
-};//»
+};
+//»
+refs.set_tab_size = this.set_tab_size;
 this.try_kill=()=>{//«
 	if (is_editor) {
 //		editor.set_stat_message("Really close the window? [y/N]");
@@ -3310,10 +3469,14 @@ this.try_kill=()=>{//«
 	else{
 cwarn("TRY_KILL CALLED BUT is_editor == false!");
 	}
-}//»
+};
+refs.try_kill = this.try_kill;
+//»
 this.toggle_paste = toggle_paste;
 this.cur_white=()=>{CURBG="#ddd";CURFG="#000";}
+refs.cur_white = this.cur_white;
 this.cur_blue=()=>{CURBG="#00f";CURFG="#fff";}
+refs.cur_blue = this.cur_blue;
 this.execute_background_command=s=>{
 
 	let shell = new Shell(this, true);
@@ -3324,6 +3487,7 @@ this.execute_background_command=s=>{
 	shell.execute(s,{env, noRespEnd: true});
 
 };
+refs.execute_background_command = this.execute_background_command;
 this.execute = async (s)=>{//«
 	if (cur_shell){
 cwarn("Sleeping");
@@ -3335,7 +3499,9 @@ cwarn("Sleeping");
 //log();
 //	sleeping = null;
 	return true;
-};//»
+};
+refs.execute = this.execute;
+//»
 Object.defineProperty(this,"lines",{//«
 	get:()=>{
 		let all;

@@ -233,7 +233,7 @@ let reload_win;
 let hold_overrides;
 
 let yank_buffer;
-/*
+/*«
 let yank_buffer = [
 	["A", "A", "A", "A", "A", "A",],
 	["B", "B", "B", "B", "B", "B",],
@@ -243,7 +243,7 @@ let yank_buffer = [
 	["F", "F", "F", "F", "F", "F",]
 ];
 yank_buffer._type="B";
-*/
+»*/
 let lines;
 let hold_lines;
 let stdin_lines;
@@ -264,9 +264,6 @@ if (!histories){
 }
 this.command_history = histories.command;
 this.search_history = histories.search;
-
-
-//let REAL_LINES_SZ = 1;
 let WRAP_LENGTH = 85;
 let NUM_ESCAPES_TO_ESCAPE=2;
 
@@ -295,6 +292,7 @@ const LINE_WRAP_MODE = 8;
 const SYMBOL_MODE = 9;
 const FILE_MODE = 10;
 const COMPLETE_MODE = 11;
+const REF_MODE = 12;
 
 const COMMAND_OR_EDIT_MODES=[
 	COMMAND_MODE,
@@ -1872,26 +1870,52 @@ const handle_symbol_keydown=(sym)=>{//«
 		render();
 	}
 };//»
-const init_symbol_mode = (if_adv)=>{//«
+
+let cur_refs;
+
+const init_symbol_mode = (opts={})=>{//«
+//const init_symbol_mode = (if_adv)=>{
 	let ln = curarr();//let ln = curln(true);
 	if (ln._fold) {
 		stat_warn("Fold detected");
 		return;
 	}
-	this.mode = SYMBOL_MODE;
 	this.symbol="";
-	if (!ALLWORDS) get_all_words();
-	if (symbols){
-		SYMBOLS = ALLWORDS.concat(symbols).sort();
-	}
-	else{
-		SYMBOLS = ALLWORDS;
-	}
+	if (opts.ref){/*«*/
+//		this.mode = SYMBOL_MODE;
+		this.mode = REF_MODE;
+		if (!cur_refs){
+			cur_refs={};
+		}
+		SYMBOLS=[];
+		let refs = globals.refs;
+		let ref_ns_names = Object.keys(refs);
+		for (let name of ref_ns_names){
+			let cur_ns = refs[name];
+			let ref_names = Object.keys(cur_ns); 
+			for (let ref_name of ref_names){
+//				let word = `${name}.${ref_name}`;
+				let word = ref_name;
+				SYMBOLS.push(word);
+				cur_refs[word] = cur_ns[ref_name];
+			}
+		}
+	}/*»*/
+	else{/*«*/
+		this.mode = SYMBOL_MODE;
+		if (!ALLWORDS) get_all_words();
+		if (symbols){
+			SYMBOLS = ALLWORDS.concat(symbols).sort();
+		}
+		else{
+			SYMBOLS = ALLWORDS;
+		}
+	}/*»*/
 
 	hold_lines = lines;
 	let hold_colors = line_colors;
 	let hx=x,hy=y,hscr=scroll_num;
-	if (ln.length && if_adv) x++;
+	if (ln.length && opts.adv) x++;
 	x=y=scroll_num=0;
 	let hold_fold = fold_mode;
 	fold_mode = false;
@@ -1901,12 +1925,31 @@ const init_symbol_mode = (if_adv)=>{//«
 	}
 	Term.set_lines(lines, []);
 	enter_cb = () => {//«
-//let ln = curln().split(/\s+/)[0];
-		let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
-		enter_cb = null;
-		alt_screen_escape_handler(true);
-		if (ln&&ln.length) print_chars(ln,{ins:true});
-		render();
+		if (this.mode===SYMBOL_MODE) {
+			let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
+			enter_cb = null;
+			alt_screen_escape_handler(true);
+			if (ln&&ln.length) print_chars(ln,{ins:true});
+			render();
+		}
+		else if (this.mode===REF_MODE){
+			let nm = lines[y+scroll_num].join("").split(/\s+/)[0];
+			enter_cb = null;
+			alt_screen_escape_handler(true);
+			let got = cur_refs[nm];
+			if (!got){
+				return stat_warn(`${nm}: no ref found`);
+			}
+			let arr = (got+"").split("\n");
+			let out = [];
+			for (let ln of arr){
+				ln = ln.replace(/\xab/g,"").replace(/\xbb/g,"");
+				ln = ln.replace(/\/\/ *$/,"");
+				out.push(ln);
+			}
+			do_paste((`const ${nm} = `+out.join("\n")), {before: opts.before});
+			stat(`Using ref: '${nm}'`);
+		}
 	};//»
 	alt_screen_escape_handler = no_render => {//«
 		alt_screen_escape_handler = null;
@@ -1924,7 +1967,6 @@ const init_symbol_mode = (if_adv)=>{//«
 		if (!no_render) render();
 	};//»
 	render();
-
 
 }//»
 const init_complete_mode=async()=>{//«
@@ -1966,7 +2008,6 @@ const init_complete_mode=async()=>{//«
 	}
 	Term.set_lines(lines, []);
 	enter_cb = () => {//«
-//let ln = curln().split(/\s+/)[0];
 		let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
 		enter_cb = null;
 		alt_screen_escape_handler(true);
@@ -4504,23 +4545,15 @@ const clear_nulls_from_file = () => {//«
 
 //»
 
-const do_paste = val=>{//«
+const do_paste = (val, opts={}) => {//«
 	if (!val) return;
 	let lns = val.split("\n");
 	yank_buffer = [];
 	yank_buffer._type = "L";
 	for (let ln of lns) yank_buffer.push([...ln]);
-	handle_paste("P");
+	if (opts.before) handle_paste("P");
+	else handle_paste("p");
 };//»
-/*
-const append_lines_from_stdin=(linesarg)=>{//«
-	yank_buffer = linesarg;
-	yank_buffer._type="L";
-	end();
-	handle_paste("p");
-	stat_warn(`${linesarg.length} lines have been appended from stdin`);
-};//»
-*/
 const handle_paste = async (which, opts = {}) => {//«
 
 let {keepFirst, doFold} = opts;
@@ -5510,7 +5543,7 @@ const handle_press=(ch)=>{//«
 	if (this.stat_input_type) handle_stat_char(ch);
 	else if (mode===INSERT_MODE) print_ch(ch,{fromHandler: true});
 	else if (mode===REPLACE_MODE) replace_char(ch, {fromHandler: true});
-	else if (mode===SYMBOL_MODE||mode===COMPLETE_MODE) handle_symbol_ch(ch);
+	else if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) handle_symbol_ch(ch);
 	else if (mode===FILE_MODE) handle_file_ch(ch);
 	else if (mode===VIS_LINE_MODE||mode===VIS_MARK_MODE||mode===VIS_BLOCK_MODE) handle_visual_key(ch);
 	else if (KEY_CHAR_FUNCS[ch]) KEY_CHAR_FUNCS[ch]();
@@ -5602,7 +5635,6 @@ const handle_visual_key=ch=>{//«
 
 };//»
 
-
 const KEY_CHAR_FUNCS={//«
 
 //	X: do_null_del,
@@ -5631,10 +5663,16 @@ const KEY_CHAR_FUNCS={//«
 	a: ()=>{ set_edit_mode("a") },
 	i: ()=>{ set_edit_mode("i") },
 	I: ()=>{ set_edit_mode("I") },
-	m:()=>{init_symbol_mode(true)},
-	M:init_symbol_mode,
+	m:()=>{init_symbol_mode({adv: true})},
+	M: init_symbol_mode,
 	X: init_cut_buffer_mode,
 	l: init_line_wrap_mode,
+	e:()=>{
+		init_symbol_mode({ref: true});
+	},
+	E:()=>{
+		init_symbol_mode({ref: true, before: true});
+	},
 
 	".": replace_one_char,
 	">":()=>{
@@ -5658,12 +5696,8 @@ const KEY_CHAR_FUNCS={//«
 //Find
 	n:()=>{resume_search(false)},
 	b:()=>{resume_search(true)},
-	"*":()=>{
-		find_word(get_cur_word().word, {exact: true});
-	},
-	"&":()=>{
-		find_word(get_cur_word().word, {exact: true, reverse: true});
-	},
+	"*":()=>{find_word(get_cur_word().word,{exact:true});},
+	"&":()=>{find_word(get_cur_word().word,{exact:true,reverse:true});},
 	"'":goto_matching_brace,
 
 //Cursor
@@ -5672,9 +5706,7 @@ const KEY_CHAR_FUNCS={//«
 
 //Scroll
 	g: vcenter_cursor,
-	" ":async()=>{
-		scroll_screen_to_cursor();
-	},
+	" ":scroll_screen_to_cursor,
 	"[":scroll_left,
 	"]":scroll_right,
 	"}":()=>{
@@ -5845,7 +5877,7 @@ this.onkeydown=async(e, sym, code)=>{//«
 		return;
 	}/*»*/
 	last_updown = false;
-	if (mode===SYMBOL_MODE||mode===COMPLETE_MODE) return handle_symbol_keydown(sym);
+	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) return handle_symbol_keydown(sym);
 	if (mode===FILE_MODE) return handle_file_keydown(sym);
 	if (LEFTRIGHT_FUNCS[sym]){//«
 		LEFTRIGHT_FUNCS[sym]();
@@ -6082,15 +6114,6 @@ return;
 	if (!stdin_lines) stdin_lines = newlines;
 	else stdin_lines.push(...newlines);
 
-//cwarn("Got lines from stdin", newlines);
-/*
-	if (this.mode===COMMAND_MODE){
-		append_lines_from_stdin(newlines);
-		return;
-	}
-	if (!stdin_lines) stdin_lines = newlines;
-	else stdin_lines.push(...newlines);
-*/
 };/*»*/
 this.quit = quit;
 //}; End vim mod«
