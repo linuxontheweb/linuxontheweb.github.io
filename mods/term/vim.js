@@ -1,12 +1,18 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
 
+/*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!«
+@ZPLROTUS: Here we are exporing num_lines to the terminal's renderer. This variable 
+is important because the length of the lines array is different from the logical
+number of lines in the file whenever there are folds. So we need to update this
+variable (like @CKJEPOIL) whenever the logical number of lines changes (rather than
+the length of the lines array).
+»*/
 /*12/26/24: Now, REF_MODE, invoked by 'e' (paste after)  or 'E' (paste before),«
 in order to insert functions (or anything else that allows for "stringification") 
 that are "exported" via globals.refs.<SOME_NS>. We currently flatten out all the
 namespaces of globals.refs onto cur_refs (which potentially overwrites
 references with the same name that are "exported" by other apps/mods/coms/etc).
 »*/
-
 /*12/25/24: Just found out that you do r_CA in order to begin to create«
 an application while editing your file, which should at least have this:
 
@@ -525,6 +531,7 @@ const set_line_lens = ()=>{//«
 			start++;
 		}
 	}
+//CKJEPOIL
 	num_lines = start;
 	set_ry();
 };//»
@@ -1843,7 +1850,8 @@ const update_symbols = () => {//«
 		uselines = SYMBOLS;
 	}
 	else {
-		let re = new RegExp("^"+sym);
+//		let re = new RegExp("^"+sym);
+		let re = new RegExp(sym);
 		uselines = SYMBOLS.filter(w=>{return re.test(w);});
 	}
 	lines = [];
@@ -5963,7 +5971,8 @@ Object.defineProperty(this,"ry",{get:()=>{//«
 }});//»
 Object.defineProperty(this,"fullpath",{get:()=>edit_fullpath});
 //Object.defineProperty(this,"num_lines",{get:()=>num_lines});
-Object.defineProperty(this,"num_lines",{get:()=>lines.length});
+//ZPLROTUS
+Object.defineProperty(this,"num_lines",{get:()=>num_lines});
 Object.defineProperty(this,"stat_message_type",{
 	get:()=>stat_message_type,
 	set:(val)=>{

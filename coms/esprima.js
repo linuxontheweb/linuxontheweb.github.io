@@ -38,9 +38,9 @@ the syntax phase, because:
 const {globals}=LOTW;
 
 const{strnum, isArr, isJSArr, isStr, isNum, isObj, log, jlog, cwarn, cerr, isEOF}=LOTW.api.util;
-const {SHELL_ERROR_CODES, comClasses}=globals;
+const {ShellMod, SHELL_ERROR_CODES, comClasses}=globals;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
-const{Com}=comClasses;
+const{Com}=ShellMod.comClasses;
 
 //»
 

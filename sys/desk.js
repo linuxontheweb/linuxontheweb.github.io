@@ -765,7 +765,8 @@ _.flexcol=function(if_off){if(if_off){this.style.display="";this.style.alignItem
 _.scrollIntoViewIfNeeded || (_.scrollIntoViewIfNeeded = _.scrollIntoView);
 
 _ = String.prototype;
-_.regstr=function(useend){var endsp="";if(useend)endsp=" ";return this.replace(/^[\x20\t]+/g,"").replace(/[\x20\t]+$/g,endsp).replace(/[\x20\t]+/g," ");}
+_.toCamel = function(){return this.split("_").reduce((acc,cur)=>{return acc+cur[0].toUpperCase()+cur.slice(1);})}
+_.regstr = function(useend){var endsp="";if(useend)endsp=" ";return this.replace(/^[\x20\t]+/g,"").replace(/[\x20\t]+$/g,endsp).replace(/[\x20\t]+/g," ");}
 _.rep = function (num) {var ret = "";for (var i=0; i < num; i++) {ret = ret + this;}return ret;}
 _.lc = function (){return this.toLowerCase();}
 _.uc = function (){return this.toUpperCase();}
