@@ -1,11 +1,27 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
 
-/*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!«
+/*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!  «
 @ZPLROTUS: Here we are exporing num_lines to the terminal's renderer. This variable 
 is important because the length of the lines array is different from the logical
 number of lines in the file whenever there are folds. So we need to update this
 variable (like @CKJEPOIL) whenever the logical number of lines changes (rather than
 the length of the lines array).
+
+JUST FIGURED OUT RIGHT NOW WHAT GOT ME THINKING ABOUT THIS YESTERDAY, AND WHAT
+WENT WRONG: WHEN GOING INTO DIFFERENT MODES, LIKE SYMBOL_MODE or REF_MODE
+@SMKJFHSO, THE num_lines variable is NOT updated... So now @XKLORPT, we are
+updating the num_lines, then we are setting it back in alt_screen_escape_handler
+@MDKIUTHS. THIS IS SOMETHING WE WILL NEED TO LOOK FOR IN OTHER MODES THAT
+ARE LIKE THIS (SUCH AS FILE_MODE and COMPLETE_MODE)!!!!!!!!!.
+
+OKAY, THIS IS STARTING TO LOOK OK BECAUSE WE JUST WENT INTO COMPLETE_MODE AND
+ADDED num_lines = lines.length and set_line_lens() in the relevant places.
+
+Let't do a hotkey that turns
+const blah_hoo_hi=(...)=>{
+to
+blahHooHi(...){
+...
 »*/
 /*12/26/24: Now, REF_MODE, invoked by 'e' (paste after)  or 'E' (paste before),«
 in order to insert functions (or anything else that allows for "stringification") 
@@ -513,7 +529,10 @@ log(lens);
 	}
 };//»
 const set_line_lens = ()=>{//«
-	if (!fold_mode) return;
+	if (!fold_mode) {
+		num_lines = lines.length;
+		return;
+	}
 	num_lines = 0;
 	if (!lines.length){
 		lens=[0];
@@ -1861,6 +1880,7 @@ const update_symbols = () => {//«
 	y=scroll_num=0;
 	set_ry();
 	Term.set_lines(lines, []);
+	num_lines = lines.length;
 	render();
 };//»
 const handle_symbol_ch=ch=>{//«
@@ -1889,6 +1909,7 @@ const handle_symbol_keydown=(sym)=>{//«
 let cur_refs;
 
 const init_symbol_mode = (opts={})=>{//«
+//SMKJFHSO
 	let ln = curarr();//let ln = curln(true);
 	if (ln._fold) {
 		stat_warn("Fold detected");
@@ -1926,6 +1947,8 @@ const init_symbol_mode = (opts={})=>{//«
 		if (w.length) lines.push([...w]);
 	}
 	Term.set_lines(lines, []);
+//XKLORPT
+	num_lines = lines.length;
 	enter_cb = () => {//«
 		if (this.mode===SYMBOL_MODE) {
 			let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
@@ -1963,8 +1986,9 @@ const init_symbol_mode = (opts={})=>{//«
 		hold_lines = null;
 		line_colors = hold_colors;
 		Term.set_lines(lines, line_colors);
-//XJKUIOTL
-		set_ry();
+//		set_ry();
+//MDKIUTHS
+		set_line_lens();
 		this.mode = COMMAND_MODE;
 		if (!no_render) render();
 	};//»
@@ -2009,6 +2033,8 @@ const init_complete_mode=async()=>{//«
 		if (w.length) lines.push([...w]);
 	}
 	Term.set_lines(lines, []);
+	num_lines = lines.length;
+//	set_line_lens();
 	enter_cb = () => {//«
 		let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
 		enter_cb = null;
@@ -2026,7 +2052,8 @@ const init_complete_mode=async()=>{//«
 		hold_lines = null;
 		line_colors = hold_colors;
 		Term.set_lines(lines, line_colors);
-		set_ry();
+//		set_ry();
+		set_line_lens();
 		this.mode = mode_hold;
 		if (!no_render) render();
 	};//»
@@ -2051,7 +2078,6 @@ hold_lines = lines;
 let hold_colors = line_colors;
 let hx=x,hy=y,hscr=scroll_num;
 x=y=scroll_num=0;
-
 
 alt_screen_escape_handler = no_render => {//«
 	x=hx;
@@ -2742,7 +2768,10 @@ const check_ry=()=>{//«
 //log(`_cy(${_cy}) < llen(${llen})`);
 	if (_cy < llen) {//«
 		set_ry();
-		if (ry !== num){
+		if (ry===num){
+//log(`OK: ${ry} === ${num}`);
+		}
+		else{
 render();
 THROW(`ry(${ry+1}) !== num(${num+1})`);
 		}
@@ -2766,6 +2795,7 @@ log("CUR_UNDO");
 log(cur_undo);
 render();
 THROW(`!!! cy (${_cy}) === lines.length (${llen}) (no fileChomp) !!!`);
+
 		}//»
 	}//»
 	else{//«
@@ -2773,6 +2803,7 @@ render();
 THROW(`!!! cy (${_cy}) > lines.length (${llen}) !!!`);
 	}//»
 }//»
+//cwarn("SCROLL_TO", num);
 	no_render = true;
 	let { openFoldHits, allowInnerFolds , doRender, fileChomp } = opts;
 	let llen = lines.length;
@@ -3050,13 +3081,10 @@ const search_and_replace = async(arr, if_entire_file)=>{//«
 //time that this function was called rather than the time that the confirmation
 //was done.
 	let time = Date.now();
-	let num_lines;
-	let marr;
+	let do_num_lines;
 	let xoff = 0;
 	let perm_x_off = 0;
-//	let first_x_off;
 	let last_slice_to;
-//	let first_xoff;
 	let hold_slice_to;
 	let slice_to;
 	let mode = this.mode;
@@ -3138,9 +3166,6 @@ const search_and_replace = async(arr, if_entire_file)=>{//«
 	}
 	//»
 	if (is_vis_mode()){//«
-//if (this.mode!==VIS_LINE_MODE){
-//cwarn("Defaulting to line mode... not doing search_and_replace in marker or block selections.");
-//}
 /*
 All slice_to's must be adjusted according to the difference between the match and 
 sub_str lengths.
@@ -3156,7 +3181,7 @@ sub_str lengths.
 			last_slice_to = x2+1;
 		}
 		open_all_sel_folds();
-		num_lines = selbot - seltop + 1;
+		do_num_lines = selbot - seltop + 1;
 		scroll_to(realy(seltop));
 	}//»
 	else{//«
@@ -3164,25 +3189,27 @@ sub_str lengths.
 			open_all_folds();
 			scroll_num = 0;
 			y = 0;
-			num_lines = lines.length;
+			ry = 0;
+			do_num_lines = lines.length;
 		}
 		else{
 			let ln = curarr();
 			if (ln._fold) open_fold(ln._fold);
 			scroll_num = cy();
 			y=0;
-			num_lines = 1;
+			do_num_lines = 1;
 		}
 	}//»
-	for (let i=0; i < num_lines; i++){//«
+	for (let i=0; i < do_num_lines; i++){//«
 		let lnarr = lines[y+scroll_num];
 		let lnstr = lnarr.join("");
-		let is_last_line = i+1===num_lines;
+		let is_last_line = i+1===do_num_lines;
+		let marr;
 		if (is_last_line && last_slice_to) slice_to = last_slice_to;
 		if (slice_to) lnstr = lnstr.slice(xoff, slice_to);
 		else lnstr = lnstr.slice(xoff);
 		if (!(marr = re.exec(lnstr))) {
-			if (i+1 == num_lines) break;
+			if (i+1 == do_num_lines) break;
 			scroll_to(ry+1);
 			xoff = perm_x_off;
 			if (hold_slice_to) slice_to = hold_slice_to;
@@ -3205,7 +3232,7 @@ sub_str lengths.
 					continue;
 				}//»
 				xoff = perm_x_off;
-				if (i+1 == num_lines) break;
+				if (i+1 == do_num_lines) break;
 				scroll_to(ry+1);
 				if (hold_slice_to) slice_to = hold_slice_to;
 				continue;
@@ -3216,7 +3243,6 @@ THROW("What is the return value from get_confirmation?");
 			}//»
 		}//»
 //ZMKLOPIJH
-//		undos = [];
 		let buf = lnarr.splice(usex, len);
 		actions.push(new Action(usex, ry, [buf], time, {neg: true, ins: true}));
 		lnarr.splice(usex, 0, ...sub_str);
@@ -3231,7 +3257,7 @@ THROW("What is the return value from get_confirmation?");
 		}//»
 		xoff = perm_x_off;
 		if (hold_slice_to) slice_to = hold_slice_to;
-		if (i+1 == num_lines) break;
+		if (i+1 == do_num_lines) break;
 		scroll_to(ry+1);
 	}//»
 	this.mode=COMMAND_MODE;
@@ -3650,6 +3676,7 @@ const do_redo = (chg) => {//«
 
 const undo = (o={}) => {//«
 //log("UNDO!");
+//log(actions.length);
 const _end = ()=>{//«
 	stat_message = `Undo change from: ${timestr(tm)}`;
 	set_ry();
@@ -3665,7 +3692,6 @@ const _end = ()=>{//«
 		scroll_num=x=y=0;
 		set_ry();
 		stat("Initial state")
-//		cur_sha1();
 		validate_initial_str();
 		return false;
 	}
@@ -3776,9 +3802,13 @@ throw new Error(`WHAT IS THIS DIFF IN PREPENDSPACE 1111: ${diff}`);
 			}//»
 		}//»
 		else{//«
+//			while (a.y===ry && a.time===tm){
 			while (a.time===tm){
 				actions.pop();
 				undos.push(a);
+				if (a.y!==ry){
+					scroll_to(a.y);
+				}
 				do_undo(a);
 				a = actions[actions.length-1];
 				if (!a) break;
@@ -3909,7 +3939,11 @@ else {//«
 		}//»
 	}//»
 	else{//«
+//		while (u.y===ry && u.time===tm){
 		while (u.time===tm){
+			if (u.y!==ry){
+				scroll_to(u.y);
+			}
 			undos.pop();
 			actions.push(u);
 			do_redo(u);
@@ -3991,7 +4025,8 @@ const KEYWORDS=[
 "package",
 "private",
 "protected",
-"null"
+"null",
+"undefined"
 ];
 const LIGHT_RED="#ff998f";
 //const LIGHT_RED="#ffaa9f";
@@ -4563,7 +4598,8 @@ if (!yank_buffer) return;
 if (this.stat_input_type){
 	let s = yank_buffer[0];
 	stat_com_arr.splice(x, 0, ...s);
-	x+=s.length;
+//	x=s.length;
+	x=0;
 	render();
 	return;
 }
@@ -5824,7 +5860,29 @@ s_CS: try_save_as,
 r_CA:toggle_reload_win,
 o_C: ()=>{init_stat_input("Open: ")},
 x_C: maybe_quit,
-
+z_CAS:()=>{
+let ln = curarr();
+if (ln._fold) return stat_warn("Fold detected");
+ln = ln.join("");
+let marr;
+if (marr = ln.match(/^const +([a-z_]+) *= *(async)?(.*)/)){
+let asnc = (marr[2]&&marr[2]+" ")||"";
+if (!marr[3].match(/^ *\(/)){
+	ln = asnc+marr[1].toCamel()+"("+marr[3].replace(/=>/,")");
+}
+else{
+	ln = asnc+marr[1].toCamel()+""+marr[3].replace(/=>/,"");
+}
+delete_line(cy());
+yank_buffer = [[...ln]];
+yank_buffer._type="L";
+handle_paste("P");
+//stat("Can paste the changed line!");
+}
+else{
+stat_warn("No matches!");
+}
+}
 };//»
 const LEFTRIGHT_FUNCS={//«
 	LEFT_: left,

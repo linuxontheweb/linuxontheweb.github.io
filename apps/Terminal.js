@@ -754,7 +754,8 @@ log(num);
 		if (this.shell.cancelled) return;
 		const{term}=this;
 		term.response(str, opts);
-		term.scroll_into_view();
+//		term.scroll_into_view();
+		term.scrollIntoView();
 		term.refresh();
 	}//»
 	out(val, opts={}){//«
@@ -1115,7 +1116,7 @@ async run(){//«
 			let colors = [];
 			for (let nm of dir_arr) name_lens.push(nm.length);
 			let ret = [];
-			term.fmt_ls(dir_arr, name_lens, ret, types, colors);
+			term.fmtLs(dir_arr, name_lens, ret, types, colors);
 			if (!ret.length) out("");
 			else {
 				if (colors.length) out(ret.join("\n"), {colors, didFmt: true});
@@ -1231,7 +1232,7 @@ const com_false = class extends Com{/*«*/
 const com_cd = class extends Com{/*«*/
 init(){
 	if (!this.args.length) {
-		this.args.push(this.term.get_homedir());
+		this.args.push(this.term.getHomedir());
 	}
 }
 async run(){
@@ -7132,6 +7133,7 @@ const scroll_into_view=(which)=>{//«
 	return did_scroll;
 };
 this.scroll_into_view = scroll_into_view;
+this.scrollIntoView = scroll_into_view;
 refs.scroll_into_view = scroll_into_view;
 //»
 const resize = () => {//«
@@ -8970,10 +8972,12 @@ this.refresh = render;
 this.fmt = fmt;
 this.break=line_break;
 this.fmt_ls = fmt_ls;
+this.fmtLs = fmt_ls;
 this.fmt2 = fmt2;
 this.clear=clear;
 this.get_dir_contents=get_dir_contents;
 this.get_homedir = get_homedir;
+this.getHomedir = get_homedir;
 this.set_tab_size = (s)=>{//«
 	if (!s.match(/[0-9]+/)) return;
 	let n = parseInt(s);
