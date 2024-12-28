@@ -565,8 +565,14 @@ const have_fold = (add) => {//«
 	return lines[cy(add)]._fold;
 };//»
 const reset_display=()=>{//«
+//	if (alt_screen_escape_handler) {
+//		alt_screen_escape_handler();
+//		alt_screen_escape_handler = null;
+//	}
+	stat_cb = null;
+//	this.stat_input_type = null;
 	x=0;y=0;scroll_num=0;
-//	this.mode = COMMAND_MODE;
+	this.mode = COMMAND_MODE;
 	set_ry();
 	stat_warn("Display reset");
 //	render({},107);
@@ -1134,6 +1140,7 @@ const toggle_reload_win=async()=>{//«
 	if (reload_win){
 		delete LOTW.apps[reload_win.appName];
 		delete reload_win.ownedBy;
+		reload_win.close();
 		reload_win = null;
 		stat("'reload_win' deleted");
 		return;

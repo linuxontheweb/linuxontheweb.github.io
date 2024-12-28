@@ -193,7 +193,7 @@ const test_coms = [
 "noret",
 "nullret",
 "badobj",
-"baddarrobj",
+"badarrobj",
 "oktypedarr",
 "badtypedarr",
 "weirdarr",
@@ -7864,7 +7864,7 @@ const handle_tab = async(pos_arg, arr_arg)=>{//«
 
 //At the end of a string with exactly one non-backtick quote character...
 //Just a quick and dirty way to do tab completion with quotes
-
+cwarn("Quote Tab Completion!");
 		let have_quote;
 		let s="";
 

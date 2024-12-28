@@ -382,8 +382,64 @@ this.wrapdiv = wrapdiv;
 this.overlay = overlay;
 this.statdiv = statdiv;
 }//»
+async execute(str, opts={}){//«
+
+	this.env['USER'] = globals.CURRENT_USER;
+	this.curShell = new this.Shell(this);
+	let gotstr = str.trim();
+
+	str = str.replace(/\x7f/g, "");
+
+	let env = {};
+	for (let k in this.env){
+		env[k]=this.env[k];
+	}
+
+	const heredocScanner=async(eof_tok)=>{//«
+		let doc = [];
+		let didone = false;
+		let prmpt="> ";
+		let rv;
+		while (true){
+			let rv = await this.readLine(prmpt);
+			if (rv===eof_tok) break;
+			doc.push(rv);
+			didone = true;
+		}
+		return doc;
+	}//»
+
+//PLDYHJKU
+	await this.curShell.execute(str,{env, heredocScanner, isInteractive: true});
+	this.responseEnd();
+
+	if (opts.noSave) return;
+
+	let ind = this.history.indexOf(gotstr);
+	if (ind >= 0) {
+		this.history.splice(ind, 1);
+	}
+	else{
+cwarn("NOT WRITING!!!", gotstr);
+//		write_to_history(gotstr);
+	}
+	this.history.push(gotstr);
+}
+//»
 
 //Util«
+
+tryKill(){//«
+	if (this.isEditor) {
+		this.actor.stat_message="Really close the window? [Y/n]";
+		this.render();
+		this.actor.set_ask_close_cb();
+	}
+	else{
+cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
+	}
+}
+//»
 
 async getch(promptarg, def_ch){//«
 	if (promptarg){
@@ -424,17 +480,6 @@ setTabSize(s){//«
 	return true;
 }
 //»
-tryKill(){//«
-	if (this.isEditor) {
-		this.actor.stat_message="Really close the window? [Y/n]";
-		this.render();
-		this.actor.set_ask_close_cb();
-	}
-	else{
-cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
-	}
-}
-//»
 curWhite(){this.curBG="#ddd";this.curFG="#000";}
 curBlue(){this.curBG="#00f";this.curFG="#fff";}
 executeBackgroundCommand(s){//«
@@ -471,28 +516,6 @@ cwarn("No history lines from", path);
 }
 //»
 
-async saveSpecialCommand(){//«
-	let s = this.getComArr().join("");
-	if (!s.match(/[a-z]/i)) {
-log("Not saving", s);
-		return;
-	}
-	if (await fsapi.writeFile(HISTORY_PATH_SPECIAL, `${s}\n`, {append: true})) return this.doOverlay(`Saved special: ${s}`);
-	poperr(`Could not write to: ${HISTORY_PATH_SPECIAL}!`);
-};
-//»
-async writeToHistory(str){//«
-	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
-cwarn(`Could not write to history: ${HISTORY_PATH}`);
-	}
-};
-//»
-async saveHistory(){//«
-	if (!await fsapi.writeFile(HISTORY_PATH, this.history.join("\n")+"\n")){
-		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
-	}
-};
-//»
 togglePaste(){//«
 	const{textarea}=this;
 	if (textarea){
@@ -548,215 +571,6 @@ wrapLine(str){//«
 }
 //»
 
-fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
-
-/*_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
-here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
-efficiently) is an outstanding issue...*/
-	const{w}=this;
-	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
-	let pad = this.lsPadding;
-//	if (!start_from) start_from=0;
-	if (col_arg == 1) {//«
-		for (let i=0; i < arr.length; i++) {
-			if (w >= arr[i].length) ret.push(arr[i]);
-			else {
-				let iter = 0;
-				while (true) {
-					let str = arr[i].substr(iter, iter+w);
-					if (!str) break;
-					ret.push(str);
-					iter += w;
-				}
-			}
-		}
-		return;
-	}//»
-	const min_col_wid=(col_num, use_cols)=>{//«
-		let max_len = 0;
-		let got_len;
-		let use_pad = pad;
-		for (let i=col_num; i < num ; i+=use_cols) {
-			if (i+1 == use_cols) use_pad = 0;
-			got_len = lens[i]+use_pad;
-			if (got_len > max_len) max_len = got_len;
-		}
-		return max_len;
-	};//»
-	let num = arr.length;
-	let col_wids = [];
-	let col_pos = [0];
-	let max_cols = col_arg;
-	if (!max_cols) {
-
-//SURMPLRK
-//Just need to find the number of entries that would fit on the first row.
-//The next rows (if there are any) cannot possibly raise the max_cols value.
-//If it changes, the next rows can only make max_cols go down.
-//It is absolutely insane to assume to that each file name is 1 character long!!! (This makes max_cols ridiculously big, e.g. 80/3 => 26.666666)
-//                    v---------------------------------------^^^^^^^^^^^^^^^^
-//		let min_wid = 1 + pad;
-//		max_cols = Math.floor(w/min_wid);
-//		if (arr.length < max_cols) max_cols = arr.length;
-
-//Updated to this:
-		let tot_len = 0;
-		for (let i=0; i < arr.length; i++){
-			tot_len += arr[i].length;
-			if (tot_len > w) {
-				max_cols = i;
-				if (!max_cols) {
-//This means that the first name is too big, and so we will only have a 1 column listing
-					max_cols = 1;
-				}
-				break;
-			}
-			tot_len+=this.lsPadding;
-		}
-		if (!max_cols) {
-//We never broke out of the loop, so we can put the entire listing on one line,
-//meaning that there are as many columns as there are directory entries.
-			max_cols = arr.length;
-		}
-//End update
-
-	}
-
-	let num_rows = Math.floor(num/max_cols);
-	let num_cols = max_cols;
-	let rem = num%num_cols;
-	let tot_wid = 0;
-	let min_wid;
-	for (let i=0; i < max_cols; i++) {
-		min_wid = min_col_wid(i, num_cols);
-		tot_wid += min_wid;
-		if (tot_wid > w) {
-			this.fmtLs(arr, lens, ret, types, color_ret, (num_cols - 1));
-			return;
-		}
-		col_wids.push(min_wid);
-		col_pos.push(tot_wid);
-	}
-	col_pos.pop();
-	let matrix = [];
-	let row_num;
-	let col_num;
-	let cur_row = -1;
-	let xpos;
-	for (let i=0; i < num; i++) {
-		let typ;
-		if (types) typ = types[i];
-		let color;
-		if (typ==dirType) color="#909fff";
-		else if (typ==linkType) color="#0cc";
-		else if (typ==badLinkType) color="#f00";
-		else if (typ==idbDataType) color="#cc0";
-		col_num = Math.floor(i%num_cols);
-		row_num = Math.floor(i/num_cols);
-		if (row_num != cur_row) {
-			matrix.push([]);
-			xpos=0;
-		}
-		let nm = arr[i];
-		let str = nm + " ".rep(col_wids[col_num] - nm.length);
-		matrix[row_num][col_num] = str;
-		if (color_ret) {
-			let use_row_num = row_num;
-			if (!color_ret[use_row_num]) color_ret[use_row_num] = {};
-			let uselen = nm.length;
-			if (arr[i].match(/\/$/)) uselen--;
-			if (color) color_ret[use_row_num][xpos] = [uselen, color];
-		}
-		xpos += str.length;
-		cur_row = row_num;
-	}
-	for (let i=0; i < matrix.length; i++) ret.push(matrix[i].join(""));
-	return;
-}
-//»
-fmt2(str, type, maxlen){//«
-    if (type) str = type + ": " + str;
-    let ret = [];
-    let w = this.w;
-    let dopad = 0;
-    if (maxlen&&maxlen < w) {
-        dopad = Math.floor((w - maxlen)/2);
-        this.w = maxlen;
-    }
-
-    let wordarr = str.split(/\x20+/);
-    let curln = "";
-    for (let i=0; i < wordarr.length; i++){
-        let w1 = wordarr[i];
-        if (((curln + " " + w1).length) >= w){
-            if (dopad) ret.push((" ".repeat(dopad))+curln);
-            else ret.push(curln);
-            curln = w1;
-        }
-        else {
-            if (!curln) curln = w1;
-            else curln += " " + w1;
-        }
-        if (i+1==wordarr.length) {
-            if (dopad) ret.push((" ".repeat(dopad))+curln);
-            else ret.push(curln);
-        }
-    }
-    return ret;
-}
-//»
-fmt(str, startx){//«
-	const{w}=this;
-	if (str === this.EOF) return [];
-	let use_max_len = this.getMaxLen();
-	if (str instanceof Blob) str = "[Blob " + str.type + " ("+str.size+")]"
-	else if (str.length > use_max_len) str = str.slice(0, use_max_len)+"...";
-	let ret = [];
-	let iter =  0;
-	let do_wide = null;
-	let marr;
-	if (str.match && str.match(/[\x80-\xFE]/)) {
-		do_wide = true;
-		let arr = str.split("");
-		for (let i=0; i < arr.length; i++) {
-			if (arr[i].match(/[\x80-\xFE]/)) {
-				arr.splice(i+1, 0, "\x03");
-				i++;
-			}
-		}
-		str = arr.join("");
-	}
-	let doadd = 0;
-	if (startx) doadd = startx;
-	if (!str.split) str = str+"";
-	let arr = str.split("\n");
-	let ln;
-	for (ln of arr) {
-		while((ln.length+doadd) >= w) {
-			iter++;
-			let val = ln.slice(0,w-doadd);
-			if (do_wide) val = val.replace(/\x03/g, "");
-			ret.push(val);
-			ln = ln.slice(w-doadd);
-			str = ln;
-			doadd = 0;
-		}
-	}
-	if (do_wide) ret.push(ln.replace(/\x03/g, ""));
-	else ret.push(ln);
-	return ret;
-}
-//»
-fmtLinesSync(arr, startx){//«
-    let all = [];
-	let usestart = startx;
-    for (let i=0; i < arr.length; i++) {
-		all = all.concat(this.fmt(arr[i],usestart));
-		usestart = 0;
-	}
-    return all;
-}
-//»
 objToString(obj ){//«
 	if (obj.id) return `[object ${obj.constructor.name}(${obj.id})]`;
 	return `[object ${obj.constructor.name}]`;
@@ -846,23 +660,6 @@ copyText(str, mess){//«
 	textarea.select();
 	document.execCommand("copy")
 	this.doOverlay(mess);
-}
-//»
-doClearLine(){//«
-
-	const{lines}=this;
-	if (this.curShell) return;
-	let str="";
-	for (let i = lines.length; i > this.y+this.scrollNum+1; i--) str = lines.pop().join("") + str;
-	let ln = lines[this.y+this.scrollNum];
-	str = ln.slice(this.x).join("") + str;
-	this.lines[this.y+this.scrollNum] = ln.slice(0, this.x);	
-	if (this.curPromptLine < this.scrollNum) {
-		this.scrollNum -= (this.scrollNum - this.curPromptLine);
-		this.y=0;
-	}
-	this.currentCutStr = str;
-	this.render();
 }
 //»
 doCopyBuffer()  {//«
@@ -965,7 +762,7 @@ checkLineLen(dy){//«
 cy(){//«
 	return this.y + this.scrollNum;
 }//»
-trimLines(){while (this.curPromptLine+1 != this.lines.length) this.lines.pop();}
+
 
 //»
 //Render«
@@ -1299,7 +1096,7 @@ if (num2 > this.w) {
 }//»
 refresh(opts){this.render(opts);}
 generateStatHtml(){//«
-const{statdiv}=this;
+	const{statdiv}=this;
 	this.statSpans = [];
 	statdiv.innerHTML="";
 	let n_cont_lines = this.nRows - this.numStatLines;
@@ -1318,10 +1115,11 @@ const{statdiv}=this;
 }
 //»
 updateStatLines(arr){//«
-if (!this.numStatLines) return;
+
+	if (!this.numStatLines) return;
 	let arrlen = arr.length;
 	if (arrlen!=this.numStatLines){
-cerr("What is the array size different from the this.numStatLines????");
+cerr("What is the array size different from the numStatLines????");
 		return;
 	}
 	if (arrlen==1) {
@@ -1336,8 +1134,9 @@ cerr("What is the array size different from the this.numStatLines????");
 //Curses«
 
 getGrid(){//«
+
 	const{tabdiv, wrapdiv}=this;
-	let tdiv = tabdiv;
+//	let tabdiv = tabdiv;
 	if (!(wrapdiv._w&&wrapdiv._h)) {
 		if (this.Win.killed) return;
 cerr("DIMS NOT SET");
@@ -1351,78 +1150,69 @@ cerr("DIMS NOT SET");
 	while (true) {
 		if (this.Win.killed) return;
 		str+=usech;
-		tdiv.innerHTML = str;
-		if (tdiv.scrollWidth > wrapdiv._w) {
-			tdiv.innerHTML = usech.repeat(str.length-1);
-			wrapdiv._w = tdiv.clientWidth;
+		tabdiv.innerHTML = str;
+		if (tabdiv.scrollWidth > wrapdiv._w) {
+			tabdiv.innerHTML = usech.repeat(str.length-1);
+			wrapdiv._w = tabdiv.clientWidth;
 			this.nCols = str.length - 1;
 			break;
 		}
 		iter++;
-		if (iter > 10000) {
+		if (iter > 1000) {
 log(wrapdiv);
-			cwarn("INFINITE LOOP ALERT DOING WIDTH: " + tdiv.scrollWidth + " > " + this.w);
+			cwarn("INFINITE LOOP ALERT DOING WIDTH: " + tabdiv.scrollWidth + " > " + this.w);
 			return 
 		}
 	}
 	str = usech;
 	iter = 0;
 	while (true) {
-		tdiv.innerHTML = str;
-		if (tdiv.scrollHeight > wrapdiv._h) {
+		tabdiv.innerHTML = str;
+		if (tabdiv.scrollHeight > wrapdiv._h) {
 			let newarr = str.split("\n");
 			newarr.pop();
-			tdiv.innerHTML = newarr.join("\n");
-			wrapdiv._h = tdiv.clientHeight;
+			tabdiv.innerHTML = newarr.join("\n");
+			wrapdiv._h = tabdiv.clientHeight;
 			this.nRows = newarr.length;
 			break;
 		}
 		str+="\n"+usech;
 		iter++;
-		if (iter > 10000) {
+		if (iter > 1000) {
 log(wrapdiv);
-			return cwarn("INFINITE LOOP ALERT DOING HEIGHT: " + tdiv.scrollHeight + " > " + this.h);
+			return cwarn("INFINITE LOOP ALERT DOING HEIGHT: " + tabdiv.scrollHeight + " > " + this.h);
 		}
 	}
-	tdiv.innerHTML="";
+	tabdiv.innerHTML="";
 	wrapdiv._over="hidden";
 }
 //»
-clearTable(){//«
+clear(){//«
 	this.lines = [];
 	this.lineColors = [];
 	this.y=0;
 	this.scrollNum = 0;
 	this.render();
-}
-//»
-clear(){//«
-//log("????");
-//const clear=(if_keep_buffer)=>{
-//	clear_table(if_keep_buffer);
-	clear_table();
-//	if (if_keep_buffer) this.curPromptLine = y;
-}
-
-//»
+}//»
 shiftLine(x1, y1, x2, y2){//«
-	let uselines = this.lines;
+	const{lines, scrollNum}=this;
 	let str_arr = [];
 	let start_len = 0;
-	if (uselines[this.scrollNum + y1]) {
-		str_arr = uselines[this.scrollNum + y1].slice(x1);
-		start_len = uselines[this.scrollNum + y1].length;
+	if (lines[scrollNum + y1]) {
+		str_arr = lines[scrollNum + y1].slice(x1);
+		start_len = lines[scrollNum + y1].length;
 	}
 	if (y1 == (y2 + 1)) {
-		if (uselines[this.scrollNum + y2]) uselines[this.scrollNum + y2] = uselines[this.scrollNum + y2].concat(str_arr);
-		uselines.splice(y1 + this.scrollNum, 1);
+		if (lines[scrollNum + y2]) lines[scrollNum + y2] = lines[scrollNum + y2].concat(str_arr);
+		lines.splice(y1 + scrollNum, 1);
 	}
 	return str_arr;
 }
 //»
 lineBreak(){//«
-	if (this.lines[this.lines.length-1] && !this.lines[this.lines.length-1].length) return;
-	this.lines.push([]);
+	const{lines}=this;
+	if (lines[lines.length-1] && !lines[lines.length-1].length) return;
+	lines.push([]);
 	this.y++;
 	this.scrollIntoView();
 	this.render();
@@ -1430,11 +1220,12 @@ lineBreak(){//«
 //»
 scrollIntoView(which){//«
 	if (!this.h) return;
+	const{lines}=this;
 	const doscroll=()=>{//«
-		if (this.lines.length-this.scrollNum+this.numStatLines <= this.h) return false;
+		if (lines.length-this.scrollNum+this.numStatLines <= this.h) return false;
 		else {
 			if (this.y>=this.h) {
-				this.scrollNum=this.lines.length-this.h+this.numStatLines;
+				this.scrollNum=lines.length-this.h+this.numStatLines;
 				this.y=this.h-1;
 			}
 			else {
@@ -1446,10 +1237,9 @@ scrollIntoView(which){//«
 	};//»
 	let did_scroll = false;
 	while (doscroll()) did_scroll = true;
-	this.y=this.lines.length - 1 - this.scrollNum;
+	this.y=lines.length - 1 - this.scrollNum;
 	return did_scroll;
-}
-//»
+}//»
 resize()  {//«
 	const{actor, tabdiv, wrapdiv, main}=this;
 	if (this.Win.killed) return;
@@ -1486,55 +1276,255 @@ resize()  {//«
 		actor.resize(this.w,this.h);
 		return;
 	}
-
 	this.render();
 }
 //»
 
-//»
-//Execute/Parse/Prompt«
-
-async execute(str, opts={}){//«
-	this.env['USER'] = globals.CURRENT_USER;
-	this.curShell = new this.Shell(this);
-	let gotstr = str.trim();
-
-	str = str.replace(/\x7f/g, "");
-
-	let env = {};
-	for (let k in this.env){
-		env[k]=this.env[k];
+charLeft(){//«
+	if (this.curScrollCommand) {
+		this.insertCurScroll();
 	}
-	let heredocScanner=async(eof_tok)=>{
-		let doc = [];
-		let didone = false;
-		let prmpt="> ";
-		let rv;
-		while (true){
-			let rv = await this.read_line(prmpt);
-			if (rv===eof_tok) break;
-			doc.push(rv);
-			didone = true;
+	if (this.x == 0) {
+		if (this.cy() == 0) return;
+		if (this.cy() > this.curPromptLine) {
+			if (this.y==0) {
+				this.scrollNum--;
+			}
+			else this.y--;
+			this.x = this.lines[this.cy()].length;
+			if (this.x==this.w) this.x--;
+			if (this.x<0) this.x = 0;
+			this.render();
+			return;
 		}
-		return doc;
-	};
-
-//PLDYHJKU
-	await this.curShell.execute(str,{env, heredocScanner, isInteractive: true});
-	this.responseEnd();
-	if (opts.noSave) return;
-
-	let ind = this.history.indexOf(gotstr);
-	if (ind >= 0) {
-		this.history.splice(ind, 1);
+		else return;
 	}
-	else{
-cwarn("NOT WRITING!!!", gotstr);
-//		write_to_history(gotstr);
+	if (this.cy()==this.curPromptLine && this.x==this.promptLen) return;
+	this.x--;
+	this.render();
+}//»
+charRight(){//«
+
+	if (this.curScrollCommand) this.insertCurScroll();
+	//Or if this is less than w-2 with a newline for a CONT like current CLI environment.
+	let nextline = this.lines[this.cy()+1];
+	let thisline = this.lines[this.cy()];
+	let thisch = thisline[this.x];
+	let thislinelen = thisline.length;
+	if (this.x == this.w-1 || ((this.x < this.w-1) && nextline && ((this.x==0&&!thislinelen) || (this.x==this.lines[this.cy()].length)))) {//«
+		if (this.x<this.w-1){
+			if (!thisch) {
+				if (!nextline) return;
+			}
+		}
+		else if (!thisch) return;
+		if (this.lines[this.cy() + 1]) {
+			this.x=0;
+			if (this.y+1==this.h) this.scrollNum++;
+			else this.y++;
+			this.render();
+		}
+		else { 
+			this.lines.push([]);
+			this.x=0;
+			this.y++;
+			if (!this.scrollIntoView(9)) this.render();
+			return;
+		}
+	}//»
+	else {
+		if (this.x==thislinelen||!thisch) return;
+		this.x++;
+		this.render();
 	}
-	this.history.push(gotstr);
-}
+
+}//»
+wordLeft(){//«
+	if (this.curScrollCommand) this.insertCurScroll();
+	let arr = this.getComArr();
+	let pos;
+	let start_x;
+	let char_pos = null;
+	let use_pos = null;
+	let add_x = this.getComPos();
+	if (add_x==0) return;
+	start_x = add_x;
+	if (arr[add_x] && arr[add_x] != " " && arr[add_x-1] == " ") add_x--;
+	if (!arr[add_x] || arr[add_x] == " ") {
+		add_x--;
+		while(add_x > 0 && (!arr[add_x] || arr[add_x] == " ")) add_x--;
+		char_pos = add_x;
+	}
+	else char_pos = add_x;
+	if (char_pos > 0 && arr[char_pos-1] == " ") use_pos = char_pos;
+	while(char_pos > 0 && arr[char_pos] != " ") char_pos--;
+	if (char_pos == 0) use_pos = 0;
+	else use_pos = char_pos+1;
+	for (let i=0; i < start_x - use_pos; i++) this.handleArrow(LEFT_KEYCODE, "");
+}//»
+wordRight(){//«
+
+	if (this.curScrollCommand) this.insertCurScroll();
+	let arr;
+	arr = this.getComArr();
+	let pos;
+	let start_x;
+	let char_pos = null;
+	let use_pos = null;
+	let add_x = this.getComPos();
+	if (add_x == arr.length) return;
+	else if (!arr[add_x]) return;
+	start_x = add_x;
+	if (arr[add_x] != " ") {
+		add_x++;
+		while(add_x != arr.length && arr[add_x] != " ") add_x++;
+		char_pos = add_x;
+		if (char_pos == arr.length) use_pos = char_pos;
+		else {
+			char_pos++;
+			while(char_pos != arr.length && arr[char_pos] == " ") char_pos++;
+			use_pos = char_pos;
+		}
+	}
+	else {
+		add_x++;
+		while(add_x != arr.length && arr[add_x] == " ") add_x++;
+		use_pos = add_x;
+	}
+	for (let i=0; i < use_pos - start_x; i++) this.handleArrow(KC["RIGHT"], "");
+}//»
+seekLineStart(){//«
+	if (this.curScrollCommand) this.insertCurScroll();
+	this.x=this.promptLen;
+	this.y=this.curPromptLine - this.scrollNum;
+	if (this.y<0) {
+		this.scrollNum+=this.y;
+		this.y=0;
+	}
+	this.render();
+}//»
+seekLineEnd(){//«
+	if (this.curScrollCommand) this.insertCurScroll();
+	this.y=this.lines.length-this.scrollNum-1;
+	if (this.y>=this.h){
+		this.scrollNum+=this.y-this.h+1
+		this.y=this.h-1;
+	}
+	if (this.lines[this.cy()].length == 1 && !this.lines[this.cy()][0]) this.x = 0;
+	else this.x=this.lines[this.cy()].length;
+	this.render();
+}//»
+
 //»
+//History/Saving«
+
+historyUp(){//«
+	if (!(this.bufPos < this.history.length)) return;
+	if (this.commandHold == null && this.bufPos == 0) {
+		this.commandHold = this.getComArr().join("");
+		this.commandPosHold = this.getComPos() + this.promptLen;
+	}
+	this.bufPos++;
+	let str = this.history[this.history.length - this.bufPos];
+	if (!str) return;
+	let diffy = this.scrollNum - this.curPromptLine;
+	while (this.curPromptLine+1 != this.lines.length) { 
+		if (!this.lines.length){
+			cerr("COULDA BEEN INFINITE LOOP: "+(this.curPromptLine+1) +" != "+this.lines.length);
+			break;
+		}
+		this.lines.pop();
+	}
+	this.handleLineStr(str.trim(), true);
+	this.comScrollMode = true;
+}//»
+historyDown(){//«
+
+	if (!(this.bufPos > 0)) return;
+
+	this.bufPos--;
+	if (this.commandHold==null) return;
+	let pos = this.history.length - this.bufPos;
+	if (this.bufPos == 0) {
+		this.trimLines();
+		this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
+		this.x = this.commandPosHold;
+		this.commandHold = null;
+		this.render();
+	}
+	else {
+		let str = this.history[this.history.length - this.bufPos];
+		if (str) {
+			this.trimLines();
+			this.handleLineStr(str.trim(), true);
+			this.comScrollMode = true;
+		}
+	}
+}//»
+historyUpMatching(){//«
+	if (!(this.bufPos < this.history.length)) return;
+	if (this.commandHold == null && this.bufPos == 0) {
+		this.commandHold = this.getComArr().join("");
+		this.commandPosHold = this.getComPos() + this.promptLen;
+	}
+	this.bufPos++;
+	let re = new RegExp("^" + this.commandHold);
+	for (let i = this.history.length - this.bufPos; this.bufPos <= this.history.length; this.bufPos++) {
+		let str = this.history[this.history.length - this.bufPos];
+		if (re.test(str)) {
+			this.trimLines();
+			this.handleLineStr(str.trim(), true);
+			this.comScrollMode = true;
+			break;
+		}
+	}
+}//»
+historyDownMatching(){//«
+	if (!(this.bufPos > 0 && this.commandHold)) return;
+	this.bufPos--;
+	let re = new RegExp("^" + this.commandHold);
+	for (let i = this.history.length - this.bufPos; this.bufPos > 0; this.bufPos--) {
+		let str = this.history[this.history.length - this.bufPos];
+		if (re.test(str)) {
+			this.trimLines();
+			this.handleLineStr(str.trim(), true);
+			this.comScrollMode = true;
+			return;
+		}
+	}
+	if (this.commandHold) {
+		this.trimLines();
+		this.handleLineStr(this.commandHold.trim(), true);
+		this.comScrollMode = true;
+		this.commandHold = null;
+	}
+}//»
+async saveSpecialCommand(){//«
+	let s = this.getComArr().join("");
+	if (!s.match(/[a-z]/i)) {
+log("Not saving", s);
+		return;
+	}
+	if (await fsapi.writeFile(HISTORY_PATH_SPECIAL, `${s}\n`, {append: true})) return this.doOverlay(`Saved special: ${s}`);
+	poperr(`Could not write to: ${HISTORY_PATH_SPECIAL}!`);
+};
+//»
+async writeToHistory(str){//«
+	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
+cwarn(`Could not write to history: ${HISTORY_PATH}`);
+	}
+};
+//»
+async saveHistory(){//«
+	if (!await fsapi.writeFile(HISTORY_PATH, this.history.join("\n")+"\n")){
+		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
+	}
+};
+//»
+
+//»
+//Prompt/Command line«
+
 getComPos(){//«
 	let add_x=0;
 	if (this.cy() > this.curPromptLine) {
@@ -1546,31 +1536,21 @@ getComPos(){//«
 }
 //»
 getComArr(from_x){//«
-	let uselines = this.lines;
+	const{lines}=this;
 	let com_arr = [];
 	let j, line;
-	for (let i = this.curPromptLine; i < uselines.length; i++) {
-		line = uselines[i];
+	for (let i = this.curPromptLine; i < lines.length; i++) {
+		line = lines[i];
 		if (i==this.curPromptLine) j=this.promptLen;
 		else j=0;
 		let len = line.length;
 		for (; j < len; j++) com_arr.push(line[j]);
-		if (len < this.w && i < uselines.length-1) com_arr.push("\n");
+		if (len < this.w && i < lines.length-1) com_arr.push("\n");
 	}
 	return com_arr;
 }
 //»
 async getCommandArr (dir, arr, pattern){//«
-	const dokids = kids=>{
-		if (!kids) return;
-		let keys = Object.keys(kids);
-		for (let k of keys){
-			let app = kids[k].appName;
-			if ((!app||app=="Com") && re.test(k)){
-				match_arr.push([k, "Command"]);
-			}
-		}
-	};
 	let match_arr = [];
 	let re = new RegExp("^" + pattern);
 	for (let i=0; i < arr.length; i++) {
@@ -1596,9 +1576,7 @@ getPromptStr(){//«
 //»
 setPrompt(opts={})  {//«
 	let use_str = opts.prompt || this.getPromptStr();
-
 	this.Win.title=use_str.replace(/..$/,"");
-	
 	let plines;
 	if (use_str==="") plines = [[""]];
 	else{
@@ -1606,7 +1584,6 @@ setPrompt(opts={})  {//«
 		plines = [use_str.split("")];
 	}
 	let line;
-	let use_col = null;
 	let len_min1;
 	if (!this.lines.length) {
 		this.lines = plines;
@@ -1621,12 +1598,10 @@ setPrompt(opts={})  {//«
 			this.lines.push(line);
 			len_min1++;
 		}
-		if (use_col) this.lineColors[len_min1] = {'0': [line.length, use_col]};
 		while(plines.length) {
 			line = plines.shift();
 			this.lines.push(line);
 			len_min1++;
-			if (use_col) this.lineColors[len_min1] = {'0': [line.length, use_col]};
 		}
 		this.curPromptLine = len_min1;
 		this.scrollIntoView();
@@ -1637,6 +1612,8 @@ setPrompt(opts={})  {//«
 	this.y=this.lines.length - 1 - this.scrollNum;
 }
 //»
+
+trimLines(){while (this.curPromptLine+1 != this.lines.length) this.lines.pop();}
 insertCurScroll()  {//«
 	this.comScrollMode = false;
 	if (this.linesHold2) this.lines = this.linesHold2.slice(0, this.lines.length);
@@ -1659,6 +1636,85 @@ insertCurScroll()  {//«
 	return str;
 }
 //»
+insertCutStr(){//«
+	for (let i=0; i < this.currentCutStr.length; i++) this.handleLetterPress(this.currentCutStr[i]);
+}//»
+doClearLine(){//«
+
+	const{lines}=this;
+	if (this.curShell) return;
+	let str="";
+	for (let i = lines.length; i > this.y+this.scrollNum+1; i--) str = lines.pop().join("") + str;
+	let ln = lines[this.y+this.scrollNum];
+	str = ln.slice(this.x).join("") + str;
+	this.lines[this.y+this.scrollNum] = ln.slice(0, this.x);	
+	if (this.curPromptLine < this.scrollNum) {
+		this.scrollNum -= (this.scrollNum - this.curPromptLine);
+		this.y=0;
+	}
+	this.currentCutStr = str;
+	this.render();
+}
+//»
+
+
+//»
+//Completion«
+
+async quoteCompletion(use_dir, tok0, arr, arr_pos){//«
+//At the end of a string with exactly one non-backtick quote character...
+//Just a quick and dirty way to do tab completion with quotes
+
+	let contents;
+	let have_quote;
+	let s="";
+	for (let i=arr_pos-1; i >=0; i--){
+		let ch = arr[i];
+		if (ch.match(/[\x22\x27]/)){
+			have_quote = ch;
+			break;
+		}
+		s=`${ch}${s}`;
+	}
+	if (s.match(/\x2f/)){
+		if (s.match(/^\x2f/)) use_dir="";
+		let ar = s.split("/");
+		s = ar.pop();
+		use_dir=`${use_dir}/${ar.join("/")}`;
+	}
+	let use_str= s.replace(/([\[(+*?])/g,"\\$1");
+	let ret = await this.getDirContents(use_dir, use_str,{if_cd: tok0==="cd", if_keep_ast: true});
+	if (!ret.length) return;
+	if(ret.length===1){
+		let rem = ret[0][0].slice(s.length);
+		for (let ch of rem) this.handleLetterPress(ch);
+		if (ret[0][1]===FOLDER_APP){
+			this.handleLetterPress("/");
+			this.awaitNextTab = true;
+		}
+		else if (ret[0][1]==="Link"){
+			let obj = await fsapi.pathToNode(`${use_dir}/${use_str}${rem}`);
+			if (obj && obj.appName===FOLDER_APP){
+				this.handleLetterPress("/");
+				this.awaitNextTab = true;
+			}
+			else this.handleLetterPress(have_quote);
+		}
+		else this.handleLetterPress(have_quote);
+		return;
+	}
+	if (this.awaitNextTab){
+		contents = ret;
+		this.doContents(contents, use_dir, "", arr_pos);
+		return;
+	}
+	let all=[];
+	for (let ar of ret) all.push(ar[0]);
+	let rem = util.sharedStart(all).slice(s.length);
+	for (let ch of rem) this.handleLetterPress(ch);
+	this.awaitNextTab = true;
+
+}//»
 async getDirContents(dir, pattern, opts={}){//«
 	let {if_cd, if_keep_ast} = opts;
 	const domatch=async()=>{//«
@@ -1684,7 +1740,6 @@ async getDirContents(dir, pattern, opts={}){//«
 				if (!kid) continue;
 			}
 			let useapp = kid.appName;
-//			if (if_cd && useapp !== FOLDER_APP) continue;
 			let ret = [keys[i], useapp];
 			if (useapp == "Link") ret.push(kid.link);
 			if (pattern == "" || re.test(keys[i])) match_arr.push(ret);
@@ -1706,44 +1761,440 @@ async getDirContents(dir, pattern, opts={}){//«
 	return domatch();
 }
 //»
+async doGetDirContents(use_dir, tok, tok0, arr_pos)  {//«
+	let ret = await this.getDirContents(use_dir, tok, {if_cd: tok0==="cd"});
+	if (!ret.length) return;
+	this.doContents(ret, use_dir, tok, arr_pos);
+}//»
+async doContents(contents, use_dir, tok, arr_pos){//«
+	if (contents.length == 1) {//«
+
+//METACHAR_ESCAPE
+
+//\x22 -> "
+//\x27 -> '
+//\x60 -> `
+//\x5b -> [
+		let chars = contents[0][0].replace(/[ \x22\x27\x5b\x60#~{<>$|&!;()]/g, "\\$&").split("");
+		let type = contents[0][1];
+		tok = tok.replace(/\*$/,"");
+		let str = tok;
+		let handle_chars = '';
+		for (let i=tok.length; i < chars.length; i++) {
+			let gotch = chars[i];
+			str+=gotch;
+//			this.handleLetterPress(gotch);
+			handle_chars+=gotch;
+		}
+		if (type==FOLDER_APP) {
+//			this.handleLetterPress("/");//"/"
+			handle_chars+="/";
+			let rv = await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
+			if (!rv) return cerr("hdk76FH3");
+		}
+		else if (type=="appDir"||type=="libDir"){
+//			this.handleLetterPress(".");//"/"
+			handle_chars+=".";
+		}
+		else if (type=="Link") {
+			let link = contents[0][2];
+			if (!link){
+cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
+			}
+			else if (!link.match(/^\x2f/)) {
+//cwarn("this.handleTab():  GOWDA link YO NOT FULLPATH LALA");
+			}
+			else {
+				let obj = await fsapi.pathToNode(link);
+				if (obj&&obj.appName==FOLDER_APP) {
+					if (this.awaitNextTab) {
+//						this.handleLetterPress("/");
+						handle_chars+="/";
+					}
+					this.awaitNextTab = true;
+				}
+				else {
+					if (!this.lines[this.cy()][this.x]) {
+//						this.handleLetterPress(" ");
+						handle_chars+=" ";
+					}
+				}
+			}
+		}
+		else {
+			if (!this.lines[this.cy()][this.x]) {
+//				this.handleLetterPress(" ");
+				handle_chars+=" ";
+			}
+		}
+//		if (this.ssh_server) return this.ssh_server.send(JSON.stringify({chars: handle_chars}));
+		for (let c of handle_chars) this.handleLetterPress(c);
+	}//»
+	else if (contents.length > 1) {//«
+		if (this.awaitNextTab) {//«
+			let diff = this.cy() - this.curPromptLine;
+//			let repeat_arr = this.getComArr();
+			let ret_arr = [];
+			for (let i=0; i < contents.length; i++) {
+				let arr = contents[i];
+				let nm = arr[0];
+				if (arr[1]===FOLDER_APP) nm+="/";
+				ret_arr.push(nm);
+			}
+			let names_sorted = ret_arr.sort();
+//			if (this.ssh_server) {
+//				return this.ssh_server.send(JSON.stringify({names: names_sorted}));
+//			}
+			this.responseComNames(names_sorted);
+		}//»
+		else {//«
+			if (!tok.length) {this.awaitNextTab = true;return;}
+			let max_len = tok.length;
+			let got_substr = "";
+			let curstr = tok;
+			let curpos = tok.length;
+			TABLOOP: while(true) {
+				let curch = null;
+				for (let arr of contents) {
+					let word = arr[0];
+					if (curpos == word.length) break TABLOOP;
+					if (!curch) curch = word[curpos];
+					else if (curch!==word[curpos]) break TABLOOP;
+				}
+				curstr += curch;
+				curpos++;
+			}
+			got_substr = curstr;
+
+			let got_rest = got_substr.substr(tok.length);
+			if (got_rest.length > 0) {
+				if (contents.length > 1)this.awaitNextTab = true;
+				else this.awaitNextTab = null;
+				
+				let chars = got_rest.split("");
+				for (let i=0; i < chars.length; i++) {
+					let gotch = chars[i];
+					if (gotch == " ") gotch = "\xa0";
+					this.handleLetterPress(gotch);
+				}
+			}
+			else this.awaitNextTab = true;
+		}//»
+	}//»
+}
+//»
+async doCompletion(){//«
+
+	let contents;
+	let use_dir = this.cur_dir;
+	let arr_pos = this.getComPos();
+	let arr = this.getComArr();
+
+	let new_arr = arr.slice(0, arr_pos);
+	let com_str = new_arr.join("");
+	new_arr = com_str.split(/ +/);
+	if (!new_arr[0] && new_arr[1]) new_arr.shift();
+	let tokpos = new_arr.length;
+	if (tokpos > 1) {
+		if (new_arr[new_arr.length-2].match(/[\x60\(&|;] *$/)) tokpos = 1;
+	}
+	let tok0 = new_arr[0];
+	if ((com_str.match(/[\x22\x27]/g)||[]).length===1){
+		this.quoteCompletion(use_dir, tok0, arr, arr_pos);
+		return;
+	}
+	let tok = new_arr.pop();
+	tok = tok.replace(/^[^<>=]*[<>=]+/,"")
+	if (tok.match(/^[^\x60;|&(]*[\x60;|&(][\/.a-zA-Z_]/)) {
+		tok = tok.replace(/^[^\x60;|&(]*[\x60;|&(]/,"");
+		tokpos = 1;
+	}
+	let got_path = null;
+	if (tok.match(/\x2f/)) {//«
+		tok = tok.replace(/^~\x2f/, "/home/"+this.env.USER+"/");
+		got_path = true;
+		let dir_arr = tok.split("/");
+		tok = dir_arr.pop();
+		let dir_str;
+		let new_dir_str;
+		if (dir_arr.length == 1 && dir_arr[0] == "") new_dir_str = "/";
+		else {
+			dir_str = dir_arr.join("/");
+			let use_cur = this.cur_dir;
+			if (dir_str.match(/^\x2f/)) use_cur = null;
+			new_dir_str = util.getFullPath(dir_str, this.cur_dir);
+		}
+		use_dir = new_dir_str;
+	}//»
+	if (!(!got_path && (tokpos==1||(tokpos>1 && this.comCompleters.includes(tok0))))) {
+		return this.doGetDirContents(use_dir, tok, tok0, arr_pos);
+	}
+	if (tokpos==1) {
+		contents = await this.getCommandArr(use_dir, Object.keys(Shell.activeCommands), tok)
+	}
+	else {
+		if (tok0 == "help"){
+			contents = await this.getCommandArr(use_dir, Object.keys(Shell.activeCommands), tok)
+		}
+		else if (tok0 == "lib" || tok0 == "import"){
+			contents = await this.getCommandArr(use_dir, await util.getList("/site/coms/"), tok)
+		}
+		else if (tok0 == "app" || tok0 == "appicon"){
+			contents = await this.getCommandArr(use_dir, await util.getList("/site/apps/"), tok)
+		}
+
+	}
+	if (contents && contents.length) this.doContents(contents, use_dir, tok, arr_pos);
+	else this.doGetDirContents(use_dir, tok, tok0, arr_pos);
+}//»
 
 //»
-//Response«
+//Response/Format«
 
-continue(str){//«
-	this.#doContinue = true;
-	this.setPrompt({prompt:"> "});
-	this.scrollIntoView();
-	this.sleeping = null;
-	this.bufPos = 0;
-	setTimeout(()=>{this.curShell = null;},10);
+fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
+
+/*_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
+here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
+efficiently) is an outstanding issue...*/
+	const{w}=this;
+	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
+	let pad = this.lsPadding;
+//	if (!start_from) start_from=0;
+	if (col_arg == 1) {//«
+		for (let i=0; i < arr.length; i++) {
+			if (w >= arr[i].length) ret.push(arr[i]);
+			else {
+				let iter = 0;
+				while (true) {
+					let str = arr[i].substr(iter, iter+w);
+					if (!str) break;
+					ret.push(str);
+					iter += w;
+				}
+			}
+		}
+		return;
+	}//»
+	const min_col_wid=(col_num, use_cols)=>{//«
+		let max_len = 0;
+		let got_len;
+		let use_pad = pad;
+		for (let i=col_num; i < num ; i+=use_cols) {
+			if (i+1 == use_cols) use_pad = 0;
+			got_len = lens[i]+use_pad;
+			if (got_len > max_len) max_len = got_len;
+		}
+		return max_len;
+	};//»
+	let num = arr.length;
+	let col_wids = [];
+	let col_pos = [0];
+	let max_cols = col_arg;
+	if (!max_cols) {
+
+//SURMPLRK
+//Just need to find the number of entries that would fit on the first row.
+//The next rows (if there are any) cannot possibly raise the max_cols value.
+//If it changes, the next rows can only make max_cols go down.
+//It is absolutely insane to assume to that each file name is 1 character long!!! (This makes max_cols ridiculously big, e.g. 80/3 => 26.666666)
+//                    v---------------------------------------^^^^^^^^^^^^^^^^
+//		let min_wid = 1 + pad;
+//		max_cols = Math.floor(w/min_wid);
+//		if (arr.length < max_cols) max_cols = arr.length;
+
+//Updated to this:
+		let tot_len = 0;
+		for (let i=0; i < arr.length; i++){
+			tot_len += arr[i].length;
+			if (tot_len > w) {
+				max_cols = i;
+				if (!max_cols) {
+//This means that the first name is too big, and so we will only have a 1 column listing
+					max_cols = 1;
+				}
+				break;
+			}
+			tot_len+=this.lsPadding;
+		}
+		if (!max_cols) {
+//We never broke out of the loop, so we can put the entire listing on one line,
+//meaning that there are as many columns as there are directory entries.
+			max_cols = arr.length;
+		}
+//End update
+
+	}
+
+	let num_rows = Math.floor(num/max_cols);
+	let num_cols = max_cols;
+	let rem = num%num_cols;
+	let tot_wid = 0;
+	let min_wid;
+	for (let i=0; i < max_cols; i++) {
+		min_wid = min_col_wid(i, num_cols);
+		tot_wid += min_wid;
+		if (tot_wid > w) {
+			this.fmtLs(arr, lens, ret, types, color_ret, (num_cols - 1));
+			return;
+		}
+		col_wids.push(min_wid);
+		col_pos.push(tot_wid);
+	}
+	col_pos.pop();
+	let matrix = [];
+	let row_num;
+	let col_num;
+	let cur_row = -1;
+	let xpos;
+	for (let i=0; i < num; i++) {
+		let typ;
+		if (types) typ = types[i];
+		let color;
+		if (typ==dirType) color="#909fff";
+		else if (typ==linkType) color="#0cc";
+		else if (typ==badLinkType) color="#f00";
+		else if (typ==idbDataType) color="#cc0";
+		col_num = Math.floor(i%num_cols);
+		row_num = Math.floor(i/num_cols);
+		if (row_num != cur_row) {
+			matrix.push([]);
+			xpos=0;
+		}
+		let nm = arr[i];
+		let str = nm + " ".rep(col_wids[col_num] - nm.length);
+		matrix[row_num][col_num] = str;
+		if (color_ret) {
+			let use_row_num = row_num;
+			if (!color_ret[use_row_num]) color_ret[use_row_num] = {};
+			let uselen = nm.length;
+			if (arr[i].match(/\/$/)) uselen--;
+			if (color) color_ret[use_row_num][xpos] = [uselen, color];
+		}
+		xpos += str.length;
+		cur_row = row_num;
+	}
+	for (let i=0; i < matrix.length; i++) ret.push(matrix[i].join(""));
+	return;
+}
+//»
+fmt2(str, type, maxlen){//«
+    if (type) str = type + ": " + str;
+    let ret = [];
+    let w = this.w;
+    let dopad = 0;
+    if (maxlen&&maxlen < w) {
+        dopad = Math.floor((w - maxlen)/2);
+        this.w = maxlen;
+    }
+
+    let wordarr = str.split(/\x20+/);
+    let curln = "";
+    for (let i=0; i < wordarr.length; i++){
+        let w1 = wordarr[i];
+        if (((curln + " " + w1).length) >= w){
+            if (dopad) ret.push((" ".repeat(dopad))+curln);
+            else ret.push(curln);
+            curln = w1;
+        }
+        else {
+            if (!curln) curln = w1;
+            else curln += " " + w1;
+        }
+        if (i+1==wordarr.length) {
+            if (dopad) ret.push((" ".repeat(dopad))+curln);
+            else ret.push(curln);
+        }
+    }
+    return ret;
+}
+//»
+fmt(str, startx){//«
+	const{w}=this;
+	if (str === this.EOF) return [];
+	let use_max_len = this.getMaxLen();
+	if (str instanceof Blob) str = "[Blob " + str.type + " ("+str.size+")]"
+	else if (str.length > use_max_len) str = str.slice(0, use_max_len)+"...";
+	let ret = [];
+	let iter =  0;
+	let do_wide = null;
+	let marr;
+	if (str.match && str.match(/[\x80-\xFE]/)) {
+		do_wide = true;
+		let arr = str.split("");
+		for (let i=0; i < arr.length; i++) {
+			if (arr[i].match(/[\x80-\xFE]/)) {
+				arr.splice(i+1, 0, "\x03");
+				i++;
+			}
+		}
+		str = arr.join("");
+	}
+	let doadd = 0;
+	if (startx) doadd = startx;
+	if (!str.split) str = str+"";
+	let arr = str.split("\n");
+	let ln;
+	for (ln of arr) {
+		while((ln.length+doadd) >= w) {
+			iter++;
+			let val = ln.slice(0,w-doadd);
+			if (do_wide) val = val.replace(/\x03/g, "");
+			ret.push(val);
+			ln = ln.slice(w-doadd);
+			str = ln;
+			doadd = 0;
+		}
+	}
+	if (do_wide) ret.push(ln.replace(/\x03/g, ""));
+	else ret.push(ln);
+	return ret;
+}
+//»
+fmtLinesSync(arr, startx){//«
+    let all = [];
+	let usestart = startx;
+    for (let i=0; i < arr.length; i++) {
+		all = all.concat(this.fmt(arr[i],usestart));
+		usestart = 0;
+	}
+    return all;
+}
+//»
+
+responseComNames(arr) {//«
+	let arr_pos = this.getComPos();
+	let repeat_arr = this.getComArr();
+	let name_lens = [];
+	for (let nm of arr) name_lens.push(nm.length);
+	let command_return = [];
+	this.fmtLs(arr, name_lens, command_return);
+	this.response(command_return.join("\n"), {didFmt: true});
+	this.responseEnd();
+	for (let i=0; i < repeat_arr.length; i++) this.handleLetterPress(repeat_arr[i]);
+	let xoff = repeat_arr.length - arr_pos;
+	for (let i=0; i < xoff; i++) this.handleArrow(LEFT_KEYCODE,"");
 	this.render();
 }
 //»
 responseEnd(opts={})  {//«
 	if (!this.didInit) return;
 
-//Why does this line exist???
-//	if (pager) return;
-	if (this.isPager) return;
+//Why does (did) this line exist???
+//	if (this.isPager) return;
 
 	this.#doContinue = false;
 	this.setPrompt();
 	this.scrollIntoView();
 	this.sleeping = null;
 	this.bufPos = 0;
-//if (!opts.)
-//	setTimeout(()=>{this.curShell = null;},10);
 	this.curShell = null;
 	this.render();
+
 }
 //»
-responseErr(out){//«
-this.response(out, {isErr: true});
-}//»
 response(out, opts={}){//«
 	const{actor}=this;
-	if (!isStr(out)) Win._fatal(new Error("Non-string given to terminal.response"));
+	if (!isStr(out)) this.Win._fatal(new Error("Non-string given to terminal.response"));
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack} = opts;
 if (inBack){
@@ -1846,10 +2297,13 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 //»
 
 //»
+
 //Keys/Handlers«
 
 doCtrlD(){//«
-cwarn("Calling do_ctrl_D!!! (nothing doing)");
+this.numCtrlD++;
+this.doOverlay(`Ctrl+d: ${this.numCtrlD}`);
+//cwarn("Calling do_ctrl_D!!! (nothing doing)");
 };//»
 doCtrlC(){//«
 	if (this.curShell) {
@@ -1924,7 +2378,7 @@ handleLineStr(str, from_scroll, uselen, if_no_render){//«
 	if (!this.comScrollMode) {
 		this.lines = copy_lines(this.lines, this.curPromptLine)
 		if (did_fail) {
-			clear();
+			this.clear();
 			return 
 		}
 	}
@@ -1967,477 +2421,26 @@ handleLineStr(str, from_scroll, uselen, if_no_render){//«
 	if (!if_no_render) this.render();
 }
 //»
-async doGetDirContents(use_dir, tok, tok0, arr_pos)  {//«
-	let ret = await this.getDirContents(use_dir, tok, {if_cd: tok0==="cd"});
-	if (!ret.length) return;
-	this.doContents(ret, use_dir, tok, arr_pos);
-}
-//»
-responseComNames(arr ) {//«
-	let arr_pos = this.getComPos();
-	let repeat_arr = this.getComArr();
-	let name_lens = [];
-	for (let nm of arr) name_lens.push(nm.length);
-	let command_return = [];
-	fmt_ls(arr, name_lens, command_return);
-	this.response(command_return.join("\n"), {didFmt: true});
-	this.responseEnd();
-	for (let i=0; i < repeat_arr.length; i++) this.handleLetterPress(repeat_arr[i]);
-	let xoff = repeat_arr.length - arr_pos;
-	for (let i=0; i < xoff; i++) handle_arrow(LEFT_KEYCODE,"");
-	this.render();
-}
-//»
-async doContents(contents, use_dir, tok, arr_pos){//«
-	if (contents.length == 1) {//«
-
-//METACHAR_ESCAPE
-
-//\x22 -> "
-//\x27 -> '
-//\x60 -> `
-//\x5b -> [
-		let chars = contents[0][0].replace(/[ \x22\x27\x5b\x60#~{<>$|&!;()]/g, "\\$&").split("");
-		let type = contents[0][1];
-		tok = tok.replace(/\*$/,"");
-		let str = tok;
-		let handle_chars = '';
-		for (let i=tok.length; i < chars.length; i++) {
-			let gotch = chars[i];
-			str+=gotch;
-//			this.handleLetterPress(gotch);
-			handle_chars+=gotch;
-		}
-		if (type==FOLDER_APP) {
-//			this.handleLetterPress("/");//"/"
-			handle_chars+="/";
-			let rv = await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
-			if (!rv) return cerr("hdk76FH3");
-		}
-		else if (type=="appDir"||type=="libDir"){
-//			this.handleLetterPress(".");//"/"
-			handle_chars+=".";
-		}
-		else if (type=="Link") {
-			let link = contents[0][2];
-			if (!link){
-cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
-			}
-			else if (!link.match(/^\x2f/)) {
-//cwarn("this.handleTab():  GOWDA link YO NOT FULLPATH LALA");
-			}
-			else {
-				let obj = await fsapi.pathToNode(link);
-				if (obj&&obj.appName==FOLDER_APP) {
-					if (this.awaitNextTab) {
-//						this.handleLetterPress("/");
-						handle_chars+="/";
-					}
-					this.awaitNextTab = true;
-				}
-				else {
-					if (!this.lines[this.cy()][this.x]) {
-//						this.handleLetterPress(" ");
-						handle_chars+=" ";
-					}
-				}
-			}
-		}
-		else {
-			if (!this.lines[this.cy()][this.x]) {
-//				this.handleLetterPress(" ");
-				handle_chars+=" ";
-			}
-		}
-//		if (this.ssh_server) return this.ssh_server.send(JSON.stringify({chars: handle_chars}));
-		for (let c of handle_chars) this.handleLetterPress(c);
-	}//»
-	else if (contents.length > 1) {//«
-		if (this.awaitNextTab) {//«
-			let diff = this.cy() - this.curPromptLine;
-//			let repeat_arr = this.getComArr();
-			let ret_arr = [];
-			for (let i=0; i < contents.length; i++) {
-				let arr = contents[i];
-				let nm = arr[0];
-				if (arr[1]===FOLDER_APP) nm+="/";
-				ret_arr.push(nm);
-			}
-			let names_sorted = ret_arr.sort();
-//			if (this.ssh_server) {
-//				return this.ssh_server.send(JSON.stringify({names: names_sorted}));
-//			}
-			response_com_names(names_sorted);
-		}//»
-		else {//«
-			if (!tok.length) {this.awaitNextTab = true;return;}
-			let max_len = tok.length;
-			let got_substr = "";
-			let curstr = tok;
-			let curpos = tok.length;
-			TABLOOP: while(true) {
-				let curch = null;
-				for (let arr of contents) {
-					let word = arr[0];
-					if (curpos == word.length) break TABLOOP;
-					if (!curch) curch = word[curpos];
-					else if (curch!==word[curpos]) break TABLOOP;
-				}
-				curstr += curch;
-				curpos++;
-			}
-			got_substr = curstr;
-
-			let got_rest = got_substr.substr(tok.length);
-			if (got_rest.length > 0) {
-				if (contents.length > 1)this.awaitNextTab = true;
-				else this.awaitNextTab = null;
-				
-				let chars = got_rest.split("");
-				for (let i=0; i < chars.length; i++) {
-					let gotch = chars[i];
-					if (gotch == " ") gotch = "\xa0";
-					this.handleLetterPress(gotch);
-				}
-			}
-			else this.awaitNextTab = true;
-		}//»
-	}//»
-}
-//»
-async handleTab(pos_arg, arr_arg){//«
+handleTab(){//«
 	if (this.curScrollCommand) this.insertCurScroll();
-	let contents;
-	let use_dir = this.cur_dir;
-//	if (this.ssh_server){}
-//	else if (this.curShell) return;
 	if (this.curShell) return;
-	let arr_pos;
-	let arr;
-	if (pos_arg) arr_pos = pos_arg;
-	else arr_pos = this.getComPos();
-	if (arr_arg) arr = arr_arg;
-	else arr = this.getComArr();
-
-	let tok = "";
-	let new_arr = arr.slice(0, arr_pos);
-	let com_str = new_arr.join("");
-	new_arr = com_str.split(/ +/);
-	if (!new_arr[0] && new_arr[1]) new_arr.shift();
-	let tokpos = new_arr.length;
-	if (tokpos > 1) {
-		if (new_arr[new_arr.length-2].match(/[\x60\(&|;] *$/)) tokpos = 1;
-	}
-	let tok0 = new_arr[0];
-	if ((com_str.match(/[\x22\x27]/g)||[]).length===1){//\x22=" \x27='«
-
-//At the end of a string with exactly one non-backtick quote character...
-//Just a quick and dirty way to do tab completion with quotes
-
-		let have_quote;
-		let s="";
-
-		for (let i=arr_pos-1; i >=0; i--){
-			let ch = arr[i];
-			if (ch.match(/[\x22\x27]/)){
-				have_quote = ch;
-				break;
-			}
-			s=`${ch}${s}`;
-		}
-		if (s.match(/\x2f/)){
-			if (s.match(/^\x2f/)) use_dir="";
-			let ar = s.split("/");
-			s = ar.pop();
-			use_dir=`${use_dir}/${ar.join("/")}`;
-		}
-//GYWJNFGHXP
-		let use_str= s.replace(/([\[(+*?])/g,"\\$1");
-		let ret = await this.getDirContents(use_dir, use_str,{if_cd: tok0==="cd", if_keep_ast: true});//, async ret => {
-		if (!ret.length) return;
-		if(ret.length===1){
-			let rem = ret[0][0].slice(s.length);
-			for (let ch of rem) this.handleLetterPress(ch);
-			if (ret[0][1]===FOLDER_APP){
-				this.handleLetterPress("/");
-				this.awaitNextTab = true;
-			}
-			else if (ret[0][1]==="Link"){
-				let obj = await fsapi.pathToNode(`${use_dir}/${use_str}${rem}`);
-				if (obj && obj.appName===FOLDER_APP){
-					this.handleLetterPress("/");
-					this.awaitNextTab = true;
-				}
-				else this.handleLetterPress(have_quote);
-			}
-			else this.handleLetterPress(have_quote);
-			return;
-		}
-		if (this.awaitNextTab){
-			contents = ret;
-			this.doContents(contents, use_dir, tok, arr_pos);
-			return;
-		}
-		let all=[];
-		for (let ar of ret) all.push(ar[0]);
-		let rem = util.sharedStart(all).slice(s.length);
-		for (let ch of rem) this.handleLetterPress(ch);
-		this.awaitNextTab = true;
-		return;
-	}//»
-	tok = new_arr.pop();
-	tok = tok.replace(/^[^<>=]*[<>=]+/,"")
-	if (tok.match(/^[^\x60;|&(]*[\x60;|&(][\/.a-zA-Z_]/)) {
-		tok = tok.replace(/^[^\x60;|&(]*[\x60;|&(]/,"");
-		tokpos = 1;
-	}
-	let got_path = null;
-	if (tok.match(/\x2f/)) {//«
-		tok = tok.replace(/^~\x2f/, "/home/"+this.env.USER+"/");
-		got_path = true;
-		let dir_arr = tok.split("/");
-		tok = dir_arr.pop();
-		let dir_str;
-		let new_dir_str;
-		if (dir_arr.length == 1 && dir_arr[0] == "") new_dir_str = "/";
-		else {
-			dir_str = dir_arr.join("/");
-			let use_cur = this.cur_dir;
-			if (dir_str.match(/^\x2f/)) use_cur = null;
-			new_dir_str = util.getFullPath(dir_str, this.cur_dir);
-		}
-		use_dir = new_dir_str;
-	}//»
-	let nogood = null;
-	if (!(!got_path && (tokpos==1||(tokpos>1 && this.comCompleters.includes(tok0))))) return this.doGetDirContents(use_dir, tok, tok0, arr_pos);
-	if (tokpos==1) {
-//		contents = await get_command_arr(use_dir, BUILTINS, tok)
-		contents = await get_command_arr(use_dir, Object.keys(Shell.activeCommands), tok)
-	}
-	else {
-		if (tok0 == "help"){
-			contents = await get_command_arr(use_dir, Object.keys(Shell.activeCommands), tok)
-		}
-		else if (tok0 == "lib" || tok0 == "import"){
-			contents = await get_command_arr(use_dir, await util.getList("/site/coms/"), tok)
-		}
-		else if (tok0 == "app" || tok0 == "appicon"){
-//			contents = await get_command_arr(use_dir, await util.getAppList(), tok)
-			contents = await get_command_arr(use_dir, await util.getList("/site/apps/"), tok)
-		}
-
-	}
-	if (contents && contents.length) this.doContents(contents, use_dir, tok, arr_pos);
-	else this.doGetDirContents(use_dir, tok, tok0, arr_pos);
+	this.doCompletion();
 }
 //»
 handleArrow(code, mod, sym){//«
+	if (this.curShell) return;
 	if (mod == "") {//«
-		if (code == KC['UP']) {//«
-			if (this.curShell) return;
-			if (this.bufPos < this.history.length) {
-				if (this.commandHold == null && this.bufPos == 0) {
-					this.commandHold = this.getComArr().join("");
-					this.commandPosHold = this.getComPos() + this.promptLen;
-				}
-				this.bufPos++;
-			}
-			else return;
-			let str = this.history[this.history.length - this.bufPos];
-			if (str) {
-				let diffy = this.scrollNum - this.curPromptLine;
-				while (this.curPromptLine+1 != this.lines.length) { 
-if (!this.lines.length){
-console.error("COULDA BEEN INFINITE LOOP: "+(this.curPromptLine+1) +" != "+this.lines.length);
-break;
-}
-					this.lines.pop();
-				}
-				this.handleLineStr(str.trim(), true);
-				this.comScrollMode = true;
-			}
-		}//»
-		else if (code == KC['DOWN']) {//«
-			if (this.curShell) return;
-			if (this.bufPos > 0) this.bufPos--;
-			else return;
-			if (this.commandHold==null) return;
-			let pos = this.history.length - this.bufPos;
-			if (this.bufPos == 0) {
-				trim_lines();
-				this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
-				this.x = this.commandPosHold;
-				this.commandHold = null;
-				this.render();
-			}
-			else {
-				let str = this.history[this.history.length - this.bufPos];
-				if (str) {
-					trim_lines();
-					this.handleLineStr(str.trim(), true);
-					this.comScrollMode = true;
-				}
-			}
-		}//»
-		else if (code == LEFT_KEYCODE) {//«
-			if (this.curScrollCommand) {
-				this.insertCurScroll();
-			}
-			if (this.x == 0) {
-				if (this.cy() == 0) return;
-				if (this.cy() > this.curPromptLine) {
-					if (this.y==0) {
-						this.scrollNum--;
-					}
-					else this.y--;
-					this.x = this.lines[this.cy()].length;
-					if (this.x==this.w) this.x--;
-					if (this.x<0) this.x = 0;
-					this.render();
-					return;
-				}
-				else return;
-			}
-			if (this.cy()==this.curPromptLine && this.x==this.promptLen) return;
-			this.x--;
-			this.render();
-
-		}//»
-		else if (code == KC["RIGHT"]) {//«
-			if (this.curScrollCommand) this.insertCurScroll();
-//Or if this is less than w-2 with a newline for a CONT like current CLI environment.
-			let nextline = this.lines[this.cy()+1];
-			let thisline = this.lines[this.cy()];
-			let thisch = thisline[this.x];
-			let thislinelen = thisline.length;
-
-			if (this.x == this.w-1 || ((this.x < this.w-1) && nextline && ((this.x==0&&!thislinelen) || (this.x==this.lines[this.cy()].length)))) {//«
-				if (this.x<this.w-1){
-					if (!thisch) {
-						if (!nextline) return;
-					}
-				}
-				else if (!thisch) return;
-				if (this.lines[this.cy() + 1]) {
-					this.x=0;
-					if (this.y+1==this.h) this.scrollNum++;
-					else this.y++;
-					this.render();
-				}
-				else { 
-					this.lines.push([]);
-					this.x=0;
-					this.y++;
-					if (!this.scrollIntoView(9)) this.render();
-					return;
-				}
-			}//»
-			else {
-				if (this.x==thislinelen||!thisch) return;
-				this.x++;
-				this.render();
-			}
-		}//»
+		if (code == KC['UP']) this.historyUp();
+		else if (code == KC['DOWN']) this.historyDown();
+		else if (code == LEFT_KEYCODE) this.charLeft();
+		else if (code == KC["RIGHT"]) this.charRight();
 	}//»
 	else if (mod=="C") {//«
-		if (kc(code,"UP")) {//«
-			if (this.bufPos < this.history.length) {
-				if (this.commandHold == null && this.bufPos == 0) {
-					this.commandHold = this.getComArr().join("");
-					this.commandPosHold = this.getComPos() + this.promptLen;
-				}
-				this.bufPos++;
-			}
-			else return;
-
-			let re = new RegExp("^" + this.commandHold);
-			for (let i = this.history.length - this.bufPos; this.bufPos <= this.history.length; this.bufPos++) {
-				let str = this.history[this.history.length - this.bufPos];
-				if (re.test(str)) {
-					trim_lines();
-					this.handleLineStr(str.trim(), true);
-					this.comScrollMode = true;
-					break;
-				}
-			}
-		}//»
-		else if (kc(code,"DOWN")) {//«
-			if (this.bufPos > 0 && this.commandHold) this.bufPos--;
-			else return;
-			let re = new RegExp("^" + this.commandHold);
-			for (let i = this.history.length - this.bufPos; this.bufPos > 0; this.bufPos--) {
-				let str = this.history[this.history.length - this.bufPos];
-				if (re.test(str)) {
-					trim_lines();
-					this.handleLineStr(str.trim(), true);
-					this.comScrollMode = true;
-					return;
-				}
-			}
-			if (this.commandHold) {
-				trim_lines();
-				this.handleLineStr(this.commandHold.trim(), true);
-				this.comScrollMode = true;
-				this.commandHold = null;
-			}
-			else {
-			}
-		}//»
-		else if (kc(code,"LEFT")) {//«
-			if (this.curScrollCommand) this.insertCurScroll();
-			let arr = this.getComArr();
-			let pos;
-			let start_x;
-			let char_pos = null;
-			let use_pos = null;
-			let add_x = this.getComPos();
-			if (add_x==0) return;
-			start_x = add_x;
-			if (arr[add_x] && arr[add_x] != " " && arr[add_x-1] == " ") add_x--;
-			if (!arr[add_x] || arr[add_x] == " ") {
-				add_x--;
-				while(add_x > 0 && (!arr[add_x] || arr[add_x] == " ")) add_x--;
-				char_pos = add_x;
-			}
-			else char_pos = add_x;
-			if (char_pos > 0 && arr[char_pos-1] == " ") use_pos = char_pos;
-			while(char_pos > 0 && arr[char_pos] != " ") char_pos--;
-			if (char_pos == 0) use_pos = 0;
-			else use_pos = char_pos+1;
-			for (let i=0; i < start_x - use_pos; i++) handle_arrow(LEFT_KEYCODE, "");
-		}//»
-		else if (kc(code,"RIGHT")) {//«
-			if (this.curScrollCommand) this.insertCurScroll();
-			let arr;
-			arr = this.getComArr();
-			let pos;
-			let start_x;
-			let char_pos = null;
-			let use_pos = null;
-			let add_x = this.getComPos();
-			if (add_x == arr.length) return;
-			else if (!arr[add_x]) return;
-			start_x = add_x;
-			if (arr[add_x] != " ") {
-				add_x++;
-				while(add_x != arr.length && arr[add_x] != " ") add_x++;
-				char_pos = add_x;
-				if (char_pos == arr.length) use_pos = char_pos;
-				else {
-					char_pos++;
-					while(char_pos != arr.length && arr[char_pos] == " ") char_pos++;
-					use_pos = char_pos;
-				}
-			}
-			else {
-				add_x++;
-				while(add_x != arr.length && arr[add_x] == " ") add_x++;
-				use_pos = add_x;
-			}
-			for (let i=0; i < use_pos - start_x; i++) handle_arrow(KC["RIGHT"], "");
-		}//»
+		if (kc(code,"UP")) this.historyUpMatching();
+		else if (kc(code,"DOWN")) this.historyDownMatching();
+		else if (kc(code,"LEFT")) this.wordLeft();
+		else if (kc(code,"RIGHT")) this.wordRight();
 	}//»
-
 }
 //»
 handlePage(sym){//«
@@ -2451,7 +2454,7 @@ handlePage(sym){//«
 			this.bufPos = this.history.length;
 			let str = this.history[0];
 			if (str) {
-				trim_lines();
+				this.trimLines();
 				this.handleLineStr(str.trim(), true);
 			}
 		}
@@ -2461,7 +2464,7 @@ handlePage(sym){//«
 		if (this.bufPos > 0) {
 			this.bufPos = 0;
 			if (this.commandHold!=null) {
-				trim_lines();
+				this.trimLines();
 				this.handleLineStr(this.commandHold.trim(), true);
 				this.commandHold = null;
 			}
@@ -2543,7 +2546,7 @@ handleBackspace(){//«
 handleDelete(mod){//«
 	if (mod == "") {
 		if (this.lines[this.cy()+1]) {
-			handle_arrow(KC.RIGHT, "");
+			this.handleArrow(KC.RIGHT, "");
 			this.handleBackspace();
 		}
 		else {
@@ -2613,7 +2616,7 @@ handleLetterPress(char_arg, if_no_render){//«
 	if (lines && lines[this.scrollNum + this.y]) {
 		if ((this.x) < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
 			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
-			shift_line(this.x-1, this.y, this.x, this.y);
+			this.shiftLine(this.x-1, this.y, this.x, this.y);
 		}
 	}
 
@@ -2754,50 +2757,24 @@ handlePriv(sym, code, mod, ispress, e){//«
 	else if (sym == "ENTER_") this.handleEnter();
 	else if (sym == "c_C") this.doCtrlC();
 	else if (sym == "k_C") this.doClearLine();
-	else if (sym == "y_C") {
-		for (let i=0; i < this.currentCutStr.length; i++) this.handleLetterPress(this.currentCutStr[i]);
-	}
-	else if (sym == "b_CAS") {
-log("BGLINES");
-	}
+	else if (sym == "y_C") this.insertCutStr();
+	
 	else if (sym == "c_CAS") {
-		clear();
+		this.clear();
 		this.responseEnd();
 	}
 	else if (sym=="a_C") {//«
 		e.preventDefault();
-		if (this.curScrollCommand) this.insertCurScroll();
-		this.x=this.promptLen;
-		this.y=this.curPromptLine - this.scrollNum;
-		if (this.y<0) {
-			this.scrollNum+=this.y;
-			this.y=0;
-		}
-		this.render();
+		this.seekLineStart();
 	}//»
-	else if (sym=="e_C") {//«
-		if (this.curScrollCommand) this.insertCurScroll();
-		this.y=this.lines.length-this.scrollNum-1;
-		if (this.y>=this.h){
-			this.scrollNum+=this.y-this.h+1
-			this.y=this.h-1;
-		}
-		if (this.lines[this.cy()].length == 1 && !this.lines[this.cy()][0]) this.x = 0;
-		else this.x=this.lines[this.cy()].length;
-		this.render();
-	}//»
-	else if (sym == "l_A"){
-	}
-	else if (sym == "g_CAS"){
-		this.saveSpecialCommand();
-	}
-	else if (sym=="h_CAS"){
-		this.selectFromHistory(HISTORY_PATH);
-	}
+	else if (sym=="e_C") this.seekLineEnd();
+	else if (sym == "g_CAS") this.saveSpecialCommand();
+	else if (sym=="h_CAS") this.selectFromHistory(HISTORY_PATH);
+	
 	else if (sym=="s_CAS"){
 		this.selectFromHistory(HISTORY_PATH_SPECIAL);
 	}
-	else if (sym=="r_CAS"){
+	else if (sym=="r_CAS"){//«
 if (!dev_mode){
 cwarn("Not dev_mode");
 return;
@@ -2805,19 +2782,16 @@ return;
 //VMUIRPOIUYT
 if (this.ondevreload) delete this.ondevreload;
 else this.ondevreload = ondevreload;
-//log(`ondevreload == ${!!this.ondevreload}`);
-//cwarn("Reload the terminal:", !this.ondevreload);
 this.doOverlay(`Reload terminal: ${!this.ondevreload}`);
-	}
+	}//»
 else if (sym=="d_CAS"){
-
 }
-else if (sym=="s_CA"){
+else if (sym=="s_CA"){//«
 if (!dev_mode) return;
 USE_DEVPARSER = !USE_DEVPARSER;
 this.doOverlay(`Use Dev Parser: ${USE_DEVPARSER}`);
 
-}
+}//»
 }
 //»
 handle(sym, e, ispress, code, mod){//«
@@ -3018,7 +2992,6 @@ quitNewScreen(screen){//«
 //Window/App«
 
 async onappinit(appargs={}){//«
-cwarn(12345);
 	this.env['USER'] = globals.CURRENT_USER;
 	this.cur_dir = this.getHomedir();
 	this.cwd = this.cur_dir;
@@ -3183,3 +3156,19 @@ if (actor&&actor.onkeyup) actor.onkeyup(e, sym);
 
 //»
 
+
+/*OLD«
+
+continue(str){//«
+	this.#doContinue = true;
+	this.setPrompt({prompt:"> "});
+	this.scrollIntoView();
+	this.sleeping = null;
+	this.bufPos = 0;
+	this.curShell = null;
+//	setTimeout(()=>{this.curShell = null;},10);
+	this.render();
+}
+//»
+
+»*/
