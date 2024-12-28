@@ -102,74 +102,37 @@ let this.#doContinue = false;
 //»
 constructor(Win){//«
 
-
 this.Win=Win;
 
 this.ShellMod = globals.ShellMod;
 this.Shell = globals.ShellMod.Shell;
-//const ShellMod = globals.ShellMod;
-//const Shell = ShellMod.Shell;
-
-//const TABSIZE = 4;
 this.tabSize=4;
-//const TABSIZE_MIN_1 = TABSIZE-1;
-this.tabSizeMin1 = this.tabSize-1;
-//const {main, Desk, statusBar: status_bar} = Win;
 this.main = Win.main;
 this.mainWin = Win.main;
 this.Desk = Win.Desk;
 this.statusBar = Win.statusBar;
-//const topwin = Win;
-//const winid = topwin.id;
-//const termobj = this;
-//const Term = this;
-//this.appClass = "cli";
-//let appclass = "cli";
 this.appClass="cli";
-
-//let this.isEditor = false;
 this.isEditor = false;
-//let this.isPager = false;
 this.isPager = false;
-
-//const CURSOR_ID = `cursor_${winid}`;
-
-//const ENV = globals.TERM_ENV;
 this.env = globals.TERM_ENV;
 
 //Editor mode constants for the renderer (copy/pasted from vim.js)«
-//XKIUO
-this.modes={
-command:1,
-insert:2,
-replace:3,
-visLine:4,
-visMark:5,
-visBlock:6,
-cutBuffer:7,
-lineWrap:8,
-symbol: 9,
-file: 10,
-complete: 11,
-ref: 12
+this.modes= {
+	command:1,
+	insert:2,
+	replace:3,
+	visLine:4,
+	visMark:5,
+	visBlock:6,
+	cutBuffer:7,
+	lineWrap:8,
+	symbol: 9,
+	file: 10,
+	complete: 11,
+	ref: 12
 };
-/*«
-const COMMAND_MODE = 1;
-const this.modes.insert = 2;
-const this.modes.replace = 3;
-const this.modes.visLine = 4;
-const this.modes.visMark = 5;
-const this.modes.visBlock = 6;
-const this.modes.cutBuffer = 7;
-const this.modes.lineWrap = 8;
-const this.modes.symbol = 9;
-const this.modes.file = 10;
-const this.modes.complete = 11;
-const this.modes.ref = 12;
-»*/
 //»
 
-this.paragraphSelectMode = true;
 //let this.paragraphSelectMode = true; //Toggle with Ctrl+Alt+p«
 /*
 When using the text editor, we have to manually insert line breaks inside of paragraphs
@@ -185,7 +148,7 @@ Here comes another paragraph...
 -------------------------------------
 
 With this.paragraphSelectMode turned on, the system clipboard will contain the following
-text upon executing the do_copy_buffer command with Cltr+Alt+a (a_CA).
+text upon executing the this.doCopyBuffer command with Cltr+Alt+a (a_CA).
 
 -------------------------------------
 These are a bunch of words that I'm writing, so I can seem very literate, and this is a crazily-hyphenated-word!
@@ -200,188 +163,62 @@ own formatting of paragraphs.
 Toggling of this.paragraphSelectMode is now done with Ctrl+Alt+p (p_CA).
 
 »*/
+this.paragraphSelectMode = true;
 
-//let highlight_actor_bg = false;
 this.highlightActorBg = false;
 this.actorHighlightColor="#101010";
 
 //vim row folds
 this.rowFoldColor = "rgb(160,160,255)";
 
-//let did_init = false;
 this.didInit = false;
-//this.Desk = Desk;
 this.winid = this.Win.id;
 this.cursorId = `cursor_${this.winid}`;
 this.numId = this.winid.split("_")[1];
-//this.topwin = Win;
-
-//let kill_funcs = []; 
-
-//let this.minTermWid = 15;
 this.minTermWid = 15;
-//let terminal_locked  = false;
-
-//let this.isScrolling = false;
 this.isScrolling = false;
-//let wheel_iter;
-this.wheelIter = undefined;
-//let dblclick_timeout;
-this.dblClickTimeout = undefined;
-this.downEvt = null;
-//let downevt=null;
-
-//let MAX_TAB_SIZE=256;
 this.maxTabSize = 256;
-//const com_completers = ["help", "app", "appicon", "lib", "import"];
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
-//const STAT_OK=1;
-//const STAT_WARNING=2;
-//const STAT_ERROR=3;
+this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 this.stat={
 	ok: 1,
 	warning: 2,
 	error: 3
 };
 
-//let nrows, this.nCols;
-this.nRows = undefined;
-this.nCols = undefined;
-//let x=0, y=0;
 this.x=0;
 this.y=0;
-//let w,h;
-this.w=undefined;
-this.h=undefined;
-//let xhold,yhold;
-this.xHold=undefined;
-this.yHold=undefined;
-//let this.holdX, hold_y;
-this.holdX=undefined;
-this.holdY=undefined;
-this.actor=undefined;
-//let actor;
-//let editor;
-//let pager;
-
-//let num_ctrl_d = 0;
 this.numCtrlD = 0;
-//let CLEAN_COPIED_STRING_MODE = false;
 this.cleanCopiedStringMode=false;
-//let DO_EXTRACT_PROMPT = true;
 this.doExtractPrompt = true;
-//const MAX_OVERLAY_LENGTH = 42;
 this.maxOverlayLength=42;
-//let this.overlayTimer = null;
-this.overlayTimer=null;
-//let TERMINAL_IS_LOCKED = false;
 this.terminalIsLocked=false;
-//let buffer_scroll_num = null;
-//let buffer_hold;
-this.bufferHold=undefined;
-//let this.lineHeight;
-this.lineHeight=undefined;
-//let FF = "monospace";
+
+this.bgCol="#080808";
 this.ff = "monospace";
-//let FW = "600";
-//let FW = "500";
 this.fw="500";
-//let this.curBG = "#00f";
 this.curBG="#00f";
-//let this.curFG = "#fff";
 this.curFG="#fff";
-//let CURBG_BLURRED = "#444";
 this.curBGBlurred = "#444";
-//let OVERLAYOP = "0.66";
 this.overlayOp="0.66";
-//let TCOL = "#e3e3e3";
 this.tCol = "#e3e3e3";
-//let topwin_focused = true;
-this.topwinFocused=true;
-//let no_prompt_mode = false;
+
 this.noPromptMode=false;
-
-//let this.minHeight;
-this.minHeight=undefined;
-
-//let this.comScrollMode = false;
 this.comScrollMode=false;
 
-//let this.numStatLines = 0;
-this.numStatLines=0;
-//let this.scrollNum = 0;
-this.scrollNum=0;
-//let scrollnum_hold;
-this.scrollNumHold=undefined;
-//let min_fs = 8;
-this.minFs=8;
-//let this.defFs = 24;
-this.defFs=24;
-//let this.grFs;
-this.grFs = undefined;
-//this.this.scrollNum = this.scrollNum;
-//this.ENV = ENV;
-
-//let max_fmt_len = 4997;
-this.maxFmtLen=4997;
-
-//let last_com_str=null;
-this.lastComStr=null;
-//let last_mode;
-this.lastMode=undefined;
-//let this.rootState = null;
-this.rootState = null;
-//let cur_shell = null;
-this.curShell = null;
-//let shell_class = null;
-//let dev_shell_class = null;
-//let ls_padding = 2;
-this.lsPadding = 2;
-//let await_next_tab = null;
-this.awaitNextTab=null;
-//let cur_prompt_line = 0;
-this.curPromptLine=0;
-//let this.curScrollCommand;
-this.curScrollCommand=undefined;
-//let prompt_str;
-this.promptStr=undefined;
-//let prompt_len;
-this.promptLen = undefined;
-//let buf_lines = [];
-this.lines=[];
-//let lines = [];
-//let line_colors = [];
-this.lineColors=[];
-//let this.linesHold2;
-this.linesHold2=undefined;
-//let this.linesHold;
-this.linesHold=undefined;
-//let this.lineColorsHold;
-this.lineColorsHold=undefined;
-
-//let this.currentCutStr = "";
-this.currentCutStr="";
-
-//let history = [];
-this.history=[];
-
-//let command_hold = null;
-this.commandHold=null;
-//let command_pos_hold = 0;
-this.commandPosHold = null;
-//let bufpos = 0;
 this.bufPos=0;
-//let sleeping = null;
-this.sleeping=null;
-//let cur_ps1;
-this.curPS1 = undefined;
-//const OK_READLINE_SYMS=["DEL_","BACK_","LEFT_", "RIGHT_"];
-this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
-//let this.statSpans;
-this.statSpans=undefined;
-//let hold_terminal_screen;
-this.holdTerminalScreen=undefined;
-//let cur_dir;
+this.curPromptLine=0;
+this.numStatLines=0;
+this.scrollNum=0;
+this.minFs=8;
+this.defFs=24;
+this.maxFmtLen=4997;
+this.rootState = false;
+this.lsPadding = 2;
+this.lines=[];
+this.lineColors=[];
+this.currentCutStr="";
+this.history=[];
 
 this.makeDOMElem();
 
@@ -390,9 +227,8 @@ this.makeDOMElem();
 makeDOMElem(){//«
 
 const{main}=this;
-//log("WINID", winid);
-//let this.bgCol = "#080808";
-this.bgCol="#080808";
+main._tcol="black";
+main._bgcol=this.bgCol;
 
 let overdiv = make('div');//«
 overdiv._pos="absolute";
@@ -417,10 +253,10 @@ tabdiv.id="termtabdiv_"+this.winid;
 tabdiv.style.userSelect = "text"
 tabdiv._w="100%";
 tabdiv._pos="absolute";
-tabdiv.onmousedown=(e)=>{downevt=e;};
+tabdiv.onmousedown=(e)=>{this.downEvt=e;};
 tabdiv.onmouseup=e=>{//«
-	if (!downevt) return;
-	let d = util.dist(e.clientX,e.clientY,downevt.clientX, downevt.clientY);
+	if (!this.downEvt) return;
+	let d = util.dist(e.clientX,e.clientY,this.downEvt.clientX, this.downEvt.clientY);
 	if (d < 10) return;
 //	focus_or_copy();
 	this.focusOrCopy();
@@ -440,47 +276,41 @@ tabdiv.onclick=e=>{//«
 		this.focusOrCopy();
 	},500);
 };//»
-tabdiv.ondblclick = e => {
+tabdiv.ondblclick = e => {//«
 	e.stopPropagation();
-//	dblclick_timeout = setTimeout(focus_or_copy, 500);
-this.dblClickTimeout = setTimeout(()=>{
-	this.focusOrCopy();
-}, 500);
-}
+	this.dblClickTimeout = setTimeout(()=>{
+		this.focusOrCopy();
+	}, 500);
+};//»
 tabdiv._loc(0,0);
 tabdiv.style.tabSize = this.tabSize;
 wrapdiv.tabdiv = tabdiv;
 //»
-let statdiv = make('div');
+let statdiv = make('div');//«
 statdiv._w="100%";
 statdiv._h="100%";
 statdiv._pos="absolute";
 statdiv._loc(0,0);
-//log(statdiv);
-let textarea;
-let areadiv;
-textarea = make('textarea');
+//»
+let textarea = make('textarea');//«
 textarea.id = `textarea_${this.Win.id}`;
 textarea._noinput = true;
 textarea.width = 1;
 textarea.height = 1;
 textarea.style.opacity = 0;
 textarea.focus();
-
-areadiv = make('div');
+//»
+let areadiv = make('div');//«
 areadiv._pos="absolute";
 areadiv._loc(0,0);
 areadiv._z=-1;
-if (textarea) {
-	areadiv.appendChild(textarea);
-}
-main._tcol="black";
-main._bgcol=this.bgCol;
+areadiv.appendChild(textarea);
+//»
 
 //let overlay;«
 
 let fakediv = make('div');
-fakediv.innerHTML = '<div style="opacity: '+this.overlayOp+';border-radius: 15px; font-size: xx-large; padding: 0.2em 0.5em; position: absolute; -webkit-user-select: none; transition: opacity 180ms ease-in; color: rgb(16, 16, 16); background-color: rgb(240, 240, 240); font-family: monospace;"></div>';
+fakediv.innerHTML = `<div style="opacity: ${this.overlayOp};border-radius: 15px; font-size: xx-large; padding: 0.2em 0.5em; position: absolute; -webkit-user-select: none; transition: opacity 180ms ease-in; color: rgb(16, 16, 16); background-color: rgb(240, 240, 240); font-family: monospace;"></div>`;
 let overlay = fakediv.childNodes[0];
 overlay.id = "overlay_"+this.winid;
 
@@ -505,7 +335,7 @@ main.onwheel=e=>{//«
 		if (!this.isScrolling){
 			if (!this.scrollNum) return;
 			if (dy > 0) return;
-			scrollnum_hold = this.scrollNum;
+			this.scrollNumHold = this.scrollNum;
 			this.isScrolling = true;
 			wheel_iter = 0;
 		}
@@ -524,8 +354,8 @@ main.onwheel=e=>{//«
 		if (!dy) return;
 		this.scrollNum += dy;
 		if (this.scrollNum < 0) this.scrollNum = 0;
-		else if (this.scrollNum >= scrollnum_hold) {
-			this.scrollNum = scrollnum_hold;
+		else if (this.scrollNum >= this.scrollNumHold) {
+			this.scrollNum = this.scrollNumHold;
 			this.isScrolling = false;
 		}
 		this.render();
@@ -547,10 +377,10 @@ main.appendChild(areadiv);
 this.tabSize = parseInt(tabdiv.style.tabSize);
 this.textarea = textarea; 
 this.areadiv = areadiv;
-this.tabdiv=tabdiv;
+this.tabdiv = tabdiv;
 this.wrapdiv = wrapdiv;
 this.overlay = overlay;
-
+this.statdiv = statdiv;
 }//»
 
 //Util«
@@ -567,8 +397,9 @@ async getch(promptarg, def_ch){//«
 }
 //»
 async readLine(promptarg){//«
-	if (this.lines[this.lines.length-1]&&this.lines[this.lines.length-1].length){
-		line_break();
+	const{lines}=this;
+	if (lines[lines.length-1]&&lines[lines.length-1].length){
+		this.lineBreak();
 		this.curPromptLine = this.y+this.scrollNum-1;
 	}
 	this.x=0;
@@ -595,10 +426,9 @@ setTabSize(s){//«
 //»
 tryKill(){//«
 	if (this.isEditor) {
-//		editor.set_stat_message("Really close the window? [y/N]");
-		actor.stat_message="Really close the window? [Y/n]";
+		this.actor.stat_message="Really close the window? [Y/n]";
 		this.render();
-		actor.set_ask_close_cb();
+		this.actor.set_ask_close_cb();
 	}
 	else{
 cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
@@ -620,7 +450,7 @@ executeBackgroundCommand(s){//«
 get useDevParser(){//«
 	return USE_DEVPARSER;
 }//»
-stat(mess){status_bar.innerText=mess;};
+stat(mess){this.statusBar.innerText=mess;};
 async getLineFromPager(arr, name){//«
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		return poperr("Could not load the pager module");
@@ -629,19 +459,19 @@ async getLineFromPager(arr, name){//«
 	if (await less.init(arr, name, {lineSelect: true, opts: {}})) return arr[less.y+less.this.scrollNum];
 
 }//»
-async selectFromHistory( path ) {//«
+async selectFromHistory(path){//«
 	let arr = await path.toLines();
 	if (!isArr(arr) && arr.length) {
 cwarn("No history lines from", path);
 		return;
 	}
-	this.curScrollCommand = await get_line_from_pager(arr, path.split("/").pop());
+	this.curScrollCommand = await this.getLineFromPager(arr, path.split("/").pop());
 	if (this.curScrollCommand) this.insertCurScroll();
 	this.render();
 }
 //»
 
-async saveSpecialCommand ()  {//«
+async saveSpecialCommand(){//«
 	let s = this.getComArr().join("");
 	if (!s.match(/[a-z]/i)) {
 log("Not saving", s);
@@ -667,7 +497,7 @@ togglePaste(){//«
 	const{textarea}=this;
 	if (textarea){
 		textarea._del();
-		textarea = null;	
+		this.textarea = null;	
 		this.doOverlay("Pasting is off");
 		return;
 	}
@@ -679,8 +509,8 @@ togglePaste(){//«
 	textarea.onpaste = onpaste;
 	areadiv.appendChild(textarea);
 	textarea.focus();
+	this.textarea = textarea;
 	this.doOverlay("Pasting is on");
-
 }
 //»
 
@@ -692,7 +522,7 @@ dopaste(){//«
 //»
 checkScrolling(){//«
 	if (this.isScrolling){
-		this.scrollNum = scrollnum_hold;
+		this.scrollNum = this.scrollNumHold;
 		this.isScrolling = false;
 		this.render();
 		return true;
@@ -719,12 +549,12 @@ wrapLine(str){//«
 //»
 
 fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
-//const fmt_ls=(arr, lens, ret, types, color_ret, start_from, col_arg)=>{
 
 /*_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
 here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
 efficiently) is an outstanding issue...*/
-const{w}=this;
+	const{w}=this;
+	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
 	let pad = this.lsPadding;
 //	if (!start_from) start_from=0;
 	if (col_arg == 1) {//«
@@ -732,7 +562,6 @@ const{w}=this;
 			if (w >= arr[i].length) ret.push(arr[i]);
 			else {
 				let iter = 0;
-//JSOJPRI
 				while (true) {
 					let str = arr[i].substr(iter, iter+w);
 					if (!str) break;
@@ -802,7 +631,6 @@ const{w}=this;
 		min_wid = min_col_wid(i, num_cols);
 		tot_wid += min_wid;
 		if (tot_wid > w) {
-//			fmt_ls(arr, lens, ret, types, color_ret, start_from, (num_cols - 1));
 			this.fmtLs(arr, lens, ret, types, color_ret, (num_cols - 1));
 			return;
 		}
@@ -819,13 +647,12 @@ const{w}=this;
 		let typ;
 		if (types) typ = types[i];
 		let color;
-		if (typ==ShellMod.var.dirType) color="#909fff";
-		else if (typ==ShellMod.var.linkType) color="#0cc";
-		else if (typ==ShellMod.var.badLinkType) color="#f00";
-		else if (typ==ShellMod.var.idbDataType) color="#cc0";
+		if (typ==dirType) color="#909fff";
+		else if (typ==linkType) color="#0cc";
+		else if (typ==badLinkType) color="#f00";
+		else if (typ==idbDataType) color="#cc0";
 		col_num = Math.floor(i%num_cols);
 		row_num = Math.floor(i/num_cols);
-
 		if (row_num != cur_row) {
 			matrix.push([]);
 			xpos=0;
@@ -834,7 +661,6 @@ const{w}=this;
 		let str = nm + " ".rep(col_wids[col_num] - nm.length);
 		matrix[row_num][col_num] = str;
 		if (color_ret) {
-//			let use_row_num = row_num+start_from;
 			let use_row_num = row_num;
 			if (!color_ret[use_row_num]) color_ret[use_row_num] = {};
 			let uselen = nm.length;
@@ -880,12 +706,11 @@ fmt2(str, type, maxlen){//«
 }
 //»
 fmt(str, startx){//«
+	const{w}=this;
 	if (str === this.EOF) return [];
 	let use_max_len = this.getMaxLen();
 	if (str instanceof Blob) str = "[Blob " + str.type + " ("+str.size+")]"
 	else if (str.length > use_max_len) str = str.slice(0, use_max_len)+"...";
-	
-//	if (type) str = type + ": " + str;
 	let ret = [];
 	let iter =  0;
 	let do_wide = null;
@@ -907,12 +732,12 @@ fmt(str, startx){//«
 	let arr = str.split("\n");
 	let ln;
 	for (ln of arr) {
-		while((ln.length+doadd) >= this.w) {
+		while((ln.length+doadd) >= w) {
 			iter++;
-			let val = ln.slice(0,this.w-doadd);
+			let val = ln.slice(0,w-doadd);
 			if (do_wide) val = val.replace(/\x03/g, "");
 			ret.push(val);
-			ln = ln.slice(this.w-doadd);
+			ln = ln.slice(w-doadd);
 			str = ln;
 			doadd = 0;
 		}
@@ -932,7 +757,6 @@ fmtLinesSync(arr, startx){//«
     return all;
 }
 //»
-
 objToString(obj ){//«
 	if (obj.id) return `[object ${obj.constructor.name}(${obj.id})]`;
 	return `[object ${obj.constructor.name}]`;
@@ -967,7 +791,7 @@ scrollMiddle(){//«
 focusOrCopy(){//«
 	let sel = window.getSelection();
 	if (sel.isCollapsed)this.textarea&&this.textarea.focus();
-	else do_clipboard_copy();
+	else this.doClipboardCopy();
 }
 //»
 
@@ -977,24 +801,9 @@ getHomedir(){//«
 }
 //»
 getBuffer(if_str){//«
-//const get_buffer = (if_str, if_no_buf)=>{
 	let ret=[];
 	if (if_str) ret = "";
 	let ln;
-
-/*«
-	if (!if_no_buf) {
-		if (buf_lines) {
-			for (let i=0; i < buf_lines.length; i++) {
-				ln = buf_lines[i].join("").replace(/\u00a0/g, " ");
-				if (if_str) ret +=  ln + "\n"
-				else ret.push(ln);
-			}
-		}
-	}
-»*/
-
-//	let actor = editor || pager;
 	let uselines;
 	if (this.actor && this.actor.get_lines) uselines = this.actor.get_lines();//in foldmode, vim's lines contain fold markers
 	else uselines = this.lines;
@@ -1020,7 +829,7 @@ curDateStr(){//«
 }
 //»
 extractPromptFromStr(str){//«
-	if (!DO_EXTRACT_PROMPT) return str;
+	if (!this.doExtractPrompt) return str;
 	let prstr = this.getPromptStr();
 	let re = new RegExp("^"+prstr.replace("$","\\$"));
 	if (re.test(str)) str = str.substr(prstr.length);
@@ -1040,10 +849,12 @@ copyText(str, mess){//«
 }
 //»
 doClearLine(){//«
+
+	const{lines}=this;
 	if (this.curShell) return;
 	let str="";
-	for (let i = this.lines.length; i > this.y+this.scrollNum+1; i--) str = this.lines.pop().join("") + str;
-	let ln = this.lines[this.y+this.scrollNum];
+	for (let i = lines.length; i > this.y+this.scrollNum+1; i--) str = lines.pop().join("") + str;
+	let ln = lines[this.y+this.scrollNum];
 	str = ln.slice(this.x).join("") + str;
 	this.lines[this.y+this.scrollNum] = ln.slice(0, this.x);	
 	if (this.curPromptLine < this.scrollNum) {
@@ -1055,7 +866,7 @@ doClearLine(){//«
 }
 //»
 doCopyBuffer()  {//«
-	copy_text(get_buffer(true), "Copied: entire buffer");
+	this.copyText(get_buffer(true), "Copied: entire buffer");
 }//»
 
 doClipboardCopy(if_buffer, strarg){//«
@@ -1085,13 +896,13 @@ const do_copy=str=>{//«
 	if (strarg) str = strarg;
 	else if (if_buffer) str = get_buffer(true);
 	else str = getSelection().toString()
-	if (CLEAN_COPIED_STRING_MODE) {
+	if (this.cleanCopiedStringMode) {
 		str = str.replace(/\n/g,"");
 //		str = extract_prompt_from_str(str);
 		str = this.extractPromptFromStr(str);
 	}
 	else {
-//cwarn("Do you really ever want this string to be stripped of newlines and the prompt? CLEAN_COPIED_STRING_MODE==false !!!");
+//cwarn("Do you really ever want this string to be stripped of newlines and the prompt? this.cleanCopiedStringMode==false !!!");
 	}
 
 	do_copy(str);
@@ -1109,7 +920,7 @@ doOverlay(strarg){//«
 	let str;
 	if (strarg) {
 		str = strarg;
-		if (str.length > MAX_OVERLAY_LENGTH) str = str.slice(0,MAX_OVERLAY_LENGTH)+"...";
+		if (str.length > this.maxOverlayLength) str = str.slice(0,this.maxOverlayLength)+"...";
 	}
 	else str = this.w+"x"+this.h;
 	this.overlay.innerText = str;
@@ -1137,11 +948,18 @@ getMaxLen(){//«
 }
 //»
 checkLineLen(dy){//«
+	const{lines, w}=this;
+//	const{cy}=this.cy();
 	if (!dy) dy = 0;
-	if (this.lines[this.cy()+dy].length > this.w) {
-		let diff = this.lines[this.cy()+dy].length-this.w;
-		for (let i=0; i < diff; i++) this.lines[this.cy()+dy].pop();
+	const new_y = this.cy()+dy;
+	if (lines[new_y].length > w) {
+		let diff = lines[new_y].length-w;
+		for (let i=0; i < diff; i++) lines[new_y].pop();
 	}
+//	if (lines[this.cy()+dy].length > this.w) {
+//		let diff = lines[this.cy()+dy].length-this.w;
+//		for (let i=0; i < diff; i++) lines[this.cy()+dy].pop();
+//	}
 }
 //»
 cy(){//«
@@ -1186,7 +1004,6 @@ const{tabdiv}=this;
 //WKKYTUHJ
 	if (actor) ({stat_input_type,stat_com_arr,stat_message,stat_message_type, line_select_mode}=actor);
 	if (!stat_input_type) stat_input_type="";
-//	if (editor) ({splice_mode, macro_mode,visual_block_mode,tab_lines,visual_line_mode,visual_mode,show_marks,seltop,selbot,selleft,selright,selmark,error_cursor, opts, num_lines, ry}=editor);
 
 	if (this.isEditor) ({mode,symbol,seltop,selbot,selleft,selright,selmark,opts,num_lines,ry}=actor);
 	if (!(this.nCols&&this.nRows)) return;
@@ -1204,11 +1021,6 @@ const{tabdiv}=this;
 	if (opts.noCursor){}
 	else if (!this.terminalIsLocked) docursor = true;
 	let usescroll = this.scrollNum;
-//	let is_buf_scroll = false;
-//	if (buffer_scroll_num!==null) {
-//		usescroll = buffer_scroll_num;
-//		is_buf_scroll = true;
-//	}
 	let scry=usescroll;
 	let slicefrom = scry;
 	let sliceto = scry + this.nRows;
@@ -1332,11 +1144,9 @@ if (num2 > this.w) {
 		}//»
 
 		if (!(this.isPager||stat_input_type||this.isScrolling)) {//«
-//		if (!(this.isPager||is_buf_scroll||stat_input_type||this.isScrolling)) {
 			if (docursor && i==this.y) {
 				let usebg;
-				if (!this.topwinFocused) usebg = this.curBGBlurred;
-//				else if (this.ssh_immediate_mode) usebg = CURBG_SSH_MODE;
+				if (!this.isFocused) usebg = this.curBGBlurred;
 				else usebg = this.curBG;
 				if (!arr[usex]||arr[usex]=="\x00") arr[usex]=" ";
 				else if (arr[usex]=="\n") arr[usex] = " <br>";
@@ -1393,9 +1203,9 @@ if (num2 > this.w) {
 				let typ = stat_message_type;
 				let bgcol=null;
 				let tcol="#000";
-				if (typ==STAT_OK) bgcol="#090";
-				else if (typ==STAT_WARNING) bgcol="#dd6";
-				else if (typ==STAT_ERROR) {
+				if (typ==this.stat.ok) bgcol="#090";
+				else if (typ==this.stat.warning) bgcol="#dd6";
+				else if (typ==this.stat.error) {
 					bgcol="#c44";
 					tcol="#fff";
 				}
@@ -1478,7 +1288,7 @@ if (num2 > this.w) {
 			usestr = `${usename}${per}% of ${this.lines.length} lines (press q to quit)`;
 			if (!stat_input_type) usestr = '<span style=background-color:#aaa;color:#000>'+usestr+'</span>'
 		}//»
-		update_stat_lines([usestr]);
+		this.updateStatLines([usestr]);
 	}//»
 	if (this.minHeight && this.h < this.minHeight){
 		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
@@ -1656,38 +1466,21 @@ resize()  {//«
 		tabdiv._dis="none";
 		wrapdiv._bgcol="#400";
 		main._bgcol="#400";
-//		terminal_locked = true;
 		this.locked = true;
 		this.doOverlay(`Min\xa0width:\xa0${this.minTermWid}`);
 		return;
 	}
 	if (!(this.nCols&&this.nRows)) {
 		this.locked = true;
-//		terminal_locked = true;
 		return;
 	}
 	this.locked = false;
-//	terminal_locked = false;
 	this.w = this.nCols;
 	this.h = this.nRows;
 	if (!(oldw==this.w&&oldh==this.h)) this.doOverlay();
 	this.lineHeight = wrapdiv.clientHeight/this.h;
 	this.scrollIntoView();
 	this.scrollMiddle();
-
-/* Not this...
-	if (editor){
-	 	this.generateStatHtml();
-		if (editor.resize) {
-			editor.resize(this.w,this.h);
-			return;
-		}
-	}
-	else if (pager){
-	 	this.generateStatHtml();
-	}
-*/
-//But this...
 	if (this.numStatLines) this.generateStatHtml();
 	if (actor && actor.resize){
 		actor.resize(this.w,this.h);
@@ -2996,13 +2789,13 @@ log("BGLINES");
 	else if (sym == "l_A"){
 	}
 	else if (sym == "g_CAS"){
-		save_special_command();
+		this.saveSpecialCommand();
 	}
 	else if (sym=="h_CAS"){
-		select_from_history(HISTORY_PATH);
+		this.selectFromHistory(HISTORY_PATH);
 	}
 	else if (sym=="s_CAS"){
-		select_from_history(HISTORY_PATH_SPECIAL);
+		this.selectFromHistory(HISTORY_PATH_SPECIAL);
 	}
 	else if (sym=="r_CAS"){
 if (!dev_mode){
@@ -3040,7 +2833,7 @@ handle(sym, e, ispress, code, mod){//«
 			}
 			else return;
 		}
-		this.scrollNum = scrollnum_hold;
+		this.scrollNum = this.scrollNumHold;
 		this.isScrolling = false;
 		this.render();
 		return;
@@ -3063,9 +2856,9 @@ handle(sym, e, ispress, code, mod){//«
 			set_new_fs(this.grFs);
 			return;
 		}
-		else if (sym=="c_CS") return do_clipboard_copy();
-		else if (sym=="v_CS") return do_clipboard_paste();
-		else if (sym=="a_CA") return do_copy_buffer();
+		else if (sym=="c_CS") return this.doClipboardCopy();
+		else if (sym=="v_CS") return this.doClipboardPaste();
+		else if (sym=="a_CA") return this.doCopyBuffer();
 		else if (sym=="p_CA"){
 			this.paragraphSelectMode = !this.paragraphSelectMode;
 			this.doOverlay(`Paragraph select: ${this.paragraphSelectMode}`);
@@ -3135,7 +2928,7 @@ xScrollTerminal(opts={}){//«
 this.render();
 }
 //»
-clipboardCopy(s){do_clipboard_copy(null,s);}
+clipboardCopy(s){this.doClipboardCopy(null,s);}
 setLines(linesarg, colorsarg){//«
 	this.lines = linesarg;
 	this.lineColors = colorsarg;
@@ -3166,8 +2959,8 @@ initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}
 	this.actor = actor_arg;
 
 	this.appClass = classarg;
-	this.isEditor = appclass == "editor";
-	this.isPager = appclass == "pager";
+	this.isEditor = classarg == "editor";
+	this.isPager = classarg == "pager";
 
 	this.lines = new_lines;
 	this.lineColors = new_colors;
@@ -3205,8 +2998,8 @@ quitNewScreen(screen){//«
 	this.scrollNum = screen.scrollNum;
 	this.numStatLines = screen.numStatLines;
 
-	this.isEditor = appclass == "editor";
-	this.isPager = appclass == "pager";
+	this.isEditor = this.appClass == "editor";
+	this.isPager = this.appClass == "pager";
 	if (!screen.funcs) screen.funcs = {};
 	this.onescape = screen.funcs.onescape;
 	this.ondevreload = screen.funcs.ondevreload;
@@ -3294,10 +3087,10 @@ if (rv) init_prompt += "\nImported libs: "+rv;
 }//»
 
 onescape(){//«
-	textarea&&textarea.focus();
-	if (check_scrolling()) return true;
-	if (status_bar.innerText){
-		status_bar.innerText = "";
+	this.textarea.focus();
+	if (this.checkScrolling()) return true;
+	if (this.statusBar.innerText){
+		this.statusBar.innerText = "";
 		return true;
 	}
 	return false;
@@ -3362,19 +3155,14 @@ async onkill(if_dev_reload){//«
 }
 //»
 onfocus(){//«
-//cwarn("FOCUS!");
-	this.isFocused = true;
-	this.topwinFocused=true;
+	this.isFocused=true;
 	if (this.curScrollCommand) this.insertCurScroll();
 	this.render();
 	this.textarea.focus();
-
 }
 //»
 onblur(){//«
-//cwarn("BLUR");
-	this.isFocused = false;
-	this.topwinFocused=false;
+	this.isFocused=false;
 	this.render();
 	if (this.curScrollCommand) this.insertCurScroll();
 	this.textarea.blur();

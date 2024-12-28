@@ -1,5 +1,5 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
-
+//12/28/24: BUG: I WASN'T ABLE TO ESCAPE FROM INSERT MODE!?!?!?!?
 /*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!  «
 @ZPLROTUS: Here we are exporing num_lines to the terminal's renderer. This variable 
 is important because the length of the lines array is different from the logical
@@ -193,7 +193,7 @@ const{
 	refresh,
 //	onescape,
 	topwin,
-	quit_new_screen,
+//	quit_new_screen,
 	x_scroll_terminal,
 	get_dir_contents,
 	Desk
@@ -409,7 +409,7 @@ x=0;
 }
 	this.opts = opts;
 	maybe_scroll();
-	refresh();
+	Term.refresh();
 }//»
 
 const validate_initial_str=async()=>{//«
@@ -566,8 +566,10 @@ const have_fold = (add) => {//«
 };//»
 const reset_display=()=>{//«
 	x=0;y=0;scroll_num=0;
+//	this.mode = COMMAND_MODE;
 	set_ry();
-	render({},107);
+	stat_warn("Display reset");
+//	render({},107);
 };//»
 const at_screen_bottom = () => {return y === Term.h - num_stat_lines - 1;};
 const at_file_end = ()=>{return y+scroll_num === lines.length - 1;};
@@ -631,7 +633,8 @@ const quit=()=>{//«
 		delete reload_win.ownedBy;
 		reload_win.close();
 	}
-	quit_new_screen(hold_screen_state);
+	Term.quitNewScreen(hold_screen_state);
+//	quit_new_screen(hold_screen_state);
 //log(quit_new_screen);
 };//»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
@@ -1580,12 +1583,12 @@ const handle_edit_input_enter = async()=> {//«
 		this.command_history.unshift(com);
 		let marr;
 //SPOLUITJ
-if (marr = com.match(/^(%)?s\/(.*)$/)){//«
+if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
 	if (this.mode===VIS_LINE_MODE && marr[1]){
 		stat_err("'%': Invalid range modifier in visual line mode");
 		return;
 	}
-	search_and_replace(marr[2], marr[1]);
+	search_and_replace(marr[3], {file: marr[1], exact: marr[2]});
 	return;
 }//»
 		if (com.match(/^\d+$/)) {
@@ -3101,8 +3104,11 @@ const get_confirmation = (lno, ind, len, out)=>{//«
 		this.mode=COMMAND_MODE;
 	});
 };//»
-const search_and_replace = async(arr, if_entire_file)=>{//«
-
+//const search_and_replace = async(arr, if_entire_file, if_exact_word)=>{
+const search_and_replace = async(arr, opts={})=>{//«
+	let if_entire_file = opts.file;
+	let if_exact_word = opts.exact;
+	let num_replaced = 0;
 //Var«
 
 //Using a single time means that for confirming replacements, we are using the
@@ -3167,6 +3173,7 @@ const search_and_replace = async(arr, if_entire_file)=>{//«
 		if (c.esc) pat_str+="\\"+c.esc;
 		else pat_str+=c;
 	}
+	if (if_exact_word) pat_str = `\\b${pat_str}\\b`;
 	let sub_str="";
 	for (let c of sub){
 		if (c.esc) sub_str+="\\"+c.esc;
@@ -3273,6 +3280,7 @@ THROW("What is the return value from get_confirmation?");
 		}//»
 //ZMKLOPIJH
 		let buf = lnarr.splice(usex, len);
+		num_replaced++;
 		actions.push(new Action(usex, ry, [buf], time, {neg: true, ins: true}));
 		lnarr.splice(usex, 0, ...sub_str);
 		actions.push(new Action(usex, ry, [[...sub_str]], time, {ins: true}));
@@ -3291,7 +3299,8 @@ THROW("What is the return value from get_confirmation?");
 	}//»
 	this.mode=COMMAND_MODE;
 	set_ry();
-	render();
+	stat(`Replaced: ${num_replaced}`);
+//	render();
 
 };//»
 
@@ -6184,7 +6193,7 @@ else{
 //Term.set_lines(lines, line_colors);
 //Term.init_edit_mode(this, num_stat_lines);
 //hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
-hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload});
+hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload});
 this.fname = edit_fname;
 if (opts.insert) set_edit_mode("i");
 else if (!edit_fname) {

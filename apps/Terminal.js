@@ -8945,6 +8945,7 @@ this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines
 };
 refs.init_new_screen = this.init_new_screen;
 //»
+this.initNewScreen = this.init_new_screen;
 this.quit_new_screen = (screen) => {//«
 if (screen === hold_terminal_screen) hold_terminal_screen = null;
 let old_actor = actor;
@@ -8965,9 +8966,11 @@ if (old_actor&&old_actor.cb) {
 };
 refs.quit_new_screen = this.quit_new_screen;
 //»
+this.quitNewScreen = this.quit_new_screen;
 
 //»
 this.wrap_line = wrap_line;
+this.wrapLine = wrap_line;
 this.dopaste=dopaste;
 this.refresh = render;
 this.fmt = fmt;

@@ -10,12 +10,11 @@ export const mod = function(termobj) {
 //Var«
 
 const {//«
-	wrap_line,
-	refresh,
+//	wrapLine,
 //	onescape,
 	topwin,
 //	modequit,
-	quit_new_screen,
+//	quit_new_screen,
 	h
 } = termobj;//»
 const less = this;
@@ -60,10 +59,10 @@ const okint = val=>{//«
 //const quit=(rv)=>{termobj.onescape=onescape;modequit(rv);};
 const quit=(rv)=>{
 //	termobj.onescape=onescape;
-	quit_new_screen(hold_screen_state);
+	termobj.quitNewScreen(hold_screen_state);
 };
 const render = () => {//«
-	refresh();
+	termobj.refresh();
 };//»
 
 const do_scroll_search=(if_start)=>{//«
@@ -497,11 +496,11 @@ lines = [];
 	less.fname = `${filename} -raw-`;
 	fmt_lines=[];
 	for (let ln of lines){
-		let wraparr = wrap_line(ln.join("")).split("\n");
+		let wraparr = termobj.wrapLine(ln.join("")).split("\n");
 		for (let l of wraparr) fmt_lines.push(l.split(""));
 	}
 //	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, onescape);
-	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, {onescape});
+	hold_screen_state = termobj.initNewScreen(less, appclass, lines, line_colors, num_stat_lines, {onescape});
 	render();
 });
 
