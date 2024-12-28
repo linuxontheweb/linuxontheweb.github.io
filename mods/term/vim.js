@@ -624,6 +624,7 @@ const quit=()=>{//«
 	Term.overrides = hold_overrides;
 	if (edit_fobj) {
 		edit_fobj.unlockFile();
+		delete Term.curEditNode;
 	}
 	if (reload_win) {
 		delete LOTW.apps[reload_win.appName];
@@ -1238,7 +1239,7 @@ const write_cb_func = async(ret)=>{//«
 			edit_fobj = node;
 			edit_fullpath = edit_fobj.fullpath;
 			edit_ftype = edit_fobj.type;
-			Term.cur_edit_node = edit_fobj;
+			Term.curEditNode = edit_fobj;
 			edit_fobj.lockFile();
 		}
 		if (Desk) Desk.make_icon_if_new(node);
@@ -1456,12 +1457,21 @@ const get_cur_spaces = (which, x_is_max)=>{//«
 	}
 	return {word: spcs, x: start_x};
 };//»
-const get_cur_word = (x_is_max)=>{//«
-	let ln = lines[y+scroll_num];//let ln = curln(true);
+const get_cur_word = (x_is_max, if_stat)=>{//«
+	let use_x;
+	let ln;
+	if (if_stat) {
+		ln = stat_com_arr;
+		use_x = stat_x;
+	}
+	else {
+		ln = ln = lines[y+scroll_num];
+		use_x = x;
+	}
 	if (!ln.length || ln._fold) return {word: null};
-	let ch = ln[x];
+	let ch = ln[use_x];
 	if (!ch.match(/\w/)) return {word: null};
-	let _x = x;
+	let _x = use_x;
 	let arr;
 	if (x_is_max) arr=[];
 	while (_x>=0){
@@ -1505,7 +1515,7 @@ cerr("Fold error detected, line: ", i);
 	return false;
 };//»
 
-const handle_edit_input_tab = async(if_ctrl)=>{//«
+const handle_tab_path_completion = async(if_ctrl)=>{//«
 	if (if_ctrl) num_completion_tabs = 0;
 	let gotpath = stat_com_arr.join("").trim();
 	let usedir, usename;
@@ -1995,16 +2005,27 @@ const init_symbol_mode = (opts={})=>{//«
 	render();
 
 }//»
-const init_complete_mode=async()=>{//«
+const init_complete_mode=async(opts={})=>{//«
 	const try_print=(val)=>{//«
 		let rem = val.slice(wrd.length);
-		if (rem) print_chars(rem);
+		if (rem) {
+			if (opts.stat) {
+				stat_com_arr.splice(stat_x, 0, ...rem);
+				stat_x += rem.length;
+			}
+			else print_chars(rem);
+		}
 		render();
 	};//»
-	if (x===0) return;
-	x--;
-	let rv = get_cur_word(true);
-	x++;
+	let use_x;
+	if (opts.stat)use_x = stat_x;
+	else use_x = x;
+	if (use_x===0) return;
+	if (opts.stat) stat_x--;
+	else x--;
+	let rv = get_cur_word(true, opts.stat);
+	if (opts.stat) stat_x++;
+	else x++;
 	let wrd = rv.word;
 	if (!wrd) return;
 	if (!ALLWORDS) get_all_words();
@@ -2016,14 +2037,20 @@ const init_complete_mode=async()=>{//«
 	if (!matches.length) {
 		return stat("No matches");
 	}
-	if (matches.length===1) return try_print(matches[0]);
+	if (matches.length===1) {
+		try_print(matches[0]);
+		return;
+	}
 	SYMBOLS = matches.slice();
 	let hold_fold = fold_mode;
 	hold_lines = lines;
 	let hold_colors = line_colors;
 	let hx=x,hy=y,hscr=scroll_num;
+	let sit_hold = this.stat_input_type;
+	let stat_x_hold = stat_x;
 	let mode_hold = this.mode;
 	this.mode = COMPLETE_MODE;
+	delete this.stat_input_type;
 	x=y=scroll_num=0;
 	fold_mode = false;
 	lines = [];
@@ -2034,7 +2061,6 @@ const init_complete_mode=async()=>{//«
 	}
 	Term.set_lines(lines, []);
 	num_lines = lines.length;
-//	set_line_lens();
 	enter_cb = () => {//«
 		let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
 		enter_cb = null;
@@ -2042,6 +2068,8 @@ const init_complete_mode=async()=>{//«
 		if (ln&&ln.length) try_print(ln)
 	};//»
 	alt_screen_escape_handler = no_render => {//«
+		this.stat_input_type = sit_hold;
+		stat_x = stat_x_hold;
 		alt_screen_escape_handler = null;
 		symbol_len = UND;
 		x=hx;
@@ -3197,6 +3225,7 @@ sub_str lengths.
 			if (ln._fold) open_fold(ln._fold);
 			scroll_num = cy();
 			y=0;
+			set_ry();
 			do_num_lines = 1;
 		}
 	}//»
@@ -5599,23 +5628,40 @@ const handle_stat_char=ch=>{//«
 	render({},90);
 };//»
 const handle_stat_input_keydown=(sym)=>{//«
-	if (sym=="TAB_"||sym=="TAB_C") return handle_edit_input_tab(sym==="TAB_C");
+	if (sym=="TAB_"||sym=="TAB_C") {
+		let sit = this.stat_input_type;
+		if (sit==="Save As: ") return handle_tab_path_completion(sym==="TAB_C");
+//		else if (sit===":"&&stat_com_arr.join("").match(/^w(rite)? /)){
+//cwarn("TAB ON WRITE SUMPUMB");
+//		}
+//		else{
+		init_complete_mode({stat: true});
+//		}
+		return;
+	}
 	num_completion_tabs = 0;
 	if (sym=="ENTER_") return handle_edit_input_enter();
 	if (sym=="LEFT_"){if (stat_x > 0) stat_x--;}
 	else if(sym=="RIGHT_"){if(stat_x<stat_com_arr.length)stat_x++;}
-	else if (sym == "BACK_") {
+	else if (sym == "BACK_") {/*«*/
 		if (stat_x > 0) {
 			stat_x--;
 			stat_com_arr.splice(stat_x, 1);
 		} 
 		else this.stat_input_type = "";
 		
-	}
+	}/*»*/
 	else if(sym=="DEL_"){if(stat_com_arr.length)stat_com_arr.splice(stat_x,1);}
 	else if(sym=="a_C"){if(stat_x==0)return;stat_x=0;}
 	else if(sym=="e_C"){if(stat_x==stat_com_arr.length)return;stat_x=stat_com_arr.length;}
 	else if (sym=="UP_"||sym=="DOWN_") do_history_arrow(sym);
+	else{
+		let func = KEY_DOWN_FUNCS[sym];
+		if (func === init_complete_mode){
+			init_complete_mode({stat: true});
+		}
+	}
+//	else if (KEY_DOWN_FUNCS[sym])
 	render({},98);
 };//»
 const handle_stat_cb_keydown=(sym)=>{//«
@@ -5925,8 +5971,6 @@ this.onkeydown=async(e, sym, code)=>{//«
 	if (sym=="ENTER_") {//«
 		if (mode===COMMAND_MODE) return toggle_cur_fold({useOffset: true});
 	}//»
-//	toggle_hold_y = null;
-//	toggle_hold_x = null;
 	if (UPDOWN_FUNCS[sym]) {/*«*/
 		if (!last_updown) {
 			scroll_hold_x = x;
@@ -5986,6 +6030,7 @@ this.set_ask_close_cb = () =>{//«
 		else {
 			if (edit_fobj) {
 				edit_fobj.unlockFile();
+				delete Term.curEditNode;
 			}
 			if (app_cb) app_cb();
 			topwin.forceKill();
@@ -6103,7 +6148,7 @@ topwin._fatal(new Error("This is a 'write locked' file!"));
 	}
 	else {
 		edit_fobj.lockFile();
-		Term.cur_edit_node = edit_fobj;
+		Term.curEditNode = edit_fobj;
 	}
 }
 	

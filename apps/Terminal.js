@@ -278,6 +278,7 @@ const make_sh_error_com = (name, mess, com_env, in_background)=>{//«
 	let com = new this.comClasses.ErrCom(name, null,null, in_background, com_env);
 //SPOIRUTM
 	com.errorMessage = `sh: ${name}: ${mess}`;
+	com.doNotAddCom = true;
 	return com;
 };//»
 
@@ -654,7 +655,10 @@ const Com = class {//«
 				this.killed = true;
 			};
 			this.no=(mess)=>{
-				if (mess) this.err(`${this.name}: ${mess}`);
+				if (mess) {
+					if (!this.doNotAddCom) mess = `${this.name}: ${mess}`;
+					this.err(mess);
+				}
 				if (this.inpipe) this.out(EOF);
 				Y(E_ERR);
 				this.killed = true;
@@ -1013,7 +1017,8 @@ init(){
 	this.optRecur = opts.recursive || opts.R;
 }
 async run(){//«
-	let {pipeTo, isSub, term, err, args} = this;
+	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
+	const{pipeTo, isSub, term, err, args} = this;
 	const out=(...args)=>{
 		this.out(...args);
 	};
@@ -1022,7 +1027,7 @@ async run(){//«
 	let dir_was_last = false;
 	let all = this.optAll;
 	let recur = this.optRecur;
-	const do_path = async(node_or_path)=>{
+	const do_path = async(node_or_path)=>{//«
 		let node;
 		let wants_dir;
 		let path;
@@ -1080,9 +1085,6 @@ async run(){//«
 				if (nm=="."||nm=="..") continue;
 				if (nm.match(/^\./)) continue;
 			}
-//			if (no_fmt) {
-//				out(nm);
-//			}
 			dir_arr.push(nm);
 		}
 		if (recur){
@@ -1103,13 +1105,13 @@ async run(){//«
 					nm=`'${nm}'`;
 				}
 				if (n.appName===FOLDER_APP) {
-					types.push(ShellMod.var.dirType);
+					types.push(dirType);
 				}
 				else if (n.appName==="Link") {
-					if (!await n.ref) types.push(ShellMod.var.badLinkType);
-					else types.push(ShellMod.var.linkType);
+					if (!await n.ref) types.push(badLinkType);
+					else types.push(linkType);
 				}
-				else if (n.blobId === ShellMod.var.idbDataType) types.push(ShellMod.var.idbDataType);
+				else if (n.blobId === idbDataType) types.push(idbDataType);
 				else types.push(null);
 			}
 			let name_lens = [];
@@ -1126,7 +1128,7 @@ async run(){//«
 		if (recur) {
 			for (let dir of recur_dirs) await do_path(dir);
 		}
-	};
+	};//»
 	while (args.length) {
 		await do_path(args.shift());
 	}
@@ -8792,11 +8794,10 @@ const ondevreload = async() => {//«
 refs.ondevreload = ondevreload;
 //»
 
-this.onkill = (if_dev_reload)=>{//«
-	execute_kill_funcs();
-	if (this.cur_edit_node) this.cur_edit_node.unlockFile();
+this.onkill = async(if_dev_reload)=>{//«
+	if (this.curEditNode) this.curEditNode.unlockFile();
 	if (!if_dev_reload) {
-		return save_history();
+		return await save_history();
 	}
 
 	this.reInit={
@@ -8814,7 +8815,7 @@ this.onkill = (if_dev_reload)=>{//«
 	delete globals.shell_commands;
 	delete globals.shell_command_options;
 
-	save_history();
+	await save_history();
 
 };
 refs.onkill = this.onkill;

@@ -425,10 +425,10 @@ const com_cat = class extends Com{//«
 		}
 	}
 	async run() {//«
-		const{out,stdin}=this;
+		const{stdin}=this;
 		if (!this.args.length){
 			if (stdin){
-				out(stdin.join("\n"));
+				this.out(stdin.join("\n"));
 				this.ok();
 			}
 			//else: we have piped input, and are waiting for an 'EOF' to exit
@@ -436,7 +436,7 @@ const com_cat = class extends Com{//«
 		}
 		let txt;
 		while (txt = await this.nextArgAsText()){
-			if (!isErr(txt)) out(txt.join("\n"));
+			if (!isErr(txt)) this.out(txt.join("\n"));
 		}
 		this.nok();
 	}//»

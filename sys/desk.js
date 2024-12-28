@@ -2644,14 +2644,14 @@ ICONS = OK;
 		for (let icn of _icons) ret.push(icn.icon);
 		return ret;
 	};//»
-reload(opts={}){//«
+async reload(opts={}){//«
 	let {app, appName, main} = this;
 	if (this.killed){
 		poperr("This window has been killed");
 		return;
 	}
 //	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
-	if (app.ondevreload) return app.ondevreload();
+	if (app.ondevreload) return await app.ondevreload();
 	if (appName.match(/^local\./)&&!opts.dataUrl){
 		return popup("'local' (development) applications cannot be independently reloaded!");
 	}
@@ -2665,18 +2665,14 @@ reload(opts={}){//«
 cwarn(`No script found for app: ${appName}`);
 	}
 	delete LOTW.apps[appName];
-
-	app.onkill&&app.onkill(true);
+	if (app.onkill) await app.onkill(true);
+//	app.onkill&&app.onkill(true);
 	let arg = this.arg;
 	arg.APPARGS = {reInit: app.reInit};
 	arg.noShow = opts.noShow;
 	arg.dataUrl = opts.dataUrl;
 	main.innerHTML="";
 	return this.loadApp();
-//	return new Promise((Y,N)=>{
-//		arg.CB = Y;
-//		make_app(arg);
-//	});
 };//»
 
 loadApp(){//Old make_app«

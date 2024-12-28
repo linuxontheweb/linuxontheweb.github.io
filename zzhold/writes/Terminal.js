@@ -80,7 +80,6 @@ const Shell = ShellMod.Shell;
 
 //»
 
-
 //Terminal«
 
 let USE_ONDEVRELOAD = false;
@@ -106,8 +105,8 @@ constructor(Win){//«
 
 this.Win=Win;
 
-this.shellMod = globals.ShellMod;
-this.shell = globals.ShellMod.Shell;
+this.ShellMod = globals.ShellMod;
+this.Shell = globals.ShellMod.Shell;
 //const ShellMod = globals.ShellMod;
 //const Shell = ShellMod.Shell;
 
@@ -305,7 +304,7 @@ this.noPromptMode=false;
 //let this.minHeight;
 this.minHeight=undefined;
 
-//let com_scroll_mode = false;
+//let this.comScrollMode = false;
 this.comScrollMode=false;
 
 //let this.numStatLines = 0;
@@ -545,7 +544,7 @@ wrapdiv.appendChild(tabdiv);
 main.appendChild(wrapdiv);
 main.appendChild(areadiv);
 
-this.tabsize = parseInt(tabdiv.style.tabSize);
+this.tabSize = parseInt(tabdiv.style.tabSize);
 this.textarea = textarea; 
 this.areadiv = areadiv;
 this.tabdiv=tabdiv;
@@ -555,6 +554,72 @@ this.overlay = overlay;
 }//»
 
 //Util«
+
+async getch(promptarg, def_ch){//«
+	if (promptarg){
+		for (let ch of promptarg) this.handleLetterPress(ch);
+	}
+	this.sleeping = false;
+	return new Promise((Y,N)=>{
+		this.#getChDefCh = def_ch;
+		this.#getChCb = Y;
+	});
+}
+//»
+async readLine(promptarg){//«
+	if (this.lines[this.lines.length-1]&&this.lines[this.lines.length-1].length){
+		line_break();
+		this.curPromptLine = this.y+this.scrollNum-1;
+	}
+	this.x=0;
+	this.sleeping = false;
+	if (promptarg){
+		this.#readLinePromptLen = promptarg.length;
+		for (let ch of promptarg) this.handleLetterPress(ch);
+	}
+	else this.#readLinePromptLen = 0;
+	this.x = this.#readLinePromptLen;
+	return new Promise((Y,N)=>{
+		this.#readLineCb = Y;
+	});
+}
+//»
+setTabSize(s){//«
+	if (!s.match(/[0-9]+/)) return;
+	let n = parseInt(s);
+	if (n==0||n>this.maxTabSize) return;
+	this.tabdiv.style.tabSize = n;
+	this.tabSize = tabdiv.style.tabSize;
+	return true;
+}
+//»
+tryKill(){//«
+	if (this.isEditor) {
+//		editor.set_stat_message("Really close the window? [y/N]");
+		actor.stat_message="Really close the window? [Y/n]";
+		this.render();
+		actor.set_ask_close_cb();
+	}
+	else{
+cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
+	}
+}
+//»
+curWhite(){this.curBG="#ddd";this.curFG="#000";}
+curBlue(){this.curBG="#00f";this.curFG="#fff";}
+executeBackgroundCommand(s){//«
+
+	let shell = new this.Shell(this, true);
+	let env = {};
+	for (let k in this.env){
+		env[k]=this.env[k];
+	}
+	shell.execute(s,{env});
+
+}//»
+get useDevParser(){//«
+	return USE_DEVPARSER;
+}//»
 stat(mess){status_bar.innerText=mess;};
 async getLineFromPager(arr, name){//«
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
@@ -637,7 +702,7 @@ checkScrolling(){//«
 //»
 
 wrapLine(str){//«
-	str = str.replace(/\t/g,"\x20".rep(this.tabsize));
+	str = str.replace(/\t/g,"\x20".rep(this.tabSize));
 	let out = '';
 	let w = this.w;
 	while (str.length > w){
@@ -1079,14 +1144,11 @@ checkLineLen(dy){//«
 	}
 }
 //»
-cx(){//«
-	return this.x;
-}//»
-
 cy(){//«
 	return this.y + this.scrollNum;
 }//»
 trimLines(){while (this.curPromptLine+1 != this.lines.length) this.lines.pop();}
+
 //»
 //Render«
 
@@ -1641,8 +1703,7 @@ resize()  {//«
 
 async execute(str, opts={}){//«
 	this.env['USER'] = globals.CURRENT_USER;
-//	cur_shell = this.shell;
-	this.curShell = new this.shell(this);
+	this.curShell = new this.Shell(this);
 	let gotstr = str.trim();
 
 	str = str.replace(/\x7f/g, "");
@@ -1681,22 +1742,6 @@ cwarn("NOT WRITING!!!", gotstr);
 	this.history.push(gotstr);
 }
 //»
-/*
-async execute(s){//«
-	if (this.curShell){
-cwarn("Sleeping");
-		return false;
-	}
-	await execute(s);
-	this.curShell = null;
-//	this.responseEnd();
-//log();
-//	this.sleeping = null;
-	return true;
-}
-//»
-*/
-
 getComPos(){//«
 	let add_x=0;
 	if (this.cy() > this.curPromptLine) {
@@ -1800,10 +1845,10 @@ setPrompt(opts={})  {//«
 }
 //»
 insertCurScroll()  {//«
-	com_scroll_mode = false;
+	this.comScrollMode = false;
 	if (this.linesHold2) this.lines = this.linesHold2.slice(0, this.lines.length);
 	let str = this.curScrollCommand;
-	let arr = fmt_lines_sync(str.split("\n"), this.promptLen);
+	let arr = this.fmtLinesSync(str.split("\n"), this.promptLen);
 	let curarr = this.getPromptStr().split("");
 	for (let i=0; i < arr.length; i++) {
 		let charr = arr[i].split("");
@@ -2083,7 +2128,7 @@ handleLineStr(str, from_scroll, uselen, if_no_render){//«
 	if (typeof uselen=="number") curx=uselen;
 	else curx = this.promptLen;
 	this.linesHold2 = this.lines;
-	if (!com_scroll_mode) {
+	if (!this.comScrollMode) {
 		this.lines = copy_lines(this.lines, this.curPromptLine)
 		if (did_fail) {
 			clear();
@@ -2415,8 +2460,8 @@ break;
 }
 					this.lines.pop();
 				}
-				handle_line_str(str.trim(), true);
-				com_scroll_mode = true;
+				this.handleLineStr(str.trim(), true);
+				this.comScrollMode = true;
 			}
 		}//»
 		else if (code == KC['DOWN']) {//«
@@ -2427,7 +2472,7 @@ break;
 			let pos = this.history.length - this.bufPos;
 			if (this.bufPos == 0) {
 				trim_lines();
-				handle_line_str(this.commandHold.replace(/\n$/,""),null,null,true);
+				this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
 				this.x = this.commandPosHold;
 				this.commandHold = null;
 				this.render();
@@ -2436,8 +2481,8 @@ break;
 				let str = this.history[this.history.length - this.bufPos];
 				if (str) {
 					trim_lines();
-					handle_line_str(str.trim(), true);
-					com_scroll_mode = true;
+					this.handleLineStr(str.trim(), true);
+					this.comScrollMode = true;
 				}
 			}
 		}//»
@@ -2517,8 +2562,8 @@ break;
 				let str = this.history[this.history.length - this.bufPos];
 				if (re.test(str)) {
 					trim_lines();
-					handle_line_str(str.trim(), true);
-					com_scroll_mode = true;
+					this.handleLineStr(str.trim(), true);
+					this.comScrollMode = true;
 					break;
 				}
 			}
@@ -2531,15 +2576,15 @@ break;
 				let str = this.history[this.history.length - this.bufPos];
 				if (re.test(str)) {
 					trim_lines();
-					handle_line_str(str.trim(), true);
-					com_scroll_mode = true;
+					this.handleLineStr(str.trim(), true);
+					this.comScrollMode = true;
 					return;
 				}
 			}
 			if (this.commandHold) {
 				trim_lines();
-				handle_line_str(this.commandHold.trim(), true);
-				com_scroll_mode = true;
+				this.handleLineStr(this.commandHold.trim(), true);
+				this.comScrollMode = true;
 				this.commandHold = null;
 			}
 			else {
@@ -2614,7 +2659,7 @@ handlePage(sym){//«
 			let str = this.history[0];
 			if (str) {
 				trim_lines();
-				handle_line_str(str.trim(), true);
+				this.handleLineStr(str.trim(), true);
 			}
 		}
 	}//»
@@ -2624,7 +2669,7 @@ handlePage(sym){//«
 			this.bufPos = 0;
 			if (this.commandHold!=null) {
 				trim_lines();
-				handle_line_str(this.commandHold.trim(), true);
+				this.handleLineStr(this.commandHold.trim(), true);
 				this.commandHold = null;
 			}
 		}
@@ -2769,14 +2814,12 @@ handleLetterPress(char_arg, if_no_render){//«
 			}
 		}
 	};//»
-//	if (this.ssh_server){
-//		this.ssh_server.send(JSON.stringify({press: char_arg}));
-//		return;
-//	}
+	const{lines}=this;
+	let cy;
 	let line;
-	if (this.lines && this.lines[this.scrollNum + this.y]) {
-		if ((this.x) < this.lines[this.scrollNum + this.y].length && this.lines[this.scrollNum + this.y][0]) {
-			this.lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
+	if (lines && lines[this.scrollNum + this.y]) {
+		if ((this.x) < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
+			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
 			shift_line(this.x-1, this.y, this.x, this.y);
 		}
 	}
@@ -2787,22 +2830,23 @@ handleLetterPress(char_arg, if_no_render){//«
 
 	let endch = null;
 	let didinc = false;
+	cy = this.y+this.scrollNum;
 	if (usex == this.w) {
-		if (this.lines[this.cy()][this.x+1]) endch = this.lines[this.cy()].pop();
+		if (lines[cy][this.x+1]) endch = lines[cy].pop();
 		didinc = true;
 		usey++;
 		usex=0;
 	}
-	if (!this.lines[this.cy()]) {//«
-		this.lines[this.cy()] = [];
-		this.lines[this.cy()][0] = char_arg;
+	if (!lines[cy]) {//«
+		lines[cy] = [];
+		lines[cy][0] = char_arg;
 	}//»
-	else if (this.lines[this.cy()] && char_arg) {//«
+	else if (lines[cy] && char_arg) {//«
 		let do_line = null;
-		if (this.lines[this.cy()][this.x]) do_line = true;
-		this.lines[this.cy()][this.x] = char_arg;
+		if (lines[cy][this.x]) do_line = true;
+		lines[cy][this.x] = char_arg;
 	}//»
-	let ln = this.lines[this.scrollNum+usey];
+	let ln = lines[this.scrollNum+usey];
 	if (ln && ln[usex]) {//«
 		if (this.x+1==this.w) {
 			if (!didinc) {
@@ -2810,7 +2854,7 @@ handleLetterPress(char_arg, if_no_render){//«
 				usex=0;
 			}
 			if (endch) {
-				if (!ln||!ln.length||ln[0]===null) this.lines[this.scrollNum+usey] = [endch];
+				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
 				else ln.unshift(endch);	
 			}
 		}
@@ -2818,19 +2862,18 @@ handleLetterPress(char_arg, if_no_render){//«
 	}//»
 	else {//«
 		if (!ln||!ln.length||ln[0]===null) {
-			this.lines[this.scrollNum+usey] = [endch];
+			lines[this.scrollNum+usey] = [endch];
 		}
 	}//»
 	this.x = usex;
 	this.y = usey;
-	dounshift(this.lines);
-//DLOPOEIRU
-//	this.scrollIntoView(8);
+	dounshift(lines);
 	if (!if_no_render) this.render();
 	this.textarea.value = "";
 }
 //»
 handlePriv(sym, code, mod, ispress, e){//«
+	const{lines}=this;
 	if (this.sleeping) {
 		if (ispress || sym=="BACK_") return;
 	}
@@ -2860,18 +2903,18 @@ handlePriv(sym, code, mod, ispress, e){//«
 			}
 		}
 		else if (this.#readLineCb){
-			if (ispress || OK_READLINE_SYMS.includes(sym)){
+			if (ispress || this.okReadlineSyms.includes(sym)){
 				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
 			}
 			else if (sym==="ENTER_"){
 				let s='';
 				let from = this.curPromptLine+1;
-				for (let i=from; i < this.lines.length; i++) {
+				for (let i=from; i < lines.length; i++) {
 					if (i==from) {
-						s+=this.lines[i].slice(this.#readLinePromptLen).join("");
+						s+=lines[i].slice(this.#readLinePromptLen).join("");
 					}
 					else {
-						s+=this.lines[i].join("");
+						s+=lines[i].join("");
 					}
 				}
 				this.#readLineCb(s);
@@ -3052,6 +3095,135 @@ if (actor.onkeydown) actor.onkeydown(e ,sym, code);
 
 //»
 
+//Editor/Pager«
+
+resetXScroll(){tabdiv._x=0;}
+xScrollTerminal(opts={}){//«
+
+	let {amt, toRightEdge, toLeftEdge} = opts;
+	let _x = tabdiv._x;
+	let cw = tabdiv.clientWidth;
+	let sw = tabdiv.scrollWidth;
+	let xdiff;
+	let usex = null;
+	if (amt) xdiff = amt;
+	else {
+		if (toRightEdge){
+			usex = cw - sw;
+		}
+		else if (toLeftEdge){
+			usex = 0;
+		}
+		else {
+			xdiff = cw/2;
+			if (opts.right){
+				xdiff = -xdiff;
+			}
+			else if (opts.left){
+			}
+		}
+	}
+	if (xdiff){
+		_x+=xdiff;
+		if (_x > 0) _x = 0;
+		tabdiv._x = _x;
+	}
+	else if (usex !== null) tabdiv._x = usex;
+	else {
+	return cwarn("x_scroll_terminal: nothing to do!!!");
+	}
+this.render();
+}
+//»
+clipboardCopy(s){do_clipboard_copy(null,s);}
+setLines(linesarg, colorsarg){//«
+	this.lines = linesarg;
+	this.lineColors = colorsarg;
+}//»
+//this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {
+initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}){//«
+	const{actor}=this;
+	let escape_fn = funcs.onescape;
+	let dev_reload_fn = funcs.ondevreload;
+//	let screen = {actor, appclass, this.lines, this.lineColors, x, y, this.scrollNum, this.numStatLines, onescape: termobj.onescape};
+	let screen = {
+		actor: this.actor,
+		appcClass: this.appClass,
+		lines: this.lines,
+		lineColors: this.lineColors,
+		x: this.x,
+		y: this.y,
+		scrollNum: this.scrollNum,
+		numStatLines: this.numStatLines,
+		funcs: {
+			onescape: this.onescape,
+			ondevreload: this.ondevreload
+		}
+	};
+	if (!this.actor) this.holdTerminalScreen = screen;
+	this.onescape = escape_fn;
+	this.ondevreload = dev_reload_fn;
+	this.actor = actor_arg;
+
+	this.appClass = classarg;
+	this.isEditor = appclass == "editor";
+	this.isPager = appclass == "pager";
+
+	this.lines = new_lines;
+	this.lineColors = new_colors;
+	this.scrollNum=this.x=this.y=0;
+	this.numStatLines=n_stat_lines;
+	if (this.numStatLines) {
+		this.wrapdiv.appendChild(this.statdiv);
+		this.generateStatHtml();
+	}
+	return screen;
+}//»
+quitNewScreen(screen){//«
+//	const{actor}=this;
+	let actor;
+	if (screen === this.holdTerminalScreen) this.holdTerminalScreen = null;
+	let old_actor = this.actor;
+/*«
+	({
+		actor,
+		appclass: this.appClass,
+		lines: this.lines,
+		line_colors: this.lineColors,
+		x: this.x,
+		y: this.y,
+		scroll_num: this.scrollNum,
+		num_stat_lines: this.numStatLines
+	} = screen);
+»*/
+	this.actor = screen.actor;
+	this.appClass = screen.appClass;
+	this.lines=screen.lines;
+	this.lineColors = screen.lineColors;
+	this.x=screen.x;
+	this.y=screen.y;
+	this.scrollNum = screen.scrollNum;
+	this.numStatLines = screen.numStatLines;
+
+	this.isEditor = appclass == "editor";
+	this.isPager = appclass == "pager";
+	if (!screen.funcs) screen.funcs = {};
+	this.onescape = screen.funcs.onescape;
+	this.ondevreload = screen.funcs.ondevreload;
+	
+	if (!this.numStatLines){
+		this.statdiv._del();
+	}
+	this.tabdiv._x = 0;
+	if (old_actor&&old_actor.cb) {
+		old_actor.cb(screen);
+	}
+}//»
+
+//»
+
+//Window/App«
+
 async onappinit(appargs={}){//«
 cwarn(12345);
 	this.env['USER'] = globals.CURRENT_USER;
@@ -3121,38 +3293,6 @@ if (rv) init_prompt += "\nImported libs: "+rv;
 	if (USE_ONDEVRELOAD) this.ondevreload = this._ondevreload;
 }//»
 
-//Obj/CB«
-
-async getch (promptarg, def_ch){//«
-	if (promptarg){
-		for (let ch of promptarg) this.handleLetterPress(ch);
-	}
-	this.sleeping = false;
-	return new Promise((Y,N)=>{
-		this.#getChDefCh = def_ch;
-		this.#getChCb = Y;
-	});
-}
-//»
-async readLine(promptarg){//«
-	if (this.lines[this.lines.length-1]&&this.lines[this.lines.length-1].length){
-		line_break();
-		this.curPromptLine = this.y+this.scrollNum-1;
-	}
-	this.x=0;
-	this.sleeping = false;
-	if (promptarg){
-		this.#readLinePromptLen = promptarg.length;
-		for (let ch of promptarg) this.handleLetterPress(ch);
-	}
-	else this.#readLinePromptLen = 0;
-	this.x = this.#readLinePromptLen;
-	return new Promise((Y,N)=>{
-		this.#readLineCb = Y;
-	});
-}
-//»
-
 onescape(){//«
 	textarea&&textarea.focus();
 	if (check_scrolling()) return true;
@@ -3169,6 +3309,7 @@ onsave(){//«
 	if (actor && actor.save) actor.save();
 }
 //»
+
 async _ondevreload(){//«
 
 /*«
@@ -3184,7 +3325,7 @@ async _ondevreload(){//«
 //	await load_new_shell();
 	ShellMod.util.deleteMods(DEL_MODS);
 	if (use_str){
-		handle_line_str(use_str);
+		this.handleLineStr(use_str);
 		this.handleEnter();
 	}
 //	ShellMod.util.deleteComs(DEL_COMS);
@@ -3195,21 +3336,19 @@ async _ondevreload(){//«
 }
 //»
 
-onkill(if_dev_reload){//«
-	const{actor}=this;
-//	execute_kill_funcs();
-	if (this.cur_edit_node) this.cur_edit_node.unlockFile();
+async onkill(if_dev_reload){//«
+	if (this.curEditNode) this.curEditNode.unlockFile();
 	if (!if_dev_reload) {
-		return save_history();
+		return await this.saveHistory();
 	}
 
 	this.reInit={
 		termBuffer: this.history,
 		useOnDevReload: !!this.ondevreload
 	};
-//	let actor = editor||pager;
-	if (actor) {
-		this.reInit.commandStr = actor.command_str;
+
+	if (this.actor) {
+		this.reInit.commandStr = this.actor.command_str;
 	}
 
 	ShellMod.util.deleteMods(DEL_MODS);
@@ -3218,7 +3357,7 @@ onkill(if_dev_reload){//«
 	delete globals.shell_commands;
 	delete globals.shell_command_options;
 
-	save_history();
+	await this.saveHistory();
 
 }
 //»
@@ -3241,177 +3380,14 @@ onblur(){//«
 	this.textarea.blur();
 }
 //»
-onresize(){
-	this.resize();
-}
-onkeydown(e,sym,mod){
-//log("DOWN", e);
-	this.handle(sym,e,false,e.keyCode,mod);
-}
-onkeypress(e) {
-//log("PRESS", e);
-	this.handle(e.key, e, true, e.charCode, "");
-}
-onkeyup(e,sym){
+onresize(){this.resize();}
+onkeydown(e,sym,mod){this.handle(sym,e,false,e.keyCode,mod);}
+onkeypress(e) {this.handle(e.key, e, true, e.charCode, "");}
+onkeyup(e,sym){//«
 const{actor}=this;
 if (actor&&actor.onkeyup) actor.onkeyup(e, sym);
-}
-//Terminal-specific methods
-
-//Editor/Pager specific«
-resetXScroll(){tabdiv._x=0;}
-xScrollTerminal(opts={}){//«
-
-	let {amt, toRightEdge, toLeftEdge} = opts;
-	let _x = tabdiv._x;
-	let cw = tabdiv.clientWidth;
-	let sw = tabdiv.scrollWidth;
-	let xdiff;
-	let usex = null;
-	if (amt) xdiff = amt;
-	else {
-		if (toRightEdge){
-			usex = cw - sw;
-		}
-		else if (toLeftEdge){
-			usex = 0;
-		}
-		else {
-			xdiff = cw/2;
-			if (opts.right){
-				xdiff = -xdiff;
-			}
-			else if (opts.left){
-			}
-		}
-	}
-	if (xdiff){
-		_x+=xdiff;
-		if (_x > 0) _x = 0;
-		tabdiv._x = _x;
-	}
-	else if (usex !== null) tabdiv._x = usex;
-	else {
-	return cwarn("x_scroll_terminal: nothing to do!!!");
-	}
-this.render();
-}
-//»
-clipboardCopy(s){do_clipboard_copy(null,s);}
-
-setLines(linesarg, colorsarg){//«
-	this.lines = linesarg;
-	this.lineColors = colorsarg;
-}//»
-//this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {
-initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}){//«
-	const{actor}=this;
-	let escape_fn = funcs.onescape;
-	let dev_reload_fn = funcs.ondevreload;
-//	let screen = {actor, appclass, this.lines, this.lineColors, x, y, this.scrollNum, this.numStatLines, onescape: termobj.onescape};
-	let screen = {
-		actor,
-		appclass: this.appClass,
-		lines: this.lines,
-		line_colors: this.lineColors,
-		x: this.x,
-		y: this.y,
-		scroll_num: this.scrollNum,
-		num_stat_lines: this.numStatLines,
-		funcs: {
-			onescape: this.onescape,
-			ondevreload: this.ondevreload
-		}
-	};
-	if (!this.actor) this.holdTerminalScreen = screen;
-	termobj.onescape = escape_fn;
-	termobj.ondevreload = dev_reload_fn;
-	this.actor = actor_arg;
-
-	this.appClass = classarg;
-	this.isEditor = appclass == "editor";
-	this.isPager = appclass == "pager";
-
-	this.lines = new_lines;
-	this.lineColors = new_colors;
-	this.scrollNum=this.x=this.y=0;
-	this.numStatLines=n_stat_lines;
-	if (this.numStatLines) {
-		this.wrapdiv.appendChild(statdiv);
-		this.generateStatHtml();
-	}
-	return screen;
-
-}//»
-quitNewScreen(screen){//«
-//	const{actor}=this;
-	let actor;
-	if (screen === this.holdTerminalScreen) this.holdTerminalScreen = null;
-	let old_actor = this.actor;
-	({
-		actor,
-		appclass,
-		lines: this.lines,
-		line_colors: this.lineColors,
-		x: this.x,
-		y: this.y,
-		scroll_num: this.scrollNum,
-		num_stat_lines: this.numStatLines
-	} = screen);
-
-	this.actor = actor;
-	this.isEditor = appclass == "editor";
-	this.isPager = appclass == "pager";
-	if (!screen.funcs) screen.funcs = {};
-	termobj.onescape = screen.funcs.onescape;
-	termobj.ondevreload = screen.funcs.ondevreload;
-	
-	if (!this.numStatLines){
-		this.statdiv._del();
-	}
-	this.tabdiv._x = 0;
-	if (old_actor&&old_actor.cb) {
-		old_actor.cb(screen);
-	}
 }//»
 
-//»
-setTabSize(s){//«
-	if (!s.match(/[0-9]+/)) return;
-	let n = parseInt(s);
-	if (n==0||n>MAX_TAB_SIZE) return;
-	tabdiv.style.tabSize = n;
-	this.tabsize = tabdiv.style.tabSize;
-	return true;
-}
-//»
-tryKill(){//«
-	if (this.isEditor) {
-//		editor.set_stat_message("Really close the window? [y/N]");
-		actor.stat_message="Really close the window? [Y/n]";
-		this.render();
-		actor.set_ask_close_cb();
-	}
-	else{
-cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
-	}
-}
-//»
-curWhite(){this.curBG="#ddd";this.curFG="#000";}
-curBlue(){this.curBG="#00f";this.curFG="#fff";}
-executeBackgroundCommand(s){//«
-
-	let shell = new Shell(this, true);
-	let env = {};
-	for (let k in this.env){
-		env[k]=this.env[k];
-	}
-	this.shell.execute(s,{env});
-
-}//»
-get useDevParser(){//«
-	return USE_DEVPARSER;
-}//»
 
 //»
 
