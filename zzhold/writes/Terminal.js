@@ -87,12 +87,6 @@ let USE_DEVPARSER = false;
 
 LOTW.apps["local.Terminal"] = class {
 
-/*«
-let this.#readLineCb;
-let this.#readLinePromptLen;
-let this.#getChCb, this.#getChDefCh;
-let this.#doContinue = false;
-»*/
 //Private Vars«
 #readLineCb;
 #readLinePromptLen;
@@ -106,7 +100,6 @@ this.Win=Win;
 
 this.ShellMod = globals.ShellMod;
 this.Shell = globals.ShellMod.Shell;
-this.tabSize=4;
 this.main = Win.main;
 this.mainWin = Win.main;
 this.Desk = Win.Desk;
@@ -165,18 +158,15 @@ Toggling of this.paragraphSelectMode is now done with Ctrl+Alt+p (p_CA).
 »*/
 this.paragraphSelectMode = true;
 
-this.highlightActorBg = false;
-this.actorHighlightColor="#101010";
 
-//vim row folds
-this.rowFoldColor = "rgb(160,160,255)";
-
+this.isScrolling = false;
 this.didInit = false;
 this.winid = this.Win.id;
 this.cursorId = `cursor_${this.winid}`;
 this.numId = this.winid.split("_")[1];
+
+this.tabSize=4;
 this.minTermWid = 15;
-this.isScrolling = false;
 this.maxTabSize = 256;
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
 this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
@@ -194,6 +184,8 @@ this.doExtractPrompt = true;
 this.maxOverlayLength=42;
 this.terminalIsLocked=false;
 
+//vim row folds
+this.rowFoldColor = "rgb(160,160,255)";
 this.bgCol="#080808";
 this.ff = "monospace";
 this.fw="500";
@@ -202,6 +194,8 @@ this.curFG="#fff";
 this.curBGBlurred = "#444";
 this.overlayOp="0.66";
 this.tCol = "#e3e3e3";
+this.highlightActorBg = false;
+this.actorHighlightColor="#101010";
 
 this.noPromptMode=false;
 this.comScrollMode=false;
@@ -220,7 +214,14 @@ this.lineColors=[];
 this.currentCutStr="";
 this.history=[];
 
+this.env['USER'] = globals.CURRENT_USER;
+this.cur_dir = this.getHomedir();
+this.cwd = this.cur_dir;
+
 this.makeDOMElem();
+
+this.setFontSize();
+this.resize();
 
 }//»
 
@@ -382,6 +383,8 @@ this.wrapdiv = wrapdiv;
 this.overlay = overlay;
 this.statdiv = statdiv;
 }//»
+
+//Execute«
 async execute(str, opts={}){//«
 
 	this.env['USER'] = globals.CURRENT_USER;
@@ -422,12 +425,38 @@ async execute(str, opts={}){//«
 	else{
 cwarn("NOT WRITING!!!", gotstr);
 //		write_to_history(gotstr);
+//		await this.writeToHistory(gotstr);
 	}
 	this.history.push(gotstr);
 }
 //»
+executeBackgroundCommand(s){//«
+
+	let shell = new this.Shell(this, true);
+	let env = {};
+	for (let k in this.env){
+		env[k]=this.env[k];
+	}
+	shell.execute(s,{env});
+
+}//»
+//»
 
 //Util«
+
+setFontSize(){//«
+	let gotfs = localStorage.Terminal_fs;
+	if (gotfs) {
+		let val = strNum(gotfs);
+		if (isNum(val,true)) this.grFs = val;
+		else {
+			this.grFs = this.defFs;
+			delete localStorage.Terminal_fs;
+		}
+	}
+	else this.grFs = this.defFs;
+	this.wrapdiv._fs = this.grFs;
+}//»
 
 tryKill(){//«
 	if (this.isEditor) {
@@ -482,20 +511,10 @@ setTabSize(s){//«
 //»
 curWhite(){this.curBG="#ddd";this.curFG="#000";}
 curBlue(){this.curBG="#00f";this.curFG="#fff";}
-executeBackgroundCommand(s){//«
-
-	let shell = new this.Shell(this, true);
-	let env = {};
-	for (let k in this.env){
-		env[k]=this.env[k];
-	}
-	shell.execute(s,{env});
-
-}//»
+stat(mess){this.statusBar.innerText=mess;};
 get useDevParser(){//«
 	return USE_DEVPARSER;
 }//»
-stat(mess){this.statusBar.innerText=mess;};
 async getLineFromPager(arr, name){//«
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		return poperr("Could not load the pager module");
@@ -1521,7 +1540,20 @@ async saveHistory(){//«
 	}
 };
 //»
-
+async initHistory(termBuffer){//«
+	if (termBuffer) {
+		this.history = termBuffer;
+		return;
+	}
+	let arr = await this.getHistory();
+	if (!arr) this.history = [];
+	else {
+		arr.pop();
+		arr = arr.reverse();
+		arr = util.uniq(arr);
+		this.history = arr.reverse();
+	}
+}//»
 //»
 //Prompt/Command line«
 
@@ -1659,7 +1691,7 @@ doClearLine(){//«
 
 
 //»
-//Completion«
+//Tab completion«
 
 async quoteCompletion(use_dir, tok0, arr, arr_pos){//«
 //At the end of a string with exactly one non-backtick quote character...
@@ -2295,6 +2327,39 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 	}
 }
 //»
+async respInit(addMessage){//«
+
+	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
+	if(dev_mode){
+		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+		init_prompt+=`\nDev Parser: ${USE_DEVPARSER}`;
+	}
+	if (admin_mode){
+		init_prompt+=`\nAdmin mode: true`;
+	}
+	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
+	let env_file_path = `${this.cur_dir}/.env`; 
+	let env_lines = await env_file_path.toLines();
+	if (env_lines) {
+		let rv = ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
+		if (rv.length){
+			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
+		}
+	}
+
+{
+	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
+if (rv) init_prompt += "\nImported libs: "+rv;
+}
+	this.response(init_prompt);
+
+}//»
+respHints(){//«
+	if (!dev_mode) {
+		this.response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners" like:`, {isWrn: true});
+		this.response(`  $ cat some files here || echo "That didn't quite work!"`, {isWrn: true});
+	}
+}//»
 
 //»
 
@@ -2313,17 +2378,6 @@ doCtrlC(){//«
 			delete this.curShell.stdin;
 		}
 	}
-/*
-	else if (this.ssh_client){
-		if (this.ssh_immediate_mode){
-			delete this.ssh_immediate_mode;
-			response("Immediate mode off");
-			response_end();
-			return;
-		}
-		this.ssh_client.close();
-	}
-*/
 	else {
 		this.handlePriv(null,"^".charCodeAt(), null, true);
 		this.handlePriv(null,"C".charCodeAt(), null, true);
@@ -2800,7 +2854,7 @@ handle(sym, e, ispress, code, mod){//«
 	if (this.locked) {
 		return;
 	}
-	if (this.isScrolling){
+	if (this.isScrolling){//«
 		if (!ispress) {
 			if (sym.match(/^[A-Z]+_$/)){
 				if (sym==="SPACE_") return;
@@ -2811,7 +2865,7 @@ handle(sym, e, ispress, code, mod){//«
 		this.isScrolling = false;
 		this.render();
 		return;
-	}
+	}//»
 	if (e && sym=="d_C") e.preventDefault();
 	if (!ispress) {//«
 		if (sym == "=_C") {
@@ -2844,15 +2898,15 @@ handle(sym, e, ispress, code, mod){//«
 	if (e&&sym=="o_C") e.preventDefault();
 
 	if (actor){
-if (ispress){
-if (actor.onkeypress) actor.onkeypress(e, sym, code);
-}
-else{
-if (actor.onkeydown) actor.onkeydown(e ,sym, code);
-}
-//		actor.key_handler(sym, e, ispress, code);
+		if (ispress){
+			if (actor.onkeypress) actor.onkeypress(e, sym, code);
+		}
+		else{
+			if (actor.onkeydown) actor.onkeydown(e ,sym, code);
+		}
 		return;
 	}
+
 	if (ispress){}
 	else if (!sym) return;
 
@@ -2862,7 +2916,7 @@ if (actor.onkeydown) actor.onkeydown(e ,sym, code);
 
 //»
 
-//Editor/Pager«
+//Alt screen apps (vim, less, etc.)«
 
 resetXScroll(){tabdiv._x=0;}
 xScrollTerminal(opts={}){//«
@@ -2907,7 +2961,6 @@ setLines(linesarg, colorsarg){//«
 	this.lines = linesarg;
 	this.lineColors = colorsarg;
 }//»
-//this.init_new_screen = (actor_arg, classarg, new_lines, new_colors, n_stat_lines, escape_fn) => {
 initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}){//«
 	const{actor}=this;
 	let escape_fn = funcs.onescape;
@@ -2989,92 +3042,7 @@ quitNewScreen(screen){//«
 
 //»
 
-//Window/App«
-
-async onappinit(appargs={}){//«
-	this.env['USER'] = globals.CURRENT_USER;
-	this.cur_dir = this.getHomedir();
-	this.cwd = this.cur_dir;
-	let gotfs = localStorage.Terminal_fs;
-	if (gotfs) {
-		let val = strNum(gotfs);
-		if (isNum(val,true)) this.grFs = val;
-		else {
-			this.grFs = this.defFs;
-			delete localStorage.Terminal_fs;
-		}
-	}
-	else this.grFs = this.defFs;
-	this.wrapdiv._fs = this.grFs;
-	this.resize();
-	let {reInit} = appargs;
-	if (!reInit) reInit = {};
-	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
-	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
-	if (termBuffer) this.history = termBuffer;
-	else {
-		let arr = await this.getHistory();
-		if (!arr) this.history = [];
-		else {
-			arr.pop();
-			arr = arr.reverse();
-			arr = util.uniq(arr);
-			this.history = arr.reverse();
-		}
-	}
-	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
-	if(dev_mode){
-		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-		init_prompt+=`\nDev Parser: ${USE_DEVPARSER}`;
-	}
-	if (admin_mode){
-		init_prompt+=`\nAdmin mode: true`;
-	}
-	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
-	let env_file_path = `${this.cur_dir}/.env`; 
-	let env_lines = await env_file_path.toLines();
-	if (env_lines) {
-		let rv = ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
-		if (rv.length){
-			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
-		}
-	}
-{
-	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
-if (rv) init_prompt += "\nImported libs: "+rv;
-}
-	this.response(init_prompt);
-	if (!dev_mode) {
-		this.response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners" like:`, {isWrn: true});
-		this.response(`  $ cat some files here || echo "That didn't quite work!"`, {isWrn: true});
-	}
-	this.didInit = true;
-	this.sleeping = false;
-	this.setPrompt();
-	this.render();
-	if (commandStr) {
-		for (let c of commandStr) this.handleLetterPress(c); 
-		this.handleEnter({noSave: true});
-	};
-	if (USE_ONDEVRELOAD) this.ondevreload = this._ondevreload;
-}//»
-
-onescape(){//«
-	this.textarea.focus();
-	if (this.checkScrolling()) return true;
-	if (this.statusBar.innerText){
-		this.statusBar.innerText = "";
-		return true;
-	}
-	return false;
-}
-//»
-onsave(){//«
-	const{actor}=this;
-//	if (editor) editor.save();
-	if (actor && actor.save) actor.save();
-}
-//»
+//System callbacks«
 
 async _ondevreload(){//«
 
@@ -3101,7 +3069,6 @@ async _ondevreload(){//«
 
 }
 //»
-
 async onkill(if_dev_reload){//«
 	if (this.curEditNode) this.curEditNode.unlockFile();
 	if (!if_dev_reload) {
@@ -3123,10 +3090,46 @@ async onkill(if_dev_reload){//«
 	delete globals.shell_commands;
 	delete globals.shell_command_options;
 
-	await this.saveHistory();
-
+//	await this.saveHistory();
+cwarn("NOT DOING saveHistory");
 }
 //»
+
+async onappinit(appargs={}){//«
+	let {reInit} = appargs;
+	if (!reInit) reInit = {};
+	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
+	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
+	await this.initHistory(termBuffer);
+	await this.respInit(addMessage);
+	this.respHints();
+	this.didInit = true;
+	this.sleeping = false;
+	this.setPrompt();
+	this.render();
+	if (commandStr) {
+		for (let c of commandStr) this.handleLetterPress(c); 
+		this.handleEnter({noSave: true});
+	};
+	if (USE_ONDEVRELOAD) this.ondevreload = this._ondevreload;
+}//»
+
+onescape(){//«
+	this.textarea.focus();
+	if (this.checkScrolling()) return true;
+	if (this.statusBar.innerText){
+		this.statusBar.innerText = "";
+		return true;
+	}
+	return false;
+}//»
+onsave(){//«
+	const{actor}=this;
+//	if (editor) editor.save();
+	if (actor && actor.save) actor.save();
+}
+//»
+
 onfocus(){//«
 	this.isFocused=true;
 	if (this.curScrollCommand) this.insertCurScroll();
@@ -3141,14 +3144,17 @@ onblur(){//«
 	this.textarea.blur();
 }
 //»
-onresize(){this.resize();}
-onkeydown(e,sym,mod){this.handle(sym,e,false,e.keyCode,mod);}
-onkeypress(e) {this.handle(e.key, e, true, e.charCode, "");}
-onkeyup(e,sym){//«
-const{actor}=this;
-if (actor&&actor.onkeyup) actor.onkeyup(e, sym);
-}//»
 
+onresize(){this.resize();}
+onkeydown(e, sym, mod) {
+	this.handle(sym, e, false, e.keyCode, mod);
+}
+onkeypress(e) {
+	this.handle(e.key, e, true, e.charCode, "");
+}
+onkeyup(e,sym){//«
+	if (this.actor&&this.actor.onkeyup) this.actor.onkeyup(e, sym);
+}//»
 
 //»
 
