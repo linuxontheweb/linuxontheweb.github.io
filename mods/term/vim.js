@@ -1,4 +1,11 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
+/*12/29/24: Just did some internal tab detection logic to decide whether it would
+be safe to determine the "graphical" x position by way of multiplying the number
+of leading tabs by tab size and then adding the rest of the remaining characters.
+Not sure if this is really necessary because this is all about detecting the "physical"
+location of the cursor, which is done on a single line basis, every terminal render
+cycle.
+*/
 //12/28/24: BUG: I WASN'T ABLE TO ESCAPE FROM INSERT MODE!?!?!?!?
 /*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!  «
 @ZPLROTUS: Here we are exporing num_lines to the terminal's renderer. This variable 
@@ -228,6 +235,10 @@ let AUTO_INSERT_ON_LINE_SEEKS = false;
 let no_save_mode = false;
 let one_line_mode;
 let quit_on_enter;
+//let has_internal_tabs;
+
+let SYNTAX_TIMEOUT_MS = 700;
+let syntax_timeout;
 
 const overrides=["c_A", "f_CAS"];
 const PREV_DEF_SYMS=["TAB_", "j_C", "v_C", "l_C"];
@@ -284,7 +295,6 @@ let lens;
 let stat_x;
 let x=0,y=0,scroll_num=0, ry=0;
 let scroll_hold_x=0;
-//let x_scroll = 0;
 let num_lines;
 
 let histories = globals.vim.histories;
@@ -384,7 +394,7 @@ const Action = function(x,y,ch,time,opts={}){//«
 let VALIDATE_JSON_ON_SAVE = true;
 let MAX_LEN_TO_VALIDATE_JSON = 10000;
 
-const MIN_WORD_LEN = 6;
+const MIN_WORD_LEN = 3;
 let symbols;
 
 let symbol_len;
@@ -1055,7 +1065,7 @@ cerr("INFIN?");
 	render({},26);
 
 };//»
-const get_folded_lines=(lns, arrarg)=>{//«
+const get_folded_lines=(lns, arrarg, if_init)=>{//«
 	let depth = 0;
 	let max_depth=0;
 	let start_i;
@@ -1072,6 +1082,14 @@ const get_folded_lines=(lns, arrarg)=>{//«
 	}
 	for (let i=0; i < lns.length; i++){
 		let ln = lns[i];
+/*
+		if(if_init && !has_internal_tabs){
+			if (ln.match(/^[^\t]\t+/)) {
+				has_internal_tabs = true;
+cwarn("INTERNAL TAB DETECTED ON LINE", i+1);
+			}
+		}
+*/
 		if (have_open_fold_marker(ln)) {//«
 			if (depth==0) {
 				start_i = i;
@@ -1841,14 +1859,13 @@ functions outside of this scope.
 //»
 //Symbols/Complete«
 
+/*
 const get_all_words=()=>{//«
-/*«
-This just gets words that are not in quotes or comments.
-Strict quote escaping rules are not enforced, so in quotes, use:
-\x22 = "
-\x27 = '
-\x60 = `
-»*/
+//This just gets words that are not in quotes or comments.
+//Strict quote escaping rules are not enforced, so in quotes, use:
+//\x22 = "
+//\x27 = '
+//\x60 = `
 let qtype;
 let words={};
 //let consts = {};
@@ -1908,6 +1925,16 @@ if (SYMBOL_WORDS) ALLWORDSYMBOLS = word_arr.concat(SYMBOL_WORDS).sort();
 ALLWORDS = word_arr.sort();
 ALLWORDS_HASH=words;
 };//»
+*/
+const get_all_words=()=>{//«
+	let lns = get_edit_save_arr()[0].split("\n");
+	let all=[];
+	for (let ln of lns){
+		let arr = ln.split(/\W+/);
+		all.push(...arr);
+	}
+	ALLWORDS = all.sort().uniq().filter((word)=>word.length>3&&word[0].match(/^[^0-9]/));
+}//»
 const update_symbols = () => {//«
 	let uselines;
 	let sym = this.symbol;
@@ -3756,6 +3783,7 @@ const _end = ()=>{//«
 		x--;
 	}
 	render();
+	do_syntax_timeout();
 }//»
 	let {time, chr, single}=o;//«
 	let chg = actions.pop();
@@ -3897,6 +3925,7 @@ const _end = ()=>{//«
 	set_ry();
 	if (x>0 && x===curarr().length) x--;
 	render();
+	do_syntax_timeout();
 	return true;
 }//»
 
@@ -4445,30 +4474,6 @@ const insert_kw=(opts={})=>{//«
 	stat("kw");
 }//»
 
-const replace_char = (ch, opts={})=>{//«
-	let time = Date.now();
-	let at_line_end = x === (curlen() - 1);//let at_line_end = x === (curln(true).length - 1);
-	let gotch = del_ch({time});
-	if (at_line_end) x++;
-	if (opts.toUpper && gotch && gotch.toUpperCase) ch = gotch.toUpperCase();
-	print_ch(ch,{time});
-	if (opts.fromHandler) {
-		x++;
-		render();
-	}
-};//»
-const replace_one_char = () => {//«
-	let ln = curarr();//let ln = curln(true);
-	if (ln._fold) return;
-	if (!ln[x]) return;
-	stat_cb=c=>{
-		stat_cb=null;
-		if (c && c.length == 1) replace_char(c);
-		render();
-	};
-	stat(".");
-};//»
-
 const delete_mode = (yank) => {//«
 	stat_cb=c=>{
 		stat_cb=null;
@@ -4499,6 +4504,7 @@ const del = () => {//«
 	if (this.mode===VIS_LINE_MODE) delete_first_space();
 	else {
 		del_ch();
+		do_syntax_timeout();
 		render();
 	}
 }//»
@@ -5408,6 +5414,7 @@ const del_ch = (opts={}) =>{//«
 	Term.is_dirty = true;
 	return have_ch;
 };//»
+
 const print_chars = (s, opts={}) =>{//«
 	let {ins}=opts;
 	let arr=s.split("");
@@ -5421,6 +5428,15 @@ const print_chars = (s, opts={}) =>{//«
 //	if (!edit_insert) x--;
 	if (this.mode!==INSERT_MODE) x--;
 };//»
+
+const do_syntax_timeout=()=>{
+	if (syntax_timeout) clearTimeout(syntax_timeout);
+	syntax_timeout=setTimeout(()=>{
+//cwarn("DO MULTILINE!");
+		syntax_multiline_comments();
+		syntax_timeout = null;
+	}, SYNTAX_TIMEOUT_MS);
+};
 const print_ch = (ch, opts={}) => {//«
 if (!ch){
 //UROPLKMHGBGT
@@ -5434,6 +5450,23 @@ return;
 		x=0;
 		ln = curarr();
 	}
+/*
+	if (!has_internal_tabs){
+		if (ch==="\t") {
+			if (x > 0 && ln.slice(0,x).join("").match(/^[^\t]+/)){
+				has_internal_tabs = true;
+				stat_message = "Internal tab detected";
+				stat_message_type = STAT_WARNING;
+			}
+		}
+		else if (ln[x]==="\t"){
+			has_internal_tabs = true;
+			stat_message = "Internal tab detected";
+			stat_message_type = STAT_WARNING;
+		}
+	}
+*/
+
     let tm = time || (new Date).getTime();
     if (!noAct) {
 		actions.push(new Action(x, ry, ch, tm, {adv: true}));
@@ -5442,18 +5475,38 @@ return;
 	if (fromHandler){
 		x++;
 		render();
+		do_syntax_timeout();
 	}
-/*«
-	if (SYNTAX){
-		if (fold_mode) real_line_colors[ry] = undefined;
-		else real_line_colors[y+scroll_num] = undefined;
-	}
-»*/
 	dirty_flag = true;
 	Term.is_dirty = true;
 	real_line_colors[ry]=undefined;
 	return true;
 }//»
+
+const replace_char = (ch, opts={})=>{//«
+	let time = Date.now();
+	let at_line_end = x === (curlen() - 1);//let at_line_end = x === (curln(true).length - 1);
+	let gotch = del_ch({time});
+	if (at_line_end) x++;
+	if (opts.toUpper && gotch && gotch.toUpperCase) ch = gotch.toUpperCase();
+	print_ch(ch,{time});
+	if (opts.fromHandler) {
+		x++;
+		render();
+		do_syntax_timeout();
+	}
+};//»
+const replace_one_char = () => {//«
+	let ln = curarr();//let ln = curln(true);
+	if (ln._fold) return;
+	if (!ln[x]) return;
+	stat_cb=c=>{
+		stat_cb=null;
+		if (c && c.length == 1) replace_char(c);
+		render();
+	};
+	stat(".");
+};//»
 
 const tab = (opts={}) => {//«
 	let {shift, ctrl}=opts;
@@ -5632,6 +5685,7 @@ const backspace = ()=>{//«
 	if (is_normal_mode())return try_empty_line_del();
 	if (this.mode!==INSERT_MODE) return;
 	do_backspace();
+	do_syntax_timeout();
 }//»
 
 //»
@@ -6105,6 +6159,7 @@ this.resize=(warg,harg)=>{//«
 //Object.defineProperty(this,"x_scroll",{get:()=>x_scroll});
 Object.defineProperty(this,"x",{get:()=>x});
 Object.defineProperty(this,"y",{get:()=>y});
+//Object.defineProperty(this,"has_internal_tabs",{get:()=>has_internal_tabs});
 Object.defineProperty(this,"scroll_num",{get:()=>scroll_num});
 Object.defineProperty(this,"stat_com_arr",{get:()=>stat_com_arr});
 Object.defineProperty(this, "stat_message", {
@@ -6218,18 +6273,28 @@ lines=[];
 line_colors = [];
 real_line_colors = [];
 if (fold_mode) {
-	lines = get_folded_lines(linesarg);
+	lines = get_folded_lines(linesarg, null, true);
 	set_line_lens();
 }
 else{
-	for(let ln of linesarg) lines.push(ln.split(""));
+	for(let ln of linesarg) {
+//		if (!has_internal_tabs && ln.match(/^[^\t]\t+/)) has_internal_tabs = true;
+		lines.push(ln.split(""));
+	}
 }
+
+//if (has_internal_tabs){
+//cwarn("INTERNAL TABS?!?!?");
+//}
 
 //Term.set_lines(lines, line_colors);
 //Term.init_edit_mode(this, num_stat_lines);
 //hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
 let use_reload;
-if (opts["use-dev-reload"]) use_reload = ondevreload;
+if (opts.r||opts["dev-name"]||opts["use-dev-reload"]) {
+	use_reload = ondevreload;
+cwarn("Using ondevreload");
+}
 hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
 this.fname = edit_fname;
 if (opts.insert) set_edit_mode("i");
@@ -6240,6 +6305,7 @@ else if (!edit_fname) {
 else if (lines.length==1 && !lines[0].length) stat(`"${edit_fname}" [New]`);
 else stat_file(linesarg.length, len);
 get_all_words();
+syntax_multiline_comments();
 //log(System);
 });
 

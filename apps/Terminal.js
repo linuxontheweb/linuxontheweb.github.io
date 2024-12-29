@@ -6693,11 +6693,6 @@ const render = (opts={})=>{
 	if (opts.noCursor){}
 	else if (!TERMINAL_IS_LOCKED) docursor = true;
 	let usescroll = scroll_num;
-//	let is_buf_scroll = false;
-//	if (buffer_scroll_num!==null) {
-//		usescroll = buffer_scroll_num;
-//		is_buf_scroll = true;
-//	}
 	let scry=usescroll;
 	let slicefrom = scry;
 	let sliceto = scry + nrows;

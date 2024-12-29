@@ -1097,6 +1097,9 @@ const opts = {//«
 		}
 	},//»
 	vim:{//«
+		s:{
+			r: 1,//use ondevreload
+		},
 		l: {
 			pipeok: 1,
 			parsel: 1,

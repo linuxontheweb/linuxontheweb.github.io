@@ -1,4 +1,6 @@
-
+/*
+DOCURSOR
+*/
 //Terminal Imports«
 
 const util = LOTW.api.util;
@@ -26,11 +28,9 @@ const {
 	isEOF,
 	sleep
 } = util;
-const NS = LOTW;
 const {
 	KC,
 	DEF_PAGER_MOD_NAME,
-//	NS,
 	TEXT_EDITOR_APP,
 	LINK_APP,
 	FOLDER_APP,
@@ -44,7 +44,7 @@ const {
 	EOF
 } = globals;
 const fsapi = fs.api;
-const widgets = NS.api.widgets;
+const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
 
 const HISTORY_FOLDER = `${globals.HOME_PATH}/.history`;
@@ -519,7 +519,7 @@ async getLineFromPager(arr, name){//«
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		return poperr("Could not load the pager module");
 	}
-	let less = new NS.mods[DEF_PAGER_MOD_NAME](this);
+	let less = new LOTW.mods[DEF_PAGER_MOD_NAME](this);
 	if (await less.init(arr, name, {lineSelect: true, opts: {}})) return arr[less.y+less.this.scrollNum];
 
 }//»
@@ -787,20 +787,18 @@ cy(){//«
 //Render«
 
 render(opts={}){//«
-const{tabdiv}=this;
+
+	const{tabdiv, actor}=this;
 //Var«
 
 //	let actor = editor||pager;
-	const{actor}=this;
+//	const{actor}=this;
 	let stat_x;
 	if (actor) {
-//this.stat
-//		({stat_x}=this.actor); 
 		stat_x = actor.stat_x;
 		this.x=actor.x;
 		this.y=actor.y;
 		this.scrollNum = actor.scroll_num;
-//		({stat_x, x,y,this.scrollNum}=actor); 
 		if (!stat_x) stat_x = this.x;
 	}
 	let seltop;
@@ -835,15 +833,16 @@ const{tabdiv}=this;
 	let visual_mode = visual_line_mode || visual_mark_mode || visual_block_mode;
 	let docursor = false;
 	if (opts.noCursor){}
-	else if (!this.terminalIsLocked) docursor = true;
+	else if (!(this.terminalIsLocked||this.isPager||stat_input_type||this.isScrolling)) docursor = true;
 	let usescroll = this.scrollNum;
 	let scry=usescroll;
 	let slicefrom = scry;
 	let sliceto = scry + this.nRows;
 	let uselines=[];
 	let is_str = false;
-	let x_scroll = 0;
-	let usex = this.x-x_scroll;
+//	let x_scroll = 0;
+//	let usex = this.x-x_scroll;
+	let usex = this.x;
 	let outarr = [];
 	let donum;
 //»
@@ -865,8 +864,50 @@ const{tabdiv}=this;
 	if (len + this.numStatLines != this.h) donum = this.h - this.numStatLines;
 	else donum = len;//»
 	for (let i = 0; i < donum; i++) {//«
-		let ind;
+
 		let arr = uselines[i];
+//DOCURSOR
+if (docursor&&i==this.y&&this.isEditor&&usex>0) {//«
+let ln = arr.slice(0, usex).join("");
+
+/*If the first character is a tab and there are no internal tabs
+then we can check for the number of leading tabs...
+*/
+let x_wid;
+if(ln[0]==="\t") {
+	if (ln.match(/[^\t]\t/)){
+//cwarn("HAVE EMBEDDED TAB(S)!!!");
+	}
+	else{
+		let marr = ln.match(/^(\t+)/);
+		if (marr){
+			let n_tabs = marr[1].length;
+			let rem_chars = usex - n_tabs;
+			x_wid = n_tabs*this.tabWid + rem_chars*this.cellWid;
+		}
+	}
+}
+else if (!ln.match(/\t/)){
+	x_wid = usex * this.cellWid;
+}
+
+if (x_wid){
+	tabdiv._x=0;
+	let scrw = this.screenWid;
+	let dx = scrw/2;
+	let diff = scrw - x_wid;
+	if (diff < 0){
+		while(diff < 0){
+			tabdiv._x-=dx;
+			diff += dx;
+		}
+	}
+	else tabdiv._x=0;
+}
+else tabdiv._x=0;
+
+}//»
+		let ind;
 		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
 		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
 		while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
@@ -906,8 +947,8 @@ const{tabdiv}=this;
 				else{
 throw new Error("WUTUTUTU");
 				}
-				useleft -= x_scroll;
-				useright -= x_scroll;
+//				useleft -= x_scroll;
+//				useright -= x_scroll;
 				if (useleft < 0) useleft = 0;
 				if (useright < 0) useright = 0;
 				let str = '<span style="color:#000;background-color:#aaa;">'+(arr[useleft]||" ");
@@ -939,7 +980,8 @@ throw new Error("WUTUTUTU");
 			let nums = Object.keys(colobj);
 			for (let numstr of nums) {
 				if (numstr.match(/^_/)) continue;
-				let num1 = parseInt(numstr)-x_scroll;
+//				let num1 = parseInt(numstr)-x_scroll;
+				let num1 = parseInt(numstr);
 				let obj = colobj[numstr];
 				let num2 = num1 + obj[0]-1;
 				let col = obj[1];
@@ -959,26 +1001,25 @@ if (num2 > this.w) {
 			}
 		}//»
 
-		if (!(this.isPager||stat_input_type||this.isScrolling)) {//«
-			if (docursor && i==this.y) {
-				let usebg;
-				if (!this.isFocused) usebg = this.curBGBlurred;
-				else usebg = this.curBG;
-				if (!arr[usex]||arr[usex]=="\x00") arr[usex]=" ";
-				else if (arr[usex]=="\n") arr[usex] = " <br>";
-				let ch = arr[usex]||" ";
-				let pre="";
-				let usech;
-				if (ch.match(/^</)&&!ch.match(/>$/)){
-					let arr = ch.split(">");
-					usech = arr.pop();
-					pre = arr[0]+">";
-				}
-				else usech = ch;
-				if (!usech.length) usech = " ";
-				let sty = `background-color:${usebg};color:${this.curFG}`;
-				arr[usex] = pre+`<span id="${this.cursorId}" style="${sty}">${usech}</span>`;
+		if (docursor&&i==this.y) {//«
+//		if (!(this.isPager||stat_input_type||this.isScrolling)) {
+			let usebg;
+			if (!this.isFocused) usebg = this.curBGBlurred;
+			else usebg = this.curBG;
+			if (!arr[usex]||arr[usex]=="\x00") arr[usex]=" ";
+			else if (arr[usex]=="\n") arr[usex] = " <br>";
+			let ch = arr[usex]||" ";
+			let pre="";
+			let usech;
+			if (ch.match(/^</)&&!ch.match(/>$/)){
+				let arr = ch.split(">");
+				usech = arr.pop();
+				pre = arr[0]+">";
 			}
+			else usech = ch;
+			if (!usech.length) usech = " ";
+			let sty = `background-color:${usebg};color:${this.curFG}`;
+			arr[usex] = pre+`<span id="${this.cursorId}" style="${sty}">${usech}</span>`;
 		}//»
 
 		let s = arr.join("");
@@ -1113,6 +1154,7 @@ if (num2 > this.w) {
 		tabdiv.innerHTML = outarr.join("\n");
 	}
 }//»
+
 refresh(opts){this.render(opts);}
 generateStatHtml(){//«
 	const{statdiv}=this;
@@ -1155,7 +1197,6 @@ cerr("What is the array size different from the numStatLines????");
 getGrid(){//«
 
 	const{tabdiv, wrapdiv}=this;
-//	let tabdiv = tabdiv;
 	if (!(wrapdiv._w&&wrapdiv._h)) {
 		if (this.Win.killed) return;
 cerr("DIMS NOT SET");
@@ -1183,6 +1224,12 @@ log(wrapdiv);
 			return 
 		}
 	}
+//SDOIP
+	this.cellWid = wrapdiv._w/this.nCols;
+	this.tabWid = this.tabSize * this.cellWid;
+	this.screenWid = wrapdiv._w;
+//log(this.tabWid);
+//log(this.cellWid);
 	str = usech;
 	iter = 0;
 	while (true) {
@@ -2788,7 +2835,7 @@ handlePriv(sym, code, mod, ispress, e){//«
 		}
 	}//»
 	let ret = null;
- 	if (ispress) {//«
+	if (ispress) {//«
 		this.numCtrlD = 0;
 		if (this.curScrollCommand) this.insertCurScroll();
 		if (code == 0) return;
@@ -3069,6 +3116,7 @@ async _ondevreload(){//«
 
 }
 //»
+/*
 async onkill(if_dev_reload){//«
 	if (this.curEditNode) this.curEditNode.unlockFile();
 	if (!if_dev_reload) {
@@ -3094,6 +3142,7 @@ async onkill(if_dev_reload){//«
 cwarn("NOT DOING saveHistory");
 }
 //»
+*/
 
 async onappinit(appargs={}){//«
 	let {reInit} = appargs;
@@ -3161,7 +3210,6 @@ onkeyup(e,sym){//«
 }; 
 
 //»
-
 
 /*OLD«
 
