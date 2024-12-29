@@ -867,46 +867,9 @@ render(opts={}){//«
 
 		let arr = uselines[i];
 //DOCURSOR
-if (docursor&&i==this.y&&this.isEditor&&usex>0) {//«
-let ln = arr.slice(0, usex).join("");
-
-/*If the first character is a tab and there are no internal tabs
-then we can check for the number of leading tabs...
-*/
-let x_wid;
-if(ln[0]==="\t") {
-	if (ln.match(/[^\t]\t/)){
-//cwarn("HAVE EMBEDDED TAB(S)!!!");
-	}
-	else{
-		let marr = ln.match(/^(\t+)/);
-		if (marr){
-			let n_tabs = marr[1].length;
-			let rem_chars = usex - n_tabs;
-			x_wid = n_tabs*this.tabWid + rem_chars*this.cellWid;
+		if (docursor&&i==this.y&&this.isEditor) {
+			this.setXScroll(arr.slice(0, usex).join(""), usex);
 		}
-	}
-}
-else if (!ln.match(/\t/)){
-	x_wid = usex * this.cellWid;
-}
-
-if (x_wid){
-	tabdiv._x=0;
-	let scrw = this.screenWid;
-	let dx = scrw/2;
-	let diff = scrw - x_wid;
-	if (diff < 0){
-		while(diff < 0){
-			tabdiv._x-=dx;
-			diff += dx;
-		}
-	}
-	else tabdiv._x=0;
-}
-else tabdiv._x=0;
-
-}//»
 		let ind;
 		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
 		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
@@ -1152,6 +1115,61 @@ if (num2 > this.w) {
 	}
 	else {
 		tabdiv.innerHTML = outarr.join("\n");
+	}
+}//»
+setXScroll(ln, usex){//«
+	const{tabdiv}=this;
+	tabdiv._x=0;
+	if (!ln.length) return;
+	let x_wid;
+	if (ln.match(/[^\t]\t/)){//«
+/*
+There are embedded tabs here, so we have to do this the hard way
+*/
+		let cells=0;
+		let chars=0;
+		let tbsz = this.tabSize;
+		for (let i=0; i < usex; i++){
+			if (ln[i]=="\t"){
+				cells++;
+				if (chars===tbsz) cells++;
+				chars=0;
+			}
+			else{
+				if (chars===tbsz){
+					cells++;
+					chars=1;
+				}
+				else chars++;
+			}
+		}
+		if (chars===tbsz) {
+			cells++;
+			chars=0;
+		}
+		x_wid = cells*this.tabWid + chars*this.cellWid;
+	}//»
+	else if(ln[0]==="\t") {//«
+//A leading tab with no embedded tabs... a simple calculation
+		let marr = ln.match(/^(\t+)/);
+		if (marr){
+			let n_tabs = marr[1].length;
+			let rem_chars = usex - n_tabs;
+			x_wid = n_tabs*this.tabWid + rem_chars*this.cellWid;
+		}
+	}//»
+	else if (!ln.match(/\t/)){//«
+//No tabs, just single width characters.
+		x_wid = usex * this.cellWid;
+	}//»
+	if (!x_wid) return;
+	let scrw = this.screenWid;
+	let cellw = this.cellWid;
+	let dx = scrw/2;
+	let diff = scrw - x_wid;
+	while(diff < cellw){
+		tabdiv._x-=dx;
+		diff += dx;
 	}
 }//»
 
