@@ -480,7 +480,7 @@ const do_imports = async(arr, err_cb) => {//«
 	let out=[];
 	for (let name of arr){
 		if (this.var.allLibs[name]) {
-			err_cb(`${name}: already loaded`);
+//			err_cb(`${name}: already loaded`);
 			continue;
 		}   
 		try{
@@ -523,7 +523,7 @@ continue;
 			sh_coms[com] = libname;
 			num_deleted++;
 		}
-cwarn(`Deleted: ${num_deleted} commands from '${libname}'`);
+log(`Deleted: ${num_deleted} commands from '${libname}'`);
 		let opts = lib.opts;
 		all = Object.keys(opts);
 		for (let opt of all){
@@ -548,7 +548,7 @@ else{
 continue;
 }
 		delete NS.mods[m];
-cwarn(`Deleted module: ${m}`);
+//log(`Deleted module: ${m}`);
 	}
 }//»
 
@@ -8688,7 +8688,7 @@ const init = async(appargs={})=>{
 		}
 	}
 {
-	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
+	let rv = await ShellMod.util.doImports(ADD_COMS, cerr);
 if (rv) init_prompt += "\nImported libs: "+rv;
 }
 	response(init_prompt);

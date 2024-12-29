@@ -212,7 +212,6 @@ w,h, cursor_id, mainWin
 const vim = this;
 
 let appclass = "editor";
-const states = [];
 let hold_screen_state;
 let actions=[];
 let undos=[];
@@ -247,6 +246,8 @@ const UND = undefined;
 //let viewOnly;
 
 //let initial_sha1;
+const MARKS={};
+
 let initial_str;
 
 let cut_buffers = [];
@@ -821,6 +822,7 @@ const reinit_folds=()=>{//«
 	line_colors=[];
 	Term.set_lines(lines, line_colors);
 };//»
+
 const await_fold_command=()=>{//«
 	stat_cb=c=>{
 		stat_cb=null;
@@ -837,6 +839,27 @@ const await_fold_command=()=>{//«
 		render({},40);
 	};
 	stat("fold");
+}//»
+const await_mark_command=()=>{//«
+	stat_cb=c=>{
+		stat_cb=null;
+		MARKS[c]=ry;
+		render({},40);
+	};
+	stat("mark");
+}//»
+const await_jump_command=()=>{//«
+	stat_cb=c=>{
+		stat_cb=null;
+		let num = MARKS[c];
+		if (Number.isFinite(num)) {
+			if (num >= num_lines) num = num_lines-1;
+			scroll_to(num);
+		}
+		else stat(`'${c}': not a mark`);
+		render();
+	};
+	stat("goto");
 }//»
 
 const open_fold = (lnsarg, opts={})=>{//«
@@ -1163,7 +1186,7 @@ const toggle_reload_win=async()=>{//«
 	}
 	reload_win.ownedBy = topwin;
 };//»
-const ondevreload=async()=>{//«
+const reload_dev_win=async()=>{
 //Want to be able to pass in a command line flag to delete the local app/mod
 //that we are editing in this file.
 	if (!reload_win) return;
@@ -1176,6 +1199,9 @@ cwarn("NO RELOAD_WIN._DATA_URL!!?");
 	stat("Reloading...");
 	let rv = await reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([`(function(){"use strict";${get_edit_str()}})()`]))});
 	stat("Done!");
+}
+const ondevreload=()=>{//«
+	return reload_dev_win();
 };//»
 
 const get_edit_lines = (opts={})=>{//«
@@ -5763,8 +5789,10 @@ const KEY_CHAR_FUNCS={//«
 	a: ()=>{ set_edit_mode("a") },
 	i: ()=>{ set_edit_mode("i") },
 	I: ()=>{ set_edit_mode("I") },
-	m:()=>{init_symbol_mode({adv: true})},
-	M: init_symbol_mode,
+	m: await_mark_command,
+	"`":await_jump_command,
+	s:()=>{init_symbol_mode({adv: true})},
+	S: init_symbol_mode,
 	X: init_cut_buffer_mode,
 	l: init_line_wrap_mode,
 	e:()=>{
@@ -6200,7 +6228,9 @@ else{
 //Term.set_lines(lines, line_colors);
 //Term.init_edit_mode(this, num_stat_lines);
 //hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
-hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload});
+let use_reload;
+if (opts["use-dev-reload"]) use_reload = ondevreload;
+hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
 this.fname = edit_fname;
 if (opts.insert) set_edit_mode("i");
 else if (!edit_fname) {

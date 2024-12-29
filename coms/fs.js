@@ -1109,7 +1109,8 @@ const opts = {//«
 			symbols: 3,
 			"force-stdout": 1,
 			"dev-name": 3,
-			refs: 3
+			refs: 3,
+			"use-dev-reload": 1
 		}
 	},//»
 	less:{l:{parsel:1}},
