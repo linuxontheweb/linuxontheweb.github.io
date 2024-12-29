@@ -866,8 +866,8 @@ const await_jump_command=()=>{//«
 			if (num >= num_lines) num = num_lines-1;
 			scroll_to(num);
 		}
-		else stat(`'${c}': not a mark`);
-		render();
+		else stat(`'${c}': Mark not set`);
+//		render();
 	};
 	stat("goto");
 }//»
