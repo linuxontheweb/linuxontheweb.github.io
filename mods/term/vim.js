@@ -201,7 +201,7 @@ const{
 //	onescape,
 	topwin,
 //	quit_new_screen,
-	x_scroll_terminal,
+//	x_scroll_terminal,
 	get_dir_contents,
 	Desk
 } = Term;
@@ -237,7 +237,7 @@ let one_line_mode;
 let quit_on_enter;
 //let has_internal_tabs;
 
-let SYNTAX_TIMEOUT_MS = 700;
+let SYNTAX_TIMEOUT_MS = 1500;
 let syntax_timeout;
 
 const overrides=["c_A", "f_CAS"];
@@ -2293,7 +2293,7 @@ const init_line_wrap_mode=()=>{//«
 		Term.set_lines(lines, line_colors);
 		this.mode = COMMAND_MODE;
 		render();
-		scroll_screen_to_cursor();
+//		scroll_screen_to_cursor();
 	};//»
 	this.mode = LINE_WRAP_MODE;
 	render();
@@ -2445,7 +2445,7 @@ let intobs = new IntersectionObserver((ents)=>{
 intobs.observe(cur);
 });
 };//»
-
+/*
 const scroll_screen_to_cursor=async()=>{//«
 	let rv = await check_cursor();
 //log(rv);
@@ -2465,6 +2465,7 @@ const scroll_left=()=>{//«
 const scroll_right=()=>{//«
 	x_scroll_terminal({right: true});
 };//»
+*/
 const maybe_scrdown_one = () => {//«
     if (y < Term.h-num_stat_lines) return false;
     scroll_num++;
@@ -3317,7 +3318,7 @@ sub_str lengths.
 		if (is_confirming){//«
 			x = usex;
 			render();
-			await scroll_screen_to_cursor();
+//			await scroll_screen_to_cursor();
 			let rv = await get_confirmation(y+scroll_num, usex, len, sub_str);
 			if (rv === true){}
 			else if (rv === null) break;
@@ -5430,6 +5431,7 @@ const print_chars = (s, opts={}) =>{//«
 };//»
 
 const do_syntax_timeout=()=>{
+//return;
 	if (syntax_timeout) clearTimeout(syntax_timeout);
 	syntax_timeout=setTimeout(()=>{
 //cwarn("DO MULTILINE!");
@@ -5888,15 +5890,15 @@ const KEY_CHAR_FUNCS={//«
 
 //Scroll
 	g: vcenter_cursor,
-	" ":scroll_screen_to_cursor,
-	"[":scroll_left,
-	"]":scroll_right,
-	"}":()=>{
-		x_scroll_terminal({toRightEdge: true});
-	},
-	"{":()=>{
-		x_scroll_terminal({toLeftEdge: true});
-	},
+//	" ":scroll_screen_to_cursor,
+//	"[":scroll_left,
+//	"]":scroll_right,
+//	"}":()=>{
+//		x_scroll_terminal({toRightEdge: true});
+//	},
+//	"{":()=>{
+//		x_scroll_terminal({toLeftEdge: true});
+//	},
 
 }//»
 const UPDOWN_FUNCS={//«
@@ -5992,9 +5994,9 @@ o_CAS: reset_display,
 q_C: syntax_multiline_comments,
 
 //Scroll
-SPACE_C: scroll_screen_to_cursor,
-"]_C":scroll_right,
-"[_C":scroll_left,
+//SPACE_C: scroll_screen_to_cursor,
+//"]_C":scroll_right,
+//"[_C":scroll_left,
 
 //Open/Save/Quit/Dev
 j_CA: test_js,
