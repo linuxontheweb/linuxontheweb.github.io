@@ -519,7 +519,7 @@ center: (elem, usewin, dims) => {
 pathParts:arg=>{return getNameExt(arg, true, true);},
 getKeys:obj=>{if(!obj)obj={};let arr=Object.keys(obj);let ret=[];for(let k of arr)if(obj.hasOwnProperty(k))ret.push(k);return ret;},
 textToBytes:async s=>{return new Uint8Array(await strToBuf(s));},
-isEOF:arg=>{if(isObj(arg)){if(arg.EOF ||(arg.lines&&arg.lines.EOF))return true;}return false;},
+//isEOF:arg=>{if(isObj(arg)){if(arg.EOF ||(arg.lines&&arg.lines.EOF))return true;}return false;},
 blobAsBytes:blob=>{return new Promise((Y,N)=>{let reader=new FileReader();reader.onloadend=()=>{Y(new Uint8Array(reader.result));};reader.onerror=N;reader.readAsArrayBuffer(blob);});},
 download:(blob,name)=>{if(!name)name="LOTW_DL";if(typeof blob=="string")blob=new Blob([blob],{type:"text/plain"});let url=URL.createObjectURL(blob);let a=make('a');a.href=url;a.download=name;a._dis="none";document.body.appendChild(a);a.click();a._del();},
 evt2Sym:e=>{let mod_str="";if(e.ctrlKey)mod_str="C";if(e.altKey)mod_str+="A";if(e.shiftKey)mod_str+="S";return(KC[e.keyCode]+"_"+mod_str);},gbid:gbid,
