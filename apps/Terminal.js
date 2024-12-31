@@ -160,6 +160,7 @@ methodical/non-destrutive kind of way, so we can be very assured of the fact tha
 everything always works as ever.»*/
 
 globals.ShellMod = new function() {
+
 //Var«
 const shellmod = this;
 const fs_coms=[//«
@@ -857,12 +858,56 @@ const ErrCom = class extends Com{//«
 	}
 }//»
 class IfCom{//«
-
 constructor(shell, conds, conseqs, fallback, opts){//«
 	this.shell = shell;
+	this.opts = opts;
 	this.conds = conds;
 	this.conseqs = conseqs
 	this.fallback = fallback;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}//»
+init(){}
+
+async run(){//«
+	const{conds, conseqs, opts}=this;
+	for (let i=0; i < conds.length; i++){
+		let rv = await this.shell.executeStatements2(conds[i], opts);
+		if (this.shell.cancelled) return;
+if (!Number.isFinite(rv)){
+cwarn("HERE IT IS");
+log(rv);
+this.shell.fatal("Non-numerical return value");
+}
+		if (!rv){
+			rv = await this.shell.executeStatements2(conseqs[i], opts)
+			if (this.shell.cancelled) return;
+			this.end(rv);
+			return;
+		}
+	}
+	if (this.fallback){
+		rv = await this.shell.executeStatements2(this.fallback, opts)
+		if (this.shell.cancelled) return;
+		return this.end(rv);
+	}
+	this.end(E_ERR);
+}//»
+
+cancel(){
+this.killed = true;
+}
+
+}//»
+class BraceGroupCom{//«
+
+constructor(shell, term, opts, grabObj){//«
+	this.term = term;
+	this.shell = shell;
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -871,37 +916,103 @@ constructor(shell, conds, conseqs, fallback, opts){//«
 		};
 	});
 }//»
+init(){
+}
+async run(){
+	let rv = await this.shell.executeStatements2(this.term, this.opts)
+	if (this.shell.cancelled) return;
+	this.end(rv);
+}
+cancel(){
+	this.killed = true;
+}
 
+}//»
+class SubshellCom{//«
+
+constructor(shell, term, opts, grabObj){//«
+	this.term = term;
+	this.shell = shell;
+	this.opts = opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}//»
+init(){
+}
+async run(){
+	let rv = await this.shell.executeStatements2(this.term, this.opts)
+	if (this.shell.cancelled) return;
+	this.end(rv);
+}
+cancel(){
+	this.killed = true;
+}
+
+}//»
+class WhileCom{//«
+
+constructor(shell, cond, do_group, opts, grabObj){//«
+	this.shell = shell;
+	this.cond = cond;
+	this.do_group = do_group;
+	this.opts = opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}//»
 init(){}
 async run(){//«
-	const{conds, conseqs, opts}=this;
-	for (let i=0; i < conds.length; i++){
-//jlog(conds[i]);
-//log(i, conds[i], rv);
-		let rv = await this.shell.executeStatements2(conds[i], opts);
-if (!Number.isFinite(rv)){
-cwarn("HERE IT IS");
-log(rv);
-this.shell.fatal("Non-numerical return value");
-}
-		if (!rv){
-			rv = await this.shell.executeStatements2(conseqs[i], opts)
-//			this.out(EOF);
-			this.end(rv);
-			return;
-		}
+	let rv = await this.shell.executeStatements2(this.cond, this.opts)
+	if (this.shell.cancelled) return;
+	while (!rv){
+		await this.shell.executeStatements2(this.do_group, this.opts)
+		if (this.shell.cancelled) return;
+		rv = await this.shell.executeStatements2(this.cond, this.opts)
+		if (this.shell.cancelled) return;
+		await sleep(0);
 	}
-	if (this.fallback){
-		rv = await this.shell.executeStatements2(this.fallback, opts)
-//		this.out(EOF);
-		return this.end(rv);
-	}
-//	this.out(EOF);
-	this.end(E_ERR);
+	this.end(rv);
 }//»
 
 }//»
+class UntilCom{//«
 
+constructor(shell, cond, do_group, opts, grabObj){//«
+	this.shell = shell;
+	this.cond = cond;
+	this.do_group = do_group;
+	this.opts = opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}//»
+init(){}
+
+async run(){//«
+	let rv = await this.shell.executeStatements2(this.cond, this.opts)
+	if (this.shell.cancelled) return;
+	while (rv){
+		await this.shell.executeStatements2(this.do_group, this.opts)
+		if (this.shell.cancelled) return;
+		rv = await this.shell.executeStatements2(this.cond, this.opts)
+		if (this.shell.cancelled) return;
+		await sleep(0);
+	}
+	this.end(rv);
+}//»
+
+}//»
+//	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
 this.comClasses={
 	Com, ScriptCom, NoCom, ErrCom,
 }
@@ -3173,11 +3284,13 @@ async parseCompoundList(opts={}){//«
 	else if (isNLs(next)){
 		term.term.push(";");
 	}
+	else if (opts.isSubshell && next.isSubEnd){
+		term.term.push(";");
+	}
 	else if (opts.isCase && next.isCaseItemEnd){
 		term.term.push(";");
 	}
 	else{
-//		err(`could not find ";", "&" or <newlines> to complete the compound list!`);
 		this.unexp(next);
 	}
 	this.skipNewlines();
@@ -3239,8 +3352,8 @@ async parseDoGroup(){//«
 		err(`'done' token not found!`);
 	}
 	this.tokNum++;
-	return {do_group: list};
-
+//	return {do_group: list};
+	return list;
 }//»
 
 async parseBraceGroup(){//«
@@ -3262,7 +3375,7 @@ async parseSubshell(){//«
 	let tok = this.curTok();
 	if (!(tok && tok.isSubStart)) err(`'(' token not found!`);
 	this.tokNum++;
-	let list = await this.parseCompoundList();
+	let list = await this.parseCompoundList({isSubshell: true});
 	tok = this.curTok();
 	if (!tok) this.unexpeof();
 	if (!tok.isSubEnd){
@@ -5436,7 +5549,8 @@ ShellMod.var.lastExitCode = lastcomcode;
 	return lastcomcode;
 }
 /*»*/
-async makeIfCommand(com, opts, grabObj){/*«*/
+
+async makeIfCommand(com, opts, grabObj){//«
 	let if_list = com.if_list;
 	let then_list = com.then_list;
 	let conditions = [if_list.compound_list.term];
@@ -5456,16 +5570,47 @@ async makeIfCommand(com, opts, grabObj){/*«*/
 	}
 //log(conditions);
 	return new IfCom(this, conditions, consequences, fallback, opts);
-}/*»*/
-makeCompoundCommand(com, opts, grabObj){/*«*/
-	let typ = com.type;
-	if (typ === "if_clause"){
-	return this.makeIfCommand(com.compound_command, opts, grabObj);
-	}
-	this.fatal(`What Compound Command type: ${type}`);
-}/*»*/
+}//»
+async makeBraceGroupCommand(com, opts, grabObj){//«
+	return new BraceGroupCom(this, com.compound_list.term, opts, grabObj);
+}//»
+async makeSubshellCommand(com, opts, grabObj){//«
+	return new SubshellCom(this, com.compound_list.term, opts, grabObj);
+}//»
+async makeWhileCommand(com, opts, grabObj){//«
+	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
+}//»
+async makeUntilCommand(com, opts, grabObj){//«
+	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
+}//»
+async makeForCommand(com, opts, grabObj){//«
+cwarn("FOR COMMAND!!!");
+log(com);
+}//»
+async makeCaseCommand(com, opts, grabObj){//«
+cwarn("CASE COMMAND!!!");
+log(com);
+}//»
+async makeFunctionCommand(com, opts, grabObj){//«
+cwarn("FUNCTION COMMAND!!!");
+log(com);
+}//»
 
-async executePipeline2(pipe, loglist, loglist_iter, opts){/*«*/
+makeCompoundCommand(com, opts, grabObj){//«
+	let typ = com.type;
+	let comp = com.compound_command;
+	if (typ === "if_clause") return this.makeIfCommand(comp, opts, grabObj);
+	if (typ === "brace_group") return this.makeBraceGroupCommand(comp, opts, grabObj);
+	if (typ === "subshell") return this.makeSubshellCommand(comp, opts, grabObj);
+	if (typ === "for_clause") return this.makeForCommand(comp, opts, grabObj);
+	if (typ === "case_clause") return this.makeCaseCommand(comp, opts, grabObj);
+	if (typ === "while_clause") return this.makeWhileCommand(comp, opts, grabObj);
+	if (typ === "until_clause") return this.makeUntilCommand(comp, opts, grabObj);
+	if (typ === "function_def") return this.makeFunctionCommand(comp, opts, grabObj);
+	this.fatal(`What Compound Command type: ${type}`);
+}//»
+
+async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
 	let lastcomcode;
 	let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
@@ -5541,6 +5686,7 @@ log(`Not running (was killed): ${com.name}`);
 	}
 }//»
 for (let com of pipeline){//«
+
 	lastcomcode = await com.awaitEnd;
 
 	if (this.cancelled) return;
@@ -5548,7 +5694,6 @@ for (let com of pipeline){//«
 	if (!(isNum(lastcomcode))) {
 		lastcomcode = E_ERR;
 	}
-
 	if (com.redirLines) {
 		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.out_redir, com.env);
 		if (this.cancelled) return;
@@ -5556,6 +5701,7 @@ for (let com of pipeline){//«
 			term.response(`sh: ${err}`, {isErr: true});
 		}
 	}
+
 }//»
 
 if (hasBang){//«
@@ -5596,7 +5742,7 @@ ShellMod.var.lastExitCode = lastcomcode;
 	}//»
 	return lastcomcode;
 }
-/*»*/
+//»
 
 async executeAndOr(andor, opts){//«
 
@@ -5640,7 +5786,20 @@ return lastcomcode;
 
 }//»
 async executeAndOr2(andor_list, andor_sep, opts){//«
+
 let loglist=[];
+let last = andor_list.pop();
+for (let i=0; i < andor_list.length-1; i+=2){
+	let andor = andor_list[i];
+	let type = andor_list[i+1];
+	let pipe = andor.pipeline.pipe_sequence;
+	loglist.push({pipe, type, hasBang: andor.bang});
+
+}
+loglist.push({pipe: last.pipeline.pipe_sequence, hasBang: last.bang});
+andor_list.push(last);
+
+/*«
 while(andor_list.length>1){
 	let andor = andor_list.shift();
 	let type = andor_list.shift();
@@ -5649,7 +5808,7 @@ while(andor_list.length>1){
 	loglist.push({pipe, type, hasBang});
 }
 loglist.push({pipe: andor_list[0].pipeline.pipe_sequence, hasBang: andor_list[0].bang});
-
+»*/
 
 let lastcomcode;
 for (let i=0; i < loglist.length; i++){//«
@@ -5710,14 +5869,10 @@ async executeStatements(statements, opts){//«
 async executeStatements2(statements, opts){//«
 	const{term}=this;
 	let lastcomcode;
-	while (statements.length){
-		lastcomcode = await this.executeAndOr2(statements.shift().andor, statements.shift(), opts);
+	for (let i=0; i < statements.length-1; i+=2){
+		lastcomcode = await this.executeAndOr2(statements[i].andor, statements[i+1], opts);
 		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
 	}
-//	for (let state of statements){
-//		lastcomcode = await this.executeAndOr2(state, opts);
-//		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
-//	}
 	return lastcomcode;
 }//»
 
@@ -5853,7 +6008,6 @@ if (!globals.shell_command_options) {
 }//»
 
 }
-//const ShellMod = globals.ShellMod;
 
 const ShellMod = globals.ShellMod;
 const Shell = ShellMod.Shell;
@@ -9009,80 +9163,3 @@ onkeyup(e,sym){//«
 
 //»
 
-/*«
-async makeSimple(com){//«
-let arr=[];
-if (com.prefix) arr.push(...com.prefix);
-if (com.name) arr.push(com.name);
-else if (com.word) arr.push(com.word);
-if (com.suffix) arr.push(...com.suffix);
-return await this.makeCommand(arr);
-}//»
-async makeIf(com, redirs){//«
-cwarn("GOT IF");
-log(com);
-log(redirs);
-
-}//»
-makeCom(com){//«
-	if (com.simple_command){
-		return this.makeSimple(com.simple_command);
-	}
-	else if (com.if_clause){
-		return this.makeIf(com.if_clause, com.redirs);
-	}
-	else{
-cwarn("Here it is below");
-log(com);
-		this.fatal(`Unknown command found (see console)`);
-	}
-}//»
-async runPipeline(obj){//«
-let bang = obj.bang;
-let seq = obj.pipeline.pipe_sequence;
-let coms=[];
-//cwarn(bang)
-for (let com of seq){
-	coms.push(this.makeCom(com));
-}
-//log(seq);
-}//»
-async runAndOr(andors, sep){//«
-//cwarn(type);
-let andor = andors.shift();
-let rv = await this.runPipeline(andor);
-//log(andor);
-while(andors.length){
-let op = andors.shift();
-cwarn(op);
-andor = andors.shift();
-rv = await this.runPipeline(andor);
-}
-//for ()
-//log(andor);
-
-}//»
-async runAllLists(lists){//«
-let rv;
-while(lists.length){
-let list = lists.shift();
-let type = lists.shift();
-rv = await this.runAndOr(list.andor, type);
-}
-}//»
-»*/
-/*OLD«
-
-continue(str){//«
-	this.#doContinue = true;
-	this.setPrompt({prompt:"> "});
-	this.scrollIntoView();
-	this.sleeping = null;
-	this.bufPos = 0;
-	this.curShell = null;
-//	setTimeout(()=>{this.curShell = null;},10);
-	this.render();
-}
-//»
-
-»*/
