@@ -389,9 +389,8 @@ const KC = {
 
 //»
 
-const TERM_ENV = {
-};
-
+const TERM_ENV = {};
+const TERM_FUNCS = {};
 export const globals = {//«
 	workers:{
 //		faust: new Worker("/wasm/faust.js"),
@@ -412,6 +411,7 @@ export const globals = {//«
 	CURRENT_USER,
 	EOF: {EOF: true},
 	TERM_ENV,
+	TERM_FUNCS,
 	SHELL_ERROR_CODES,
 
 	HOME_PATH,

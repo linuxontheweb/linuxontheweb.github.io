@@ -1,3 +1,9 @@
+/*12/31/24: In all of these places where we need to repeatedly reuse certain
+compound_list's, we either need to:
+-  Have a dup method for the compound_list, in order to duplicate all of the Word objects
+-  save the source text that makes up these objects and then send it back through the parser
+   in order to get another one.
+*/
 /*Just had an issue with EOFs inside of scripts @LPIRHSKF. For some reason, it was
 assumed that EOFs should only go to the next commands in your immediate pipeline,
 and not to the scriptOut callback...
@@ -266,6 +272,29 @@ const isNLs=val=>{return val instanceof Newlines;};
 
 //«Expansion 
 
+const dup_compound_list=(term)=>{//«
+let rv={};
+const dup=(o)=>{
+let rv;
+if (isStr(o)) return o;
+if (o.dup) return o.dup();
+if (isObj(o)){
+	rv = {};
+	for (let k in o){
+		if (o[k]) rv[k] = dup(o[k]);
+		else rv[k] = o[k];
+	}
+}
+else if (isArr(o)){
+	rv = [];
+	for (let i=0; i < o.length; i++){
+		rv.push(dup(o[i]));
+	}
+}
+return rv;
+};
+return dup(term);
+};/*»*/
 
 //»
 //Helpers (this.util)«
@@ -958,7 +987,7 @@ class WhileCom{//«
 constructor(shell, cond, do_group, opts, grabObj){//«
 	this.shell = shell;
 	this.cond = cond;
-	this.do_group = do_group;
+	this.do_group = do_group[0].andor[0].pipeline.pipe_sequence[0].compound_command.compound_list.term;
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -969,12 +998,12 @@ constructor(shell, cond, do_group, opts, grabObj){//«
 }//»
 init(){}
 async run(){//«
-	let rv = await this.shell.executeStatements2(this.cond, this.opts)
+	let rv = await this.shell.executeStatements2(dup_compound_list(this.cond), this.opts);
 	if (this.shell.cancelled) return;
 	while (!rv){
-		await this.shell.executeStatements2(this.do_group, this.opts)
+		await this.shell.executeStatements2(dup_compound_list(this.do_group), this.opts);
 		if (this.shell.cancelled) return;
-		rv = await this.shell.executeStatements2(this.cond, this.opts)
+		rv = await this.shell.executeStatements2(dup_compound_list(this.cond), this.opts);
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
@@ -987,7 +1016,7 @@ class UntilCom{//«
 constructor(shell, cond, do_group, opts, grabObj){//«
 	this.shell = shell;
 	this.cond = cond;
-	this.do_group = do_group;
+	this.do_group = do_group[0].andor[0].pipeline.pipe_sequence[0].compound_command.compound_list.term;
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -999,12 +1028,12 @@ constructor(shell, cond, do_group, opts, grabObj){//«
 init(){}
 
 async run(){//«
-	let rv = await this.shell.executeStatements2(this.cond, this.opts)
+	let rv = await this.shell.executeStatements2(dup_compound_list(this.cond), this.opts)
 	if (this.shell.cancelled) return;
 	while (rv){
-		await this.shell.executeStatements2(this.do_group, this.opts)
+		await this.shell.executeStatements2(dup_compound_list(this.do_group), this.opts)
 		if (this.shell.cancelled) return;
-		rv = await this.shell.executeStatements2(this.cond, this.opts)
+		rv = await this.shell.executeStatements2(dup_compound_list(this.cond), this.opts)
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
@@ -1012,6 +1041,57 @@ async run(){//«
 }//»
 
 }//»
+class FunctionCom{/*«*/
+
+constructor(shell, name, com, opts){/*«*/
+	this.shell=shell;
+	this.name=name;
+	this.com = com.compound_command;
+	this.type = com.type;
+	this.redirs = com.redirs;
+	this.opts=opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}/*»*/
+async init(){/*«*/
+	let typ = this.type;
+	let name = this.name
+	const funcs = this.shell.term.funcs;
+	let func;
+	if (typ==="brace_group"){
+		func = (shell, args, opts, grabObj) => { 
+			let com = new BraceGroupCom(shell, this.com.dup().term, opts, grabObj);
+			com.args = args;
+			return com;
+		}
+	}
+	else if (typ==="subshell"){
+		let term_str = JSON.stringify(this.com.compound_list.term);
+		func = (shell, args, opts, grabObj) => { 
+			let com = new SubshellCom(shell, this.com.dup().term, opts, grabObj);
+			com.args = args;
+			return com;
+		}
+	}
+	else{
+		throw new Error(`MAKE WHAT TYPE OF FUNCTION (NOT BRACE OR SUBSHELL: <${typ}>)`);
+	}
+	funcs[name] = func;
+}/*»*/
+run(){
+//As commands themselves, function definitions don't do much of anything, e.g.:
+//echo blah blah blah | 
+	this.end(E_SUC);
+}
+}/*»*/
+
+//Just need ForCom and CaseCom
+
+//return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
 //	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
 this.comClasses={
 	Com, ScriptCom, NoCom, ErrCom,
@@ -1843,18 +1923,18 @@ const ErrorHandler = class {
 };//»
 /*Token Classes (Words, Quotes, Subs)«*/
 
-const Sequence = class {/*«*/
-	constructor(start, par, env){
-		this.par = par;
-		this.env = env;
+const Sequence = class {//«
+	constructor(start){
+//		this.par = par;
+//		this.env = env;
 		this.val = [];
 		this.start = start;
 	}
-}/*»*/
-const Newlines = class extends Sequence{/*«*/
+}//»
+const Newlines = class extends Sequence{//«
 	get isNLs(){ return true; }
 	toString(){ return "newline"; }
-}/*»*/
+}//»
 const Word = class extends Sequence{//«
 async expandSubs(shell, term){//«
 
@@ -1949,13 +2029,13 @@ dsSQuoteExpansion(){//«
 		if (ent instanceof DSQuote) ent.expand();
 	}
 }//»
-get isAssignment(){
+get isAssignment(){//«
 	let eq_pos = this.val.indexOf("=");
 	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
 	let pre_eq_arr = this.val.slice(0, eq_pos);
 	let first = pre_eq_arr.shift();
 	return (typeof first === "string" && first.match(/^[_a-zA-Z]$/));
-}
+}//»
 get assignmentParts(){//«
 //const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 	let eq_pos = this.val.indexOf("=");
@@ -1973,7 +2053,7 @@ get assignmentParts(){//«
 }//»
 get isWord(){return true;}
 dup(){//«
-	let word = new Word(this.start, this.par, this.env);
+	let word = new Word(this.start);
 	let arr = word.val;
 	for (let ent of this.val){
 		if (isStr(ent)) arr.push(ent);
@@ -2246,7 +2326,6 @@ this.seqClasses={
 }
 
 /*»*/
-
 //Scanner«
 
 //These 2 functions are "holdover" logic from esprima, which seems too "loose" for 
@@ -3182,17 +3261,21 @@ async getMoreTokensFromTerminal(){//«
 	this.numToks = this.tokens.length;
 }//»
 eatRedirects(){//«
+//	const{toks}=this;
+//	const toks = this.tokens;
 	let err = this.fatal;
 	let tok = this.curTok();
 	let list=[];
 	while(tok && tok.isRedir){
 		let rop = tok;
 		this.tokNum++;
-		let fname = toks[this.tokNum];
+		let fname = this.tokens[this.tokNum];
 		if (!fname) err("syntax error near unexpected token 'newline'");
 		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
 		if (!fname.isChars) err(`wanted characters only in the filename`);
-		list.push({redir: [rop, fname], isRedir: true});
+		list.push({redir: [rop, fname], isRedir: true, dup:()=>{
+			return {redir: [rop, fname.dup()], isRedir: true};
+		}});
 		this.tokNum++;
 		tok = this.curTok();
 	}
@@ -3275,7 +3358,7 @@ async parseCompoundList(opts={}){//«
 	let next = this.curTok();
 	if (!next) {
 		term.term.push(";");
-		return {compound_list: term}
+		return {compound_list: term, dup:()=>{return dup_compound_list(term);}}
 	}
 	if (next.isSepOp){
 		term.term.push(next.val);
@@ -3294,7 +3377,7 @@ async parseCompoundList(opts={}){//«
 		this.unexp(next);
 	}
 	this.skipNewlines();
-	return {compound_list: term};
+	return {compound_list: term, dup:()=>{return dup_compound_list(term);}}
 }//»
 
 async parseFuncBody(){//«
@@ -3304,6 +3387,10 @@ let comp_com = await this.parseCompoundCommand();
 //	let tok = this.curTok();
 //	this.unexp(tok);
 //}
+/*Even though the spec says that a function_body is a compound_command [redirect_list],
+we are already doing eatRedirects inside of parseCompoundCommand since all compound
+commands take redirect lists.
+*/
 //let redirs = this.eatRedirects();
 //Then get the bunch of redirections after it
 return {function_body: {command: comp_com}};
@@ -3845,11 +3932,15 @@ while(tok){
 		if (!fname.isChars) err(`wanted characters only in the filename`);
 		if (!have_comword){
 			if (!pref) pref = [];
-			pref.push({redir: [rop, fname], isRedir: true});
+			pref.push({redir: [rop, fname], isRedir: true, dup:()=>{
+				return {redir: [rop, fname.dup()], isRedir: true}
+			}});
 		}
 		else{
 			if (!suf) suf = [];
-			suf.push({redir: [rop, fname], isRedir: true});
+			suf.push({redir: [rop, fname], isRedir: true, dup:()=>{
+				return {redir: [rop, fname.dup()], isRedir: true}
+			}});
 		}
 	}//»
 	else if (tok.isWord){//«
@@ -5358,6 +5449,12 @@ async makeCommand(arr, opts, grabObj){//«
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
 	}//»
+	if (term.funcs[usecomword]){
+let func = term.funcs[usecomword](this, arr, opts, grabObj);
+func.isFunc = true;
+return func;
+
+	}
 	if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
 //Need to do this for matching stuff
@@ -5466,8 +5563,6 @@ async executePipeline(pipe, loglist, loglist_iter, opts){/*«*/
 				pipeline._hasBang = true;
 			}
 		}
-//		let rv = await this.makeCommand(arr, pipeline, j, j>0, j < pipelist.length-1, opts, screenGrab)
-//		let rv = await this.makeCommand(arr, j>0, j < pipelist.length-1, opts, screenGrab)
 		let rv = await this.makeCommand(arr, opts, screenGrab)
 		if (this.cancelled) return;
 		if (isStr(rv)) return rv;
@@ -5583,16 +5678,16 @@ async makeWhileCommand(com, opts, grabObj){//«
 async makeUntilCommand(com, opts, grabObj){//«
 	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
 }//»
+async makeFunctionCommand(com, opts, grabObj){//«
+return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
+}//»
+
 async makeForCommand(com, opts, grabObj){//«
 cwarn("FOR COMMAND!!!");
 log(com);
 }//»
 async makeCaseCommand(com, opts, grabObj){//«
 cwarn("CASE COMMAND!!!");
-log(com);
-}//»
-async makeFunctionCommand(com, opts, grabObj){//«
-cwarn("FUNCTION COMMAND!!!");
 log(com);
 }//»
 
@@ -6039,9 +6134,11 @@ this.statusBar = Win.statusBar;
 this.appClass="cli";
 this.isEditor = false;
 this.isPager = false;
-this.env = globals.TERM_ENV;
+this.env={};
+//this.env = globals.TERM_ENV;
 this.ENV = this.env;
-
+//this.funcs = globals.TERM_FUNCS;
+this.funcs={};
 //Editor mode constants for the renderer (copy/pasted from vim.js)«
 this.modes= {
 	command:1,
