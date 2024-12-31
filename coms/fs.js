@@ -753,7 +753,7 @@ async init(){
 #doGrep(val){
 	const re = this.#re;
 	if (!re) return;
-	const {out}=this;
+//	const {out}=this;
 	let arr;
 	if (isStr(val)) arr=[val];
 	else if (!isArr(val)){
@@ -762,17 +762,19 @@ async init(){
 	}
 	else arr = val;	
 	for (let ln of arr){
-		if (re.test(ln)) out(ln);
+		if (re.test(ln)) {
+			this.out(ln);
+		}
 	}
 }
 async run(){
 	if (this.killed) return;
-	let{args, err: _err, out}=this;
+	let{args}=this;
 	let have_error = false;
 	const err=mess=>{
 		if (!mess) return;
 		have_error=true;
-		_err(mess);
+		this.err(mess);
 	};
 	let rv = await get_file_lines_from_args(args, this.term, err);
 //	if (rv.err && rv.err.length) err(rv.err);
@@ -785,7 +787,7 @@ pipeIn(val){
 		this.ok();
 		return;
 	}
-	this.#doGrep(val);
+	this.#doGrep(val.split("\n"));
 }
 
 }//»

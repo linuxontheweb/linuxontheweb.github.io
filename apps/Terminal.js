@@ -1,3 +1,7 @@
+/*Parameter Expansions @PMJDHSWL have a weird new ParamSub (@XMKJDHE) object that
+has an empty expand method. It will be easy to get this working in the case that
+there is only a number or a plain word in there...
+*/
 /*12/31/24: In all of these places where we need to repeatedly re-use certain«
 compound_list's, we either need to:
 -  Have a dup method for the compound_list, in order to duplicate all of the Word objects
@@ -10,6 +14,13 @@ are used in the Unix shell. When calling shell.execute, @XKLRSMFLE, we create a 
 do that copying when we are doing the subshell. Also, the assignments before an
 *actual* command do not go into the terminal's environment. I guess there needs to
 be a separate command env object...
+
+
+
+NOW JUST ONE MORE KIND OF COMPOUND_COMMAND (CASE_CLAUSE) TO MAKE THIS A PRETTY
+MUCH FEATURE COMPLETE MINIMAL LINUX DISTRO??? 
+
+
 »*/
 /*12/30/24: Just had an issue with EOFs inside of scripts @LPIRHSKF. For some reason, it was«
 assumed that EOFs should only go to the next commands in your immediate pipeline,
@@ -1124,7 +1135,7 @@ constructor(shell, name, in_list, do_group, opts, grabObj){
 }
 //async allExpansions(arr, env, scriptName, scriptArgs){
 async init(){
-this.in_list = (await this.shell.allExpansions(this.in_list)).arr;
+this.in_list = await this.shell.allExpansions(this.in_list);
 //log(this.in_list);
 }
 async run(){
@@ -2315,6 +2326,7 @@ dup(){//«
 }//»
 
 }//»
+//XMKJDHE
 const ParamSub = class extends Sequence{//«
 expand(shell, term){
 cwarn("EXPAND PARAMSUB!!!");
@@ -4879,6 +4891,7 @@ else{//«
 
 }//»
 parameterExpansion(tok, env, script_name="sh", script_args=[]){//«
+//PMJDHSWL
 //const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
 //We will also need env, script_name, and script_args passed in here
 /*«
@@ -5302,7 +5315,7 @@ return stdin;
 }//»
 async allExpansions(arr, env, scriptName, scriptArgs){//«
 const{term}=this;
-let in_redir, out_redir;
+//let in_redir, out_redir;
 for (let k=0; k < arr.length; k++){//«
 	let tok = arr[k];
 	if (tok instanceof Word){
@@ -5324,6 +5337,7 @@ for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
 	if (tok instanceof Word) tok.tildeExpansion();
 }//»
+/*
 for (let k=0; k < arr.length; k++){//redirs«
 	let tok = arr[k];
 	let typ = tok.type;
@@ -5331,7 +5345,6 @@ for (let k=0; k < arr.length; k++){//redirs«
 	if (typ==="r_op"){
 		let rop = tok.r_op;
 		if (!OK_REDIR_TOKS.includes(rop)) {
-//			return terr(`sh: unsupported operator: '${tok.r_op}'`);
 			return `unsupported operator: '${tok.r_op}'`;
 		}
 		if (rop==="<<"||rop=="<<-"){
@@ -5342,26 +5355,22 @@ for (let k=0; k < arr.length; k++){//redirs«
 			continue;
 		}
 		let tok2 = arr[k+1];
-//		if (!tok2) return terr("sh: syntax error near unexpected token `newline'");
 		if (!tok2) return "syntax error near unexpected token `newline'";
-//		if (!(tok2 instanceof Word)) return terr(`sh: invalid or missing redirection operand`);
 		if (!(tok2 instanceof Word)) return `invalid or missing redirection operand`;
 		arr.splice(k, 2);
 		k-=2;
 		val = null;
 		if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [tok.r_op, tok2.toString()];
 		else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [tok.r_op, tok2.toString()];
-//		else return terr(`sh: unsupported operator: '${rop}'`);
 		else return `unsupported operator: '${rop}'`;
 	}
 }//»
+*/
 for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
 if (tok.isWord) {
-//	let rv = parameter_expansion(tok, env, scriptName, scriptArgs);
 	let rv = this.parameterExpansion(tok, env, scriptName, scriptArgs);
-//	if (isStr(rv)) return terr(`sh: ${rv}`);
 	if (isStr(rv)) return rv;
 }
 
@@ -5375,10 +5384,10 @@ for (let k=0; k < arr.length; k++){//command sub«
 for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
-		let{start, par, env} = tok;
+		let{start} = tok;
 		let words = [];
 		for (let field of tok.fields){
-			let word = new Word(start, par, env);
+			let word = new Word(start);
 			word.val = [...field];
 			words.push(word);
 		}
@@ -5390,7 +5399,6 @@ for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
 
 let tok = arr[k];
 if (tok.isWord) {
-//	let rv = await filepath_expansion(tok, term.cur_dir);
 	let rv = await this.filepathExpansion(tok, term.cur_dir);
 	if (isStr(rv)){
 		term.response(rv, {isErr: true});
@@ -5398,7 +5406,6 @@ if (tok.isWord) {
 	}
 	if (rv !== tok){
 		arr.splice(k, 1, ...rv);
-//		k--;//Need to revisit the original position, in case there are more expansions there
 	}
 }
 
@@ -5406,11 +5413,12 @@ if (tok.isWord) {
 for (let k=0; k < arr.length; k++){//quote removal«
 	let tok = arr[k];
 	if (tok.isWord) {
-//		quote_removal(tok);
 		this.quoteRemoval(tok);
 	}
 }//»
-return {arr, inRedir: in_redir, outRedir: out_redir};
+//return {arr, inRedir: in_redir, outRedir: out_redir};
+//return {arr, inRedir: in_redir, outRedir: out_redir};
+return arr;
 }//»
 async tryImport(com, comword){//«
 //If we have a string rather than a function, do the command library importing routine.
@@ -5443,10 +5451,7 @@ async makeCommand(arr, in_redir, out_redir, opts, grabObj){//«
 	let comobj, usecomword;
 	let rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
 	if (isStr(rv)) return `sh: ${rv}`;
-	arr = rv.arr;
-//jlog(arr);
-//	let in_redir = rv.inRedir;
-//	let out_redir = rv.outRedir;
+	arr = rv;
 //Set environment variables (exports to terminal's environment if there is nothing left)
 	rv = ShellMod.util.addToEnv(arr, env, {term});
 //This is an "error" array
