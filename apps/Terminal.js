@@ -1,13 +1,20 @@
-/*12/31/24: In all of these places where we need to repeatedly reuse certain
+/*12/31/24: In all of these places where we need to repeatedly re-use certain«
 compound_list's, we either need to:
 -  Have a dup method for the compound_list, in order to duplicate all of the Word objects
 -  save the source text that makes up these objects and then send it back through the parser
    in order to get another one.
-*/
-/*Just had an issue with EOFs inside of scripts @LPIRHSKF. For some reason, it was
+
+The ForCom @SLDLTOD is highlighting our inability to figure out how the environments
+are used in the Unix shell. When calling shell.execute, @XKLRSMFLE, we create a new
+(shallow) copy of the terminal's environment object. I guess we are only supposed to
+do that copying when we are doing the subshell. Also, the assignments before an
+*actual* command do not go into the terminal's environment. I guess there needs to
+be a separate command env object...
+»*/
+/*12/30/24: Just had an issue with EOFs inside of scripts @LPIRHSKF. For some reason, it was«
 assumed that EOFs should only go to the next commands in your immediate pipeline,
 and not to the scriptOut callback...
-*/
+»*/
 let USE_ONDEVRELOAD = false;
 //let USE_DEVPARSER = false;
 let USE_DEVPARSER = true;
@@ -987,7 +994,13 @@ class WhileCom{//«
 constructor(shell, cond, do_group, opts, grabObj){//«
 	this.shell = shell;
 	this.cond = cond;
-	this.do_group = do_group[0].andor[0].pipeline.pipe_sequence[0].compound_command.compound_list.term;
+
+//	this.do_group = do_group[0].andor[0].pipeline.pipe_sequence[0].compound_command.compound_list.term;
+
+	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
+	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
+	else this.do_group = do_group;
+
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -1016,7 +1029,11 @@ class UntilCom{//«
 constructor(shell, cond, do_group, opts, grabObj){//«
 	this.shell = shell;
 	this.cond = cond;
-	this.do_group = do_group[0].andor[0].pipeline.pipe_sequence[0].compound_command.compound_list.term;
+
+	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
+	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
+	else this.do_group = do_group;
+
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -1087,6 +1104,47 @@ run(){
 //echo blah blah blah | 
 	this.end(E_SUC);
 }
+}/*»*/
+class ForCom{/*«*/
+constructor(shell, name, in_list, do_group, opts, grabObj){
+	this.shell=shell;
+	this.name=name;
+	this.in_list=in_list;
+	this.do_group=do_group;
+//	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
+//	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
+//	else this.do_group = do_group;
+	this.opts=opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}
+//async allExpansions(arr, env, scriptName, scriptArgs){
+async init(){
+this.in_list = (await this.shell.allExpansions(this.in_list)).arr;
+//log(this.in_list);
+}
+async run(){
+/*
+this.name goes into the environment as the key and the particular array value as the value
+*/
+const{shell}=this;
+//SLDLTOD
+let env = this.opts.env;
+let nm = this.name+"";
+for (let val of this.in_list){
+	env[nm] = val+"";
+	let grp = dup_compound_list(this.do_group);
+	await shell.executeStatements2(grp.term, this.opts)
+	if (shell.cancelled) return;
+	await sleep(0);
+}
+this.end(E_SUC);
+}
+
 }/*»*/
 
 //Just need ForCom and CaseCom
@@ -4555,7 +4613,10 @@ fatal(mess){throw new Error(mess);}
 async expandComsub(tok){//«
 //const expand_comsub=async(tok, shell, term)=>
 	const{term}=this;
-	const err = term.resperr;
+//	const err = term.resperr;
+const err=(mess)=>{
+term.response(mess, {isErr: true});
+};
 	let s='';
 	let vals = tok.val;
 	for (let ent of vals){
@@ -4594,7 +4655,7 @@ pushed into the quote's characters.
 	let sub_lines = [];
 	try{
 //cwarn(`COMSUB <${s}>`);
-		await this.execute(s, {subLines: sub_lines, env: tok.env});
+		await this.devexecute(s, {subLines: sub_lines, env: tok.env});
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -4888,7 +4949,6 @@ else if (qtyp!=='"') continue;
 if (ch==="$"){/*«*/
 
 const do_name_sub=(name)=>{//«
-
 let diff = end_i - start_i;
 let val = env[name]||"";
 word.splice(start_i, end_i-start_i+1, ...val);
@@ -5373,7 +5433,7 @@ cerr(e);
 	return gotcom;
 }//»
 
-async makeCommand(arr, opts, grabObj){//«
+async makeCommand(arr, in_redir, out_redir, opts, grabObj){//«
 //async makeCommand(arr, pipeline, pipeline_iter, pipeFrom, pipeTo, opts, grabObj){
 	const{term}=this;
 	const makeShErrCom = ShellMod.util.makeShErrCom;
@@ -5381,13 +5441,12 @@ async makeCommand(arr, opts, grabObj){//«
 	let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let args=[];
 	let comobj, usecomword;
-//jlog(arr);
 	let rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
 	if (isStr(rv)) return `sh: ${rv}`;
 	arr = rv.arr;
 //jlog(arr);
-	let in_redir = rv.inRedir;
-	let out_redir = rv.outRedir;
+//	let in_redir = rv.inRedir;
+//	let out_redir = rv.outRedir;
 //Set environment variables (exports to terminal's environment if there is nothing left)
 	rv = ShellMod.util.addToEnv(arr, env, {term});
 //This is an "error" array
@@ -5542,6 +5601,68 @@ cerr(e);
 //SKIOPRHJT
 }//»
 
+
+async makeIfCommand(com, opts, grabObj){//«
+	let if_list = com.if_list;
+	let then_list = com.then_list;
+	let conditions = [if_list.compound_list.term];
+	let consequences = [then_list.compound_list.term];
+	let fallback;
+	let else_part = com.else_part;
+	if (else_part){
+		let elif_seq = else_part.elif_seq;
+		if (elif_seq){
+			while (elif_seq.length){
+				let elif = elif_seq.shift();
+				conditions.push(elif.elif.compound_list.term);
+				consequences.push(elif.then.compound_list.term);
+			}
+		}
+		fallback = else_part.else_list.compound_list.term;
+	}
+//log(conditions);
+	return new IfCom(this, conditions, consequences, fallback, opts);
+}//»
+async makeBraceGroupCommand(com, opts, grabObj){//«
+	return new BraceGroupCom(this, com.compound_list.term, opts, grabObj);
+}//»
+async makeSubshellCommand(com, opts, grabObj){//«
+	return new SubshellCom(this, com.compound_list.term, opts, grabObj);
+}//»
+async makeWhileCommand(com, opts, grabObj){//«
+	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
+}//»
+async makeUntilCommand(com, opts, grabObj){//«
+	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
+}//»
+async makeFunctionCommand(com, opts, grabObj){//«
+return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
+}//»
+
+async makeForCommand(com, opts, grabObj){//«
+//cwarn("FOR COMMAND!!!");
+//log(com);
+return new ForCom(this, com.name, com.in_list, com.do_group, opts, grabObj);
+}//»
+async makeCaseCommand(com, opts, grabObj){//«
+cwarn("CASE COMMAND!!!");
+log(com);
+}//»
+
+makeCompoundCommand(com, opts, grabObj){//«
+	let typ = com.type;
+	let comp = com.compound_command;
+	if (typ === "if_clause") return this.makeIfCommand(comp, opts, grabObj);
+	if (typ === "brace_group") return this.makeBraceGroupCommand(comp, opts, grabObj);
+	if (typ === "subshell") return this.makeSubshellCommand(comp, opts, grabObj);
+	if (typ === "for_clause") return this.makeForCommand(comp, opts, grabObj);
+	if (typ === "case_clause") return this.makeCaseCommand(comp, opts, grabObj);
+	if (typ === "while_clause") return this.makeWhileCommand(comp, opts, grabObj);
+	if (typ === "until_clause") return this.makeUntilCommand(comp, opts, grabObj);
+	if (typ === "function_def") return this.makeFunctionCommand(comp, opts, grabObj);
+	this.fatal(`What Compound Command type: ${type}`);
+}//»
+
 async executePipeline(pipe, loglist, loglist_iter, opts){/*«*/
 	const{term}=this;
 	let lastcomcode;
@@ -5644,67 +5765,6 @@ ShellMod.var.lastExitCode = lastcomcode;
 	return lastcomcode;
 }
 /*»*/
-
-async makeIfCommand(com, opts, grabObj){//«
-	let if_list = com.if_list;
-	let then_list = com.then_list;
-	let conditions = [if_list.compound_list.term];
-	let consequences = [then_list.compound_list.term];
-	let fallback;
-	let else_part = com.else_part;
-	if (else_part){
-		let elif_seq = else_part.elif_seq;
-		if (elif_seq){
-			while (elif_seq.length){
-				let elif = elif_seq.shift();
-				conditions.push(elif.elif.compound_list.term);
-				consequences.push(elif.then.compound_list.term);
-			}
-		}
-		fallback = else_part.else_list.compound_list.term;
-	}
-//log(conditions);
-	return new IfCom(this, conditions, consequences, fallback, opts);
-}//»
-async makeBraceGroupCommand(com, opts, grabObj){//«
-	return new BraceGroupCom(this, com.compound_list.term, opts, grabObj);
-}//»
-async makeSubshellCommand(com, opts, grabObj){//«
-	return new SubshellCom(this, com.compound_list.term, opts, grabObj);
-}//»
-async makeWhileCommand(com, opts, grabObj){//«
-	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
-}//»
-async makeUntilCommand(com, opts, grabObj){//«
-	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
-}//»
-async makeFunctionCommand(com, opts, grabObj){//«
-return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
-}//»
-
-async makeForCommand(com, opts, grabObj){//«
-cwarn("FOR COMMAND!!!");
-log(com);
-}//»
-async makeCaseCommand(com, opts, grabObj){//«
-cwarn("CASE COMMAND!!!");
-log(com);
-}//»
-
-makeCompoundCommand(com, opts, grabObj){//«
-	let typ = com.type;
-	let comp = com.compound_command;
-	if (typ === "if_clause") return this.makeIfCommand(comp, opts, grabObj);
-	if (typ === "brace_group") return this.makeBraceGroupCommand(comp, opts, grabObj);
-	if (typ === "subshell") return this.makeSubshellCommand(comp, opts, grabObj);
-	if (typ === "for_clause") return this.makeForCommand(comp, opts, grabObj);
-	if (typ === "case_clause") return this.makeCaseCommand(comp, opts, grabObj);
-	if (typ === "while_clause") return this.makeWhileCommand(comp, opts, grabObj);
-	if (typ === "until_clause") return this.makeUntilCommand(comp, opts, grabObj);
-	if (typ === "function_def") return this.makeFunctionCommand(comp, opts, grabObj);
-	this.fatal(`What Compound Command type: ${type}`);
-}//»
-
 async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
 	let lastcomcode;
@@ -5727,16 +5787,42 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 			rv = await this.makeCompoundCommand(com, opts, screenGrab)
 		}
 		else if (com.simple_command){
+			let in_redir, out_redir;
 			let arr=[];
 			com = com.simple_command;
 			if (com.prefix) {
-				for (let pref of com.prefix) arr.push(pref.word);
+				for (let pref of com.prefix) {
+					if (pref.word) arr.push(pref.word);
+					else if (pref.redir) {
+						let red = pref.redir;
+						let rop = red[0].val;
+						let red_to = red[1].toString();
+						if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [rop, red_to];
+						else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [rop, red_to];
+						else this.fatal(`unsupported operator: '${rop}'`);
+					}
+				}
 			}
 			if (com.word||com.name) arr.push(com.word||com.name);
 			if (com.suffix) {
-				for (let suf of com.suffix) arr.push(suf.word);
+				for (let suf of com.suffix) {
+					if (suf.word) arr.push(suf.word);
+					else if (suf.redir) {
+						let red = suf.redir;
+						let rop = red[0].val;
+						let red_to = red[1].toString();
+						if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [rop, red_to];
+						else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [rop, red_to];
+						else this.fatal(`unsupported operator: '${rop}'`);
+					}
+				}
+
+//				for (let suf of com.suffix) arr.push(suf.word||suf);
 			}
-			rv = await this.makeCommand(arr, opts, screenGrab)
+//log(arr);
+//jlog(arr);
+			rv = await this.makeCommand(arr, in_redir, out_redir, opts, screenGrab)
+
 		}
 		else{
 cwarn("Here is the command");
@@ -6426,6 +6512,7 @@ async execute(str, opts={}){//«
 
 	str = str.replace(/\x7f/g, "");
 
+//XKLRSMFLE
 	let env = {};
 	for (let k in this.env){
 		env[k]=this.env[k];
