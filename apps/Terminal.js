@@ -1157,7 +1157,106 @@ run(){
 	this.end(E_SUC);
 }
 }/*»*/
+class CaseCom{/*«*/
 
+constructor(shell, word, list, opts, grabObj){/*«*/
+this.shell=shell;
+this.word=word;
+this.list=list;
+this.opts=opts;
+this.awaitEnd = new Promise((Y,N)=>{
+	this.end = (rv)=>{
+		Y(rv);
+		this.killed = true;
+	};
+});
+}/*»*/
+//return new CaseCom(this, com.word, com.list, opts, grabObj);
+async init(){/*«*/
+	this.word.tildeExpansion();
+	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+	await this.word.expandSubs(this.shell, this.shell.term);
+	this.word.quoteRemoval();
+	this.word = this.word.fields.join("")
+//cwarn("WORD");
+//log(this.word.fields.join(" "));
+}/*»*/
+
+async run(){
+/*«
+For exerything, do:
+
+expansions to do:
+1) Tilde
+	tok.tildeExpansion();
+2) Param
+	let rv = tok.parameterExpansion(env, scriptName, scriptArgs);
+3) Com Sub/Math
+	await tok.expandSubs(this, term);
+4) Quote Removal
+	tok.quoteRemoval();
+
+For every word in every
+
+
+Pattern matching: 
+?: any char
+*: multiple chars
+[...]: list of chars
+
+
+re.test(word);
+
+»*/
+const{word}=this;
+let rv;
+let did_match=false;
+LOOP: for (let obj of this.list){
+	let item = obj.case_item;
+	let end = item.end;
+	if (did_match){
+		rv = await this.shell.executeStatements2(item.compound_list, this.opts)
+		if (end.isSemiAnd) continue LOOP;
+		break LOOP;
+	}
+	let pat_list = item.pattern_list;
+	for (let wrd of pat_list){
+		wrd.tildeExpansion();
+		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+		await wrd.expandSubs(this.shell, this.shell.term);
+		wrd.quoteRemoval();
+		let arr = wrd.fields.join("").split("");
+		let patstr='';
+		for (let ch of arr){//«
+			if (ch==="."){
+				patstr+='\\.';
+			}
+			else if (ch==="*"){
+				patstr+='.*';
+			}
+			else if (ch==="?"){
+				patstr+='.';
+			}
+			else {
+				patstr+=ch.toString();
+			}
+		}//»
+		const re = new RegExp("^" + patstr + "$");
+		if (re.test(word)){
+			did_match = true;
+			rv = await this.shell.executeStatements2(item.compound_list, this.opts)
+			if (end.isSemiAnd) continue LOOP;
+			break LOOP;
+		}
+	}
+}
+if (!did_match) this.end(E_ERR);
+else {
+	this.end(rv);
+}
+
+}
+}/*»*/
 //Just need ForCom and CaseCom
 
 //return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
@@ -1333,9 +1432,12 @@ init(){
 }
 async run(){//«
 	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
-	const{pipeTo, isSub, term, err, args} = this;
+	const{pipeTo, isSub, term, args} = this;
 	const out=(...args)=>{
 		this.out(...args);
+	};
+	const err=(...args)=>{
+		this.err(...args);
 	};
 	let no_fmt = pipeTo|| isSub;
 	let nargs = args.length;
@@ -1369,7 +1471,7 @@ async run(){//«
 				err(`${regpath}: not a directory`);
 				return;
 			}
-			if (dir_was_last) out.push("");
+			if (dir_was_last) out("");
 			dir_was_last = false;
 			if (node.appName==LINK_APP){
 				out(`${node.name} -> ${node.symLink}`);
@@ -2063,6 +2165,247 @@ this.fields = fields;
 
 }//»
 
+quoteRemoval(){//«
+	let s='';
+	let qtyp;
+	let arr = this.val;
+	for (let l=0; l < arr.length; l++){
+		let c = arr[l];
+		if (c==='"'||c==="'") {
+			if (c===qtyp){
+				qtyp=null;
+				continue;
+			}
+			else if (!qtyp){
+				qtyp = c;
+				continue;
+			}
+		}
+		s+=c.toString();
+	}
+	this.val = [...s];
+}//»
+parameterExpansion(env, script_name="sh", script_args=[]){//«
+//PMJDHSWL
+//const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
+//We will also need env, script_name, and script_args passed in here
+/*«
+
+A "parameter" is a NAME or a SYMBOL, as described below.
+
+We are looking for one of:
+
+$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
+@: positional parameters starting from 1, and something about field splitting
+*: Same as above, with something else about field splitting
+#: Number of positional parameters (minus the 0th)
+?: Most recent exit code
+-: Current options flag
+$: pid of the shell
+!: pid of most recent '&' statement
+0: name of shell or shell script
+
+All DIGIT's (other than 0) are the current (1-based) positional parameters
+
+These expands in anything other than single quotes
+
+We can also easily support '${#NAME}', since this just gives the length of the
+string of the variable, NAME.
+
+I'm not sure how to handle:
+$ DQUOTE='"'
+$ echo "$DQUOTE"
+
+Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
+
+»*/
+/*«
+
+Should we not put everything inside $'...', and then escape ALL
+single quotes that are in the replacement value??? Otherwise, there can't be
+escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
+
+So, if we do:
+PARAM_WITH_SINGLE_QUOTES="...'//..."
+
+echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
+=> BLAH$'...\'//...'BLAH
+
+»*/
+const tok = this;
+const word = tok.val;
+//cwarn("HI", this);
+let qtyp;
+OUTER_LOOP: for (let i=0; i < word.length; i++){
+
+let ch = word[i];
+if (!qtyp){
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		continue;
+	}
+	else{
+//Unquoted stuff
+	}
+}
+else if (qtyp===ch) {
+	qtyp=null;
+	continue;
+}
+else if (qtyp!=='"') continue;
+
+//We are unquoted or in double quotes
+
+if (ch==="$"){/*«*/
+
+const do_name_sub=(name)=>{//«
+let diff = end_i - start_i;
+let val = env[name]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+
+};//»
+const do_arg_sub=(num)=>{//«
+let diff = end_i - start_i;
+let val = script_args[num]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+};//»
+const do_sym_sub=(sym)=>{//«
+let diff = end_i - start_i;
+let val;
+//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
+switch(sym){
+	case "0": val = script_name; break;
+	case "#": val = script_args.length+""; break;
+	case "*":
+	case "@":
+		val = script_args.join(" ");
+		break;
+	case "?": val = ShellMod.var.lastExitCode+""; break;
+	default: val = "$"+sym;
+}
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+
+};/*»*/
+const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
+
+	let next = word[i+1];
+	if (!next) continue;
+	let start_i = i;
+	let end_i;
+	if (next==="{") {/*«*/
+		i++;
+//If no next one or the next one is a "}", barf INVSUB
+//If the next one is a special symbol, there must be a "}" immediately following it
+//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
+//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
+//    ANY_NAME_CHARS, with a terminating "}".
+		next = word[i+1];
+		if (!next) return "bad substitution: '${<END>'";
+		else if (next==="}") return "bad substitution: '${}'";
+
+		if (SPECIAL_SYMBOLS.includes(next)){/*«*/
+			let sym = next;
+			i++;
+			next = word[i+1];
+			if (next !== "}") return BADSUB(sym, next);
+			end_i = i+1;
+			do_sym_sub(sym);
+		}/*»*/
+		else if (DIGIT_CHARS_1_to_9.includes(next)){/*«*/
+			let numstr=next;
+			i++;
+			next = word[i+1];
+			while(true){
+				if (next==="}"){
+				//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
+		//cwarn("Substitute script_arg #", argnum);
+		//			end_i = i;
+					end_i = i+1;
+					do_arg_sub(parseInt(numstr)-1);
+					break;
+				}
+				if (!ANY_DIGIT_CHARS.includes(next)){
+		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
+					return BADSUB(numstr, next);
+				}
+				numstr+=next;
+				i++;
+				next = word[i+1];
+			}
+		}/*»*/
+		else if (START_NAME_CHARS.includes(next)){/*«*/
+
+		let namestr=next;
+		i++;
+		next = word[i+1];
+		while(true){
+			if (next==="}"){
+				end_i = i+1;
+				do_name_sub(namestr);
+				continue OUTER_LOOP;
+			}
+			if (!ANY_NAME_CHARS.includes(next)){
+				return BADSUB(namestr, next);
+			}
+			namestr+=next;
+			i++;
+			next = word[i+1];
+		}
+
+		}/*»*/
+		else return INVSUB;
+
+	}/*»*/
+	else{/*«*/
+//If the next one is a special symbol (including "0"), we can do the substitution now«
+//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
+//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
+//  literal '$'
+//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
+
+//		i++;
+//		next = word[i+1];»
+
+if (SPECIAL_SYMBOLS.includes(next)){
+	end_i = i+1;
+	do_sym_sub(next);
+}
+else if (DIGIT_CHARS_1_to_9.includes(next)){
+	end_i = i+1;
+	do_arg_sub(parseInt(next)-1);
+}
+else if (!START_NAME_CHARS.includes(next)){
+	continue;
+}
+else{/*«*/
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (!ANY_NAME_CHARS.includes(next)){
+		end_i=i;
+		do_name_sub(namestr);
+		continue OUTER_LOOP;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}/*»*/
+
+	}/*»*/
+
+}/*»*/
+
+}
+
+return tok;
+}/*»*/
 tildeExpansion(){//«
 	const {val} = this;
 	let parts = this.assignmentParts;
@@ -2359,7 +2702,10 @@ const MathSub = class extends Sequence{//«
 
 async expand(shell, term){//«
 //Need to turn everything into a string that gets sent through math.eval()
-	const err = term.resperr;
+//	const err = term.resperr;
+const err=mess=>{
+term.response(mess, {isErr: true});
+};
 	if (!await util.loadMod("util.math")) {
 		err("could not load the math module");
 		return "";
@@ -2376,7 +2722,7 @@ async expand(shell, term){//«
 		return math.eval(s)+"";
 	}
 	catch(e){
-		err(e.message);
+		err(`math expansion: ${e.message}`);
 		return "";
 	}
 }//»
@@ -3580,7 +3926,7 @@ the entire case_clause;
 	seq.push(tok);
 	tok = this.nextTok();
 	if (!tok) this.unexp("newline");
-	if (tok.isPatListEnd) return {pattern_list: seq}// ')'
+	if (tok.isPatListEnd) return seq;// ')'
 	if (!tok.isPatListSep) this.unexp(tok);
 	this.tokNum++;
 	return this.parseCasePatternList(seq);
@@ -3604,8 +3950,8 @@ async parseCaseItem(){//«
 //                 | pattern_list ')' compound_list
 //                 ;//»
 
-let pat_list = await this.parseCasePatternList();
-if (pat_list===true) return true;
+let pattern_list = await this.parseCasePatternList();
+if (pattern_list===true) return true;
 
 let tok = this.curTok();
 if (!tok){
@@ -3624,10 +3970,11 @@ if (!tok){
 	tok = this.curTok();
 }
 
-let comp_list;
+let compound_list;
 if (tok.isCommandStart){
 //This one can end with a ";;" or ";&"
-	comp_list = await this.parseCompoundList({isCase: true});
+	compound_list = (await this.parseCompoundList({isCase: true})).compound_list.term;
+//log(compound_list.compound_list);
 }
 tok = this.curTok();
 if (!tok){
@@ -3636,9 +3983,9 @@ if (!tok){
 if (tok.isCaseItemEnd){
 	this.tokNum++;
 	this.skipNewlines();
-	return {case_item: {pattern_list: pat_list, compound_list: comp_list, end: tok}};
+	return {case_item: {pattern_list, compound_list, end: tok}};
 }
-return {case_item: {pattern_list: pat_list, compound_list: comp_list}};
+return {case_item: {pattern_list, compound_list}};
 
 }//»
 async parseCaseList(seq_arg){/*«*/
@@ -3651,7 +3998,7 @@ async parseCaseList(seq_arg){/*«*/
 let seq = seq_arg || [];
 let item = await this.parseCaseItem();
 if (item===true){//This *must* be a lone "esac"
-	return {case_list: seq};
+	return seq;
 }
 else if (!item){
 //This *probably* should already be an error in parseCaseItem
@@ -4025,7 +4372,7 @@ while(tok){
 		}
 		else{
 			if (!suf) suf = [];
-			suf.push({word: tok});
+			suf.push(tok);
 		}
 	}//»
 	else{
@@ -4890,247 +5237,7 @@ else{//«
 }//»
 
 }//»
-parameterExpansion(tok, env, script_name="sh", script_args=[]){//«
-//PMJDHSWL
-//const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
-//We will also need env, script_name, and script_args passed in here
-/*«
 
-A "parameter" is a NAME or a SYMBOL, as described below.
-
-We are looking for one of:
-
-$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
-@: positional parameters starting from 1, and something about field splitting
-*: Same as above, with something else about field splitting
-#: Number of positional parameters (minus the 0th)
-?: Most recent exit code
--: Current options flag
-$: pid of the shell
-!: pid of most recent '&' statement
-0: name of shell or shell script
-
-All DIGIT's (other than 0) are the current (1-based) positional parameters
-
-These expands in anything other than single quotes
-
-We can also easily support '${#NAME}', since this just gives the length of the
-string of the variable, NAME.
-
-I'm not sure how to handle:
-$ DQUOTE='"'
-$ echo "$DQUOTE"
-
-Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
-
-»*/
-/*«
-
-Should we not put everything inside $'...', and then escape ALL
-single quotes that are in the replacement value??? Otherwise, there can't be
-escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
-
-So, if we do:
-PARAM_WITH_SINGLE_QUOTES="...'//..."
-
-echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
-=> BLAH$'...\'//...'BLAH
-
-»*/
-let word = tok.val;
-let qtyp;
-OUTER_LOOP: for (let i=0; i < word.length; i++){
-
-let ch = word[i];
-if (!qtyp){
-	if (["'",'"','`'].includes(ch)) {
-		qtyp = ch;
-		continue;
-	}
-	else{
-//Unquoted stuff
-	}
-}
-else if (qtyp===ch) {
-	qtyp=null;
-	continue;
-}
-else if (qtyp!=='"') continue;
-
-//We are unquoted or in double quotes
-
-if (ch==="$"){/*«*/
-
-const do_name_sub=(name)=>{//«
-let diff = end_i - start_i;
-let val = env[name]||"";
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-
-};//»
-const do_arg_sub=(num)=>{//«
-let diff = end_i - start_i;
-let val = script_args[num]||"";
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-};//»
-const do_sym_sub=(sym)=>{//«
-let diff = end_i - start_i;
-let val;
-//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
-switch(sym){
-	case "0": val = script_name; break;
-	case "#": val = script_args.length+""; break;
-	case "*":
-	case "@":
-		val = script_args.join(" ");
-		break;
-	case "?": val = ShellMod.var.lastExitCode+""; break;
-	default: val = "$"+sym;
-}
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-
-};/*»*/
-const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
-
-	let next = word[i+1];
-	if (!next) continue;
-	let start_i = i;
-	let end_i;
-	if (next==="{") {/*«*/
-		i++;
-//If no next one or the next one is a "}", barf INVSUB
-//If the next one is a special symbol, there must be a "}" immediately following it
-//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
-//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
-//    ANY_NAME_CHARS, with a terminating "}".
-		next = word[i+1];
-		if (!next) return "bad substitution: '${<END>'";
-		else if (next==="}") return "bad substitution: '${}'";
-
-		if (SPECIAL_SYMBOLS.includes(next)){/*«*/
-			let sym = next;
-			i++;
-			next = word[i+1];
-			if (next !== "}") return BADSUB(sym, next);
-			end_i = i+1;
-			do_sym_sub(sym);
-		}/*»*/
-		else if (DIGIT_CHARS_1_to_9.includes(next)){/*«*/
-			let numstr=next;
-			i++;
-			next = word[i+1];
-			while(true){
-				if (next==="}"){
-				//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
-		//cwarn("Substitute script_arg #", argnum);
-		//			end_i = i;
-					end_i = i+1;
-					do_arg_sub(parseInt(numstr)-1);
-					break;
-				}
-				if (!ANY_DIGIT_CHARS.includes(next)){
-		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
-					return BADSUB(numstr, next);
-				}
-				numstr+=next;
-				i++;
-				next = word[i+1];
-			}
-		}/*»*/
-		else if (START_NAME_CHARS.includes(next)){/*«*/
-
-		let namestr=next;
-		i++;
-		next = word[i+1];
-		while(true){
-			if (next==="}"){
-				end_i = i+1;
-				do_name_sub(namestr);
-				continue OUTER_LOOP;
-			}
-			if (!ANY_NAME_CHARS.includes(next)){
-				return BADSUB(namestr, next);
-			}
-			namestr+=next;
-			i++;
-			next = word[i+1];
-		}
-
-		}/*»*/
-		else return INVSUB;
-
-	}/*»*/
-	else{/*«*/
-//If the next one is a special symbol (including "0"), we can do the substitution now«
-//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
-//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
-//  literal '$'
-//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
-
-//		i++;
-//		next = word[i+1];»
-
-if (SPECIAL_SYMBOLS.includes(next)){
-	end_i = i+1;
-	do_sym_sub(next);
-}
-else if (DIGIT_CHARS_1_to_9.includes(next)){
-	end_i = i+1;
-	do_arg_sub(parseInt(next)-1);
-}
-else if (!START_NAME_CHARS.includes(next)){
-	continue;
-}
-else{/*«*/
-
-let namestr=next;
-i++;
-next = word[i+1];
-while(true){
-	if (!ANY_NAME_CHARS.includes(next)){
-		end_i=i;
-		do_name_sub(namestr);
-		continue OUTER_LOOP;
-	}
-	namestr+=next;
-	i++;
-	next = word[i+1];
-}
-
-}/*»*/
-
-	}/*»*/
-
-}/*»*/
-
-}
-
-return tok;
-}/*»*/
-quoteRemoval(tok){//«
-//quote_removal(tok){
-	let s='';
-	let qtyp;
-	let arr = tok.val;
-	for (let l=0; l < arr.length; l++){
-		let c = arr[l];
-		if (c==='"'||c==="'") {
-			if (c===qtyp){
-				qtyp=null;
-				continue;
-			}
-			else if (!qtyp){
-				qtyp = c;
-				continue;
-			}
-		}
-		s+=c.toString();
-	}
-	tok.val = [...s];
-//	return s;
-}/*»*/
 async filepathExpansion(tok, cur_dir){//«
 //const filepath_expansion=async(tok, cur_dir)=>{
 /*«
@@ -5159,7 +5266,6 @@ let qtyp;
 let path_arr=[];
 
 for (let ch of arr){//«
-//log(ch);
 if (ch=="/"){
 	path_arr.push(patstr);
 	patstr='';
@@ -5333,44 +5439,16 @@ if (tok.isWord) {
 	}
 }
 }//»
+
 for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
 	if (tok instanceof Word) tok.tildeExpansion();
 }//»
-/*
-for (let k=0; k < arr.length; k++){//redirs«
-	let tok = arr[k];
-	let typ = tok.type;
-	let val = tok[typ];
-	if (typ==="r_op"){
-		let rop = tok.r_op;
-		if (!OK_REDIR_TOKS.includes(rop)) {
-			return `unsupported operator: '${tok.r_op}'`;
-		}
-		if (rop==="<<"||rop=="<<-"){
-			arr.splice(k, 1);
-			k--;
-			val=null;
-			in_redir = [rop, tok.value];
-			continue;
-		}
-		let tok2 = arr[k+1];
-		if (!tok2) return "syntax error near unexpected token `newline'";
-		if (!(tok2 instanceof Word)) return `invalid or missing redirection operand`;
-		arr.splice(k, 2);
-		k-=2;
-		val = null;
-		if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [tok.r_op, tok2.toString()];
-		else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [tok.r_op, tok2.toString()];
-		else return `unsupported operator: '${rop}'`;
-	}
-}//»
-*/
 for (let k=0; k < arr.length; k++){//parameters«
 
 let tok = arr[k];
 if (tok.isWord) {
-	let rv = this.parameterExpansion(tok, env, scriptName, scriptArgs);
+	let rv = tok.parameterExpansion(env, scriptName, scriptArgs);
 	if (isStr(rv)) return rv;
 }
 
@@ -5413,7 +5491,7 @@ if (tok.isWord) {
 for (let k=0; k < arr.length; k++){//quote removal«
 	let tok = arr[k];
 	if (tok.isWord) {
-		this.quoteRemoval(tok);
+		tok.quoteRemoval();
 	}
 }//»
 //return {arr, inRedir: in_redir, outRedir: out_redir};
@@ -5641,8 +5719,6 @@ async makeUntilCommand(com, opts, grabObj){//«
 	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
 }//»
 async makeForCommand(com, opts, grabObj){//«
-//cwarn("FOR COMMAND!!!");
-//log(com);
 return new ForCom(this, com.name, com.in_list, com.do_group.compound_list.term, opts, grabObj);
 }//»
 
@@ -5651,8 +5727,7 @@ return new FunctionCom(this, com.name, com.body.function_body.command, opts, gra
 }//»
 
 async makeCaseCommand(com, opts, grabObj){//«
-cwarn("CASE COMMAND!!!");
-log(com);
+return new CaseCom(this, com.word, com.list, opts, grabObj);
 }//»
 
 makeCompoundCommand(com, opts, grabObj){//«
@@ -5669,108 +5744,6 @@ makeCompoundCommand(com, opts, grabObj){//«
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
-async executePipeline(pipe, loglist, loglist_iter, opts){/*«*/
-	const{term}=this;
-	let lastcomcode;
-	let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-	let in_background = false;
-	let pipelist = pipe.pipe;
-	if (!pipelist){
-		return `sh: pipeline list not found!`;
-	}
-	let pipetype = pipe.type;
-	let pipeline = [];
-	let screenGrab = {grabber: ""};
-	let last_com;
-	for (let j=0; j < pipelist.length; j++) {//«
-		let arr = pipelist[j].com;
-		{
-			let arr0=arr[0];
-			if (arr0 && arr0.hasBang){
-				pipeline._hasBang = true;
-			}
-		}
-		let rv = await this.makeCommand(arr, opts, screenGrab)
-		if (this.cancelled) return;
-		if (isStr(rv)) return rv;
-		if (last_com){
-			last_com.nextCom = rv;
-			last_com.pipeTo = true;
-		}
-		if (j > 0) rv.pipeFrom = true;
-		pipeline.push(rv);
-		last_com = rv;
-	}//»
-
-	this.pipeline = pipeline;
-
-for (let com of pipeline){/*«*/
-	await com.init();
-	if (this.cancelled) return;
-}/*»*/
-for (let com of pipeline){/*«*/
-	if (!com.killed) com.run();
-	else{
-log(`Not running (was killed): ${com.name}`);	
-	}
-}/*»*/
-for (let com of pipeline){//«
-	lastcomcode = await com.awaitEnd;
-
-	if (this.cancelled) return;
-
-	if (!(isNum(lastcomcode))) {
-		lastcomcode = E_ERR;
-	}
-
-	if (com.redirLines) {
-		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.out_redir, com.env);
-		if (this.cancelled) return;
-		if (err) {
-			term.response(`sh: ${err}`, {isErr: true});
-		}
-	}
-}//»
-
-if (pipeline._hasBang){//«
-	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
-	else lastcomcode = E_SUC;
-}//»
-ShellMod.var.lastExitCode = lastcomcode;
-
-//LEUIKJHX
-	if (lastcomcode==E_SUC){//SUCCESS«
-		if (pipetype=="||"){
-			for (let j=loglist_iter+1; j < loglist.length; j++){
-				if (loglist[j].type=="&&"){
-					return {code: lastcomcode, nextIter: j, continueLoop: true};
-				}
-			}
-			return {code: lastcomcode, breakLoop: true};
-		}
-//		else:
-//			1 pipetype=="&&" and we automatically go to the next one or:
-//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
-	}
-	else{//FAILURE
-		if (pipetype=="&&"){
-			for (let j=loglist_iter+1; j < loglist.length; j++){
-				if (loglist[j].type=="||"){
-//					i=j;
-//					continue LOGLIST_LOOP;
-					return {code: lastcomcode, nextIter: j, continueLoop: true};
-				}
-			}
-//			break LOGLIST_LOOP;
-			return {code: lastcomcode, breakLoop: true};
-		}
-//		else:
-//			1 pipetype=="||" and we automatically go to the next one or:
-//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
-	}//»
-	return lastcomcode;
-}
-/*»*/
 async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
 	let lastcomcode;
@@ -5798,8 +5771,8 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 			com = com.simple_command;
 			if (com.prefix) {
 				for (let pref of com.prefix) {
-					if (pref.word) arr.push(pref.word);
-					else if (pref.redir) {
+					if (pref.isWord) arr.push(pref);
+					else if (pref.isRedir) {
 						let red = pref.redir;
 						let rop = red[0].val;
 						let red_to = red[1].toString();
@@ -5807,13 +5780,14 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 						else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [rop, red_to];
 						else this.fatal(`unsupported operator: '${rop}'`);
 					}
+//					else arr.push(pref);
 				}
 			}
 			if (com.word||com.name) arr.push(com.word||com.name);
 			if (com.suffix) {
 				for (let suf of com.suffix) {
-					if (suf.word) arr.push(suf.word);
-					else if (suf.redir) {
+					if (suf.isWord) arr.push(suf);
+					else if (suf.isRedir) {
 						let red = suf.redir;
 						let rop = red[0].val;
 						let red_to = red[1].toString();
@@ -5822,11 +5796,7 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 						else this.fatal(`unsupported operator: '${rop}'`);
 					}
 				}
-
-//				for (let suf of com.suffix) arr.push(suf.word||suf);
 			}
-//log(arr);
-//jlog(arr);
 			rv = await this.makeCommand(arr, in_redir, out_redir, opts, screenGrab)
 
 		}
@@ -5931,47 +5901,6 @@ ShellMod.var.lastExitCode = lastcomcode;
 }
 //»
 
-async executeAndOr(andor, opts){//«
-
-let lastcomcode;
-
-let loglist = andor.statement;
-
-if (!loglist){
-	return `sh: logic list not found!`;
-}
-
-for (let i=0; i < loglist.length; i++){//«
-
-	let rv = await this.executePipeline(loglist[i], loglist, i, opts);
-	if (this.cancelled) return;
-	if (isStr(rv)) return rv;
-	if (Number.isFinite(rv)){
-		lastcomcode = rv;
-		continue;
-	}
-	if (!isObj(rv)){
-cwarn("Here is the value");
-log(rv);
-this.fatal("Unknown value returned from executePipeline!");
-	}
-	if (rv.breakStatementLoop){
-//Must return the whole object
-		return rv;
-	}
-	if (rv.breakLoop){
-		return rv.code;
-	}
-	if (rv.continueLoop){
-		lastcomcode = rv.code;
-cwarn("CONTINUE", i, rv.nextIter);
-		i = rv.nextIter;
-	}
-}//»
-
-return lastcomcode;
-
-}//»
 async executeAndOr2(andor_list, andor_sep, opts){//«
 
 let loglist=[];
@@ -6044,15 +5973,6 @@ return lastcomcode;
 */
 }//»
 
-async executeStatements(statements, opts){//«
-	const{term}=this;
-	let lastcomcode;
-	for (let state of statements){
-		lastcomcode = await this.executeAndOr(state, opts);
-		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
-	}
-	return lastcomcode;
-}//»
 async executeStatements2(statements, opts){//«
 	const{term}=this;
 	let lastcomcode;
@@ -9353,3 +9273,333 @@ onkeyup(e,sym){//«
 
 //»
 
+/*
+async executePipeline(pipe, loglist, loglist_iter, opts){//«
+	const{term}=this;
+	let lastcomcode;
+	let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	let in_background = false;
+	let pipelist = pipe.pipe;
+	if (!pipelist){
+		return `sh: pipeline list not found!`;
+	}
+	let pipetype = pipe.type;
+	let pipeline = [];
+	let screenGrab = {grabber: ""};
+	let last_com;
+	for (let j=0; j < pipelist.length; j++) {//«
+		let arr = pipelist[j].com;
+		{
+			let arr0=arr[0];
+			if (arr0 && arr0.hasBang){
+				pipeline._hasBang = true;
+			}
+		}
+		let rv = await this.makeCommand(arr, opts, screenGrab)
+		if (this.cancelled) return;
+		if (isStr(rv)) return rv;
+		if (last_com){
+			last_com.nextCom = rv;
+			last_com.pipeTo = true;
+		}
+		if (j > 0) rv.pipeFrom = true;
+		pipeline.push(rv);
+		last_com = rv;
+	}//»
+
+	this.pipeline = pipeline;
+
+for (let com of pipeline){//«
+	await com.init();
+	if (this.cancelled) return;
+}//»
+for (let com of pipeline){//«
+	if (!com.killed) com.run();
+	else{
+log(`Not running (was killed): ${com.name}`);	
+	}
+}//»
+for (let com of pipeline){//«
+	lastcomcode = await com.awaitEnd;
+
+	if (this.cancelled) return;
+
+	if (!(isNum(lastcomcode))) {
+		lastcomcode = E_ERR;
+	}
+
+	if (com.redirLines) {
+		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.out_redir, com.env);
+		if (this.cancelled) return;
+		if (err) {
+			term.response(`sh: ${err}`, {isErr: true});
+		}
+	}
+}//»
+
+if (pipeline._hasBang){//«
+	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
+	else lastcomcode = E_SUC;
+}//»
+ShellMod.var.lastExitCode = lastcomcode;
+
+//LEUIKJHX
+	if (lastcomcode==E_SUC){//SUCCESS«
+		if (pipetype=="||"){
+			for (let j=loglist_iter+1; j < loglist.length; j++){
+				if (loglist[j].type=="&&"){
+					return {code: lastcomcode, nextIter: j, continueLoop: true};
+				}
+			}
+			return {code: lastcomcode, breakLoop: true};
+		}
+//		else:
+//			1 pipetype=="&&" and we automatically go to the next one or:
+//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
+	}
+	else{//FAILURE
+		if (pipetype=="&&"){
+			for (let j=loglist_iter+1; j < loglist.length; j++){
+				if (loglist[j].type=="||"){
+//					i=j;
+//					continue LOGLIST_LOOP;
+					return {code: lastcomcode, nextIter: j, continueLoop: true};
+				}
+			}
+//			break LOGLIST_LOOP;
+			return {code: lastcomcode, breakLoop: true};
+		}
+//		else:
+//			1 pipetype=="||" and we automatically go to the next one or:
+//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
+	}//»
+	return lastcomcode;
+}
+//»
+async executeAndOr(andor, opts){//«
+
+let lastcomcode;
+
+let loglist = andor.statement;
+
+if (!loglist){
+	return `sh: logic list not found!`;
+}
+
+for (let i=0; i < loglist.length; i++){//«
+
+	let rv = await this.executePipeline(loglist[i], loglist, i, opts);
+	if (this.cancelled) return;
+	if (isStr(rv)) return rv;
+	if (Number.isFinite(rv)){
+		lastcomcode = rv;
+		continue;
+	}
+	if (!isObj(rv)){
+cwarn("Here is the value");
+log(rv);
+this.fatal("Unknown value returned from executePipeline!");
+	}
+	if (rv.breakStatementLoop){
+//Must return the whole object
+		return rv;
+	}
+	if (rv.breakLoop){
+		return rv.code;
+	}
+	if (rv.continueLoop){
+		lastcomcode = rv.code;
+cwarn("CONTINUE", i, rv.nextIter);
+		i = rv.nextIter;
+	}
+}//»
+
+return lastcomcode;
+
+}//»
+async executeStatements(statements, opts){//«
+	const{term}=this;
+	let lastcomcode;
+	for (let state of statements){
+		lastcomcode = await this.executeAndOr(state, opts);
+		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
+	}
+	return lastcomcode;
+}//»
+parameterExpansion(tok, env, script_name="sh", script_args=[]){//«
+//PMJDHSWL
+//const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
+//We will also need env, script_name, and script_args passed in here
+let word = tok.val;
+let qtyp;
+OUTER_LOOP: for (let i=0; i < word.length; i++){
+
+let ch = word[i];
+if (!qtyp){
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		continue;
+	}
+	else{
+//Unquoted stuff
+	}
+}
+else if (qtyp===ch) {
+	qtyp=null;
+	continue;
+}
+else if (qtyp!=='"') continue;
+
+//We are unquoted or in double quotes
+
+if (ch==="$"){//«
+
+const do_name_sub=(name)=>{//«
+let diff = end_i - start_i;
+let val = env[name]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+
+};//»
+const do_arg_sub=(num)=>{//«
+let diff = end_i - start_i;
+let val = script_args[num]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+};//»
+const do_sym_sub=(sym)=>{//«
+let diff = end_i - start_i;
+let val;
+//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
+switch(sym){
+	case "0": val = script_name; break;
+	case "#": val = script_args.length+""; break;
+	case "*":
+	case "@":
+		val = script_args.join(" ");
+		break;
+	case "?": val = ShellMod.var.lastExitCode+""; break;
+	default: val = "$"+sym;
+}
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+
+};//»
+const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
+
+	let next = word[i+1];
+	if (!next) continue;
+	let start_i = i;
+	let end_i;
+	if (next==="{") {//«
+		i++;
+//If no next one or the next one is a "}", barf INVSUB
+//If the next one is a special symbol, there must be a "}" immediately following it
+//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
+//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
+//    ANY_NAME_CHARS, with a terminating "}".
+		next = word[i+1];
+		if (!next) return "bad substitution: '${<END>'";
+		else if (next==="}") return "bad substitution: '${}'";
+
+		if (SPECIAL_SYMBOLS.includes(next)){//«
+			let sym = next;
+			i++;
+			next = word[i+1];
+			if (next !== "}") return BADSUB(sym, next);
+			end_i = i+1;
+			do_sym_sub(sym);
+		}//»
+		else if (DIGIT_CHARS_1_to_9.includes(next)){//«
+			let numstr=next;
+			i++;
+			next = word[i+1];
+			while(true){
+				if (next==="}"){
+				//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
+		//cwarn("Substitute script_arg #", argnum);
+		//			end_i = i;
+					end_i = i+1;
+					do_arg_sub(parseInt(numstr)-1);
+					break;
+				}
+				if (!ANY_DIGIT_CHARS.includes(next)){
+		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
+					return BADSUB(numstr, next);
+				}
+				numstr+=next;
+				i++;
+				next = word[i+1];
+			}
+		}//»
+		else if (START_NAME_CHARS.includes(next)){//«
+
+		let namestr=next;
+		i++;
+		next = word[i+1];
+		while(true){
+			if (next==="}"){
+				end_i = i+1;
+				do_name_sub(namestr);
+				continue OUTER_LOOP;
+			}
+			if (!ANY_NAME_CHARS.includes(next)){
+				return BADSUB(namestr, next);
+			}
+			namestr+=next;
+			i++;
+			next = word[i+1];
+		}
+
+		}//»
+		else return INVSUB;
+
+	}//»
+	else{//«
+//If the next one is a special symbol (including "0"), we can do the substitution now«
+//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
+//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
+//  literal '$'
+//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
+
+//		i++;
+//		next = word[i+1];»
+
+if (SPECIAL_SYMBOLS.includes(next)){
+	end_i = i+1;
+	do_sym_sub(next);
+}
+else if (DIGIT_CHARS_1_to_9.includes(next)){
+	end_i = i+1;
+	do_arg_sub(parseInt(next)-1);
+}
+else if (!START_NAME_CHARS.includes(next)){
+	continue;
+}
+else{//«
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (!ANY_NAME_CHARS.includes(next)){
+		end_i=i;
+		do_name_sub(namestr);
+		continue OUTER_LOOP;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}//»
+
+	}//»
+
+}//»
+
+}
+
+return tok;
+}//»
+*/
