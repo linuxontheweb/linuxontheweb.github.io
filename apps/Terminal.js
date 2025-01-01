@@ -810,7 +810,6 @@ log(num);
 		if (this.shell.cancelled) return;
 		const{term}=this;
 		term.response(str, opts);
-//		term.scroll_into_view();
 		term.scrollIntoView();
 		term.refresh();
 	}//»
@@ -907,52 +906,7 @@ const ErrCom = class extends Com{//«
 		this.no(this.errorMessage);
 	}
 }//»
-class IfCom{//«
-constructor(shell, conds, conseqs, fallback, opts){//«
-	this.shell = shell;
-	this.opts = opts;
-	this.conds = conds;
-	this.conseqs = conseqs
-	this.fallback = fallback;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
-}//»
-init(){}
 
-async run(){//«
-	const{conds, conseqs, opts}=this;
-	for (let i=0; i < conds.length; i++){
-		let rv = await this.shell.executeStatements2(conds[i], opts);
-		if (this.shell.cancelled) return;
-if (!Number.isFinite(rv)){
-cwarn("HERE IT IS");
-log(rv);
-this.shell.fatal("Non-numerical return value");
-}
-		if (!rv){
-			rv = await this.shell.executeStatements2(conseqs[i], opts)
-			if (this.shell.cancelled) return;
-			this.end(rv);
-			return;
-		}
-	}
-	if (this.fallback){
-		rv = await this.shell.executeStatements2(this.fallback, opts)
-		if (this.shell.cancelled) return;
-		return this.end(rv);
-	}
-	this.end(E_ERR);
-}//»
-
-cancel(){
-this.killed = true;
-}
-
-}//»
 class BraceGroupCom{//«
 
 constructor(shell, term, opts, grabObj){//«
@@ -1001,6 +955,85 @@ async run(){
 cancel(){
 	this.killed = true;
 }
+
+}//»
+class IfCom{//«
+constructor(shell, conds, conseqs, fallback, opts){//«
+	this.shell = shell;
+	this.opts = opts;
+	this.conds = conds;
+	this.conseqs = conseqs
+	this.fallback = fallback;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}//»
+init(){}
+
+async run(){//«
+	const{conds, conseqs, opts}=this;
+	for (let i=0; i < conds.length; i++){
+		let rv = await this.shell.executeStatements2(conds[i], opts);
+		if (this.shell.cancelled) return;
+if (!Number.isFinite(rv)){
+cwarn("HERE IT IS");
+log(rv);
+this.shell.fatal("Non-numerical return value");
+}
+		if (!rv){
+			rv = await this.shell.executeStatements2(conseqs[i], opts)
+			if (this.shell.cancelled) return;
+			this.end(rv);
+			return;
+		}
+	}
+	if (this.fallback){
+		rv = await this.shell.executeStatements2(this.fallback, opts)
+		if (this.shell.cancelled) return;
+		return this.end(rv);
+	}
+	this.end(E_ERR);
+}//»
+
+cancel(){
+this.killed = true;
+}
+
+}//»
+class ForCom{//«
+
+constructor(shell, name, in_list, do_group, opts, grabObj){//«
+	this.shell=shell;
+	this.name=name;
+	this.in_list=in_list;
+	this.do_group=do_group;
+	this.opts=opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}//»
+async init(){//«
+	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+	if (this.shell.cancelled) return;
+}//»
+async run(){//«
+	const{shell}=this;
+	let env = this.opts.env;
+	let nm = this.name+"";
+	for (let val of this.in_list){
+		env[nm] = val+"";
+		await shell.executeStatements2(dup_compound_list(this.do_group), this.opts)
+		if (shell.cancelled) return;
+		await sleep(0);
+	}
+	this.end(E_SUC);
+}//»
 
 }//»
 class WhileCom{//«
@@ -1069,53 +1102,12 @@ async run(){//«
 }//»
 
 }//»
-class ForCom{/*«*/
-constructor(shell, name, in_list, do_group, opts, grabObj){
+class FunctionCom{//«
+
+constructor(shell, name, com, opts){//«
 	this.shell=shell;
 	this.name=name;
-	this.in_list=in_list;
-	this.do_group=do_group;
-	this.opts=opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
-}
-//async allExpansions(arr, env, scriptName, scriptArgs){
-async init(){
-this.in_list = await this.shell.allExpansions(this.in_list);
-//log(this.in_list);
-}
-async run(){
-//cwarn("FOR");
-//log(this.do_group);
-//	this.end(E_SUC);
-//return;
-/*
-this.name goes into the environment as the key and the particular array value as the value
-*/
-const{shell}=this;
-//SLDLTOD
-let env = this.opts.env;
-let nm = this.name+"";
-for (let val of this.in_list){
-	env[nm] = val+"";
-	await shell.executeStatements2(dup_compound_list(this.do_group), this.opts)
-	if (shell.cancelled) return;
-	await sleep(0);
-}
-this.end(E_SUC);
-}
-
-}/*»*/
-class FunctionCom{/*«*/
-
-constructor(shell, name, com, opts){/*«*/
-	this.shell=shell;
-	this.name=name;
-	this.com = com.compound_command;
+	this.com = com.compound_command.compound_list.term;
 	this.type = com.type;
 	this.redirs = com.redirs;
 	this.opts=opts;
@@ -1125,23 +1117,22 @@ constructor(shell, name, com, opts){/*«*/
 			this.killed = true;
 		};
 	});
-}/*»*/
-async init(){/*«*/
+}//»
+async init(){//«
 	let typ = this.type;
 	let name = this.name
 	const funcs = this.shell.term.funcs;
 	let func;
 	if (typ==="brace_group"){
 		func = (shell, args, opts, grabObj) => { 
-			let com = new BraceGroupCom(shell, this.com.dup().term, opts, grabObj);
+			let com = new BraceGroupCom(shell, dup_compound_list(this.com), opts, grabObj);
 			com.args = args;
 			return com;
 		}
 	}
 	else if (typ==="subshell"){
-		let term_str = JSON.stringify(this.com.compound_list.term);
 		func = (shell, args, opts, grabObj) => { 
-			let com = new SubshellCom(shell, this.com.dup().term, opts, grabObj);
+			let com = new SubshellCom(shell, dup_compound_list(this.com), opts, grabObj);
 			com.args = args;
 			return com;
 		}
@@ -1150,16 +1141,15 @@ async init(){/*«*/
 		throw new Error(`MAKE WHAT TYPE OF FUNCTION (NOT BRACE OR SUBSHELL: <${typ}>)`);
 	}
 	funcs[name] = func;
-}/*»*/
+}//»
 run(){
 //As commands themselves, function definitions don't do much of anything, e.g.:
 //echo blah blah blah | 
 	this.end(E_SUC);
 }
-}/*»*/
-class CaseCom{/*«*/
-
-constructor(shell, word, list, opts, grabObj){/*«*/
+}//»
+class CaseCom{//«
+constructor(shell, word, list, opts, grabObj){//«
 this.shell=shell;
 this.word=word;
 this.list=list;
@@ -1170,19 +1160,16 @@ this.awaitEnd = new Promise((Y,N)=>{
 		this.killed = true;
 	};
 });
-}/*»*/
-//return new CaseCom(this, com.word, com.list, opts, grabObj);
-async init(){/*«*/
+}//»
+async init(){//«
 	this.word.tildeExpansion();
 	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
 	await this.word.expandSubs(this.shell, this.shell.term);
+	if(this.shell.cancelled) return;
 	this.word.quoteRemoval();
 	this.word = this.word.fields.join("")
-//cwarn("WORD");
-//log(this.word.fields.join(" "));
-}/*»*/
-
-async run(){
+}//»
+async run(){//«
 /*«
 For exerything, do:
 
@@ -1208,14 +1195,15 @@ Pattern matching:
 re.test(word);
 
 »*/
-const{word}=this;
+const{word, shell}=this;
 let rv;
 let did_match=false;
 LOOP: for (let obj of this.list){
 	let item = obj.case_item;
 	let end = item.end;
 	if (did_match){
-		rv = await this.shell.executeStatements2(item.compound_list, this.opts)
+		rv = await shell.executeStatements2(item.compound_list, this.opts)
+		if(shell.cancelled) return;
 		if (end.isSemiAnd) continue LOOP;
 		break LOOP;
 	}
@@ -1223,7 +1211,8 @@ LOOP: for (let obj of this.list){
 	for (let wrd of pat_list){
 		wrd.tildeExpansion();
 		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
-		await wrd.expandSubs(this.shell, this.shell.term);
+		await wrd.expandSubs(shell, shell.term);
+		if(shell.cancelled) return;
 		wrd.quoteRemoval();
 		let arr = wrd.fields.join("").split("");
 		let patstr='';
@@ -1245,6 +1234,7 @@ LOOP: for (let obj of this.list){
 		if (re.test(word)){
 			did_match = true;
 			rv = await this.shell.executeStatements2(item.compound_list, this.opts)
+			if(shell.cancelled) return;
 			if (end.isSemiAnd) continue LOOP;
 			break LOOP;
 		}
@@ -1255,15 +1245,10 @@ else {
 	this.end(rv);
 }
 
-}
-}/*»*/
-//Just need ForCom and CaseCom
+}//»
+}//»
 
-//return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
-//	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
-this.comClasses={
-	Com, ScriptCom, NoCom, ErrCom,
-}
+this.comClasses={Com,ScriptCom,NoCom,ErrCom};
 
 //»
 //Builtin commands/options: this.defCommand(Opt)s (ls, cd, echo, etc...)«
@@ -6062,12 +6047,11 @@ return lastcomcode;
 
 }//»
 
-
 cancel(){//«
 	this.cancelled = true;
 	let pipe = this.pipeline;
 	if (!pipe) return;
-	for (let com of pipe) com.cancel();
+	for (let com of pipe) com.cancel && com.cancel();
 }//»
 
 };
@@ -9273,333 +9257,3 @@ onkeyup(e,sym){//«
 
 //»
 
-/*
-async executePipeline(pipe, loglist, loglist_iter, opts){//«
-	const{term}=this;
-	let lastcomcode;
-	let {scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-	let in_background = false;
-	let pipelist = pipe.pipe;
-	if (!pipelist){
-		return `sh: pipeline list not found!`;
-	}
-	let pipetype = pipe.type;
-	let pipeline = [];
-	let screenGrab = {grabber: ""};
-	let last_com;
-	for (let j=0; j < pipelist.length; j++) {//«
-		let arr = pipelist[j].com;
-		{
-			let arr0=arr[0];
-			if (arr0 && arr0.hasBang){
-				pipeline._hasBang = true;
-			}
-		}
-		let rv = await this.makeCommand(arr, opts, screenGrab)
-		if (this.cancelled) return;
-		if (isStr(rv)) return rv;
-		if (last_com){
-			last_com.nextCom = rv;
-			last_com.pipeTo = true;
-		}
-		if (j > 0) rv.pipeFrom = true;
-		pipeline.push(rv);
-		last_com = rv;
-	}//»
-
-	this.pipeline = pipeline;
-
-for (let com of pipeline){//«
-	await com.init();
-	if (this.cancelled) return;
-}//»
-for (let com of pipeline){//«
-	if (!com.killed) com.run();
-	else{
-log(`Not running (was killed): ${com.name}`);	
-	}
-}//»
-for (let com of pipeline){//«
-	lastcomcode = await com.awaitEnd;
-
-	if (this.cancelled) return;
-
-	if (!(isNum(lastcomcode))) {
-		lastcomcode = E_ERR;
-	}
-
-	if (com.redirLines) {
-		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.out_redir, com.env);
-		if (this.cancelled) return;
-		if (err) {
-			term.response(`sh: ${err}`, {isErr: true});
-		}
-	}
-}//»
-
-if (pipeline._hasBang){//«
-	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
-	else lastcomcode = E_SUC;
-}//»
-ShellMod.var.lastExitCode = lastcomcode;
-
-//LEUIKJHX
-	if (lastcomcode==E_SUC){//SUCCESS«
-		if (pipetype=="||"){
-			for (let j=loglist_iter+1; j < loglist.length; j++){
-				if (loglist[j].type=="&&"){
-					return {code: lastcomcode, nextIter: j, continueLoop: true};
-				}
-			}
-			return {code: lastcomcode, breakLoop: true};
-		}
-//		else:
-//			1 pipetype=="&&" and we automatically go to the next one or:
-//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
-	}
-	else{//FAILURE
-		if (pipetype=="&&"){
-			for (let j=loglist_iter+1; j < loglist.length; j++){
-				if (loglist[j].type=="||"){
-//					i=j;
-//					continue LOGLIST_LOOP;
-					return {code: lastcomcode, nextIter: j, continueLoop: true};
-				}
-			}
-//			break LOGLIST_LOOP;
-			return {code: lastcomcode, breakLoop: true};
-		}
-//		else:
-//			1 pipetype=="||" and we automatically go to the next one or:
-//			2 there is no pipetype because we are the last pipeline of this loglist, and the logic of the thing doesn't matter
-	}//»
-	return lastcomcode;
-}
-//»
-async executeAndOr(andor, opts){//«
-
-let lastcomcode;
-
-let loglist = andor.statement;
-
-if (!loglist){
-	return `sh: logic list not found!`;
-}
-
-for (let i=0; i < loglist.length; i++){//«
-
-	let rv = await this.executePipeline(loglist[i], loglist, i, opts);
-	if (this.cancelled) return;
-	if (isStr(rv)) return rv;
-	if (Number.isFinite(rv)){
-		lastcomcode = rv;
-		continue;
-	}
-	if (!isObj(rv)){
-cwarn("Here is the value");
-log(rv);
-this.fatal("Unknown value returned from executePipeline!");
-	}
-	if (rv.breakStatementLoop){
-//Must return the whole object
-		return rv;
-	}
-	if (rv.breakLoop){
-		return rv.code;
-	}
-	if (rv.continueLoop){
-		lastcomcode = rv.code;
-cwarn("CONTINUE", i, rv.nextIter);
-		i = rv.nextIter;
-	}
-}//»
-
-return lastcomcode;
-
-}//»
-async executeStatements(statements, opts){//«
-	const{term}=this;
-	let lastcomcode;
-	for (let state of statements){
-		lastcomcode = await this.executeAndOr(state, opts);
-		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
-	}
-	return lastcomcode;
-}//»
-parameterExpansion(tok, env, script_name="sh", script_args=[]){//«
-//PMJDHSWL
-//const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
-//We will also need env, script_name, and script_args passed in here
-let word = tok.val;
-let qtyp;
-OUTER_LOOP: for (let i=0; i < word.length; i++){
-
-let ch = word[i];
-if (!qtyp){
-	if (["'",'"','`'].includes(ch)) {
-		qtyp = ch;
-		continue;
-	}
-	else{
-//Unquoted stuff
-	}
-}
-else if (qtyp===ch) {
-	qtyp=null;
-	continue;
-}
-else if (qtyp!=='"') continue;
-
-//We are unquoted or in double quotes
-
-if (ch==="$"){//«
-
-const do_name_sub=(name)=>{//«
-let diff = end_i - start_i;
-let val = env[name]||"";
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-
-};//»
-const do_arg_sub=(num)=>{//«
-let diff = end_i - start_i;
-let val = script_args[num]||"";
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-};//»
-const do_sym_sub=(sym)=>{//«
-let diff = end_i - start_i;
-let val;
-//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
-switch(sym){
-	case "0": val = script_name; break;
-	case "#": val = script_args.length+""; break;
-	case "*":
-	case "@":
-		val = script_args.join(" ");
-		break;
-	case "?": val = ShellMod.var.lastExitCode+""; break;
-	default: val = "$"+sym;
-}
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-
-};//»
-const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
-
-	let next = word[i+1];
-	if (!next) continue;
-	let start_i = i;
-	let end_i;
-	if (next==="{") {//«
-		i++;
-//If no next one or the next one is a "}", barf INVSUB
-//If the next one is a special symbol, there must be a "}" immediately following it
-//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
-//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
-//    ANY_NAME_CHARS, with a terminating "}".
-		next = word[i+1];
-		if (!next) return "bad substitution: '${<END>'";
-		else if (next==="}") return "bad substitution: '${}'";
-
-		if (SPECIAL_SYMBOLS.includes(next)){//«
-			let sym = next;
-			i++;
-			next = word[i+1];
-			if (next !== "}") return BADSUB(sym, next);
-			end_i = i+1;
-			do_sym_sub(sym);
-		}//»
-		else if (DIGIT_CHARS_1_to_9.includes(next)){//«
-			let numstr=next;
-			i++;
-			next = word[i+1];
-			while(true){
-				if (next==="}"){
-				//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
-		//cwarn("Substitute script_arg #", argnum);
-		//			end_i = i;
-					end_i = i+1;
-					do_arg_sub(parseInt(numstr)-1);
-					break;
-				}
-				if (!ANY_DIGIT_CHARS.includes(next)){
-		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
-					return BADSUB(numstr, next);
-				}
-				numstr+=next;
-				i++;
-				next = word[i+1];
-			}
-		}//»
-		else if (START_NAME_CHARS.includes(next)){//«
-
-		let namestr=next;
-		i++;
-		next = word[i+1];
-		while(true){
-			if (next==="}"){
-				end_i = i+1;
-				do_name_sub(namestr);
-				continue OUTER_LOOP;
-			}
-			if (!ANY_NAME_CHARS.includes(next)){
-				return BADSUB(namestr, next);
-			}
-			namestr+=next;
-			i++;
-			next = word[i+1];
-		}
-
-		}//»
-		else return INVSUB;
-
-	}//»
-	else{//«
-//If the next one is a special symbol (including "0"), we can do the substitution now«
-//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
-//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
-//  literal '$'
-//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
-
-//		i++;
-//		next = word[i+1];»
-
-if (SPECIAL_SYMBOLS.includes(next)){
-	end_i = i+1;
-	do_sym_sub(next);
-}
-else if (DIGIT_CHARS_1_to_9.includes(next)){
-	end_i = i+1;
-	do_arg_sub(parseInt(next)-1);
-}
-else if (!START_NAME_CHARS.includes(next)){
-	continue;
-}
-else{//«
-
-let namestr=next;
-i++;
-next = word[i+1];
-while(true){
-	if (!ANY_NAME_CHARS.includes(next)){
-		end_i=i;
-		do_name_sub(namestr);
-		continue OUTER_LOOP;
-	}
-	namestr+=next;
-	i++;
-	next = word[i+1];
-}
-
-}//»
-
-	}//»
-
-}//»
-
-}
-
-return tok;
-}//»
-*/
