@@ -830,7 +830,7 @@ const reinit_folds=()=>{//«
 	lines=get_folded_lines(get_edit_lines({str: true}));
 	set_line_lens();
 	line_colors=[];
-	Term.set_lines(lines, line_colors);
+	Term.setLines(lines, line_colors);
 };//»
 
 const await_fold_command=()=>{//«
@@ -1824,7 +1824,7 @@ const init_cut_buffer_mode=()=>{//«
 		}
 		y=scroll_num=0;
 		lines = cut_buffers[cur_cut_buffer];
-		Term.set_lines(lines, []);
+		Term.setLines(lines, []);
 		render();
 	};
 
@@ -1837,7 +1837,7 @@ functions outside of this scope.
 */
 	hold_lines = lines;
 	lines = cut_buffers[0];
-	Term.set_lines(lines, []);
+	Term.setLines(lines, []);
 	alt_screen_escape_handler = no_render => {//«
 		stat_cb = null;
 		alt_screen_escape_handler = null;
@@ -1848,7 +1848,7 @@ functions outside of this scope.
 		fold_mode = hold_fold;
 		lines = hold_lines;
 		hold_lines = null;
-		Term.set_lines(lines, line_colors);
+		Term.setLines(lines, line_colors);
 		this.mode = COMMAND_MODE;
 		if (!no_render) render();
 	};//»
@@ -1952,7 +1952,7 @@ const update_symbols = () => {//«
 	}
 	y=scroll_num=0;
 	set_ry();
-	Term.set_lines(lines, []);
+	Term.setLines(lines, []);
 	num_lines = lines.length;
 	render();
 };//»
@@ -1998,8 +1998,8 @@ const init_symbol_mode = (opts={})=>{//«
 		this.mode = REF_MODE;
 	}//»
 	else{//«
+		get_all_words();
 		this.mode = SYMBOL_MODE;
-		if (!ALLWORDS) get_all_words();
 		if (symbols){
 			SYMBOLS = ALLWORDS.concat(symbols).sort();
 		}
@@ -2019,7 +2019,7 @@ const init_symbol_mode = (opts={})=>{//«
 	for (let w of SYMBOLS){
 		if (w.length) lines.push([...w]);
 	}
-	Term.set_lines(lines, []);
+	Term.setLines(lines, []);
 //XKLORPT
 	num_lines = lines.length;
 	enter_cb = () => {//«
@@ -2058,7 +2058,7 @@ const init_symbol_mode = (opts={})=>{//«
 		lines = hold_lines;
 		hold_lines = null;
 		line_colors = hold_colors;
-		Term.set_lines(lines, line_colors);
+		Term.setLines(lines, line_colors);
 //		set_ry();
 //MDKIUTHS
 		set_line_lens();
@@ -2080,6 +2080,8 @@ const init_complete_mode=async(opts={})=>{//«
 		}
 		render();
 	};//»
+
+	get_all_words();
 	let use_x;
 	if (opts.stat)use_x = stat_x;
 	else use_x = x;
@@ -2091,7 +2093,7 @@ const init_complete_mode=async(opts={})=>{//«
 	else x++;
 	let wrd = rv.word;
 	if (!wrd) return;
-	if (!ALLWORDS) get_all_words();
+//	if (!ALLWORDS) get_all_words();
 	let re = new RegExp("^"+wrd);
 	let usewords;
 	if (ALLWORDSYMBOLS) usewords = ALLWORDSYMBOLS;
@@ -2122,7 +2124,7 @@ const init_complete_mode=async(opts={})=>{//«
 	for (let w of matches){
 		if (w.length) lines.push([...w]);
 	}
-	Term.set_lines(lines, []);
+	Term.setLines(lines, []);
 	num_lines = lines.length;
 	enter_cb = () => {//«
 		let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
@@ -2142,7 +2144,7 @@ const init_complete_mode=async(opts={})=>{//«
 		lines = hold_lines;
 		hold_lines = null;
 		line_colors = hold_colors;
-		Term.set_lines(lines, line_colors);
+		Term.setLines(lines, line_colors);
 //		set_ry();
 		set_line_lens();
 		this.mode = mode_hold;
@@ -2177,7 +2179,7 @@ alt_screen_escape_handler = no_render => {//«
 	lines = hold_lines;
 	hold_lines = null;
 	line_colors = hold_colors;
-	Term.set_lines(lines, line_colors);
+	Term.setLines(lines, line_colors);
 	set_line_lens();
 	this.mode = COMMAND_MODE;
 	if (!no_render) render();
@@ -2188,7 +2190,7 @@ else {
 	lines = [];
 	for(let ln of arr) lines.push(ln.split(""));
 }
-Term.set_lines(lines, []);
+Term.setLines(lines, []);
 set_line_lens();
 this.mode = FILE_MODE;
 render();
@@ -2270,7 +2272,7 @@ const init_line_wrap_mode=()=>{//«
 	y = Math.floor(hx/Term.w);
 	x = hx%Term.w;
 	Term.reset_x_scroll();
-	Term.set_lines(lines, []);
+	Term.setLines(lines, []);
 	num_line_wrap_actions = 0;
 	alt_screen_escape_handler = async if_enter => {//«
 		if (if_enter) {
@@ -2290,7 +2292,7 @@ const init_line_wrap_mode=()=>{//«
 		lines = hold_lines;
 		hold_lines = null;
 		set_ry();
-		Term.set_lines(lines, line_colors);
+		Term.setLines(lines, line_colors);
 		this.mode = COMMAND_MODE;
 		render();
 //		scroll_screen_to_cursor();
@@ -6289,7 +6291,7 @@ else{
 //cwarn("INTERNAL TABS?!?!?");
 //}
 
-//Term.set_lines(lines, line_colors);
+//Term.setLines(lines, line_colors);
 //Term.init_edit_mode(this, num_stat_lines);
 //hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
 let use_reload;
@@ -6306,7 +6308,7 @@ else if (!edit_fname) {
 }
 else if (lines.length==1 && !lines[0].length) stat(`"${edit_fname}" [New]`);
 else stat_file(linesarg.length, len);
-get_all_words();
+//get_all_words();
 syntax_multiline_comments();
 //log(System);
 });

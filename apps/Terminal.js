@@ -1,8 +1,11 @@
-/*Parameter Expansions @PMJDHSWL have a weird new ParamSub (@XMKJDHE) object that
+/*1/1/25: Need to find all the places where we have repeating do_group's
+	- ForCom
+*/
+/*12/31/24: Parameter Expansions @PMJDHSWL have a weird new ParamSub (@XMKJDHE) object that«
 has an empty expand method. It will be easy to get this working in the case that
 there is only a number or a plain word in there...
-*/
-/*12/31/24: In all of these places where we need to repeatedly re-use certain«
+
+In all of these places where we need to repeatedly re-use certain
 compound_list's, we either need to:
 -  Have a dup method for the compound_list, in order to duplicate all of the Word objects
 -  save the source text that makes up these objects and then send it back through the parser
@@ -1008,9 +1011,10 @@ constructor(shell, cond, do_group, opts, grabObj){//«
 
 //	this.do_group = do_group[0].andor[0].pipeline.pipe_sequence[0].compound_command.compound_list.term;
 
-	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
-	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
-	else this.do_group = do_group;
+//	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
+//	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
+//	else this.do_group = do_group;
+	this.do_group = do_group;
 
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
@@ -1040,11 +1044,7 @@ class UntilCom{//«
 constructor(shell, cond, do_group, opts, grabObj){//«
 	this.shell = shell;
 	this.cond = cond;
-
-	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
-	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
-	else this.do_group = do_group;
-
+	this.do_group = do_group;
 	this.opts = opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -1069,6 +1069,47 @@ async run(){//«
 }//»
 
 }//»
+class ForCom{/*«*/
+constructor(shell, name, in_list, do_group, opts, grabObj){
+	this.shell=shell;
+	this.name=name;
+	this.in_list=in_list;
+	this.do_group=do_group;
+	this.opts=opts;
+	this.awaitEnd = new Promise((Y,N)=>{
+		this.end = (rv)=>{
+			Y(rv);
+			this.killed = true;
+		};
+	});
+}
+//async allExpansions(arr, env, scriptName, scriptArgs){
+async init(){
+this.in_list = await this.shell.allExpansions(this.in_list);
+//log(this.in_list);
+}
+async run(){
+//cwarn("FOR");
+//log(this.do_group);
+//	this.end(E_SUC);
+//return;
+/*
+this.name goes into the environment as the key and the particular array value as the value
+*/
+const{shell}=this;
+//SLDLTOD
+let env = this.opts.env;
+let nm = this.name+"";
+for (let val of this.in_list){
+	env[nm] = val+"";
+	await shell.executeStatements2(dup_compound_list(this.do_group), this.opts)
+	if (shell.cancelled) return;
+	await sleep(0);
+}
+this.end(E_SUC);
+}
+
+}/*»*/
 class FunctionCom{/*«*/
 
 constructor(shell, name, com, opts){/*«*/
@@ -1115,47 +1156,6 @@ run(){
 //echo blah blah blah | 
 	this.end(E_SUC);
 }
-}/*»*/
-class ForCom{/*«*/
-constructor(shell, name, in_list, do_group, opts, grabObj){
-	this.shell=shell;
-	this.name=name;
-	this.in_list=in_list;
-	this.do_group=do_group;
-//	let seq = do_group[0].andor[0].pipeline.pipe_sequence[0];
-//	if (seq.compound_command) this.do_group = seq.compound_command.compound_list.term;
-//	else this.do_group = do_group;
-	this.opts=opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
-}
-//async allExpansions(arr, env, scriptName, scriptArgs){
-async init(){
-this.in_list = await this.shell.allExpansions(this.in_list);
-//log(this.in_list);
-}
-async run(){
-/*
-this.name goes into the environment as the key and the particular array value as the value
-*/
-const{shell}=this;
-//SLDLTOD
-let env = this.opts.env;
-let nm = this.name+"";
-for (let val of this.in_list){
-	env[nm] = val+"";
-	let grp = dup_compound_list(this.do_group);
-	await shell.executeStatements2(grp.term, this.opts)
-	if (shell.cancelled) return;
-	await sleep(0);
-}
-this.end(E_SUC);
-}
-
 }/*»*/
 
 //Just need ForCom and CaseCom
@@ -3428,7 +3428,7 @@ async parseCompoundList(opts={}){//«
 	let next = this.curTok();
 	if (!next) {
 		term.term.push(";");
-		return {compound_list: term, dup:()=>{return dup_compound_list(term);}}
+		return {compound_list: term}
 	}
 	if (next.isSepOp){
 		term.term.push(next.val);
@@ -3447,7 +3447,7 @@ async parseCompoundList(opts={}){//«
 		this.unexp(next);
 	}
 	this.skipNewlines();
-	return {compound_list: term, dup:()=>{return dup_compound_list(term);}}
+	return {compound_list: term};
 }//»
 
 async parseFuncBody(){//«
@@ -5640,15 +5640,16 @@ async makeWhileCommand(com, opts, grabObj){//«
 async makeUntilCommand(com, opts, grabObj){//«
 	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
 }//»
+async makeForCommand(com, opts, grabObj){//«
+//cwarn("FOR COMMAND!!!");
+//log(com);
+return new ForCom(this, com.name, com.in_list, com.do_group.compound_list.term, opts, grabObj);
+}//»
+
 async makeFunctionCommand(com, opts, grabObj){//«
 return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
 }//»
 
-async makeForCommand(com, opts, grabObj){//«
-//cwarn("FOR COMMAND!!!");
-//log(com);
-return new ForCom(this, com.name, com.in_list, com.do_group, opts, grabObj);
-}//»
 async makeCaseCommand(com, opts, grabObj){//«
 cwarn("CASE COMMAND!!!");
 log(com);
