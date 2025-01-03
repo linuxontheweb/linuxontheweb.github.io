@@ -1,5 +1,11 @@
 /*1/3/25: 
 
+Now we need to make sure about output redirections vis-a-vis compound commands,
+just like we did the "stdin thing." We did an envPipeInCb, so maybe we need an
+envRedirLines, for when there is an out_redir in our compound command....
+
+
+
 LPIRHSKF is where we check for this.nextCom with our simple command's out response.
 We need to to the same thing for compound commands. We need to put the nextCom's
 pipeIn callback into the environment of the commands that we are executing, when
@@ -913,7 +919,7 @@ log(num);
 	out(val, opts={}){//«
 		if (this.shell.cancelled) return;
 		const{term}=this;
-		let redir_lns = this.redirLines;
+		let redir_lns = this.redirLines || this.envRedirLines;
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
 			let next_com = this.nextCom;
@@ -1009,6 +1015,7 @@ class CompoundCom{/*«*/
 constructor(shell, opts){//«
 	this.shell = shell;
 	this.opts=opts;
+	this.outRedir = opts.outRedir;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
 			Y(rv);
@@ -1028,6 +1035,10 @@ init(){/*«*/
 			}
 		}
 		else opts.envPipeInCb = ()=>{};
+	}
+	if (this.outRedir){
+		this.redirLines = [];
+		opts.envRedirLines = this.redirLines;
 	}
 	this.opts = opts;
 }/*»*/
@@ -5700,7 +5711,7 @@ cerr(e);
 	return gotcom;
 }//»
 
-async makeIfCommand(com, opts, grabObj){//«
+async makeIfCommand(com, opts){//«
 	let if_list = com.if_list;
 	let then_list = com.then_list;
 	let conditions = [if_list.compound_list.term];
@@ -5724,10 +5735,10 @@ async makeIfCommand(com, opts, grabObj){//«
 async makeBraceGroupCommand(com, opts){//«
 	return new BraceGroupCom(this, opts, com.compound_list.term);
 }//»
-async makeSubshellCommand(com, opts, grabObj){//«
+async makeSubshellCommand(com, opts){//«
 	return new SubshellCom(this, opts, com.compound_list.term);
 }//»
-async makeWhileCommand(com, opts, grabObj){//«
+async makeWhileCommand(com, opts){//«
 	return new WhileCom(this, opts, com.condition.compound_list.term, com.do_group.compound_list.term);
 }//»
 async makeUntilCommand(com, opts){//«
@@ -5739,7 +5750,7 @@ async makeForCommand(com, opts){//«
 async makeFunctionCommand(com, opts){//«
 	return new FunctionCom(this, opts, com.name, com.body.function_body.command);
 }//»
-async makeCaseCommand(com, opts, grabObj){//«
+async makeCaseCommand(com, opts){//«
 	return new CaseCom(this, opts, com.word, com.list);
 }//»
 makeCompoundCommand(com, opts){//«
@@ -5759,7 +5770,7 @@ makeCompoundCommand(com, opts){//«
 async makeCommand(arr, opts){//«
 	const{term}=this;
 	const makeShErrCom = ShellMod.util.makeShErrCom;
-	const {grabObj, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {grabObj, envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 
 	let args=[];
 	let comobj, usecomword;
@@ -5779,7 +5790,8 @@ async makeCommand(arr, opts){//«
 		env,
 		command_str: this.commandStr,
 		shell: this,
-		envPipeInCb
+		envPipeInCb,
+		envRedirLines
 	}//»
 //XXXXXXXXXXXX
 	let comword = arr.shift();
@@ -5909,7 +5921,7 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
 	const makeShErrCom = ShellMod.util.makeShErrCom;
 	let lastcomcode;
-	let {envPipeInCb, stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	let {stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let in_background = false;
 	let pipelist = pipe.pipe;
 	if (!pipelist){
@@ -5967,7 +5979,6 @@ log(stdin);
 		comopts.outRedir = out_redir;
 		comopts.grabObj = screenGrab;
 		if (com.compound_command){
-//log();
 			rv = await this.makeCompoundCommand(com, comopts)
 		}
 		else if (com.simple_command){
@@ -6014,7 +6025,7 @@ for (let com of pipeline){//«
 		lastcomcode = E_ERR;
 	}
 	if (com.redirLines) {
-		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.outRedir, com.env);
+		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.outRedir, env);
 		if (this.cancelled) return;
 		if (err) {
 			term.response(`sh: ${err}`, {isErr: true});
