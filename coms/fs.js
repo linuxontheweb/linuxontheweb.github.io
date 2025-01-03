@@ -251,7 +251,7 @@ pipeIn(val){/*«*/
 
 }/*»*/
 const com_less = class extends Com{//«
-async init(){
+async init(){/*«*/
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		this.no("could not load the pager module");
 		return;
@@ -284,7 +284,7 @@ async init(){
 		name = node.name;
 	}
 	this.awaitCb = this.pager.init(arr, name, {opts});
-}
+}/*»*/
 async run(){
 	await this.awaitCb;
 	this.ok();

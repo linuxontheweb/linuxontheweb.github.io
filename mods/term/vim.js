@@ -1,11 +1,11 @@
 //Historical development notes (and old code) are kept in doc/dev/VIM
-/*12/29/24: Just did some internal tab detection logic to decide whether it would
+/*12/29/24: Just did some internal tab detection logic to decide whether it would«
 be safe to determine the "graphical" x position by way of multiplying the number
 of leading tabs by tab size and then adding the rest of the remaining characters.
 Not sure if this is really necessary because this is all about detecting the "physical"
 location of the cursor, which is done on a single line basis, every terminal render
 cycle.
-*/
+»*/
 //12/28/24: BUG: I WASN'T ABLE TO ESCAPE FROM INSERT MODE!?!?!?!?
 /*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!  «
 @ZPLROTUS: Here we are exporing num_lines to the terminal's renderer. This variable 
