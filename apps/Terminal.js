@@ -1004,12 +1004,11 @@ const ErrCom = class extends Com{//«
 	}
 }//»
 /*«Compounds*/
-class BraceGroupCom{//«
 
-constructor(shell, term, opts){//«
-	this.term = term;
+class CompoundCom{/*«*/
+constructor(shell, opts){//«
 	this.shell = shell;
-	this.opts = opts;
+	this.opts=opts;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
 			Y(rv);
@@ -1017,9 +1016,7 @@ constructor(shell, term, opts){//«
 		};
 	});
 }//»
-init(){
-}
-async run(){
+init(){/*«*/
 	let opts={};
 	for (let k in this.opts){
 		opts[k]=this.opts[k];
@@ -1032,56 +1029,42 @@ async run(){
 		}
 		else opts.envPipeInCb = ()=>{};
 	}
-	let rv = await this.shell.executeStatements2(this.term, opts)
+	this.opts = opts;
+}/*»*/
+cancel(){this.killed=true;}
+}/*»*/
+
+class BraceGroupCom extends CompoundCom{//«
+constructor(shell, opts, list){
+	super(shell, opts);
+	this.list = list;
+}
+async run(){/*«*/
+	let rv = await this.shell.executeStatements2(this.list, this.opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
-}
-cancel(){
-	this.killed = true;
-}
-
+}/*»*/
 }//»
-class SubshellCom{//«
-
-constructor(shell, term, opts, grabObj){//«
-	this.term = term;
-	this.shell = shell;
-	this.opts = opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
-}//»
-init(){
+class SubshellCom extends CompoundCom{//«
+constructor(shell, opts, list){
+	super(shell, opts);
+	this.list = list;
 }
 async run(){
-	let rv = await this.shell.executeStatements2(this.term, this.opts)
+	let rv = await this.shell.executeStatements2(this.list, this.opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }
-cancel(){
-	this.killed = true;
-}
-
 }//»
-class IfCom{//«
-constructor(shell, conds, conseqs, fallback, opts){//«
-	this.shell = shell;
-	this.opts = opts;
+
+class IfCom extends CompoundCom{//«
+constructor(shell, opts, conds, conseqs, fallback){//«
+	super(shell, opts);
 	this.conds = conds;
 	this.conseqs = conseqs
 	this.fallback = fallback;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
 }//»
 init(){}
-
 async run(){//«
 	const{conds, conseqs, opts}=this;
 	for (let i=0; i < conds.length; i++){
@@ -1106,26 +1089,14 @@ this.shell.fatal("Non-numerical return value");
 	}
 	this.end(E_ERR);
 }//»
-
-cancel(){
-this.killed = true;
-}
-
 }//»
-class ForCom{//«
+class ForCom extends CompoundCom{//«
 
-constructor(shell, name, in_list, do_group, opts, grabObj){//«
-	this.shell=shell;
+constructor(shell, opts, name, in_list, do_group){//«
+	super(shell, opts);
 	this.name=name;
 	this.in_list=in_list;
 	this.do_group=do_group;
-	this.opts=opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
 }//»
 async init(){//«
 	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
@@ -1145,21 +1116,13 @@ async run(){//«
 }//»
 
 }//»
-class WhileCom{//«
+class WhileCom extends CompoundCom{//«
 
-constructor(shell, cond, do_group, opts, grabObj){//«
-	this.shell = shell;
+constructor(shell, opts, cond, do_group){//«
+	super(shell, opts);
 	this.cond = cond;
 	this.do_group = do_group;
-	this.opts = opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
 }//»
-init(){}
 async run(){//«
 	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
 	if (this.shell.cancelled) return;
@@ -1174,9 +1137,8 @@ async run(){//«
 }//»
 
 }//»
-class UntilCom{//«
-
-constructor(shell, cond, do_group, opts, grabObj){//«
+class UntilCom extends CompoundCom{//«
+constructor(shell, opts, cond, do_group){//«
 	this.shell = shell;
 	this.cond = cond;
 	this.do_group = do_group;
@@ -1204,9 +1166,9 @@ async run(){//«
 }//»
 
 }//»
-class FunctionCom{//«
+class FunctionCom extends CompoundCom{//«
 
-constructor(shell, name, com, opts){//«
+constructor(shell, opts, name, com){//«
 	this.shell=shell;
 	this.name=name;
 	this.com = com.compound_command.compound_list.term;
@@ -1227,14 +1189,14 @@ async init(){//«
 	let func;
 	if (typ==="brace_group"){
 		func = (shell, args, opts, com_env, grabObj) => { 
-			let com = new BraceGroupCom(shell, dup(this.com), opts, com_env, grabObj);
+			let com = new BraceGroupCom(shell, opts, dup(this.com));
 			com.args = args;
 			return com;
 		}
 	}
 	else if (typ==="subshell"){
 		func = (shell, args, opts, com_env, grabObj) => { 
-			let com = new SubshellCom(shell, dup(this.com), opts, com_env, grabObj);
+			let com = new SubshellCom(shell, opts, dup(this.com));
 			com.args = args;
 			return com;
 		}
@@ -1250,8 +1212,8 @@ run(){
 	this.end(E_SUC);
 }
 }//»
-class CaseCom{//«
-constructor(shell, word, list, opts, grabObj){//«
+class CaseCom extends CompoundCom{//«
+constructor(shell, opts, word, list){//«
 this.shell=shell;
 this.word=word;
 this.list=list;
@@ -5757,40 +5719,40 @@ async makeIfCommand(com, opts, grabObj){//«
 		fallback = else_part.else_list.compound_list.term;
 	}
 //log(conditions);
-	return new IfCom(this, conditions, consequences, fallback, opts);
+	return new IfCom(this, opts, conditions, consequences, fallback);
 }//»
-async makeBraceGroupCommand(com, opts, grabObj){//«
-	return new BraceGroupCom(this, com.compound_list.term, opts, grabObj);
+async makeBraceGroupCommand(com, opts){//«
+	return new BraceGroupCom(this, opts, com.compound_list.term);
 }//»
 async makeSubshellCommand(com, opts, grabObj){//«
-	return new SubshellCom(this, com.compound_list.term, opts, grabObj);
+	return new SubshellCom(this, opts, com.compound_list.term);
 }//»
 async makeWhileCommand(com, opts, grabObj){//«
-	return new WhileCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
+	return new WhileCom(this, opts, com.condition.compound_list.term, com.do_group.compound_list.term);
 }//»
-async makeUntilCommand(com, opts, grabObj){//«
-	return new UntilCom(this, com.condition.compound_list.term, com.do_group.compound_list.term, opts, grabObj);
+async makeUntilCommand(com, opts){//«
+	return new UntilCom(this, opts, com.condition.compound_list.term, com.do_group.compound_list.term);
 }//»
-async makeForCommand(com, opts, grabObj){//«
-return new ForCom(this, com.name, com.in_list, com.do_group.compound_list.term, opts, grabObj);
+async makeForCommand(com, opts){//«
+	return new ForCom(this, opts, com.name, com.in_list, com.do_group.compound_list.term);
 }//»
-async makeFunctionCommand(com, opts, grabObj){//«
-return new FunctionCom(this, com.name, com.body.function_body.command, opts, grabObj);
+async makeFunctionCommand(com, opts){//«
+	return new FunctionCom(this, opts, com.name, com.body.function_body.command);
 }//»
 async makeCaseCommand(com, opts, grabObj){//«
-return new CaseCom(this, com.word, com.list, opts, grabObj);
+	return new CaseCom(this, opts, com.word, com.list);
 }//»
-makeCompoundCommand(com, opts, grabObj){//«
+makeCompoundCommand(com, opts){//«
 	let typ = com.type;
 	let comp = com.compound_command;
-	if (typ === "if_clause") return this.makeIfCommand(comp, opts, grabObj);
-	if (typ === "brace_group") return this.makeBraceGroupCommand(comp, opts, grabObj);
-	if (typ === "subshell") return this.makeSubshellCommand(comp, opts, grabObj);
-	if (typ === "for_clause") return this.makeForCommand(comp, opts, grabObj);
-	if (typ === "case_clause") return this.makeCaseCommand(comp, opts, grabObj);
-	if (typ === "while_clause") return this.makeWhileCommand(comp, opts, grabObj);
-	if (typ === "until_clause") return this.makeUntilCommand(comp, opts, grabObj);
-	if (typ === "function_def") return this.makeFunctionCommand(comp, opts, grabObj);
+	if (typ === "if_clause") return this.makeIfCommand(comp, opts);
+	if (typ === "brace_group") return this.makeBraceGroupCommand(comp, opts);
+	if (typ === "subshell") return this.makeSubshellCommand(comp, opts);
+	if (typ === "for_clause") return this.makeForCommand(comp, opts);
+	if (typ === "case_clause") return this.makeCaseCommand(comp, opts);
+	if (typ === "while_clause") return this.makeWhileCommand(comp, opts);
+	if (typ === "until_clause") return this.makeUntilCommand(comp, opts);
+	if (typ === "function_def") return this.makeFunctionCommand(comp, opts);
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
@@ -5809,9 +5771,7 @@ async makeCommand(arr, opts){//«
 //This is an "error" array
 	if (rv.length) term.response(rv.join("\n"), {isErr: true});
 	const com_env = {//«
-//		in_redir,
 		stdin,
-//		out_redir,
 		outRedir,
 		isSub: !!subLines,
 		scriptOut,
