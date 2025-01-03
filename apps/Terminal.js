@@ -1,9 +1,9 @@
-/*1/3/25: 
+
+/*1/3/25:«
 
 Now we need to make sure about output redirections vis-a-vis compound commands,
 just like we did the "stdin thing." We did an envPipeInCb, so maybe we need an
 envRedirLines, for when there is an out_redir in our compound command....
-
 
 
 LPIRHSKF is where we check for this.nextCom with our simple command's out response.
@@ -40,7 +40,6 @@ unspecified if that character is neither a digit nor one of the special
 parameters (see 2.5.2 Special Parameters).
 @ * # ? - $ ! 0
 
-
 Need to pass the stdin of ScriptCom into its execute function, and 
 need to make sure we are doing the same kind of thing for functions and compound 
 commands. I think com_read needs to check for an EOF in order to return E_ERR. 
@@ -62,7 +61,6 @@ they are intermingled with assignments before the simple command names and with
 arguments after the simple command names.
 
 
-
 When we are doing expansions, for example parameter subs @LSJFANSF: We need a
 way to "mask off" these characters from the rest, so there are no further
 substitutions attempted on them.  This goes for all the expansions (tilde, command, etc.)...
@@ -74,10 +72,10 @@ patstr += "\"+ch;
 
 @WIUTYSNFI, need a way to escape our filepath expansion chars, defined @EPRORMSIS
 
-*/
-/*1/1/25: Need to find all the places where we have repeating do_group's
+»*/
+/*1/1/25: Need to find all the places where we have repeating do_group's«
 	- ForCom
-*/
+»*/
 /*12/31/24: Parameter Expansions @PMJDHSWL have a weird new ParamSub (@XMKJDHE) object that«
 has an empty expand method. It will be easy to get this working in the case that
 there is only a number or a plain word in there...
@@ -5711,59 +5709,36 @@ cerr(e);
 	return gotcom;
 }//»
 
-async makeIfCommand(com, opts){//«
-	let if_list = com.if_list;
-	let then_list = com.then_list;
-	let conditions = [if_list.compound_list.term];
-	let consequences = [then_list.compound_list.term];
-	let fallback;
-	let else_part = com.else_part;
-	if (else_part){
-		let elif_seq = else_part.elif_seq;
-		if (elif_seq){
-			while (elif_seq.length){
-				let elif = elif_seq.shift();
-				conditions.push(elif.elif.compound_list.term);
-				consequences.push(elif.then.compound_list.term);
-			}
-		}
-		fallback = else_part.else_list.compound_list.term;
-	}
-//log(conditions);
-	return new IfCom(this, opts, conditions, consequences, fallback);
-}//»
-async makeBraceGroupCommand(com, opts){//«
-	return new BraceGroupCom(this, opts, com.compound_list.term);
-}//»
-async makeSubshellCommand(com, opts){//«
-	return new SubshellCom(this, opts, com.compound_list.term);
-}//»
-async makeWhileCommand(com, opts){//«
-	return new WhileCom(this, opts, com.condition.compound_list.term, com.do_group.compound_list.term);
-}//»
-async makeUntilCommand(com, opts){//«
-	return new UntilCom(this, opts, com.condition.compound_list.term, com.do_group.compound_list.term);
-}//»
-async makeForCommand(com, opts){//«
-	return new ForCom(this, opts, com.name, com.in_list, com.do_group.compound_list.term);
-}//»
-async makeFunctionCommand(com, opts){//«
-	return new FunctionCom(this, opts, com.name, com.body.function_body.command);
-}//»
-async makeCaseCommand(com, opts){//«
-	return new CaseCom(this, opts, com.word, com.list);
-}//»
 makeCompoundCommand(com, opts){//«
 	let typ = com.type;
 	let comp = com.compound_command;
-	if (typ === "if_clause") return this.makeIfCommand(comp, opts);
-	if (typ === "brace_group") return this.makeBraceGroupCommand(comp, opts);
-	if (typ === "subshell") return this.makeSubshellCommand(comp, opts);
-	if (typ === "for_clause") return this.makeForCommand(comp, opts);
-	if (typ === "case_clause") return this.makeCaseCommand(comp, opts);
-	if (typ === "while_clause") return this.makeWhileCommand(comp, opts);
-	if (typ === "until_clause") return this.makeUntilCommand(comp, opts);
-	if (typ === "function_def") return this.makeFunctionCommand(comp, opts);
+	if (typ === "if_clause") {/*«*/
+		let if_list = comp.if_list;
+		let then_list = comp.then_list;
+		let conditions = [if_list.compound_list.term];
+		let consequences = [then_list.compound_list.term];
+		let fallback;
+		let else_part = comp.else_part;
+		if (else_part){
+			let elif_seq = else_part.elif_seq;
+			if (elif_seq){
+				while (elif_seq.length){
+					let elif = elif_seq.shift();
+					conditions.push(elif.elif.compound_list.term);
+					consequences.push(elif.then.compound_list.term);
+				}
+			}
+			fallback = else_part.else_list.compound_list.term;
+		}
+		return new IfCom(this, opts, conditions, consequences, fallback);
+	}/*»*/
+	if (typ === "brace_group") return new BraceGroupCom(this, opts, comp.compound_list.term);
+	if (typ === "subshell") return new SubshellCom(this, opts, comp.compound_list.term);
+	if (typ === "for_clause") return new ForCom(this, opts, comp.name, comp.in_list, comp.do_group.compound_list.term);
+	if (typ === "case_clause") return new CaseCom(this, opts, comp.word, comp.list);
+	if (typ === "while_clause") return new WhileCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term);
+	if (typ === "until_clause") return new UntilCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term);
+	if (typ === "function_def") return new FunctionCom(this, opts, comp.name, comp.body.function_body.command);
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
