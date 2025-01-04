@@ -33,7 +33,7 @@ const isWord=val=>{return val instanceof Word;};
 //»
 
 export const mod = function(termobj) {
-
+this.comName="log";
 //Var«
 
 let LINE_SELECT_MODE = true;

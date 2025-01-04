@@ -206,7 +206,7 @@ cwarn("BLOCKED");
 }//»
 
 export const mod = function(termobj) {
-
+this.comName="email";
 //Var«
 const {//«
 	refresh,

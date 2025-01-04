@@ -194,7 +194,7 @@ export const mod = function(Term) {
 //»
 
 //Imports«
-
+this.comName="vim";
 const{
 	cur_dir,
 	refresh,

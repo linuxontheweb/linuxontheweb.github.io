@@ -821,7 +821,7 @@ const Com = class {//«
 			};
 		});//»
 	}//»
-	static grabsScreen = false;
+//	static grabsScreen = false;
 	async nextArgAsNode(opts={}){//«
 		let {noErr, noneIsErr} = opts;
 		let e, f, node;
@@ -1197,14 +1197,14 @@ async init(){//«
 	const funcs = this.shell.term.funcs;
 	let func;
 	if (typ==="brace_group"){
-		func = (shell, args, opts, com_env, grabObj) => { 
+		func = (shell, args, opts, com_env) => { 
 			let com = new BraceGroupCom(shell, opts, dup(this.com));
 			com.args = args;
 			return com;
 		}
 	}
 	else if (typ==="subshell"){
-		func = (shell, args, opts, com_env, grabObj) => { 
+		func = (shell, args, opts, com_env) => { 
 			let com = new SubshellCom(shell, opts, dup(this.com));
 			com.args = args;
 			return com;
@@ -1397,8 +1397,11 @@ this.ok(`${say_type}[${say_num}].${com} = ${val}`);
 const com_log = class extends Com{//«
 
 #promise;
-static grabsScreen = true;
+//static grabsScreen = true;
 async init(){//«
+	if (this.term.actor) {
+		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
+	}
 	if (!await util.loadMod("term.log")) {
 		this.no("could not load the 'log' module");
 		return;
@@ -5745,7 +5748,7 @@ makeCompoundCommand(com, opts){//«
 async makeCommand(arr, opts){//«
 	const{term}=this;
 	const makeShErrCom = ShellMod.util.makeShErrCom;
-	const {grabObj, envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 
 	let args=[];
 	let comobj, usecomword;
@@ -5816,7 +5819,7 @@ async makeCommand(arr, opts){//«
 		if (isStr(com)) return com;
 	}//»
 	if (term.funcs[usecomword]){
-let func = term.funcs[usecomword](this, arr, opts, com_env, grabObj);
+let func = term.funcs[usecomword](this, arr, opts, com_env);
 func.isFunc = true;
 return func;
 
@@ -5863,11 +5866,7 @@ return func;
 		comobj.subLines = subLines;
 		return comobj;
 	}//»
-	if (grabObj.grabber && com.grabsScreen){//«
-		ShellMod.var.lastExitCode = E_ERR;
-		return makeShErrCom(comword, `the screen has already been grabbed by: ${grabObj.grabber}`, com_env);
-	}//»
-	grabObj.grabber = com.grabsScreen?comword: "";
+
 	let com_opts;
 	let gotopts = Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
@@ -5952,7 +5951,6 @@ log(stdin);
 		}
 		comopts.stdin = stdin || optStdin;
 		comopts.outRedir = out_redir;
-		comopts.grabObj = screenGrab;
 		if (com.compound_command){
 			rv = await this.makeCompoundCommand(com, comopts)
 		}
@@ -6876,7 +6874,7 @@ copyText(str, mess){//«
 }
 //»
 doCopyBuffer()  {//«
-	this.copyText(get_buffer(true), "Copied: entire buffer");
+	this.copyText(this.getBuffer(true), "Copied: entire buffer");
 }//»
 
 doClipboardCopy(if_buffer, strarg){//«
@@ -6904,7 +6902,7 @@ const do_copy=str=>{//«
 }//»
 	let str;
 	if (strarg) str = strarg;
-	else if (if_buffer) str = get_buffer(true);
+	else if (if_buffer) str = this.getBuffer(true);
 	else str = getSelection().toString()
 	if (this.cleanCopiedStringMode) {
 		str = str.replace(/\n/g,"");
@@ -8501,6 +8499,9 @@ log(out);
 }
 return;
 }
+	if (out == "" && out.isNL){
+		out=" \n ";
+	}
 	out = out.split("\n");
 /*
 	else if (!out) return;
@@ -8578,6 +8579,8 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 		let arr;
 		if (pretty) arr = fmt2(ln);
 		else arr = this.fmt(ln);
+//cwarn("ARR");
+//log(arr);
 		for (let l of arr){
 			use_lines[curnum] = l.split("");
 			if (use_color) use_line_colors[curnum] = {0: [l.length, use_color]};
@@ -9027,6 +9030,10 @@ handlePriv(sym, code, mod, ispress, e){//«
 						s+=lines[i].join("");
 					}
 				}
+if (!s){
+s = new String("");
+s.isNL = true;
+}
 				this.#readLineCb(s);
 				this.#readLineCb = null;
 				this.sleeping = true;

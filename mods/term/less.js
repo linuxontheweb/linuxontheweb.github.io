@@ -17,6 +17,7 @@ const {//«
 //	quit_new_screen,
 	h
 } = termobj;//»
+this.comName = "less";
 const less = this;
 let appclass="pager";
 let hold_screen_state;

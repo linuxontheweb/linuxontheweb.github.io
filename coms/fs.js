@@ -251,7 +251,10 @@ pipeIn(val){/*«*/
 
 }/*»*/
 const com_less = class extends Com{//«
-async init(){/*«*/
+async init(){//«
+	if (this.term.actor) {
+		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
+	}
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		this.no("could not load the pager module");
 		return;
@@ -266,7 +269,7 @@ async init(){/*«*/
 			name = "*stdin*";
 		}
 		else{
-			arr = this.term.get_buffer();
+			arr = this.term.getBuffer();
 			name = "*buffer*";
 		}
 	}
@@ -284,23 +287,24 @@ async init(){/*«*/
 		name = node.name;
 	}
 	this.awaitCb = this.pager.init(arr, name, {opts});
-}/*»*/
+}//»
 async run(){
 	await this.awaitCb;
 	this.ok();
 }
 pipeIn(val){
+	if (this.killed) return;
 	this.pager.addLines(val);
 }
-//static get grabsScreen(){return true;}
-static grabsScreen = true;
 
 }//»
 const com_vim = class extends Com{//«
 
 #noPipe;
-static grabsScreen = true;
 async init(){//«
+	if (this.term.actor) {
+		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
+	}
 	let {args, opts, command_str, term}=this;
 	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 		this.no("could not load the pager module");
@@ -383,6 +387,7 @@ async run(){
 	this.ok();
 }
 pipeIn(val){
+	if (this.killed) return;
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
 }
@@ -414,8 +419,13 @@ run:
 
 »*/
 const com_cat = class extends Com{//«
+	#useTerm = false;
 	init(){
-		if (this.noInputOrArgs()) return this.no();
+//		if (this.noInputOrArgs()) return this.no();
+		if (this.noInputOrArgs({noErr: true})){
+//log("READ FROM TERM");
+			this.#useTerm = true;
+		}
 		this.maybeSetNoPipe();
 	}
 	pipeIn(val){
@@ -424,7 +434,16 @@ const com_cat = class extends Com{//«
 			this.ok();
 		}
 	}
+	async doTermLoop(){
+		let ln;
+		while (true){
+			let ln = await this.term.readLine();
+			this.out(ln);
+		}
+		this.ok();
+	}
 	async run() {//«
+		if (this.#useTerm)return this.doTermLoop();
 		const{stdin}=this;
 		if (!this.args.length){
 			if (stdin){
