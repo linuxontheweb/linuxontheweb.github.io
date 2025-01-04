@@ -39,6 +39,7 @@ const {Icon} = Desk.api;
 let path;
 let num_entries = 0;
 let picker_mode;
+let save_as_ext;
 
 //»
 
@@ -193,13 +194,19 @@ keys.splice(keys.indexOf("."),1);
 keys.splice(keys.indexOf(".."),1);
 
 if (picker_mode){
-	let arr = [];
+	let dirs = [];
+	let files = [];
 	for (let k of keys){
-		if(kids[k].appName===FOLDER_APP) arr.push(k);
+		if(kids[k].appName===FOLDER_APP) dirs.push(k);
+		else if (save_as_ext && kids[k].ext === save_as_ext) files.push(k);
 	}
-	keys = arr;
+	dirs.sort();
+	files.sort();
+	keys=[...dirs, ...files];
 }
-keys.sort();
+else {
+	keys.sort();
+}
 curnum = keys.length
 num_entries = keys.length;
 stat_num();
@@ -246,7 +253,7 @@ cwarn("Not found in kids: "+ kid.dataset.name);
 		}
 		let ref;
 		if (got.link) ref = await got.ref;
-		let icn = new Icon(got, {elem: kid, observer, ref});
+		let icn = new Icon(got, {elem: kid, observer, ref, pickerMode: picker_mode});
 		if (got.filesaver_cb) got.filesaver_cb(icn);
 //		icn._pos="relative";
 		icn.parWin = Win;
@@ -358,6 +365,8 @@ const init=(if_reinit)=>{//«
 
 return new Promise(async(Y,N)=>{
 	if (Win.saver) {
+//log("EXT",Win.saver.ext);
+		save_as_ext = Win.saver.ext;
 		make_save_dom();
 	}
 	if (!path) {
@@ -467,13 +476,7 @@ else if (s=="f_"||s=="f_C") go_forth();
 else if (s=="s_"||s=="s_C") do_save();
 
 }//»
-this.onkill = (if_reload, if_force) => {//«
-//	if (if_force){
-//		if (Win.saver) {
-//			Win.saver.cb(null, 1);
-//			Win.saver=null;
-//		}
-//	}
+this.onkill = () => {//«
 	icondv._del();
 }//»
 this.onresize = () => {//«

@@ -1727,43 +1727,6 @@ makeDOMElem(arg){//«
 		butdiv._add(b);
 		return b;
 	};//»
-	const doclose = (force, if_dev_reload)=>{//«
-//	const doclose = function(evt, thisarg, force, if_dev_reload) {
-		if (!this.checkProp("Close")) return;
-		if (this.isMinimized) return;
-		if (!force && (this != CWIN)) return;
-		if (this.no_events) return;
-		if (this.nobuttons && !force) return;
-		if (this.app.onkill) {
-//DEKLKSMD
-			this.app.onkill(if_dev_reload, force);
-		}
-		OUTERLOOP2: for (let wspace of workspaces) {
-			let wins = wspace.windows;
-			for (let i = 0; i < wins.length; i++) {
-				if (wins[i] == this) {
-					wins.splice(i, 1);
-					break OUTERLOOP2;
-				}
-			}
-		}
-		if (this.isFolder) icon_array_off(3);
-		this.killed = true;
-		this.app.killed = true;
-		win._del();
-		let icn = this.icon;
-		let node = this.node;
-		if (icn) {
-			if (!node) node = icn.node;
-			icn.win = null;
-		}
-		if (node && node.unlockFile) node.unlockFile();
-		if (this.bindNum){
-			delete globals.boundWins[this.bindNum];
-			show_overlay(`${this.bindNum}: the key has been unbound`);
-		}
-		top_win_on();
-	};//»
 	const onhover=function(){//«
 		if (CDL) return;
 		butdiv._op= 1;
@@ -1801,30 +1764,22 @@ makeDOMElem(arg){//«
 	close.style.lineHeight = "110%";
 	butdiv.close = close;
 	titlebar.close = close;
-	this.easyKill=()=>{
-//		doclose(null, close);
-		doclose();
-	}
-	this.forceKill = if_dev_reload => {
-		if (this.isMinimized) this.unminimize(true);
-//		doclose(null, close, true, if_dev_reload);
-		doclose(true, if_dev_reload);
+	this.forceKill = () => {
+		this.doClose();
 	};
 	close.onclick=()=>{
-		if (check_cwin_owned()) return;
-//		if (this._savecb) this._savecb();
-		this.forceKill();
+		if (check_cwin_owned(this)) return;
+		if (check_win_is_dirty(this)) return;
+//		doclose();
+		this.doClose();
 	}
+/*«
 	this.keyKill = () => {
-		if (this.app && this.app.is_editing) {
-			if (this.app.try_kill) this.app.try_kill();
-			else cwarn("Dropping close signal");
-		} 
-		else {
-//			doclose(null, close, true);
-			doclose(true);
-		}
+		if (!(this.app && this.app.is_editing)) return doclose();
+		if (this.app.try_kill) this.app.try_kill();
+		else cwarn("Dropping close signal");
 	};
+»*/
 //»
 	let max = mkbut("14px");//«
 	max.id="maxbut_"+winid;
@@ -2443,9 +2398,6 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		let transend = e =>{
 			win.style.transition = "";
 			main.style.transition = "";
-//			this.sbcr();
-//			this.statusBar.resize();
-//			this.app.onresize();
 			this.resize();
 			win.removeEventListener('transitionend', transend);
 			this.isTransitioning = null;
@@ -2453,7 +2405,6 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		};
 		win.style.transition = `left ${WIN_TRANS_SECS}, top ${WIN_TRANS_SECS}`;
 		main.style.transition = `width ${WIN_TRANS_SECS}, height ${WIN_TRANS_SECS}`;
-//		let max = this.max_button;
 		if (!this.isMaxed) {
 			this.maxHoldW = main._w;
 			this.maxHoldH = main._h;
@@ -2475,12 +2426,45 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		else {
 			this.isTransitioning = true;
 			win.addEventListener('transitionend', transend);
-//			this.isTransitioning = true;
-//			win.addEventListener('transitionend', transend);
 		}
 	};//»
 	minimize(){this.minButton.click();};
-	close(){this.keyKill();}
+	doClose(){//«
+		if (!this.checkProp("Close")) return;
+		if (this.isMinimized) this.unminimize(true);
+		if (this.app.onkill) {
+			this.app.onkill();
+		}
+		OUTERLOOP2: for (let wspace of workspaces) {
+			let wins = wspace.windows;
+			for (let i = 0; i < wins.length; i++) {
+				if (wins[i] == this) {
+					wins.splice(i, 1);
+					break OUTERLOOP2;
+				}
+			}
+		}
+		if (this.isFolder) icon_array_off(3);
+		this.killed = true;
+		this.app.killed = true;
+		this.winElem._del();
+		let icn = this.icon;
+		let node = this.node;
+		if (icn) {
+			if (!node) node = icn.node;
+			icn.win = null;
+		}
+		if (node && node.unlockFile) node.unlockFile();
+		if (this.bindNum){
+			delete globals.boundWins[this.bindNum];
+			show_overlay(`${this.bindNum}: the key has been unbound`);
+		}
+		top_win_on();
+	};//»
+	close(if_force){/*«*/
+		if (if_force) return this.doClose();
+		this.closeButton.click();
+	}/*»*/
 	setLayout(if_set){//«
 		const get_cursor = (e, rect) => {//«
 			let lr_pad = rect.width * 0.25;
@@ -2942,7 +2926,7 @@ const clear_drag_resize_win=()=>{//«
 		CDW = null;
 	}
 };//»
-const do_tile_windows = () => {//«
+const tile_windows = () => {//«
 /*«
 
 
@@ -3246,25 +3230,6 @@ for (let win of arr) win.app.onresize();
 */
 return arr;
 };//»
-const tile_windows = do_tile_windows;
-/*
-const tile_windows=()=>{//«
-	let arr;
-	let iter=0;
-	while (arr = do_tile_windows()){
-if (iter > 5){
-cerr("WTHELLLLL????????");
-break;
-}
-		iter++;
-	}
-	if (arr) {
-		for (let win of arr) {
-			win.resize();
-		}
-	}
-};//»
-*/
 const toggle_show_windows = (if_no_current) => {//«
 	let wins = get_active_windows();
 	if (windows_showing) {
@@ -3611,14 +3576,22 @@ const switch_win_to_workspace = (w, num) => {//«
 	w.workspaceNum = num;
 	return true;
 };//»
-const check_cwin_owned=()=>{//«
-	if (CWIN && CWIN.ownedBy){
+const check_cwin_owned=(winarg)=>{//«
+	let usewin = winarg || CWIN;
+	if (usewin && usewin.ownedBy){
 cwarn("Here is the owning window");
-log(CWIN.ownedBy);
+log(usewin.ownedBy);
 		popup("The window is owned! (check console)");
 		return true;
 	}
 	return false;
+};//»
+const check_win_is_dirty=(winarg)=>{//«
+if (winarg.app && winarg.app.is_dirty){
+popup("The window is 'dirty'!");
+return true;
+}
+return false;
 };//»
 const raise_bound_win=(num)=>{//«
 	let obj = globals.boundWins[num];
@@ -3939,8 +3912,8 @@ class Icon {//«
 
 constructor(node, opts={}){//«
 
-	let {elem, observer, ref}=opts;
-
+	let {elem, observer, ref, pickerMode}=opts;
+	this.pickerMode = pickerMode;
 	this.elem = elem;
 	this.node = node;
 	this.ref = ref;
@@ -4092,6 +4065,7 @@ wrapper.ondragstart = e => {//«
 	e.preventDefault();
 	e.stopPropagation();
 	if (globals.read_only) return;
+	if (this.pickerMode) return;
 	let par = iconelm.parentNode;
 	CDICN = this;
 	CDL = make_cur_drag_img();
@@ -4147,6 +4121,9 @@ set_context_menu({X:e.clientX,Y:e.clientY},{items:menu});
 };//»
 wrapper.ondblclick = e => {//«
 	e.stopPropagation();
+	if (this.pickerMode && !this.isFolder){
+		return;
+	}
 	this.dblclick = true;
 	open_icon(this, {e: e});
 };//»
@@ -4613,7 +4590,7 @@ cwarn("THis is a rare event!");
 	cldragimg(true);
 	return;
 }//»
-if (globals.read_only){//«
+if (globals.read_only || ICONS[0].pickerMode){//«
 	for (let icn of ICONS) {
 		icn.shake();
 		icn.off();
@@ -6744,7 +6721,9 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 	if (this.isdesk() && !SHOW_ICONS) return;
 	let openit=()=>{
 		if (!if_toggle&&ICONS.length==1) {
-			open_icon(ICONS[0]);
+			let icn = ICONS[0];
+			if (icn.pickerMode && !icn.isFolder){}
+			else open_icon(icn);
 			return true;
 		}
 		return false;
@@ -6761,13 +6740,17 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 	}
 	else if (if_open){
 		if (haveit) icn.off(true);
+		if (icn.pickerMode && !icn.isFolder) return;
 		open_icon(icn, {force: if_force_new_win});
 	}
 	else if (!haveit){
 		if (ICONS.length&&(icn.parWin!==ICONS[0].parWin)) icon_array_off(1);
 		icn.on(true);
 	}
-	else open_icon(icn, {force: if_force_new_win});
+	else {
+		if (icn.pickerMode && !icn.isFolder) return;
+		open_icon(icn, {force: if_force_new_win});
+	}
 };//»
 this.vizCheck=()=>{//«
 	if (this.isdesk()){
@@ -8302,57 +8285,6 @@ const handle_ESC = (if_alt) => {//«
 	if (windows.layout_mode) return toggle_layout_mode();
 	if (windows_showing) toggle_show_windows();
 };//»
-
-/*
-//This is all an abstraction
-const KEYSYM_MAP={//«
-	f_A:{"n":"fullscreen_window"},
-	d_CA:{"n":"make_folder"},
-	f_CA:{"n":"make_file"},
-	"`_A":{"n":"window_cycle"},
-	x_A:{"n":"close_window"},
-	m_A:{"n":"maximize_window"},
-	d_A:{"n":"toggle_desktop"},
-	l_CA:{"n":"toggle_layout_mode"},
-	w_CA:{"n":"toggle_win_chrome"},
-	n_A:{"n":"minimize_window"},
-	"b_A":{"n":"toggle_taskbar"},
-	t_A:{n:"open_terminal"},
-	e_A:{n:"open_explorer"},
-	h_A:{n:"open_help"},
-};//»
-const KEYSYM_FUNCS = {//«
-focus_desktop:()=>{let w=CWIN;if(w&&(w.isFullscreen||w.isMaxed))return;CWIN&&CWIN.off();CUR.todesk();},
-make_folder,
-make_file,
-toggle_taskbar,
-open_terminal,
-open_help,
-toggle_win_chrome:()=>{CWIN&&CWIN.toggleChrome()},
-toggle_layout_mode:toggle_layout_mode,
-save_window:()=>{let w=CWIN;if(!w||w.isMinimized)return true;w.app.onsave();return true;},
-delete_selected_files: ()=>{return delete_selected_files();},
-window_cycle: ()=>{return window_cycle();},
-reset: ()=>{return handle_ESC();},
-toggle_desktop: ()=>{return toggle_show_windows();},
-close_window: ()=>{
-	if (!CWIN) return;
-	if (check_cwin_owned()) return;
-	CWIN.close();
-},
-fullscreen_window: ()=>{CWIN&&CWIN.fullscreen()},
-minimize_window: ()=>{CWIN&&CWIN.minimize()},
-maximize_window: ()=>{CWIN&&CWIN.maximize();},
-popmacro:()=>{WDG.popmacro();return true;},
-//reload_app_window:()=>{return win_reload(CWIN)},
-reload_desk_icons:reload_desk_icons_cb,
-open_explorer: open_home_folder,
-open_root_folder:()=>{
-open_file_by_path("/")
-},
-open_app:(name,if_force)=>{open_app(name||"None",{force: if_force});},
-}//»
-*/
 
 //«Detect if all keys are up
 const KEYS_PRESSED={};
