@@ -58,6 +58,11 @@ let focused = false;
 
 let area = make('textarea');
 area.id = `textarea_${Win.id}`;
+area.onfocus=()=>{
+	if (!topwin.saveFolder) return
+	topwin.off();
+	topwin.saveFolder.on();
+};
 //area.style.caretShape="block";
 
 win.area = area;
@@ -134,7 +139,7 @@ Win.name = name;
 Win.path = path;
 Win.ext = ext;
 Win.title = name;
-Win.cur_save_folder = null;
+Win.saveFolder = null;
 node.lockFile();
 Win.node = node;
 
@@ -148,11 +153,13 @@ this.overrides = {//«
 	'b_CAS': 1
 };//»
 this.onfocus = ()=>{//«
-//	if (view_only) return;
-	if (topwin.cur_save_folder){
+	if (topwin.saveFolder){
+		topwin.off();
 		setTimeout(()=>{
-			if(topwin.cur_save_folder) topwin.cur_save_folder.on();
-		},10);
+			if (!topwin.saveFolder) return;
+			topwin.saveFolder.up();
+			topwin.saveFolder.on();
+		},0);
 		return;
 	}
 	if (modified) return;

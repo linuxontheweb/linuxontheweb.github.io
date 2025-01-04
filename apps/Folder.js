@@ -150,39 +150,6 @@ const do_save = ()=>{//«
 };//»
 
 //»
-/*
-const go_back = ()=>{//«
-	if (path.match(/^\x2f+$/)) return;
-
-	let arr = path.split("/");
-	arr.pop();
-	if (!prev_paths) prev_paths=[Win.fullpath];
-	else prev_paths.unshift(Win.fullpath);
-	let opts = {PREVPATHS: prev_paths, WINARGS: {}};
-	Win.setWinArgs(opts.WINARGS);
-	if (Win.saver) {
-		opts.SAVER = Win.saver;
-	}
-	Win.easyKill();
-	Desk.open_file_by_path(arr.join("/"), opts);
-};//»
-const go_forth=()=>{//«
-	if (!prev_paths) return;
-	let goto_path = prev_paths.shift();
-	if (!goto_path){
-cwarn("Cannot go forward with goto_path ===", goto_path);
-		return;
-	}
-	if (!prev_paths.length) prev_paths = undefined;
-	let opts = {PREVPATHS: prev_paths, WINARGS: {}};
-	Win.setWinArgs(opts.WINARGS);
-	if (Win.saver) {
-		opts.SAVER = Win.saver;
-	}
-	Win.easyKill();
-	Desk.open_file_by_path(goto_path, opts);
-};//»
-*/
 const go_back = async()=>{//«
 	if (path.match(/^\x2f+$/)) return;
 	let arr = path.split("/");
@@ -468,6 +435,10 @@ this.get_context=()=>{//«
 	}   
 	return arr;
 };//»
+this.onfocus=()=>{
+	if (!save_input) return;
+	setTimeout(()=>{save_input.focus();},0);
+};
 this.onescape=()=>{//«
 	if (savebut) {
 		let act = document.activeElement;

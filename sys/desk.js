@@ -1,3 +1,24 @@
+/*1/1/24: 
+
+Just looking at the whole api.saveAs Workflow, from Initialization
+@DWEUNFKL to:
+1) Cancel
+2) Success
+
+Let's look into Window.onkill, and giving it options, in order to know when it is in
+1) Window.reload @DEKLKSMD
+2) window.onbeforeunload @SMKLDKSF
+
+Also, when doing the saveAs workflow, we need the Folder to list the files of the
+same type (e.g. .txt), as well as the folders. The question is, when it comes to one
+of the icons of our same type, what do we do upon "selecting" it? 
+
+Upon clicking it: we put the name into the textarea.
+Upon double-clicking, we put the name in the textarea AND click the SAVE button.
+
+EITHER WAY: THIS OPERATION WILL FAIL (UNLESS AN EXPLICIT NUCLEAR_OPTION IS SET).
+
+*/
 /*12/22/24: Just doing a simple desktop icon toggling routine.«
 
 I'm pretty sure that all icons that are being added to the desktop *MUST*
@@ -1494,7 +1515,7 @@ constructor(arg){//«
 	this.allowMinimize = true;
 	this.allowNone = false;
 
-	let winargs = arg.WINARGS||{};
+	let winargs = arg.winArgs||{};
 	this.winArgs = winargs;
 	let app = arg.appName;
 	this.appName = arg.appName;
@@ -1511,7 +1532,7 @@ constructor(arg){//«
 	this.app = {onresize:NOOP};
 	this.appName = app;
 	this.type = "window";
-	if (arg.APPARGS) this.noSave = true;
+	if (arg.appArgs) this.noSave = true;
 	else this.noSave = null;
 	this.ownedBy = undefined;
 
@@ -1520,12 +1541,13 @@ constructor(arg){//«
 	this.addDOMListeners();
 
 	arg.topWin = this;
-	if (arg.SAVER) {
-//		this.bottomPad = botpad;
-		this.bottomPad = winargs.BOTTOMPAD;
-		this.saver = arg.SAVER;
-		arg.SAVER.folderCb(this);
+
+	if (arg.saver) {
+		this.bottomPad = winargs.bottomPad;
+		this.saver = arg.saver;
+		arg.saver.folderCb(this);
 	}
+
 	windows.push(this);
 	this.arg = arg;
 
@@ -1600,7 +1622,7 @@ makeDOMElem(arg){//«
 	else if (winargs.WID === "100%") usew = winw();
 	else usew = defwinargs.WID;
 
-	let botpad = winargs.BOTTOMPAD;
+	let botpad = winargs.bottomPad;
 	if (isFin(winargs.HGT)) useh = winargs.HGT;
 	else if (winargs.HGT === "100%") useh = winh();
 	else {
@@ -1712,7 +1734,10 @@ makeDOMElem(arg){//«
 		if (!force && (this != CWIN)) return;
 		if (this.no_events) return;
 		if (this.nobuttons && !force) return;
-		if (this.app.onkill) this.app.onkill(if_dev_reload, force);
+		if (this.app.onkill) {
+//DEKLKSMD
+			this.app.onkill(if_dev_reload, force);
+		}
 		OUTERLOOP2: for (let wspace of workspaces) {
 			let wins = wspace.windows;
 			for (let i = 0; i < wins.length; i++) {
@@ -1856,7 +1881,7 @@ cwarn("this!==CWIN ????");
 	let footer_wrap=make('div');
 	footer_wrap._pos="relative";
 //«
-//The BOTTOMPAD property is ultimately given to us via a WINARG argument, so
+//The bottomPad property is ultimately given to us via a WINARG argument, so
 //that, for example, from Desk.api.saveAs (@DWEUNFKL), a folder window can be
 //opened up that has a Main window with a smaller height than normal (shrunken by
 //the amount of SAVEAS_BOTTOM_HGT), so that buttons (like Save and Cancel) can be
@@ -2150,9 +2175,9 @@ contextMenuOn(e){//«
 	};
 };//»
 setWinArgs(args){//«
-//	let args={BOTTOMPAD: w.bottompad, X: w.winElem._x, Y:w.winElem._y, WID: w.main._w, HGT: w.main._h};
+//	let args={bottomPad: w.bottompad, X: w.winElem._x, Y:w.winElem._y, WID: w.main._w, HGT: w.main._h};
 	let {main, winElem: win} = this;
-	args.BOTTOMPAD = this.bottompad;
+	args.bottomPad = this.bottompad;
 	args.X = win._x;
 	args.Y = win._y;
 	args.WID = main._w;
@@ -2668,7 +2693,7 @@ cwarn(`No script found for app: ${appName}`);
 	if (app.onkill) await app.onkill(true);
 //	app.onkill&&app.onkill(true);
 	let arg = this.arg;
-	arg.APPARGS = {reInit: app.reInit};
+	arg.appArgs = {reInit: app.reInit};
 	arg.noShow = opts.noShow;
 	arg.dataUrl = opts.dataUrl;
 	main.innerHTML="";
@@ -2716,9 +2741,9 @@ return new Promise((Y,N)=>{
 			this.on();
 		}
 		if (winapp===FOLDER_APP) {
-			this.app.onappinit(arg.FULLPATH, arg.PREVPATHS);
+			this.app.onappinit(arg.fullPath, arg.prevPaths);
 		}
-		else if (arg.APPARGS) this.app.onappinit(arg.APPARGS);
+		else if (arg.appArgs) this.app.onappinit(arg.appArgs);
 		cb(this);
 	};//»
 	const load_cb = async() => {//«
@@ -3678,8 +3703,9 @@ const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {
 
 	let icn = iconarg ||{appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
 	icn.winArgs = winargs;
-	return open_new_window(icn, {SAVER: saverarg, PREVPATHS: prevpaths});
+	return open_new_window(icn, {saver: saverarg, prevPaths: prevpaths});
 }//»
+
 const check_name_exists = async(str, which, usepath) => {//«
 	let path;
 	if (which) path = which.fullpath;
@@ -6220,13 +6246,13 @@ This happens when reloading a folder window.
 		return gotwin;
 	}
 	let win = new Window({
-		FULLPATH: fullpath,
+		fullPath: fullpath,
 //		CB: winCb,
-		WINARGS: winArgs,
+		winArgs: winArgs,
 		name: usename || appname.split(".").pop(),
 		appName: appname,
 		dataUrl,
-		APPARGS: appArgs
+		appArgs: appArgs
 	});
 	if (icon) {
 		icon.win = win;
@@ -6283,13 +6309,13 @@ const open_new_window = async (icn, opts={}) => {//«
 
 	let win = new Window({
 //		CB: cb,
-		WINARGS: icn.winArgs,
+		winArgs: icn.winArgs,
 		appName: app,
 		viewOnly,
 		name: usename,
-		FULLPATH: fullpath,
-		PREVPATHS: opts.PREVPATHS,
-		SAVER: opts.SAVER
+		fullPath: fullpath,
+		prevPaths: opts.prevPaths,
+		saver: opts.saver
 	});
 //	if (!win) return;
 
@@ -6342,7 +6368,7 @@ const open_file_by_path = async(patharg, opt={}) => {//«
 			let icn = CUR.geticon();
 			if (icn) icn.hideLabelName();
 		}
-		return open_folder_win(node.name, path, null, opt.WINARGS, opt.SAVER, opt.PREVPATHS);
+		return open_folder_win(node.name, path, null, opt.winArgs, opt.saver, opt.prevPaths);
 	}
 	if (check_special_ext(node)) return;
 	let fullpath = node.fullpath;
@@ -6351,7 +6377,7 @@ const open_file_by_path = async(patharg, opt={}) => {//«
 	let fname = patharr.pop();
 //SJNMYEJK
 	let fake = {
-		winargs: opt.WINARGS,
+		winargs: opt.winArgs,
 		name: fname,
 		path: (patharr.join("/")).regpath(true),
 		fullpath: () => {
@@ -8079,32 +8105,28 @@ cerr(mess);
 //»
 
 //Opens a folder in "Save As..." mode
-api.saveAs=(win, ext)=>{//«
-//api.saveAs=(win, val, ext)=>{
-return new Promise(async(Y,N)=>{
-open_file_by_path(globals.home_path, {
 //DWEUNFKL
-	WINARGS: {BOTTOMPAD: SAVEAS_BOTTOM_HGT},
-	SAVER:{
-		ext, 
-		folderCb: fwin=>{
-			win.cur_save_folder = fwin;
-		},
-		cb:async (fwin, savename)=>{//«
-			if (!fwin){
-				win.cur_save_folder = null;
-				Y({});
-				return;
+api.saveAs=(win, ext)=>{//«
+	return new Promise(async(Y,N)=>{
+		open_file_by_path(globals.home_path, {
+			winArgs: {bottomPad: SAVEAS_BOTTOM_HGT},
+			saver:{
+				ext, 
+				folderCb: fwin=>{
+					win.saveFolder = fwin;
+				},
+				cb:async (fwin, savename)=>{//«
+					if (!fwin){
+						win.saveFolder = null;
+						Y({});
+						return;
+					}
+					Y({path: fwin.fullpath, name: savename});
+					fwin.forceKill();
+				}//»
 			}
-			Y({path: fwin.fullpath, name: savename});
-			fwin.forceKill();
-		}//»
-	}
-
-});
-
-});
-
+		});
+	});
 };//»
 
 //»
@@ -8806,6 +8828,7 @@ const dokeyup = function(e) {//«
 		for (let w of get_all_windows()) {
 			if (w.app) {
 				if (w.app.is_dirty) return true;
+//SMKLDKSF
 				if (w.app.onkill) w.app.onkill();
 			}
 		}

@@ -6635,9 +6635,7 @@ async execute(str, opts={}){//«
 		this.history.splice(ind, 1);
 	}
 	else{
-//cwarn("NOT WRITING!!!", gotstr);
-//		write_to_history(gotstr);
-		await this.writeToHistory(gotstr);
+		await this.appendToHistory(gotstr);
 	}
 	this.history.push(gotstr);
 }
@@ -7803,18 +7801,21 @@ log("Not saving", s);
 	poperr(`Could not write to: ${HISTORY_PATH_SPECIAL}!`);
 };
 //»
-async writeToHistory(str){//«
+async appendToHistory(str){//«
 	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
 cwarn(`Could not write to history: ${HISTORY_PATH}`);
 	}
 };
 //»
+/*
 async saveHistory(){//«
 	if (!await fsapi.writeFile(HISTORY_PATH, this.history.join("\n")+"\n")){
 		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
 	}
 };
+
 //»
+*/
 async initHistory(termBuffer){//«
 	if (termBuffer) {
 		this.history = termBuffer;
@@ -9345,10 +9346,10 @@ async _ondevreload(){//«
 
 }
 //»
-async onkill(if_dev_reload){//«
+onkill(if_dev_reload){//«
 	if (this.curEditNode) this.curEditNode.unlockFile();
 	if (!if_dev_reload) {
-		return await this.saveHistory();
+		return;
 	}
 
 	this.reInit={
@@ -9365,8 +9366,6 @@ async onkill(if_dev_reload){//«
 
 	delete globals.shell_commands;
 	delete globals.shell_command_options;
-
-	await this.saveHistory();
 }
 //»
 
