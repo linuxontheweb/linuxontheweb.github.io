@@ -1,4 +1,5 @@
 
+//«Notes
 /*1/3/25:«
 
 Now we need to make sure about output redirections vis-a-vis compound commands,
@@ -104,9 +105,7 @@ MUCH FEATURE COMPLETE MINIMAL LINUX DISTRO???
 assumed that EOFs should only go to the next commands in your immediate pipeline,
 and not to the scriptOut callback...
 »*/
-let USE_ONDEVRELOAD = false;
-//let USE_DEVPARSER = false;
-let USE_DEVPARSER = true;
+//»
 
 //Terminal Imports«
 const NS = LOTW;
@@ -3147,7 +3146,12 @@ scanParam(){//«
 
 }//»
 async scanSub(par, opts={}){//«
-
+/*
+We need to balance all internal "(" and ")"
+*/
+let paren_depth;
+if (Number.isFinite(opts.parenDepth)) paren_depth = opts.parenDepth;
+else paren_depth = 0;
 let is_math = opts.isMath;
 let is_param = opts.isParam;
 let is_comsub = opts.isComSub;
@@ -3168,10 +3172,10 @@ If we are not embedded in any kind of quote
 
 let start = this.index;
 //const sub = cont_sub || (is_math ? new MathSub(start, par) : new ComSub(start, par));
-const sub = cont_sub || (is_math ? new MathSub(start, par) : 
+let sub = cont_sub || (is_math ? new MathSub(start, par) : 
 	(is_param ? new ParamSub(start, par) : new ComSub(start, par))
 	);
-const out = sub.val;
+let out = sub.val;
 if (!cont_sub) {
 	this.index+=2;
 	if (is_math){
@@ -3191,6 +3195,9 @@ if (ch==="\\"){//«
 	out.push("\\", this.source[cur]);
 	have_space = false;
 }//»
+else if (ch==="("){
+	paren_depth++;
+}
 else if (ch==="$"&&this.source[cur+1]==="'"){//«
 	this.index=cur;
 	let rv = await this.scanQuote(par, "$", in_backquote);
@@ -3258,15 +3265,27 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 			out.push(sub);
 			this.index++;
 		}//»
-else if (((is_math || is_comsub) && ch===")") || (is_param && ch === "}")){//«
-	if (is_math){
-		if (this.source[cur+1] !== ")") return "expected a final '))'";
-		cur++;
-	}
+else if (is_param && ch==="}"){
 	this.index = cur;
-//	log(`scanSub DONE: ${start} -> ${cur}, <${out.join("")}>`);
+	return sub;
+}
+else if (paren_depth === 0 && is_comsub && ch===")"){//«
+	this.index = cur;
 	return sub;
 }//»
+else if (paren_depth === 0 && is_math && ch===")"){//«
+	if (this.source[cur+1] !== ")") {
+		return "expected a final '))'";
+	}
+	this.index = cur+1;
+	return sub;
+}//»
+else if (ch===")"){
+	if (paren_depth) {
+		paren_depth--;
+	}
+	else return "unexpected token: ')'";
+}
 else if (ch===" " || ch==="\t"){//«
 	out.push(ch);
 	have_space = true;
@@ -3289,7 +3308,7 @@ if (this.eol()){
 	sub.val = out;
 	await this.more();
 //	return await this.scanComSub(par, is_math, in_backquote, sub);
-	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBack: in_backquote, contSub: sub});
+	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBack: in_backquote, contSub: sub, parenDepth: paren_depth});
 }
 
 
@@ -5957,7 +5976,7 @@ log(stdin);
 		else if (com.simple_command){
 			com = com.simple_command;
 			let arr = com.prefix;
-			arr.push(com.word||com.name);
+			if (com.word||com.name) arr.push(com.word||com.name);
 			arr.push(...com.suffix);
 			rv = await this.makeCommand(arr, comopts)
 		}
@@ -6268,6 +6287,8 @@ ShellMod.init();
 //»
 
 //Terminal«
+
+let USE_ONDEVRELOAD = false;
 
 export const app = class {
 
@@ -6704,9 +6725,6 @@ setTabSize(s){//«
 curWhite(){this.curBG="#ddd";this.curFG="#000";}
 curBlue(){this.curBG="#00f";this.curFG="#fff";}
 stat(mess){this.statusBar.innerText=mess;};
-get useDevParser(){//«
-	return USE_DEVPARSER;
-}//»
 async getLineFromPager(arr, name){//«
 	if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 		return poperr("Could not load the pager module");
@@ -8595,7 +8613,6 @@ async respInit(addMessage){//«
 	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
 	if(dev_mode){
 		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-		init_prompt+=`\nDev Parser: ${USE_DEVPARSER}`;
 	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
@@ -9107,12 +9124,6 @@ this.doOverlay(`Reload terminal: ${!this.ondevreload}`);
 	}//»
 else if (sym=="d_CAS"){
 }
-else if (sym=="s_CA"){//«
-if (!dev_mode) return;
-USE_DEVPARSER = !USE_DEVPARSER;
-this.doOverlay(`Use Dev Parser: ${USE_DEVPARSER}`);
-
-}//»
 }
 //»
 handle(sym, e, ispress, code, mod){//«
