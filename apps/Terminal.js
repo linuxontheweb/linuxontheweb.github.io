@@ -1,4 +1,7 @@
-
+/*XXX 1/4/25: We are only calling eatRedirects from parseCompoundCommand, and XXX
+it doesn't know how to handle tok.isHeredoc @XPJSKLAJ. So we are just
+going to leave that for an exercise for...
+*/
 //«Notes
 /*1/3/25:«
 
@@ -3865,6 +3868,12 @@ eatRedirects(){//«
 	let list=[];
 	while(tok && tok.isRedir){
 		let rop = tok;
+if (rop.isHeredoc){
+//XPJSKLAJ
+cwarn("SKIPPING THIS HEREDOC...");
+log(rop.value);
+}
+else {
 		this.tokNum++;
 		let fname = this.tokens[this.tokNum];
 		if (!fname) err("syntax error near unexpected token 'newline'");
@@ -3873,6 +3882,7 @@ eatRedirects(){//«
 		list.push({redir: [rop, fname], isRedir: true, dup:()=>{
 			return {redir: [rop, fname.dup()], isRedir: true};
 		}});
+}
 		this.tokNum++;
 		tok = this.curTok();
 	}
