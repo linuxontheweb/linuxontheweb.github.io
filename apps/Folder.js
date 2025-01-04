@@ -311,7 +311,8 @@ savebut.onclick=()=>{
 	savebut.disabled = true;
 };
 canbut.onclick=()=>{
-	Win.closeButton.click();
+	Win.saver.cb();
+	savebut.disabled = true;
 };
 
 botdiv._add(sp);
@@ -467,12 +468,12 @@ else if (s=="s_"||s=="s_C") do_save();
 
 }//»
 this.onkill = (if_reload, if_force) => {//«
-	if (if_force){
-		if (Win.saver) {
-			Win.saver.cb(null, 1);
-			Win.saver=null;
-		}
-	}
+//	if (if_force){
+//		if (Win.saver) {
+//			Win.saver.cb(null, 1);
+//			Win.saver=null;
+//		}
+//	}
 	icondv._del();
 }//»
 this.onresize = () => {//«

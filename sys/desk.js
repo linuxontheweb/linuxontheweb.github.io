@@ -3411,7 +3411,9 @@ const top_win_on = () => {//«
 			gotwin = w;
 		}
 	}
-	if (gotwin) gotwin.on();
+	if (gotwin) {
+		gotwin.on();
+	}
 	else {
 		CWIN = null;
 		CUR.todesk();
@@ -8116,13 +8118,13 @@ api.saveAs=(win, ext)=>{//«
 					win.saveFolder = fwin;
 				},
 				cb:async (fwin, savename)=>{//«
-					if (!fwin){
-						win.saveFolder = null;
-						Y({});
-						return;
-					}
-					Y({path: fwin.fullpath, name: savename});
-					fwin.forceKill();
+					win.saveFolder.forceKill();
+					win.saveFolder = null;
+					if (!fwin) Y({});
+					else Y({path: fwin.fullpath, name: savename});
+					CWIN = null;
+					win.up();
+					win.on();
 				}//»
 			}
 		});
