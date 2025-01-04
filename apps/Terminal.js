@@ -4516,11 +4516,13 @@ while(tok){
 	if (tok.isHeredoc){//«
 		if (!have_comword){
 			if (!pref) pref = [];
-			pref.push({heredoc: tok});
+//			pref.push({heredoc: tok});
+			pref.push(tok);
 		}
 		else{
 			if (!suf) suf = [];
-			suf.push({heredoc: tok});
+//			suf.push({heredoc: tok});
+			suf.push(tok);
 		}
 	}//»
 	else if (tok.r_op){//«
@@ -4766,7 +4768,7 @@ return {program: complete_coms};
 }//»
 async parseContinueStr(str){//«
 
-let parser = new _Parser(str.split(""), {
+let parser = new _DevParser(str.split(""), {
 	terminal: this.terminal,
 	heredocScanner: this.heredocScanner,
 	env: this.env,
@@ -4777,11 +4779,9 @@ let newtoks, comstr_out;
 try {
 	let errmess;
 	await parser.scanNextTok();
-	({err: errmess, tokens: newtoks, source: comstr_out} = await parser.parse());
-	if (errmess) return errmess;
+	await parser.tokenize();
+	let newtoks = parser.tokens;
 	return newtoks;
-//	this.tokens = this.tokens.concat(newtoks);
-//	toks = this.tokens;
 }
 catch(e){
 	return e.message;
@@ -4871,274 +4871,6 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 //	return await this.compile();
 //
 //};//»
-
-};
-
-//»
-//Old Parser«
-
-const parse = async(command_str, opts={})=>{//«
-
-let parser = new _Parser(command_str.split(""), opts);
-let toks, comstr_out;
-let program;
-try {
-	let errmess;
-	await parser.scanNextTok();
-	({program, err: errmess, tokens: toks, source: comstr_out} = await parser.parse());
-	if (errmess) return errmess;
-	command_str = comstr_out;
-}
-catch(e){
-	cerr(e);
-	return e.message;
-}
-if (program) {
-return program;
-}
-
-//Collect commands with their arguments«
-let com = [];
-let coms = [];
-let have_neg = false;
-for (let tok of toks){
-	if (tok.c_op){
-		if (!com.length) return `unexpected empty command (found: '${tok.c_op}')`;
-		coms.push({com});
-		com = [];
-		coms.push(tok);
-	}
-	else if (isNLs(tok)){
-		if (com.length){
-			coms.push({com});
-			com = [];
-		}
-	}
-	else{
-		let old_have_neg  = have_neg;
-		if (!com.length){
-			if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
-				have_neg = true;
-				continue;
-			}
-			else have_neg = false;
-		}
-		else have_neg = false;
-		if (old_have_neg){
-			tok.hasBang = true;
-		}
-		com.push(tok);
-	}
-}
-if (com.length) coms.push({com});
-//»
-//Collect pipelines with their subsequent logic operators (if any)«
-let pipes = [];
-let pipe = [];
-for (let i=0; i < coms.length; i++){
-	let tok = coms[i];
-	if (tok.c_op && tok.c_op != "|"){//Anything "higher order" than '|' ('&&', ';', etc) goes here«
-		if (tok.c_op==="&&"||tok.c_op==="||") {//«
-			if (!coms[i+1]) {
-				if (opts.isInteractive){
-					let rv;
-					while ((rv = await opts.terminal.readLine("> ")).match(/^ *$/)) {
-						command_str+="\n";
-					}
-					return Parser.parse(command_str+"\n"+rv, opts);
-				}
-				return "malformed logic list";
-			}
-			pipes.push({pipe, type: tok.c_op});
-		}//»
-		else {
-			pipes.push({pipe}, tok);
-		}
-		pipe = [];
-	}//»
-	else if (!tok.c_op){//Commands and redirects
-		pipe.push(tok);
-	}
-	else if (pipe.length && coms[i+1]){//noop: This token "must" be a '|'
-	}
-	else {
-		if (opts.isInteractive && !coms[i+1]){
-			let rv;
-			while ((rv = await opts.terminal.readLine("> ")).match(/^ *$/)) {
-				command_str+="\n";
-			}
-			return Parser.parse(command_str+"\n"+rv, opts);
-		}
-		return "malformed pipeline";
-	}
-
-}
-if (pipe.length) pipes.push({pipe});
-//»
-//Collect ';' separated lists of pipelines+logic operators (if any)«
-let statements=[];
-let statement=[];
-for (let tok of pipes){
-	let cop = tok.c_op;
-	if (cop) {
-		if (cop==="&"||cop===";"){
-			statements.push({statement, type: cop});
-			statement = [];
-		}
-		else{
-			return `unknown control operator: ${cop}`;
-		}
-	}
-	else{
-		statement.push(tok);
-	}
-}
-if (statement.length) statements.push({statement});
-
-//»
-return statements;
-};//»
-
-const _Parser = class {
-
-constructor(code, opts={}) {//«
-	this.env = opts.env;
-	this.terminal = opts.terminal;
-	this.isInteractive = opts.isInteractive;
-	this.isContinue = opts.isContinue;
-	this.heredocScanner = opts.heredocScanner;
-	this.errorHandler = new ErrorHandler();
-	this.scanner = new Scanner(code, opts, this.errorHandler);
-//	this.isInteractive = opts.isInteractive;
-	this.lookahead = {//«
-		type: EOF_Type,
-		value: '',
-		lineNumber: this.scanner.lineNumber,
-		lineStart: 0,
-		start: 0,
-		end: 0
-	};//»
-	this.hasLineTerminator = false;
-	this.tokNum = 0;
-	this.numToks = 0;
-	this.tokens = [];
-/*
-Since this is async (because we might need to get more lines from 'await terminal.readLine()'),
-then we need to do 'await this.scanNextTok()' **outside** of the constructor, since there is
-NO async/await in constructors.
-*/
-//	this.scanNextTok();
-}//»
-
-fatal(mess){//«
-throw new Error(mess);
-}//»
-eol(){//«
-	return (
-		(this.isInteractive && this.tokNum === this.numToks) || 
-		(!this.isInteractive && isNLs(this.tokens[this.tokNum]))
-	)
-}//»
-end(){//«
-//SLKIURUJ
-	return(this.tokNum===this.numToks);
-}//»
-async scanNextTok(heredoc_flag) {//«
-	let token = this.lookahead;
-	this.scanner.scanComments();
-	let next = await this.scanner.lex(heredoc_flag);
-	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
-	this.lookahead = next;
-	return token;
-};//»
-
-nextLinesUntilDelim(delim){//«
-	let out='';
-	let rv = this.scanner.scanNextLineNot(delim);
-	while (isStr(rv)){
-		out+=rv+"\n";
-		rv = this.scanner.scanNextLineNot(delim);
-	}
-	if (rv===true) return out;
-	return false;
-}//»
-
-async parse() {//«
-	let toks = [];
-	let next = this.lookahead;
-	let cur_iohere_tok;
-	let heredocs;
-	let heredoc_num;
-	let cur_heredoc_tok;
-	let cur_heredoc;
-	let interactive = this.isInteractive;
-	while (next.type !== EOF_Type) {
-//If !heredocs && next is "<<" or "<<-", we need to:
-		if (heredocs && isNLs(next)){/*«*/
-if (interactive){
-throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
-}
-			for (let i=0; i < heredocs.length; i++){
-				let heredoc = heredocs[i];
-				let rv = this.nextLinesUntilDelim(heredoc.delim);
-				if (!isStr(rv)){
-					return {err: "warning: here-document at line ? delimited by end-of-file"}
-				}
-				heredoc.tok.value = rv;
-			}
-			this.scanner.index--;
-			heredocs = null;
-		}/*»*/
-		else if (cur_heredoc_tok){/*«*/
-			if (next.isWord){/*«*/
-				if (!heredocs) {
-					heredocs = [];
-					heredoc_num = 0;
-				}
-				cur_heredoc_tok.delim = next.toString();
-				heredocs.push({tok: cur_heredoc_tok, delim: next.toString()});	
-				cur_heredoc_tok = null;
-			}/*»*/
-			else{/*«*/
-				if (isNLs(next)){
-					return "syntax error near unexpected token 'newline'";
-				}
-				else if (next.r_op || next.c_op){
-					return `syntax error near unexpected token '${next.r_op||next.c_op}'`;
-				}
-				else{
-cwarn("Whis this non-NLs or r_op or c_op????");
-					log(next);
-					throw new Error("WUUTTTTTTTTT IZZZZZZZZZ THISSSSSSSSS JKFD^&*$% (see console)");
-				}
-			}/*»*/
-		}/*»*/
-		else if (next.type==="r_op" && (next.r_op==="<<" || next.r_op==="<<-")){/*«*/
-			toks.push(next);
-			cur_heredoc_tok = next;
-//			cur_heredoc_tok.isHeredoc = true;
-		}/*»*/
-		else {/*«*/
-				toks.push(next);
-		}/*»*/
-		await this.scanNextTok(!!heredocs);
-		next = this.lookahead;
-	}
-	if (heredocs){/*«*/
-		if (!interactive) return {err: "warning: here-document at line ? delimited by end-of-file"}
-		for (let i=0; i < heredocs.length; i++){
-			let heredoc = heredocs[i];
-			let rv = await this.heredocScanner(heredoc.delim);
-			heredoc.tok.value = rv.join("\n");
-		}
-		heredocs = null;
-	}/*»*/
-	if (cur_heredoc_tok){/*«*/
-		return {err: "syntax error near unexpected token 'newline'"};
-	}/*»*/
-	return {tokens: toks, source: this.scanner.source.join("")};
-
-};//»
 
 };
 
@@ -5614,7 +5346,12 @@ stripRedirs(com){//«
 	if (!com.suffix) com.suffix=[];
 	let pref = com.prefix;
 	for (let i=0; i < pref.length; i++){
-		if (pref[0].isRedir){
+		if (pref[0].isHeredoc) {
+			redirs.push(pref[0]);
+			pref.splice(i, 1);
+			i--;
+		}
+		else if (pref[0].isRedir) {
 			redirs.push(pref[0].redir);
 			pref.splice(i, 1);
 			i--;
@@ -5622,11 +5359,17 @@ stripRedirs(com){//«
 	}
 	let suf = com.suffix;
 	for (let i=0; i < suf.length; i++){
-		if (suf[0].isRedir){
+		if (suf[0].isHeredoc) {
+			redirs.push(suf[0]);
+			suf.splice(i, 1);
+			i--;
+		}
+		else if (suf[0].isRedir) {
 			redirs.push(suf[0].redir);
 			suf.splice(i, 1);
 			i--;
 		}
+
 	}
 	return redirs;
 }//»
@@ -5940,6 +5683,10 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 			redirs = this.stripRedirs(com.simple_command);
 		}
 		for (let red of redirs){
+			if (red.isHeredoc) {
+				in_redir = red;
+				continue;
+			}
 			let rop = red.redir[0].val;
 			let red_to = red.redir[1].toString();
 			if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [rop, red_to];
@@ -5948,7 +5695,10 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 		}
 		let stdin;
 		if (in_redir){/*«*/
-			stdin = await this.getStdinLines(in_redir, !!subLines);
+			if (in_redir.isHeredoc){
+				stdin = in_redir.value.split("\n");
+			}
+			else stdin = await this.getStdinLines(in_redir, !!subLines);
 			if (isStr(stdin)){
 				ShellMod.var.lastExitCode = E_ERR;
 				rv = makeShErrCom(null, stdin, {term, shell: this});

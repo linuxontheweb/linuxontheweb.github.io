@@ -505,26 +505,3 @@ this.stat=stat_cur;
 }
 
 
-
-
-
-
-
-/*Old«
-
-Removed from onkeydown
-else if (s==="TAB_"){
-
-if (savebut) {
-e.preventDefault();
-let act = document.activeElement;
-
-if (act===savebut) canbut.focus();
-else {
-	savebut.focus();
-}
-}
-}
-
-»*/
-
