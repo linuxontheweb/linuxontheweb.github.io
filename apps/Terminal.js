@@ -2354,7 +2354,6 @@ Here we need a concept of "fields".
 - DQuote is a special string that must resolve internal expansions.
 
 »*/
-
 const fields = [];
 let curfield="";
 for (let ent of this.val){
@@ -2715,8 +2714,7 @@ toString(){/*«*/
 //log("TOSTRING!!!", this.val.join(""));
 //log(this.fields);
 //If only 0 or 1 fields, there will be no newlines
-//if (this.fields)
-//return this.fields.join("\n");
+if (this.fields) return this.fields.join("\n");
 return this.val.join("");
 }/*»*/
 get isChars(){/*«*/
@@ -2899,7 +2897,9 @@ if (curword) out.push(curword);
 return out.join("\n");
 
 }//»
-
+toString(){
+	return this.val.join("");
+}
 }//»
 
 const BQuote = class extends Sequence{//«
@@ -5701,10 +5701,13 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const makeShErrCom = ShellMod.util.makeShErrCom;
 	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
-	let all = assigns;
-	if (name) all.push(name);
-	all.push(...args);
-	let rv = await this.allExpansions(all, env, scriptName, scriptArgs);
+//	let exps = assigns;
+//	let all = assigns;
+//	if (name) exps.push(name);
+//	exps.push(...args);
+//	let all = args;
+//for ()
+	let rv = await this.allExpansions(args, env, scriptName, scriptArgs);
 	if (isStr(rv)) return `sh: ${rv}`;
 //Set environment variables (exports to terminal's environment if there is nothing left)
 	rv = ShellMod.util.addToEnv(assigns, env, {term});
@@ -5734,7 +5737,9 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	{
 		let hold = arr;
 		arr = [];
-		for (let arg of hold) arr.push(arg.toString());
+		for (let arg of hold) {
+			arr.push(arg.toString());
+		}
 	}
 	if (ShellMod.var.aliases[comword]){//«
 //Replace with an alias if we can
