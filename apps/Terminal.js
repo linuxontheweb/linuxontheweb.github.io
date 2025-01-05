@@ -2359,7 +2359,7 @@ let curfield="";
 for (let ent of this.val){
 	if (ent instanceof BQuote || ent instanceof ComSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
-		let rv = await ent.expand(shell, term);
+		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
 		let arr = rv.split("\n");
 		if (arr.length) {
 			curfield+=arr.shift();
@@ -2373,10 +2373,10 @@ for (let ent of this.val){
 	}//»
 	else if (ent instanceof MathSub){//«
 //resolve and start or append to curfield, since this can only return 1 (possibly empty) value
-		curfield += await ent.expand(shell, term);
+		curfield += await ent.expand(shell, term, env, scriptName, scriptArgs);
 	}//»
 	else if (ent instanceof DQuote){//«
-		curfield += '"'+await ent.expand(shell, term)+'"';
+		curfield += '"'+await ent.expand(shell, term, env, scriptName, scriptArgs)+'"';
 	}//»
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
 		curfield += "'"+ent.toString()+"'";
@@ -2714,7 +2714,7 @@ toString(){/*«*/
 //log("TOSTRING!!!", this.val.join(""));
 //log(this.fields);
 //If only 0 or 1 fields, there will be no newlines
-if (this.fields) return this.fields.join("\n");
+//if (this.fields) return this.fields.join("\n");
 return this.val.join("");
 }/*»*/
 get isChars(){/*«*/
@@ -2870,8 +2870,8 @@ dup(){//«
 	}
 	return dq;
 }//»
-async expand(shell, term){//This returns a string (with possible embedded newlines)«
-
+async expand(shell, term, env, scriptName, scriptArgs){//This returns a string (with possible embedded newlines)«
+//log("EXPAND", env);
 let out = [];
 let curword="";
 let vals = this.val;
@@ -2881,7 +2881,7 @@ for (let ent of vals){
 			out.push(curword);
 			curword="";
 		}
-		out.push(await ent.expand(shell, term));
+		out.push(await ent.expand(shell, term, env, scriptName, scriptArgs));
 	}
 	else if (!isStr(ent)){
 cwarn("HERE IS ENT!!!!");
@@ -5561,8 +5561,9 @@ stripRedirs(com){//«
 	return redirs;
 }//»
 */
-async allExpansions(arr, env, scriptName, scriptArgs){//«
+async allExpansions(arr, env, scriptName, scriptArgs, opts={}){//«
 const{term}=this;
+const{isAssign}=opts;
 //let in_redir, out_redir;
 for (let k=0; k < arr.length; k++){//«
 	let tok = arr[k];
@@ -5605,15 +5606,22 @@ for (let k=0; k < arr.length; k++){//command sub«
 for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
-		let{start} = tok;
-		let words = [];
-		for (let field of tok.fields){
-			let word = new Word(start);
-			word.val = [...field];
-			words.push(word);
+		if (isAssign){
+			let out=[];
+			for (let field of tok.fields) out.push(...field.split("\n"));
+			tok.val=out.join(" ");
 		}
-		arr.splice(k, 1, ...words);
-		k+=words.length-1;
+		else {
+			let{start} = tok;
+			let words = [];
+			for (let field of tok.fields){
+				let word = new Word(start);
+				word.val = [...field];
+				words.push(word);
+			}
+			arr.splice(k, 1, ...words);
+			k+=words.length-1;
+		}
 	}
 }//»
 for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
@@ -5701,18 +5709,20 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const makeShErrCom = ShellMod.util.makeShErrCom;
 	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
-//	let exps = assigns;
-//	let all = assigns;
-//	if (name) exps.push(name);
-//	exps.push(...args);
-//	let all = args;
-//for ()
-	let rv = await this.allExpansions(args, env, scriptName, scriptArgs);
-	if (isStr(rv)) return `sh: ${rv}`;
-//Set environment variables (exports to terminal's environment if there is nothing left)
-	rv = ShellMod.util.addToEnv(assigns, env, {term});
-//This is an "error" array
-	if (rv.length) term.response(rv.join("\n"), {isErr: true});
+//log(assigns);
+
+	let rv
+	if (assigns.length) {
+//log(assigns);
+//for (let ass of assigns){
+//log(ass.assignmentParts);
+//}
+		rv = await this.allExpansions(assigns, env, scriptName, scriptArgs, {isAssign: true});
+		if (isStr(rv)) return `sh: ${rv}`;
+		rv = ShellMod.util.addToEnv(assigns, env, {term});
+		if (rv.length) term.response(rv.join("\n"), {isErr: true});
+	}
+
 	const com_env = {//«
 		stdin,
 		outRedir,
@@ -5725,15 +5735,13 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		envPipeInCb,
 		envRedirLines
 	}//»
-
 //XXXXXXXXXXXX
-//	let comword = arr.shift();
-	let comword = name;
-
-	if (!comword) {
+	if (!name) {
 		return new NoCom();
 	}
-	let arr = args;
+	let arr = [name, ...args];
+	rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
+	if (isStr(rv)) return `sh: ${rv}`;
 	{
 		let hold = arr;
 		arr = [];
@@ -5741,6 +5749,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 			arr.push(arg.toString());
 		}
 	}
+	let comword = arr.shift();
 	if (ShellMod.var.aliases[comword]){//«
 //Replace with an alias if we can
 //This should allow aliases that expand with options...
