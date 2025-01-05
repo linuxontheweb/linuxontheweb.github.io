@@ -333,7 +333,8 @@ async init(){//«
 		if (!globals.refs[opts.refs]) return this.no(`${opts.refs}: not found in globals.refs`);
 	}
 	if (!path) {
-		if (this.stdin) val = this.stdin.join("\n");
+//		if (this.stdin) val = this.stdin.join("\n");
+		if (this.stdin) val = this.stdin;
 		else val="";
 	}
 	else {
@@ -447,7 +448,7 @@ const com_cat = class extends Com{//«
 		const{stdin}=this;
 		if (!this.args.length){
 			if (stdin){
-				this.out(stdin.join("\n"));
+				this.out(stdin);
 				this.ok();
 			}
 			//else: we have piped input, and are waiting for an 'EOF' to exit

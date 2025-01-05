@@ -21,7 +21,7 @@ const globals = LOTW.globals;
 //const {getAppIcon}= capi;
 const{NS, FS_TYPE, FOLDER_APP}=globals;
 const{poperr} = globals.widgets;
-const{make,mkdv,mk,mksp,log,cwarn,cerr, getAppIcon}=util;
+const{make,mkdv,mk,mksp,log,cwarn,cerr, getAppIcon, isStr}=util;
 const {fs}=NS.api;
 
 //»
@@ -40,6 +40,8 @@ let path;
 let num_entries = 0;
 let picker_mode;
 let save_as_ext;
+
+const thisApp = this;
 
 //»
 
@@ -253,7 +255,7 @@ cwarn("Not found in kids: "+ kid.dataset.name);
 		}
 		let ref;
 		if (got.link) ref = await got.ref;
-		let icn = new Icon(got, {elem: kid, observer, ref, pickerMode: picker_mode});
+		let icn = new Icon(got, {elem: kid, observer, ref, pickerMode: picker_mode, parApp: thisApp});
 		if (got.filesaver_cb) got.filesaver_cb(icn);
 //		icn._pos="relative";
 		icn.parWin = Win;
@@ -422,6 +424,9 @@ cwarn("No path given (Win._fullpath)");
 //»
 
 //OBJ/CB«
+this.set_save_name=(name)=>{
+if (save_input && isStr(name)) save_input.value = name;
+};
 
 this.reload=reload;
 this.get_context=()=>{//«

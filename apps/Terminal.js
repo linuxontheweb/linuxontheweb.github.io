@@ -1,7 +1,19 @@
-/*XXX 1/4/25: We are only calling eatRedirects from parseCompoundCommand, and XXX
+/*1/5/25: Apropos the note below (from yesterday), I am going to create Stdin
+and Stdin objects immediately after doing the heredoc stuff in the parser...
+@YJDHSLFJS.
+
+Now collecting all redirects (tok.isRedir) is much simpler because we just need
+the individual tokens themselves.
+
+Just cleaned up parseSimpleCommand @JEEKSMD.
+
+
+
+*/
+/*XXX 1/4/25: We are only calling eatRedirects from parseCompoundCommand, and XXX«
 it doesn't know how to handle tok.isHeredoc @XPJSKLAJ. So we are just
 going to leave that for an exercise for...
-*/
+»*/
 //«Notes
 /*1/3/25:«
 
@@ -703,7 +715,7 @@ continue;
 //log(`Deleted module: ${m}`);
 	}
 }//»
-
+/*
 const write_to_redir = async(term, out, redir, env)=>{//«
 //let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
 	if (!isArr(out)) return {err: "the redirection output is not a Uint8Array or JS array!"}
@@ -741,7 +753,7 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
 	return {};
 };//»
-
+*/
 this.util={/*«*/
 	makeShErrCom: make_sh_error_com,
 	getOptions:get_options,
@@ -750,7 +762,7 @@ this.util={/*«*/
 	doImports:do_imports,
 	deleteComs:delete_coms,
 	deleteMods:delete_mods,
-	writeToRedir:write_to_redir
+//	writeToRedir:write_to_redir
 }/*»*/
 
 }
@@ -779,7 +791,156 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/,
 }//»
 
 //»
-//Command Classes: this.comClasses (Com, ErrCom, ScriptCom)«
+//Classes: this.comClasses (Com, ErrCom, ScriptCom)«
+
+class Stdin{/*«*/
+
+constructor(tok, arg){
+	this.tok=tok;
+	this.arg=arg;
+	this.isStdin = true;
+	this.isRedir = true;
+}
+
+async setValue(shell, term, env, scriptName, scriptArgs){/*«*/
+
+if (this.tok.isHeredoc) {
+	this.value = this.tok.value
+	return true;
+}
+const{tok, arg}=this;
+const {r_op}=tok;
+if (r_op==="<"){/*«*/
+	let arg = this.arg;
+	let raw = arg.raw;
+	if (!arg.isSimple){
+		return `expected a 'simple' file redirection (have '${raw}')`;
+	}
+	arg.tildeExpansion();
+	arg.dsSQuoteExpansion();
+	let fname = arg.toString();
+	let node = await fname.toNode(term);
+	if (!node) {
+		return `${raw}: no such file or directory`;
+	}
+	if (!node.isFile){
+		return `${raw}: not a regular file`;
+	}
+	let rv = await node.text;
+	if (!isStr(rv)){
+		return `${raw}: an invalid value was returned`;
+	}
+	this.value = rv;
+	return true;
+}/*»*/
+if (r_op==="<<<"){/*«*/
+	await this.arg.expandSubs(shell, term, env, scriptName, scriptArgs);
+//	this.arg.quoteRemoval();
+//log(this.arg.val);
+	this.value = this.arg.fields.join("\n");
+	return true;
+}/*»*/
+return `Unknown stdin redirection: ${rop}`;
+
+}/*»*/
+
+dup(){
+	return new Stdin(this.tok, this.arg&&this.arg.dup());
+}
+
+}/*»*/
+class Stdout{/*«*/
+
+constructor(tok, file){
+	this.tok=tok;
+	this.file=file;
+	this.isStdout = true;
+	this.isRedir = true;
+}
+
+async write(term, val, env, ok_clobber){/*«*/
+
+if (!(isStr(val)||(val instanceof Uint8Array))){
+return "Invalid value to write to stdout (want string or Uint8Array)";
+}
+
+const{tok, file: fname}=this;
+const {op}=tok;
+let fullpath = normPath(fname, term.cur_dir);
+let node = await fsapi.pathToNode(fullpath);
+if (node) {/*«*/
+	if (node.type == FS_TYPE && op===">" && !ok_clobber) {
+		if (env.CLOBBER_OK==="true"){}
+		else return `not clobbering '${fname}' (shell.var.allowRedirClobber==${ok_clobber})`;
+	}
+	if (node.writeLocked()){
+		return `${fname}: the file is "write locked" (${node.writeLocked()})`;
+	}
+	if (node.data){
+		return `${fname}: cannot write to the data file`;
+	}
+}/*»*/
+let patharr = fullpath.split("/");
+patharr.pop();
+let parpath = patharr.join("/");
+if (!parpath) return `${fname}: Permission denied`;
+let parnode = await fsapi.pathToNode(parpath);
+let typ = parnode.type;
+if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
+	return `${fname}: invalid or unsupported path`;
+}
+if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+	return `${fname}: Permission denied`;
+}
+if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) return `${fname}: Could not write to the file`;
+return true;
+
+/*
+const write_to_redir = async(term, out, redir, env)=>{//«
+//let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
+	if (!isArr(out)) return {err: "the redirection output is not a Uint8Array or JS array!"}
+	if (!(out instanceof Uint8Array)) {
+		 if (!isStr(out[0])) return {err: "the redirection output does not seem to be an array of Strings!"};
+		out = out.join("\n");
+	}
+	let op = redir.shift();
+	let fname = redir.shift();
+	if (!fname) return {err:`missing operand to the redirection operator`};
+	let fullpath = normPath(fname, term.cur_dir);
+	let node = await fsapi.pathToNode(fullpath);
+	if (node) {
+		if (node.type == FS_TYPE && op===">" && !this.var.allowRedirClobber) {
+			if (env.CLOBBER_OK==="true"){}
+			else return {err: `not clobbering '${fname}' (this.var.allowRedirClobber==${this.var.allowRedirClobber})`};
+		}
+		if (node.writeLocked()){
+			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
+		}
+		if (node.data){
+			return {err:`${fname}: cannot write to the data file`};
+		}
+	}
+	let patharr = fullpath.split("/");
+	patharr.pop();
+	let parpath = patharr.join("/");
+	if (!parpath) return {err:`${fname}: Permission denied`};
+	let parnode = await fsapi.pathToNode(parpath);
+	let typ = parnode.type;
+	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: invalid or unsupported path`};
+	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+		return {err:`${fname}: Permission denied`};
+	}
+	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
+	return {};
+};//»
+*/
+	}/*»*/
+
+dup(){
+	return new Stdin(this.tok, this.arg.dup());
+}
+
+}/*»*/
 
 const Com = class {//«
 	constructor(name, args, opts, env={}){//«
@@ -2231,8 +2392,6 @@ for (let ent of this.val){
 }
 fields.push(curfield);
 this.fields = fields;
-//log(this.fields);
-
 }//»
 
 quoteRemoval(){//«
@@ -2567,6 +2726,18 @@ get isChars(){/*«*/
 	}
 	return true;
 }/*»*/
+get isSimple(){/*«*/
+	for (let ent of this.val){
+		if (ent instanceof DQuote){
+			for (let ent2 of ent.val){
+				if (!isStr(ent2)) return false;
+			}
+		}
+		else if (!(isStr(ent)||(ent instanceof SQuote)||(ent instanceof DSQuote))) return false;
+	}
+	return true;
+}/*»*/
+
 }//»
 const SQuote = class extends Sequence{/*«*/
 	expand(){
@@ -3453,16 +3624,16 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let start = this.index;
 //	let src = this.source;
 //	let str='';
-	let src;
+//	let src;
 	let rv;
 	let start_line_number = this.lineNumber;
 	let start_line_start = this.lineStart;
-	let _word = new Word(start, par, env);
+	let _word = new Word(start);
 	let word = _word.val;
 	let is_plain_chars = true;
 // Simple means there are only plain chars, escapes, '...', $'...' and 
 // "..." with no embedded substitutions
-	let is_simple = true;
+//	let is_simple = true;
 	while (!this.eof()) {
 		let ch = this.source[this.index];
 		let next1 = this.source[this.index+1];
@@ -3599,6 +3770,8 @@ log(wrd);
 //is_plain_chars == false
 		_word.isCommandStart = true;
 	}
+	_word.raw = this.source.slice(start, this.index).join("");
+//log(raw);
 	return _word;
 }/*»*/
 scanNewlines(par, env, heredoc_flag){/*«*/
@@ -3682,9 +3855,9 @@ return await this.scanWord(null, this.env);
 
 //»
 
-//Dev Parser«
+//Parser«
 
-const _DevParser = class {
+const Parser = class {
 
 constructor(code, opts={}) {//«
 	this.env = opts.env;
@@ -3861,6 +4034,18 @@ async getMoreTokensFromTerminal(){//«
 	this.numToks = this.tokens.length;
 }//»
 eatRedirects(){//«
+	let err = this.fatal;
+	let tok = this.curTok();
+	let list=[];
+	while(tok && tok.isRedir){
+		list.push(tok);
+		this.tokNum++;
+		tok = this.curTok();
+	}
+	return list;
+}//»
+/*
+eatRedirects(){//«
 //	const{toks}=this;
 //	const toks = this.tokens;
 	let err = this.fatal;
@@ -3888,7 +4073,7 @@ else {
 	}
 	return list;
 }//»
-
+*/
 async parseList(seq_arg){//«
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
@@ -4516,76 +4701,38 @@ async parseSimpleCommand(){//«
 
 let err = this.fatal;
 let toks = this.tokens;
-let pref;
-let word;
+//let have_comword;
 let name;
-let suf;
-let have_comword;
 let tok = toks[this.tokNum];
+let assigns = [];
+let redirs = [];
+let args = [];
+//JEEKSMD
 while(tok){
-	if (tok.isHeredoc){//«
-		if (!have_comword){
-			if (!pref) pref = [];
-//			pref.push({heredoc: tok});
-			pref.push(tok);
-		}
-		else{
-			if (!suf) suf = [];
-//			suf.push({heredoc: tok});
-			suf.push(tok);
-		}
-	}//»
-	else if (tok.r_op){//«
-		let rop = tok;
-//		toks.shift();
-		this.tokNum++;
-		let fname = toks[this.tokNum];
-		if (!fname) err("syntax error near unexpected token 'newline'");
-		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
-		if (!fname.isChars) err(`wanted characters only in the filename`);
-		if (!have_comword){
-			if (!pref) pref = [];
-			pref.push({redir: [rop, fname], isRedir: true, dup:()=>{
-				return {redir: [rop, fname.dup()], isRedir: true}
-			}});
-		}
-		else{
-			if (!suf) suf = [];
-			suf.push({redir: [rop, fname], isRedir: true, dup:()=>{
-				return {redir: [rop, fname.dup()], isRedir: true}
-			}});
-		}
-	}//»
+	if (tok.isRedir) redirs.push(tok);
 	else if (tok.isWord){//«
-		if (!have_comword) {
+		if (!name) {
 			if (tok.isAssignment){
-				if (!pref) pref = [];
-				pref.push(tok);
+				assigns.push(tok);
 			}
 			else{
-				have_comword = tok;
+				name = tok;
 			}
 		}
 		else{
-			if (!suf) suf = [];
-			suf.push(tok);
+			args.push(tok);
 		}
 	}//»
 	else{
 		break;
 	}
-//	toks.shift();
 	this.tokNum++;
 	tok = toks[this.tokNum];
 }
-if (!have_comword){
-	if (!pref) err("NO COMWORD && NO PREFIX!?!?");
-	return {simple_command: {prefix: pref}};
-}
-else if (pref){
-	return {simple_command: {prefix: pref, word: have_comword, suffix: suf}};
-}
-else return {simple_command: {name: have_comword, suffix: suf}};
+if (!name) return {redirs, simple_command: {assigns}};
+return {redirs, simple_command: {assigns, name, args}};
+//if (!name) return {simple_command: {assigns, redirs}};
+//return {simple_command: {assigns, redirs, name, args}};
 
 }//»
 async parseCompoundCommand(){//«
@@ -4778,7 +4925,7 @@ return {program: complete_coms};
 }//»
 async parseContinueStr(str){//«
 
-let parser = new _DevParser(str.split(""), {
+let parser = new Parser(str.split(""), {
 	terminal: this.terminal,
 	heredocScanner: this.heredocScanner,
 	env: this.env,
@@ -4872,6 +5019,35 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 	if (cur_heredoc_tok){//«
 		this.fatal("syntax error near unexpected token 'newline'");
 	}//»
+
+//YJDHSLFJS
+
+for (let i=0; i < toks.length; i++){
+let tok = toks[i];
+if (!tok.isRedir) {
+//log("TOK",tok);
+	continue;
+}
+let next = toks[i+1];
+let rop = tok.r_op;
+if (tok.isHeredoc){/*«*/
+	toks[i] = new Stdin(tok);
+	toks[i].isHeredoc = true;
+}/*»*/
+else if (OK_OUT_REDIR_TOKS.includes(rop)){/*«*/
+	if (!next) this.unexp("newline");
+	if (!next.isWord) this.unexp(next);
+	toks[i] = new Stdout(tok, next);
+	toks.splice(i+1, 1);
+} /*»*/
+else if (OK_IN_REDIR_TOKS.includes(rop)) {/*«*/
+	if (!next) this.unexp("newline");
+	if (!next.isWord) this.unexp(next);
+	toks[i] = new Stdin(tok, next);
+	toks.splice(i+1, 1);
+}/*»*/
+else this.fatal(`unsupported operator: '${rop}'`);
+}
 
 	this.tokens = toks;
 	this.numToks = toks.length;
@@ -5350,6 +5526,7 @@ else if (red==="<<"){
 }
 return stdin;
 }//»
+/*
 stripRedirs(com){//«
 	let redirs = [];
 	if (!com.prefix) com.prefix=[];
@@ -5383,6 +5560,7 @@ stripRedirs(com){//«
 	}
 	return redirs;
 }//»
+*/
 async allExpansions(arr, env, scriptName, scriptArgs){//«
 const{term}=this;
 //let in_redir, out_redir;
@@ -5517,18 +5695,19 @@ makeCompoundCommand(com, opts){//«
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
-async makeCommand(arr, opts){//«
+//async makeCommand(arr, opts){
+async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const{term}=this;
 	const makeShErrCom = ShellMod.util.makeShErrCom;
 	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-
-	let args=[];
 	let comobj, usecomword;
-	let rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
+	let all = assigns;
+	if (name) all.push(name);
+	all.push(...args);
+	let rv = await this.allExpansions(all, env, scriptName, scriptArgs);
 	if (isStr(rv)) return `sh: ${rv}`;
-	arr = rv;
 //Set environment variables (exports to terminal's environment if there is nothing left)
-	rv = ShellMod.util.addToEnv(arr, env, {term});
+	rv = ShellMod.util.addToEnv(assigns, env, {term});
 //This is an "error" array
 	if (rv.length) term.response(rv.join("\n"), {isErr: true});
 	const com_env = {//«
@@ -5543,11 +5722,15 @@ async makeCommand(arr, opts){//«
 		envPipeInCb,
 		envRedirLines
 	}//»
+
 //XXXXXXXXXXXX
-	let comword = arr.shift();
+//	let comword = arr.shift();
+	let comword = name;
+
 	if (!comword) {
 		return new NoCom();
 	}
+	let arr = args;
 	{
 		let hold = arr;
 		arr = [];
@@ -5683,15 +5866,15 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 		let rv;
 
 //DNGZXER
-		let in_redir, out_redir;
-		let redirs;
-		if (com.compound_command) {
-			redirs = com.redirs;
-//log(redirs);
-		}
-		else {
-			redirs = this.stripRedirs(com.simple_command);
-		}
+/*«
+//		let in_redir, out_redir;
+//		let redirs;
+//		if (com.compound_command) {
+//			redirs = com.redirs;
+//		}
+//		else {
+//			redirs = this.stripRedirs(com.simple_command);
+//		}
 		for (let red of redirs){
 			if (red.isHeredoc) {
 				in_redir = red;
@@ -5704,7 +5887,7 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 			else this.fatal(`unsupported operator: '${rop}'`);
 		}
 		let stdin;
-		if (in_redir){/*«*/
+		if (in_redir){
 			if (in_redir.isHeredoc){
 				stdin = in_redir.value.split("\n");
 			}
@@ -5723,22 +5906,46 @@ log(stdin);
 				pipeline.push(rv);
 				continue;
 			}
-		}/*»*/
+		}
+»*/
+		let in_redir, out_redir;
+		let redirs = com.redirs;
+//log(com);
+		for (let red of redirs){
+			if (red.isStdin) in_redir = red;
+			else if (red.isStdout) out_redir = red;
+			else{
+cwarn("Here is the non stdin/stdout redir");
+log(red);
+				this.fatal("Unknown token in com.redirs!?!?! (see console)");
+			}
+		}
+		let stdin;
+		let errmess;
+		if (in_redir){
+//async expandSubs(shell, term, env, scriptName, scriptArgs)
+			let rv2 = await in_redir.setValue(this, term, env, scriptName, scriptArgs);
+			if (isStr(rv2)){
+				errmess = rv2;
+			}
+			else{
+				stdin = in_redir.value;
+			}
+		}
 		let comopts={};
 		for (let k in opts){
 			comopts[k] = opts[k];
 		}
 		comopts.stdin = stdin || optStdin;
 		comopts.outRedir = out_redir;
-		if (com.compound_command){
-			rv = await this.makeCompoundCommand(com, comopts)
+		if (errmess){
+			rv = makeShErrCom(null, errmess, {term, shell: this});
+		}
+		else if (com.compound_command){
+			rv = await this.makeCompoundCommand(com, comopts, errmess)
 		}
 		else if (com.simple_command){
-			com = com.simple_command;
-			let arr = com.prefix;
-			if (com.word||com.name) arr.push(com.word||com.name);
-			arr.push(...com.suffix);
-			rv = await this.makeCommand(arr, comopts)
+			rv = await this.makeCommand(com.simple_command, comopts, errmess)
 		}
 		else{//«
 cwarn("Here is the command");
@@ -5776,13 +5983,20 @@ for (let com of pipeline){//«
 	if (!(isNum(lastcomcode))) {
 		lastcomcode = E_ERR;
 	}
-	if (com.redirLines) {
-		let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.outRedir, env);
-		if (this.cancelled) return;
-		if (err) {
-			term.response(`sh: ${err}`, {isErr: true});
-		}
-	}
+	if (!com.redirLines) continue;
+//	let {err} = await ShellMod.util.writeToRedir(term, com.redirLines, com.outRedir, env);
+	let val;
+	if (com.redirLines instanceof Uint8Array) val = com.redirLines;
+	else val = com.redirLines.join("\n");
+	let rv = await com.outRedir.write(term, val, env, this.var.allowRedirClobber)
+	if (this.cancelled) return;
+	if (rv===true) continue;
+	if (isStr(rv)) term.response(`sh: ${rv}`, {isErr: true});
+	else {
+cwarn("Here is the value below");
+log(rv);
+	return `unknown value returned from redir.write!!! (see console)`
+}
 
 }//»
 
@@ -5910,8 +6124,8 @@ async executeStatements2(statements, opts){//«
 
 async devexecute(command_str, opts){//«
 	const{term}=this;
-//	let parser = new _DevParser(command_str.split(""), {terminal: term, isInteractive: false});
-	let parser = new _DevParser(command_str.split(""), opts);
+//	let parser = new Parser(command_str.split(""), {terminal: term, isInteractive: false});
+	let parser = new Parser(command_str.split(""), opts);
 	try{
 
 		let errmess;
@@ -5930,7 +6144,7 @@ async devexecute(command_str, opts){//«
 //log(statements);
 	}
 	catch(e){
-cerr(e);
+//cerr(e);
 term.response(e.message,{isErr: true});
 	}
 //	term.response_end();

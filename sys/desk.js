@@ -453,6 +453,7 @@ let CWIN;
 let taskbar;
 const body = document.body;
 const desk = mkdv();
+desk.app = Desk;
 
 const desk_imgdiv=mkdv();
 const start_button=mkdv();
@@ -642,6 +643,7 @@ DDIE=WDIE=DDX=DDY=null;
 //Object.defineProperty(Object.prototype,'_keys',{get:function(){return Object.keys(this);},set:function(){}});
 //Object.defineProperty(Object.prototype,'_vals',{get:function(){let arr=[];let keys=Object.keys(this);for(let k of keys){arr.push(this[k]);}return arr;},set:function(){}});
 Object.defineProperty(this,"CWIN",{get:()=>CWIN});
+Object.defineProperty(this,"ICONS",{get:()=>ICONS});
 Object.defineProperty(this,"WINS",{get:()=>windows});
 
 {
@@ -3646,7 +3648,7 @@ const reload_desk_icons = async(arr) => {//«
 	for(let node of arr){
 		let ref;
 		if (node.link) ref = await node.ref;
-		let icn = new Icon(node, {ref});
+		let icn = new Icon(node, {ref, parApp: Desk});
 		icn.parWin = desk;
 		placeInIconSlot(icn, {create: true, load: true});
 	}
@@ -3912,7 +3914,8 @@ class Icon {//«
 
 constructor(node, opts={}){//«
 
-	let {elem, observer, ref, pickerMode}=opts;
+	let {elem, observer, ref, pickerMode, parApp}=opts;
+	this.parApp = parApp;
 	this.pickerMode = pickerMode;
 	this.elem = elem;
 	this.node = node;
@@ -4092,6 +4095,9 @@ wrapper.onmousedown = e => {//«
 };//»
 wrapper.onclick = e => {//«
 	e.stopPropagation();
+	if (this.pickerMode && !this.isFolder && this.parApp !== Desk){
+		this.parApp.set_save_name(node.baseName);
+	}
 };//»
 wrapper.oncontextmenu = e => {//«
 if (isMobile) return;
@@ -4506,6 +4512,7 @@ const do_end=async()=>{//«
 		if (usewin === desk) {
 			for (let icn of ICONS) {
 				icn.parWin = desk;
+				icn.parApp = Desk;
 				icn.iconElem._pos="absolute";
 				if(!icn.iconElem.parentNode) {
 //					if (!SHOW_ICONS) icn.iconElem.style.visibility="hidden";
@@ -4516,6 +4523,7 @@ const do_end=async()=>{//«
 		else {
 			for (let icn of ICONS) {
 				icn.parWin = usewin;
+				icn.parApp = usewin.app;
 			}
 			let wins = get_wins_by_path(usewin.fullpath);
 			for (let w of wins) {
@@ -4663,7 +4671,7 @@ for (let icn of ICONS) {
 	let r = icn.iconElem.getBoundingClientRect();
 	let ref;
 	if (icn.link) ref = await icn.ref;
-	let newicn = new Icon(icn.node,{ref});
+	let newicn = new Icon(icn.node,{ref, parApp: Desk});
 	newicn.is_copy = true;
 	let elm = newicn.iconElem;
 	elm._pos="fixed";
@@ -5566,7 +5574,7 @@ const make_new_text_file = (winarg, val, ext, opts={})=>{//«
 			Y();
 			return;
 		}
-		let icn = new Icon({name: `${name}.${ext}`, baseName: name, ext: ext, fake: true});
+		let icn = new Icon({name: `${name}.${ext}`, baseName: name, ext: ext, fake: true, parApp: winarg.app});
 		icn._savetext = val;
 		icn._editcb = Y;
 		if (winarg===desk) placeInIconSlot(icn, {create: true});
@@ -5607,7 +5615,7 @@ const make_folder_icon = async(winarg) => {//«
 		return poperr(`Not making a directory of type: '${rtype}'`);
 	}
 	let obj;
-	let icn = new Icon({name: name, baseName: name, kids:true, fake: true});
+	let icn = new Icon({name: name, baseName: name, kids:true, fake: true, parApp: usewin.app});
 	icn.isnew = true;
 	if (usewin===desk) placeInIconSlot(icn, {create: true});
 	else add_icon_to_folder_win(icn, usewin.top);
@@ -5665,10 +5673,10 @@ cwarn(`No node returned in make_icon_if_new, (path=${path})`);
 		node.appicon = await node.text;
 	}
 	if (dirpath === DESK_PATH) {
-		placeInIconSlot(new Icon(node, {ref}), {create: true});
+		placeInIconSlot(new Icon(node, {ref, parApp: Desk}), {create: true});
 	}
 	let wins = get_wins_by_path(dirpath);
-	for (let w of wins) add_icon_to_folder_win(new Icon(node, {ref}), w);
+	for (let w of wins) add_icon_to_folder_win(new Icon(node, {ref, parApp: w.app}), w);
 
 };
 this.make_icon_if_new = make_icon_if_new;
@@ -5720,7 +5728,7 @@ log(node);
 	if (ext==="app") node.appicon = await node.text;
 	let ref;
 	if (node.link) ref = await node.ref;
-	let icn = new Icon(node, {ref});
+	let icn = new Icon(node, {ref, parApp: where.app});
 	if (where===desk) placeInIconSlot(icn, {pos: opts.pos, create: true});
 	else add_icon_to_folder_win(icn, where);
 	return icn;
