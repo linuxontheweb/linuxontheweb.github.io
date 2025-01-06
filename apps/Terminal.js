@@ -1,9 +1,9 @@
-/*1/6/25: @IFKLJFSN is where we are passing an 'env' argument into addToEnv
+/*1/6/25: «Getting environments working
+
+@IFKLJFSN is where we are passing an 'env' argument into addToEnv
 for the assignments array. We need to create new envs for comsubs!!!
 So it looks like we just need to pass in an 'sdup(cur_env)', for whenever we
 are going into deeper levels.
-
-
 
 Let's just pass the opts that are given as the second arg to
 Shell.devexecute (@SLDPEHDBF) into expandSubs. A big point of this is simply
@@ -25,7 +25,7 @@ So now we need to create copied environments for the situations above...
 
 Then we need to have a concept of com_env
 
-*/
+»*/
 /*1/5/25: « NEED TO GET RID OF Word.parameterExpansion (@PMJDHSWL)??
 In CaseCom:
   - @AKDMFLS
@@ -1206,9 +1206,9 @@ const ErrCom = class extends Com{//«
 		this.no(this.errorMessage);
 	}
 }//»
-/*«Compounds*/
+//«Compounds
 
-class CompoundCom{/*«*/
+class CompoundCom{//«
 constructor(shell, opts){//«
 	this.shell = shell;
 	this.opts=opts;
@@ -1220,7 +1220,7 @@ constructor(shell, opts){//«
 		};
 	});
 }//»
-init(){/*«*/
+init(){//«
 	let opts={};
 	for (let k in this.opts){
 		opts[k]=this.opts[k];
@@ -1238,20 +1238,20 @@ init(){/*«*/
 		opts.envRedirLines = this.redirLines;
 	}
 	this.opts = opts;
-}/*»*/
+}//»
 cancel(){this.killed=true;}
-}/*»*/
+}//»
 
 class BraceGroupCom extends CompoundCom{//«
 constructor(shell, opts, list){
 	super(shell, opts);
 	this.list = list;
 }
-async run(){/*«*/
+async run(){//«
 	let rv = await this.shell.executeStatements2(this.list, this.opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
-}/*»*/
+}//»
 }//»
 class SubshellCom extends CompoundCom{//«
 constructor(shell, opts, list){
@@ -1351,16 +1351,9 @@ async run(){//«
 }//»
 class UntilCom extends CompoundCom{//«
 constructor(shell, opts, cond, do_group){//«
-	this.shell = shell;
+	super(shell, opts);
 	this.cond = cond;
 	this.do_group = do_group;
-	this.opts = opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
 }//»
 init(){}
 
@@ -1381,18 +1374,11 @@ async run(){//«
 class FunctionCom extends CompoundCom{//«
 
 constructor(shell, opts, name, com){//«
-	this.shell=shell;
+	super(shell, opts);
 	this.name=name;
 	this.com = com.compound_command.compound_list.term;
 	this.type = com.type;
 	this.redirs = com.redirs;
-	this.opts=opts;
-	this.awaitEnd = new Promise((Y,N)=>{
-		this.end = (rv)=>{
-			Y(rv);
-			this.killed = true;
-		};
-	});
 }//»
 async init(){//«
 	let typ = this.type;
@@ -1426,16 +1412,9 @@ run(){
 }//»
 class CaseCom extends CompoundCom{//«
 constructor(shell, opts, word, list){//«
-this.shell=shell;
+super(shell, opts);
 this.word=word;
 this.list=list;
-this.opts=opts;
-this.awaitEnd = new Promise((Y,N)=>{
-	this.end = (rv)=>{
-		Y(rv);
-		this.killed = true;
-	};
-});
 }//»
 async init(){//«
 	this.word.tildeExpansion();
@@ -1449,7 +1428,7 @@ async init(){//«
 }//»
 async run(){//«
 /*«
-For exerything, do:
+For everything, do:
 
 expansions to do:
 1) Tilde
@@ -1490,7 +1469,7 @@ LOOP: for (let obj of this.list){
 		wrd.tildeExpansion();
 //DJSLPEKS
 //		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
-		await wrd.expandSubs(shell, shell.term);
+		await wrd.expandSubs(shell, shell.term, this.opts);
 		if(shell.cancelled) return;
 		wrd.quoteRemoval();
 		let arr = wrd.fields.join("").split("");
@@ -1526,7 +1505,8 @@ else {
 
 }//»
 }//»
-/*»*/
+
+//»
 
 this.comClasses={Com,ScriptCom,NoCom,ErrCom};
 
@@ -2443,237 +2423,6 @@ quoteRemoval(){//«
 	}
 	this.val = [...s];
 }//»
-parameterExpansion(env, script_name="sh", script_args=[]){//«
-//PMJDHSWL
-//const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
-//We will also need env, script_name, and script_args passed in here
-/*«
-
-A "parameter" is a NAME or a SYMBOL, as described below.
-
-We are looking for one of:
-
-$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
-@: positional parameters starting from 1, and something about field splitting
-*: Same as above, with something else about field splitting
-#: Number of positional parameters (minus the 0th)
-?: Most recent exit code
--: Current options flag
-$: pid of the shell
-!: pid of most recent '&' statement
-0: name of shell or shell script
-
-All DIGIT's (other than 0) are the current (1-based) positional parameters
-
-These expands in anything other than single quotes
-
-We can also easily support '${#NAME}', since this just gives the length of the
-string of the variable, NAME.
-
-I'm not sure how to handle:
-$ DQUOTE='"'
-$ echo "$DQUOTE"
-
-Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
-
-»*/
-/*«
-
-Should we not put everything inside $'...', and then escape ALL
-single quotes that are in the replacement value??? Otherwise, there can't be
-escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
-
-So, if we do:
-PARAM_WITH_SINGLE_QUOTES="...'//..."
-
-echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
-=> BLAH$'...\'//...'BLAH
-
-»*/
-const tok = this;
-const word = tok.val;
-//cwarn("HI", this);
-let qtyp;
-OUTER_LOOP: for (let i=0; i < word.length; i++){
-
-let ch = word[i];
-if (!qtyp){
-	if (["'",'"','`'].includes(ch)) {
-		qtyp = ch;
-		continue;
-	}
-	else{
-//Unquoted stuff
-	}
-}
-else if (qtyp===ch) {
-	qtyp=null;
-	continue;
-}
-else if (qtyp!=='"') continue;
-
-//We are unquoted or in double quotes
-
-if (ch==="$"){/*«*/
-
-//LSJFANSF
-const do_name_sub=(name)=>{//«
-let diff = end_i - start_i;
-let val = env[name]||"";
-cwarn(name);
-log(val);
-let arr=[];
-for (let ch of val){
-	let s = new String(ch);
-	s.wasExpanded = true;
-	arr.push(s);
-}
-word.splice(start_i, end_i-start_i+1, ...arr);
-//log(word);
-i = end_i - diff;
-
-};//»
-const do_arg_sub=(num)=>{//«
-let diff = end_i - start_i;
-let val = script_args[num]||"";
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-};//»
-const do_sym_sub=(sym)=>{//«
-let diff = end_i - start_i;
-let val;
-//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
-switch(sym){
-	case "0": val = script_name; break;
-	case "#": val = script_args.length+""; break;
-	case "*":
-	case "@":
-		val = script_args.join(" ");
-		break;
-	case "?": val = ShellMod.var.lastExitCode+""; break;
-	default: val = "$"+sym;
-}
-word.splice(start_i, end_i-start_i+1, ...val);
-i = end_i - diff;
-
-};/*»*/
-const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
-
-	let next = word[i+1];
-	if (!next) continue;
-	let start_i = i;
-	let end_i;
-	if (next==="{") {/*«*/
-		i++;
-//If no next one or the next one is a "}", barf INVSUB
-//If the next one is a special symbol, there must be a "}" immediately following it
-//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
-//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
-//    ANY_NAME_CHARS, with a terminating "}".
-		next = word[i+1];
-		if (!next) return "bad substitution: '${<END>'";
-		else if (next==="}") return "bad substitution: '${}'";
-
-		if (SPECIAL_SYMBOLS.includes(next)){/*«*/
-			let sym = next;
-			i++;
-			next = word[i+1];
-			if (next !== "}") return BADSUB(sym, next);
-			end_i = i+1;
-			do_sym_sub(sym);
-		}/*»*/
-		else if (DIGIT_CHARS_1_to_9.includes(next)){/*«*/
-			let numstr=next;
-			i++;
-			next = word[i+1];
-			while(true){
-				if (next==="}"){
-				//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
-		//cwarn("Substitute script_arg #", argnum);
-		//			end_i = i;
-					end_i = i+1;
-					do_arg_sub(parseInt(numstr)-1);
-					break;
-				}
-				if (!ANY_DIGIT_CHARS.includes(next)){
-		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
-					return BADSUB(numstr, next);
-				}
-				numstr+=next;
-				i++;
-				next = word[i+1];
-			}
-		}/*»*/
-		else if (START_NAME_CHARS.includes(next)){/*«*/
-
-		let namestr=next;
-		i++;
-		next = word[i+1];
-		while(true){
-			if (next==="}"){
-				end_i = i+1;
-				do_name_sub(namestr);
-				continue OUTER_LOOP;
-			}
-			if (!ANY_NAME_CHARS.includes(next)){
-				return BADSUB(namestr, next);
-			}
-			namestr+=next;
-			i++;
-			next = word[i+1];
-		}
-
-		}/*»*/
-		else return INVSUB;
-
-	}/*»*/
-	else{/*«*/
-//If the next one is a special symbol (including "0"), we can do the substitution now«
-//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
-//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
-//  literal '$'
-//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
-
-//		i++;
-//		next = word[i+1];»
-
-if (SPECIAL_SYMBOLS.includes(next)){
-	end_i = i+1;
-	do_sym_sub(next);
-}
-else if (DIGIT_CHARS_1_to_9.includes(next)){
-	end_i = i+1;
-	do_arg_sub(parseInt(next)-1);
-}
-else if (!START_NAME_CHARS.includes(next)){
-	continue;
-}
-else{/*«*/
-
-let namestr=next;
-i++;
-next = word[i+1];
-while(true){
-	if (!ANY_NAME_CHARS.includes(next)){
-		end_i=i;
-		do_name_sub(namestr);
-		continue OUTER_LOOP;
-	}
-	namestr+=next;
-	i++;
-	next = word[i+1];
-}
-
-}/*»*/
-
-	}/*»*/
-
-}/*»*/
-
-}
-
-return tok;
-}/*»*/
 tildeExpansion(){//«
 	const {val} = this;
 	let parts = this.assignmentParts;
@@ -9365,4 +9114,238 @@ onkeyup(e,sym){//«
 }; 
 
 //»
+
+/*
+parameterExpansion(env, script_name="sh", script_args=[]){//«
+//PMJDHSWL
+//const parameter_expansion = (tok, env, script_name="sh", script_args=[]) => {
+//We will also need env, script_name, and script_args passed in here
+//«
+
+//A "parameter" is a NAME or a SYMBOL, as described below.
+//
+//We are looking for one of:
+//
+//$LONGESTNAME, $ONEDIGIT, ${NAME}, ${ONEORMOREDIGITS}, $[@*#?-$!0] or ${[@*#?-$!0]}:
+//@: positional parameters starting from 1, and something about field splitting
+//*: Same as above, with something else about field splitting
+//#: Number of positional parameters (minus the 0th)
+//?: Most recent exit code
+//-: Current options flag
+//$: pid of the shell
+//!: pid of most recent '&' statement
+//0: name of shell or shell script
+//
+//All DIGIT's (other than 0) are the current (1-based) positional parameters
+//
+//These expands in anything other than single quotes
+//
+//We can also easily support '${#NAME}', since this just gives the length of the
+//string of the variable, NAME.
+//
+//I'm not sure how to handle:
+//$ DQUOTE='"'
+//$ echo "$DQUOTE"
+//
+//Maybe escape all quote substitutions (in double quotes or out), and all redir chars?
+
+//»
+//«
+
+//Should we not put everything inside $'...', and then escape ALL
+//single quotes that are in the replacement value??? Otherwise, there can't be
+//escaped single quotes inside of pure single quotes: '\'' (doesn't work!)
+//
+//So, if we do:
+//PARAM_WITH_SINGLE_QUOTES="...'//..."
+//
+//echo BLAH${PARAM_WITH_SINGLE_QUOTES}BLAH
+//=> BLAH$'...\'//...'BLAH
+
+//»
+const tok = this;
+const word = tok.val;
+//cwarn("HI", this);
+let qtyp;
+OUTER_LOOP: for (let i=0; i < word.length; i++){
+
+let ch = word[i];
+if (!qtyp){
+	if (["'",'"','`'].includes(ch)) {
+		qtyp = ch;
+		continue;
+	}
+	else{
+//Unquoted stuff
+	}
+}
+else if (qtyp===ch) {
+	qtyp=null;
+	continue;
+}
+else if (qtyp!=='"') continue;
+
+//We are unquoted or in double quotes
+
+if (ch==="$"){//«
+
+//LSJFANSF
+const do_name_sub=(name)=>{//«
+let diff = end_i - start_i;
+let val = env[name]||"";
+cwarn(name);
+log(val);
+let arr=[];
+for (let ch of val){
+	let s = new String(ch);
+	s.wasExpanded = true;
+	arr.push(s);
+}
+word.splice(start_i, end_i-start_i+1, ...arr);
+//log(word);
+i = end_i - diff;
+
+};//»
+const do_arg_sub=(num)=>{//«
+let diff = end_i - start_i;
+let val = script_args[num]||"";
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+};//»
+const do_sym_sub=(sym)=>{//«
+let diff = end_i - start_i;
+let val;
+//const SPECIAL_SYMBOLS=[ "@","*","#","?","-","$","!","0" ];
+switch(sym){
+	case "0": val = script_name; break;
+	case "#": val = script_args.length+""; break;
+	case "*":
+	case "@":
+		val = script_args.join(" ");
+		break;
+	case "?": val = ShellMod.var.lastExitCode+""; break;
+	default: val = "$"+sym;
+}
+word.splice(start_i, end_i-start_i+1, ...val);
+i = end_i - diff;
+
+};//»
+const BADSUB=(arg, next)=>{return `bad/unsupported substitution: stopped at '\${${arg}${next?next:"<END>"}'`;}
+
+	let next = word[i+1];
+	if (!next) continue;
+	let start_i = i;
+	let end_i;
+	if (next==="{") {//«
+		i++;
+//If no next one or the next one is a "}", barf INVSUB
+//If the next one is a special symbol, there must be a "}" immediately following it
+//If the next one is a digit, there must be 0 or more digits (maybe "0") followed by the "}"
+//Otherwise, the next one must be a START_NAME_CHARS, followed by 0 or more 
+//    ANY_NAME_CHARS, with a terminating "}".
+		next = word[i+1];
+		if (!next) return "bad substitution: '${<END>'";
+		else if (next==="}") return "bad substitution: '${}'";
+
+		if (SPECIAL_SYMBOLS.includes(next)){//«
+			let sym = next;
+			i++;
+			next = word[i+1];
+			if (next !== "}") return BADSUB(sym, next);
+			end_i = i+1;
+			do_sym_sub(sym);
+		}//»
+		else if (DIGIT_CHARS_1_to_9.includes(next)){//«
+			let numstr=next;
+			i++;
+			next = word[i+1];
+			while(true){
+				if (next==="}"){
+				//Do a parseInt on numstr, and if in a script, replace with: script_arg[num-1]
+		//cwarn("Substitute script_arg #", argnum);
+		//			end_i = i;
+					end_i = i+1;
+					do_arg_sub(parseInt(numstr)-1);
+					break;
+				}
+				if (!ANY_DIGIT_CHARS.includes(next)){
+		//			return `bad substitution: have '\${${numstr}${next?next:"<END>"}'`;
+					return BADSUB(numstr, next);
+				}
+				numstr+=next;
+				i++;
+				next = word[i+1];
+			}
+		}//»
+		else if (START_NAME_CHARS.includes(next)){//«
+
+		let namestr=next;
+		i++;
+		next = word[i+1];
+		while(true){
+			if (next==="}"){
+				end_i = i+1;
+				do_name_sub(namestr);
+				continue OUTER_LOOP;
+			}
+			if (!ANY_NAME_CHARS.includes(next)){
+				return BADSUB(namestr, next);
+			}
+			namestr+=next;
+			i++;
+			next = word[i+1];
+		}
+
+		}//»
+		else return INVSUB;
+
+	}//»
+	else{//«
+//If the next one is a special symbol (including "0"), we can do the substitution now«
+//Else if the next is one of DIGIT_CHARS "1"->"9", we can do the substitution noe
+//Else if the next isn't a START_NAME_CHARS, we continue and keep this a 
+//  literal '$'
+//Else we look at every succeeding char, and do the sub on the first non-ANY_NAME_CHARS.
+
+//		i++;
+//		next = word[i+1];»
+
+if (SPECIAL_SYMBOLS.includes(next)){
+	end_i = i+1;
+	do_sym_sub(next);
+}
+else if (DIGIT_CHARS_1_to_9.includes(next)){
+	end_i = i+1;
+	do_arg_sub(parseInt(next)-1);
+}
+else if (!START_NAME_CHARS.includes(next)){
+	continue;
+}
+else{//«
+
+let namestr=next;
+i++;
+next = word[i+1];
+while(true){
+	if (!ANY_NAME_CHARS.includes(next)){
+		end_i=i;
+		do_name_sub(namestr);
+		continue OUTER_LOOP;
+	}
+	namestr+=next;
+	i++;
+	next = word[i+1];
+}
+
+}//»
+
+	}//»
+
+}//»
+
+}
+
+return tok;
+}//»
+*/
 
