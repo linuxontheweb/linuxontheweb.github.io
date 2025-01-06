@@ -1,11 +1,31 @@
-/*1/5/25: 
-NEED TO GET RID OF Word.parameterExpansion (@PMJDHSWL)??
+/*1/6/25: Let's just pass the opts that are given as the second arg to
+Shell.devexecute (@SLDPEHDBF) into expandSubs. A big point of this is simply
+to efficiently pass these values (especially env, scriptName and scriptArgs) 
+into ParamSub.expand @KLSDHSKD.
+
+Now its just a matter of getting the fine arts of field-splitting and variable/parameter
+environments working nicely:
+1) So that commands like:
+~$ FOOD=1234 echo blah blah blah
+...do not pollute the environment with this value for 'FOOD' (assuming that 'FOOD' was unset
+or had another value).
+
+Also:
+~$ (FOOD=abcde)
+...should not pollute the environment like above, either.
+
+*/
+/*1/5/25: « NEED TO GET RID OF Word.parameterExpansion (@PMJDHSWL)??
 In CaseCom:
   - @AKDMFLS
   - @DJSLPEKS
 
 @AKDKRKSJ, we have a Word.expandSubs that is only passing the shell
-and the term args, but Word.expandSubs 
+and the term args, but Word.expandSubs @XNDKSLDK has this signature:
+async expandSubs(shell, term, env, scriptName, scriptArgs)
+...TODO NEED TO FIND ALL THE PLACES THAT Word.expandSubs IS CALLED
+AND PUT THOSE ARGS IN THERE!!! $)T
+
 
 AT THE END OF THE DAY: It seems the only "real" issue is that double
 quotes no longer seem to keep their significance when I am doing
@@ -26,7 +46,7 @@ the individual tokens themselves.
 
 Just cleaned up parseSimpleCommand @JEEKSMD.
 
-*/
+»*/
 /*XXX 1/4/25: We are only calling eatRedirects from parseCompoundCommand, and XXX«
 it doesn't know how to handle tok.isHeredoc @XPJSKLAJ. So we are just
 going to leave that for an exercise for...
@@ -809,6 +829,7 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 }//»
 
 //»
+
 //Classes: this.comClasses (Com, ErrCom, ScriptCom)«
 
 class Stdin{/*«*/
@@ -820,7 +841,9 @@ constructor(tok, arg){
 	this.isRedir = true;
 }
 
-async setValue(shell, term, env, scriptName, scriptArgs){/*«*/
+async setValue(shell, term, opts={}){/*«*/
+//async setValue(shell, term, env, scriptName, scriptArgs){
+const{env, scriptName, scriptArgs} = opts;
 
 if (this.tok.isHeredoc) {
 	this.value = this.tok.value
@@ -852,7 +875,8 @@ if (r_op==="<"){/*«*/
 	return true;
 }/*»*/
 if (r_op==="<<<"){/*«*/
-	await this.arg.expandSubs(shell, term, env, scriptName, scriptArgs);
+//	await this.arg.expandSubs(shell, term, env, scriptName, scriptArgs);
+	await this.arg.expandSubs(shell, term, opts);
 //	this.arg.quoteRemoval();
 //log(this.arg.val);
 	this.value = this.arg.fields.join("\n");
@@ -1162,10 +1186,13 @@ const ScriptCom = class extends Com{//«
 		const scriptOut=(val)=>{
 			this.out(val);
 		};
-		let scriptArgs = this.args;
-		let scriptName = this.name;
-//SKDMRJJS
-		let code = await this.shell.devexecute(this.text, {scriptOut, scriptName, scriptArgs, env: this.env});
+		let code = await this.shell.devexecute(this.text, {
+			shell: this.shell,
+			scriptOut,
+			scriptName: this.name,
+			scriptArgs: this.args,
+			env: this.env
+		});
 		this.end(code);
 	}
 }//»
@@ -1289,7 +1316,8 @@ constructor(shell, opts, name, in_list, do_group){//«
 	this.do_group=do_group;
 }//»
 async init(){//«
-	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+//	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+	this.in_list = await this.shell.allExpansions(this.in_list, this.opts);
 	if (this.shell.cancelled) return;
 }//»
 async run(){//«
@@ -1509,6 +1537,7 @@ else {
 this.comClasses={Com,ScriptCom,NoCom,ErrCom};
 
 //»
+
 //Builtin commands/options: this.defCommand(Opt)s (ls, cd, echo, etc...)«
 {
 /*«
@@ -1602,25 +1631,6 @@ cancel(){
 this.log.quit();
 this.ok();
 }
-}//»
-const com_devparse = class extends Com{//«
-init(){//«
-	if (!this.args.length) this.no("need a file arg");
-}//»
-async run(){//«
-	let fname = this.args.shift();
-	let text = await fname.toText(this.term);
-	if (!text) return this.no(`${fname}: NOTEXT`);
-	let str = text.join("\n");
-	let shell = new ShellMod.Shell(this.term);
-	let rv = await shell.devexecute(str);
-	if (isStr(rv)){
-		return this.no(rv);
-	}
-log(rv);
-	//log(shell);
-	this.ok();
-}//»
 }//»
 const com_bindwin = class extends Com{//«
 	init(){
@@ -2217,7 +2227,6 @@ this.ok("NOT MUCH HERE!!!");
 this.defCommands={//«
 //const shell_commands={
 workman: com_workman,
-devparse: com_devparse,
 bindwin: com_bindwin,
 math: com_math,
 log: com_log,
@@ -2290,6 +2299,7 @@ Long options may be given an argument like this:
 };//»
 
 }//»Builtin commands
+
 //ErrorHandler«
 
 const ErrorHandler = class {
@@ -2360,9 +2370,10 @@ const Newlines = class extends Sequence{//«
 	toString(){ return "newline"; }
 }//»
 const Word = class extends Sequence{//«
-
-async expandSubs(shell, term, env, scriptName, scriptArgs){//«
-
+//XNDKSLDK
+async expandSubs(shell, term, opts={}){//«
+//async expandSubs(shell, term, env, scriptName, scriptArgs){
+//const{env, scriptName, scriptArgs} = opts;
 /*«
 Here we need a concept of "fields".
 
@@ -2380,7 +2391,8 @@ let curfield="";
 for (let ent of this.val){
 	if (ent instanceof BQuote || ent instanceof ComSub|| ent instanceof ParamSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
-		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
+//		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
+		let rv = await ent.expand(shell, term, opts);
 		if (rv) {
 			let arr = rv.split("\n");
 			if (arr.length) {
@@ -2395,10 +2407,12 @@ for (let ent of this.val){
 	}//»
 	else if (ent instanceof MathSub){//«
 //resolve and start or append to curfield, since this can only return 1 (possibly empty) value
-		curfield += await ent.expand(shell, term, env, scriptName, scriptArgs);
+//		curfield += await ent.expand(shell, term, env, scriptName, scriptArgs);
+		curfield += await ent.expand(shell, term, opts);
 	}//»
 	else if (ent instanceof DQuote){//«
-		curfield += '"'+await ent.expand(shell, term, env, scriptName, scriptArgs)+'"';
+//		curfield += '"'+await ent.expand(shell, term, env, scriptName, scriptArgs)+'"';
+		curfield += '"'+await ent.expand(shell, term, opts)+'"';
 	}//»
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
 		curfield += "'"+ent.toString()+"'";
@@ -2894,8 +2908,7 @@ dup(){//«
 	}
 	return dq;
 }//»
-async expand(shell, term, env, scriptName, scriptArgs){//This returns a string (with possible embedded newlines)«
-//log("EXPAND", env);
+async expand(shell, term, opts={}){//This returns a string (with possible embedded newlines)«
 let out = [];
 let curword="";
 let vals = this.val;
@@ -2907,7 +2920,8 @@ for (let ent of vals){
 			out.push(curword);
 			curword="";
 		}
-		out.push(await ent.expand(shell, term, env, scriptName, scriptArgs));
+//		out.push(await ent.expand(shell, term, env, scriptName, scriptArgs));
+		out.push(await ent.expand(shell, term, opts));
 	}
 	else if (!isStr(ent)){
 cwarn("HERE IS ENT!!!!");
@@ -2930,8 +2944,8 @@ toString(){
 
 const BQuote = class extends Sequence{//«
 //Collect everything in a string...
-expand(shell, term){
-	return shell.expandComsub(this);
+expand(shell, term, opts){
+	return shell.expandComsub(this, opts);
 }
 dup(){//«
 	let bq = new BQuote(this.start, this.par, this.env);
@@ -2947,8 +2961,10 @@ dup(){//«
 //XMKJDHE
 const ParamSub = class extends Sequence{//«
 
-expand(shell, term, env, scriptName, scriptArgs){/*«*/
-//log(this.val);
+//KLSDHSKD
+expand(shell, term, opts){/*«*/
+const{env,scriptName, scriptArgs}=opts;
+//expand(shell, term, env, scriptName, scriptArgs){
 for (let ch of this.val){
 if (!isStr(ch)){
 //log(this.val.toString());
@@ -2995,8 +3011,8 @@ dup(){//«
 
 }//»
 const ComSub = class extends Sequence{//«
-expand(shell, term){
-	return shell.expandComsub(this);
+expand(shell, term, opts){
+	return shell.expandComsub(this, opts);
 }
 dup(){//«
 	let com = new ComSub(this.start, this.par, this.env);
@@ -3109,7 +3125,7 @@ const Scanner = class {
 constructor(code, opts={}, handler) {//«
 	this.isInteractive = opts.isInteractive||false;
 	this.env = opts.env;
-	this.terminal = opts.terminal;
+	this.term = opts.term;
 	this.source = code;
 	this.errorHandler = handler;
 	this.length = code.length;
@@ -3131,7 +3147,7 @@ async more(no_nl){/*«*/
 	let nl;
 	if (no_nl) nl="";
 	else nl="\n";
-	let rv = nl+(await this.terminal.readLine("> "));
+	let rv = nl+(await this.term.readLine("> "));
 //log(RV, `${rv}`);
 	this.source = this.source.concat(...rv);
 	this.length = this.source.length;
@@ -3889,7 +3905,7 @@ const Parser = class {
 
 constructor(code, opts={}) {//«
 	this.env = opts.env;
-	this.terminal = opts.terminal;
+	this.term = opts.term;
 	this.isInteractive = opts.isInteractive;
 	this.isContinue = opts.isContinue;
 	this.heredocScanner = opts.heredocScanner;
@@ -3909,7 +3925,7 @@ constructor(code, opts={}) {//«
 	this.numToks = 0;
 	this.tokens = [];
 /*
-Since this is async (because we might need to get more lines from 'await terminal.readLine()'),
+Since this is async (because we might need to get more lines from 'await term.readLine()'),
 then we need to do 'await this.scanNextTok()' **outside** of the constructor, since there is
 NO async/await in constructors.
 */
@@ -4050,7 +4066,7 @@ getNextNonNewlinesTok(){//«
 }//»
 async getNonEmptyLineFromTerminal(){//«
 	let rv;
-	while ((rv = await this.terminal.readLine("> ")).match(/^[\x20\t]*(#.+)?$/)){}
+	while ((rv = await this.term.readLine("> ")).match(/^[\x20\t]*(#.+)?$/)){}
 	return rv;
 }//»
 async getMoreTokensFromTerminal(){//«
@@ -4954,7 +4970,7 @@ return {program: complete_coms};
 async parseContinueStr(str){//«
 
 let parser = new Parser(str.split(""), {
-	terminal: this.terminal,
+	term: this.term,
 	heredocScanner: this.heredocScanner,
 	env: this.env,
 	isInteractive: true,
@@ -5094,11 +5110,12 @@ class Shell {//«
 
 constructor(term){//«
 	this.term = term;
+	this.env = term.env;
 	this.cancelled = false;
 }//»
 
 fatal(mess){throw new Error(mess);}
-async expandComsub(tok){//«
+async expandComsub(tok, opts){//«
 //const expand_comsub=async(tok, shell, term)=>
 	const{term}=this;
 //	const err = term.resperr;
@@ -5115,7 +5132,7 @@ are treated like any other character inside of scanQuote()
 @DJJUTILJJ is where all the "others" characters (including newlines, "\n") are 
 pushed into the quote's characters.
 */
-				s+='"'+(await ent.expand(this, term))+'"';
+				s+='"'+(await ent.expand(this, term, opts))+'"';
 			}
 			else if (ent instanceof DSQuote){
 //Don't need to wrap it in $'...' again if we are actuall expanding it
@@ -5128,7 +5145,7 @@ pushed into the quote's characters.
 				if (ent instanceof SQuote) {
 					s+="'"+ent.toString()+"'";
 				}
-				else s+=(await ent.expand(this, term)).split("\n").join(" ");
+				else s+=(await ent.expand(this, term, opts)).split("\n").join(" ");
 			}
 		}
 		else {
@@ -5142,8 +5159,7 @@ pushed into the quote's characters.
 	}
 	let sub_lines = [];
 	try{
-//cwarn(`COMSUB <${s}>`);
-		await this.devexecute(s, {subLines: sub_lines, env: tok.env});
+		await this.devexecute(s, {subLines: sub_lines, env: this.env, shell: this});
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -5152,6 +5168,7 @@ cerr(e);
 		return "";
 	}
 }//»
+
 curlyExpansion(tok, from_pos){//«
 //const curly_expansion = (tok, from_pos) => {
 
@@ -5589,7 +5606,9 @@ stripRedirs(com){//«
 	return redirs;
 }//»
 */
-async allExpansions(arr, env, scriptName, scriptArgs, opts={}){//«
+async allExpansions(arr, shopts={}, opts={}){//«
+//async allExpansions(arr, env, scriptName, scriptArgs, opts={}){
+const{env,scriptName,scriptArgs} = shopts;
 const{term}=this;
 const{isAssign}=opts;
 //let in_redir, out_redir;
@@ -5629,7 +5648,8 @@ for (let k=0; k < arr.length; k++){//parameters«
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
-		await tok.expandSubs(this, term, env, scriptName, scriptArgs);
+//		await tok.expandSubs(this, term, env, scriptName, scriptArgs);
+		await tok.expandSubs(this, term, shopts);
 	}
 }//»
 for (let k=0; k < arr.length; k++){//field splitting«
@@ -5747,11 +5767,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 
 	let rv
 	if (assigns.length) {
-//log(assigns);
-//for (let ass of assigns){
-//log(ass.assignmentParts);
-//}
-		rv = await this.allExpansions(assigns, env, scriptName, scriptArgs, {isAssign: true});
+//		rv = await this.allExpansions(assigns, env, scriptName, scriptArgs, {isAssign: true});
+		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
 		rv = ShellMod.util.addToEnv(assigns, env, {term});
 		if (rv.length) term.response(rv.join("\n"), {isErr: true});
@@ -5774,7 +5791,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		return new NoCom();
 	}
 	let arr = [name, ...args];
-	rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
+//	rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
+	rv = await this.allExpansions(arr, opts);
 	if (isStr(rv)) return `sh: ${rv}`;
 	{
 		let hold = arr;
@@ -5894,11 +5912,13 @@ cerr(e);
 	}//»
 //SKIOPRHJT
 }//»
+
 async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
 	const makeShErrCom = ShellMod.util.makeShErrCom;
 	let lastcomcode;
-	let {stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+//	let {stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	let {stdin: optStdin, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let in_background = false;
 	let pipelist = pipe.pipe;
 	if (!pipelist){
@@ -5914,48 +5934,6 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 		let rv;
 
 //DNGZXER
-/*«
-//		let in_redir, out_redir;
-//		let redirs;
-//		if (com.compound_command) {
-//			redirs = com.redirs;
-//		}
-//		else {
-//			redirs = this.stripRedirs(com.simple_command);
-//		}
-		for (let red of redirs){
-			if (red.isHeredoc) {
-				in_redir = red;
-				continue;
-			}
-			let rop = red.redir[0].val;
-			let red_to = red.redir[1].toString();
-			if (OK_OUT_REDIR_TOKS.includes(rop)) out_redir = [rop, red_to];
-			else if (OK_IN_REDIR_TOKS.includes(rop)) in_redir = [rop, red_to];
-			else this.fatal(`unsupported operator: '${rop}'`);
-		}
-		let stdin;
-		if (in_redir){
-			if (in_redir.isHeredoc){
-				stdin = in_redir.value.split("\n");
-			}
-			else stdin = await this.getStdinLines(in_redir, !!subLines);
-			if (isStr(stdin)){
-				ShellMod.var.lastExitCode = E_ERR;
-				rv = makeShErrCom(null, stdin, {term, shell: this});
-				pipeline.push(rv);
-				continue;
-			}
-			else if (!isArr(stdin)){
-				ShellMod.var.lastExitCode = E_ERR;
-cwarn("Here is the non-array value");
-log(stdin);
-				rv = makeShErrCom(null, "an invalid value was returned from get_stdin_lines (see console)", {term, shell: this});
-				pipeline.push(rv);
-				continue;
-			}
-		}
-»*/
 		let in_redir, out_redir;
 		let redirs = com.redirs;
 //log(com);
@@ -5971,8 +5949,8 @@ log(red);
 		let stdin;
 		let errmess;
 		if (in_redir){
-//async expandSubs(shell, term, env, scriptName, scriptArgs)
-			let rv2 = await in_redir.setValue(this, term, env, scriptName, scriptArgs);
+//			let rv2 = await in_redir.setValue(this, term, env, scriptName, scriptArgs);
+			let rv2 = await in_redir.setValue(this, term, opts);
 			if (isStr(rv2)){
 				errmess = rv2;
 			}
@@ -6102,17 +6080,6 @@ for (let i=0; i < andor_list.length-1; i+=2){
 loglist.push({pipe: last.pipeline.pipe_sequence, hasBang: last.bang});
 andor_list.push(last);
 
-/*«
-while(andor_list.length>1){
-	let andor = andor_list.shift();
-	let type = andor_list.shift();
-	let pipe = andor.pipeline.pipe_sequence;
-	let hasBang = andor.bang;
-	loglist.push({pipe, type, hasBang});
-}
-loglist.push({pipe: andor_list[0].pipeline.pipe_sequence, hasBang: andor_list[0].bang});
-»*/
-
 let lastcomcode;
 for (let i=0; i < loglist.length; i++){//«
 
@@ -6146,18 +6113,6 @@ cwarn("CONTINUE", i, rv.nextIter);
 
 return lastcomcode;
 
-
-
-/*
-let loglist = andor.statement;
-
-if (!loglist){
-	return `sh: logic list not found!`;
-}
-
-
-return lastcomcode;
-*/
 }//»
 
 async executeStatements2(statements, opts){//«
@@ -6170,9 +6125,9 @@ async executeStatements2(statements, opts){//«
 	return lastcomcode;
 }//»
 
+//SLDPEHDBF
 async devexecute(command_str, opts){//«
 	const{term}=this;
-//	let parser = new Parser(command_str.split(""), {terminal: term, isInteractive: false});
 	let parser = new Parser(command_str.split(""), opts);
 	try{
 
@@ -6198,56 +6153,6 @@ term.response(e.message,{isErr: true});
 //	term.response_end();
 
 }/*»*/
-
-async execute(command_str, opts={}){//«
-
-this.commandStr = command_str;
-
-//Init/Var
-const terr=(arg, code)=>{//«
-	term.response(arg, {isErr: true});
-//	if (!scriptOut) term.response_end();
-//	if (is_top_level) term.response_end();
-	ShellMod.var.lastExitCode = code||E_ERR;
-	return ShellMod.var.lastExitCode;
-};//»
-//WIMNNUYDKL
-
-const{term}=this;
-
-let is_top_level = !(opts.scriptOut||opts.subLines);
-let heredocs;
-
-command_str = command_str.replace(/^ +/,"");
-
-let statements;
-
-try{
-	statements = await parse(command_str, {env: opts.env, terminal: term, isInteractive: opts.isInteractive, heredocScanner: opts.heredocScanner, isTopLevel: is_top_level});
-}
-catch(e){
-	return terr("sh: "+e.message);
-}
-if (isStr(statements)) return terr("sh: "+statements);
-
-let lastcomcode = await this.executeStatements(statements, opts);
-if (this.cancelled) return;
-if (isStr(lastcomcode)) return terr(lastcomcode);
-if (!Number.isFinite(lastcomcode)){
-cerr("A NON-NUMERICAL lastcomcode was returned from executeStatements!");
-log(lastcomcode);
-lastcomcode = E_ERR;
-}
-
-//In a script, refresh rather than returning to the prompt
-if (!is_top_level) {
-	term.refresh();
-}
-
-//Command line input returns to prompt
-return lastcomcode;
-
-}//»
 
 cancel(){//«
 	this.cancelled = true;
@@ -6335,6 +6240,7 @@ this.appClass="cli";
 this.isEditor = false;
 this.isPager = false;
 this.env={};
+this.env['USER'] = globals.CURRENT_USER;
 //this.env = globals.TERM_ENV;
 this.ENV = this.env;
 //this.funcs = globals.TERM_FUNCS;
@@ -6619,19 +6525,19 @@ this.statdiv = statdiv;
 //Execute«
 
 async execute(str, opts={}){//«
-
-	this.env['USER'] = globals.CURRENT_USER;
+/*
+	let env = {};
+	for (let k in this.env){
+		env[k]=this.env[k];
+	}
+*/
 	this.curShell = new this.Shell(this);
+//	this.curShell.env = this.env;
 	let gotstr = str.trim();
 
 	str = str.replace(/\x7f/g, "");
 
 //XKLRSMFLE
-	let env = {};
-	for (let k in this.env){
-		env[k]=this.env[k];
-	}
-
 	const heredocScanner=async(eof_tok)=>{//«
 		let doc = [];
 		let didone = false;
@@ -6647,7 +6553,13 @@ async execute(str, opts={}){//«
 	}//»
 
 //PLDYHJKU
-	await this.curShell.devexecute(str,{env, heredocScanner, isInteractive: true, terminal: this});
+	await this.curShell.devexecute(str, {
+		env: this.env,
+		heredocScanner,
+		isInteractive: true,
+		term: this,
+		shell: this.curShell
+	});
 	this.responseEnd();
 
 	if (opts.noSave) return;
@@ -8525,7 +8437,7 @@ responseEnd(opts={})  {//«
 response(out, opts={}){//«
 	const{actor}=this;
 	if (isEOF(out)) return;
-	if (!isStr(out)) this.Win._fatal(new Error("Non-string given to terminal.response"));
+	if (!isStr(out)) this.Win._fatal(new Error("Non-string given to term.response"));
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack} = opts;
 if (inBack){
