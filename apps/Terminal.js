@@ -1,4 +1,23 @@
-/*1/5/25: Apropos the note below (from yesterday), I am going to create Stdin
+/*1/5/25: 
+NEED TO GET RID OF Word.parameterExpansion (@PMJDHSWL)??
+In CaseCom:
+  - @AKDMFLS
+  - @DJSLPEKS
+
+@AKDKRKSJ, we have a Word.expandSubs that is only passing the shell
+and the term args, but Word.expandSubs 
+
+AT THE END OF THE DAY: It seems the only "real" issue is that double
+quotes no longer seem to keep their significance when I am doing
+assignments followed by echos, eg:
+
+~$ HAR=`ls`
+~$ echo "$HAR"
+
+WELL THIS PROBLEM IS MUCH MUCH BETTER THAN ALL OF THE OUTPUT SHOWING UP
+AS "[Object object]" !!!!!
+
+Apropos the note below (from yesterday), I am going to create Stdin
 and Stdin objects immediately after doing the heredoc stuff in the parser...
 @YJDHSLFJS.
 
@@ -6,8 +25,6 @@ Now collecting all redirects (tok.isRedir) is much simpler because we just need
 the individual tokens themselves.
 
 Just cleaned up parseSimpleCommand @JEEKSMD.
-
-
 
 */
 /*XXX 1/4/25: We are only calling eatRedirects from parseCompoundCommand, and XXX«
@@ -563,9 +580,9 @@ const get_options = (args, com, opts={}) => {//«
 const add_to_env = (arr, env, opts)=>{//«
 	let {term, if_export} = opts;
 	let marr;
-	let use;
+//	let use;
 	let err = [];
-	use = arr[0];
+	let use = arr[0];
 	let assigns = {};
 	while (use) {
 		let which;
@@ -574,7 +591,8 @@ const add_to_env = (arr, env, opts)=>{//«
 			if (arr[0]===" ") arr.shift();
 			use = arr[0];
 		};
-		marr = this.var.assignRE.exec(use);
+//log(use.toString());
+		marr = this.var.assignRE.exec(use.toString());
 		if (!marr){
 			if (!if_export) break;
 			else{
@@ -786,7 +804,7 @@ aliases: {
 noSetEnvVars: ["USER"],
 preloadLibs: preload_libs,
 allLibs: LOTW.libs,
-assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/,
+assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 
 }//»
 
@@ -1399,7 +1417,9 @@ this.awaitEnd = new Promise((Y,N)=>{
 }//»
 async init(){//«
 	this.word.tildeExpansion();
-	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+//AKDMFLS
+//	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+//AKDKRKSJ
 	await this.word.expandSubs(this.shell, this.shell.term);
 	if(this.shell.cancelled) return;
 	this.word.quoteRemoval();
@@ -1446,7 +1466,8 @@ LOOP: for (let obj of this.list){
 	let pat_list = item.pattern_list;
 	for (let wrd of pat_list){
 		wrd.tildeExpansion();
-		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+//DJSLPEKS
+//		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
 		await wrd.expandSubs(shell, shell.term);
 		if(shell.cancelled) return;
 		wrd.quoteRemoval();
@@ -2357,19 +2378,20 @@ Here we need a concept of "fields".
 const fields = [];
 let curfield="";
 for (let ent of this.val){
-	if (ent instanceof BQuote || ent instanceof ComSub){//«
+	if (ent instanceof BQuote || ent instanceof ComSub|| ent instanceof ParamSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
 		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
-		let arr = rv.split("\n");
-		if (arr.length) {
-			curfield+=arr.shift();
-			fields.push(curfield);
-			let last = arr.pop();
-			if (arr.length) fields.push(...arr);
-			if (last) curfield = last;
-			else curfield = "";
+		if (rv) {
+			let arr = rv.split("\n");
+			if (arr.length) {
+				curfield+=arr.shift();
+				fields.push(curfield);
+				let last = arr.pop();
+				if (arr.length) fields.push(...arr);
+				if (last) curfield = last;
+				else curfield = "";
+			}
 		}
-//log(fields);
 	}//»
 	else if (ent instanceof MathSub){//«
 //resolve and start or append to curfield, since this can only return 1 (possibly empty) value
@@ -2381,10 +2403,10 @@ for (let ent of this.val){
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
 		curfield += "'"+ent.toString()+"'";
 	}
-	else if (ent instanceof ParamSub){
-		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
-		curfield+=rv;
-	}
+//	else if (ent instanceof ParamSub){
+//		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
+//		curfield+=rv;
+//	}
 	else{//Must be isStr«
 		curfield += ent.toString();
 	}//»
@@ -2490,6 +2512,8 @@ if (ch==="$"){/*«*/
 const do_name_sub=(name)=>{//«
 let diff = end_i - start_i;
 let val = env[name]||"";
+cwarn(name);
+log(val);
 let arr=[];
 for (let ch of val){
 	let s = new String(ch);
@@ -2876,6 +2900,8 @@ let out = [];
 let curword="";
 let vals = this.val;
 for (let ent of vals){
+
+//log("ENT",ent);
 	if (ent.expand){//This cannot be another DQuote
 		if (curword){
 			out.push(curword);
@@ -3228,6 +3254,7 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 			this.index=cur;
 			rv = await this.scanParam();
 			out.push(rv);
+			cur=this.index;
 		}
 		else if (check_subs && ch==="$" && src[cur+1] && (src[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(src[cur+1]))){
 			let sub = new ParamSub(cur);
@@ -3432,6 +3459,7 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 			this.index=cur;
 			let sub = await this.scanParam();
 			out.push(sub);
+			cur = this.index;
 		}//»
 		else if (ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){//«
 			let sub = new ParamSub(cur);
@@ -5571,6 +5599,7 @@ for (let k=0; k < arr.length; k++){//«
 		tok.dsSQuoteExpansion();
 	}
 }//»
+if (!isAssign) {
 for (let k=0; k < arr.length; k++){//curlies«
 let tok = arr[k];
 if (tok.isWord) {
@@ -5582,7 +5611,7 @@ if (tok.isWord) {
 	}
 }
 }//»
-
+}
 for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
 	if (tok instanceof Word) tok.tildeExpansion();
@@ -5607,9 +5636,14 @@ for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
 		if (isAssign){
-			let out=[];
-			for (let field of tok.fields) out.push(...field.split("\n"));
-			tok.val=out.join(" ");
+//			let out=[];
+//			let out="";
+//			for (let field of tok.fields) out.push(...field.split("\n"));
+//			for (let field of tok.fields) out+=field+"\n";
+//			tok.val=out.join(" ");
+//tok.val=out;
+tok.val=tok.fields.join("\n");
+//log(tok.val);
 		}
 		else {
 			let{start} = tok;
