@@ -1,5 +1,7 @@
 /*1/6/25: @IFKLJFSN is where we are passing an 'env' argument into addToEnv
 for the assignments array. We need to create new envs for comsubs!!!
+So it looks like we just need to pass in an 'sdup(cur_env)', for whenever we
+are going into deeper levels.
 
 
 
@@ -1180,7 +1182,7 @@ const ScriptCom = class extends Com{//«
 			scriptOut,
 			scriptName: this.name,
 			scriptArgs: this.args,
-			env: this.env
+			env: sdup(this.env)
 		});
 		this.end(code);
 	}
