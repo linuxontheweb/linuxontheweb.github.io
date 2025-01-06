@@ -1,4 +1,9 @@
-/*1/6/25: Let's just pass the opts that are given as the second arg to
+/*1/6/25: @IFKLJFSN is where we are passing an 'env' argument into addToEnv
+for the assignments array. We need to create new envs for comsubs!!!
+
+
+
+Let's just pass the opts that are given as the second arg to
 Shell.devexecute (@SLDPEHDBF) into expandSubs. A big point of this is simply
 to efficiently pass these values (especially env, scriptName and scriptArgs) 
 into ParamSub.expand @KLSDHSKD.
@@ -13,6 +18,10 @@ or had another value).
 Also:
 ~$ (FOOD=abcde)
 ...should not pollute the environment like above, either.
+
+So now we need to create copied environments for the situations above...
+
+Then we need to have a concept of com_env
 
 */
 /*1/5/25: « NEED TO GET RID OF Word.parameterExpansion (@PMJDHSWL)??
@@ -418,35 +427,8 @@ const isNLs=val=>{return val instanceof Newlines;};
 //«Funcs
 
 //«Expansion 
-/*
-const dup=(obj)=>{//«
-let rv={};
 
-const _dup=(o)=>{
-let rv;
-if (isStr(o)) return o;
-if (o.dup) return o.dup();
-if (isObj(o)){
-	rv = {};
-	for (let k in o){
-		if (o[k]) rv[k] = _dup(o[k]);
-		else rv[k] = o[k];
-	}
-}
-else if (isArr(o)){
-	rv = [];
-	for (let i=0; i < o.length; i++){
-		rv.push(_dup(o[i]));
-	}
-}
-return rv;
-};
-return _dup(obj);
-};
-//»
-*/
-
-const dup_compound_list=(term)=>{//«
+const dup=(obj)=>{//Deep copy«
 const _dup=(o)=>{//«
 let rv;
 if (isStr(o)) return o;
@@ -466,9 +448,16 @@ else if (isArr(o)){
 }
 return rv;
 };/*»*/
-return _dup(term);
+return _dup(obj);
 };
-const dup = dup_compound_list;
+const sdup=(obj)=>{//Shallow copy
+	let out={};
+	for (let k in obj){
+		out[k]=obj[k];
+	}
+	return out;
+};
+
 /*»*/
 //»
 //Helpers (this.util)«
@@ -631,9 +620,9 @@ const add_to_env = (arr, env, opts)=>{//«
 //		env[which]=marr[3];
 		next();
 	}
-	if (!arr.length && !if_export){
-		env = term.ENV;
-	}
+//	if (!arr.length && !if_export){
+//		env = term.ENV;
+//	}
 	for (let k in assigns){
 		env[k]=assigns[k];
 	}
@@ -1268,7 +1257,10 @@ constructor(shell, opts, list){
 	this.list = list;
 }
 async run(){
-	let rv = await this.shell.executeStatements2(this.list, this.opts)
+//log(this.opts.env);
+	let opts = sdup(this.opts);
+	opts.env = sdup(this.opts.env);
+	let rv = await this.shell.executeStatements2(this.list, opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }
@@ -5159,7 +5151,7 @@ pushed into the quote's characters.
 	}
 	let sub_lines = [];
 	try{
-		await this.devexecute(s, {subLines: sub_lines, env: this.env, shell: this});
+		await this.devexecute(s, {subLines: sub_lines, env: sdup(this.env), shell: this});
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -5770,7 +5762,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 //		rv = await this.allExpansions(assigns, env, scriptName, scriptArgs, {isAssign: true});
 		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
-		rv = ShellMod.util.addToEnv(assigns, env, {term});
+//IFKLJFSN
+		rv = ShellMod.util.addToEnv(assigns, name?sdup(env):env, {term});
 		if (rv.length) term.response(rv.join("\n"), {isErr: true});
 	}
 
@@ -5958,10 +5951,13 @@ log(red);
 				stdin = in_redir.value;
 			}
 		}
-		let comopts={};
+
+		let comopts=sdup(opts);
+/*
 		for (let k in opts){
 			comopts[k] = opts[k];
 		}
+*/
 		comopts.stdin = stdin || optStdin;
 		comopts.outRedir = out_redir;
 		if (errmess){
@@ -6525,14 +6521,10 @@ this.statdiv = statdiv;
 //Execute«
 
 async execute(str, opts={}){//«
-/*
-	let env = {};
-	for (let k in this.env){
-		env[k]=this.env[k];
-	}
-*/
-	this.curShell = new this.Shell(this);
-//	this.curShell.env = this.env;
+
+	const shell = new this.Shell(this);
+
+	this.curShell = shell;
 	let gotstr = str.trim();
 
 	str = str.replace(/\x7f/g, "");
@@ -6560,7 +6552,8 @@ async execute(str, opts={}){//«
 		term: this,
 		shell: this.curShell
 	});
-	this.responseEnd();
+//log(this.curShell);
+	if (this.curShell === shell && !shell.cancelled) this.responseEnd();
 
 	if (opts.noSave) return;
 
