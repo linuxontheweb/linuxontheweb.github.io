@@ -1,3 +1,9 @@
+/*1/7/25: 
+Now that we are working on the "real" test command (aka the '[' command),
+we need a way to tell getOptions @OEORMSRU to *not* check for options.
+
+*/
+
 /*1/6/25: «Getting environments working
 
 @IFKLJFSN is where we are passing an 'env' argument into addToEnv
@@ -465,6 +471,391 @@ const sdup=(obj)=>{//Shallow copy
 //Helpers (this.util)«
 {
 
+const eval_shell_expr = async (args, cwd) => {//«
+//cwarn("CWD",cwd);
+/*«From https://www.man7.org/linux/man-pages/man1/test.1.html
+test - check file types and compare values
+       test EXPRESSION
+       test
+       [ EXPRESSION ]
+       [ ]
+       [ OPTION
+
+Exit with the status determined by EXPRESSION.
+
+An omitted EXPRESSION defaults to false.  Otherwise, EXPRESSION
+is true or false and sets exit status.  It is one of:
+
+( EXPRESSION )
+  EXPRESSION is true
+
+! EXPRESSION
+  EXPRESSION is false
+
+EXPRESSION1 -a EXPRESSION2
+  both EXPRESSION1 and EXPRESSION2 are true
+
+EXPRESSION1 -o EXPRESSION2
+  either EXPRESSION1 or EXPRESSION2 is true
+
+-n STRING
+  the length of STRING is nonzero
+
+STRING equivalent to -n STRING
+
+-z STRING
+  the length of STRING is zero
+
+STRING1 = STRING2
+  the strings are equal
+
+STRING1 != STRING2
+  the strings are not equal
+
+INTEGER1 -eq INTEGER2
+  INTEGER1 is equal to INTEGER2
+
+INTEGER1 -ge INTEGER2
+  INTEGER1 is greater than or equal to INTEGER2
+
+INTEGER1 -gt INTEGER2
+  INTEGER1 is greater than INTEGER2
+
+INTEGER1 -le INTEGER2
+  INTEGER1 is less than or equal to INTEGER2
+
+INTEGER1 -lt INTEGER2
+  INTEGER1 is less than INTEGER2
+
+INTEGER1 -ne INTEGER2
+  INTEGER1 is not equal to INTEGER2
+
+FILE1 -ef FILE2
+  FILE1 and FILE2 have the same device and inode numbers
+
+FILE1 -nt FILE2
+  FILE1 is newer (modification date) than FILE2
+FILE1 -ot FILE2
+  FILE1 is older than FILE2
+
+-d FILE
+  FILE exists and is a directory
+
+-e FILE
+  FILE exists
+
+-f FILE
+  FILE exists and is a regular file
+
+-h FILE
+  FILE exists and is a symbolic link (same as -L)
+
+-L FILE
+  FILE exists and is a symbolic link (same as -h)
+
+-N FILE
+  FILE exists and has been modified since it was last read
+
+-r FILE
+  FILE exists and the user has read access
+
+-s FILE
+  FILE exists and has a size greater than zero
+
+-w FILE
+  FILE exists and the user has write access
+
+
+
+
+-G FILE
+  FILE exists and is owned by the effective group ID
+
+-b FILE
+  FILE exists and is block special
+
+-c FILE
+  FILE exists and is character special
+
+-g FILE
+  FILE exists and is set-group-ID
+
+-k FILE
+  FILE exists and has its sticky bit set
+
+-x FILE
+  FILE exists and the user has execute (or search) access
+
+-p FILE
+  FILE exists and is a named pipe
+
+-O FILE
+  FILE exists and is owned by the effective user ID
+
+-S FILE
+  FILE exists and is a socket
+
+-t FD  file descriptor FD is opened on a terminal
+
+-u FILE
+  FILE exists and its set-user-ID bit is set
+
+
+Except for -h and -L, all FILE-related tests dereference symbolic
+links.  Beware that parentheses need to be escaped (e.g., by
+backslashes) for shells.  INTEGER may also be -l STRING, which
+evaluates to the length of STRING.
+
+Binary -a and -o are ambiguous.  Use 'test EXPR1 && test EXPR2'
+or 'test EXPR1 || test EXPR2' instead.
+
+'[' honors --help and --version, but 'test' treats them as
+STRINGs.
+
+»*/
+
+/*«Cheat sheet
+
+
+So we have a series of expressions separated by -a (and) and -o (or).
+
+
+*** Binary ops ***
+String and Integer:
+  -eq, -ne
+
+Integer-only:
+  -ge, -gt, -le, -lt
+
+File only:
+  -ef, -nt, -ot
+
+*** Unary ops ***
+
+n: non-zero-length string
+z: zero-length string
+
+For the rest, the strings are treated as files
+h: is symlnk
+L: is symlink
+
+ef: same file
+nt: newer than
+ot: older than
+
+d: is directory
+e: exists
+f: is regular
+r: user can read
+s: size is greater than 0
+w: user can write
+
+p: is named pipe
+N: modified since last read
+
+We just need a little tokenizer parser here:
+
+control ops: ( )
+
+If, as advised in the documentation, we don't support the logical connectives
+('-a' and '-o'), then there seems to be no point in supporting the grouping/control 
+operators: '(' and ')'. Then, all we need to support are singular binary or unary operators:
+
+[!] [Expression]
+
+Where expression is one of:
+1) unary word
+2) word binary word
+
+All we need to do is strip any '!' and then see how many tokens there are.
+
+If 0: this is always (!) false
+If 1: this is always (!) true
+If 2: 
+  - the first must be a valid unary operator.
+  - otherwise complain: "<first_arg>: unary operator expexted"
+If 3:
+  - the second must be a valid binary operator.
+  - otherwise complain: "<second_arg>: binary operator expected"
+
+If more than 3:
+  - complain: "too many arguments"
+»*/
+
+const maybe_neg=(which)=>{//«
+	if (!is_neg){
+		if (which) return E_SUC;
+		return E_ERR;
+	}
+	if (which) return E_ERR;
+	return E_SUC;
+};//»
+const UNARY_OPS=[/*«*/
+	"-n",//non-zerp
+	"-z",//zero
+
+	"-h",//symlink
+	"-L",//symlink
+	"-d",
+	"-e",
+	"-f",
+	"-r",
+	"-s",
+	"-w",
+];/*»*/
+const BINARY_OPS=[/*«*/
+	"=",//String equal
+	"!=",//String equal
+	"-eq",//String/integer equal
+	"-ne",//String/integer not equal
+	"-ge",//Int >=
+	"-gt",//Int >
+	"-le",//Int <=
+	"-lt",//Int <
+
+	"-ef",//equal files (same inode)
+	"-nt",//newer than
+	"-ot",//older than
+];/*»*/
+if (!args.length) return E_ERR;
+const BAD_ARGS=["(",")","-a","-o"];
+for (let arg of args){
+	if (BAD_ARGS.includes(arg)) return `'${arg}': unsupported operator`;
+}
+let is_neg;
+if (args[0]==="!"){
+	is_neg = true;
+	args.shift();
+}
+else{
+	is_neg = false;
+}
+if (args.length == 1) return maybe_neg(true);
+
+if (args.length > 3) return "too many arguments";
+if (args.length==2){/*«*/
+	let op = args.shift();
+	if (!UNARY_OPS.includes(op)) return `'${op}': unary operator expected`
+	let arg = args.shift();
+	if (op==="n") return maybe_neg(arg.length);
+	if (op==="z") return maybe_neg(!arg.length);
+
+//	"-h",//symlink
+//	"-L",//symlink
+//	"-d",
+//	"-e",
+//	"-f",
+//	"-r",
+//	"-s",
+//	"-w",
+
+//d: is directory
+//e: exists
+//f: is regular
+
+//r: user can read
+//s: size is greater than 0
+//w: user can write
+
+let node = await arg.toNode({cwd, getLink: op==="-h"||op==="-L"});
+if (!node) return maybe_neg(false);
+if (op==="-e"||op==="-r") return maybe_neg(true);
+if (op==="-f") return maybe_neg(node.isFile);
+if (op==="-h"||op==="-L") return maybe_neg(node.isLink);
+if (op==="-w"){/*«*/
+	let usenode;
+	if (node.isDir) usenode = node;
+	else usenode = node.par;
+	return maybe_neg(await fsapi.checkDirPerm(usenode));
+}/*»*/
+if (op==="-s"){/*«*/
+	if (!node.isFile) return maybe_neg(true);
+	if (node.type!==FS_TYPE) {
+cwarn("Not checking the size of non-local-fs files");
+		return maybe_neg(true);
+	}
+	let f = await node._file;
+	if (!f){
+cwarn("No file returned from node._file!!!", node);
+		return maybe_neg(false);
+	}
+	return maybe_neg(!!f.size);
+}/*»*/
+
+cerr(`UNUSED OPERATOR (${op}), RETURNING ERROR`);
+
+	return E_ERR;
+}/*»*/
+
+let arg1 = args[0];
+let op = args[1];
+let arg2 = args[2];
+if (!BINARY_OPS.includes(op)) return `'${op}': binary operator expected`
+
+if (arg1.match(/^\d+$/)&&!arg2.match(/^\d+$/)) return `'${arg2}': integer expression expected`;
+if (arg2.match(/^\d+$/)&&!arg1.match(/^\d+$/)) return `'${arg1}': integer expression expected`;
+if (arg1.match(/^\d+$/)){/*«*/
+let n1 = parseInt(arg1);
+let n2 = parseInt(arg2);
+switch(op){
+	case "-eq": return maybe_neg(n1 === n1);
+	case "-ne": return maybe_neg(n1 !== n2);
+	case "-ge": return maybe_neg(n1 >= n2);
+	case "-gt": return maybe_neg(n1 > n2);
+	case "-le": return maybe_neg(n1 <= n2);
+	case "-lt": return maybe_neg(n1 < n2);
+}
+}/*»*/
+else if (op==="-eq"||op==="=") return maybe_neg(arg1 === arg2);
+else if (op==="-ne"||op==="!=") return maybe_neg(arg1 !== arg2);
+
+//cwarn("EVAL", arg1, op, arg2);
+let node1 = await arg1.toNode({cwd});
+let node2 = await arg2.toNode({cwd});
+if (!(node1&&node2)) return maybe_neg(false);
+if (!(node1.isFile&&node2.isFile)) return maybe_neg(node1===node2);
+
+//	"-ef",//equal files (same inode)
+//	"-nt",//newer than
+//	"-ot",//older than
+if (op==="-ef"){/*«*/
+	if (Number.isFinite(node1.blobId) &&  Number.isFinite(node2.blobId)){
+		return maybe_neg(node1.blobId===node2.blobId);
+	}
+	return maybe_neg(node1===node2);
+}/*»*/
+if (node1.type===FS_TYPE&&node2.type===FS_TYPE){/*«*/
+
+let f1 = await node1._file;
+let f2 = await node2._file;
+if (!(f1&&f2)){/*«*/
+cwarn("No files on the node[s]");
+log(node1, node2);
+	return E_ERR;
+}/*»*/
+let m1 = f1.lastModified;
+let m2 = f2.lastModified;
+if (!(m1&&m2)){/*«*/
+cwarn("No lastModified times on the node.file[s]");
+log(f1, f2);
+return E_ERR;
+}/*»*/
+if (op==="-ot") return maybe_neg(m1 > m2);
+if (op==="-nt") return maybe_neg(m1 < m2);
+
+}/*»*/
+else{/*«*/
+cwarn("Not comparing modification times of nodes that are non-fs files");
+log(node1, node2);
+return E_ERR;
+}/*»*/
+cerr(`UNUSED OPERATOR (${op}), RETURNING ERROR`);
+//if (op)
+
+return E_ERR;
+
+};//»
+
 const make_sh_error_com = (name, mess, com_env)=>{//«
 	let com = new this.comClasses.ErrCom(name, null,null, com_env);
 //SPOIRUTM
@@ -784,6 +1175,7 @@ const write_to_redir = async(term, out, redir, env)=>{//«
 };//»
 */
 this.util={/*«*/
+	evalShellExpr: eval_shell_expr,
 	makeShErrCom: make_sh_error_com,
 	getOptions:get_options,
 	addToEnv:add_to_env,
@@ -821,7 +1213,7 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 
 //»
 
-//Classes: this.comClasses (Com, ErrCom, ScriptCom)«
+//Classes     (Com, ErrCom, Stdin/Stdout, ScriptCom...)«
 
 class Stdin{/*«*/
 
@@ -1512,7 +1904,7 @@ this.comClasses={Com,ScriptCom,NoCom,ErrCom};
 
 //»
 
-//Builtin commands/options: this.defCommand(Opt)s (ls, cd, echo, etc...)«
+//Builtins    (ls, cd, echo, etc...)«
 {
 /*«
 const com_ = class extends Com{
@@ -1522,6 +1914,26 @@ run(){
 }
 }
 »*/
+
+const com_brackettest = class extends Com{//«
+init(){
+	if (!this.args.length || this.args.pop() !=="]") return this.no("missing ']'");
+}
+async run(){
+	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+	if (isStr(rv)) return this.no(rv);
+	this.end(rv);
+}
+}//»
+const com_test = class extends Com{//«
+init(){}
+async run(){
+	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+	if (isStr(rv)) return this.no(rv);
+	this.end(rv);
+}
+}//»
+
 
 const com_workman = class extends Com{//«
 init(){}
@@ -2188,18 +2600,10 @@ async run(){
 }
 }/*»*/
 
-const com_test = class extends Com{//«
-	init(){
-	}
-	pipeIn(val){
-	}
-	async run() {//«
-this.ok("NOT MUCH HERE!!!");
-	}//»
-};//»
 
 this.defCommands={//«
 //const shell_commands={
+"[": com_brackettest,
 workman: com_workman,
 bindwin: com_bindwin,
 math: com_math,
@@ -2228,6 +2632,7 @@ app: com_app,
 appicon: com_appicon,
 open: com_open,
 msleep: com_msleep,
+test: com_test,
 };
 
 //»
@@ -2269,7 +2674,9 @@ Long options may be given an argument like this:
 	read:{l:{prompt:3}},
 	import:{s:{d:1},l:{delete: 1}},
 	echodelay:{s:{d: 3}},
-	bindwin:{s:{d:3},l:{desc: 3}}
+	bindwin:{s:{d:3},l:{desc: 3}},
+	test: true,
+	"[": true
 };//»
 
 }//»Builtin commands
@@ -5635,12 +6042,16 @@ return func;
 	let com_opts;
 	let gotopts = Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
-	rv = ShellMod.util.getOptions(arr, usecomword, gotopts);
-	if (rv[1]&&rv[1][0]) {
-		ShellMod.var.lastExitCode = E_ERR;
-		return makeShErrCom(comword, rv[1][0], com_env);
+//OEORMSRU
+	if (gotopts === true) com_opts = {};
+	else {
+		rv = ShellMod.util.getOptions(arr, usecomword, gotopts);
+		if (rv[1]&&rv[1][0]) {
+			ShellMod.var.lastExitCode = E_ERR;
+			return makeShErrCom(comword, rv[1][0], com_env);
+		}
+		com_opts = rv[0];
 	}
-	com_opts = rv[0];
 	try{//«new Com
 		comobj = new com(usecomword, arr, com_opts, com_env);
 		comobj.scriptOut = scriptOut;
