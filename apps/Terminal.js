@@ -722,7 +722,12 @@ const BAD_ARGS=["(",")","-a","-o"];
 for (let arg of args){
 	if (BAD_ARGS.includes(arg)) return `'${arg}': unsupported operator`;
 }
-let is_neg;
+let is_neg = false;
+while (args[0]==="!"){
+	is_neg = !is_neg;
+	args.shift();
+}
+/*«
 if (args[0]==="!"){
 	is_neg = true;
 	args.shift();
@@ -730,6 +735,7 @@ if (args[0]==="!"){
 else{
 	is_neg = false;
 }
+»*/
 if (args.length == 1) return maybe_neg(true);
 
 if (args.length > 3) return "too many arguments";
