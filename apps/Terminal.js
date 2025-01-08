@@ -3359,8 +3359,8 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 	if (!cont_quote){
 	 	start = this.index;
 	}
-	let src = this.source;
-	let len = src.length;
+//	let src = this.source;
+	let len = this.source.length;
 	let is_ds_single = which === "$";
 	let is_single;
 	if (is_ds_single) {
@@ -3391,21 +3391,22 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 
 	if (!cont_quote) this.index++;
 	let cur = this.index;
-	let ch = src[cur];
+	let ch = this.source[cur];
 	let rv;
 	let next;
 	while(ch && ch !== end_quote){
-		if (ch==="`" && in_backquote){
+
+		if (ch==="`" && in_backquote){/*«*/
 			return `unexpected EOF while looking for matching '${which}'`;
-		}
-		if (check_subs&&ch==="$"&&(src[cur+1]==="("||src[cur+1]==="{")) {//«
+		}/*»*/
+		if (check_subs&&ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")) {//«
 			this.index=cur;
-			if (src[cur+2]==="("){
+			if (this.source[cur+2]==="("){
 //				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
 				rv = await this.scanSub(quote, {isMath: true, inBack: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			}
-			else if (src[cur+1]==="{"){
+			else if (this.source[cur+1]==="{"){
 //				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
 				rv = await this.scanSub(quote, {isParam: true, inBack: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
@@ -3419,18 +3420,18 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 			out.push(rv);
 			cur=this.index;
 		}//»
-		else if (check_subs && ch==="$" && src[cur+1] && src[cur+1].match(/[_a-zA-Z]/)){
+		else if (check_subs && ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)){/*«*/
 			this.index=cur;
 			rv = await this.scanParam();
 			out.push(rv);
 			cur=this.index;
-		}
-		else if (check_subs && ch==="$" && src[cur+1] && (src[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(src[cur+1]))){
+		}/*»*/
+		else if (check_subs && ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){/*«*/
 			let sub = new ParamSub(cur);
-			sub.val=[src[cur+1]];
+			sub.val=[this.source[cur+1]];
 			out.push(sub);
 			this.index++;
-		}
+		}/*»*/
 		else if (check_bq&&ch==="`"){//«
 			this.index = cur;
 			rv = await this.scanQuote(quote, "`");
@@ -3441,7 +3442,7 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 		}//»
 		else if (!is_hard_single && ch==="\\"){//«
 			cur++;
-			ch = src[cur];
+			ch = this.source[cur];
 //log("HICH", ch);
 /*
 if (this.isInteractive){
@@ -3471,7 +3472,7 @@ cwarn("SKIP OIMPET");
 			out.push(rv);
 			cur = this.index;
 		}//»
-		else if (is_bq && ch==="$" && src[cur+1]==="'"){//«
+		else if (is_bq && ch==="$" && this.source[cur+1]==="'"){//«
 			this.index=cur;//DPORUTIH  ARGHHHHHHH!?!?!?!?!?
 			rv = await this.scanQuote(quote, "$", true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -3483,7 +3484,7 @@ cwarn("SKIP OIMPET");
 			out.push(ch);
 		}
 		cur++;
-		ch = src[cur];
+		ch = this.source[cur];
 	}
 	this.index = cur;
 	if (ch !== end_quote) {
@@ -3689,9 +3690,9 @@ return null;
 }//»
 scanOperator(){/*«*/
 
-	let src = this.source;
+//	let this.source = this.source;
 	let start = this.index;
-	let str = src[start];
+	let str = this.source[start];
 	let obj={};
 	switch(str){
 	case '(':/*«*/
@@ -3706,7 +3707,7 @@ scanOperator(){/*«*/
 		break;/*»*/
 	case '&':/*«*/
 		++this.index;
-		if (src[this.index]==="&"){
+		if (this.source[this.index]==="&"){
 			this.index++;
 			str="&&";
 			obj.isAndIf = true;
@@ -3714,7 +3715,7 @@ scanOperator(){/*«*/
 		break;/*»*/
 	case '|':/*«*/
 		++this.index;
-		if (src[this.index]==="|"){
+		if (this.source[this.index]==="|"){
 			this.index++;
 			str="||";
 			obj.isOrIf = true;
@@ -3726,8 +3727,8 @@ scanOperator(){/*«*/
 		break;/*»*/
 	case '>'://«
 		++this.index;
-		if ([">","&","|"].includes(src[this.index])){
-			str+=src[this.index];
+		if ([">","&","|"].includes(this.source[this.index])){
+			str+=this.source[this.index];
 			++this.index;
 		}
 		break;/*»*/
@@ -3737,17 +3738,17 @@ scanOperator(){/*«*/
 	//'<>',
 	//'<<-',
 	//'<<<',
-		if (src[this.index]===">"){
+		if (this.source[this.index]===">"){
 			str = "<>";
 			++this.index;
 		}
-		else if (src[this.index]==="<"){
+		else if (this.source[this.index]==="<"){
 			++this.index;
-			if (src[this.index]==="<"){
+			if (this.source[this.index]==="<"){
 				++this.index;
 				str = "<<<";
 			}
-			else if (src[this.index]==="-"){
+			else if (this.source[this.index]==="-"){
 				++this.index;
 				str = "<<-";
 				obj.isHeredoc = true;
@@ -3760,13 +3761,13 @@ scanOperator(){/*«*/
 		break;/*»*/
 	case ';':
 		++this.index;
-		if (src[this.index]===";"){
+		if (this.source[this.index]===";"){
 			this.index++;
 			str=";;";
 			obj.isDSemi = true;
 			obj.isCaseItemEnd = true;
 		}
-		else if (src[this.index]==="&"){
+		else if (this.source[this.index]==="&"){
 			this.index++;
 			str=";&";
 			obj.isSemiAnd = true;
@@ -3974,13 +3975,13 @@ log(wrd);
 scanNewlines(par, env, heredoc_flag){/*«*/
 
 	let start = this.index;
-	let src = this.source;
+//	let this.source = this.source;
 //	let str="";
 	let val = [];
 	let iter=0;
 	let start_line_number = this.lineNumber;
 	let start_line_start = this.index;
-	while (src[start+iter]==="\n"){
+	while (this.source[start+iter]==="\n"){
 		iter++;
 		if (heredoc_flag) break;
 	}
@@ -3996,14 +3997,14 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 }/*»*/
 scanNextLineNot(delim){/*«*/
 	let cur = this.index;
-	let src = this.source;
+//	let this.source = this.source;
 	let ln='';
-	let ch = src[cur];
+	let ch = this.source[cur];
 	while(ch!=="\n"){
 		if (!ch) break;
 		ln+=ch;
 		cur++;
-		ch = src[cur];
+		ch = this.source[cur];
 	}
 	this.index = cur+1;
 	if (ln===delim) {
