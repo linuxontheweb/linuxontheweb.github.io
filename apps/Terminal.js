@@ -1,10 +1,11 @@
-/*1/7/25: 
-Now that we are working on the "real" test command (aka the '[' command),
+/*1/8/25: Shell Command Language 2.3.1 (Alias Substitution): I really have *no idea* 
+what they are talking about there (not that I've tried very hard to figure it all out).
+*/
+/*1/7/25: «Now that we are working on the "real" test command (aka the '[' command),
 we need a way to tell getOptions @OEORMSRU to *not* check for options.
 
 Both 'test' and '[...]' are interfaces into the new 'eval_shell_expr' function.
-*/
-
+»*/
 /*1/6/25: «Getting environments working
 
 @IFKLJFSN is where we are passing an 'env' argument into addToEnv
@@ -432,8 +433,6 @@ const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
 
 const isNLs=val=>{return val instanceof Newlines;};
-//»
-//«Funcs
 
 //«Expansion 
 
@@ -468,7 +467,12 @@ const sdup=(obj)=>{//Shallow copy
 };
 
 /*»*/
+
 //»
+
+//»
+//«Funcs
+
 //Helpers (this.util)«
 {
 
@@ -701,6 +705,8 @@ const UNARY_OPS=[/*«*/
 const BINARY_OPS=[/*«*/
 	"=",//String equal
 	"!=",//String equal
+	"=~",//String match
+
 	"-eq",//String/integer equal
 	"-ne",//String/integer not equal
 	"-ge",//Int >=
@@ -734,7 +740,6 @@ else{
 //if (args.length == 1) return maybe_neg(true);
 //if (!args.length) return maybe_neg(false);
 if (args.length < 2) return maybe_neg(args.length);
-
 if (args.length > 3) return "too many arguments";
 if (args.length==2){/*«*/
 	let op = args.shift();
@@ -795,6 +800,18 @@ let op = args[1];
 let arg2 = args[2];
 if (!BINARY_OPS.includes(op)) return `'${op}': binary operator expected`
 
+if (op==="=~"){
+//log(op, arg1, arg2);
+try{
+let re = new RegExp(arg2);
+return maybe_neg(!!re.test(arg1));
+}
+catch(e){
+return E_ERR;
+}
+return E_SUC;
+}
+
 if (arg1.match(/^\d+$/)&&!arg2.match(/^\d+$/)) return `'${arg2}': integer expression expected`;
 if (arg2.match(/^\d+$/)&&!arg1.match(/^\d+$/)) return `'${arg1}': integer expression expected`;
 if (arg1.match(/^\d+$/)){/*«*/
@@ -809,9 +826,8 @@ switch(op){
 	case "-lt": return maybe_neg(n1 < n2);
 }
 }/*»*/
-else if (op==="-eq"||op==="=") return maybe_neg(arg1 === arg2);
-else if (op==="-ne"||op==="!=") return maybe_neg(arg1 !== arg2);
-
+if (op==="-eq"||op==="=") return maybe_neg(arg1 === arg2);
+if (op==="-ne"||op==="!=") return maybe_neg(arg1 !== arg2);
 //cwarn("EVAL", arg1, op, arg2);
 let node1 = await arg1.toNode({cwd});
 let node2 = await arg2.toNode({cwd});
@@ -2779,13 +2795,19 @@ for (let ent of this.val){
 		let rv = await ent.expand(shell, term, opts);
 		if (rv) {
 			let arr = rv.split("\n");
+//log(arr);
 			if (arr.length) {
+
 				curfield+=arr.shift();
-				fields.push(curfield);
-				let last = arr.pop();
-				if (arr.length) fields.push(...arr);
-				if (last) curfield = last;
-				else curfield = "";
+				if (arr.length) {
+					fields.push(curfield);
+
+					let last = arr.pop();
+					fields.push(...arr);
+
+					curfield = last || "";
+				}
+
 			}
 		}
 	}//»
@@ -2801,15 +2823,12 @@ for (let ent of this.val){
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
 		curfield += "'"+ent.toString()+"'";
 	}
-//	else if (ent instanceof ParamSub){
-//		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
-//		curfield+=rv;
-//	}
 	else{//Must be isStr«
 		curfield += ent.toString();
 	}//»
 }
-fields.push(curfield);
+
+if (curfield) fields.push(curfield);
 this.fields = fields;
 }//»
 
@@ -3086,8 +3105,9 @@ throw new Error("WWWWWTFFFFF IS ENT!?!?!");
 	}
 }
 if (curword) out.push(curword);
-
-return out.join("\n");
+//log(out);
+//return out.join("\n");
+return out.join("");
 
 }//»
 toString(){
@@ -3179,7 +3199,7 @@ dup(){//«
 }//»
 const MathSub = class extends Sequence{//«
 
-async expand(shell, term){//«
+async expand(shell, term, opts={}){//«
 //Need to turn everything into a string that gets sent through math.eval()
 //	const err = term.resperr;
 const err=mess=>{
@@ -3192,7 +3212,7 @@ term.response(mess, {isErr: true});
 	let s='';
 	let vals = this.val;
 	for (let ent of vals){
-		if (ent.expand) s+=await ent.expand(shell, term);
+		if (ent.expand) s+=await ent.expand(shell, term, opts);
 		else s+=ent.toString();
 	}
 
@@ -6949,7 +6969,8 @@ getBuffer(if_str){//«
 
 	if (this.actor && (this.paragraphSelectMode || this.actor.parSel)){//Paragraph select mode
 		if (if_str) ret = ret.split("\n");
-		ret = linesToParas(ret);
+//		ret = linesToParas(ret);
+		let paras = linesToParas(ret);
 		if (if_str) ret = paras.join("\n");
 		else ret = paras;
 	}

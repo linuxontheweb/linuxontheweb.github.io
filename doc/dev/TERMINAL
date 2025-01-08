@@ -376,6 +376,7 @@ are interpreted as a command to be passed along to the server. This means
 that all of the normal piping and redirections should work.
 
 »*/
+
 //»
 
 //DevShell object«
@@ -3887,7 +3888,7 @@ this.cancel=()=>{
 		if (arr[0]==" ") arr.shift();
 
 //»
-/*
+/*«
 const com_help = async(args, opts, _)=>{//«
 	let help = globals.shell_help;
 	const {err, out}=_;
@@ -4167,7 +4168,7 @@ const com_pokerhands = async(args, o)=>{//«
 //log(arr);
 	return {out: JSON.stringify(out)};
 };//»
-*/
+*//*»*/
 
 /*@GYWJNFGHXP: Just started on a "solution" to the issue referenced on the Bug below.«
 
