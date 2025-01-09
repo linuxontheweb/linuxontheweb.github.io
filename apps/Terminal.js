@@ -8749,12 +8749,7 @@ if (rv) init_prompt += "\nImported libs: "+rv;
 	this.response(init_prompt);
 
 }//»
-respHints(){//«
-	if (!dev_mode) {
-		this.response(`Hint: The LOTW shell is currently for non-algorithmic "one-liners" like:`, {isWrn: true});
-		this.response(`  $ cat some files here || echo "That didn't quite work!"`, {isWrn: true});
-	}
-}//»
+
 
 //»
 
@@ -9490,7 +9485,6 @@ async onappinit(appargs={}){//«
 	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
 	await this.initHistory(termBuffer);
 	await this.respInit(addMessage);
-	this.respHints();
 	this.didInit = true;
 	this.sleeping = false;
 	this.isFocused = true;
