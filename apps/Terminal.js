@@ -1,6 +1,31 @@
-/*1/8/25: Shell Command Language 2.3.1 (Alias Substitution): I really have *no idea* 
-what they are talking about there (not that I've tried very hard to figure it all out).
+/*1/9/25: Now just sit back and relax and meditate on com_mail @YWPOEKRN. This will be
+the very first actual application of the working system. I want 2 basic screens:
+1) Saved messages (a list from the database, newest -> oldest or reverse)
+2) New messages (an in-memory list received from querying the IMAP server)
+
+We can only respond messages from the Saved screen because only these have the
+actual email text.
+
+We can delete messages (via IMAP) from either screen.
+
+So these are the functions:
+1) Compose (Reply is compose with to and subject filled in)
+2) Send
+3) Delete
+
+We want our own database (like in mods/term/email.js) rather than merely using
+FS data nodes because we want to enable arbitrary schemas, without screwing around
+with the functionality of the  singular purpose of the FS database (making it
+more complex than necessary).
+
+In that email.js database, we made indexes out of 'from' and 'time'. I guess
+'from' is an email address. Then we can connect proper names (of people and
+organizations) with email addresses in another table (or database).
+
 */
+/*1/8/25: Shell Command Language 2.3.1 (Alias Substitution): I really have *no idea* «
+what they are talking about there (not that I've tried very hard to figure it all out).
+»*/
 /*1/7/25: «Now that we are working on the "real" test command (aka the '[' command),
 we need a way to tell getOptions @OEORMSRU to *not* check for options.
 
@@ -474,7 +499,7 @@ const sdup=(obj)=>{//Shallow copy
 //«Funcs
 
 //Helpers (this.util)«
-{
+//{
 
 const eval_shell_expr = async (args, cwd) => {//«
 /*«From https://www.man7.org/linux/man-pages/man1/test.1.html
@@ -706,6 +731,7 @@ const BINARY_OPS=[/*«*/
 	"=",//String equal
 	"!=",//String equal
 	"=~",//String match
+	"!~",//String match
 
 	"-eq",//String/integer equal
 	"-ne",//String/integer not equal
@@ -800,11 +826,13 @@ let op = args[1];
 let arg2 = args[2];
 if (!BINARY_OPS.includes(op)) return `'${op}': binary operator expected`
 
-if (op==="=~"){
+if (op==="=~"||op=="!~"){
 //log(op, arg1, arg2);
 try{
 let re = new RegExp(arg2);
-return maybe_neg(!!re.test(arg1));
+let res = !!re.test(arg1);
+if (op==="!~") return maybe_neg(!res);
+return maybe_neg(res);
 }
 catch(e){
 return E_ERR;
@@ -875,7 +903,7 @@ return E_ERR;
 
 };//»
 
-const make_sh_error_com = (name, mess, com_env)=>{//«
+const make_sh_err_com = (name, mess, com_env)=>{//«
 	let com = new this.comClasses.ErrCom(name, null,null, com_env);
 //SPOIRUTM
 	if (name) com.errorMessage = `sh: ${name}: ${mess}`;
@@ -984,7 +1012,7 @@ const get_options = (args, com, opts={}) => {//«
 			if (getall || (ret = getlong(marr[1]))) {
 				if (getall) ret = marr[1];
 				if (getall || (lopts[marr[1]] === 1 || lopts[marr[1]] === 2)) obj[ret] = true;
-				else if (lopts[marr[1]] === 3) err.push(`long option: '${marr[1]}' requires an arg"`);
+				else if (lopts[marr[1]] === 3) err.push(`long option: '${marr[1]}' requires an arg`);
 				else if (lopts[marr[1]]) err.push(`long option: '${marr[1]}' has an invalid option definition: ${lopts[marr[1]]}`);
 				else if (!lopts[marr[1]]) err.push(`invalid long option: '${marr[1]}`);
 				args.splice(i, 1);
@@ -1087,7 +1115,8 @@ const do_imports = async(arr, err_cb) => {//«
 			continue;
 		}   
 		try{
-			let num = await this.util.importComs(name);
+//			let num = await this.util.importComs(name);
+			let num = await import_coms(name);
 			out.push(`${name}(${num})`);
 //			did_num.push({name, num});
 		}catch(e){
@@ -1096,8 +1125,6 @@ cerr(e);
 		}
 	}
 	return out.join(", ");
-//	do_overlay(s);
-//	return did_num;
 };//»
 
 const delete_coms = arr => {//«
@@ -1154,58 +1181,25 @@ continue;
 //log(`Deleted module: ${m}`);
 	}
 }//»
+this.util={
+	deleteComs:delete_coms,
+	deleteMods:delete_mods,
+	addToEnv:add_to_env,
+	doImports:do_imports,
+};
 /*
-const write_to_redir = async(term, out, redir, env)=>{//«
-//let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
-	if (!isArr(out)) return {err: "the redirection output is not a Uint8Array or JS array!"}
-	if (!(out instanceof Uint8Array)) {
-		 if (!isStr(out[0])) return {err: "the redirection output does not seem to be an array of Strings!"};
-		out = out.join("\n");
-	}
-	let op = redir.shift();
-	let fname = redir.shift();
-	if (!fname) return {err:`missing operand to the redirection operator`};
-	let fullpath = normPath(fname, term.cur_dir);
-	let node = await fsapi.pathToNode(fullpath);
-	if (node) {
-		if (node.type == FS_TYPE && op===">" && !this.var.allowRedirClobber) {
-			if (env.CLOBBER_OK==="true"){}
-			else return {err: `not clobbering '${fname}' (this.var.allowRedirClobber==${this.var.allowRedirClobber})`};
-		}
-		if (node.writeLocked()){
-			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
-		}
-		if (node.data){
-			return {err:`${fname}: cannot write to the data file`};
-		}
-	}
-	let patharr = fullpath.split("/");
-	patharr.pop();
-	let parpath = patharr.join("/");
-	if (!parpath) return {err:`${fname}: Permission denied`};
-	let parnode = await fsapi.pathToNode(parpath);
-	let typ = parnode.type;
-	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: invalid or unsupported path`};
-	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
-		return {err:`${fname}: Permission denied`};
-	}
-	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
-	return {};
-};//»
-*/
-this.util={/*«*/
+this.util={//«
 	evalShellExpr: eval_shell_expr,
-	makeShErrCom: make_sh_error_com,
+	make_sh_err_com: make_sh_error_com,
 	getOptions:get_options,
 	addToEnv:add_to_env,
 	importComs:import_coms,
 	doImports:do_imports,
 	deleteComs:delete_coms,
 	deleteMods:delete_mods,
-//	writeToRedir:write_to_redir
-}/*»*/
-
-}
+}//»
+*/
+//}
 //»
 
 //»
@@ -1339,45 +1333,6 @@ if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) return `${fname}: Could not write to the file`;
 return true;
 
-/*
-const write_to_redir = async(term, out, redir, env)=>{//«
-//let {err} = await write_to_redir(term, (out instanceof Uint8Array) ? out:out.join("\n"), redir, env);
-	if (!isArr(out)) return {err: "the redirection output is not a Uint8Array or JS array!"}
-	if (!(out instanceof Uint8Array)) {
-		 if (!isStr(out[0])) return {err: "the redirection output does not seem to be an array of Strings!"};
-		out = out.join("\n");
-	}
-	let op = redir.shift();
-	let fname = redir.shift();
-	if (!fname) return {err:`missing operand to the redirection operator`};
-	let fullpath = normPath(fname, term.cur_dir);
-	let node = await fsapi.pathToNode(fullpath);
-	if (node) {
-		if (node.type == FS_TYPE && op===">" && !this.var.allowRedirClobber) {
-			if (env.CLOBBER_OK==="true"){}
-			else return {err: `not clobbering '${fname}' (this.var.allowRedirClobber==${this.var.allowRedirClobber})`};
-		}
-		if (node.writeLocked()){
-			return {err:`${fname}: the file is "write locked" (${node.writeLocked()})`};
-		}
-		if (node.data){
-			return {err:`${fname}: cannot write to the data file`};
-		}
-	}
-	let patharr = fullpath.split("/");
-	patharr.pop();
-	let parpath = patharr.join("/");
-	if (!parpath) return {err:`${fname}: Permission denied`};
-	let parnode = await fsapi.pathToNode(parpath);
-	let typ = parnode.type;
-	if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) return {err:`${fname}: invalid or unsupported path`};
-	if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
-		return {err:`${fname}: Permission denied`};
-	}
-	if (!await fsapi.writeFile(fullpath, out, {append: op===">>"})) return {err:`${fname}: Could not write to the file`};
-	return {};
-};//»
-*/
 	}/*»*/
 
 dup(){
@@ -1934,12 +1889,405 @@ run(){
 }
 »*/
 
+//YWPOEKRN
+const com_mail = class extends Com{
+static opts={l:{add:1, del: 1, get: 1}};
+init(){
+}
+
+/*
+async getDB(){//«
+
+	if (!await mkDir(APPDATA_PATH,"mail")){
+		Y(`Could not create the mail data directory: ${MAILDATA_PATH}`);
+		return;
+	}
+
+	let dbvers_node = await DBVERS_FILE.toNode();
+	if (!dbvers_node){
+log("Making DBVERS_FILE...");
+		dbvers_node = await mkFile(DBVERS_FILE,{data: {type: "number", value: 0}});
+		if (!dbvers_node) return Y(`Could not get DBVERS_FILE (${DBVERS_FILE})`);
+	}
+	let db_vers_data = await dbvers_node.getValue();
+	if (!db_vers_data) return Y(`Could not get the data from DBVERS_FILE (${DBVERS_FILE})`);
+	if (!(isObj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
+		return Y(`Invalid data returned from DBVERS_FILE (${DBVERS_FILE})`);
+	}
+	let db_vers = db_vers_data.value;
+
+	users_node = await mkFile(USERS_FILE);
+	if (!users_node) return Y(`Could not get the users file: ${USERS_FILE}`);
+	users = (await users_node.text).split("\n");
+	if (!users[0]) users.shift();
+
+log("USERS", users);
+//Users file format:
+//address1 [whitespace separated list of aliases...]
+//...
+
+//For adduser/deluser/etc, do all that stuff here and then return before init_new_screen.
+if (op){//«
+	if (op=="add"){
+		db_vers++;
+		if (users.includes(address)){
+	cerr(`add: users[] already has: ${address}`);
+			return Y();
+		}
+		users.push(address);
+		db = new DB(db_vers, in_table_name);
+
+		if (!await db.init()){
+cerr("Could not initialize the db for adding");
+			return Y();
+		}
+log(db);
+
+	}
+	else if (op=="del"){
+
+		let ind = users.indexOf(address);
+		if (ind == -1){
+	cerr(`del: users[] does not have: ${address}`);
+			return Y();
+		}
+
+		db_vers++;
+		users.splice(ind, 1);
+		db = new DB(db_vers, in_table_name);
+
+		if (!await db.init(true)){
+cerr("Could not initialize the db for deleting");
+			return Y();
+		}
+log(db);
+
+	}
+	else{
+cerr(`Unknown operation in init: ${op}`);
+		return Y();
+	}
+
+	if (!await dbvers_node.setValue({type:"number", value: db_vers})){
+cerr("Could not set the new db version");
+		return Y();
+	}
+
+	if (!await users_node.setValue(users.join("\n"))){
+cerr("Could not setValue for users_node!?!?");
+log(users_node);
+		return Y();
+	}
+
+	db.close();
+	Y(true);
+	return;
+
+}//»
+
+if (!users.includes(address)) {
+	return Y(`The address (${address}) has not been added!`);
+}
+
+db = new DB(db_vers, in_table_name);
+
+
+if (!await db.init()){
+cerr("Could not initialize the db");
+return Y();
+}
+
+log(db);
+}//»
+*/
+
+async run(){
+
+const MAIL_DBNAME = "mail";
+
+class DB {//«
+#db;
+//#mailDataPath;
+#dbVersFile;
+#dbVersNode;
+#usersFile;
+#curUserFile;
+#users;
+#usersNode;
+
+constructor(){/*«*/
+//	this.storeName = table_name;
+//	this.#mailDataPath=`${globals.APPDATA_PATH}/mail`;
+
+	let mail_data_path =`${globals.APPDATA_PATH}/mail`;
+	this.#dbVersFile = `${mail_data_path}/db_vers`;
+	this.#usersFile = `${mail_data_path}/users`;
+	this.#curUserFile = `${mail_data_path}/curuser`;
+}/*»*/
+
+async getDBVers(){/*«*/
+	let fname = this.#dbVersFile;
+	let node = await fname.toNode();
+	if (!node){
+log("Making DBVERS_FILE...");
+		node = await fsapi.mkFile(fname,{data: {type: "number", value: 0}});
+		if (!node) return `Could not get DBVERS_FILE (${fname})`;
+	}
+	this.#dbVersNode = node;
+
+	let data = await node.getValue();
+	if (!data) return `Could not get the data from DBVERS_FILE (${fname})`;
+	if (!(isObj(data) && data.type == "number" && Number.isFinite(data.value))){
+		return `Invalid data returned from DBVERS_FILE (${fname})`;
+	}
+	this.version = data.value;
+	return this.version;
+}/*»*/
+async getUsers(){//«
+	let fname = this.#usersFile;
+	let users_node = await fsapi.mkFile(fname);
+	if (!users_node) return `Could not get the users file: ${fname}`;
+//log(users_node);
+	let users = users_node.data.value;
+//log(users);
+	if (!users[0]) users.shift();
+	this.#usersNode = users_node;
+	this.#users = users;
+	return users;
+}//»
+async updateInfo(){/*«*/
+//	if (!await this.#dbVersNode.setValue({type:"number", value: this.version})){
+	if (!await this.#dbVersNode.setDataValue(this.version)){
+		return "Could not setValue for dbVersNode";
+    }
+
+//  if (!await this.#usersNode.setValue({type: "stringarray", value: this.#users.join("\n")})){
+    if (!await this.#usersNode.setDataValue(this.#users.join("\n"))){
+		return "Could not setValue for usersNode";
+    }
+	return true;
+}/*»*/
+async initDB(username, opts={}){//«
+//async initDB(username, if_del){
+
+let in_table_name = `in:${username}`;
+
+let ver_num = await this.getDBVers();/*«*/
+if (isStr(ver_num)) return ver_num;
+if (!Number.isFinite(ver_num)) {
+cwarn("Here is the non-numerical value");
+log(ver_num);
+	return "invalid value returned from getDBVers (expected a number, see console)";
+}/*»*/
+let users = await this.getUsers();/*«*/
+if (isStr(users)) return users;
+if (!isArr(users)){
+cwarn("Here is the non-array value");
+log(users);
+	return "invalid value returned from getUsers (expected an array, see console)";
+}/*»*/
+
+if (opts.add){/*«*/
+	if (users.includes(username)) return `users already has: ${username}`
+	this.version++;
+}/*»*/
+else{/*«*/
+	let ind = users.indexOf(username);
+	if (ind == -1){
+		return `users does not have: ${username}`;
+	}
+	if (opts.del){/*«*/
+		users.splice(ind, 1);
+		this.version++;
+	}/*»*/
+}/*»*/
+
+return new Promise((Y,N)=>{//«
+	let req = indexedDB.open(MAIL_DBNAME, this.version);
+	req.onerror=e=>{
+cerr(e);
+		Y();
+	};
+	req.onsuccess=async e=>{
+		this.#db = e.target.result;
+		Y(true);
+	};
+	req.onblocked=e=>{
+cerr(e);
+		Y();
+	};
+	req.onupgradeneeded=(e)=>{
+		if (opts.del){
+			e.target.result.deleteObjectStore(in_table_name);
+			return;
+		}
+		let store = e.target.result.createObjectStore(in_table_name, {autoIncrement: true});
+		store.createIndex("from", "from", {unique: false});
+		store.createIndex("time", "time", {unique: false});
+//		store.createIndex("messId", "messId", {unique: true});
+	}
+});/*»*/
+
+}//»
+getStore(if_write){//«
+	return this.#db.transaction([this.table_name],if_write?"readwrite":"readonly").objectStore(this.table_name);
+}//»
+addMessage(mess){//«
+	return new Promise((Y,N)=>{
+		let req = get_store(true).add(mess);
+		req.onerror=(e)=>{
+cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+}//»
+close(){//«
+	if (!this.#db) {
+cwarn("CLOSE CALLED WITHOUT INIT?!?!");
+		return;
+	}
+cwarn("Closing the database...");
+	this.#db.close();
+	this.#db = undefined;
+}//»
+getById(id){//«
+	return new Promise((Y,N)=>{
+		let req = this.getStore().get(id);
+		req.onerror=(e)=>{
+			cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(e.target.result);
+		};
+	});
+}//»
+putById(id, node){//«
+	return new Promise((Y,N)=>{
+		let req = this.getStore(true).put(node, id);
+		req.onerror=(e)=>{
+cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+}//»
+delById(id){//«
+	return new Promise((Y,N)=>{
+		let req = get_store(true).delete(id);
+		req.onerror=(e)=>{
+cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+}//»
+async createMessage(time, from, sub, text){//«
+//The first 4 are required (subject may be [none])
+
+	if (!subject) subject = "[none]";
+
+	let rv = await add_message({time, from, sub, text});
+	if (!rv){
+cerr("createMessage: failed");
+	}
+
+}//»
+async deleteMessage (id){//«
+
+if (!await del_by_id(id)) return;
+
+return true;
+
+}//»
+async addMessageText(id, text){//«
+
+	let mess = await get_by_id(id);
+	if (!mess) return cerr(`could not get message ${id}`);
+	if (mess.text) return cwarn(`message already has a 'text' field!`);
+	mess.text = text;
+	if (!await put_by_id(id, mess)) return cerr('put_by_id failed!');
+	return true;
+
+}//»
+async dropDatabase(){//«
+	return new Promise((Y,N)=>{
+		this.#db.close();
+		const req = window.indexedDB.deleteDatabase(MAIL_DBNAME);
+		req.onerror = (event) => {
+cerr("Error deleting database.");
+			Y();
+		};
+		req.onblocked = (e)=>{
+cwarn("BLOCKED");
+			Y();
+		};
+		req.onsuccess = (event) => {
+			Y(true);
+		};
+	});
+}//»
+
+/*//«
+async init(if_del){
+	if (this.#db) {
+cwarn("WHO CALLED DB.INIT?");
+		return;
+	}
+	if (!await this.initDB(if_del)) {
+throw new Error("init_db() failed!");
+	}
+	return true;
+}
+//»*/
+
+}//»
+
+let db = new DB();
+
+//log(db);
+//log(this.opts);
+//const{add, del, get}=this.opts;
+const{args}=this;
+let user = args.shift();
+if (!user) return this.no("username needed");
+let op = args.shift();
+if (!op) return this.no("opcode needed");
+//log(user, op);
+let rv = await db.initDB(user);
+if (isStr(rv)) return this.no(rv);
+if (rv!==true){
+	cwarn("Here is the non-true value");
+	log(rv);
+	this.no("non true value returned from initDB (see console)");
+	return;
+}
+log(db);
+//log("RV",rv);
+//if (add){
+//log(`ADD: ${add}`);
+//address = address.toLowerCase();
+//let in_table_name = `in:${address}`;
+//}
+this.ok();
+}
+
+}
+
 const com_brackettest = class extends Com{//«
 init(){
 	if (!this.args.length || this.args.pop() !=="]") return this.no("missing ']'");
 }
 async run(){
-	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+//	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+	let rv = await eval_shell_expr(this.args, this.term.cwd);
 	if (isStr(rv)) return this.no(rv);
 	this.end(rv);
 }
@@ -1947,13 +2295,12 @@ async run(){
 const com_test = class extends Com{//«
 init(){}
 async run(){
-	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+//	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+	let rv = await eval_shell_expr(this.args, this.term.cwd);
 	if (isStr(rv)) return this.no(rv);
 	this.end(rv);
 }
 }//»
-
-
 const com_workman = class extends Com{//«
 init(){}
 run(){//«
@@ -2461,7 +2808,8 @@ async run(){
 }//»
 const com_export = class extends Com{/*«*/
 	run(){
-		let rv = ShellMod.util.addToEnv(this.args, this.term.ENV, {if_export: true});
+//		let rv = ShellMod.util.addToEnv(this.args, this.term.ENV, {if_export: true});
+		let rv = add_to_env(this.args, this.term.ENV, {if_export: true});
 		if (rv.length){
 			this.err(rv.join("\n"));
 			this.no();
@@ -2610,11 +2958,13 @@ async run(){
 		have_error = true;
 	};
 	if (opts.delete || opts.d){
-		ShellMod.util.deleteComs(args);
+//		ShellMod.util.deleteComs(args);
+		delete_coms(args);
 		this.ok();
 		return;
 	}
-	await ShellMod.util.doImports(args, err);
+//	await ShellMod.util.doImports(args, err);
+	await do_imports(args, err);
 	have_error?this.no():this.ok();
 }
 }/*»*/
@@ -2622,6 +2972,7 @@ async run(){
 
 this.defCommands={//«
 //const shell_commands={
+mail: com_mail,
 "[": com_brackettest,
 workman: com_workman,
 bindwin: com_bindwin,
@@ -5884,7 +6235,8 @@ async tryImport(com, comword){//«
 //1) libraries are defined in ShellMod.var.preloadLibs, and 
 //2) this is the first invocation of a command from one of those libraries.
 	try{
-		await ShellMod.util.importComs(com);//com is the library name
+//		await ShellMod.util.importComs(com);//com is the library name
+		await import_coms(com);//com is the library name
 		if (this.cancelled) return;
 	}catch(e){
 		if (this.cancelled) return;
@@ -5934,7 +6286,8 @@ makeCompoundCommand(com, opts){//«
 //async makeCommand(arr, opts){
 async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const{term}=this;
-	const makeShErrCom = ShellMod.util.makeShErrCom;
+//	const make_sh_err_com = ShellMod.util.make_sh_err_com;
+//	const make_sh_err_com = make_sh_error_com;
 	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 //log(assigns);
@@ -5945,7 +6298,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
 //IFKLJFSN
-		rv = ShellMod.util.addToEnv(assigns, name?sdup(env):env, {term});
+//		rv = ShellMod.util.addToEnv(assigns, name?sdup(env):env, {term});
+		rv = add_to_env(assigns, name?sdup(env):env, {term});
 		if (rv.length) term.response(rv.join("\n"), {isErr: true});
 	}
 
@@ -6031,48 +6385,48 @@ return func;
 		if (!comword.match(/\x2f/)) {
 //It doesn't look like a file.
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, `command not found`, com_env);
+			return make_sh_err_com(comword, `command not found`, com_env);
 		}
 
 		let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
 		if (!node) {
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, `file not found`, com_env);
+			return make_sh_err_com(comword, `file not found`, com_env);
 		}
 		let app = node.appName;
 		if (app===FOLDER_APP) {
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, `is a directory`, com_env);
+			return make_sh_err_com(comword, `is a directory`, com_env);
 		}
 		if (app!==TEXT_EDITOR_APP) {
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, `not a text file`, com_env);
+			return make_sh_err_com(comword, `not a text file`, com_env);
 		}
 		if (!comword.match(/\.sh$/i)){
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, `only executing files with '.sh' extension`, com_env);
+			return make_sh_err_com(comword, `only executing files with '.sh' extension`, com_env);
 		}
 		let text = await node.text;
 		if (!text) {
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, `no text returned`, com_env);
+			return make_sh_err_com(comword, `no text returned`, com_env);
 		}
 		comobj = new ScriptCom(this, comword, text, arr, com_env);
 		comobj.scriptOut = scriptOut;
 		comobj.subLines = subLines;
 		return comobj;
 	}//»
-
 	let com_opts;
-	let gotopts = Shell.activeOptions[usecomword];
+	let gotopts = com.opts || Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
 //OEORMSRU
 	if (gotopts === true) com_opts = {};
 	else {
-		rv = ShellMod.util.getOptions(arr, usecomword, gotopts);
+//		rv = ShellMod.util.getOptions(arr, usecomword, gotopts);
+		rv = get_options(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
 			ShellMod.var.lastExitCode = E_ERR;
-			return makeShErrCom(comword, rv[1][0], com_env);
+			return make_sh_err_com(comword, rv[1][0], com_env);
 		}
 		com_opts = rv[0];
 	}
@@ -6087,14 +6441,15 @@ cerr(e);
 //VKJEOKJ
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
-		return makeShErrCom(usecomword, e.message, com_env);
+		return make_sh_err_com(usecomword, e.message, com_env);
 	}//»
 //SKIOPRHJT
 }//»
 
 async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
-	const makeShErrCom = ShellMod.util.makeShErrCom;
+//	const make_sh_err_com = ShellMod.util.make_sh_err_com;
+//	const make_sh_err_com = make_sh_error_com;
 	let lastcomcode;
 //	let {stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let {stdin: optStdin, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
@@ -6147,7 +6502,7 @@ log(red);
 		comopts.stdin = stdin || optStdin;
 		comopts.outRedir = out_redir;
 		if (errmess){
-			rv = makeShErrCom(null, errmess, {term, shell: this});
+			rv = make_sh_err_com(null, errmess, {term, shell: this});
 		}
 		else if (com.compound_command){
 			rv = await this.makeCompoundCommand(com, comopts, errmess)
@@ -8737,6 +9092,7 @@ async respInit(addMessage){//«
 	let env_lines = await env_file_path.toLines();
 	if (env_lines) {
 		let rv = ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
+//		let rv = add_to_env(env_lines, this.env, {if_export: true});
 		if (rv.length){
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
@@ -8744,6 +9100,7 @@ async respInit(addMessage){//«
 
 {
 	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
+//	let rv = await do_imports(ADD_COMS, cwarn);
 if (rv) init_prompt += "\nImported libs: "+rv;
 }
 	this.response(init_prompt);
@@ -9306,7 +9663,6 @@ handle(sym, e, ispress, code, mod){//«
 
 //Alt screen apps (vim, less, etc.)«
 
-resetXScroll(){tabdiv._x=0;}
 xScrollTerminal(opts={}){//«
 
 	let {amt, toRightEdge, toLeftEdge} = opts;
@@ -9529,12 +9885,8 @@ onblur(){//«
 //»
 
 onresize(){this.resize();}
-onkeydown(e, sym, mod) {
-	this.handle(sym, e, false, e.keyCode, mod);
-}
-onkeypress(e) {
-	this.handle(e.key, e, true, e.charCode, "");
-}
+onkeydown(e,sym,mod){this.handle(sym,e,false,e.keyCode,mod);}
+onkeypress(e){this.handle(e.key,e,true,e.charCode,"");}
 onkeyup(e,sym){//«
 	if (this.actor&&this.actor.onkeyup) this.actor.onkeyup(e, sym);
 }//»
