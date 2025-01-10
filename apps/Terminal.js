@@ -271,7 +271,7 @@ const DEL_COMS=[
 ];
 const ADD_COMS=[
 //"esprima",
-"test"
+//"test"
 ];
 
 if (dev_mode){
@@ -1890,7 +1890,8 @@ run(){
 »*/
 
 //YWPOEKRN
-const com_mail = class extends Com{
+
+const com_mail = class extends Com{/*«*/
 static opts={l:{add:1, del: 1, get: 1}};
 init(){
 }
@@ -2279,7 +2280,7 @@ log(db);
 this.ok();
 }
 
-}
+}/*»*/
 
 const com_brackettest = class extends Com{//«
 init(){
@@ -9098,7 +9099,7 @@ async respInit(addMessage){//«
 		}
 	}
 
-{
+if (dev_mode){
 	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
 //	let rv = await do_imports(ADD_COMS, cwarn);
 if (rv) init_prompt += "\nImported libs: "+rv;
