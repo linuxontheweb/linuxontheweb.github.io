@@ -2716,8 +2716,8 @@ const com_msleep = class extends Com{/*«*/
 	}
 }/*»*/
 const com_hist = class extends Com{/*«*/
-	run(){
-		this.out(this.term.get_history().join("\n"));
+	async run(){
+		this.out((await this.term.getHistory()).join("\n"));
 		this.ok();
 	}
 }/*»*/
@@ -7541,6 +7541,7 @@ render(opts={}){//«
 	let len = uselines.length;//«
 	if (len + this.numStatLines != this.h) donum = this.h - this.numStatLines;
 	else donum = len;//»
+
 	for (let i = 0; i < donum; i++) {//«
 
 		let arr = uselines[i];
@@ -7668,7 +7669,8 @@ if (num2 > this.w) {
 		else outarr.push(s);
 
 	}//»
-	if (actor) {//«
+
+	if (actor) {//Status line«
 		let usestr;
 		if (stat_input_type) {//«
 			let arr,ind;
@@ -7788,6 +7790,7 @@ if (num2 > this.w) {
 		}//»
 		this.updateStatLines([usestr]);
 	}//»
+
 	if (this.minHeight && this.h < this.minHeight){
 		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
 	}
