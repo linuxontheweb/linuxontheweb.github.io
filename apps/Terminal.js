@@ -1111,19 +1111,17 @@ const do_imports = async(arr, err_cb) => {//«
 	let out=[];
 	for (let name of arr){
 		if (this.var.allLibs[name]) {
-//			err_cb(`${name}: already loaded`);
 			continue;
 		}   
 		try{
-//			let num = await this.util.importComs(name);
 			let num = await import_coms(name);
 			out.push(`${name}(${num})`);
-//			did_num.push({name, num});
 		}catch(e){
 			err_cb(`${name}: error importing the module`);
 cerr(e);
 		}
 	}
+
 	return out.join(", ");
 };//»
 
@@ -2953,20 +2951,19 @@ async run(){
 }//»
 const com_import = class extends Com{/*«*/
 async run(){
-	let {term, err: _err, opts, args}=this;
+	let {term, opts, args}=this;
 	let have_error = false;
 	const err=(arg)=>{
-		_err(arg);
+		this.err(arg);
 		have_error = true;
 	};
 	if (opts.delete || opts.d){
-//		ShellMod.util.deleteComs(args);
 		delete_coms(args);
 		this.ok();
 		return;
 	}
-//	await ShellMod.util.doImports(args, err);
-	await do_imports(args, err);
+	let rv = await do_imports(args, err);
+	if (rv) this.inf(`imported: ${rv}`);
 	have_error?this.no():this.ok();
 }
 }/*»*/
@@ -8981,6 +8978,8 @@ response(out, opts={}){//«
 //		this.Win._fatal(new Error("Non-string given to term.response"));
 cwarn("Here is the non-string object");
 log(out);
+//This is not a bug since it is perfectly "okay" (I think) to pass aribtrary objects
+//*through* a pipeline... but not out the end of it.
 		let str = `non-string object found in standard output stream (see console)`;
 		if (opts.name) str = `${opts.name}: ${str}`;
 		out = `sh: ${str}`;
@@ -9034,6 +9033,7 @@ propagating through the pipeline).
 	}
 */
 	if (colors) {
+//The two fatal results are major bugs, and should be treated "calamitously"
 		if (!didFmt){
 			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
 			Win._fatal(e);
