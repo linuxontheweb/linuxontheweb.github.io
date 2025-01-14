@@ -8976,7 +8976,14 @@ responseEnd(opts={})  {//«
 response(out, opts={}){//«
 	const{actor}=this;
 	if (isEOF(out)) return;
-	if (!isStr(out)) this.Win._fatal(new Error("Non-string given to term.response"));
+	if (!isStr(out)) {
+//		this.Win._fatal(new Error("Non-string given to term.response"));
+cwarn("Here is the non-string object");
+log(out);
+		out = "non-string object found in standard output stream (see console)";
+		opts = {isErr: true};
+//opts.isErr = true;
+	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack} = opts;
 if (inBack){
