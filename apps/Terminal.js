@@ -1342,6 +1342,7 @@ dup(){
 }/*»*/
 
 const Com = class {//«
+
 	constructor(name, args, opts, env={}){//«
 		this.name =name;
 		this.args=args;
@@ -1383,7 +1384,6 @@ const Com = class {//«
 			};
 		});//»
 	}//»
-//	static grabsScreen = false;
 	async nextArgAsNode(opts={}){//«
 		let {noErr, noneIsErr} = opts;
 		let e, f, node;
@@ -1469,9 +1469,10 @@ log(num);
 	eof(){this.out(EOF);}
 	init(){}
 	run(){this.wrn(`sh:\x20${this.name}:\x20the 'run' method has not been overriden!`);}
-	resp(str, opts){//«
+	resp(str, opts={}){//«
 		if (this.shell.cancelled) return;
 		const{term}=this;
+		opts.name = this.name;
 		term.response(str, opts);
 		term.scrollIntoView();
 		term.refresh();
@@ -8980,9 +8981,10 @@ response(out, opts={}){//«
 //		this.Win._fatal(new Error("Non-string given to term.response"));
 cwarn("Here is the non-string object");
 log(out);
-		out = "non-string object found in standard output stream (see console)";
+		let str = `non-string object found in standard output stream (see console)`;
+		if (opts.name) str = `${opts.name}: ${str}`;
+		out = `sh: ${str}`;
 		opts = {isErr: true};
-//opts.isErr = true;
 	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack} = opts;
