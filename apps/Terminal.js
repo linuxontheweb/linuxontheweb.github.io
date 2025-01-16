@@ -1,85 +1,123 @@
 /*1/16/25: Files to change for email:
 
-LOTW MAIL_USER_DIR ($MUD): ~/.appdata/mail/<user_email_addr> 
+A basic "lesson" here is that applications should *generally* make use of data nodes,
+if for no other reason than that there is no real non-system-level (via backend JS) way of
+creating/modifying them. The only issue is whether a user has *already* created certain
+of the following files as "regular" (FS_TYPE) files. 
 
-1) apps/Terminal.js
-  - Create a 'bdiv' in makeDOMElem, that goes right under 'tdiv
-  - Upon resizing, create Term.nrows number of divs (via string -> innerHTML).
-  - Put a 'multilineSelection' array on the actor (less)
-  - Upon rendering, iterate through this array and set backgroundColor values on the row divs
+All of our (non-databased) data goes in the (user-facing) LOTW folder:
+	MAIL_USER_DIR ($MUD): ~/.appdata/mail/<user_email_addr> 
 
-2) com_mail:
-  - Do a mini-REPL that "listens" for the major commands:
-	[f]etch [n]ew [s]aved [d]rafts [c]ontacts [o]utbox [s]ent
+This directory, along with the databases "new:<user_email_addr>" and "saved:<user_email_addr>"
+will be created upon using the command: 
+	$ mail --init=<user_email_addr>
 
-	fetch: Get all envelopes since last_poll_time, and store in database new:<user_email_addr>
-	new: lists the envelopes in new:<user_email_addr>, and allows for fetching the email
-		text bodies, which moves the db entries into saved:<user_email_addr>
-	saved: lists the emails in saved:<user_email_addr>, and allows for deleting emails
-		(locally or remotely) as well as as responding to emails.
-	drafts: lists the emails in $MUD/Drafts.
-		- A draft may be created either through Saved->respond or Contacts->Compose
-	contacts: lists the "to" addresses in $MUD/contacts
-	outbox: lists the emails in $MUD/Outbox, which are finished drafts, and have all
-		"final" auto-formatting done to them. A "true rendering" of the email can be 
-		seen from here. The 'send' command will iterate through each of these, sending
-		them via the SMTP service, and them moving them into $MUD/Sent
-	sent: Lists all emails in $MUD/Sent
+1) $MUD/last_poll_time: The largest timestamp (the most recent inbound email) //«
+	that has been entered into new:<user_email_addr>. 
 
+	Maybe this can be a data node of type = "timestamp"
 
-	When using the 'less' module, add a 'multilineSelection' array and an 'exitChars' array
-	onto the less object.
+//»
+2) $MUD/contacts: A JSON data file, to be used as the "contacts" in the Contacts //«
+	screen, with each "record" something like:
+		{
+			address: <email_address>,
+			real_name: full name,
+			aliases: [list of aliases],
+			tags: [list of tags (business, personal, hobby...)],
+			dob: date of birth	
+			uri: website or canonical namespace
+		}
 
-	When using the 'vim' module, add a 'saveFunc' for when the editor's text is to be put 
-	somewhere onto a data node (or possibly in a database). This function should return an 
-	object like:
-		{message: <...>, type: <suc|err|wrn>}
-
-3) $MUD/last_poll_time: The largest timestamp (the most recent inbound email) that has been 
-	entered into new:<user_email_addr>
-
-4) $MUD/contacts: A "data" JSON file, to be used as the contacts in the Contacts screen, with 
-	each "record" something like:
-
-		address: <email_address>,
-		real_name: full name,
-		aliases: list of aliases
-		tags: list of tags (business, personal, hobby...)
-
-	- And maybe such fields as:
-
-		dob: date of birth	
-		uri: website or canonical namespace
-
-	- The Contacts aliases should go somewhere in the global environment, for example:
+	- The Contacts aliases should go somewhere on 'globals', for example:
 		globals.emailAliases[<user_email_addr>] = {
-			nick_a1: <email_address_a>,//Contact 'a' has <n> nicknames
+			nick_a1: <email_address_a>,
 			nick_a2: <email_address_a>,
 			...
-			nick_a<n>: <email_address_a>,
+			nick_a<n>: <email_address_a>,//Contact 'a' has <n> nicknames
 
-			nick_b1: <email_address_b>,//Contact 'b' has 2 nicknames
-			nick_b2: <email_address_b>,
+			nick_b1: <email_address_b>,
+			nick_b2: <email_address_b>,//Contact 'b' has 2 nicknames
 
 			nick_c1: <email_address_c>,//Contact 'c' has 1 nickname
 			...
 		}
 
-		FAPP, there should usually be only 1 nickname per unique email contact.
+		There should usually be 0-1 nicknames per unique email contact.
+//»
+
+On the server
+
+3) apps/Terminal.js: Terminal app (new div to render "on" lines)//«
+  - Create a 'bdiv' in makeDOMElem, that goes right under 'tdiv'
+  - Upon resizing, create Term.nrows number of divs (via string -> innerHTML).
+  - Upon rendering, iterate through the less.multilineSelection array and set each 
+		backgroundColor values on the relevant row divs
+/»
+4) apps/Terminal.js: com_mail://«
+  - Do a mini-REPL that "listens" for the major commands:
+	[q]uit
+	[u]pdate
+	[n]ew
+	[s]aved
+	[c]ontacts
+	[d]rafts
+	[o]utbox
+	s[e]nt
+
+	Quit: Gracefully exit the mail REPL
+
+	Update: Get all envelopes since last_poll_time, and store in database: 
+		"new:<user_email_addr>"
+
+	New: lists the envelopes in "new:<user_email_addr>", and allows for fetching the email
+		text bodies, which moves the db entries into "saved:<user_email_addr>"
+
+	Saved: lists the emails in "saved:<user_email_addr>", and allows for deleting emails
+		(locally or remotely) as well as as responding to emails. There should be an
+		easy way to view the email (as HTML) in an app window.
+
+	Contacts: lists the "to" addresses in $MUD/contacts
+		- We can add to and delete from the contacts list as well compose a new draft
+		to a given contact.
+
+	Drafts: lists the emails in $MUD/Drafts.
+		- A "draft" may be created either through Saved->respond or Contacts->compose
+
+	Outbox: lists the emails in $MUD/Outbox, which are finished drafts, and have all
+		"final" auto-formatting done to them. A "true rendering" of the email can be 
+		seen from here. The 'send' command will iterate through each of these, sending
+		them via the SMTP service, and them moving them into $MUD/Sent
+
+	sEnt: Lists all emails in $MUD/Sent
 
 
-5) mods/term/less.js:
+	- When using the 'less' module, add a 'multilineSelection' array and an 'exitChars' array
+	onto the less object.
+
+	- When using the 'vim' module, add a 'saveFunc' for when the editor's text is to be put 
+	somewhere onto a (possibly arbitrarily complex) data node (or directly into a database). 
+	This function should return an object like:
+		{message: <...>, type: <suc|err|wrn>}
+
+	- For all "create email" commands (respond or compose new), we create a data file
+	in $MUD/Drafts, and the put the saveFunc on vim, and then init vim:
+		* Blank for "compose new"
+		* With the top (subject) line filled in for "respond".
+
+//»
+5) mods/term/less.js: Pager mod//«
 	In onkeydown-><SPACE>, check for the multilineSelection array member, and toggle the
-		appropriate value.
+		appropriate value (scroll_num + y).
 	In onkeypress, check for the character's existence in exitChars, and in that case,
 		do 'less.exitChar = <char>', before quitting the module.
-
-6) mods/term/vim.js:
+//»
+6) mods/term/vim.js: Editor mod//«
 	In the innermost part of vim's internal save function, check for vim.saveFunc, and
 		await on that, and put the return value's message onto the status bar.
-
-7) node/svcs/imap.js:
-	Allow for the following imap operations:
+//»
+7) node/svcs/imap.js: Backend IMAP service//«
+	Allow for the following IMAP operations:
 		- Connect: return a unique/"random" connection session ID to be used in all subsequent operations
 			* We should probably only allow a single connection session at a time in the first version
 			* A session should "timeout" after TIMEOUT_SECS (proably 10->60 seconds) since the
@@ -87,6 +125,10 @@ LOTW MAIL_USER_DIR ($MUD): ~/.appdata/mail/<user_email_addr>
 		- Fetch all envelopes since <timestamp>
 		- Fetch a single text body
 		- Disconnect
+//»
+7) node/svcs/smtp.js: Backend SMTP service//«
+	- Probably something needs to be change here...???
+//»
 
 */
 
