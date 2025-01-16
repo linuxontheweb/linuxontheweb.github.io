@@ -1,4 +1,4 @@
-/*1/16/25: Files to change for email:
+/*1/16/25: The LOTW e-mail "application"
 
 A basic "lesson" here is that applications should *generally* make use of data nodes,
 if for no other reason than that there is no real non-system-level (via backend JS) way of
@@ -8,12 +8,29 @@ of the following files as "regular" (FS_TYPE) files.
 All of our (non-databased) data goes in the (user-facing) LOTW folder:
 	MAIL_USER_DIR ($MUD): ~/.appdata/mail/<user_email_addr> 
 
-This directory, along with the databases "new:<user_email_addr>" and "saved:<user_email_addr>"
-will be created upon using the command: 
+This directory, along with the database stores "new:<user_email_addr>" and 
+"saved:<user_email_addr>" will be created upon using the command: 
 	$ mail --init=<user_email_addr>
 
+Then we can make the file:
+	~/.appdata/mail/cur_mail_addr (which points to the "active" $MUD)
+
+Also:
+	$ mail --use=<user_email_addr> can set the $MUD to another existing one.
+
+There should also be a command dedicated to getting the value of EMAIL_USER
+that exists on the server, so we can do something like:
+	MY_EMAIL_ADDRESS=`curemailaddr`
+	$ mail --init=$MY_EMAIL_ADDRESS
+... or even just
+	$ mail --init=`curemailaddr`
+
+Then for every backend service request, we will send <user_email_addr> along, and reject 
+the request if the server is not using the same one (hardcoded into the server's 
+memory via the environment variables, EMAIL_USER and EMAIL_PASSWORD).
+
 1) $MUD/last_poll_time: The largest timestamp (the most recent inbound email) //«
-	that has been entered into new:<user_email_addr>. 
+	that has been entered into database: "new:<user_email_addr>".
 
 	Maybe this can be a data node of type = "timestamp"
 
@@ -25,7 +42,7 @@ will be created upon using the command:
 			real_name: full name,
 			aliases: [list of aliases],
 			tags: [list of tags (business, personal, hobby...)],
-			dob: date of birth	
+			dob: date of birth,	
 			uri: website or canonical namespace
 		}
 
@@ -44,14 +61,21 @@ will be created upon using the command:
 		}
 
 		There should usually be 0-1 nicknames per unique email contact.
+
+While it is *possible* to make this an "actual" database, the very concept of a
+"contact" is that these are the people you are personally familiar with, and
+the list should therefore *not* be very big (e.g. the size of some big company's
+list of clients or customers), and so pulling the whole thing into memory should
+be a fairly reasonable way to go.
+
 //»
 
 On the server
 
-3) apps/Terminal.js: Terminal app (new div to render "on" lines)//«
+3) apps/Terminal.js: Terminal app (new div to render "toggled on" lines)//«
   - Create a 'bdiv' in makeDOMElem, that goes right under 'tdiv'
-  - Upon resizing, create Term.nrows number of divs (via string -> innerHTML).
-  - Upon rendering, iterate through the less.multilineSelection array and set each 
+  - Upon grid init/resizing, create Term.nrows number of divs (via string -> innerHTML).
+  - Upon rendering, iterate through the less.multilineSelection array and set/unset the
 		backgroundColor values on the relevant row divs
 /»
 4) apps/Terminal.js: com_mail://«
@@ -67,7 +91,7 @@ On the server
 
 	Quit: Gracefully exit the mail REPL
 
-	Update: Get all envelopes since last_poll_time, and store in database: 
+	Update: Get all envelopes since last_poll_time, and add to database store: 
 		"new:<user_email_addr>"
 
 	New: lists the envelopes in "new:<user_email_addr>", and allows for fetching the email
