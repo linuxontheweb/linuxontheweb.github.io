@@ -1,206 +1,96 @@
-/*1/9/25: Now just sit back and relax and meditate on com_mail @YWPOEKRN. This will be
-the very first actual application of the working system. I want 2 basic screens:
-1) Saved messages (a list from the database, newest -> oldest or reverse)
-2) New messages (an in-memory list received from querying the IMAP server)
+/*1/16/25: Files to change for email:
 
-We can only respond messages from the Saved screen because only these have the
-actual email text.
+LOTW MAIL_USER_DIR ($MUD): ~/.appdata/mail/<user_email_addr> 
 
-We can delete messages (via IMAP) from either screen.
+1) apps/Terminal.js
+  - Create a 'bdiv' in makeDOMElem, that goes right under 'tdiv
+  - Upon resizing, create Term.nrows number of divs (via string -> innerHTML).
+  - Put a 'multilineSelection' array on the actor (less)
+  - Upon rendering, iterate through this array and set backgroundColor values on the row divs
 
-So these are the functions:
-1) Compose (Reply is compose with to and subject filled in)
-2) Send
-3) Delete
+2) com_mail:
+  - Do a mini-REPL that "listens" for the major commands:
+	[f]etch [n]ew [s]aved [d]rafts [c]ontacts [o]utbox [s]ent
 
-We want our own database (like in mods/term/email.js) rather than merely using
-FS data nodes because we want to enable arbitrary schemas, without screwing around
-with the functionality of the  singular purpose of the FS database (making it
-more complex than necessary).
+	fetch: Get all envelopes since last_poll_time, and store in database new:<user_email_addr>
+	new: lists the envelopes in new:<user_email_addr>, and allows for fetching the email
+		text bodies, which moves the db entries into saved:<user_email_addr>
+	saved: lists the emails in saved:<user_email_addr>, and allows for deleting emails
+		(locally or remotely) as well as as responding to emails.
+	drafts: lists the emails in $MUD/Drafts.
+		- A draft may be created either through Saved->respond or Contacts->Compose
+	contacts: lists the "to" addresses in $MUD/contacts
+	outbox: lists the emails in $MUD/Outbox, which are finished drafts, and have all
+		"final" auto-formatting done to them. A "true rendering" of the email can be 
+		seen from here. The 'send' command will iterate through each of these, sending
+		them via the SMTP service, and them moving them into $MUD/Sent
+	sent: Lists all emails in $MUD/Sent
 
-In that email.js database, we made indexes out of 'from' and 'time'. I guess
-'from' is an email address. Then we can connect proper names (of people and
-organizations) with email addresses in another table (or database).
+
+	When using the 'less' module, add a 'multilineSelection' array and an 'exitChars' array
+	onto the less object.
+
+	When using the 'vim' module, add a 'saveFunc' for when the editor's text is to be put 
+	somewhere onto a data node (or possibly in a database). This function should return an 
+	object like:
+		{message: <...>, type: <suc|err|wrn>}
+
+3) $MUD/last_poll_time: The largest timestamp (the most recent inbound email) that has been 
+	entered into new:<user_email_addr>
+
+4) $MUD/contacts: A "data" JSON file, to be used as the contacts in the Contacts screen, with 
+	each "record" something like:
+
+		address: <email_address>,
+		real_name: full name,
+		aliases: list of aliases
+		tags: list of tags (business, personal, hobby...)
+
+	- And maybe such fields as:
+
+		dob: date of birth	
+		uri: website or canonical namespace
+
+	- The Contacts aliases should go somewhere in the global environment, for example:
+		globals.emailAliases[<user_email_addr>] = {
+			nick_a1: <email_address_a>,//Contact 'a' has <n> nicknames
+			nick_a2: <email_address_a>,
+			...
+			nick_a<n>: <email_address_a>,
+
+			nick_b1: <email_address_b>,//Contact 'b' has 2 nicknames
+			nick_b2: <email_address_b>,
+
+			nick_c1: <email_address_c>,//Contact 'c' has 1 nickname
+			...
+		}
+
+		FAPP, there should usually be only 1 nickname per unique email contact.
+
+
+5) mods/term/less.js:
+	In onkeydown-><SPACE>, check for the multilineSelection array member, and toggle the
+		appropriate value.
+	In onkeypress, check for the character's existence in exitChars, and in that case,
+		do 'less.exitChar = <char>', before quitting the module.
+
+6) mods/term/vim.js:
+	In the innermost part of vim's internal save function, check for vim.saveFunc, and
+		await on that, and put the return value's message onto the status bar.
+
+7) node/svcs/imap.js:
+	Allow for the following imap operations:
+		- Connect: return a unique/"random" connection session ID to be used in all subsequent operations
+			* We should probably only allow a single connection session at a time in the first version
+			* A session should "timeout" after TIMEOUT_SECS (proably 10->60 seconds) since the
+				last request was issued
+		- Fetch all envelopes since <timestamp>
+		- Fetch a single text body
+		- Disconnect
 
 */
-/*1/8/25: Shell Command Language 2.3.1 (Alias Substitution): I really have *no idea* «
-what they are talking about there (not that I've tried very hard to figure it all out).
-»*/
-/*1/7/25: «Now that we are working on the "real" test command (aka the '[' command),
-we need a way to tell getOptions @OEORMSRU to *not* check for options.
 
-Both 'test' and '[...]' are interfaces into the new 'eval_shell_expr' function.
-»*/
-/*1/6/25: «Getting environments working
-
-@IFKLJFSN is where we are passing an 'env' argument into addToEnv
-for the assignments array. We need to create new envs for comsubs!!!
-So it looks like we just need to pass in an 'sdup(cur_env)', for whenever we
-are going into deeper levels.
-
-Let's just pass the opts that are given as the second arg to
-Shell.devexecute (@SLDPEHDBF) into expandSubs. A big point of this is simply
-to efficiently pass these values (especially env, scriptName and scriptArgs) 
-into ParamSub.expand @KLSDHSKD.
-
-Now its just a matter of getting the fine arts of field-splitting and variable/parameter
-environments working nicely:
-1) So that commands like:
-~$ FOOD=1234 echo blah blah blah
-...do not pollute the environment with this value for 'FOOD' (assuming that 'FOOD' was unset
-or had another value).
-
-Also:
-~$ (FOOD=abcde)
-...should not pollute the environment like above, either.
-
-So now we need to create copied environments for the situations above...
-
-Then we need to have a concept of com_env
-
-»*/
-/*1/5/25: « NEED TO GET RID OF Word.parameterExpansion (@PMJDHSWL)??
-In CaseCom:
-  - @AKDMFLS
-  - @DJSLPEKS
-
-@AKDKRKSJ, we have a Word.expandSubs that is only passing the shell
-and the term args, but Word.expandSubs @XNDKSLDK has this signature:
-async expandSubs(shell, term, env, scriptName, scriptArgs)
-...TODO NEED TO FIND ALL THE PLACES THAT Word.expandSubs IS CALLED
-AND PUT THOSE ARGS IN THERE!!! $)T
-
-
-AT THE END OF THE DAY: It seems the only "real" issue is that double
-quotes no longer seem to keep their significance when I am doing
-assignments followed by echos, eg:
-
-~$ HAR=`ls`
-~$ echo "$HAR"
-
-WELL THIS PROBLEM IS MUCH MUCH BETTER THAN ALL OF THE OUTPUT SHOWING UP
-AS "[Object object]" !!!!!
-
-Apropos the note below (from yesterday), I am going to create Stdin
-and Stdin objects immediately after doing the heredoc stuff in the parser...
-@YJDHSLFJS.
-
-Now collecting all redirects (tok.isRedir) is much simpler because we just need
-the individual tokens themselves.
-
-Just cleaned up parseSimpleCommand @JEEKSMD.
-
-»*/
-/*XXX 1/4/25: We are only calling eatRedirects from parseCompoundCommand, and XXX«
-it doesn't know how to handle tok.isHeredoc @XPJSKLAJ. So we are just
-going to leave that for an exercise for...
-»*/
 //«Notes
-/*1/3/25:«
-
-Now we need to make sure about output redirections vis-a-vis compound commands,
-just like we did the "stdin thing." We did an envPipeInCb, so maybe we need an
-envRedirLines, for when there is an out_redir in our compound command....
-
-
-LPIRHSKF is where we check for this.nextCom with our simple command's out response.
-We need to to the same thing for compound commands. We need to put the nextCom's
-pipeIn callback into the environment of the commands that we are executing, when
-it comes to the compound commands, as well as functions and scripts???
-
-SO IT TURNS OUT THAT THE SHELL DOES DO FILEPATH EXPANSIONS ON PARAMETER SUBSTITUTIONS.
-IF THERE IS A REGEX COMPILATION ERROR, THEN IT JUST LETS IT PASS THROUGH.
-
-Now we are using the scanner to create ParamSub's from all valid uses of '$', e.g.:
-
-1) $BLAH
-2) $1
-3) $#
-4) ${...}
-
-@MXDHSOERJ I want to look for the sequence:
-'$' + any character that can be substituted
-For a parameter that is not enclosed in braces:
-
-If the parameter is a name, the expansion shall use the longest valid name (see
-XBD 3.216 Name), whether or not the variable denoted by that name exists.
-
-In the shell command language, a word consisting solely of underscores, digits,
-and alphabetics from the portable character set. The first character of a name
-is not a digit.
-
-Note:
-The Portable Character Set is defined in detail in 6.1 Portable Character Set.
-
-Otherwise, the parameter is a single-character symbol, and behavior is
-unspecified if that character is neither a digit nor one of the special
-parameters (see 2.5.2 Special Parameters).
-@ * # ? - $ ! 0
-
-Need to pass the stdin of ScriptCom into its execute function, and 
-need to make sure we are doing the same kind of thing for functions and compound 
-commands. I think com_read needs to check for an EOF in order to return E_ERR. 
-NO: COM_READ JUST NEEDS TO GET THE STDIN ARRAY.
-1) ScriptCom @SKDMRJJS
-2) FunctionCom
-
-For parsing, need to allow brace group compound lists to end with '}'...
-
-
-OKAY: In Shell.makeCommand @MFJKTYUS is where we are doing the conversion from
-the array of in_redir tokens, e.g. ["<", "SomeFile.txt"] to the actual lines of
-standard input.
-BUT WE SHOULD ACUTALLY DO IT IN Shell.executePipeline2 @DNGZXER. 
-
-The only difference etween simple_command and compound_command when it comes to
-collecting redirs is that they are already together with compound_command's but
-they are intermingled with assignments before the simple command names and with
-arguments after the simple command names.
-
-
-When we are doing expansions, for example parameter subs @LSJFANSF: We need a
-way to "mask off" these characters from the rest, so there are no further
-substitutions attempted on them.  This goes for all the expansions (tilde, command, etc.)...
-@XMJFGRTU, we are constructing the RegExp's for pathname expansions.
-
-HOW ABOUT @EORKTIG, we first have a check for if ch.wasExpanded, and do:
-
-patstr += "\"+ch;
-
-@WIUTYSNFI, need a way to escape our filepath expansion chars, defined @EPRORMSIS
-
-»*/
-/*1/1/25: Need to find all the places where we have repeating do_group's«
-	- ForCom
-»*/
-/*12/31/24: Parameter Expansions @PMJDHSWL have a weird new ParamSub (@XMKJDHE) object that«
-has an empty expand method. It will be easy to get this working in the case that
-there is only a number or a plain word in there...
-
-In all of these places where we need to repeatedly re-use certain
-compound_list's, we either need to:
--  Have a dup method for the compound_list, in order to duplicate all of the Word objects
--  save the source text that makes up these objects and then send it back through the parser
-   in order to get another one.
-
-The ForCom @SLDLTOD is highlighting our inability to figure out how the environments
-are used in the Unix shell. When calling shell.execute, @XKLRSMFLE, we create a new
-(shallow) copy of the terminal's environment object. I guess we are only supposed to
-do that copying when we are doing the subshell. Also, the assignments before an
-*actual* command do not go into the terminal's environment. I guess there needs to
-be a separate command env object...
-
-
-
-NOW JUST ONE MORE KIND OF COMPOUND_COMMAND (CASE_CLAUSE) TO MAKE THIS A PRETTY
-MUCH FEATURE COMPLETE MINIMAL LINUX DISTRO??? 
-
-
-»*/
-/*12/30/24: Just had an issue with EOFs inside of scripts @LPIRHSKF. For some reason, it was«
-assumed that EOFs should only go to the next commands in your immediate pipeline,
-and not to the scriptOut callback...
-»*/
 //»
 
 //Terminal Imports«
