@@ -25,6 +25,9 @@ that exists on the server, so we can do something like:
 ... or even just
 	$ mail --init=`curemailaddr`
 
+Let's get this via an '/_env' request, so this will be something like:
+	await fetch('/_env?val=EMAIL_USER')
+
 Then for every backend service request, we will send <user_email_addr> along, and reject 
 the request if the server is not using the same one (hardcoded into the server's 
 memory via the environment variables, EMAIL_USER and EMAIL_PASSWORD).
@@ -1487,6 +1490,17 @@ log(num);
 		this.killed = true;
 cwarn(`${this.name}: cancelled`);
 	}
+	checkRet(val, fname){
+		if (val===true) return true;
+		if (isStr(val)) {
+			this.no(val);
+			return false;
+		}
+		cwarn("Here is the non-true value");
+		log(val);
+		this.no(`non-true value returned from '${fname}' (see console)`);
+		return false;
+	}
 }//»
 const ScriptCom = class extends Com{//«
 	constructor(shell, name, text, args, env){
@@ -1845,9 +1859,20 @@ run(){
 »*/
 
 //YWPOEKRN
+//XXXXXXXXXXXX
+
+const com_curemailaddr = class extends Com{/*«*/
+	init(){}
+	async run(){
+		let rv = await fetch('/_env?key=EMAIL_USER');
+		if (!rv.ok) return this.no("EMAIL_USER: not found");
+		this.out(await rv.text());
+		this.ok();
+	}
+}/*»*/
 
 const com_mail = class extends Com{/*«*/
-static opts={l:{add:1, del: 1, get: 1}};
+static opts={l:{add:1, del: 1, get: 1, drop: 1}};
 init(){
 }
 
@@ -1958,6 +1983,7 @@ log(db);
 */
 
 async run(){
+const{args, opts}=this;
 
 const MAIL_DBNAME = "mail";
 
@@ -1999,6 +2025,10 @@ log("Making DBVERS_FILE...");
 	this.version = data.value;
 	return this.version;
 }/*»*/
+async resetDBVers(){/*«*/
+	if (!this.#dbVersNode) return `No 'database version node'!`;
+	return await this.#dbVersNode.setDataValue(1);
+}/*»*/
 async getUsers(){//«
 	let fname = this.#usersFile;
 	let users_node = await fsapi.mkFile(fname);
@@ -2026,8 +2056,6 @@ async updateInfo(){/*«*/
 async initDB(username, opts={}){//«
 //async initDB(username, if_del){
 
-let in_table_name = `in:${username}`;
-
 let ver_num = await this.getDBVers();/*«*/
 if (isStr(ver_num)) return ver_num;
 if (!Number.isFinite(ver_num)) {
@@ -2035,6 +2063,7 @@ cwarn("Here is the non-numerical value");
 log(ver_num);
 	return "invalid value returned from getDBVers (expected a number, see console)";
 }/*»*/
+
 let users = await this.getUsers();/*«*/
 if (isStr(users)) return users;
 if (!isArr(users)){
@@ -2042,7 +2071,13 @@ cwarn("Here is the non-array value");
 log(users);
 	return "invalid value returned from getUsers (expected an array, see console)";
 }/*»*/
-
+let in_table_name;
+if (opts.drop){
+if (ver_num===0) return `'drop' called with db version = 0!`;
+}
+else if (!username) return `no username given!`
+else{
+in_table_name = `in:${username}`;
 if (opts.add){/*«*/
 	if (users.includes(username)) return `users already has: ${username}`
 	this.version++;
@@ -2057,6 +2092,7 @@ else{/*«*/
 		this.version++;
 	}/*»*/
 }/*»*/
+}
 
 return new Promise((Y,N)=>{//«
 	let req = indexedDB.open(MAIL_DBNAME, this.version);
@@ -2185,12 +2221,11 @@ cerr("Error deleting database.");
 cwarn("BLOCKED");
 			Y();
 		};
-		req.onsuccess = (event) => {
+		req.onsuccess = (e) => {
 			Y(true);
 		};
 	});
 }//»
-
 /*//«
 async init(if_del){
 	if (this.#db) {
@@ -2207,32 +2242,32 @@ throw new Error("init_db() failed!");
 }//»
 
 let db = new DB();
+if (opts.drop){
+	let rv = await db.initDB(null,{drop: true});
+	if (!this.checkRet(rv, "initDB")) return;
+	if (!await db.dropDatabase()) return this.no("Drop database: failed");
+	rv = await db.resetDBVers();
+	if (!this.checkRet(rv, "resetDBVers")) return;
+	this.ok();
+}
 
-//log(db);
-//log(this.opts);
-//const{add, del, get}=this.opts;
-const{args}=this;
+/*«
 let user = args.shift();
 if (!user) return this.no("username needed");
 let op = args.shift();
 if (!op) return this.no("opcode needed");
-//log(user, op);
 let rv = await db.initDB(user);
 if (isStr(rv)) return this.no(rv);
 if (rv!==true){
-	cwarn("Here is the non-true value");
-	log(rv);
+cwarn("Here is the non-true value");
+log(rv);
 	this.no("non true value returned from initDB (see console)");
 	return;
 }
 log(db);
-//log("RV",rv);
-//if (add){
-//log(`ADD: ${add}`);
-//address = address.toLowerCase();
-//let in_table_name = `in:${address}`;
-//}
 this.ok();
+*//*»*/
+
 }
 
 }/*»*/
@@ -2927,6 +2962,7 @@ async run(){
 
 this.defCommands={//«
 //const shell_commands={
+curemailaddr: com_curemailaddr,
 mail: com_mail,
 "[": com_brackettest,
 workman: com_workman,
@@ -6270,7 +6306,6 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		envPipeInCb,
 		envRedirLines
 	}//»
-//XXXXXXXXXXXX
 	if (!name) {
 		return new NoCom();
 	}

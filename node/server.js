@@ -150,6 +150,10 @@ log(rv);
 //	res.end(JSON.stringify(rv.message));
 //	res.end(rv.message);
 }//»
+else if (which==="env"){
+	if (!args.key) return no(res, "'env' requires a 'key' arg");
+	res.end(process.env[args.key]||"");
+}
 else no(res, `Bad service: ${which}`);
 
 };//»
