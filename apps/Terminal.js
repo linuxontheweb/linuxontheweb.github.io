@@ -1490,17 +1490,25 @@ log(num);
 		this.killed = true;
 cwarn(`${this.name}: cancelled`);
 	}
-	checkRet(val, fname){
+	checkStrOrTrue(val, fname, opts={}){//«
+/*This is for function calls that return either:
+1) true upon success
+2) a string error message upon failure
+*/
 		if (val===true) return true;
 		if (isStr(val)) {
-			this.no(val);
+			if (opts.noExit) this.err(val);
+			else this.no(val);
 			return false;
 		}
-		cwarn("Here is the non-true value");
-		log(val);
-		this.no(`non-true value returned from '${fname}' (see console)`);
+cwarn("Here is the non-true value");
+log(val);
+		if (!fname) fname="?";
+		let mess = `non-true value returned from '${fname}' (see console)`;
+		if (opts.noExit) this.err(mess);
+		else this.no(mess);
 		return false;
-	}
+	}//»
 }//»
 const ScriptCom = class extends Com{//«
 	constructor(shell, name, text, args, env){
@@ -1872,7 +1880,7 @@ const com_curemailaddr = class extends Com{/*«*/
 }/*»*/
 
 const com_mail = class extends Com{/*«*/
-static opts={l:{add:1, del: 1, get: 1, drop: 1}};
+static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
 init(){
 }
 
@@ -1983,7 +1991,7 @@ log(db);
 */
 
 async run(){
-const{args, opts}=this;
+const{args, opts, term}=this;
 
 const MAIL_DBNAME = "mail";
 
@@ -2242,14 +2250,43 @@ throw new Error("init_db() failed!");
 }//»
 
 let db = new DB();
-if (opts.drop){
-	let rv = await db.initDB(null,{drop: true});
-	if (!this.checkRet(rv, "initDB")) return;
+let rv;
+if (opts.drop){//«
+	rv = await term.getch(`Drop database: '${MAIL_DBNAME}'? [y/N]`);
+	if (!(rv==="y"||rv==="Y")) return this.no("not dropping");
+	rv = await db.initDB(null,{drop: true});
+	if (!this.checkStrOrTrue(rv, "initDB")) return;
 	if (!await db.dropDatabase()) return this.no("Drop database: failed");
 	rv = await db.resetDBVers();
-	if (!this.checkRet(rv, "resetDBVers")) return;
+	if (!this.checkStrOrTrue(rv, "resetDBVers")) return;
 	this.ok();
-}
+}//»
+else if (opts.init){//«
+
+let addr = opts.init;
+rv = await term.getch(`Create user: '${addr}'? [y/N]`);
+if (!(rv==="y"||rv==="Y")) return this.no("not creating");
+cwarn("CREATE",addr);
+this.ok();
+
+}//»
+else if (opts.del){//«
+
+let addr = opts.del;
+rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
+if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
+cwarn("DELETE",addr);
+this.ok();
+
+}//»
+else if (opts.use){//«
+cwarn("USE", opts.use);
+this.ok();
+}//»
+else{//«
+cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
+this.ok();
+}//»
 
 /*«
 let user = args.shift();
@@ -2266,7 +2303,7 @@ log(rv);
 }
 log(db);
 this.ok();
-*//*»*/
+»*/
 
 }
 
