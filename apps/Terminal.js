@@ -1,4 +1,9 @@
-/*1/16/25: The LOTW e-mail "application"
+/*1/18/25: Just made a 'bgdiv' under the 'tabdiv', which internally consists of
+'nRows' worth of divs (@SJRMSJR), to be used for such things as multiline selection 
+toggling within a pager. We now have a 'bgRowStyles' array property on the terminal 
+object, so that the render loop can quickly set (or unset) the backgroundColor properties.
+*/
+/*1/16/25: The LOTW e-mail "application"«
 
 A basic "lesson" here is that applications should *generally* make use of data nodes,
 if for no other reason than that there is no real non-system-level (via backend JS) way of
@@ -76,7 +81,7 @@ be a fairly reasonable way to go.
 On the server
 
 3) apps/Terminal.js: Terminal app (new div to render "toggled on" lines)//«
-  - Create a 'bdiv' in makeDOMElem, that goes right under 'tdiv'
+  - Create a 'bdiv' in makeDOMElem, that goes right under 'tabdiv'
   - Upon grid init/resizing, create Term.nrows number of divs (via string -> innerHTML).
   - Upon rendering, iterate through the less.multilineSelection array and set/unset the
 		backgroundColor values on the relevant row divs
@@ -157,7 +162,7 @@ On the server
 	- Probably something needs to be change here...???
 //»
 
-*/
+»*/
 
 //«Notes
 //»
@@ -1993,6 +1998,7 @@ log(db);
 async run(){
 const{args, opts, term}=this;
 
+//Put this onto globals somewhere...
 const MAIL_DBNAME = "mail";
 
 class DB {//«
@@ -2013,6 +2019,8 @@ constructor(){/*«*/
 	this.#dbVersFile = `${mail_data_path}/db_vers`;
 	this.#usersFile = `${mail_data_path}/users`;
 	this.#curUserFile = `${mail_data_path}/curuser`;
+	this.dbName = MAIL_DBNAME;
+
 }/*»*/
 
 async getDBVers(){/*«*/
@@ -2103,7 +2111,7 @@ else{/*«*/
 }
 
 return new Promise((Y,N)=>{//«
-	let req = indexedDB.open(MAIL_DBNAME, this.version);
+	let req = indexedDB.open(this.dbName, this.version);
 	req.onerror=e=>{
 cerr(e);
 		Y();
@@ -2220,7 +2228,7 @@ async addMessageText(id, text){//«
 async dropDatabase(){//«
 	return new Promise((Y,N)=>{
 		this.#db.close();
-		const req = window.indexedDB.deleteDatabase(MAIL_DBNAME);
+		const req = window.indexedDB.deleteDatabase(this.dbName);
 		req.onerror = (event) => {
 cerr("Error deleting database.");
 			Y();
@@ -6987,6 +6995,12 @@ tabdiv._loc(0,0);
 tabdiv.style.tabSize = this.tabSize;
 wrapdiv.tabdiv = tabdiv;
 //»
+let bgdiv = make('div');
+bgdiv._w="100%";
+bgdiv._h="100%";
+bgdiv._pos="absolute";
+bgdiv._loc(0,0);
+
 let statdiv = make('div');//«
 statdiv._w="100%";
 statdiv._h="100%";
@@ -7073,6 +7087,8 @@ overdiv.onmousemove = e=>{//«
 	if (Desk) Desk.mousemove(e);
 };//»
 //»
+
+wrapdiv.appendChild(bgdiv);
 wrapdiv.appendChild(tabdiv);
 main.appendChild(wrapdiv);
 main.appendChild(areadiv);
@@ -7081,6 +7097,7 @@ this.tabSize = parseInt(tabdiv.style.tabSize);
 this.textarea = textarea; 
 this.areadiv = areadiv;
 this.tabdiv = tabdiv;
+this.bgdiv = bgdiv;
 this.wrapdiv = wrapdiv;
 this.overlay = overlay;
 this.statdiv = statdiv;
@@ -7815,6 +7832,15 @@ if (num2 > this.w) {
 			if (!stat_input_type) usestr = '<span style=background-color:#aaa;color:#000>'+usestr+'</span>'
 		}//»
 		this.updateStatLines([usestr]);
+if (actor.multilineSels){
+let sels = actor.multilineSels;
+let stys = this.bgRowStyles;
+for (let i=0; i < donum; i++){
+//let n = i+scry;
+//cwarn("SETTING", n);
+stys[i].backgroundColor=sels[i+scry]?"#555":"";
+}
+}
 	}//»
 
 	if (this.minHeight && this.h < this.minHeight){
@@ -8031,6 +8057,16 @@ scrollIntoView(which){//«
 	this.y=lines.length - 1 - this.scrollNum;
 	return did_scroll;
 }//»
+setBgRows(){//«
+//SJRMSJR
+	this.bgdiv.innerHTML = "<div> </div>".repeat(this.nRows);
+	let arr = Array.from(this.bgdiv.children);
+	let stys=[];
+	for (let div of arr){
+		stys.push(div.style);
+	}
+	this.bgRowStyles = stys;
+}//»
 resize()  {//«
 	const{actor, tabdiv, wrapdiv, main}=this;
 	if (this.Win.killed) return;
@@ -8060,6 +8096,7 @@ resize()  {//«
 	this.h = this.nRows;
 	if (!(oldw==this.w&&oldh==this.h)) this.doOverlay();
 	this.lineHeight = wrapdiv.clientHeight/this.h;
+	this.setBgRows();
 	this.scrollIntoView();
 	this.scrollMiddle();
 	if (this.numStatLines) this.generateStatHtml();

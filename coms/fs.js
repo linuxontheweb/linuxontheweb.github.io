@@ -260,6 +260,7 @@ async init(){//«
 		return;
 	}
 	this.pager = new NS.mods[DEF_PAGER_MOD_NAME](this.term);
+	this.pager.exitChars=["q"];
 	let path = this.args.shift();
 	let arr;
 	let name;
@@ -286,10 +287,19 @@ async init(){//«
 		arr = val.split("\n");
 		name = node.name;
 	}
+
+//Imitate a multiline selection
+//	let sels=[];
+//	for (let ln of arr) sels.push(false);
+//	this.pager.multilineSels = sels;
+//	this.awaitCb = this.pager.init(arr, name, {opts, lineSelect: true});
+
 	this.awaitCb = this.pager.init(arr, name, {opts});
 }//»
 async run(){
 	await this.awaitCb;
+//Reset the terminal background rows
+//this.term.setBgRows();
 	this.ok();
 }
 pipeIn(val){
@@ -311,6 +321,12 @@ async init(){//«
 		return;
 	}
 	this.editor = new NS.mods[DEF_EDITOR_MOD_NAME](this.term);
+/*
+this.editor.saveFunc = async(val)=>{
+//log("SAVING...", val);
+return {mess: "YIM ON THE YIM YIM YIM", type: 2};
+};
+*/
 	let path = args.shift();
 	let val;
 	let node;
@@ -376,7 +392,7 @@ log(val);
 		symbols,
 	});
 }//»
-async run(){
+async run(){/*«*/
 	await this.awaitCb;
 	if (this.pipeTo || this.opts["force-stdout"]){
 		this.out(this.editor.get_lines({str: true}).join("\n"));
@@ -386,12 +402,12 @@ async run(){
 		this.redirLines.push(...lns);
 	}
 	this.ok();
-}
-pipeIn(val){
+}/*»*/
+pipeIn(val){/*«*/
 	if (this.killed) return;
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
-}
+}/*»*/
 cancel(){
 //this.killed = true;
 this.editor.quit();

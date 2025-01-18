@@ -1320,6 +1320,20 @@ log("Saved",ret.size);
 	}
 	let val = arr[0];
 	let numlines = arr[1];
+	if (this.saveFunc){
+/*
+This is largely for applications that internally call vim in order to set a field
+on an FSNode of type = IDB_DATA_TYPE. When this function exists, there should
+*PROBABLY ALREADY BE* an FSNode with a particular full path in the filesystem.
+Meaning that this should always be a simple "Save" call rather than any kind of
+"Save As" call.
+*/
+		let rv = await this.saveFunc(val);
+		stat_message = rv.mess;
+		stat_message_type = rv.type||STAT_NONE;
+		render();
+		return;
+	}
 	let opts={retObj: true};
 	let usepath = edit_fullpath;
 	let OK_TYPES=[FS_TYPE];

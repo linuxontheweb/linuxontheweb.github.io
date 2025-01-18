@@ -2,7 +2,7 @@
 //Imports«
 const util = LOTW.api.util;
 const globals = LOTW.globals;
-const{strNum, isArr, isStr, log, jlog, cwarn, cerr, isEOF}=util;
+const{strNum, isArr, isStr, isBool, log, jlog, cwarn, cerr, isEOF}=util;
 //»
 
 export const mod = function(termobj) {
@@ -300,7 +300,15 @@ this.onkeydown=(e, sym, code)=>{//«
 		else return;
 		render();
 	}//»
-	else if (sym=="SPACE_"){//«
+else if (sym=="SPACE_"){
+	const{multilineSels: sels} = this;
+	let n = y+scroll_num;
+	if (sels && isBool(sels[n])){
+		sels[n]=!sels[n];
+		render();
+	}
+}
+	else if (sym=="SPACE_A"){//«
 		if (raw_lines&&fmt_lines){
 			if (lines===raw_lines) {
 				lines = fmt_lines;
@@ -311,9 +319,7 @@ this.onkeydown=(e, sym, code)=>{//«
 				less.fname = `${filename} -raw-`;
 			}
 			if (scroll_num > lines.length) scroll_num=lines.length-termobj.h+1;
-//			set_lines();
-
-			termobj.set_lines(lines, line_colors);
+			termobj.setLines(lines, line_colors);
 			render();
 		}
 	}//»
@@ -404,7 +410,13 @@ else if (sym=="ENTER_"){//«
 this.onkeypress=(e, sym, code)=>{//«
 
 	if (!this.stat_input_type) {
-		if (sym==="q") quit();
+		if (this.exitChars){
+			if (this.exitChars.includes(sym)){
+				this.exitChar = sym;
+				quit();
+			}
+		}
+		else if (sym==="q") quit();
 		return;
 	}
 	if (!(code >= 32 && code <= 126)) return;
