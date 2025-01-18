@@ -1,8 +1,20 @@
-/*1/18/25: Just made a 'bgdiv' under the 'tabdiv', which internally consists of
+/*1/18/25: Just made a 'bgdiv' under the 'tabdiv', which internally consists of«
 'nRows' worth of divs (@SJRMSJR), to be used for such things as multiline selection 
 toggling within a pager. We now have a 'bgRowStyles' array property on the terminal 
 object, so that the render loop can quickly set (or unset) the backgroundColor properties.
-*/
+
+Now we have "multiline toggling" (via multilineSels) plus exitChars -> exitChar
+functionality in less, and the saveFunc functionality in vim, in order to allow
+for more application-controllable workflows with these modules.
+
+The 'mail' app is just a bunch of juggling back and forth between the mini-REPL,
+the multiline-selection/multikey-quit modes of less, and the saveFunc mode of
+vim.
+
+The "inward" flow is "Poll for New"->New->Saved.
+The "outward" flow is (Contacts->compose or Saved->respond) -> Drafts -> Outbox -> Sent
+
+»*/
 /*1/16/25: The LOTW e-mail "application"«
 
 A basic "lesson" here is that applications should *generally* make use of data nodes,
@@ -1999,7 +2011,9 @@ async run(){
 const{args, opts, term}=this;
 
 //Put this onto globals somewhere...
-const MAIL_DBNAME = "mail";
+//const MAIL_DBNAME = "mail";
+const MAIL_DB_NAME = globals.MAIL_DB_NAME;
+cwarn("MAIL", MAIL_DB_NAME);
 
 class DB {//«
 #db;
@@ -2018,8 +2032,8 @@ constructor(){/*«*/
 	let mail_data_path =`${globals.APPDATA_PATH}/mail`;
 	this.#dbVersFile = `${mail_data_path}/db_vers`;
 	this.#usersFile = `${mail_data_path}/users`;
-	this.#curUserFile = `${mail_data_path}/curuser`;
-	this.dbName = MAIL_DBNAME;
+	this.#curUserFile = `${mail_data_path}/cur_user`;
+	this.dbName = MAIL_DB_NAME;
 
 }/*»*/
 
@@ -2242,6 +2256,13 @@ cwarn("BLOCKED");
 		};
 	});
 }//»
+async getCurUser(){
+//cwarn("getCurUser", this.#curUserFile);
+let node = await this.#curUserFile.toNode();
+if (!node) return;
+return node.data.value;
+//log(node);
+}
 /*//«
 async init(if_del){
 	if (this.#db) {
@@ -2260,7 +2281,7 @@ throw new Error("init_db() failed!");
 let db = new DB();
 let rv;
 if (opts.drop){//«
-	rv = await term.getch(`Drop database: '${MAIL_DBNAME}'? [y/N]`);
+	rv = await term.getch(`Drop database: '${MAIL_DB_NAME}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not dropping");
 	rv = await db.initDB(null,{drop: true});
 	if (!this.checkStrOrTrue(rv, "initDB")) return;
@@ -2293,7 +2314,9 @@ this.ok();
 }//»
 else{//«
 cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
-this.ok();
+rv = await db.getCurUser();
+if (rv) return this.no("could not get the current user");
+this.ok(rv);
 }//»
 
 /*«
@@ -7832,15 +7855,13 @@ if (num2 > this.w) {
 			if (!stat_input_type) usestr = '<span style=background-color:#aaa;color:#000>'+usestr+'</span>'
 		}//»
 		this.updateStatLines([usestr]);
-if (actor.multilineSels){
-let sels = actor.multilineSels;
-let stys = this.bgRowStyles;
-for (let i=0; i < donum; i++){
-//let n = i+scry;
-//cwarn("SETTING", n);
-stys[i].backgroundColor=sels[i+scry]?"#555":"";
-}
-}
+		if (actor.multilineSels){
+			let sels = actor.multilineSels;
+			let stys = this.bgRowStyles;
+			for (let i=0; i < donum; i++){
+				stys[i].backgroundColor=sels[i+scry]?"#555":"";
+			}
+		}
 	}//»
 
 	if (this.minHeight && this.h < this.minHeight){

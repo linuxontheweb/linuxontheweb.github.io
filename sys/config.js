@@ -72,6 +72,8 @@ const DESK_PATH = `${HOME_PATH}/Desktop`;
 
 //Values/Strings«
 
+const MAIL_DB_NAME = "mail";
+
 const MAX_TEXTAREA_BYTES = 10000;
 
 const DEF_EDITOR_MOD_NAME = "term.vim";
@@ -431,6 +433,8 @@ export const globals = {//«
 	DEF_BIN_APP,
 	WRITING_APPS,
 	VIEWONLY_APPS,
+
+	MAIL_DB_NAME,
 
 	DEF_EDITOR_MOD_NAME,
 	DEF_PAGER_MOD_NAME,
