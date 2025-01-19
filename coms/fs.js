@@ -1,4 +1,3 @@
-
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -438,9 +437,7 @@ run:
 const com_cat = class extends Com{//«
 	#useTerm = false;
 	init(){
-//		if (this.noInputOrArgs()) return this.no();
 		if (this.noInputOrArgs({noErr: true})){
-//log("READ FROM TERM");
 			this.#useTerm = true;
 		}
 		this.maybeSetNoPipe();

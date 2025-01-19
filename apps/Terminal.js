@@ -1,3 +1,30 @@
+/*1/19/25:«
+
+This doesn't work:
+  $ cat | less
+
+...because less is the "actor" in the terminal (@CLKIRYUT), which eats up all key strokes,
+before the readLine mechanism can take effect @LOUORPR.
+
+An "actor" is whatever grabs the screen. We should distinguish between different kinds
+of actors:
+  editors: greedily grab every key event there is (editors want maximum control)
+  pagers: grab only key downs (command keys) unless there is an active "input line"
+    at the bottom of the screen to handle textual "command lines" (like searching 
+	for a string).
+
+Because 'grep' is *not* an "actor", the following command works:
+  $ cat | grep blah
+
+In the "real Linux" version of less, the command input mechanism doesn't seem
+to work ('cat' appears to eat up all the keystrokes).
+
+So we would need to check for #readLineCb before sending into the actor, which
+should eat up all...
+
+»*/
+
+//«Notes
 /*1/18/25: Just made a 'bgdiv' under the 'tabdiv', which internally consists of«
 'nRows' worth of divs (@SJRMSJR), to be used for such things as multiline selection 
 toggling within a pager. We now have a 'bgRowStyles' array property on the terminal 
@@ -14,6 +41,20 @@ vim.
 The "inward" flow is "Poll for New"->New->Saved.
 The "outward" flow is (Contacts->compose or Saved->respond) -> Drafts -> Outbox -> Sent
 
+Let's keep everything in /var/appdata/mail, so there is no question as to whether a
+command line user can mess with the application logic. Here there will be:
+1) db_vers
+2) cur_user
+
+Upon the creation of "USER(<email_addr>)", we need at least:
+1) data store: "new:<email_addr>"
+2) data store: "saved:<email_addr>"
+3) FS directory: "/var/appdata/mail/<email_addr>"
+
+For every addition (or deletion) of a user, we will need to increment db_vers, since
+each of these operations changes the object store configuration of the "mail"
+database.
+
 »*/
 /*1/16/25: The LOTW e-mail "application"«
 
@@ -23,14 +64,14 @@ creating/modifying them. The only issue is whether a user has *already* created 
 of the following files as "regular" (FS_TYPE) files. 
 
 All of our (non-databased) data goes in the (user-facing) LOTW folder:
-	MAIL_USER_DIR ($MUD): ~/.appdata/mail/<user_email_addr> 
+	MAIL_USER_DIR ($MUD): /var/appdata/mail/<user_email_addr> 
 
 This directory, along with the database stores "new:<user_email_addr>" and 
 "saved:<user_email_addr>" will be created upon using the command: 
 	$ mail --init=<user_email_addr>
 
 Then we can make the file:
-	~/.appdata/mail/cur_mail_addr (which points to the "active" $MUD)
+	/var/appdata/mail/cur_user (which points to the "active" $MUD)
 
 Also:
 	$ mail --use=<user_email_addr> can set the $MUD to another existing one.
@@ -175,8 +216,6 @@ On the server
 //»
 
 »*/
-
-//«Notes
 //»
 
 //Terminal Imports«
@@ -1896,118 +1935,13 @@ const com_curemailaddr = class extends Com{/*«*/
 	}
 }/*»*/
 
-const com_mail = class extends Com{/*«*/
-static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
-init(){
-}
+const com_mail = class extends Com{//«
 
-/*
-async getDB(){//«
+//static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
 
-	if (!await mkDir(APPDATA_PATH,"mail")){
-		Y(`Could not create the mail data directory: ${MAILDATA_PATH}`);
-		return;
-	}
+init(){}
 
-	let dbvers_node = await DBVERS_FILE.toNode();
-	if (!dbvers_node){
-log("Making DBVERS_FILE...");
-		dbvers_node = await mkFile(DBVERS_FILE,{data: {type: "number", value: 0}});
-		if (!dbvers_node) return Y(`Could not get DBVERS_FILE (${DBVERS_FILE})`);
-	}
-	let db_vers_data = await dbvers_node.getValue();
-	if (!db_vers_data) return Y(`Could not get the data from DBVERS_FILE (${DBVERS_FILE})`);
-	if (!(isObj(db_vers_data) && db_vers_data.type == "number" && Number.isFinite(db_vers_data.value))){
-		return Y(`Invalid data returned from DBVERS_FILE (${DBVERS_FILE})`);
-	}
-	let db_vers = db_vers_data.value;
-
-	users_node = await mkFile(USERS_FILE);
-	if (!users_node) return Y(`Could not get the users file: ${USERS_FILE}`);
-	users = (await users_node.text).split("\n");
-	if (!users[0]) users.shift();
-
-log("USERS", users);
-//Users file format:
-//address1 [whitespace separated list of aliases...]
-//...
-
-//For adduser/deluser/etc, do all that stuff here and then return before init_new_screen.
-if (op){//«
-	if (op=="add"){
-		db_vers++;
-		if (users.includes(address)){
-	cerr(`add: users[] already has: ${address}`);
-			return Y();
-		}
-		users.push(address);
-		db = new DB(db_vers, in_table_name);
-
-		if (!await db.init()){
-cerr("Could not initialize the db for adding");
-			return Y();
-		}
-log(db);
-
-	}
-	else if (op=="del"){
-
-		let ind = users.indexOf(address);
-		if (ind == -1){
-	cerr(`del: users[] does not have: ${address}`);
-			return Y();
-		}
-
-		db_vers++;
-		users.splice(ind, 1);
-		db = new DB(db_vers, in_table_name);
-
-		if (!await db.init(true)){
-cerr("Could not initialize the db for deleting");
-			return Y();
-		}
-log(db);
-
-	}
-	else{
-cerr(`Unknown operation in init: ${op}`);
-		return Y();
-	}
-
-	if (!await dbvers_node.setValue({type:"number", value: db_vers})){
-cerr("Could not set the new db version");
-		return Y();
-	}
-
-	if (!await users_node.setValue(users.join("\n"))){
-cerr("Could not setValue for users_node!?!?");
-log(users_node);
-		return Y();
-	}
-
-	db.close();
-	Y(true);
-	return;
-
-}//»
-
-if (!users.includes(address)) {
-	return Y(`The address (${address}) has not been added!`);
-}
-
-db = new DB(db_vers, in_table_name);
-
-
-if (!await db.init()){
-cerr("Could not initialize the db");
-return Y();
-}
-
-log(db);
-}//»
-*/
-
-async run(){
+async run(){//«
 const{args, opts, term}=this;
 
 //Put this onto globals somewhere...
@@ -2025,7 +1959,7 @@ class DB {//«
 #users;
 #usersNode;
 
-constructor(){/*«*/
+constructor(){//«
 //	this.storeName = table_name;
 //	this.#mailDataPath=`${globals.APPDATA_PATH}/mail`;
 
@@ -2035,9 +1969,9 @@ constructor(){/*«*/
 	this.#curUserFile = `${mail_data_path}/cur_user`;
 	this.dbName = MAIL_DB_NAME;
 
-}/*»*/
+}//»
 
-async getDBVers(){/*«*/
+async getDBVers(){//«
 	let fname = this.#dbVersFile;
 	let node = await fname.toNode();
 	if (!node){
@@ -2054,11 +1988,11 @@ log("Making DBVERS_FILE...");
 	}
 	this.version = data.value;
 	return this.version;
-}/*»*/
-async resetDBVers(){/*«*/
+}//»
+async resetDBVers(){//«
 	if (!this.#dbVersNode) return `No 'database version node'!`;
 	return await this.#dbVersNode.setDataValue(1);
-}/*»*/
+}//»
 async getUsers(){//«
 	let fname = this.#usersFile;
 	let users_node = await fsapi.mkFile(fname);
@@ -2071,7 +2005,7 @@ async getUsers(){//«
 	this.#users = users;
 	return users;
 }//»
-async updateInfo(){/*«*/
+async updateInfo(){//«
 //	if (!await this.#dbVersNode.setValue({type:"number", value: this.version})){
 	if (!await this.#dbVersNode.setDataValue(this.version)){
 		return "Could not setValue for dbVersNode";
@@ -2082,19 +2016,19 @@ async updateInfo(){/*«*/
 		return "Could not setValue for usersNode";
     }
 	return true;
-}/*»*/
+}//»
 async initDB(username, opts={}){//«
 //async initDB(username, if_del){
 
-let ver_num = await this.getDBVers();/*«*/
+let ver_num = await this.getDBVers();//«
 if (isStr(ver_num)) return ver_num;
 if (!Number.isFinite(ver_num)) {
 cwarn("Here is the non-numerical value");
 log(ver_num);
 	return "invalid value returned from getDBVers (expected a number, see console)";
-}/*»*/
+}//»
 
-let users = await this.getUsers();/*«*/
+let users = await this.getUsers();//«
 if (isStr(users)) return users;
 if (!isArr(users)){
 cwarn("Here is the non-array value");
@@ -2108,20 +2042,20 @@ if (ver_num===0) return `'drop' called with db version = 0!`;
 else if (!username) return `no username given!`
 else{
 in_table_name = `in:${username}`;
-if (opts.add){/*«*/
+if (opts.add){//«
 	if (users.includes(username)) return `users already has: ${username}`
 	this.version++;
-}/*»*/
-else{/*«*/
+}//»
+else{//«
 	let ind = users.indexOf(username);
 	if (ind == -1){
 		return `users does not have: ${username}`;
 	}
-	if (opts.del){/*«*/
+	if (opts.del){//«
 		users.splice(ind, 1);
 		this.version++;
-	}/*»*/
-}/*»*/
+	}//»
+}//»
 }
 
 return new Promise((Y,N)=>{//«
@@ -2148,7 +2082,7 @@ cerr(e);
 		store.createIndex("time", "time", {unique: false});
 //		store.createIndex("messId", "messId", {unique: true});
 	}
-});/*»*/
+});//»
 
 }//»
 getStore(if_write){//«
@@ -2256,31 +2190,29 @@ cwarn("BLOCKED");
 		};
 	});
 }//»
-async getCurUser(){
+async getCurUser(){//«
 //cwarn("getCurUser", this.#curUserFile);
 let node = await this.#curUserFile.toNode();
 if (!node) return;
 return node.data.value;
 //log(node);
-}
-/*//«
-async init(if_del){
-	if (this.#db) {
-cwarn("WHO CALLED DB.INIT?");
-		return;
-	}
-	if (!await this.initDB(if_del)) {
-throw new Error("init_db() failed!");
-	}
-	return true;
-}
-//»*/
+}//»
 
 }//»
 
 let db = new DB();
 let rv;
-if (opts.drop){//«
+if (!args.length){
+	cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
+	rv = await db.getCurUser();
+	if (!rv) return this.no("could not get the current user");
+	this.ok(rv);
+	return;
+}
+const cmd = args.shift();
+
+if (cmd === "drop"){//«
+	if (args.length) return this.no("to many arguments");
 	rv = await term.getch(`Drop database: '${MAIL_DB_NAME}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not dropping");
 	rv = await db.initDB(null,{drop: true});
@@ -2289,35 +2221,32 @@ if (opts.drop){//«
 	rv = await db.resetDBVers();
 	if (!this.checkStrOrTrue(rv, "resetDBVers")) return;
 	this.ok();
+	return;
 }//»
-else if (opts.init){//«
 
-let addr = opts.init;
-rv = await term.getch(`Create user: '${addr}'? [y/N]`);
-if (!(rv==="y"||rv==="Y")) return this.no("not creating");
+const addr = args.shift();
+if (!addr) return this.no(`no 'addr' argument given!`);
+if (cmd === "init"){//«
+
+	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
+	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
 cwarn("CREATE",addr);
-this.ok();
+	this.ok();
 
 }//»
-else if (opts.del){//«
-
-let addr = opts.del;
-rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
-if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
+else if (cmd === "del"){//«
+	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
+	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
 cwarn("DELETE",addr);
-this.ok();
-
+	this.ok();
 }//»
-else if (opts.use){//«
-cwarn("USE", opts.use);
-this.ok();
+else if (cmd === "use"){//«
+cwarn("USE", addr);
+	this.ok();
 }//»
-else{//«
-cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
-rv = await db.getCurUser();
-if (rv) return this.no("could not get the current user");
-this.ok(rv);
-}//»
+else if (cmd){
+	this.no(`unknown command: '${cmd}'`);
+}
 
 /*«
 let user = args.shift();
@@ -2336,9 +2265,9 @@ log(db);
 this.ok();
 »*/
 
-}
-
 }/*»*/
+
+}//»
 
 const com_brackettest = class extends Com{//«
 init(){
@@ -9574,7 +9503,7 @@ handlePriv(sym, code, mod, ispress, e){//«
 		if (ispress || sym=="BACK_") return;
 	}
 	if (this.curShell){//«
-		if (sym==="c_C") {
+		if (sym==="c_C") {//«
 //			this.curShell.cancelled_time = (new Date).getTime();
 			this.curShell.cancel();
 			this.curShell = null;
@@ -9582,8 +9511,8 @@ handlePriv(sym, code, mod, ispress, e){//«
 			this.response("^C");
 			this.responseEnd();
 			return;
-		}
-		else if (this.#getChCb){
+		}//»
+		else if (this.#getChCb){//«
 			if (ispress) {
 				this.sleeping = true;
 				this.#getChCb(e.key);
@@ -9597,10 +9526,12 @@ handlePriv(sym, code, mod, ispress, e){//«
 				}
 				return;
 			}
-		}
-		else if (this.#readLineCb){
+		}//»
+		else if (this.#readLineCb){//«
 			if (ispress || this.okReadlineSyms.includes(sym)){
 				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
+//LOUORPR
+//else: let the 'ispress' characters/okReadlineSyms (DEL_, BACK_, LEFT_, RIGHT_) pass through...
 			}
 			else if (sym==="ENTER_"){
 				let s='';
@@ -9613,10 +9544,10 @@ handlePriv(sym, code, mod, ispress, e){//«
 						s+=lines[i].join("");
 					}
 				}
-if (!s){
-s = new String("");
-s.isNL = true;
-}
+				if (!s){
+					s = new String("");
+					s.isNL = true;
+				}
 				this.#readLineCb(s);
 				this.#readLineCb = null;
 				this.sleeping = true;
@@ -9625,9 +9556,10 @@ s.isNL = true;
 			else{
 				return;
 			}
-		}
+		}//»
 		else return;
 	}//»
+
 	if (!this.lines[this.cy()]) {//«
 		if (code == 75 && alt) return;
 		else {
@@ -9741,7 +9673,9 @@ handle(sym, e, ispress, code, mod){//«
 	else this.awaitNextTab = null;
 	if (e&&sym=="o_C") e.preventDefault();
 
+//CLKIRYUT
 	if (actor){
+//	if (actor && !this.#readLineCb){
 		if (ispress){
 			if (actor.onkeypress) actor.onkeypress(e, sym, code);
 		}
