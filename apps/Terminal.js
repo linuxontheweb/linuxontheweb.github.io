@@ -2217,9 +2217,18 @@ async rmUserDir(addr){//«
 cwarn(`rmUserDir: ${addr}: does not exist!`);
 		return true;
 	}
+/*
+I guess the following call should
+1) pass the "root" flag and "fullDirs" flag to 'check_ok_rm'
+2) handle recursive removal in 'delete_fobj'.
+
+Since we are dealing with data nodes, deleting the nodes in the "Filesystem" database
+will purge all trace of them (as opposed to deleting regular files which do *NOT*
+remove the associated blobs from, e.g.: filesystem:http://localhost:8080/temporary/blobs/
+*/
 	return await fsapi.doFsRm([dirpath], mess=>{
 cerr(mess);
-	}, {ROOT: true});
+	}, {root: true, fullDirs: true});
 }//»
 async init(){//«
 	let node = await this.#mailDataPath.toNode();
@@ -2237,7 +2246,7 @@ async init(){//«
 
 }//»
 
-let db = new DB();
+const db = new DB();
 
 let rv = await db.init();
 if (!this.checkStrOrTrue(rv, "db.init")) return;

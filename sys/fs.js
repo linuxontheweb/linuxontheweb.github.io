@@ -918,8 +918,8 @@ const getPathByDirId=async(idarg)=>{//«
 const doFsRm=async(args, errcb, opts={})=>{//«
 	let{dirsOnly}=opts;
 	let cwd = opts.CWD;
-	let is_root = opts.ROOT;
-	let do_full_dirs = opts.FULLDIRS;
+	let is_root = opts.ROOT||opts.root;
+	let do_full_dirs = opts.FULLDIRS||opts.fullDirs;
 	let arr = [];
 	let no_error = true;
 	for (let path of args){
@@ -960,24 +960,15 @@ const rmFile=async(fobj, opts)=>{//«
 	}
 	let id = fobj.id;
 	let parid = fobj.par.id;
-if (!(id&&parid)) {
-if (fobj.type==SHM_TYPE) return [true];
+	if (!(id&&parid)) {
+		if (fobj.type==SHM_TYPE) return [true];
 bad(`NO ID && PARID???`);
 log(fobj);
 log(fobj.par);
-return [];
-}
-//	db.init();
+		return [];
+	}
 	if (!await db.removeNode(id, parid)) return bad("FRYNBSJ");
 //WMNJUGFNH
-/*«
-	let blobId = fobj.blobId;
-	if (blobId && Number.isFinite(blobId)) {
-		if (!BLOB_DIR) BLOB_DIR = await get_blob_dir();
-		if (!BLOB_DIR) return Y();
-		await BLOB_DIR.removeEntry(blobId);
-	}
-»*/
 	return [true];
 };//»
 const clearStorage = async ()=>{//«
@@ -1000,7 +991,7 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 		return;
 	}
 	if (obj.appName !== FOLDER_APP) {//«
-		if (!(rtype==FS_TYPE||rtype==SHM_TYPE)){
+		if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype===IDB_DATA_TYPE)){
 			errcb(`${path}: not (currently) handling fs type: '${rtype}'`);
 			return;
 		}
@@ -1039,7 +1030,7 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 	return obj;
 };//»
 const delete_fobj = async(node, opts={})=>{//«
-	const OK_TYPES=[FS_TYPE,SHM_TYPE];
+	const OK_TYPES=[FS_TYPE, SHM_TYPE, IDB_DATA_TYPE];
 	if (!OK_TYPES.includes(node.type)) {
 cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
 		return;
