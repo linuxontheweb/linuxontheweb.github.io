@@ -1981,26 +1981,19 @@ log(ver_num);
 let new_table_name;
 let saved_table_name;
 if (opts.drop){
-	if (ver_num===0) return `'drop' called with db version = 0!`;
+	if (ver_num===0) {
+//		return `'drop' called with db version = 0!`;
+cwarn(`'drop' called with db version = 0! (setting version to 1)`);
+		ver_num = 1;
+		this.version = ver_num;
+	}
 }
 else if (!username) return `no username given!`
 else{
 	new_table_name = `new:${username}`;
 	saved_table_name = `saved:${username}`;
 
-/*
-	if (opts.add){//«
-//		if (users.includes(username)) return `users already has: ${username}`
-		this.version++;
-	}//»
-	else{//«
-		if (opts.del){//«
-			this.version++;
-		}//»
-	}//»
-*/
-
-if (opts.add||opts.del) this.version++;
+	if (opts.add||opts.del) this.version++;
 
 }
 
@@ -2284,6 +2277,26 @@ cwarn("CREATE",addr);
 
 	rv = await db.mkUserDir(addr);
 	if (!rv) return this.no("fatal: could not create the user directory");
+
+/*
+
+In this new userDir, we want:
+1) last_poll_time ("numerical" data node)
+
+These directories are filled with "email" data nodes (possibly with timestamps, too):
+	{
+		to: <addr>, 
+		subject: String, 
+		body: String
+	}
+
+2) Drafts/
+3) Outbox/
+4) Sent/
+
+*/
+
+
 /*
 Let's just assume here that the non-existence of a user directory implies the
 non-existence of the corresponding database object stores, so we will just go
