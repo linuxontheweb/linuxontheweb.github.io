@@ -312,13 +312,13 @@ const {
 //  EOF,
 //	fs
 } = globals;
-/*
-const util = LOTW.api.util;
-const{log,jlog,cwarn,cerr,isNum,isArr,isStr,isObj,isNode,isFile,isDir,isErr,isEOF,sleep,normPath,}=util;
-*/
+
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
+
 //const fsapi = globals.api.fs;
 //const{pathToNode}=fsapi;
+
+const MAIL_DB_NAME = globals.MAIL_DB_NAME;
 
 //»
 
@@ -1944,17 +1944,12 @@ init(){}
 async run(){//«
 const{args, opts, term}=this;
 
-//Put this onto globals somewhere...
-//const MAIL_DBNAME = "mail";
-const MAIL_DB_NAME = globals.MAIL_DB_NAME;
-cwarn("MAIL", MAIL_DB_NAME);
-
 class DB {//«
 #db;
 //#mailDataPath;
+#mailDataPath;
 #dbVersFile;
 #dbVersNode;
-#usersFile;
 #curUserFile;
 #users;
 #usersNode;
@@ -1964,58 +1959,14 @@ constructor(){//«
 //	this.#mailDataPath=`${globals.APPDATA_PATH}/mail`;
 
 	let mail_data_path =`${globals.APPDATA_PATH}/mail`;
+	this.#mailDataPath = mail_data_path;
 	this.#dbVersFile = `${mail_data_path}/db_vers`;
-	this.#usersFile = `${mail_data_path}/users`;
 	this.#curUserFile = `${mail_data_path}/cur_user`;
 	this.dbName = MAIL_DB_NAME;
 
 }//»
-
-async getDBVers(){//«
-	let fname = this.#dbVersFile;
-	let node = await fname.toNode();
-	if (!node){
-log("Making DBVERS_FILE...");
-		node = await fsapi.mkFile(fname,{data: {type: "number", value: 0}});
-		if (!node) return `Could not get DBVERS_FILE (${fname})`;
-	}
-	this.#dbVersNode = node;
-
-	let data = await node.getValue();
-	if (!data) return `Could not get the data from DBVERS_FILE (${fname})`;
-	if (!(isObj(data) && data.type == "number" && Number.isFinite(data.value))){
-		return `Invalid data returned from DBVERS_FILE (${fname})`;
-	}
-	this.version = data.value;
-	return this.version;
-}//»
-async resetDBVers(){//«
-	if (!this.#dbVersNode) return `No 'database version node'!`;
-	return await this.#dbVersNode.setDataValue(1);
-}//»
-async getUsers(){//«
-	let fname = this.#usersFile;
-	let users_node = await fsapi.mkFile(fname);
-	if (!users_node) return `Could not get the users file: ${fname}`;
-//log(users_node);
-	let users = users_node.data.value;
-//log(users);
-	if (!users[0]) users.shift();
-	this.#usersNode = users_node;
-	this.#users = users;
-	return users;
-}//»
-async updateInfo(){//«
-//	if (!await this.#dbVersNode.setValue({type:"number", value: this.version})){
-	if (!await this.#dbVersNode.setDataValue(this.version)){
-		return "Could not setValue for dbVersNode";
-    }
-
-//  if (!await this.#usersNode.setValue({type: "stringarray", value: this.#users.join("\n")})){
-    if (!await this.#usersNode.setDataValue(this.#users.join("\n"))){
-		return "Could not setValue for usersNode";
-    }
-	return true;
+fatal(mess){//«
+	throw new Error(mess);
 }//»
 async initDB(username, opts={}){//«
 //async initDB(username, if_del){
@@ -2027,35 +1978,30 @@ cwarn("Here is the non-numerical value");
 log(ver_num);
 	return "invalid value returned from getDBVers (expected a number, see console)";
 }//»
-
-let users = await this.getUsers();//«
-if (isStr(users)) return users;
-if (!isArr(users)){
-cwarn("Here is the non-array value");
-log(users);
-	return "invalid value returned from getUsers (expected an array, see console)";
-}/*»*/
-let in_table_name;
+let new_table_name;
+let saved_table_name;
 if (opts.drop){
-if (ver_num===0) return `'drop' called with db version = 0!`;
+	if (ver_num===0) return `'drop' called with db version = 0!`;
 }
 else if (!username) return `no username given!`
 else{
-in_table_name = `in:${username}`;
-if (opts.add){//«
-	if (users.includes(username)) return `users already has: ${username}`
-	this.version++;
-}//»
-else{//«
-	let ind = users.indexOf(username);
-	if (ind == -1){
-		return `users does not have: ${username}`;
-	}
-	if (opts.del){//«
-		users.splice(ind, 1);
+	new_table_name = `new:${username}`;
+	saved_table_name = `saved:${username}`;
+
+/*
+	if (opts.add){//«
+//		if (users.includes(username)) return `users already has: ${username}`
 		this.version++;
 	}//»
-}//»
+	else{//«
+		if (opts.del){//«
+			this.version++;
+		}//»
+	}//»
+*/
+
+if (opts.add||opts.del) this.version++;
+
 }
 
 return new Promise((Y,N)=>{//«
@@ -2074,16 +2020,62 @@ cerr(e);
 	};
 	req.onupgradeneeded=(e)=>{
 		if (opts.del){
-			e.target.result.deleteObjectStore(in_table_name);
+cwarn("DELETING", new_table_name, saved_table_name);
+			e.target.result.deleteObjectStore(new_table_name);
+			e.target.result.deleteObjectStore(saved_table_name);
 			return;
 		}
-		let store = e.target.result.createObjectStore(in_table_name, {autoIncrement: true});
-		store.createIndex("from", "from", {unique: false});
-		store.createIndex("time", "time", {unique: false});
+		let newstore = e.target.result.createObjectStore(new_table_name, {autoIncrement: true});
+		newstore.createIndex("from", "from", {unique: false});
+		newstore.createIndex("time", "time", {unique: false});
+
+		let savedstore = e.target.result.createObjectStore(saved_table_name, {autoIncrement: true});
+		savedstore.createIndex("from", "from", {unique: false});
+		savedstore.createIndex("time", "time", {unique: false});
+
 //		store.createIndex("messId", "messId", {unique: true});
 	}
 });//»
 
+}//»
+async getDBVers(){//«
+	let fname = this.#dbVersFile;
+	let node = await fname.toNode();
+	if (!node){
+log("Making DBVERS_FILE...");
+		node = await fsapi.mkFile(fname,{data: {type: "number", value: 0}});
+		if (!node) return `Could not get DBVERS_FILE (${fname})`;
+	}
+	this.#dbVersNode = node;
+
+	let data = await node.getValue();
+	if (!data) return `Could not get the data from DBVERS_FILE (${fname})`;
+	if (!(isObj(data) && data.type == "number" && Number.isFinite(data.value))){
+		return `Invalid data returned from DBVERS_FILE (${fname})`;
+	}
+	this.version = data.value;
+	return this.version;
+}//»
+async saveDBVers(){//«
+	if (!this.#dbVersNode) return `No 'database version node'!`;
+	return await this.#dbVersNode.setDataValue(this.version);
+}//»
+async resetDBVers(){//«
+	if (!this.#dbVersNode) return `No 'database version node'!`;
+	return await this.#dbVersNode.setDataValue(1);
+}//»
+
+async updateInfo(){//«
+//	if (!await this.#dbVersNode.setValue({type:"number", value: this.version})){
+	if (!await this.#dbVersNode.setDataValue(this.version)){
+		return "Could not setValue for dbVersNode";
+    }
+
+//  if (!await this.#usersNode.setValue({type: "stringarray", value: this.#users.join("\n")})){
+    if (!await this.#usersNode.setDataValue(this.#users.join("\n"))){
+		return "Could not setValue for usersNode";
+    }
+	return true;
 }//»
 getStore(if_write){//«
 	return this.#db.transaction([this.table_name],if_write?"readwrite":"readonly").objectStore(this.table_name);
@@ -2191,28 +2183,84 @@ cwarn("BLOCKED");
 	});
 }//»
 async getCurUser(){//«
-//cwarn("getCurUser", this.#curUserFile);
-let node = await this.#curUserFile.toNode();
-if (!node) return;
-return node.data.value;
-//log(node);
+	let node = await this.#curUserFile.toNode();
+	if (!node) return;
+	return node.data.value;
+}//»
+async setCurUser(addr){//«
+	let node = await this.#curUserFile.toNode();
+	if (!node) return;
+cwarn("Set curuser to", addr);
+log(node);
+//	return node.data.value;
+}//»
+async getUserDir(addr){//«
+	if (!addr){
+		this.fatal("'addr' argument required!");
+		return;
+	}
+	return await (`${this.#mailDataPath}/${addr}`).toNode();
+}//»
+async mkUserDir(addr){//«
+	if (!addr){
+		this.fatal("'addr' argument required!");
+		return;
+	}
+	let rv = await (`${this.#mailDataPath}/${addr}`).toNode();
+	if (rv) {
+cwarn(`mkUserDir: ${addr}: already exists!`);
+		return true;
+	}
+	return await fsapi.mkDir(this.#mailDataPath, addr);
+}//»
+async rmUserDir(addr){//«
+	if (!addr){
+		this.fatal("'addr' argument required!");
+		return;
+	}
+	let dirpath = `${this.#mailDataPath}/${addr}`;
+	let rv = await dirpath.toNode();
+	if (!rv) {
+cwarn(`rmUserDir: ${addr}: does not exist!`);
+		return true;
+	}
+	return await fsapi.doFsRm([dirpath], mess=>{
+cerr(mess);
+	}, {ROOT: true});
+}//»
+async init(){//«
+	let node = await this.#mailDataPath.toNode();
+	if (!node){
+		if (!await fsapi.mkDir(globals.APPDATA_PATH, "mail")){
+			return `fatal: could not create the mail data directory: ${this.#mailDataPath}`;
+		}
+		return true;
+	}
+	else if (!node.isDir){
+		return "fatal: the mailDataPath node exists, but is not a directory!"
+	}
+	return true;
 }//»
 
 }//»
 
 let db = new DB();
-let rv;
-if (!args.length){
-	cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
+
+let rv = await db.init();
+if (!this.checkStrOrTrue(rv, "db.init")) return;
+
+if (!args.length){//«
 	rv = await db.getCurUser();
 	if (!rv) return this.no("could not get the current user");
+cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
 	this.ok(rv);
 	return;
-}
+}//»
 const cmd = args.shift();
 
 if (cmd === "drop"){//«
-	if (args.length) return this.no("to many arguments");
+
+	if (args.length) return this.no("too many arguments");
 	rv = await term.getch(`Drop database: '${MAIL_DB_NAME}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not dropping");
 	rv = await db.initDB(null,{drop: true});
@@ -2222,50 +2270,63 @@ if (cmd === "drop"){//«
 	if (!this.checkStrOrTrue(rv, "resetDBVers")) return;
 	this.ok();
 	return;
+
 }//»
 
 const addr = args.shift();
 if (!addr) return this.no(`no 'addr' argument given!`);
 if (cmd === "init"){//«
 
+	if (await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' already exists!`);
 	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
 cwarn("CREATE",addr);
-	this.ok();
 
+	rv = await db.mkUserDir(addr);
+	if (!rv) return this.no("fatal: could not create the user directory");
+/*
+Let's just assume here that the non-existence of a user directory implies the
+non-existence of the corresponding database object stores, so we will just go
+ahead here and create the object stores and the directory structure...
+*/
+	rv = await db.initDB(addr, {add: true});
+	if (!rv) return this.no(`could not add the object stores for: ${addr}`);
+	rv = await db.saveDBVers();
+	if (!this.checkStrOrTrue(rv, "saveDBVers")) return;
+	this.ok();
+	return;
 }//»
-else if (cmd === "del"){//«
+
+//The remaining commands assume that 'addr' has already been initialized
+if (!await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
+
+if (cmd === "del"){//«
 	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
-cwarn("DELETE",addr);
+	if (!await db.rmUserDir(addr)) return this.no(`removing user directory: '${addr}' failed`);
+	rv = await db.initDB(addr, {del: true});
+	if (!rv) return this.no(`could not delete the object stores for: ${addr}`);
+	rv = await db.saveDBVers();
+	if (!this.checkStrOrTrue(rv, "saveDBVers")) return;
+/*
+Remove the user's directory and object stores, and clear the cur_user file if
+'addr' is the cur_user.
+*/
 	this.ok();
 }//»
 else if (cmd === "use"){//«
 cwarn("USE", addr);
+	if (await this.getCurUser() === addr) return this.ok();
+	rv = await db.setCurUser(addr);
+	if (!rv) return this.no("there was a problem setting the 'curUser' file");
 	this.ok();
 }//»
 else if (cmd){
 	this.no(`unknown command: '${cmd}'`);
 }
 
-/*«
-let user = args.shift();
-if (!user) return this.no("username needed");
-let op = args.shift();
-if (!op) return this.no("opcode needed");
-let rv = await db.initDB(user);
-if (isStr(rv)) return this.no(rv);
-if (rv!==true){
-cwarn("Here is the non-true value");
-log(rv);
-	this.no("non true value returned from initDB (see console)");
-	return;
-}
-log(db);
-this.ok();
-»*/
 
-}/*»*/
+}//»
 
 }//»
 
