@@ -1,11 +1,45 @@
-/*1/20/25: Let's get rid of the "curUser" concept and just always *require* an address
+
+/*1/20/25: Notes for email REPL @SBSNOWP«
+
+In the REPL, we have handles on the following things:
+
+db: the database for the current email address
+db.new: object store of new emails ("live" listing of envelopes since 'last_poll_time')
+db.saved: object store of saved emails (emails that *were* new, but then the text bodies were retrieved from the IMAP server, and so they got moved the "new" object store)
+
+MUD: The "Mail User Directory": /var/appdata/mail/<email_addr>
+
+MUD/last_poll_time: The timestamp of the last polling for new envelopes (initialized to 0)
+	- There should probably be a command that lets a user set/reset this to any arbitrary
+	  numerical value (perhaps checking that it isn't greater than the current time).
+MUD/Drafts/: The directory that holds all email drafts (original emails to a "contact" 
+	and responses to emails in db.saved)
+MUD/Sent/: The directory that holds all emails that *were* drafts, but that got 
+	successfully sent via SMTP.
+
+We will probably also want:
+
+MUD/Contacts/: Directory that holds data nodes of type == "Person" (which should at least 
+include an 'email_addr' field).
+
+I think we will want a concept of "transform algorithms" that takes the raw underlying
+text of an email draft and converts it into the "final" text, e.g. for replacing
+environment variables with their values, or performing other shell-like expansions.
+These algorithms should be named, and the names should go onto the email objects.
+
+
+
+Let's get rid of the "curUser" concept and just always *require* an address
 as the first argument to the 'mail' command. We will assume the user wants to "hardcode"
-an 'EMAIL_USER' variable in their terminal environment via the '~/.env' file.
+an 'EMAIL_USER' variable in their terminal environment, e.g. via the '~/.env' file.
 
 So the commands will look like:
-  $ mail $EMAIL_USER init
+  $ mail $EMAIL_USER [cmd [cmd_args...]]
 
-*/
+»*/
+
+//«Notes
+
 /*1/19/25:«
 
 This doesn't work:
@@ -31,8 +65,6 @@ So we would need to check for #readLineCb before sending into the actor, which
 should eat up all...
 
 »*/
-
-//«Notes
 /*1/18/25: Just made a 'bgdiv' under the 'tabdiv', which internally consists of«
 'nRows' worth of divs (@SJRMSJR), to be used for such things as multiline selection 
 toggling within a pager. We now have a 'bgRowStyles' array property on the terminal 
@@ -229,6 +261,7 @@ On the server
 //»
 
 »*/
+
 //»
 
 //Terminal Imports«
@@ -2305,8 +2338,8 @@ if (!cmd){//«
 	rv = await db.initDB();
 	if (!rv) return this.no(`could not initialize the database for: ${addr}`);
 
+//SBSNOWP
 cwarn("Mail REPL here...");
-
 	db.close();
 	this.ok();
 	return;
