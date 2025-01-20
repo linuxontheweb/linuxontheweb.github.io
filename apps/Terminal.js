@@ -1950,9 +1950,9 @@ async run(){//«
 
 const{args, opts, term}=this;
 let rv;
-if (opts.r){
+if (opts.r){//«
 	let path = `${globals.APPDATA_PATH}/mail`;
-	rv = await term.getch(`delete the *entire* mail directory: '${path}'? [y/n]`);
+	rv = await term.getch(`Recursively remove the *entire* mail directory: '${path}'? [y/n]`);
 	if (!rv) return this.no("not deleting");
 cwarn("DO DELETE");
 	rv = await fsapi.doFsRm([path], mess=>{
@@ -1961,19 +1961,12 @@ cerr(mess);
 	if (!rv) return this.no();
 	this.ok();
 	return;
-}
+}//»
 
 class DB {//«
 
 #db;
 #mailDataPath;
-
-//#mailDataPath;
-//#dbVersFile;
-//#dbVersNode;
-//#curUserFile;
-//#users;
-//#usersNode;
 
 constructor(addr){//«
 
@@ -2305,32 +2298,19 @@ const db = new DB(addr);
 rv = await db.initAppDir();
 if (!this.checkStrOrTrue(rv, "db.initAppDir")) return;
 
-if (!args.length){//«
-//	rv = await db.getCurUser();
-//	if (!rv) return this.no("could not get the current user");
-cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
-	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
-	this.ok();
-	return;
-}//»
 const cmd = args.shift();
 
-/*
-if (cmd === "drop"){//«
+if (!cmd){//«
+	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	rv = await db.initDB();
+	if (!rv) return this.no(`could not initialize the database for: ${addr}`);
 
-	if (args.length) return this.no("too many arguments");
-	rv = await term.getch(`Drop database: '${MAIL_DB_NAME}'? [y/N]`);
-	if (!(rv==="y"||rv==="Y")) return this.no("not dropping");
-	rv = await db.initDB(null,{drop: true});
-	if (!this.checkStrOrTrue(rv, "initDB")) return;
-	if (!await db.dropDatabase()) return this.no("Drop database: failed");
-//	rv = await db.resetDBVers();
-//	if (!this.checkStrOrTrue(rv, "resetDBVers")) return;
+cwarn("Mail REPL here...");
+
+	db.close();
 	this.ok();
 	return;
-
 }//»
-*/
 
 if (cmd === "init"){//«
 
@@ -2358,17 +2338,8 @@ if (cmd === "del"){//«
 	this.ok();
 
 }//»
-/*
-else if (cmd === "use"){//«
-cwarn("USE", addr);
-	if (await this.getCurUser() === addr) return this.ok();
-	rv = await db.setCurUser(addr);
-	if (!rv) return this.no("there was a problem setting the 'curUser' file");
-	this.ok();
-}//»
-*/
 else if (cmd){
-	this.no(`unknown command: '${cmd}'`);
+	this.no(`unknown mail command: '${cmd}'`);
 }
 
 
@@ -2393,53 +2364,48 @@ const com_dblist = class extends Com{//«
 	}
 }//»
 const com_dbdrop = class extends Com{//«
-async run(){
-
-const drop_database=(db_name)=>{//«
-	return new Promise((Y,N)=>{
-		const req = window.indexedDB.deleteDatabase(db_name);
-		req.onerror = (event) => {
+	async run(){
+		const drop_database=(db_name)=>{//«
+			return new Promise((Y,N)=>{
+				const req = window.indexedDB.deleteDatabase(db_name);
+				req.onerror = (event) => {
 cerr("Error deleting database.");
-			Y();
-		};
-		req.onblocked = (e)=>{
+					Y();
+				};
+				req.onblocked = (e)=>{
 cwarn("BLOCKED");
-			Y();
-		};
-		req.onsuccess = (e) => {
-			Y(true);
-		};
-	});
-}//»
-
-const{term}=this;
-
-let dbs=[];
-for (let db of  await indexedDB.databases()) dbs.push(db.name);
-for (let arg of this.args){//«
-//log("TRYDROP", arg);
-	if (!dbs.includes(arg)) {
-		this.err(`${arg}: not an installed database`);
-		continue;
+					Y();
+				};
+				req.onsuccess = (e) => {
+					Y(true);
+				};
+			});
+		}//»
+		const{term}=this;
+		let dbs=[];
+		for (let db of  await indexedDB.databases()) dbs.push(db.name);
+		for (let arg of this.args){//«
+			if (!dbs.includes(arg)) {
+				this.err(`${arg}: not an installed database`);
+				continue;
+			}
+			if (arg === globals.FS_DB_NAME){
+				this.err(`${arg}: not deleting the entire filesystem!`);
+				continue;
+			}
+			let rv = await term.getch(`Drop database: '${arg}'? [y/N]`);
+			if (!(rv==="y"||rv==="Y")) {
+				this.wrn(`not dropping: '${arg}'`);
+				continue;
+			}
+			if (!await drop_database(arg)){
+				this.err(`error dropping: '${arg}'`);
+				continue;
+			}
+			this.suc(`dropped: '${arg}'`);
+		}//»
+		this.ok();
 	}
-	if (arg === globals.FS_DB_NAME){
-		this.err(`${arg}: not deleting the entire filesystem!`);
-		continue;
-	}
-	let rv = await term.getch(`Drop database: '${arg}'? [y/N]`);
-	if (!(rv==="y"||rv==="Y")) {
-		this.wrn(`not dropping: '${arg}'`);
-		continue;
-	}
-	if (!await drop_database(arg)){
-		this.err(`error dropping: '${arg}'`);
-		continue;
-	}
-	this.suc(`dropped: '${arg}'`);
-}//»
-this.ok();
-}
-
 }//»
 
 const com_brackettest = class extends Com{//«
