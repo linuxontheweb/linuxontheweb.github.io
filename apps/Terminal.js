@@ -1,3 +1,11 @@
+/*1/20/25: Let's get rid of the "curUser" concept and just always *require* an address
+as the first argument to the 'mail' command. We will assume the user wants to "hardcode"
+an 'EMAIL_USER' variable in their terminal environment via the '~/.env' file.
+
+So the commands will look like:
+  $ mail $EMAIL_USER init
+
+*/
 /*1/19/25:«
 
 This doesn't work:
@@ -39,7 +47,7 @@ the multiline-selection/multikey-quit modes of less, and the saveFunc mode of
 vim.
 
 The "inward" flow is "Poll for New"->New->Saved.
-The "outward" flow is (Contacts->compose or Saved->respond) -> Drafts -> Outbox -> Sent
+The "outward" flow is (Contacts->compose or Saved->respond) -> Drafts -> Sent
 
 Let's keep everything in /var/appdata/mail, so there is no question as to whether a
 command line user can mess with the application logic. Here there will be:
@@ -169,10 +177,15 @@ On the server
 	Drafts: lists the emails in $MUD/Drafts.
 		- A "draft" may be created either through Saved->respond or Contacts->compose
 
+
 	Outbox: lists the emails in $MUD/Outbox, which are finished drafts, and have all
 		"final" auto-formatting done to them. A "true rendering" of the email can be 
 		seen from here. The 'send' command will iterate through each of these, sending
 		them via the SMTP service, and them moving them into $MUD/Sent
+
+		!!! NO: This is redundant because the same algorithm would be used to "preview" 
+		drafts, as would be used to "transform" drafts into saved emails. !!!
+
 
 	sEnt: Lists all emails in $MUD/Sent
 
@@ -319,6 +332,7 @@ const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //const{pathToNode}=fsapi;
 
 const MAIL_DB_NAME = globals.MAIL_DB_NAME;
+const MAIL_DB_VERNUM = globals.MAIL_DB_VERNUM;
 
 //»
 
@@ -1925,165 +1939,56 @@ run(){
 //YWPOEKRN
 //XXXXXXXXXXXX
 
-const com_curemailaddr = class extends Com{/*«*/
-	init(){}
-	async run(){
-		let rv = await fetch('/_env?key=EMAIL_USER');
-		if (!rv.ok) return this.no("EMAIL_USER: not found");
-		this.out(await rv.text());
-		this.ok();
-	}
-}/*»*/
-
 const com_mail = class extends Com{//«
 
 //static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
+static opts={s:{r: 1}};
 
 init(){}
 
 async run(){//«
+
 const{args, opts, term}=this;
+let rv;
+if (opts.r){
+	let path = `${globals.APPDATA_PATH}/mail`;
+	rv = await term.getch(`delete the *entire* mail directory: '${path}'? [y/n]`);
+	if (!rv) return this.no("not deleting");
+cwarn("DO DELETE");
+	rv = await fsapi.doFsRm([path], mess=>{
+cerr(mess);
+	}, {root: true, fullDirs: true});
+	if (!rv) return this.no();
+	this.ok();
+	return;
+}
 
 class DB {//«
-#db;
-//#mailDataPath;
-#mailDataPath;
-#dbVersFile;
-#dbVersNode;
-#curUserFile;
-#users;
-#usersNode;
 
-constructor(){//«
+#db;
+#mailDataPath;
+
+//#mailDataPath;
+//#dbVersFile;
+//#dbVersNode;
+//#curUserFile;
+//#users;
+//#usersNode;
+
+constructor(addr){//«
+
 //	this.storeName = table_name;
 //	this.#mailDataPath=`${globals.APPDATA_PATH}/mail`;
 
-	let mail_data_path =`${globals.APPDATA_PATH}/mail`;
-	this.#mailDataPath = mail_data_path;
-	this.#dbVersFile = `${mail_data_path}/db_vers`;
-	this.#curUserFile = `${mail_data_path}/cur_user`;
-	this.dbName = MAIL_DB_NAME;
+	this.#mailDataPath = `${globals.APPDATA_PATH}/mail`;
+//	this.#dbVersFile = `${mail_data_path}/db_vers`;
+//	this.#curUserFile = `${mail_data_path}/cur_user`;
+	this.emailAddr = addr;
+	this.dbName = `${MAIL_DB_NAME}:${MAIL_DB_VERNUM}/${addr}`;
 
 }//»
 fatal(mess){//«
 	throw new Error(mess);
-}//»
-async initDB(username, opts={}){//«
-//async initDB(username, if_del){
-
-let ver_num = await this.getDBVers();//«
-if (isStr(ver_num)) return ver_num;
-if (!Number.isFinite(ver_num)) {
-cwarn("Here is the non-numerical value");
-log(ver_num);
-	return "invalid value returned from getDBVers (expected a number, see console)";
-}//»
-let new_table_name;
-let saved_table_name;
-if (opts.drop){
-	if (ver_num===0) {
-//		return `'drop' called with db version = 0!`;
-cwarn(`'drop' called with db version = 0! (setting version to 1)`);
-		ver_num = 1;
-		this.version = ver_num;
-	}
-}
-else if (!username) return `no username given!`
-else{
-	new_table_name = `new:${username}`;
-	saved_table_name = `saved:${username}`;
-
-	if (opts.add||opts.del) this.version++;
-
-}
-
-return new Promise((Y,N)=>{//«
-	let req = indexedDB.open(this.dbName, this.version);
-	req.onerror=e=>{
-cerr(e);
-		Y();
-	};
-	req.onsuccess=async e=>{
-		this.#db = e.target.result;
-		Y(true);
-	};
-	req.onblocked=e=>{
-cerr(e);
-		Y();
-	};
-	req.onupgradeneeded=(e)=>{
-		if (opts.del){
-cwarn("DELETING", new_table_name, saved_table_name);
-			e.target.result.deleteObjectStore(new_table_name);
-			e.target.result.deleteObjectStore(saved_table_name);
-			return;
-		}
-		let newstore = e.target.result.createObjectStore(new_table_name, {autoIncrement: true});
-		newstore.createIndex("from", "from", {unique: false});
-		newstore.createIndex("time", "time", {unique: false});
-
-		let savedstore = e.target.result.createObjectStore(saved_table_name, {autoIncrement: true});
-		savedstore.createIndex("from", "from", {unique: false});
-		savedstore.createIndex("time", "time", {unique: false});
-
-//		store.createIndex("messId", "messId", {unique: true});
-	}
-});//»
-
-}//»
-async getDBVers(){//«
-	let fname = this.#dbVersFile;
-	let node = await fname.toNode();
-	if (!node){
-log("Making DBVERS_FILE...");
-		node = await fsapi.mkFile(fname,{data: {type: "number", value: 0}});
-		if (!node) return `Could not get DBVERS_FILE (${fname})`;
-	}
-	this.#dbVersNode = node;
-
-	let data = await node.getValue();
-	if (!data) return `Could not get the data from DBVERS_FILE (${fname})`;
-	if (!(isObj(data) && data.type == "number" && Number.isFinite(data.value))){
-		return `Invalid data returned from DBVERS_FILE (${fname})`;
-	}
-	this.version = data.value;
-	return this.version;
-}//»
-async saveDBVers(){//«
-	if (!this.#dbVersNode) return `No 'database version node'!`;
-	return await this.#dbVersNode.setDataValue(this.version);
-}//»
-async resetDBVers(){//«
-	if (!this.#dbVersNode) return `No 'database version node'!`;
-	return await this.#dbVersNode.setDataValue(1);
-}//»
-
-async updateInfo(){//«
-//	if (!await this.#dbVersNode.setValue({type:"number", value: this.version})){
-	if (!await this.#dbVersNode.setDataValue(this.version)){
-		return "Could not setValue for dbVersNode";
-    }
-
-//  if (!await this.#usersNode.setValue({type: "stringarray", value: this.#users.join("\n")})){
-    if (!await this.#usersNode.setDataValue(this.#users.join("\n"))){
-		return "Could not setValue for usersNode";
-    }
-	return true;
-}//»
-getStore(if_write){//«
-	return this.#db.transaction([this.table_name],if_write?"readwrite":"readonly").objectStore(this.table_name);
-}//»
-addMessage(mess){//«
-	return new Promise((Y,N)=>{
-		let req = get_store(true).add(mess);
-		req.onerror=(e)=>{
-cerr(e);
-			Y();
-		};
-		req.onsuccess = e => {
-			Y(true);
-		};
-	});
 }//»
 close(){//«
 	if (!this.#db) {
@@ -2093,6 +1998,7 @@ cwarn("CLOSE CALLED WITHOUT INIT?!?!");
 cwarn("Closing the database...");
 	this.#db.close();
 	this.#db = undefined;
+	return true;
 }//»
 getById(id){//«
 	return new Promise((Y,N)=>{
@@ -2130,6 +2036,22 @@ cerr(e);
 		};
 	});
 }//»
+
+getStore(if_write){//«
+	return this.#db.transaction([this.table_name],if_write?"readwrite":"readonly").objectStore(this.table_name);
+}//»
+addMessage(mess){//«
+	return new Promise((Y,N)=>{
+		let req = get_store(true).add(mess);
+		req.onerror=(e)=>{
+cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+}//»
 async createMessage(time, from, sub, text){//«
 //The first 4 are required (subject may be [none])
 
@@ -2158,59 +2080,48 @@ async addMessageText(id, text){//«
 	return true;
 
 }//»
-async dropDatabase(){//«
-	return new Promise((Y,N)=>{
-		this.#db.close();
-		const req = window.indexedDB.deleteDatabase(this.dbName);
-		req.onerror = (event) => {
-cerr("Error deleting database.");
-			Y();
-		};
-		req.onblocked = (e)=>{
-cwarn("BLOCKED");
-			Y();
-		};
-		req.onsuccess = (e) => {
-			Y(true);
-		};
-	});
-}//»
-async getCurUser(){//«
-	let node = await this.#curUserFile.toNode();
-	if (!node) return;
-	return node.data.value;
-}//»
-async setCurUser(addr){//«
-	let node = await this.#curUserFile.toNode();
-	if (!node) return;
-cwarn("Set curuser to", addr);
-log(node);
-//	return node.data.value;
-}//»
-async getUserDir(addr){//«
-	if (!addr){
-		this.fatal("'addr' argument required!");
-		return;
+
+async mkUserDir(){//«
+
+/*«Notes
+
+In this new userDir, we want:
+1) last_poll_time ("numerical" data node)
+
+These directories are filled with "email" data nodes (possibly with timestamps, too):
+	{
+		to: <addr>, 
+		subject: String, 
+		body: String
 	}
-	return await (`${this.#mailDataPath}/${addr}`).toNode();
-}//»
-async mkUserDir(addr){//«
-	if (!addr){
-		this.fatal("'addr' argument required!");
-		return;
-	}
+
+2) Drafts/
+3) Sent/
+
+
+»*/
+
+	let addr = this.emailAddr;
 	let rv = await (`${this.#mailDataPath}/${addr}`).toNode();
 	if (rv) {
-cwarn(`mkUserDir: ${addr}: already exists!`);
-		return true;
+		return `${addr}: already exists`;
 	}
-	return await fsapi.mkDir(this.#mailDataPath, addr);
+	rv = await fsapi.mkDir(this.#mailDataPath, addr);
+	let path = `${this.#mailDataPath}/${addr}`;
+	if (!rv) return `could not create the user directory: ${path}`;
+	if (!await fsapi.writeDataFile(`${path}/last_poll_time`,{type: "timestamp", val: 0})){
+		return `could not create 'last_poll_time' in '${path}'`;
+	}
+	if (!await fsapi.mkDir(path, "Drafts")){
+		return `could not create 'Drafts/' in '${path}'`;
+	}
+	if (!await fsapi.mkDir(path, "Sent")){
+		return `could not create 'Sent/' in '${path}'`;
+	}
+	return true;
 }//»
-async rmUserDir(addr){//«
-	if (!addr){
-		this.fatal("'addr' argument required!");
-		return;
-	}
+async rmUserDir(){//«
+	let addr = this.emailAddr;
 	let dirpath = `${this.#mailDataPath}/${addr}`;
 	let rv = await dirpath.toNode();
 	if (!rv) {
@@ -2230,7 +2141,106 @@ remove the associated blobs from, e.g.: filesystem:http://localhost:8080/tempora
 cerr(mess);
 	}, {root: true, fullDirs: true});
 }//»
-async init(){//«
+async getUserDir(){//«
+/*
+	if (!addr){
+		this.fatal("'addr' argument required!");
+		return;
+	}
+*/
+	return await (`${this.#mailDataPath}/${this.emailAddr}`).toNode();
+}//»
+
+async dropDatabase(){//«
+	return new Promise((Y,N)=>{
+		if (this.#db) this.#db.close();
+		const req = window.indexedDB.deleteDatabase(this.dbName);
+		req.onerror = (event) => {
+cerr("Error deleting database.");
+			Y();
+		};
+		req.onblocked = (e)=>{
+cwarn("BLOCKED");
+			Y();
+		};
+		req.onsuccess = (e) => {
+			Y(true);
+		};
+	});
+}//»
+
+async initDB(opts={}){//«
+//async initDB(username, opts={}){
+//async initDB(username, if_del){
+/*
+let ver_num = await this.getDBVers();//«
+if (isStr(ver_num)) return ver_num;
+if (!Number.isFinite(ver_num)) {
+cwarn("Here is the non-numerical value");
+log(ver_num);
+	return "invalid value returned from getDBVers (expected a number, see console)";
+}//»
+*/
+let new_table_name="new";
+let saved_table_name="saved";
+
+/*«
+if (opts.drop){
+}
+else if (!username) return `no username given!`
+else{
+	if (opts.add||opts.del) this.version++;
+}
+»*/
+
+return new Promise((Y,N)=>{//«
+
+//The "version number" here is a hardcoded as '1' because this is not where we are
+//doing our "actual" versioning. We are "actually" doing it externally via the names
+//of the databases, rather that as a rather obscure internal variable (as the indexedDB 
+//api would have us do it).
+
+cwarn(`OPENING: '${this.dbName}'`);
+
+	let req = indexedDB.open(this.dbName, 1);
+	req.onerror=e=>{
+cerr(e);
+		Y();
+	};
+	req.onsuccess=async e=>{
+cwarn("SUCCESS!!!");
+		this.#db = e.target.result;
+		Y(true);
+	};
+	req.onblocked=e=>{
+cerr(e);
+		Y();
+	};
+
+//This is only ever called upon database creation, because we have no concept of database "versions" (as the indexedDB api understands them).
+	req.onupgradeneeded=(e)=>{
+/*«
+		if (opts.del){
+cwarn("DELETING", new_table_name, saved_table_name);
+			e.target.result.deleteObjectStore(new_table_name);
+			e.target.result.deleteObjectStore(saved_table_name);
+			return;
+		}
+»*/
+log("Upgrading...");
+		let newstore = e.target.result.createObjectStore(new_table_name, {autoIncrement: true});
+		newstore.createIndex("from", "from", {unique: false});
+//		newstore.createIndex("time", "time", {unique: false});
+
+		let savedstore = e.target.result.createObjectStore(saved_table_name, {autoIncrement: true});
+		savedstore.createIndex("from", "from", {unique: false});
+//		savedstore.createIndex("time", "time", {unique: false});
+//		store.createIndex("messId", "messId", {unique: true});
+	}
+});//»
+
+}//»
+async initAppDir(){//«
 	let node = await this.#mailDataPath.toNode();
 	if (!node){
 		if (!await fsapi.mkDir(globals.APPDATA_PATH, "mail")){
@@ -2244,22 +2254,68 @@ async init(){//«
 	return true;
 }//»
 
+/*«
+async getCurUser(){//«
+	let node = await this.#curUserFile.toNode();
+	if (!node) return;
+	return node.data.value;
+}//»
+async setCurUser(addr){//«
+	let node = await this.#curUserFile.toNode();
+	if (!node) return;
+cwarn("Set curuser to", addr);
+log(node);
+//	return node.data.value;
+}//»
+async getDBVers(){//«
+	let fname = this.#dbVersFile;
+	let node = await fname.toNode();
+	if (!node){
+log("Making DBVERS_FILE...");
+		node = await fsapi.mkFile(fname,{data: {type: "number", value: 0}});
+		if (!node) return `Could not get DBVERS_FILE (${fname})`;
+	}
+	this.#dbVersNode = node;
+
+	let data = await node.getValue();
+	if (!data) return `Could not get the data from DBVERS_FILE (${fname})`;
+	if (!(isObj(data) && data.type == "number" && Number.isFinite(data.value))){
+		return `Invalid data returned from DBVERS_FILE (${fname})`;
+	}
+	this.version = data.value;
+	return this.version;
+}//»
+async saveDBVers(){//«
+	if (!this.#dbVersNode) return `No 'database version node'!`;
+	return await this.#dbVersNode.setDataValue(this.version);
+}//»
+async resetDBVers(){//«
+	if (!this.#dbVersNode) return `No 'database version node'!`;
+	return await this.#dbVersNode.setDataValue(1);
+}//»
+»*/
+
 }//»
 
-const db = new DB();
+const addr = args.shift();
+if (!addr) return this.no(`no 'addr' argument given!`);
 
-let rv = await db.init();
-if (!this.checkStrOrTrue(rv, "db.init")) return;
+const db = new DB(addr);
+
+rv = await db.initAppDir();
+if (!this.checkStrOrTrue(rv, "db.initAppDir")) return;
 
 if (!args.length){//«
-	rv = await db.getCurUser();
-	if (!rv) return this.no("could not get the current user");
+//	rv = await db.getCurUser();
+//	if (!rv) return this.no("could not get the current user");
 cwarn("Check MUD/cur_user, initialize the db, and start mail REPL");
-	this.ok(rv);
+	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	this.ok();
 	return;
 }//»
 const cmd = args.shift();
 
+/*
 if (cmd === "drop"){//«
 
 	if (args.length) return this.no("too many arguments");
@@ -2268,53 +2324,23 @@ if (cmd === "drop"){//«
 	rv = await db.initDB(null,{drop: true});
 	if (!this.checkStrOrTrue(rv, "initDB")) return;
 	if (!await db.dropDatabase()) return this.no("Drop database: failed");
-	rv = await db.resetDBVers();
-	if (!this.checkStrOrTrue(rv, "resetDBVers")) return;
+//	rv = await db.resetDBVers();
+//	if (!this.checkStrOrTrue(rv, "resetDBVers")) return;
 	this.ok();
 	return;
 
 }//»
+*/
 
-const addr = args.shift();
-if (!addr) return this.no(`no 'addr' argument given!`);
 if (cmd === "init"){//«
 
-	if (await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' already exists!`);
+	if (await db.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
 	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
-cwarn("CREATE",addr);
-
-	rv = await db.mkUserDir(addr);
-	if (!rv) return this.no("fatal: could not create the user directory");
-
-/*
-
-In this new userDir, we want:
-1) last_poll_time ("numerical" data node)
-
-These directories are filled with "email" data nodes (possibly with timestamps, too):
-	{
-		to: <addr>, 
-		subject: String, 
-		body: String
-	}
-
-2) Drafts/
-3) Outbox/
-4) Sent/
-
-*/
-
-
-/*
-Let's just assume here that the non-existence of a user directory implies the
-non-existence of the corresponding database object stores, so we will just go
-ahead here and create the object stores and the directory structure...
-*/
-	rv = await db.initDB(addr, {add: true});
-	if (!rv) return this.no(`could not add the object stores for: ${addr}`);
-	rv = await db.saveDBVers();
-	if (!this.checkStrOrTrue(rv, "saveDBVers")) return;
+	rv = await db.mkUserDir();
+	if (!this.checkStrOrTrue(rv, "mkUserDir")) return;
+	rv = await db.initDB();
+	if (!rv) return this.no(`could not initialize the object stores for: ${addr}`);
 	this.ok();
 	return;
 }//»
@@ -2323,19 +2349,16 @@ ahead here and create the object stores and the directory structure...
 if (!await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
 
 if (cmd === "del"){//«
+
 	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
-	if (!await db.rmUserDir(addr)) return this.no(`removing user directory: '${addr}' failed`);
-	rv = await db.initDB(addr, {del: true});
-	if (!rv) return this.no(`could not delete the object stores for: ${addr}`);
-	rv = await db.saveDBVers();
-	if (!this.checkStrOrTrue(rv, "saveDBVers")) return;
-/*
-Remove the user's directory and object stores, and clear the cur_user file if
-'addr' is the cur_user.
-*/
+
+	if (!await db.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
+	if (!await db.dropDatabase()) return this.no(`error dropping the database`);
 	this.ok();
+
 }//»
+/*
 else if (cmd === "use"){//«
 cwarn("USE", addr);
 	if (await this.getCurUser() === addr) return this.ok();
@@ -2343,12 +2366,79 @@ cwarn("USE", addr);
 	if (!rv) return this.no("there was a problem setting the 'curUser' file");
 	this.ok();
 }//»
+*/
 else if (cmd){
 	this.no(`unknown command: '${cmd}'`);
 }
 
 
 }//»
+
+}//»
+const com_curemailaddr = class extends Com{/*«*/
+	init(){}
+	async run(){
+		let rv = await fetch('/_env?key=EMAIL_USER');
+		if (!rv.ok) return this.no("EMAIL_USER: not found");
+		this.out(await rv.text());
+		this.ok();
+	}
+}/*»*/
+const com_dblist = class extends Com{//«
+	async run(){
+		for (let db of (await indexedDB.databases())){
+			this.out(`${db.name} ${db.version}`);
+		}
+		this.ok();
+	}
+}//»
+const com_dbdrop = class extends Com{//«
+async run(){
+
+const drop_database=(db_name)=>{//«
+	return new Promise((Y,N)=>{
+		const req = window.indexedDB.deleteDatabase(db_name);
+		req.onerror = (event) => {
+cerr("Error deleting database.");
+			Y();
+		};
+		req.onblocked = (e)=>{
+cwarn("BLOCKED");
+			Y();
+		};
+		req.onsuccess = (e) => {
+			Y(true);
+		};
+	});
+}//»
+
+const{term}=this;
+
+let dbs=[];
+for (let db of  await indexedDB.databases()) dbs.push(db.name);
+for (let arg of this.args){//«
+//log("TRYDROP", arg);
+	if (!dbs.includes(arg)) {
+		this.err(`${arg}: not an installed database`);
+		continue;
+	}
+	if (arg === globals.FS_DB_NAME){
+		this.err(`${arg}: not deleting the entire filesystem!`);
+		continue;
+	}
+	let rv = await term.getch(`Drop database: '${arg}'? [y/N]`);
+	if (!(rv==="y"||rv==="Y")) {
+		this.wrn(`not dropping: '${arg}'`);
+		continue;
+	}
+	if (!await drop_database(arg)){
+		this.err(`error dropping: '${arg}'`);
+		continue;
+	}
+	this.suc(`dropped: '${arg}'`);
+}//»
+this.ok();
+}
 
 }//»
 
@@ -3042,6 +3132,8 @@ async run(){
 
 this.defCommands={//«
 //const shell_commands={
+dblist: com_dblist,
+dbdrop: com_dbdrop,
 curemailaddr: com_curemailaddr,
 mail: com_mail,
 "[": com_brackettest,
@@ -7227,8 +7319,16 @@ cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
 	}
 }
 //»
-
+forceNewline(){
+	const{lines}=this;
+	if (lines[lines.length-1]&&lines[lines.length-1].length){
+		this.lineBreak();
+		this.curPromptLine = this.y+this.scrollNum-1;
+	}
+	this.x=0;
+}
 async getch(promptarg, def_ch){//«
+	this.forceNewline();
 	if (promptarg){
 		for (let ch of promptarg) this.handleLetterPress(ch);
 	}
@@ -7240,12 +7340,7 @@ async getch(promptarg, def_ch){//«
 }
 //»
 async readLine(promptarg){//«
-	const{lines}=this;
-	if (lines[lines.length-1]&&lines[lines.length-1].length){
-		this.lineBreak();
-		this.curPromptLine = this.y+this.scrollNum-1;
-	}
-	this.x=0;
+	this.forceNewline();
 	this.sleeping = false;
 	if (promptarg){
 		this.#readLinePromptLen = promptarg.length;

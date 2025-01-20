@@ -71,8 +71,9 @@ const DESK_PATH = `${HOME_PATH}/Desktop`;
 //»
 
 //Values/Strings«
-
-const MAIL_DB_NAME = "mail";
+const FS_DB_NAME = "Filesystem";
+const MAIL_DB_NAME = "Mail";
+const MAIL_DB_VERNUM = 1;
 
 const MAX_TEXTAREA_BYTES = 10000;
 
@@ -434,7 +435,9 @@ export const globals = {//«
 	WRITING_APPS,
 	VIEWONLY_APPS,
 
+	FS_DB_NAME,
 	MAIL_DB_NAME,
+	MAIL_DB_VERNUM,
 
 	DEF_EDITOR_MOD_NAME,
 	DEF_PAGER_MOD_NAME,

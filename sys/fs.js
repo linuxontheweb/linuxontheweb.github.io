@@ -62,6 +62,7 @@ const sleep=()=>{return new Promise((Y,N)=>{});}
 const NS = LOTW;
 const {
 //	PROJECT_ROOT_MOUNT_NAME,
+	FS_DB_NAME,
 	FS_PREF,
 	FS_TYPE,
 	MOUNT_TYPE,
@@ -81,7 +82,7 @@ const ispos = arg=>{return isNum(arg,true);}
 
 //Var«
 
-const DBNAME = "Filesystem";
+//const DBNAME = "Filesystem";
 const NODES_TABLE_NAME = "Nodes";
 //const DEF_BRANCH_NAME = "def";
 //const DEF_BRANCH_PATH = `0/${DEF_BRANCH_NAME}`;
@@ -104,7 +105,7 @@ let db;
 
 const init_db=()=>{//«
 	return new Promise((Y,N)=>{
-		let req = indexedDB.open(DBNAME, 1);
+		let req = indexedDB.open(FS_DB_NAME, 1);
 		req.onerror=e=>{
 cerr(e);
 			Y();
@@ -345,7 +346,7 @@ this.dropDatabase = () => {//«
 //throw new Error("Comment me out to use dropDatabase()!");
 	return new Promise((Y,N)=>{
 		db.close();
-		const req = window.indexedDB.deleteDatabase(DBNAME);
+		const req = window.indexedDB.deleteDatabase(FS_DB_NAME);
 		req.onerror = (event) => {
 cerr("Error deleting database.");
 			Y();
@@ -955,6 +956,7 @@ const rmFile=async(fobj, opts)=>{//«
 		let kids = fobj.kids;
 		for (let k in kids){
 			if (k=="."||k=="..") continue;
+cwarn(`Deleting:`, kids[k]);
 			await delete_fobj(kids[k], opts);
 		}
 	}
