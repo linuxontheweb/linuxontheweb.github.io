@@ -257,16 +257,20 @@ cwarn("BLOCKED");
 	});
 }//»
 
-const do_imap_op = async(com, op, add_args) => {//«
+const do_imap_op = async(com, op, opts={}) => {//«
 //	const{args, opts, term}=com;
 	const addr = com.args.shift();
 	if (!addr) return com.no(`no 'addr' argument given!`);
 	let url = `/_imap?user=${addr}&op=${op}`;
-	if (add_args) url = url + "&" + add_args;;
+	if (opts.addArgs) url = url + "&" + opts.addArgs;
 	let rv = await fetch(url);
 	let is_ok = rv.ok;
 	let txt = await rv.text();
-	if (!is_ok) return com.no(txt.split("\n")[0]);
+	if (!is_ok) {
+		com.no(txt.split("\n")[0]);
+		return false;
+	}
+	if (opts.retOnly) return txt;
 	com.out(txt);
 	com.ok();
 };//»
@@ -616,7 +620,18 @@ const com_imapgetenvs = class extends Com{//«
 			this.wrn(`got a negative 'unix time' (${days_ago} days ago), setting to 0`);
 			unix_ms = 0;
 		}
-		do_imap_op(this, "getenvs", `since=${unix_ms}`);
+		let rv = await do_imap_op(this, "getenvs", {addArgs: `since=${unix_ms}`, retOnly: true});
+		if (rv === false) return;
+if (!isStr(rv)){
+cwarn("Here is the non-string value");
+log(rv);
+this.no("unknown value returned from imap.getenvs (see console)");
+return;
+}
+cwarn("GOT JSON ENVS");
+log(rv);
+this.ok();
+
 	}
 };//»
 

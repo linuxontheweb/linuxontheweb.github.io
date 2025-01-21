@@ -228,7 +228,7 @@ const client_opts = {//«
 };//»
 
 //»
-
+//«Funcs
 const OK=rv=>{//«
 	if (!rv) rv = true;
 	is_busy = false;
@@ -266,6 +266,7 @@ const unset_vars = () => {//«
 	is_connected = false;
 	is_busy = false;
 };//»
+//»
 
 const connect = async() => {//«
 //	if (is_connected) return ERR("already connected");
