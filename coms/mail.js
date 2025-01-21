@@ -257,11 +257,13 @@ cwarn("BLOCKED");
 	});
 }//»
 
-const do_imap_op = async(com, op) => {//«
+const do_imap_op = async(com, op, add_args) => {//«
 //	const{args, opts, term}=com;
 	const addr = com.args.shift();
 	if (!addr) return com.no(`no 'addr' argument given!`);
-	let rv = await fetch(`/_imap?user=${addr}&op=${op}`);
+	let url = `/_imap?user=${addr}&op=${op}`;
+	if (add_args) url = url + "&" + add_args;;
+	let rv = await fetch(url);
 	let is_ok = rv.ok;
 	let txt = await rv.text();
 	if (!is_ok) return com.no(txt.split("\n")[0]);
@@ -603,6 +605,20 @@ const com_imapdis = class extends Com{//«
 		do_imap_op(this, "logout");
 	}
 };//»
+const com_imapgetenvs = class extends Com{//«
+	async run(){
+		let days_ago = this.args.shift();
+		if (!days_ago) return this.no("need a 'days_ago' argument");
+		if (!days_ago.match(/^\d+$/)) return this.no("invalid 'days_ago' argument");
+		let ms_ago = (days_ago * 24 * 3600 * 1000);
+		let unix_ms = Date.now() - ms_ago;
+		if (unix_ms < 0) {
+			this.wrn(`got a negative 'unix time' (${days_ago} days ago), setting to 0`);
+			unix_ms = 0;
+		}
+		do_imap_op(this, "getenvs", `since=${unix_ms}`);
+	}
+};//»
 
 const com_mail = class extends Com{//«
 
@@ -738,6 +754,7 @@ export const coms = {//«
 	dbdrop: com_dbdrop,
 	imapcon: com_imapcon,
 	imapdis: com_imapdis,
+	imapgetenvs: com_imapgetenvs
 
 };//»
 

@@ -189,12 +189,13 @@ globals.ShellMod = new function() {
 //Var«
 const shellmod = this;
 const mail_coms=[
-"mail",
-"curaddr",
-"dblist",
-"dbdrop",
-"imapcon",
-"imapdis"
+	"mail",
+	"curaddr",
+	"dblist",
+	"dbdrop",
+	"imapcon",
+	"imapdis",
+	"imapgetenvs"
 ];
 const fs_coms=[//«
 	"_purge",

@@ -356,8 +356,11 @@ catch(e){
 }
 
 };//»
-const get_envelopes_since = async (timestamp) => {//«
+const get_envelopes_since = async (args) => {//«
+//const get_envelopes_since = async (timestamp) => {
 is_busy = true;
+let {since} = args;
+if (!since) since = 0;
 
 /*«
 
@@ -405,16 +408,28 @@ optionsopt{
 if (!is_connected) return ERR("not connected");
 if (!cur_mailbox) return ERR("no current mailbox");
 
+let since_date = new Date(parseInt(since));
+//log("since_date", since_date);
 try {
-
+/*«
 	let rv = await client.fetch(
-		{since: new Date(parseInt(timestamp))},
+		{since: since_date},
 		{envelope: true},
 		{uid: true}
 	);
-	OK(rv);
+»*/
+//	let num = 0;
+	let arr = [];
+	for await (let msg of client.fetch({since: since_date}, {envelope: true}, {uid: true})){
+//		num++;
+		arr.push(msg);
+//log(msg);
+	}
+	return OK(JSON.stringify(arr));
 }
 catch(e){
+log("ERR");
+log(e);
 	return ERR(e);
 }
 
@@ -443,7 +458,8 @@ logout,
 openbox,
 whichbox,
 "status": boxstatus,
-getseq
+getseq,
+getenvs: get_envelopes_since
 //verify,
 
 };//»
