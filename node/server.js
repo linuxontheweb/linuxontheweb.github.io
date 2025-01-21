@@ -1,15 +1,3 @@
-//const HOST="0.0.0.0";
-const HOST = "localhost";
-const HOST_SVC_ROOT = '/usr/local/home/lotw/zzhold/writes';
-//const PORT = 4443;
-const PORT = 8080;
-//const PORT = 8081;
-//let secure = false;
-//let secure = true;
-let secure = false;
-let imap;
-let smtp;
-
 //Import«
 
 const fs = require('fs');
@@ -24,7 +12,22 @@ const cwarn=(...args)=>{console.warn(...args);};
 let ws_server, ws_client;
 
 //»
-/*
+//Var«
+
+//const HOST="0.0.0.0";
+const HOST = "localhost";
+const HOST_SVC_ROOT = '/usr/local/home/lotw/zzhold/writes';
+//const PORT = 4443;
+const PORT = 8080;
+//const PORT = 8081;
+//let secure = false;
+//let secure = true;
+let secure = false;
+let imap;
+let smtp;
+const DEF_MIME = "application/octet-stream";
+
+/*«
 //SSL«
 //openssl req -new -x509 -keyout key.pem -out server.pem -days 365 -nodes
 const HTTPS_OPTIONS = { 
@@ -32,7 +35,7 @@ const HTTPS_OPTIONS = {
 	cert: fs.readFileSync(`${process.env.HOME}/.ssh/server.pem`), 
 };
 //»
-*/
+»*/
 const EXT_TO_MIME = {//«
 	js: "application/javascript",
 	json: "application/javascript",
@@ -49,8 +52,10 @@ const EXT_TO_MIME = {//«
 	gz: "application/gzip",
 	wav: "audio/wav"
 }//»
-const DEF_MIME = "application/octet-stream";
 
+//»
+
+//Funcs«
 const get_post_data = (req) => {//«
 	return new Promise((Y,N)=>{
 		let body = [];
@@ -71,6 +76,7 @@ const no = (res, arg) => {//«
 	else res.end("Error\n");
 };//»
 const text_mime = ()=>{return EXT_TO_MIME.txt}
+//»
 
 const svc_handler = async(which, args, req, res) => {//«
 
@@ -119,11 +125,22 @@ else if (which=="imap"){//«
 	if (!imap) {
 		imap = require('./svcs/imap.js');
 	}
+
+	if (!args.user){
+		no(res, "no 'user' arg!");
+		return;
+	}
+	if (args.user !== process.env.EMAIL_USER){
+		no(res, `invalid 'user' arg (got '${args.user}')`);
+		return;
+	}
+
 	let op = args.op;
 	if (!op){
 		no(res, "no operation was given (need an 'op' argument!)");
 		return;
 	}
+	if (imap.isBusy()) return no(res, "the imap module is busy");
 	let func = imap[op];
 	if (!func){
 		no(res, `the function: ${op} does not exist in the imap module`);
@@ -132,8 +149,8 @@ else if (which=="imap"){//«
 	let rv = await func(args);
 	if (!rv) return no(res, "imap returned an empty respose");
 	if (rv.error) return no(res, rv.error+"");
-	let succ = rv.success;
-	if (succ){
+	if (rv.success){
+		let succ = rv.success;
 		ok(res);
 		if (succ === true) return res.end("OK");
 		if (typeof succ === "string") return res.end(succ);
@@ -150,10 +167,10 @@ log(rv);
 //	res.end(JSON.stringify(rv.message));
 //	res.end(rv.message);
 }//»
-else if (which==="env"){
+else if (which==="env"){//«
 	if (!args.key) return no(res, "'env' requires a 'key' arg");
 	res.end(process.env[args.key]||"");
-}
+}//»
 else no(res, `Bad service: ${which}`);
 
 };//»
@@ -226,6 +243,8 @@ else{
 }
 
 };//»
+
+//Init«
 let server;
 if (secure) server = https.createServer(HTTPS_OPTIONS, handler).listen(PORT, HOST);
 else {
@@ -288,7 +307,7 @@ ws.on('close', async()=>{//«
 });//»
 
 });
-
+//»
 
 log(`Listening on ${HOST}:${PORT}`);
 

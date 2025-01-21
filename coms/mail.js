@@ -257,6 +257,18 @@ cwarn("BLOCKED");
 	});
 }//»
 
+const do_imap_op = async(com, op) => {//«
+//	const{args, opts, term}=com;
+	const addr = com.args.shift();
+	if (!addr) return com.no(`no 'addr' argument given!`);
+	let rv = await fetch(`/_imap?user=${addr}&op=${op}`);
+	let is_ok = rv.ok;
+	let txt = await rv.text();
+	if (!is_ok) return com.no(txt.split("\n")[0]);
+	com.out(txt);
+	com.ok();
+};//»
+
 //»
 
 class DB {//«
@@ -581,6 +593,17 @@ async resetDBVers(){//«
 
 }//»
 
+const com_imapcon = class extends Com{//«
+	async run(){
+		do_imap_op(this, "connect");
+	}
+};//»
+const com_imapdis = class extends Com{//«
+	async run(){
+		do_imap_op(this, "logout");
+	}
+};//»
+
 const com_mail = class extends Com{//«
 
 //static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
@@ -707,10 +730,14 @@ const com_dbdrop = class extends Com{//«
 	}
 }//»
 
-export const coms = {/*«*/
+export const coms = {//«
+
 	mail: com_mail,
 	curaddr: com_curaddr,
 	dblist: com_dblist,
-	dbdrop: com_dbdrop
-};/*»*/
+	dbdrop: com_dbdrop,
+	imapcon: com_imapcon,
+	imapdis: com_imapdis,
+
+};//»
 

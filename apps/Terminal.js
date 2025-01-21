@@ -193,6 +193,8 @@ const mail_coms=[
 "curaddr",
 "dblist",
 "dbdrop",
+"imapcon",
+"imapdis"
 ];
 const fs_coms=[//«
 	"_purge",

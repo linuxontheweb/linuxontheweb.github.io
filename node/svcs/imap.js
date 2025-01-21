@@ -1,4 +1,27 @@
+/*1/21/25:«
 
+Now I am legitimately back here after 3+ months of turning LOTW into an *actual*
+browser-based implementation of GNU/Linux.
+
+What I want is to enable a CLI workflow with 3 distinct parts
+
+1. Mandatory "connect" to IMAP service
+2. Optional series of "requests" to the service
+3. Mandatory "disconnect" from IMAP service
+
+There might be an interval timeout (e.g. 5-15 secs) here after connecting that 
+disconnects and sets the client to null.
+
+We'll want a "busy" flag that is turned on when a connect/disconnect/request 
+operation begins, and then turned off when it ends.
+
+All we care about in terms of "sessions" is that the "user" arg on every request
+is identical with process.env.EMAIL_USER in here. We are taking care of that in
+the main server module (which calls the functions that are exported from here).
+
+»*/
+
+//«Notes
 /*10/13/24:ETIMEDOUT«
 Error: read ETIMEDOUT
     at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
@@ -16,7 +39,7 @@ Error: Unhandled error: ETIMEDOUT
     at process._fatalException (node:internal/process/execution:191:25)
 
 »*/
-/*
+/*«Some time in October 2024:
 
 Since we can't really figure out how to limit the fetch to a single body part, we are
 just setting the maxLength field on the source object (member of the 2nd arg to the
@@ -25,7 +48,7 @@ method working. This is currently at 5kb, but should probably go up to ~32 kb. T
 we are pretty guaranteed not to have to worry about downloading a bunch of attachments
 that might be in the full message, maybe resulting in many, many megabytes.
 
-*/
+»*/
 /*Docs«
 
 //Flags«
@@ -168,6 +191,7 @@ S:   a006 OK LOGOUT completed
 //»
 
 »*/
+//»
 
 //Imports«
 
@@ -185,14 +209,14 @@ const TEXT_MIME = "text/plain";
 
 const USER = process.env.EMAIL_USER;
 
-let lock;
+//let lock;
+let is_busy = false;
+
 let is_connected = false;
 let cur_mailbox;
 
-//»
-
 let client;
-const client_opts = {
+const client_opts = {//«
 	host: 'imap.mail.yahoo.com',
 	port: 993,
 	secure: true,
@@ -201,12 +225,13 @@ const client_opts = {
         user: USER,
         pass: process.env.EMAIL_PASSWORD
 	}
-};
+};//»
 
-//const client = new ImapFlow(client_opts);
+//»
 
 const OK=rv=>{//«
 	if (!rv) rv = true;
+	is_busy = false;
 	return {success: rv};
 };//»
 const ERR=mess=>{//«
@@ -216,41 +241,36 @@ const ERR=mess=>{//«
 log(mess);
 		mess = mess.message;
 	}
+	is_busy = false;
 	return {error: mess};
 
 };//»
 
+const close_cb = () => {//«
+log("connection closed");
+	unset_vars();
+};//»
 const do_openbox = async(which)=>{//«
 	try{
 		cur_mailbox = await client.mailboxOpen(which);
 log(`${cur_mailbox.path} opened`);
-		return OK();
+		return OK(`${cur_mailbox.path} opened`);
 	}
 	catch(e){
 		return ERR(e);
 	}
+};//»
+const unset_vars = () => {//«
+	client = null;
+	cur_mailbox = null;
+	is_connected = false;
+	is_busy = false;
 };//»
 
-const verify = async()=>{//«
-	if (is_connected) return USER;
-	try{
-log("verifying...");
-		client = new ImapFlow(client_opts);
-		await client.connect();
-		is_connected = true;
-		await client.logout();
-		client = null;
-		is_connected = false;
-log(`OK: ${USER}`);
-		return OK(USER);
-	}
-	catch(e){
-log(e);
-		return ERR(e);
-	}
-};//»
 const connect = async() => {//«
-	if (is_connected) return ERR("already connected");
+//	if (is_connected) return ERR("already connected");
+	is_busy = true;
+	if (is_connected) return OK("Already connected");
 	try{
 log("connecting...");
 		client = new ImapFlow(client_opts);
@@ -265,18 +285,23 @@ log(e);
 		return ERR(e);
 	}
 };//»
+const connected = () => {//«
+	is_busy = true;
+	return OK(is_connected + "");
+};//»
 const logout = async() => {//«
+	is_busy = true;
 	if (!is_connected) return ERR("not connected");
 	try{
 		await client.logout();
-		client = null;
-		is_connected = false;
+		unset_vars();
 		return OK();
 	}catch(e){
 		return ERR(e);
 	}
 };//»
-const openbox = async(args)=>{//«
+const openbox = async (args) => {//«
+	is_busy = true;
 
 	if (!is_connected) return ERR("not connected");
 	let {box} = args;
@@ -285,12 +310,14 @@ const openbox = async(args)=>{//«
 	return do_openbox(box);
 
 };//»
-const whichbox= () => {//«
+const whichbox = () => {//«
+	is_busy = true;
 	if (!is_connected) return ERR("not connected");
 	if (!cur_mailbox) return ERR("no mailbox");
 	return OK(cur_mailbox.path);
 };//»
 const boxstatus = async() => {//«
+	is_busy = true;
 	if (!is_connected) return ERR("not connected");
 	if (!cur_mailbox) return ERR("no mailbox");
 try{
@@ -301,7 +328,8 @@ catch(e){
 	return ERR(e);
 }
 };//»
-const getseq=async(args)=>{//«
+const getseq = async (args) => {//«
+is_busy = true;
 
 if (!is_connected) return ERR("not connected");
 if (!cur_mailbox) return ERR("no current mailbox");
@@ -321,7 +349,6 @@ if (!text){
 log(mess.bodyParts);
 	return ERR("No bodyParts.1!");
 }
-//log(text.toString());
 	return OK(text.toString());
 }
 catch(e){
@@ -329,17 +356,73 @@ catch(e){
 }
 
 };//»
-const connected = () => {return OK(is_connected+"");};
-const close_cb=()=>{
-	client = null;
-	is_connected = false;
-	log("connection closed");
-};
+const get_envelopes_since = async (timestamp) => {//«
+is_busy = true;
 
+/*«
+
+Returns: Array of FetchMessageObject's:
+{
+	uid: Number,
+	envelope: MessageEnvelopeObject
+}
+
+MessageEnvelopeObject:
+{
+	from: [MessageAddressObject]
+	to: [MessageAddressObject]
+	replyTo: [MessageAddressObject]
+	inReplyTo: String (Message ID from In-Reply-To header)
+	date: Date,
+	subject: String,
+}
+
+
+//(async) fetch(range, query, optionsopt)
+
+range   SequenceString |    Range or search parameters of messages to fetch
+        Array.<Number> |
+        SearchObject
+
+SearchObject{
+	since:       Date | string   Matches messages received after date
+}
+
+
+query   FetchQueryObject    Fetch query (what parts/fields to include in the message response)
+
+FetchQueryObject{
+	envelope:    Boolean     if true then include parsed ENVELOPE object in the response
+}
+
+
+optionsopt{
+	uid:	Boolean		if true then uses UID number instead of sequence number for seq
+}
+
+»*/
+
+if (!is_connected) return ERR("not connected");
+if (!cur_mailbox) return ERR("no current mailbox");
+
+try {
+
+	let rv = await client.fetch(
+		{since: new Date(parseInt(timestamp))},
+		{envelope: true},
+		{uid: true}
+	);
+	OK(rv);
+}
+catch(e){
+	return ERR(e);
+}
+
+};//»
 
 process.on('uncaughtException', (err) => {//«
-
 	if (err.code === "NoConnection" && err.command === 'IDLE'){
+		unset_vars();
 log("caught NoConnection error (from IDLE)");
 	}
 	else{
@@ -349,21 +432,43 @@ log(err);
 
 });//»
 
-module.exports={//«
+module.exports = {//«
 //	getMail
 //	fetchOne
 
+isBusy:()=>{return is_busy},
 connect,
 connected,
 logout,
 openbox,
 whichbox,
 "status": boxstatus,
-verify,
 getseq
+//verify,
 
 };//»
 
+//«Old
+/*
+const verify = async () => {//«
+	if (is_connected) return USER;
+	try{
+log("verifying...");
+		client = new ImapFlow(client_opts);
+		await client.connect();
+		is_connected = true;
+		await client.logout();
+		client = null;
+		is_connected = false;
+log(`OK: ${USER}`);
+		return OK(USER);
+	}
+	catch(e){
+log(e);
+		return ERR(e);
+	}
+};//»
+*/
 /*
 const fetchOne = (seqNum) => {//«
 
@@ -581,4 +686,5 @@ finally {
 });
 };//»
 */
+//»
 
