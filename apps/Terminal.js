@@ -1,4 +1,13 @@
+/*BUG @ZOPIRUTKS: The 'fname' argument to normPath was a Word object, so this failed«
+with a 'path.match' is not a function. And just above that, we had to change
+the line: 
+  const {op}=tok;//WRONG!!!
+to:
+  const {val: op}=tok;
 
+I JUST CAN'T BELIEVE THAT WE HADN'T TESTED REDIRECTS ***AT ALL*** SINCE WE "FINISHED" THE
+SHELL UP A COUPLE WEEKS AGO!?!?!
+»*/
 //«Notes
 
 /*1/19/25:« This doesn't work: $ cat | less
@@ -1138,8 +1147,13 @@ return "Invalid value to write to stdout (want string or Uint8Array)";
 }
 
 const{tok, file: fname}=this;
-const {op}=tok;
-let fullpath = normPath(fname, term.cur_dir);
+//const {op}=tok;//WRONG!!!
+//-----vvv
+const {val: op}=tok;
+
+//let fullpath = normPath(fname, term.cur_dir);//WRONG!!!
+//ZOPIRUTKS------------------vvvvvvvvvvv
+let fullpath = normPath(fname.toString(), term.cur_dir);
 let node = await fsapi.pathToNode(fullpath);
 if (node) {/*«*/
 	if (node.type == FS_TYPE && op===">" && !ok_clobber) {
@@ -1188,7 +1202,9 @@ const Com = class {//«
 		for (let k in env) {
 			this[k]=env[k];
 		}
-		if (this.outRedir&&this.outRedir.length){
+//log(this.outRedir);
+//		if (this.outRedir&&this.outRedir.length){
+		if (this.outRedir){
 			this.redirLines = [];
 		}
 		this.awaitEnd = new Promise((Y,N)=>{//«
@@ -1316,6 +1332,7 @@ log(num);
 		if (this.shell.cancelled) return;
 		const{term}=this;
 		let redir_lns = this.redirLines || this.envRedirLines;
+//log("REDIR_LNS", redir_lns);
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
 			let next_com = this.nextCom;
@@ -1360,10 +1377,22 @@ log(num);
 		}
 		this.resp(val, opts);
 	}//»
-	err(str){this.resp(str,{isErr:true});}
-	suc(str){this.resp(str,{isSuc:true});}
-	wrn(str){this.resp(str,{isWrn:true});}
-	inf(str){this.resp(str,{isInf:true});}
+	err(str, opts={}){
+		opts.isErr=true;
+		this.resp(str, opts);
+	}
+	suc(str, opts={}){
+		opts.isSuc=true;
+		this.resp(str,opts);
+	}
+	wrn(str, opts={}){
+		opts.isWrn=true;
+		this.resp(str,opts);
+	}
+	inf(str, opts={}){
+		opts.isInf=true;
+		this.resp(str,opts);
+	}
 	cancel(){
 		this.killed = true;
 cwarn(`${this.name}: cancelled`);
@@ -5977,7 +6006,8 @@ for (let com of pipeline){//«
 	let val;
 	if (com.redirLines instanceof Uint8Array) val = com.redirLines;
 	else val = com.redirLines.join("\n");
-	let rv = await com.outRedir.write(term, val, env, this.var.allowRedirClobber)
+//log(ShellMod.var);
+	let rv = await com.outRedir.write(term, val, env, ShellMod.var.allowRedirClobber)
 	if (this.cancelled) return;
 	if (rv===true) continue;
 	if (isStr(rv)) term.response(`sh: ${rv}`, {isErr: true});
@@ -8535,7 +8565,7 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 			continue;
 		}
 		let arr;
-		if (pretty) arr = fmt2(ln);
+		if (pretty) arr = this.fmt2(ln);
 		else arr = this.fmt(ln);
 //cwarn("ARR");
 //log(arr);

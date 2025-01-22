@@ -31,7 +31,6 @@ environment variables with their values, or performing other shell-like expansio
 These algorithms should be named, and the names should go onto the email objects.
 
 
-
 Let's get rid of the "curUser" concept and just always *require* an address
 as the first argument to the 'mail' command. We will assume the user wants to "hardcode"
 an 'EMAIL_USER' variable in their terminal environment, e.g. via the '~/.env' file.
@@ -234,7 +233,7 @@ On the server
 const {globals}=LOTW;
 const {fs: fsapi, util}=LOTW.api;
 const {MAIL_DB_NAME, MAIL_DB_VERNUM, ShellMod} = globals;
-const{isStr, log, jlog, cwarn, cerr}=util;
+const{isStr, isNum, log, jlog, cwarn, cerr}=util;
 const {Com} = ShellMod.comClasses;
 
 //»
@@ -278,28 +277,128 @@ const do_imap_op = async(com, op, opts={}) => {//«
 
 //»
 
-const mail_loop = (term, db) => {
+const mail_loop = (com, db) => {//«
 return new Promise(async(Y,N)=>{
-cwarn("DO MAIL LOOP FOR 1 SEC!!!", term, cb);
 
-setTimeout(()=>{
+let imap_logged_in=false;
+const help=()=>{//«
+	com.inf(`Mail commands: log[i]n log[o]ut [u]pdate [n]ew [s]aved [c]ontacts [d]rafts sen[t] [q]uit [h]elp`, {pretty: true});
+};//»
+const hang=()=>{return new Promise((Y,N)=>{});}
+const do_update=async()=>{//«
 
-Y(true);
+	let time = await db.lastPoll();
+	if (!isNum(time)){
+		com.err("db.lastPoll() did not return a numerical value (see console)");
+		return;
+	}
+	com.inf(`Using last_poll_time: ${time}`);
 
-}, 1000);
+/*
 
+Now the question is how we handle "login sessions".
+
+1) Upon starting this loop
+2) Upon first using an "online" command
+
+let rv = await do_imap_op(this, "getenvs", {addArgs: `since=${unix_ms}`, retOnly: true});
+
+*/
+
+};//»
+const do_get = async(url, opts={})=>{//«
+	let rv = await fetch(url);
+	let is_ok = rv.ok;
+	let txt = await rv.text();
+	if (!is_ok) {
+		com.err(txt.split("\n")[0]);
+	}
+	else if (opts.isSuc){
+		com.suc(txt);
+	}
+	else return txt;
+};//»
+const login=(opts)=>{//«
+	imap_logged_in=true;
+	return do_get(`${base_imap_url}&op=connect`, opts);
+};//»
+const logout=(opts)=>{//«
+	imap_logged_in=false;
+	return do_get(`${base_imap_url}&op=logout`, opts);
+};//»
+const exit=rv=>{//«
+	if (imap_logged_in) logout();
+	Y(rv);
+};//»
+
+/*«
+	log[i]n
+	log[o]ut
+	[u]pdate
+	[n]ew
+	[s]aved
+	[c]ontacts
+	[d]rafts
+	sen[t]
+	[q]uit
+	[h]elp
+»*/
+
+const{term}=com;
+const addr = db.emailAddr;
+
+const base_imap_url = `/_imap?user=${addr}`;
+
+const OK_CHARS=["i","o","q","u","n","s","c","d","e","h"];
+
+let num_invalid = 0;
+help();
+while(true){
+
+	let rv = await term.getch("iounscdtqh> ");
+	term.lineBreak();
+	if (!OK_CHARS.includes(rv)){
+		num_invalid++;
+		com.wrn(`invalid command (got '${rv?rv:""}')`);
+		if (num_invalid===3) {
+			com.err("Aborting the loop (too many invalid commands)");
+			return exit();
+		}
+		continue;
+	}
+	if (rv==="q") return exit(true);
+	if (rv==="h") help();
+	else if (rv==="u"){
+		await do_update();
+	}
+	else if (rv==="i"){
+		await login({isSuc: true});
+	}
+	else if (rv==="o"){
+		await logout({isSuc: true});
+	}
+	else {
+		com.wrn(`Got command: ${rv}`);
+	}
+	num_invalid = 0;
+
+}
 
 });
-};
+};//»
 
 class DB {//«
 
 #db;
 #mailDataPath;
+#userDirPath;
+#lastPollPath;
 
 constructor(addr){//«
 
 	this.#mailDataPath = `${globals.APPDATA_PATH}/mail`;
+	this.#userDirPath = `${this.#mailDataPath}/${addr}`;
+	this.#lastPollPath = `${this.#userDirPath}/last_poll_time`;
 	this.emailAddr = addr;
 	this.dbName = `${MAIL_DB_NAME}:${MAIL_DB_VERNUM}/${addr}`;
 
@@ -570,6 +669,29 @@ async initMailDir(){//«
 	return true;
 }//»
 
+async lastPoll(){//«
+	let node = await this.#lastPollPath.toNode();
+	if (!node){
+cerr(`FATAL: lastPollPath ${this.#lastPollPath} node not found!`);
+		return;
+	}
+	if (node.isData!==true){
+cerr("FATAL: the lastPoll node is NOT a data node!!!");
+		return;
+	}
+	let data = node.data;
+	if (data.type!=="timestamp"){
+cerr("FATAL: the lastPoll data node is NOT of type = 'timestamp'");
+		return;
+	}
+	let val = data.val;
+	if (!isNum(val)){
+cerr("FATAL: the lastPoll data node value is NOT a number!");
+		return;
+	}
+	return val;
+}//»
+
 /*«
 async getCurUser(){//«
 	let node = await this.#curUserFile.toNode();
@@ -653,7 +775,8 @@ if (!cmd){//«
 
 //SBSNOWP
 //cwarn("Mail REPL here...");
-	rv = await mail_loop(term, db);
+	this.inf(`Starting mail REPL for: '${addr}'`);
+	rv = await mail_loop(this, db);
 log("MAIL LOOP RET", rv);
 	db.close();
 	this.ok();
@@ -671,6 +794,7 @@ if (cmd === "init"){//«
 	if (!rv) return this.no(`could not initialize the object stores for: ${addr}`);
 	this.ok();
 	return;
+
 }//»
 //The remaining commands assume that 'addr' has already been initialized
 if (!await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
@@ -684,14 +808,16 @@ if (cmd === "del"){//«
 	this.ok();
 
 }//»
-else if (cmd==="check") this.ok();
+else if (cmd==="check") this.ok(`OK: ${addr}`);
 else if (cmd){
 	this.no(`unknown mail command: '${cmd}'`);
 }
 
 
 }//»
-
+cancel(){
+cwarn("HI CANCEL");
+}
 }//»
 
 const com_imapcon = class extends Com{//«
@@ -723,8 +849,9 @@ log(rv);
 this.no("unknown value returned from imap.getenvs (see console)");
 return;
 }
-cwarn("GOT JSON ENVS");
-log(rv);
+//cwarn("GOT JSON ENVS");
+//log(rv);
+this.out(rv);
 this.ok();
 
 	}
