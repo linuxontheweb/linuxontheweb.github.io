@@ -292,8 +292,14 @@ const do_update=async()=>{//«
 		com.err("db.lastPoll() did not return a numerical value (see console)");
 		return;
 	}
-	com.inf(`Using last_poll_time: ${time}`);
+//	com.inf(`Using last_poll_time: ${time}`);
+com.inf(`!!! USING LOCAL FILE: /home/me/ENVSOUT !!!`);
+//return 
+let envs = await "/home/me/ENVSOUT".toJson();
+let rv = await db.saveNew(envs);
+if (isStr(rv)) com.inf(rv);
 
+//jlog(arr);
 /*
 
 Now the question is how we handle "login sessions".
@@ -302,6 +308,25 @@ Now the question is how we handle "login sessions".
 2) Upon first using an "online" command
 
 let rv = await do_imap_op(this, "getenvs", {addArgs: `since=${unix_ms}`, retOnly: true});
+
+Save these envelopes to db.new, and set last_poll_time to the 
+
+ {
+	"seq": 233,
+	"uid": 80348,
+	"emailId": "AM0UewsdtemMZ3ENyQJ8uGVPGPs",
+	"envelope": {
+		"date": "2024-12-29T08:50:32.000Z",
+		"subject": "Do not pay your electric bill until you read this.",
+		"from":[{"name":"Elon Musk","address":"partners@blezr.wqjsport.com"}],
+		"sender":[{"name":"Elon Musk","address":"partners@blezr.wqjsport.com"}],
+		"replyTo":[{"name":"","address":"partners@blezr.wqjsport.com"}],
+		"to":[{"name":"","address":"dkane75@yahoo.com"}],
+		"messageId": "<5lz7yziw7q08vgvapx70wt83h.y1bip31awf.2917983932.qeesdnwi6l.2cwgbqi3@blezr.wqjsport.com>"
+	},
+	"id": "AM0UewsdtemMZ3ENyQJ8uGVPGPs"
+}
+
 
 */
 
@@ -416,9 +441,10 @@ cwarn("Closing the database...");
 	this.#db = undefined;
 	return true;
 }//»
-getById(id){//«
+
+getById(store_name, id){//«
 	return new Promise((Y,N)=>{
-		let req = this.getStore().get(id);
+		let req = this.getStore(store_name).get(id);
 		req.onerror=(e)=>{
 			cerr(e);
 			Y();
@@ -428,9 +454,9 @@ getById(id){//«
 		};
 	});
 }//»
-putById(id, node){//«
+putById(store_name, id, node){//«
 	return new Promise((Y,N)=>{
-		let req = this.getStore(true).put(node, id);
+		let req = this.getStore(store_name, true).put(node, id);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -440,9 +466,9 @@ cerr(e);
 		};
 	});
 }//»
-delById(id){//«
+delById(store_name, id){//«
 	return new Promise((Y,N)=>{
-		let req = get_store(true).delete(id);
+		let req = get_store(store_name, true).delete(id);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -453,8 +479,8 @@ cerr(e);
 	});
 }//»
 
-getStore(if_write){//«
-	return this.#db.transaction([this.table_name],if_write?"readwrite":"readonly").objectStore(this.table_name);
+getStore(store_name, if_write){//«
+	return this.#db.transaction([store_name],if_write?"readwrite":"readonly").objectStore(store_name);
 }//»
 addMessage(mess){//«
 	return new Promise((Y,N)=>{
@@ -643,14 +669,16 @@ cwarn("DELETING", new_table_name, saved_table_name);
 		}
 »*/
 log("Upgrading...");
-		let newstore = e.target.result.createObjectStore(new_table_name, {autoIncrement: true});
-		newstore.createIndex("from", "from", {unique: false});
-//		newstore.createIndex("time", "time", {unique: false});
+//We can use {keyPath: "uid"} (rather than autoIncrement) in order to key by the email uids.
 
-		let savedstore = e.target.result.createObjectStore(saved_table_name, {autoIncrement: true});
+		let newstore = e.target.result.createObjectStore(new_table_name, {keyPath: "uid"});
+//		let newstore = e.target.result.createObjectStore(new_table_name, {autoIncrement: true});
+		newstore.createIndex("from", "from", {unique: false});
+
+		let savedstore = e.target.result.createObjectStore(saved_table_name, {keyPath: "uid"});
+//		let savedstore = e.target.result.createObjectStore(saved_table_name, {autoIncrement: true});
 		savedstore.createIndex("from", "from", {unique: false});
-//		savedstore.createIndex("time", "time", {unique: false});
-//		store.createIndex("messId", "messId", {unique: true});
+
 	}
 });//»
 
@@ -691,7 +719,32 @@ cerr("FATAL: the lastPoll data node value is NOT a number!");
 	}
 	return val;
 }//»
+async saveNew(emails){
+let store = this.getStore("new", true);
+//log(store);
+let num_saved = 0;
+for (let email of emails){
 
+let {uid, envelope} = email;
+let {date, subject, from, sender} = envelope;
+let timestamp = Math.floor((new Date(date)).getTime()/1000);
+let from1 = from[0];
+let from1nm = from1.name;
+let from1addr = from1.address;
+let sender1 = sender[0];
+let sender1nm = sender1.name;
+let sender1addr = sender1.address;
+
+//cwarn(uid, timestamp, subject);
+//log(`FROM <${from1nm}> <${from1addr}>`);
+//log(`SENDER <${sender1nm}> <${sender1addr}>`);
+num_saved++;
+let obj = {from: from1addr, fromName: from1nm, timestamp, uid, subject};
+log(obj);
+
+}
+return `saved: ${num_saved} new emails`;
+}
 /*«
 async getCurUser(){//«
 	let node = await this.#curUserFile.toNode();

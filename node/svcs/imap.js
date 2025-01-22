@@ -329,17 +329,17 @@ catch(e){
 	return ERR(e);
 }
 };//»
-const getseq = async (args) => {//«
+const get_uid = async (args) => {//«
 is_busy = true;
 
 if (!is_connected) return ERR("not connected");
 if (!cur_mailbox) return ERR("no current mailbox");
-let {seq} = args;
-if (!(seq && (seq.match(/^\d+$/) || seq === "*"))) return ERR("Invalid sequence arg");
+let {uid} = args;
+if (!(uid && (uid.match(/^\d+$/) || uid === "*"))) return ERR("Invalid uid/sequence arg");
 
 try {
 
-let mess = await client.fetchOne(seq, {bodyParts: ["1"]});
+let mess = await client.fetchOne(uid, {bodyParts: ["1"]}, {uid: true});
 if (!mess.bodyParts){
 log(mess);
 	return ERR("No bodyParts returned!");
@@ -459,7 +459,7 @@ logout,
 openbox,
 whichbox,
 "status": boxstatus,
-getseq,
+getuid: get_uid,
 getenvs: get_envelopes_since
 //verify,
 
