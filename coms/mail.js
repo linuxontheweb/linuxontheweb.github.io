@@ -226,6 +226,7 @@ On the server
 //»
 
 »*/
+
 //»
 
 //Imports«
@@ -276,6 +277,20 @@ const do_imap_op = async(com, op, opts={}) => {//«
 };//»
 
 //»
+
+const mail_loop = (term, db) => {
+return new Promise(async(Y,N)=>{
+cwarn("DO MAIL LOOP FOR 1 SEC!!!", term, cb);
+
+setTimeout(()=>{
+
+Y(true);
+
+}, 1000);
+
+
+});
+};
 
 class DB {//«
 
@@ -399,7 +414,6 @@ These directories are filled with "email" data nodes (possibly with timestamps, 
 
 2) Drafts/
 3) Sent/
-
 
 »*/
 
@@ -542,7 +556,7 @@ log("Upgrading...");
 });//»
 
 }//»
-async initAppDir(){//«
+async initMailDir(){//«
 	let node = await this.#mailDataPath.toNode();
 	if (!node){
 		if (!await fsapi.mkDir(globals.APPDATA_PATH, "mail")){
@@ -599,6 +613,87 @@ async resetDBVers(){//«
 
 }//»
 
+const com_mail = class extends Com{//«
+
+//static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
+static opts={s:{r: 1, u: 3}, l: {user: 3}};
+
+async run(){//«
+
+const{args, opts, term, env}=this;
+let rv;
+
+if (opts.r){//«
+	let path = `${globals.APPDATA_PATH}/mail`;
+	rv = await term.getch(`Recursively remove the *entire* mail directory: '${path}'? [y/n]`);
+	if (!rv) return this.no("not deleting");
+cwarn("DO DELETE");
+	rv = await fsapi.doFsRm([path], mess=>{
+cerr(mess);
+	}, {root: true, fullDirs: true});
+	if (!rv) return this.no();
+	this.ok();
+	return;
+}//»
+
+const addr = opts.user || opts.u || env.EMAIL_USER;
+if (!addr) return this.no(`no --user, -u option or 'EMAIL_USER' in the environment!`);
+
+const db = new DB(addr);
+
+rv = await db.initMailDir();
+if (!this.checkStrOrTrue(rv, "db.initMailDir")) return;
+
+const cmd = args.shift();
+
+if (!cmd){//«
+	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	rv = await db.initDB();
+	if (!rv) return this.no(`could not initialize the database for: ${addr}`);
+
+//SBSNOWP
+//cwarn("Mail REPL here...");
+	rv = await mail_loop(term, db);
+log("MAIL LOOP RET", rv);
+	db.close();
+	this.ok();
+	return;
+}//»
+
+if (cmd === "init"){//«
+
+	if (await db.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
+	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
+	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
+	rv = await db.mkUserDir();
+	if (!this.checkStrOrTrue(rv, "mkUserDir")) return;
+	rv = await db.initDB();
+	if (!rv) return this.no(`could not initialize the object stores for: ${addr}`);
+	this.ok();
+	return;
+}//»
+//The remaining commands assume that 'addr' has already been initialized
+if (!await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
+if (cmd === "del"){//«
+
+	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
+	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
+
+	if (!await db.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
+	if (!await db.dropDatabase()) return this.no(`error dropping the database`);
+	this.ok();
+
+}//»
+else if (cmd==="check") this.ok();
+else if (cmd){
+	this.no(`unknown mail command: '${cmd}'`);
+}
+
+
+}//»
+
+}//»
+
 const com_imapcon = class extends Com{//«
 	async run(){
 		do_imap_op(this, "connect");
@@ -634,87 +729,6 @@ this.ok();
 
 	}
 };//»
-
-const com_mail = class extends Com{//«
-
-//static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
-static opts={s:{r: 1}};
-
-init(){}
-
-async run(){//«
-
-const{args, opts, term}=this;
-let rv;
-if (opts.r){//«
-	let path = `${globals.APPDATA_PATH}/mail`;
-	rv = await term.getch(`Recursively remove the *entire* mail directory: '${path}'? [y/n]`);
-	if (!rv) return this.no("not deleting");
-cwarn("DO DELETE");
-	rv = await fsapi.doFsRm([path], mess=>{
-cerr(mess);
-	}, {root: true, fullDirs: true});
-	if (!rv) return this.no();
-	this.ok();
-	return;
-}//»
-
-const addr = args.shift();
-if (!addr) return this.no(`no 'addr' argument given!`);
-
-const db = new DB(addr);
-
-rv = await db.initAppDir();
-if (!this.checkStrOrTrue(rv, "db.initAppDir")) return;
-
-const cmd = args.shift();
-
-if (!cmd){//«
-	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
-	rv = await db.initDB();
-	if (!rv) return this.no(`could not initialize the database for: ${addr}`);
-
-//SBSNOWP
-cwarn("Mail REPL here...");
-	db.close();
-	this.ok();
-	return;
-}//»
-
-if (cmd === "init"){//«
-
-	if (await db.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
-	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
-	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
-	rv = await db.mkUserDir();
-	if (!this.checkStrOrTrue(rv, "mkUserDir")) return;
-	rv = await db.initDB();
-	if (!rv) return this.no(`could not initialize the object stores for: ${addr}`);
-	this.ok();
-	return;
-}//»
-
-//The remaining commands assume that 'addr' has already been initialized
-if (!await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
-
-if (cmd === "del"){//«
-
-	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
-	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
-
-	if (!await db.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
-	if (!await db.dropDatabase()) return this.no(`error dropping the database`);
-	this.ok();
-
-}//»
-else if (cmd){
-	this.no(`unknown mail command: '${cmd}'`);
-}
-
-
-}//»
-
-}//»
 
 const com_curaddr = class extends Com{//«
 	async run(){

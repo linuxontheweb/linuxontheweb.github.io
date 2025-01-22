@@ -2033,7 +2033,7 @@ run(){
 	if (args.length) {
 		return this.no("arguments are not supported");
 	}
-	let env = term.ENV;
+	let env = this.env;
 	let keys = Object.keys(env);//let keys = env._keys;
 	let out = [];
 	for (let key of keys){
@@ -5559,41 +5559,6 @@ else if (red==="<<"){
 }
 return stdin;
 }//»
-/*
-stripRedirs(com){//«
-	let redirs = [];
-	if (!com.prefix) com.prefix=[];
-	if (!com.suffix) com.suffix=[];
-	let pref = com.prefix;
-	for (let i=0; i < pref.length; i++){
-		if (pref[0].isHeredoc) {
-			redirs.push(pref[0]);
-			pref.splice(i, 1);
-			i--;
-		}
-		else if (pref[0].isRedir) {
-			redirs.push(pref[0].redir);
-			pref.splice(i, 1);
-			i--;
-		}
-	}
-	let suf = com.suffix;
-	for (let i=0; i < suf.length; i++){
-		if (suf[0].isHeredoc) {
-			redirs.push(suf[0]);
-			suf.splice(i, 1);
-			i--;
-		}
-		else if (suf[0].isRedir) {
-			redirs.push(suf[0].redir);
-			suf.splice(i, 1);
-			i--;
-		}
-
-	}
-	return redirs;
-}//»
-*/
 async allExpansions(arr, shopts={}, opts={}){//«
 //async allExpansions(arr, env, scriptName, scriptArgs, opts={}){
 const{env,scriptName,scriptArgs} = shopts;
@@ -5754,25 +5719,24 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 //log(assigns);
-
 	let rv
+	let use_env;
 	if (assigns.length) {
 //		rv = await this.allExpansions(assigns, env, scriptName, scriptArgs, {isAssign: true});
 		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
-//IFKLJFSN
-//		rv = ShellMod.util.addToEnv(assigns, name?sdup(env):env, {term});
-		rv = add_to_env(assigns, name?sdup(env):env, {term});
+		use_env = name?sdup(env):env;
+		rv = add_to_env(assigns, use_env, {term});
 		if (rv.length) term.response(rv.join("\n"), {isErr: true});
 	}
-
+	else use_env = env;
 	const com_env = {//«
 		stdin,
 		outRedir,
 		isSub: !!subLines,
 		scriptOut,
 		term,
-		env,
+		env: use_env,
 		command_str: this.commandStr,
 		shell: this,
 		envPipeInCb,
@@ -9409,3 +9373,38 @@ onkeyup(e,sym){//«
 //»
 
 
+/*From class Shell{}
+stripRedirs(com){//«
+	let redirs = [];
+	if (!com.prefix) com.prefix=[];
+	if (!com.suffix) com.suffix=[];
+	let pref = com.prefix;
+	for (let i=0; i < pref.length; i++){
+		if (pref[0].isHeredoc) {
+			redirs.push(pref[0]);
+			pref.splice(i, 1);
+			i--;
+		}
+		else if (pref[0].isRedir) {
+			redirs.push(pref[0].redir);
+			pref.splice(i, 1);
+			i--;
+		}
+	}
+	let suf = com.suffix;
+	for (let i=0; i < suf.length; i++){
+		if (suf[0].isHeredoc) {
+			redirs.push(suf[0]);
+			suf.splice(i, 1);
+			i--;
+		}
+		else if (suf[0].isRedir) {
+			redirs.push(suf[0].redir);
+			suf.splice(i, 1);
+			i--;
+		}
+
+	}
+	return redirs;
+}//»
+*/
