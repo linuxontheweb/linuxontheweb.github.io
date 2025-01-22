@@ -1,5 +1,10 @@
-/*BUG @ZOPIRUTKS: The 'fname' argument to normPath was a Word object, so this failed«
-with a 'path.match' is not a function. And just above that, we had to change
+/*1/22/25 BUG @ZOPIRUTKS: The 'fname' argument to normPath was a Word object, «
+so this failed with Error: "path.match is not a function".  This error was caught 
+by the try/catch @LSPOEIRK, and was only printed in red on the terminal (rather than 
+having the full error stack sent to the JS console). So I just changed it back to 
+logging to the JS console via cerr(...).
+
+And just above that, we had to change
 the line: 
   const {op}=tok;//WRONG!!!
 to:
@@ -1151,7 +1156,8 @@ const{tok, file: fname}=this;
 //-----vvv
 const {val: op}=tok;
 
-//let fullpath = normPath(fname, term.cur_dir);//WRONG!!!
+//This is instance of Word vvvvv
+// let fullpath = normPath(fname, term.cur_dir);//WRONG!!!
 //ZOPIRUTKS------------------vvvvvvvvvvv
 let fullpath = normPath(fname.toString(), term.cur_dir);
 let node = await fsapi.pathToNode(fullpath);
@@ -6140,7 +6146,8 @@ async devexecute(command_str, opts){//«
 //log(statements);
 	}
 	catch(e){
-//cerr(e);
+//LSPOEIRK
+cerr(e);
 term.response(e.message,{isErr: true});
 	}
 //	term.response_end();
