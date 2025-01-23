@@ -232,7 +232,12 @@ On the server
 
 const {globals}=LOTW;
 const {fs: fsapi, util}=LOTW.api;
-const {MAIL_DB_NAME, MAIL_DB_VERNUM, ShellMod} = globals;
+const {
+	DEF_PAGER_MOD_NAME,
+	MAIL_DB_NAME,
+	MAIL_DB_VERNUM,
+	ShellMod
+} = globals;
 const{isStr, isNum, log, jlog, cwarn, cerr}=util;
 const {Com} = ShellMod.comClasses;
 
@@ -365,6 +370,54 @@ const exit=rv=>{//«
 	if (imap_logged_in) logout();
 	Y(rv);
 };//»
+const show_new_list = async()=>{
+//cwarn(com.term.w);
+const{term}=com;
+let wid = term.w;
+if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+	com.err("could not load the pager module");
+	return;
+}
+let new_arr = await db.getAll("new");
+if (!new_arr.length){
+	com.wrn("No new emails!");
+	return;
+}
+let arr = [];
+let curtime = Date.now();
+let sels = [];
+for (let obj of new_arr){
+	let tm = obj.timestamp*1000;
+	let diff_days = Math.floor((curtime - tm)/86400000);//86400000 ms/day
+	let str = `${diff_days}) ${obj.fromName}: ${obj.subject}`;
+	arr.push(str.slice(0, wid));
+	sels.push(false);
+}
+let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.stat_message = `[q]uit [d]el [s]ave`;
+pager.multilineSels = sels;
+pager.exitChars=["q", "d", "s"];
+await pager.init(arr, "*new emails*", {opts:{}, lineSelect: true});
+term.setBgRows();
+let ch = pager.exitChar;
+if (ch==="q") return;
+//if (ch==="s"){
+let out_arr = [];
+for (let i=0; i < sels.length; i++){
+if (sels[i]) out_arr.push(new_arr[i].uid);
+}
+if (!out_arr.length) return;
+//cwarn(`GOTCOM: ${ch}`);
+if (ch==="s"){
+log("Download, put into db.saved and delete from db.new");
+}
+else if (ch==="d"){
+log("Delete from server then from db.new");
+}
+//cwarn("GOT UIDS");
+log(out_arr);
+//log(sels);
+};
 
 /*«
 	log[i]n
@@ -411,6 +464,9 @@ while(true){
 	}
 	else if (rv==="o"){
 		await logout({isSuc: true});
+	}
+	else if (rv==="n"){
+		await show_new_list();
 	}
 	else {
 		com.wrn(`Got command: ${rv}`);
@@ -488,6 +544,18 @@ cerr(e);
 		};
 	});
 }//»
+getAll(store_name){
+	return new Promise((Y,N)=>{
+		let store = this.getStore(store_name);
+		let req = store.getAll();
+		req.onerror=e=>{
+			N(e);
+		};
+		req.onsuccess=e=>{
+			Y(e.target.result);
+		};
+	});
+}
 
 getStore(store_name, if_write){//«
 	return this.#db.transaction([store_name],if_write?"readwrite":"readonly").objectStore(store_name);
