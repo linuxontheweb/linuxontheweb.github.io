@@ -6,15 +6,15 @@
 In the REPL, we have handles on the following things:
 
 db: the database for the current email address
-db.new: object store of new emails (listing of envelopes retrieved since 'last_poll_time')
+db.new: object store of new emails (listing of envelopes retrieved after 'last_uid')
 db.saved: object store of saved emails (emails that *were* new, but then the text bodies 
   were retrieved from the IMAP server, and so they got moved to the "saved" object store)
 
 MUD: The "Mail User Directory": /var/appdata/mail/<email_addr>
 
-MUD/last_poll_time: The timestamp of the last polling for new envelopes (initialized to 0)
+MUD/last_uid: The largest uid returned from the latest polling for new envelopes (initialized to 0)
 	- There should probably be a command that lets a user set/reset this to any arbitrary
-	  numerical value (perhaps checking that it isn't greater than the current time).
+	  value.
 MUD/Drafts/: The directory that holds all email drafts (original emails to a "contact" 
 	and responses to emails in db.saved)
 MUD/Sent/: The directory that holds all emails that *were* drafts, but that got 
@@ -94,10 +94,10 @@ Then for every backend service request, we will send <user_email_addr> along, an
 the request if the server is not using the same one (hardcoded into the server's 
 memory via the environment variables, EMAIL_USER and EMAIL_PASSWORD).
 
-1) $MUD/last_poll_time: The largest timestamp (the most recent inbound email) //«
+1) $MUD/last_uid: The largest uid (the most recent inbound email) //«
 	that has been entered into database: "new:<user_email_addr>".
 
-	Maybe this can be a data node of type = "timestamp"
+	Maybe this can be a data node of type = "integer"
 
 //»
 2) $MUD/contacts: A JSON data file, to be used as the "contacts" in the Contacts //«
@@ -156,7 +156,7 @@ On the server
 
 	Quit: Gracefully exit the mail REPL
 
-	Update: Get all envelopes since last_poll_time, and add to database store: 
+	Update: Get all envelopes since last_uid, and add to database store: 
 		"new:<user_email_addr>"
 
 	New: lists the envelopes in "new:<user_email_addr>", and allows for fetching the email
@@ -287,20 +287,30 @@ const help=()=>{//«
 const hang=()=>{return new Promise((Y,N)=>{});}
 const do_update=async()=>{//«
 
-	let time = await db.lastPoll();
-	if (!isNum(time)){
-		com.err("db.lastPoll() did not return a numerical value (see console)");
+	let uid = await db.lastUID();
+	if (!isNum(uid)){
+		com.err("db.lastUID() did not return a numerical value (see console)");
 		return;
 	}
-//	com.inf(`Using last_poll_time: ${time}`);
+
+//com.inf(`Using last_uid: ${uid}`);
 com.inf(`!!! USING LOCAL FILE: /home/me/ENVSOUT !!!`);
-//return 
+
+//let envs = await do_imap_op(this, "getenvs", {addArgs: `uid=${uid+1}`, retOnly: true});
+//if (envs===false) return;
+
 let envs = await "/home/me/ENVSOUT".toJson();
-let rv = await db.saveNew(envs);
-if (isStr(rv)) com.inf(rv);
+try{
+	let rv = await db.saveNew(envs);
+	if (isStr(rv)) com.inf(rv);
+}
+catch(e){
+//cerr(e.target.error);
+	com.err(`error saving the new envelopes: ${e.target.error} (see console)`);
+}
 
 //jlog(arr);
-/*
+/*«
 
 Now the question is how we handle "login sessions".
 
@@ -309,7 +319,7 @@ Now the question is how we handle "login sessions".
 
 let rv = await do_imap_op(this, "getenvs", {addArgs: `since=${unix_ms}`, retOnly: true});
 
-Save these envelopes to db.new, and set last_poll_time to the 
+Save these envelopes to db.new, and set last_uid to the 
 
  {
 	"seq": 233,
@@ -328,7 +338,7 @@ Save these envelopes to db.new, and set last_poll_time to the
 }
 
 
-*/
+»*/
 
 };//»
 const do_get = async(url, opts={})=>{//«
@@ -417,13 +427,13 @@ class DB {//«
 #db;
 #mailDataPath;
 #userDirPath;
-#lastPollPath;
+#lastUIDPath;
 
 constructor(addr){//«
 
 	this.#mailDataPath = `${globals.APPDATA_PATH}/mail`;
 	this.#userDirPath = `${this.#mailDataPath}/${addr}`;
-	this.#lastPollPath = `${this.#userDirPath}/last_poll_time`;
+	this.#lastUIDPath = `${this.#userDirPath}/last_uid`;
 	this.emailAddr = addr;
 	this.dbName = `${MAIL_DB_NAME}:${MAIL_DB_VERNUM}/${addr}`;
 
@@ -528,7 +538,7 @@ async mkUserDir(){//«
 /*«Notes
 
 In this new userDir, we want:
-1) last_poll_time ("numerical" data node)
+1) last_uid ("numerical" data node)
 
 These directories are filled with "email" data nodes (possibly with timestamps, too):
 	{
@@ -550,8 +560,10 @@ These directories are filled with "email" data nodes (possibly with timestamps, 
 	rv = await fsapi.mkDir(this.#mailDataPath, addr);
 	let path = `${this.#mailDataPath}/${addr}`;
 	if (!rv) return `could not create the user directory: ${path}`;
-	if (!await fsapi.writeDataFile(`${path}/last_poll_time`,{type: "timestamp", val: 0})){
-		return `could not create 'last_poll_time' in '${path}'`;
+//The imap server module automatically adds '1' to this value, which makes it
+//a valid uid number ('0' would be invalid as a uid).
+	if (!await fsapi.writeDataFile(`${path}/last_uid`,{type: "integer", val: 0})){
+		return `could not create 'last_uid' in '${path}'`;
 	}
 	if (!await fsapi.mkDir(path, "Drafts")){
 		return `could not create 'Drafts/' in '${path}'`;
@@ -659,7 +671,7 @@ cerr(e);
 	};
 
 //This is only ever called upon database creation, because we have no concept of database "versions" (as the indexedDB api understands them).
-	req.onupgradeneeded=(e)=>{
+	req.onupgradeneeded=(e)=>{//«
 /*«
 		if (opts.del){
 cwarn("DELETING", new_table_name, saved_table_name);
@@ -673,13 +685,14 @@ log("Upgrading...");
 
 		let newstore = e.target.result.createObjectStore(new_table_name, {keyPath: "uid"});
 //		let newstore = e.target.result.createObjectStore(new_table_name, {autoIncrement: true});
-		newstore.createIndex("from", "from", {unique: false});
+		newstore.createIndex("fromAddr", "fromAddr", {unique: false});
 
 		let savedstore = e.target.result.createObjectStore(saved_table_name, {keyPath: "uid"});
 //		let savedstore = e.target.result.createObjectStore(saved_table_name, {autoIncrement: true});
-		savedstore.createIndex("from", "from", {unique: false});
+		savedstore.createIndex("fromAddr", "fromAddr", {unique: false});
 
-	}
+	}//»
+
 });//»
 
 }//»
@@ -697,54 +710,73 @@ async initMailDir(){//«
 	return true;
 }//»
 
-async lastPoll(){//«
-	let node = await this.#lastPollPath.toNode();
+async lastUID(save_uid){//«
+	let node = await this.#lastUIDPath.toNode();
 	if (!node){
-cerr(`FATAL: lastPollPath ${this.#lastPollPath} node not found!`);
+cerr(`FATAL: lastUIDPath ${this.#lastUIDPath} node not found!`);
 		return;
 	}
 	if (node.isData!==true){
-cerr("FATAL: the lastPoll node is NOT a data node!!!");
+log(node);
+cerr("FATAL: the lastUID node is NOT a data node!!!");
 		return;
 	}
 	let data = node.data;
-	if (data.type!=="timestamp"){
-cerr("FATAL: the lastPoll data node is NOT of type = 'timestamp'");
+	if (data.type!=="integer"){
+cerr("FATAL: the lastUID data node is NOT of type = 'integer'");
 		return;
 	}
 	let val = data.val;
 	if (!isNum(val)){
-cerr("FATAL: the lastPoll data node value is NOT a number!");
+cerr("FATAL: the lastUID data node value is NOT a number!");
 		return;
 	}
-	return val;
+	if (!save_uid) return val;
+	if (!await node.setDataValue(save_uid)) return;
+	return true;
 }//»
-async saveNew(emails){
+async saveNew(emails){//«
+//Let's do a Promise.all() with database add's (will reject of there are already records with the same uid's)
+
+const add_prom=(store, item)=>{//«
+	return new Promise((Y,N)=>{
+		let req = store.add(item);
+		req.onerror=(e)=>{
+//cerr(e);
+cerr("Here is the invalid item");
+log(item);
+			N(e);
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+};//»
 let store = this.getStore("new", true);
-//log(store);
-let num_saved = 0;
-for (let email of emails){
 
-let {uid, envelope} = email;
-let {date, subject, from, sender} = envelope;
-let timestamp = Math.floor((new Date(date)).getTime()/1000);
-let from1 = from[0];
-let from1nm = from1.name;
-let from1addr = from1.address;
-let sender1 = sender[0];
-let sender1nm = sender1.name;
-let sender1addr = sender1.address;
+let proms = [];
+let highest_uid = 0;
+for (let email of emails){//«
+	let {uid, envelope} = email;
+	let {date, subject, from, sender} = envelope;
+	let timestamp = Math.floor((new Date(date)).getTime()/1000);
+	let from1 = from[0];
+	let from1nm = from1.name;
+	let from1addr = from1.address;
+	let sender1 = sender[0];
+	let sender1nm = sender1.name;
+	let sender1addr = sender1.address;
+	uid = parseInt(uid);
+	if (uid > highest_uid) highest_uid = uid;
+	proms.push(add_prom(store, {uid, fromAddr: from1addr, fromName: from1nm, timestamp, subject}));
+}//»
 
-//cwarn(uid, timestamp, subject);
-//log(`FROM <${from1nm}> <${from1addr}>`);
-//log(`SENDER <${sender1nm}> <${sender1addr}>`);
-num_saved++;
-let obj = {from: from1addr, fromName: from1nm, timestamp, uid, subject};
-log(obj);
+await Promise.all(proms);
+if (!await this.lastUID(highest_uid)) this.fatal(`save operation failed: this.lastUID(${highest_uid})`);
+return `saved: ${emails.length} new emails`;
 
-}
-return `saved: ${num_saved} new emails`;
-}
+}//»
+
 /*«
 async getCurUser(){//«
 	let node = await this.#curUserFile.toNode();

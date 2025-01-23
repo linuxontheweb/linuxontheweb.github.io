@@ -8351,6 +8351,7 @@ efficiently) is an outstanding issue...*/
 }
 //»
 fmt2(str, type, maxlen){//«
+//This does soft-wrapping (introduces line breaks at spaces before 'w' chars)
     if (type) str = type + ": " + str;
     let ret = [];
     let w = this.w;
@@ -8382,6 +8383,7 @@ fmt2(str, type, maxlen){//«
 }
 //»
 fmt(str, startx){//«
+//This does hard-wrapping (introduces line breaks exactly at 'w' chars)
 	const{w}=this;
 	if (str === this.EOF) return [];
 	let use_max_len = this.getMaxLen();
@@ -8434,6 +8436,34 @@ fmtLinesSync(arr, startx){//«
 }
 //»
 
+async respInit(addMessage){//«
+
+	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
+	if(dev_mode){
+		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+	}
+	if (admin_mode){
+		init_prompt+=`\nAdmin mode: true`;
+	}
+	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
+	let env_file_path = `${this.cur_dir}/.env`; 
+	let env_lines = await env_file_path.toLines();
+	if (env_lines) {
+		let rv = ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
+//		let rv = add_to_env(env_lines, this.env, {if_export: true});
+		if (rv.length){
+			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
+		}
+	}
+
+if (dev_mode){
+	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
+//	let rv = await do_imports(ADD_COMS, cwarn);
+if (rv) init_prompt += "\nImported libs: "+rv;
+}
+	this.response(init_prompt);
+
+}//»
 responseComNames(arr) {//«
 	let arr_pos = this.getComPos();
 	let repeat_arr = this.getComArr();
@@ -8511,7 +8541,7 @@ return;
 	if (isErr) use_color = "#f99";
 	else if (isSuc) use_color = "#7f7";
 	else if (isWrn) use_color = "#ff7";
-	else if (isInf) use_color = "#aaf";
+	else if (isInf) use_color = "#bbf";
 
 /*'actor' means there is a non-terminal screen.
 This can happen, e.g. with errors with screen-based commands inside of pipelines,
@@ -8585,34 +8615,6 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 	}
 }
 //»
-async respInit(addMessage){//«
-
-	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
-	if(dev_mode){
-		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-	}
-	if (admin_mode){
-		init_prompt+=`\nAdmin mode: true`;
-	}
-	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
-	let env_file_path = `${this.cur_dir}/.env`; 
-	let env_lines = await env_file_path.toLines();
-	if (env_lines) {
-		let rv = ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
-//		let rv = add_to_env(env_lines, this.env, {if_export: true});
-		if (rv.length){
-			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
-		}
-	}
-
-if (dev_mode){
-	let rv = await ShellMod.util.doImports(ADD_COMS, cwarn);
-//	let rv = await do_imports(ADD_COMS, cwarn);
-if (rv) init_prompt += "\nImported libs: "+rv;
-}
-	this.response(init_prompt);
-
-}//»
 
 
 //»

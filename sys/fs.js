@@ -1674,7 +1674,7 @@ cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)
 		if (!id) return cerr("ADBNYURL");
 	}
 	let kid = mk_dir_kid(parobj, name,{
-		isData: opts.data,
+		isData: !!opts.data,
 		isFile: !opts.data
 	});
 

@@ -360,8 +360,9 @@ catch(e){
 const get_envelopes_since = async (args) => {//«
 //const get_envelopes_since = async (timestamp) => {
 is_busy = true;
-let {since} = args;
-if (!since) since = 0;
+let {uid} = args;
+if (!uid) uid = "1";
+if (uid==="0" || !uid.match(/^\d+$/)) return err(`invalid 'uid' argument: have '${uid}'`);
 
 /*«
 
@@ -409,7 +410,7 @@ optionsopt{
 if (!is_connected) return ERR("not connected");
 if (!cur_mailbox) return ERR("no current mailbox");
 
-let since_date = new Date(parseInt(since));
+//let since_date = new Date(parseInt(since));
 //log("since_date", since_date);
 try {
 /*«
@@ -421,7 +422,12 @@ try {
 »*/
 //	let num = 0;
 	let arr = [];
-	for await (let msg of client.fetch({since: since_date}, {envelope: true}, {uid: true})){
+/*
+This makes infinitely more sense as a sequence string of uid's:
+<last_uid+1:*>
+*/
+//	for await (let msg of client.fetch({since: since_date}, {envelope: true}, {uid: true})){
+	for await (let msg of client.fetch(`${uid}:*`, {envelope: true}, {uid: true})){
 //		num++;
 		arr.push(msg);
 //log(msg);
