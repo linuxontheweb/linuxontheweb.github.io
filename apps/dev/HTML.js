@@ -33,19 +33,8 @@ Main.style.userSelect="text";
 
 //»
 
-//Funcs«
+const set_html = text => {//«
 
-const init=()=>{//«
-}//»
-
-//»
-
-//OBJ/CB«
-
-this.onappinit=()=>{};
-
-this.onloadfile=bytes=>{//«
-	let text = util.bytesToStr(bytes);
 	let parser = new DOMParser();
 	let doc = parser.parseFromString(text, "text/html");
 	let tot=0;
@@ -60,23 +49,33 @@ this.onloadfile=bytes=>{//«
 	}
 	Main.innerHTML = doc.body.innerHTML;
 	Win.statusBar.innerHTML = `${tot} nodes deleted`;
+
 };//»
 
+//OBJ/CB«
+
+this.onappinit=(args={})=>{
+	if (args.text) set_html(args.text);
+};
+
+this.onloadfile=bytes=>{
+	set_html(util.bytesToStr(bytes));
+};
+
 this.onkeydown = function(e,s) {//«
-}//»
+};//»
 this.onkeyup=(e)=>{//«
 };//»
 this.onkeypress=e=>{//«
 };//»
 this.onkill = function() {//«
-}//»
+};//»
 this.onresize = function() {//«
-}//»
+};//»
 this.onfocus=()=>{//«
-}//»
-
+};//»
 this.onblur=()=>{//«
-}//»
+};//»
 
 //»
 

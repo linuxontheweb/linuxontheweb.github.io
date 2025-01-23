@@ -388,6 +388,12 @@ else if (sym=="SPACE_"){
 		render();
 	}//»
 else if (sym=="ENTER_"){//«
+	const{multilineEnterFuncs: funcs} = this;
+	let n = y+scroll_num;
+	if (funcs && funcs[n] instanceof Function){
+		funcs[n]();
+		return;
+	}
 	if (line_select_mode) quit(true);
 }//»
 	else if (sym=="n_") {//«

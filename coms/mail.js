@@ -374,18 +374,22 @@ const exit=rv=>{//«
 const download_and_move_to_saved = async arr => {//«
 cwarn("Download, put into db.saved and delete from db.new");
 //log(arr);
-for (let obj of arr){
-let uid = obj.uid;
-com.inf(`Getting uid: ${uid}...`);
-term.render({noCursor: true});
-let rv = await do_get(`${base_imap_url}&op=getuid&uid=${uid}`);
-if (!rv) continue;
-com.inf(`Got ${uid} OK!`, {noBr: true});
-term.render({noCursor: true});
-obj.bodyText= rv;
-log(obj);
-//log(rv);
-//log(`GET: ${uid}`);
+for (let obj of arr) {
+	let uid = obj.uid;
+	com.inf(`Getting uid: ${uid}...`);
+	term.render({noCursor: true});
+	let rv = await do_get(`${base_imap_url}&op=getuid&uid=${uid}`);
+	if (!rv) continue;
+	com.inf(`Got ${uid} OK!`, {noBr: true});
+	term.render({noCursor: true});
+	obj.bodyText= rv;
+	if (!await db.addItem("saved", obj)){
+		com.err(`Add item (uid=${uid}) to db.saved: FAILED!`);
+		continue;
+	}
+	if (!await db.delItemByKey("new", uid)){
+		com.err(`Delete item (uid=${uid}) from db.new: FAILED!`);
+	}
 }
 };//»
 const show_new_list = async()=>{//«
@@ -412,9 +416,10 @@ for (let obj of new_arr){
 	sels.push(false);
 }
 let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
-pager.stat_message = `[q]uit [d]el [s]ave`;
+pager.stat_message = `*new*  [q]uit [d]el [s]ave`;
 pager.multilineSels = sels;
 pager.exitChars=["q", "d", "s"];
+
 await pager.init(arr, "*new emails*", {opts:{}, lineSelect: true});
 term.setBgRows();
 term.render();
@@ -435,6 +440,66 @@ await download_and_move_to_saved(out_arr);
 }
 else if (ch==="d"){
 log("Delete from server then from db.new");
+}
+term.render();
+//cwarn("GOT UIDS");
+//log(out_arr);
+//log(sels);
+};//»
+const show_saved_list = async()=>{//«
+//cwarn(com.term.w);
+//const{term}=com;
+let wid = term.w;
+if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+	com.err("could not load the pager module");
+	return;
+}
+let saved_arr = await db.getAll("saved");
+if (!saved_arr.length){
+	com.wrn("No saved emails!");
+	return;
+}
+let arr = [];
+let curtime = Date.now();
+let sels = [];
+let enters=[];
+for (let obj of saved_arr){
+	let tm = obj.timestamp*1000;
+	let diff_days = Math.floor((curtime - tm)/86400000);//86400000 ms/day
+	let str = `${diff_days}) ${obj.fromName}: ${obj.subject}`;
+	arr.push(str.slice(0, wid));
+	sels.push(false);
+	enters.push(()=>{
+//cwarn("HI EMAIL OBJ!!!");
+//log(obj.bodyText);
+LOTW.Desk.api.openApp("dev.HTML", {force: true, appArgs: {text: obj.bodyText}});
+	});
+}
+let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.stat_message = `*saved* [q]uit [d]el`;
+pager.multilineSels = sels;
+pager.multilineEnterFuncs = enters;
+pager.exitChars=["q", "d"];
+
+/*
+We might want a pager.multilineEnterFuncs in order to, e.g. bring up HTML
+windows to show the email messages.
+*/
+
+await pager.init(arr, "*saved emails*", {opts:{}, lineSelect: true});
+
+term.setBgRows();
+term.render();
+let ch = pager.exitChar;
+if (ch==="q") return;
+let out_arr = [];
+for (let i=0; i < sels.length; i++){
+	if (sels[i]) out_arr.push(new_arr[i]);
+}
+if (!out_arr.length) return;
+//cwarn(`GOTCOM: ${ch}`);
+if (ch==="d"){
+log("Delete from server then from db.saved");
 }
 term.render();
 //cwarn("GOT UIDS");
@@ -491,6 +556,9 @@ while(true){
 	else if (rv==="n"){
 		await show_new_list();
 	}
+	else if (rv==="s"){
+		await show_saved_list();
+	}
 	else {
 		com.wrn(`Got command: ${rv}`);
 	}
@@ -543,9 +611,9 @@ getById(store_name, id){//«
 		};
 	});
 }//»
-putById(store_name, id, node){//«
+putItem(store_name, item){//«
 	return new Promise((Y,N)=>{
-		let req = this.getStore(store_name, true).put(node, id);
+		let req = this.getStore(store_name, true).put(item);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -555,9 +623,9 @@ cerr(e);
 		};
 	});
 }//»
-delById(store_name, id){//«
+addItem(store_name, item){//«
 	return new Promise((Y,N)=>{
-		let req = get_store(store_name, true).delete(id);
+		let req = this.getStore(store_name, true).add(item);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -567,7 +635,19 @@ cerr(e);
 		};
 	});
 }//»
-getAll(store_name){
+delItemByKey(store_name, key){//«
+	return new Promise((Y,N)=>{
+		let req = this.getStore(store_name, true).delete(key);
+		req.onerror=(e)=>{
+cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+}//»
+getAll(store_name){//«
 	return new Promise((Y,N)=>{
 		let store = this.getStore(store_name);
 		let req = store.getAll();
@@ -578,14 +658,17 @@ getAll(store_name){
 			Y(e.target.result);
 		};
 	});
-}
+}//»
 
 getStore(store_name, if_write){//«
 	return this.#db.transaction([store_name],if_write?"readwrite":"readonly").objectStore(store_name);
 }//»
-addMessage(mess){//«
+
+/*
+//We aren't doing these things in the database, but as data files in MUD/Drafts and MUD/Sent
+addMessage(store_name, mess){//«
 	return new Promise((Y,N)=>{
-		let req = get_store(true).add(mess);
+		let req = this.getStore(store_name, true).add(mess);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -623,6 +706,7 @@ async addMessageText(id, text){//«
 	return true;
 
 }//»
+*/
 
 async mkUserDir(){//«
 
