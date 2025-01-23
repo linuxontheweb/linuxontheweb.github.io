@@ -238,7 +238,7 @@ const {
 	MAIL_DB_VERNUM,
 	ShellMod
 } = globals;
-const{isStr, isNum, log, jlog, cwarn, cerr}=util;
+const{isStr, isNum, isObj, log, jlog, cwarn, cerr}=util;
 const {Com} = ShellMod.comClasses;
 
 //»
@@ -469,10 +469,12 @@ for (let obj of saved_arr){
 	let str = `${diff_days}) ${obj.fromName}: ${obj.subject}`;
 	arr.push(str.slice(0, wid));
 	sels.push(false);
+/*
+We might want a pager.multilineEnterFuncs in order to, e.g. bring up HTML
+windows to show the email messages.
+*/
 	enters.push(()=>{
-//cwarn("HI EMAIL OBJ!!!");
-//log(obj.bodyText);
-LOTW.Desk.api.openApp("dev.HTML", {force: true, appArgs: {text: obj.bodyText}});
+		LOTW.Desk.api.openApp("dev.HTML", {force: true, appArgs: {text: obj.bodyText}});
 	});
 }
 let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
@@ -480,11 +482,6 @@ pager.stat_message = `*saved* [q]uit [d]el`;
 pager.multilineSels = sels;
 pager.multilineEnterFuncs = enters;
 pager.exitChars=["q", "d"];
-
-/*
-We might want a pager.multilineEnterFuncs in order to, e.g. bring up HTML
-windows to show the email messages.
-*/
 
 await pager.init(arr, "*saved emails*", {opts:{}, lineSelect: true});
 
@@ -506,7 +503,55 @@ term.render();
 //log(out_arr);
 //log(sels);
 };//»
+const show_contacts_list = async()=>{//«
 
+let dir = await db.getContactsDir();
+if (isStr(dir)) return com.err(dir);
+let kids = dir.kids;
+let arr = [];
+for (let key in kids){
+if (!key.match(/^\d+$/)) continue;
+
+cwarn(key);
+let node = kids[key];
+if (node.isData!==true){
+com.wrn(`Skipping non-data node: '${key}'`);
+continue;
+}
+let data = node.data;
+if (data.type!=="contact"){
+com.wrn(`Skipping data node type != "contact": '${key}'`);
+continue;
+}
+if (!isObj(data.value) && isStr(data.value.address) && isStr(data.value.name)){
+com.wrn(`Skipping invalid contact node: '${key}'`);
+continue;
+}
+let{name, address} = data.value;
+let str = `${name}) ${address}`;
+arr.push(str.slice(0, term.w));
+}
+if (!arr.length){
+com.wrn("No contacts to show!");
+return;
+}
+if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+	com.err("could not load the pager module");
+	return;
+}
+
+let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.exitChars=["q"];
+let rv = await pager.init(arr, "*contacts*", {opts:{}, lineSelect: true});
+if (pager.exitChar) return;
+let num = pager.y + pager.scroll_num;
+/*
+Create a draft object, and put a saveFunc on vim to save it in 'MUD/Drafts/'
+*/
+cwarn("Start vim for Contact");
+log(arr[num]);
+
+};//»
 /*«
 	log[i]n
 	log[o]ut
@@ -559,6 +604,10 @@ while(true){
 	else if (rv==="s"){
 		await show_saved_list();
 	}
+	else if (rv==="c"){
+		await show_contacts_list();
+	}
+
 	else {
 		com.wrn(`Got command: ${rv}`);
 	}
@@ -737,7 +786,7 @@ These directories are filled with "email" data nodes (possibly with timestamps, 
 	if (!rv) return `could not create the user directory: ${path}`;
 //The imap server module automatically adds '1' to this value, which makes it
 //a valid uid number ('0' would be invalid as a uid).
-	if (!await fsapi.writeDataFile(`${path}/last_uid`,{type: "integer", val: 0})){
+	if (!await fsapi.writeDataFile(`${path}/last_uid`,{type: "integer", value: 0})){
 		return `could not create 'last_uid' in '${path}'`;
 	}
 	if (!await fsapi.mkDir(path, "Drafts")){
@@ -745,6 +794,9 @@ These directories are filled with "email" data nodes (possibly with timestamps, 
 	}
 	if (!await fsapi.mkDir(path, "Sent")){
 		return `could not create 'Sent/' in '${path}'`;
+	}
+	if (!await fsapi.mkDir(path, "Contacts")){
+		return `could not create 'Contacts/' in '${path}'`;
 	}
 	return true;
 }//»
@@ -770,13 +822,19 @@ cerr(mess);
 	}, {root: true, fullDirs: true});
 }//»
 async getUserDir(){//«
-/*
-	if (!addr){
-		this.fatal("'addr' argument required!");
-		return;
-	}
-*/
 	return await (`${this.#mailDataPath}/${this.emailAddr}`).toNode();
+}//»
+async getContactsDir(){//«
+	let path = `${this.#mailDataPath}/${this.emailAddr}/Contacts`;
+	let dir = await path.toNode();
+	if (!dir){
+		return "no contacts directory found!";
+	}
+	if (dir.isDir!==true) {
+		return "'Contacts' is not a directory!";
+	}
+	await fsapi.popDir(dir);
+	return dir;
 }//»
 
 async dropDatabase(){//«
@@ -901,7 +959,7 @@ cerr("FATAL: the lastUID node is NOT a data node!!!");
 cerr("FATAL: the lastUID data node is NOT of type = 'integer'");
 		return;
 	}
-	let val = data.val;
+	let val = data.value;
 	if (!isNum(val)){
 cerr("FATAL: the lastUID data node value is NOT a number!");
 		return;
@@ -1162,8 +1220,44 @@ const com_dbdrop = class extends Com{//«
 	}
 }//»
 
+const com_mkcontact = class extends Com{//«
+
+static opts = {l: {name: 3, addr: 3, user: 3}, s:{u: 3}};
+
+async run(){//«
+
+	const{opts,env}=this;
+	const addr = opts.user || opts.u || env.EMAIL_USER;
+	if (!addr) return this.no(`no --user, -u option or 'EMAIL_USER' in the environment!`);
+	const db = new DB(addr);
+	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+
+	const{name, addr: to_addr} = opts;
+	if (!(name&&to_addr)) return this.no("Need 'name' and 'addr' options!");
+
+	let dir = await db.getContactsDir();
+	if (isStr(dir)) return this.no(dir);
+	let num = 1;
+	let kids = dir.kids;
+	while(kids[`${num}`]){
+		num++;
+	}
+
+	let save_path = `${dir.fullpath}/${num}`;
+//	cwarn("SAVE AS", save_path);
+	const obj = {type: "contact", value: {name, address: to_addr}};
+	if (!await fsapi.writeDataFile(save_path, obj)){
+		this.no(`Could not save to '${save_path}'`);
+		return;
+	}
+	this.ok();
+}//»
+
+};//»
+
 export const coms = {//«
 
+	mkcontact: com_mkcontact,
 	mail: com_mail,
 	curaddr: com_curaddr,
 	dblist: com_dblist,

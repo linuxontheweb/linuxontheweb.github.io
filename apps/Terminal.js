@@ -203,6 +203,7 @@ globals.ShellMod = new function() {
 //Var«
 const shellmod = this;
 const mail_coms=[
+	"mkcontact",
 	"mail",
 	"curaddr",
 	"dblist",
