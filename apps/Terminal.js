@@ -8510,7 +8510,7 @@ log(out);
 		opts = {isErr: true};
 	}
 
-	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack} = opts;
+	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack, noBr} = opts;
 if (inBack){
 if (isErr){
 cerr(out);
@@ -8527,7 +8527,7 @@ return;
 		out=" \n ";
 	}
 	out = out.split("\n");
-/*
+/*«
 	else if (!out) return;
 	else if (!isArr(out)){
 log("STDOUT");
@@ -8535,7 +8535,7 @@ log(out);
 return;
 	}
 	else if (out instanceof Uint8Array) out = [`Uint8Array(${out.length})`];
-*/
+»*/
 //WOPIUTHSDKL
 	let use_color;
 	if (isErr) use_color = "#f99";
@@ -8589,7 +8589,8 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 		use_line_colors = this.lineColors;
 	}
 
-	if (use_lines.length && !use_lines[use_lines.length-1].length) use_lines.pop();
+//	if (use_lines.length && !use_lines[use_lines.length-1].length) use_lines.pop();
+	if (use_lines.length && (noBr || !use_lines[use_lines.length-1].length)) use_lines.pop();
 
 	let len = out.length;
 	for (let i=0, curnum = use_lines.length; i < len; i++){

@@ -285,6 +285,7 @@ const do_imap_op = async(com, op, opts={}) => {//«
 const mail_loop = (com, db) => {//«
 return new Promise(async(Y,N)=>{
 
+const{term}=com;
 let imap_logged_in=false;
 const help=()=>{//«
 	com.inf(`Mail commands: log[i]n log[o]ut [u]pdate [n]ew [s]aved [c]ontacts [d]rafts sen[t] [q]uit [h]elp`, {pretty: true});
@@ -370,9 +371,26 @@ const exit=rv=>{//«
 	if (imap_logged_in) logout();
 	Y(rv);
 };//»
-const show_new_list = async()=>{
+const download_and_move_to_saved = async arr => {//«
+cwarn("Download, put into db.saved and delete from db.new");
+//log(arr);
+for (let obj of arr){
+let uid = obj.uid;
+com.inf(`Getting uid: ${uid}...`);
+term.render({noCursor: true});
+let rv = await do_get(`${base_imap_url}&op=getuid&uid=${uid}`);
+if (!rv) continue;
+com.inf(`Got ${uid} OK!`, {noBr: true});
+term.render({noCursor: true});
+obj.bodyText= rv;
+log(obj);
+//log(rv);
+//log(`GET: ${uid}`);
+}
+};//»
+const show_new_list = async()=>{//«
 //cwarn(com.term.w);
-const{term}=com;
+//const{term}=com;
 let wid = term.w;
 if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 	com.err("could not load the pager module");
@@ -399,25 +417,30 @@ pager.multilineSels = sels;
 pager.exitChars=["q", "d", "s"];
 await pager.init(arr, "*new emails*", {opts:{}, lineSelect: true});
 term.setBgRows();
+term.render();
 let ch = pager.exitChar;
 if (ch==="q") return;
 //if (ch==="s"){
 let out_arr = [];
 for (let i=0; i < sels.length; i++){
-if (sels[i]) out_arr.push(new_arr[i].uid);
+if (sels[i]) out_arr.push(new_arr[i]);
 }
 if (!out_arr.length) return;
 //cwarn(`GOTCOM: ${ch}`);
 if (ch==="s"){
-log("Download, put into db.saved and delete from db.new");
+/*
+Let's do this sequentially, showing the progress of each on the terminal
+*/
+await download_and_move_to_saved(out_arr);
 }
 else if (ch==="d"){
 log("Delete from server then from db.new");
 }
+term.render();
 //cwarn("GOT UIDS");
-log(out_arr);
+//log(out_arr);
 //log(sels);
-};
+};//»
 
 /*«
 	log[i]n
@@ -432,7 +455,7 @@ log(out_arr);
 	[h]elp
 »*/
 
-const{term}=com;
+//const{term}=com;
 const addr = db.emailAddr;
 
 const base_imap_url = `/_imap?user=${addr}`;
