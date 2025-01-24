@@ -528,7 +528,7 @@ let draft_val = draft_node.data.value;
 let use_text = draft_val.subject + "\n\n" + draft_val.bodyText;
 
 let editor = new LOTW.mods[DEF_EDITOR_MOD_NAME](term);
-editor.saveFunc = async (val) => {//«
+const validate_draft = val => {//«
 	draft_val.subject="";
 	draft_val.bodyText="";
 	let arr = val.split("\n");
@@ -545,8 +545,51 @@ editor.saveFunc = async (val) => {//«
 			draft_val.bodyText = body;
 		}
 	}
-cwarn("SAVE DRAFT_VAL");
-log(draft_val);
+	return true;
+};//»
+editor.sendFunc = async(val) => {//«
+	let rv = validate_draft(val);
+	if (rv !== true) return rv;
+	if (!(draft_val.subject.match(/\w/)&&draft_val.bodyText.match(/\w/))){
+		return {mess: "Invalid email", type: STAT_ERR}
+	}
+/*
+
+Pop up a window with...
+To: Name <address>
+Subject: <subject here...>
+
+Replace all 
+"<" with "&lt;"
+">" with "&gt;"
+"&" with "&amp;"
+
+[Then wrap all of the bodyText lines in <p>'s, and put them here.]
+
+We can do some kind of an "EmailConf" application that renders all of this,
+and has "Send" and "Cancel" buttons. So we will need to await either one
+of the buttons here...
+
+*/
+cwarn("SEND");
+log(`Subject: <${draft_val.subject}>`);
+
+//log(util.linesToParas(draft_val.bodyText.split("\n"), {skipNLs: true}));
+
+log(util.linesToParas(draft_val.bodyText.split("\n")).join("\n"));
+
+	return {mess: "Trying to send...", type: STAT_WARN};
+};//»
+/*
+Want to have a persistent message (for normal mode) on the bottom?
+
+//editor.persistent_message = "Ctrl+Alt+Shift+s to send";
+*/
+//editor.stat_message = `*saved* [q]uit [d]el`;
+
+editor.saveFunc = async (val) => {//«
+	let rv = validate_draft(val);
+	if (rv !== true) return rv;
 	if (!await draft_node.setDataValue(draft_val)){
 		return {mess:"Could not save the draft", type: STAT_ERR};
 	}
@@ -555,11 +598,6 @@ log(draft_val);
 await editor.init(use_text, draft_node.fullpath, {
 	opts:{},
 	node: draft_node,
-//	node,
-//	type: typ,
-//	command_str,
-//	opts,
-//	symbols,
 });
 
 };//»

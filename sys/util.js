@@ -296,7 +296,7 @@ const sharedStart=(array)=>{//«
 	while(i<L && a1.charAt(i)=== a2.charAt(i)) i++;
 	return a1.substring(0, i);
 };//»
-const linesToParas = lns => {//«
+const linesToParas = (lns, opts={}) => {//«
 	let paras = [];
 	let curln = "";
 	for (let ln of lns){
@@ -305,8 +305,18 @@ const linesToParas = lns => {//«
 				paras.push(curln);
 				curln = "";
 			}
-			paras.push("");
+			if (!opts.skipNLs) paras.push("");
 			continue;
+		}
+		if (ln.match(/^\s+\w+/)){
+			if (curln) {
+				paras.push(curln);
+//				curln = "";
+				curln = "";
+			}
+//			paras.push(ln);
+//			curln = ln;
+//			continue;
 		}
 		if (ln.match(/-\s*$/)) ln = ln.replace(/-\s+$/,"-");
 		else ln = ln.replace(/\s*$/," ");

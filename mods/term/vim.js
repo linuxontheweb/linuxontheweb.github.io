@@ -210,10 +210,6 @@ let{
 w,h, cursor_id, mainWin
 } = Term;
 //»
-//Globals«
-
-
-//»
 //Var«
 
 const vim = this;
@@ -5996,6 +5992,22 @@ cerr(e);
 	document.head.appendChild(scr);
 },//»
 */
+s_CAS:async()=>{
+//cwarn("EDITOR.SEND???");
+if (!vim.sendFunc) return;
+
+let arr = get_edit_save_arr();
+if (detect_fold_error(arr)) {
+	return;
+}
+let val = arr[0];
+let rv = await vim.sendFunc(val);
+stat_message = rv.mess;
+stat_message_type = rv.type||STAT_NONE;
+render();
+//log("RV", rv);
+
+},
 //Init/Toggle modes
 p_C: init_complete_mode,
 v_C: init_visual_block_mode,
