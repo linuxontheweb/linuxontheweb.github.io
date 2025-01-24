@@ -6315,6 +6315,9 @@ cwarn("Using ondevreload");
 }
 hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
 this.fname = edit_fname;
+
+syntax_multiline_comments();
+
 if (opts.insert) set_edit_mode("i");
 else if (!edit_fname) {
 	if (no_save_mode) render();
@@ -6322,9 +6325,8 @@ else if (!edit_fname) {
 }
 else if (lines.length==1 && !lines[0].length) stat(`"${edit_fname}" [New]`);
 else stat_file(linesarg.length, len);
-//get_all_words();
-syntax_multiline_comments();
-//log(System);
+
+
 });
 
 setTimeout(async()=>{

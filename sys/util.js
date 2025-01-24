@@ -266,11 +266,23 @@ const isErr=arg=>{return arg instanceof Error;};
 const isNum=arg=>{return((typeof arg==="number")||(arg instanceof Number));};
 const isZero=arg=>{return arg===0;};
 const isInt=arg=>{if(!isNum(arg))return false;return !((arg+"").match(/\./));};
-const hashsum=(which,arg)=>{return new Promise(async(Y,N)=>{let doit=buf=>{crypto.subtle.digest(which,buf).then(ret=>{let arr=new Uint8Array(ret);let str='';for(let ch of arr)str+=ch.toString(16).lpad(2,"0");Y(str);}).catch(e=>{N(e);})};if(!crypto.subtle)return Y("FAKE-HASH-SUM-NO-CRYPTO.SUBTLE");if(isStr(arg))doit(await strToBuf(arg));else if(arg instanceof Blob)doit(await blobToBuf(arg));else if(arg instanceof ArrayBuffer)doit(arg);else if(arg && arg.buffer instanceof ArrayBuffer)doit(arg.buffer);else N("Core.api.hashsum called without a valid type\x20(String,\xa0Blob,\xa0,TypedArray,\xa0or ArrayBuffer!)");});};
-const isObj=arg=>{return (arg && typeof arg === "object"&& typeof arg.length === "undefined");};
-const strNum=(str,min,max,if_exclude_min)=>{let num=null;if(isNum(str))return str;if(!isStr(str))return;if(str.match(/^-?[0-9]+$/))num=parseInt(str);else if(str.match(/^-?([0-9]+)?\.[0-9]+$/))num=parseFloat(str);if(isNum(min)){if(if_exclude_min && num<=min)return null;else if(num<min)return null;}if(isNum(max)&& num>max)return null;return num;};
 const isArr=arg=>{return (arg && typeof arg === "object" && typeof arg.length !== "undefined");};
+const isObj=arg=>{return (arg && typeof arg === "object"&& typeof arg.length === "undefined");};
 const isBool=arg=>{return typeof arg === "boolean";};
+const isDef=arg=>{
+	let typ = typeof arg;
+	return (
+		typ === "boolean" ||
+		typ === "number" ||
+		typ === "string" || 
+		arg instanceof Boolean ||
+		arg instanceof Number ||
+		arg instanceof String ||
+		(arg && typ === "object")
+	);
+}
+const hashsum=(which,arg)=>{return new Promise(async(Y,N)=>{let doit=buf=>{crypto.subtle.digest(which,buf).then(ret=>{let arr=new Uint8Array(ret);let str='';for(let ch of arr)str+=ch.toString(16).lpad(2,"0");Y(str);}).catch(e=>{N(e);})};if(!crypto.subtle)return Y("FAKE-HASH-SUM-NO-CRYPTO.SUBTLE");if(isStr(arg))doit(await strToBuf(arg));else if(arg instanceof Blob)doit(await blobToBuf(arg));else if(arg instanceof ArrayBuffer)doit(arg);else if(arg && arg.buffer instanceof ArrayBuffer)doit(arg.buffer);else N("Core.api.hashsum called without a valid type\x20(String,\xa0Blob,\xa0,TypedArray,\xa0or ArrayBuffer!)");});};
+const strNum=(str,min,max,if_exclude_min)=>{let num=null;if(isNum(str))return str;if(!isStr(str))return;if(str.match(/^-?[0-9]+$/))num=parseInt(str);else if(str.match(/^-?([0-9]+)?\.[0-9]+$/))num=parseFloat(str);if(isNum(min)){if(if_exclude_min && num<=min)return null;else if(num<min)return null;}if(isNum(max)&& num>max)return null;return num;};
 const bufToStr=arg=>{return (new TextDecoder('utf-8').decode(new DataView(arg)));};
 const blobToBuf=b=>{return new Promise((Y,N)=>{let rdr=new FileReader();rdr.onloadend=()=>{Y(rdr.result);};rdr.onerror=N;rdr.readAsArrayBuffer(b);});};
 const toBlob=val=>{let blob;if(isStr(val))blob=new Blob([val]);else if(val instanceof Uint8Array)blob=new Blob([val.buffer]);else if(val instanceof ArrayBuffer)blob=new Blob([val]);else if(val instanceof Blob)blob=val;return blob;};
@@ -445,6 +457,7 @@ toStr,
 getNameExt,
 toBuf,
 toBlob,
+isDef,//is a defined value (string, boolean, number, object)
 isNum,
 isBool,
 isInt,

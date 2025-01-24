@@ -234,12 +234,25 @@ const {globals}=LOTW;
 const {fs: fsapi, util}=LOTW.api;
 const {
 	DEF_PAGER_MOD_NAME,
+	DEF_EDITOR_MOD_NAME,
 	MAIL_DB_NAME,
 	MAIL_DB_VERNUM,
 	ShellMod
 } = globals;
 const{isStr, isNum, isObj, log, jlog, cwarn, cerr}=util;
 const {Com} = ShellMod.comClasses;
+const STAT_NONE=0;
+const STAT_OK=1;
+const STAT_WARN=2;
+const STAT_ERR=3;
+/*
+this.stat={
+    none: 0,
+    ok: 1,
+    warning: 2,
+    error: 3
+};
+*/
 
 //»
 
@@ -371,6 +384,7 @@ const exit=rv=>{//«
 	if (imap_logged_in) logout();
 	Y(rv);
 };//»
+
 const download_and_move_to_saved = async arr => {//«
 cwarn("Download, put into db.saved and delete from db.new");
 //log(arr);
@@ -503,33 +517,85 @@ term.render();
 //log(out_arr);
 //log(sels);
 };//»
+const edit_draft = async(draft_node)=>{//«
+
+if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
+	com.err("could not load the editor module");
+	return;
+}
+
+let draft_val = draft_node.data.value;
+let use_text = draft_val.subject + "\n\n" + draft_val.bodyText;
+
+let editor = new LOTW.mods[DEF_EDITOR_MOD_NAME](term);
+editor.saveFunc = async (val) => {//«
+	draft_val.subject="";
+	draft_val.bodyText="";
+	let arr = val.split("\n");
+	let sub = arr.shift();
+	if (!(sub && sub.match(/\w+/))) return {mess: "Subject not found!", type: STAT_WARN};
+	draft_val.subject = sub;
+	if (arr.length){
+		let blank = arr.shift();
+		if (!blank.match(/^\s*$/)){
+			return {mess: "Non-blank line found under the subject", type: STAT_ERR};
+		}
+		if (arr.length) {
+			let body = arr.join("\n");
+			draft_val.bodyText = body;
+		}
+	}
+cwarn("SAVE DRAFT_VAL");
+log(draft_val);
+	if (!await draft_node.setDataValue(draft_val)){
+		return {mess:"Could not save the draft", type: STAT_ERR};
+	}
+	return {mess: "Saved Okay", type: STAT_OK};
+};//»
+await editor.init(use_text, draft_node.fullpath, {
+	opts:{},
+	node: draft_node,
+//	node,
+//	type: typ,
+//	command_str,
+//	opts,
+//	symbols,
+});
+
+};//»
 const show_contacts_list = async()=>{//«
 
-let dir = await db.getContactsDir();
-if (isStr(dir)) return com.err(dir);
-let kids = dir.kids;
-let arr = [];
-for (let key in kids){
-if (!key.match(/^\d+$/)) continue;
+let contacts_dir = await db.getContactsDir();
+if (isStr(contacts_dir)) return com.err(contacts_dir);
+let contacts_kids = contacts_dir.kids;
+let arr=[];
+let objs=[];
+//Testing lots of made up name/email pairs 
+//for (let i=0; i < 500; i++){
+//arr.push(`${i} ${i}) ${i}@${i}.${i}`);
+//objs.push(`${i}@${i}.${i}`);
+//}
+for (let key in contacts_kids){
+	if (!key.match(/^\d+$/)) continue;
 
-cwarn(key);
-let node = kids[key];
-if (node.isData!==true){
-com.wrn(`Skipping non-data node: '${key}'`);
-continue;
-}
-let data = node.data;
-if (data.type!=="contact"){
-com.wrn(`Skipping data node type != "contact": '${key}'`);
-continue;
-}
-if (!isObj(data.value) && isStr(data.value.address) && isStr(data.value.name)){
-com.wrn(`Skipping invalid contact node: '${key}'`);
-continue;
-}
-let{name, address} = data.value;
-let str = `${name}) ${address}`;
-arr.push(str.slice(0, term.w));
+	let node = contacts_kids[key];
+	if (node.isData!==true){
+		com.wrn(`Skipping non-data node: '${key}'`);
+		continue;
+	}
+	let data = node.data;
+	if (data.type!=="contact"){
+		com.wrn(`Skipping data node type != "contact": '${key}'`);
+		continue;
+	}
+	if (!isObj(data.value) && isStr(data.value.address) && isStr(data.value.name)){
+		com.wrn(`Skipping invalid contact node: '${key}'`);
+		continue;
+	}
+	let{name, address} = data.value;
+	let str = `${name}) ${address}`;
+	arr.push(str.slice(0, term.w));
+	objs.push(data.value);
 }
 if (!arr.length){
 com.wrn("No contacts to show!");
@@ -541,17 +607,169 @@ if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 }
 
 let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.stat_message = `*Contacts menu*  [q]uit or [Enter] to select`;
 pager.exitChars=["q"];
+
 let rv = await pager.init(arr, "*contacts*", {opts:{}, lineSelect: true});
 if (pager.exitChar) return;
-let num = pager.y + pager.scroll_num;
-/*
-Create a draft object, and put a saveFunc on vim to save it in 'MUD/Drafts/'
-*/
-cwarn("Start vim for Contact");
-log(arr[num]);
+
+
+let use_contact = objs[pager.y + pager.scroll_num];
+
+let drafts_dir = await db.getDraftsDir();
+if (isStr(drafts_dir)) return com.err(drafts_dir);
+let drafts_kids = drafts_dir.kids;
+
+let draft_num = 1;
+while(drafts_kids[`${draft_num}`]){
+	draft_num++;
+}
+
+let draft_path = `${drafts_dir.fullpath}/${draft_num}`
+let draft_val = {
+	subject:"",
+	toContact: use_contact,
+	bodyText:""
+};
+let draft_obj = {type: "email", value: draft_val};
+let draft_node = await fsapi.writeDataFile(draft_path, draft_obj, {newOnly: true});
+if (!draft_node){
+	com.err(`Could not create the new draft (${draft_path})`);
+	return;
+}
+await edit_draft(draft_node);
+
 
 };//»
+const show_drafts_list = async()=>{//«
+
+let drafts_dir = await db.getDraftsDir();
+if (isStr(drafts_dir)) return com.err(drafts_dir);
+let drafts_kids = drafts_dir.kids;
+let arr=[];
+let objs=[];
+for (let key in drafts_kids){
+	if (!key.match(/^\d+$/)) continue;
+
+	let node = drafts_kids[key];
+	if (node.isData!==true){
+		com.wrn(`Skipping non-data node: '${key}'`);
+		continue;
+	}
+	let data = node.data;
+	if (data.type!=="email"){
+		com.wrn(`Skipping data node type != "email": '${key}'`);
+		continue;
+	}
+	let val = data.value;
+	if (!isObj(data.value) && isStr(val.subject) && isStr(val.bodyText) && isObj(val.toContact)){
+		com.wrn(`Skipping invalid email node: '${key}'`);
+		continue;
+	}
+	let ln1 = val.bodyText.split("\n")[0];
+	let str = `${val.toContact.name}) ${val.subject}: ${ln1}`;
+	arr.push(str.slice(0, term.w));
+	objs.push(node);
+}
+
+if (!arr.length){
+	com.wrn("No drafts to show!");
+	return;
+}
+if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+	com.err("could not load the pager module");
+	return;
+}
+
+let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.stat_message = `*Drafts menu*  [q]uit or [Enter] to select`;
+pager.exitChars=["q"];
+
+let rv = await pager.init(arr, "*drafts*", {opts:{}, lineSelect: true});
+if (pager.exitChar) return;
+await edit_draft(objs[pager.y + pager.scroll_num]);
+
+/*//«
+if (!arr.length){
+com.wrn("No contacts to show!");
+return;
+}
+if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+	com.err("could not load the pager module");
+	return;
+}
+
+let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.stat_message = `*Contacts menu*  [q]uit or [Enter] to select`;
+pager.exitChars=["q"];
+
+let rv = await pager.init(arr, "*contacts*", {opts:{}, lineSelect: true});
+if (pager.exitChar) return;
+
+if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
+	com.err("could not load the editor module");
+	return;
+}
+
+let use_contact = objs[pager.y + pager.scroll_num];
+
+let drafts_dir = await db.getDraftsDir();
+if (isStr(drafts_dir)) return com.err(drafts_dir);
+let drafts_kids = drafts_dir.kids;
+
+let draft_num = 1;
+while(drafts_kids[`${draft_num}`]){
+	draft_num++;
+}
+
+let draft_path = `${drafts_dir.fullpath}/${draft_num}`
+let draft_obj = {type: "email", value: {
+	subject:"",
+	toContact: use_contact,
+	bodyText:""
+}};
+let draft_node = await fsapi.writeDataFile(draft_path, draft_obj, {newOnly: true});
+if (!draft_node){
+	com.err(`Could not create the new draft (${draft_path})`);
+	return;
+}
+
+let editor = new LOTW.mods[DEF_EDITOR_MOD_NAME](term);
+editor.saveFunc = async (val) => {//«
+	draft_obj.subject="";
+	draft_obj.bodyText="";
+	let arr = val.split("\n");
+	let sub = arr.shift();
+	if (!(sub && sub.match(/\w+/))) return {mess: "Subject not found!", type: STAT_WARN};
+	draft_obj.subject = sub;
+	if (arr.length){
+		let blank = arr.shift();
+		if (!blank.match(/^\s*$/)){
+			return {mess: "Non-blank line found under the subject", type: STAT_ERR};
+		}
+		if (arr.length) {
+			let body = arr.join("\n");
+			draft_obj.bodyText = body;
+		}
+	}
+	if (!await draft_node.setDataValue(draft_obj)){
+		return {mess:"Could not save the draft", type: STAT_ERR};
+	}
+	return {mess: "Saved Okay", type: STAT_OK};
+};//»
+await editor.init("", draft_path, {
+	opts:{},
+	node: draft_node,
+//	node,
+//	type: typ,
+//	command_str,
+//	opts,
+//	symbols,
+});
+»*/
+
+};//»
+
 /*«
 	log[i]n
 	log[o]ut
@@ -570,13 +788,13 @@ const addr = db.emailAddr;
 
 const base_imap_url = `/_imap?user=${addr}`;
 
-const OK_CHARS=["i","o","q","u","n","s","c","d","e","h"];
+const OK_CHARS=["i","o","q","u","n","s","c","d","t","h"];
 
 let num_invalid = 0;
 help();
 while(true){
 
-	let rv = await term.getch("iounscdtqh> ");
+	let rv = await term.getch("mail> ");
 	term.lineBreak();
 	if (!OK_CHARS.includes(rv)){
 		num_invalid++;
@@ -607,7 +825,12 @@ while(true){
 	else if (rv==="c"){
 		await show_contacts_list();
 	}
-
+	else if (rv==="d"){
+		await show_drafts_list();
+	}
+	else if (rv==="t"){
+com.wrn("SHOW SENT SCREEN...");
+	}
 	else {
 		com.wrn(`Got command: ${rv}`);
 	}
@@ -618,7 +841,7 @@ while(true){
 });
 };//»
 
-class DB {//«
+class EmailUser {//«
 
 #db;
 #mailDataPath;
@@ -713,50 +936,6 @@ getStore(store_name, if_write){//«
 	return this.#db.transaction([store_name],if_write?"readwrite":"readonly").objectStore(store_name);
 }//»
 
-/*
-//We aren't doing these things in the database, but as data files in MUD/Drafts and MUD/Sent
-addMessage(store_name, mess){//«
-	return new Promise((Y,N)=>{
-		let req = this.getStore(store_name, true).add(mess);
-		req.onerror=(e)=>{
-cerr(e);
-			Y();
-		};
-		req.onsuccess = e => {
-			Y(true);
-		};
-	});
-}//»
-async createMessage(time, from, sub, text){//«
-//The first 4 are required (subject may be [none])
-
-	if (!subject) subject = "[none]";
-
-	let rv = await add_message({time, from, sub, text});
-	if (!rv){
-cerr("createMessage: failed");
-	}
-
-}//»
-async deleteMessage (id){//«
-
-if (!await del_by_id(id)) return;
-
-return true;
-
-}//»
-async addMessageText(id, text){//«
-
-	let mess = await get_by_id(id);
-	if (!mess) return cerr(`could not get message ${id}`);
-	if (mess.text) return cwarn(`message already has a 'text' field!`);
-	mess.text = text;
-	if (!await put_by_id(id, mess)) return cerr('put_by_id failed!');
-	return true;
-
-}//»
-*/
-
 async mkUserDir(){//«
 
 /*«Notes
@@ -824,18 +1003,19 @@ cerr(mess);
 async getUserDir(){//«
 	return await (`${this.#mailDataPath}/${this.emailAddr}`).toNode();
 }//»
-async getContactsDir(){//«
-	let path = `${this.#mailDataPath}/${this.emailAddr}/Contacts`;
-	let dir = await path.toNode();
+async getSomeDir(which){/*«*/
+	let path = `${this.#mailDataPath}/${this.emailAddr}/${which}`;
+	let dir = await path.toNode({doPopDir: true});
 	if (!dir){
-		return "no contacts directory found!";
+		return `no ${which} directory found!`;
 	}
 	if (dir.isDir!==true) {
-		return "'Contacts' is not a directory!";
+		return `'${which}' is not a directory!`;
 	}
-	await fsapi.popDir(dir);
 	return dir;
-}//»
+}/*»*/
+getContactsDir(){return this.getSomeDir("Contacts");}
+getDraftsDir(){return this.getSomeDir("Drafts");}
 
 async dropDatabase(){//«
 	return new Promise((Y,N)=>{
@@ -1011,6 +1191,49 @@ return `saved: ${emails.length} new emails`;
 }//»
 
 /*«
+
+//We aren't doing these things in the database, but as data files in MUD/Drafts and MUD/Sent
+addMessage(store_name, mess){//«
+	return new Promise((Y,N)=>{
+		let req = this.getStore(store_name, true).add(mess);
+		req.onerror=(e)=>{
+cerr(e);
+			Y();
+		};
+		req.onsuccess = e => {
+			Y(true);
+		};
+	});
+}//»
+async createMessage(time, from, sub, text){//«
+//The first 4 are required (subject may be [none])
+
+	if (!subject) subject = "[none]";
+
+	let rv = await add_message({time, from, sub, text});
+	if (!rv){
+cerr("createMessage: failed");
+	}
+
+}//»
+async deleteMessage (id){//«
+
+if (!await del_by_id(id)) return;
+
+return true;
+
+}//»
+async addMessageText(id, text){//«
+
+	let mess = await get_by_id(id);
+	if (!mess) return cerr(`could not get message ${id}`);
+	if (mess.text) return cwarn(`message already has a 'text' field!`);
+	mess.text = text;
+	if (!await put_by_id(id, mess)) return cerr('put_by_id failed!');
+	return true;
+
+}//»
+
 async getCurUser(){//«
 	let node = await this.#curUserFile.toNode();
 	if (!node) return;
@@ -1079,50 +1302,50 @@ cerr(mess);
 const addr = opts.user || opts.u || env.EMAIL_USER;
 if (!addr) return this.no(`no --user, -u option or 'EMAIL_USER' in the environment!`);
 
-const db = new DB(addr);
+const user = new EmailUser(addr);
 
-rv = await db.initMailDir();
-if (!this.checkStrOrTrue(rv, "db.initMailDir")) return;
+rv = await user.initMailDir();
+if (!this.checkStrOrTrue(rv, "user.initMailDir")) return;
 
 const cmd = args.shift();
 
 if (!cmd){//«
-	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
-	rv = await db.initDB();
+	if (!await user.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	rv = await user.initDB();
 	if (!rv) return this.no(`could not initialize the database for: ${addr}`);
 
 //SBSNOWP
 //cwarn("Mail REPL here...");
 	this.inf(`Starting mail REPL for: '${addr}'`);
-	rv = await mail_loop(this, db);
+	rv = await mail_loop(this, user);
 log("MAIL LOOP RET", rv);
-	db.close();
+	user.close();
 	this.ok();
 	return;
 }//»
 
 if (cmd === "init"){//«
 
-	if (await db.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
+	if (await user.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
 	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
-	rv = await db.mkUserDir();
+	rv = await user.mkUserDir();
 	if (!this.checkStrOrTrue(rv, "mkUserDir")) return;
-	rv = await db.initDB();
+	rv = await user.initDB();
 	if (!rv) return this.no(`could not initialize the object stores for: ${addr}`);
 	this.ok();
 	return;
 
 }//»
 //The remaining commands assume that 'addr' has already been initialized
-if (!await db.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
+if (!await user.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
 if (cmd === "del"){//«
 
 	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
 
-	if (!await db.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
-	if (!await db.dropDatabase()) return this.no(`error dropping the database`);
+	if (!await user.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
+	if (!await user.dropDatabase()) return this.no(`error dropping the database`);
 	this.ok();
 
 }//»
@@ -1229,13 +1452,13 @@ async run(){//«
 	const{opts,env}=this;
 	const addr = opts.user || opts.u || env.EMAIL_USER;
 	if (!addr) return this.no(`no --user, -u option or 'EMAIL_USER' in the environment!`);
-	const db = new DB(addr);
-	if (!await db.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	const user = new EmailUser(addr);
+	if (!await user.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
 
 	const{name, addr: to_addr} = opts;
 	if (!(name&&to_addr)) return this.no("Need 'name' and 'addr' options!");
 
-	let dir = await db.getContactsDir();
+	let dir = await user.getContactsDir();
 	if (isStr(dir)) return this.no(dir);
 	let num = 1;
 	let kids = dir.kids;

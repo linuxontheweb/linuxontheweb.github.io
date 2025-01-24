@@ -44,6 +44,7 @@ const {
 	cwarn,
 	cerr,
 	strNum,
+	isDef,
 	isArr,
 	isObj,
 	isNum,
@@ -521,6 +522,10 @@ cerr("Data not found");
 log(this);
 			return;
 		}
+		if (!isDef(val)){
+cerr("Data types *require* a 'value' field (util.isDef() === true)");
+return;
+		}
 		dat.value = val;
 		if (!await db.setNodeData(this.id, this.data)) {
 cerr("Could not set node data");
@@ -533,6 +538,10 @@ cerr("Could not set node data");
 			if (!(isObj(val) && isStr(val.type))){
 cerr(`Expected an object with a 'type' field! (for inline data storage)`);
 				return;
+			}
+			if (!isDef(val.value)){
+cerr("Data types *require* a 'value' field (util.isDef() === true)");
+return;
 			}
 			if (this.data.type !== val.type){
 cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
@@ -838,7 +847,7 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 };//»
 //String.prototype.to(Node|Text|Lines|Bytes|Buffer|Blob)«
 {
-const toNode = function(opts={}) {//«
+const toNode = async function(opts={}) {//«
 	let s = this+"";
 	if (s.match(/^\x2f/)){}
 	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
@@ -846,7 +855,12 @@ const toNode = function(opts={}) {//«
 cerr("Cannot construct a full path!");
 		return false;
 	}
-	return pathToNode(normPath(s), opts.getLink);
+	let node = await pathToNode(normPath(s), opts.getLink);
+	if (!node) return node;
+	if (opts.doPopDir && node.isDir===true){
+		await popDir(node, opts);
+	}
+	return node;
 };//»
 let _ = String.prototype;
 _.toNode=toNode;
@@ -1912,6 +1926,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	}
 	else if (isData){
 //		kid.isData = true;
+		add_lock_funcs(kid);
 	}
 	else {
 //		kid.isFile = true;

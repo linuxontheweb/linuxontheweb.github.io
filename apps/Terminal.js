@@ -6308,6 +6308,7 @@ this.maxTabSize = 256;
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
 this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 this.stat={
+	none: 0,
 	ok: 1,
 	warning: 2,
 	error: 3
