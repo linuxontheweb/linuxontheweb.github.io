@@ -6002,6 +6002,7 @@ if (detect_fold_error(arr)) {
 }
 let val = arr[0];
 let rv = await vim.sendFunc(val);
+if (!(rv && isStr(rv.mess))) return;
 stat_message = rv.mess;
 stat_message_type = rv.type||STAT_NONE;
 render();

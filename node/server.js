@@ -109,6 +109,14 @@ else if (which=="smtp"){//«
 	if (!smtp) {
 		smtp = require('./svcs/smtp.js');
 	}
+	if (!args.user){
+		no(res, "no 'user' arg!");
+		return;
+	}
+	if (args.user !== process.env.EMAIL_USER){
+		no(res, `invalid 'user' arg (got '${args.user}')`);
+		return;
+	}
 	if (!args.to) return no(res, "smtp requires a 'to' field");
 	let dat = await get_post_data(req);
 	let obj = {to: args.to, text: dat.toString()};

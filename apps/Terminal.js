@@ -7179,7 +7179,10 @@ if (num2 > this.w) {
 				let typ = stat_message_type;
 				let bgcol=null;
 				let tcol="#000";
-				if (typ==this.stat.ok) bgcol="#090";
+				if (typ==this.stat.ok) {
+					bgcol="#070";
+					tcol="#fff";
+				}
 				else if (typ==this.stat.warning) bgcol="#dd6";
 				else if (typ==this.stat.error) {
 					bgcol="#c44";

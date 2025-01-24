@@ -7370,7 +7370,8 @@ api.popyesno = (str, opts = {}) => {
 			REV: opts.reverse,
 			TIT: opts.title,
 			WIN:opts.win,
-			DEFNO: opts.defNo
+			DEFNO: opts.defNo,
+			VERYBIG: opts.veryBig,
 		});
 	});
 }

@@ -239,7 +239,7 @@ const {
 	MAIL_DB_VERNUM,
 	ShellMod
 } = globals;
-const{isStr, isNum, isObj, log, jlog, cwarn, cerr}=util;
+const{isStr, isNum, isObj, log, jlog, cwarn, cerr, mkdv, make}=util;
 const {Com} = ShellMod.comClasses;
 const STAT_NONE=0;
 const STAT_OK=1;
@@ -295,7 +295,7 @@ const do_imap_op = async(com, op, opts={}) => {//«
 
 //»
 
-const mail_loop = (com, db) => {//«
+const mail_loop = (com, user) => {//«
 return new Promise(async(Y,N)=>{
 
 const{term}=com;
@@ -306,9 +306,9 @@ const help=()=>{//«
 const hang=()=>{return new Promise((Y,N)=>{});}
 const do_update=async()=>{//«
 
-	let uid = await db.lastUID();
+	let uid = await user.lastUID();
 	if (!isNum(uid)){
-		com.err("db.lastUID() did not return a numerical value (see console)");
+		com.err("user.lastUID() did not return a numerical value (see console)");
 		return;
 	}
 
@@ -320,7 +320,7 @@ com.inf(`!!! USING LOCAL FILE: /home/me/ENVSOUT !!!`);
 
 let envs = await "/home/me/ENVSOUT".toJson();
 try{
-	let rv = await db.saveNew(envs);
+	let rv = await user.saveNew(envs);
 	if (isStr(rv)) com.inf(rv);
 }
 catch(e){
@@ -338,7 +338,7 @@ Now the question is how we handle "login sessions".
 
 let rv = await do_imap_op(this, "getenvs", {addArgs: `since=${unix_ms}`, retOnly: true});
 
-Save these envelopes to db.new, and set last_uid to the 
+Save these envelopes to user.new, and set last_uid to the 
 
  {
 	"seq": 233,
@@ -386,7 +386,7 @@ const exit=rv=>{//«
 };//»
 
 const download_and_move_to_saved = async arr => {//«
-cwarn("Download, put into db.saved and delete from db.new");
+cwarn("Download, put into user.saved and delete from user.new");
 //log(arr);
 for (let obj of arr) {
 	let uid = obj.uid;
@@ -397,12 +397,12 @@ for (let obj of arr) {
 	com.inf(`Got ${uid} OK!`, {noBr: true});
 	term.render({noCursor: true});
 	obj.bodyText= rv;
-	if (!await db.addItem("saved", obj)){
-		com.err(`Add item (uid=${uid}) to db.saved: FAILED!`);
+	if (!await user.addItem("saved", obj)){
+		com.err(`Add item (uid=${uid}) to user.saved: FAILED!`);
 		continue;
 	}
-	if (!await db.delItemByKey("new", uid)){
-		com.err(`Delete item (uid=${uid}) from db.new: FAILED!`);
+	if (!await user.delItemByKey("new", uid)){
+		com.err(`Delete item (uid=${uid}) from user.new: FAILED!`);
 	}
 }
 };//»
@@ -414,7 +414,7 @@ if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 	com.err("could not load the pager module");
 	return;
 }
-let new_arr = await db.getAll("new");
+let new_arr = await user.getAll("new");
 if (!new_arr.length){
 	com.wrn("No new emails!");
 	return;
@@ -453,7 +453,7 @@ Let's do this sequentially, showing the progress of each on the terminal
 await download_and_move_to_saved(out_arr);
 }
 else if (ch==="d"){
-log("Delete from server then from db.new");
+log("Delete from server then from user.new");
 }
 term.render();
 //cwarn("GOT UIDS");
@@ -468,7 +468,7 @@ if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 	com.err("could not load the pager module");
 	return;
 }
-let saved_arr = await db.getAll("saved");
+let saved_arr = await user.getAll("saved");
 if (!saved_arr.length){
 	com.wrn("No saved emails!");
 	return;
@@ -492,10 +492,10 @@ windows to show the email messages.
 	});
 }
 let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
-pager.stat_message = `*saved* [q]uit [d]el`;
+pager.stat_message = `*saved* [r]eply [d]el [a]dd_contact [q]uit`;
 pager.multilineSels = sels;
 pager.multilineEnterFuncs = enters;
-pager.exitChars=["q", "d"];
+pager.exitChars=["q", "d", "r", "a"];
 
 await pager.init(arr, "*saved emails*", {opts:{}, lineSelect: true});
 
@@ -503,19 +503,47 @@ term.setBgRows();
 term.render();
 let ch = pager.exitChar;
 if (ch==="q") return;
+if (ch==="r"||ch==="a"){
+let which = saved_arr[pager.y+pager.scroll_num];
+/*Create an email in Drafts...
+*/
+log(which);
+if (ch==="a"){
+cwarn("ADD CONTACT");
+return;
+}
+cwarn("REPLY");
+return;
+}
 let out_arr = [];
 for (let i=0; i < sels.length; i++){
 	if (sels[i]) out_arr.push(new_arr[i]);
 }
 if (!out_arr.length) return;
-//cwarn(`GOTCOM: ${ch}`);
 if (ch==="d"){
-log("Delete from server then from db.saved");
+log("Delete from server then from user.saved");
 }
 term.render();
 //cwarn("GOT UIDS");
 //log(out_arr);
 //log(sels);
+};//»
+const send_email=async(draft)=>{//«
+
+cwarn("SENDING...");
+let url = `${base_smtp_url}&to=${encodeURIComponent(draft.toContact.address)}&subject=${encodeURIComponent(draft.subject)}`;
+cwarn(url);
+log(draft.bodyText);
+return true;
+
+/*«
+Need to put the user on here
+
+await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(sub)}`, {
+    method:"POST", body: txt
+});
+»*/
+
 };//»
 const edit_draft = async(draft_node)=>{//«
 
@@ -571,14 +599,48 @@ and has "Send" and "Cancel" buttons. So we will need to await either one
 of the buttons here...
 
 */
-cwarn("SEND");
-log(`Subject: <${draft_val.subject}>`);
+//cwarn("SEND");
+//log(draft_val);
+//log(`Subject: <${draft_val.subject}>`);
 
 //log(util.linesToParas(draft_val.bodyText.split("\n"), {skipNLs: true}));
 
-log(util.linesToParas(draft_val.bodyText.split("\n")).join("\n"));
+let body_arr = util.linesToParas(draft_val.bodyText.split("\n"));
+let div = mkdv();
+let todiv = mkdv();
+todiv.innerText = `To: ${draft_val.toContact.name} <${draft_val.toContact.address}>`
+let subdiv = mkdv();
+subdiv.innerText = `Sub: ${draft_val.subject}`;
+let bodylabdiv = mkdv();
+bodylabdiv.innerHTML="<hr>Body:<br>";
+let bodydiv = mkdv();
+for (let para of body_arr){
+	if (!para) para = "\xa0";
+	let p = make('p');
+	p.innerText = para;
+	bodydiv.appendChild(p);
+}
+div.appendChild(todiv);
+div.appendChild(subdiv);
+div.appendChild(bodylabdiv);
+div.appendChild(bodydiv);
 
-	return {mess: "Trying to send...", type: STAT_WARN};
+if (!await LOTW.api.widgets.popyesno(div,{title: "Send this email?", veryBig: true})){
+	return {mess: "Cancelled", type: STAT_WARN};
+}
+editor.stat_message = "Trying to send...";
+editor.stat_message_type = STAT_WARN;
+term.render();
+//Here we are mimicking the 'send' function
+if (!await send_email(draft_val)){
+	return {mess: "Send error", type: STAT_ERR};
+}
+//Upon successful completion, we need to remove draft_node from MUD/Drafts and
+//put it into MUD/Sent...
+//await util.sleep(1500);
+
+//log("GOT",rv);
+	return {mess: "Send OK", type: STAT_OK};
 };//»
 /*
 Want to have a persistent message (for normal mode) on the bottom?
@@ -603,7 +665,7 @@ await editor.init(use_text, draft_node.fullpath, {
 };//»
 const show_contacts_list = async()=>{//«
 
-let contacts_dir = await db.getContactsDir();
+let contacts_dir = await user.getContactsDir();
 if (isStr(contacts_dir)) return com.err(contacts_dir);
 let contacts_kids = contacts_dir.kids;
 let arr=[];
@@ -654,7 +716,7 @@ if (pager.exitChar) return;
 
 let use_contact = objs[pager.y + pager.scroll_num];
 
-let drafts_dir = await db.getDraftsDir();
+let drafts_dir = await user.getDraftsDir();
 if (isStr(drafts_dir)) return com.err(drafts_dir);
 let drafts_kids = drafts_dir.kids;
 
@@ -681,7 +743,7 @@ await edit_draft(draft_node);
 };//»
 const show_drafts_list = async()=>{//«
 
-let drafts_dir = await db.getDraftsDir();
+let drafts_dir = await user.getDraftsDir();
 if (isStr(drafts_dir)) return com.err(drafts_dir);
 let drafts_kids = drafts_dir.kids;
 let arr=[];
@@ -751,7 +813,7 @@ if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 
 let use_contact = objs[pager.y + pager.scroll_num];
 
-let drafts_dir = await db.getDraftsDir();
+let drafts_dir = await user.getDraftsDir();
 if (isStr(drafts_dir)) return com.err(drafts_dir);
 let drafts_kids = drafts_dir.kids;
 
@@ -822,9 +884,10 @@ await editor.init("", draft_path, {
 »*/
 
 //const{term}=com;
-const addr = db.emailAddr;
+const addr = user.emailAddr;
 
 const base_imap_url = `/_imap?user=${addr}`;
+const base_smtp_url = `/_smtp?user=${addr}`;
 
 const OK_CHARS=["i","o","q","u","n","s","c","d","t","h"];
 
