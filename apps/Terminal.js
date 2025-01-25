@@ -94,8 +94,24 @@ const {
 	EOF,
 	isNodeJS,
 	TERM_STAT_TYPES,
+	VIM_MODES
 } = globals;
 const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
+const {
+	COMMAND_MODE,
+	INSERT_MODE,
+	REPLACE_MODE,
+	VIS_LINE_MODE,
+	VIS_MARK_MODE,
+	VIS_BLOCK_MODE,
+	CUT_BUFFER_MODE,
+	LINE_WRAP_MODE,
+	SYMBOL_MODE,
+	FILE_MODE,
+	COMPLETE_MODE,
+	REF_MODE
+} = VIM_MODES;
+
 const fsapi = fs.api;
 const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
@@ -6251,6 +6267,7 @@ this.ENV = this.env;
 //this.funcs = globals.TERM_FUNCS;
 this.funcs={};
 //Editor mode constants for the renderer (copy/pasted from vim.js)«
+/*
 this.modes= {
 	command:1,
 	insert:2,
@@ -6265,6 +6282,7 @@ this.modes= {
 	complete: 11,
 	ref: 12
 };
+*/
 //»
 
 //let this.paragraphSelectMode = true; //Toggle with Ctrl+Alt+p«
@@ -6980,15 +6998,19 @@ render(opts={}){//«
 
 	if (this.isEditor) ({mode,symbol,seltop,selbot,selleft,selright,selmark,opts,num_lines,ry}=actor);
 	if (!(this.nCols&&this.nRows)) return;
-	let visual_line_mode = (mode===this.modes.visLine) || line_select_mode;
+//	let visual_line_mode = (mode===this.modes.visLine) || line_select_mode;
+	let visual_line_mode = (mode===VIS_LINE_MODE) || line_select_mode;
 	if (line_select_mode) seltop = selbot = this.scrollNum+this.y;
 	
-	if (mode===this.modes.ref||mode===this.modes.symbol||mode===this.modes.complete){
+//	if (mode===this.modes.ref||mode===this.modes.symbol||mode===this.modes.complete){
+	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE){
 		visual_line_mode = true;
 		seltop = selbot = this.y+this.scrollNum;
 	}
-	let visual_block_mode = mode===this.modes.visBlock;
-	let visual_mark_mode = mode===this.modes.visMark;
+//	let visual_block_mode = mode===this.modes.visBlock;
+	let visual_block_mode = mode===VIS_BLOCK_MODE;
+//	let visual_mark_mode = mode===this.modes.visMark;
+	let visual_mark_mode = mode===VIS_MARK_MODE;
 	let visual_mode = visual_line_mode || visual_mark_mode || visual_block_mode;
 	let docursor = false;
 	if (opts.noCursor){}
@@ -7027,7 +7049,7 @@ render(opts={}){//«
 
 		let arr = uselines[i];
 //DOCURSOR
-		if (docursor&&i==this.y&&this.isEditor) {
+		if (docursor&&i==this.y&&this.isEditor&&mode!==LINE_WRAP_MODE) {
 			this.setXScroll(arr.slice(0, usex).join(""), usex);
 		}
 		let ind;
@@ -7200,25 +7222,33 @@ if (num2 > this.w) {
 				actor.stat_message_type=null;
 			}//»
 			else {//«
-				if (mode === this.modes.insert) mess = "-- INSERT --";
-				else if (mode === this.modes.replace) mess = "-- REPLACE --";
-				else if (mode == this.modes.symbol) {
+//				if (mode === this.modes.insert) mess = "-- INSERT --";
+				if (mode === INSERT_MODE) mess = "-- INSERT --";
+//				else if (mode === this.modes.replace) mess = "-- REPLACE --";
+				else if (mode === REPLACE_MODE) mess = "-- REPLACE --";
+//				else if (mode == this.modes.symbol) {
+				else if (mode === SYMBOL_MODE) {
 					if (symbol) mess = `-- SYMBOL: ${symbol} --`;
 					else mess = "-- SYMBOL --";
 				}
-				else if (mode == this.modes.ref) {
+//				else if (mode == this.modes.ref) {
+				else if (mode === REF_MODE) {
 					if (symbol) mess = `-- REF: ${symbol} --`;
 					else mess = "-- REF --";
 				}
-				else if (mode === this.modes.complete) {
+//				else if (mode === this.modes.complete) {
+				else if (mode === COMPLETE_MODE) {
 					mess = `-- COMPLETE: ${symbol} --`;
 				}
 				else if (visual_line_mode) mess = "-- VISUAL LINE --";
 				else if (visual_mark_mode) mess = "-- VISUAL --";
 				else if (visual_block_mode) mess = "-- VISUAL BLOCK --";
-				else if (mode === this.modes.file) mess = "-- FILE --";
-				else if (mode === this.modes.cutBuffer) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
-				else if (mode === this.modes.lineWrap) mess = "-- LINE WRAP --";
+//				else if (mode === this.modes.file) mess = "-- FILE --";
+				else if (mode === FILE_MODE) mess = "-- FILE --";
+//				else if (mode === this.modes.cutBuffer) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
+				else if (mode === CUT_BUFFER_MODE) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
+//				else if (mode === this.modes.lineWrap) mess = "-- LINE WRAP --";
+				else if (mode === LINE_WRAP_MODE) mess = "-- LINE WRAP --";
 				messln = mess.length;
 			}//»
 			let per;
@@ -7242,7 +7272,8 @@ if (num2 > this.w) {
 			if (perln > 4) per = "?%";
 			per = "\x20".repeat(4-perln)+per;
 			let lncol;
-			if (mode===this.modes.lineWrap){
+//			if (mode===this.modes.lineWrap){
+			if (mode===LINE_WRAP_MODE){
 				lncol = (actor.line_wrap_y+1)+","+(actor.line_wrap_x+1);
 			}
 			else{
@@ -7289,6 +7320,9 @@ if (num2 > this.w) {
 		tabdiv.innerHTML = outarr.join("\n");
 	}
 }//»
+resetXScroll(){
+	this.tabdiv._x=0;
+}
 setXScroll(ln, usex){//«
 	const{tabdiv}=this;
 	tabdiv._x=0;

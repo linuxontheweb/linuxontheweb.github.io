@@ -3,6 +3,13 @@ included, if there are only one of them. So now @WOLMFGHJ, we are passing in
 an argument to get_all_words, which tests to see (@DJKUYTKM) if the indexOf
 and lastIndexOf values of the given word are the same (which would mean that 
 there is only one occurrence of them).
+
+Just updated init_line_wrap_mode, in order to deal with the same 'num_lines'
+issue referenced in the note from 12/27/24. There, I reset num_lines just
+after calling 'Term.setLines', then I called 'set_line_lens' inside the
+alt_screen_escape_handler. THIS IS VERY VERY IMPORTANT QUALITY CONTROL
+TYPE STUFF HERE!!!
+
 »*/
 
 //Historical development notes (and old code) are kept in doc/dev/VIM
@@ -179,9 +186,25 @@ const{
 dev_mode,
 ShellMod,
 TERM_STAT_TYPES,
+VIM_MODES,
 }=globals;
 const{isArr, isStr, isEOF, log, jlog, cwarn, cerr, consoleLog: con}=LOTW.api.util;
 const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
+const {
+	COMMAND_MODE,
+	INSERT_MODE,
+	REPLACE_MODE,
+	VIS_LINE_MODE,
+	VIS_MARK_MODE,
+	VIS_BLOCK_MODE,
+	CUT_BUFFER_MODE,
+	LINE_WRAP_MODE,
+	SYMBOL_MODE,
+	FILE_MODE,
+	COMPLETE_MODE,
+	REF_MODE
+} = VIM_MODES;
+//log(C);
 //const{log:clog, nlog: cnlog}=consoleLog;
 const{fs,FS_TYPE,SHM_TYPE,NS}=globals;
 const fsapi = fs.api;
@@ -316,20 +339,6 @@ let cur_background_command;
 
 //Any changes to the mode variables MUST be updated in Terminal.js @XKIUO
 //WKOIPUHN
-
-const COMMAND_MODE = 1;
-const INSERT_MODE = 2;
-const REPLACE_MODE = 3;
-const VIS_LINE_MODE = 4;
-const VIS_MARK_MODE = 5;
-const VIS_BLOCK_MODE = 6;
-const CUT_BUFFER_MODE = 7;
-const LINE_WRAP_MODE = 8;
-const SYMBOL_MODE = 9;
-const FILE_MODE = 10;
-const COMPLETE_MODE = 11;
-const REF_MODE = 12;
-
 const COMMAND_OR_EDIT_MODES=[
 	COMMAND_MODE,
 	INSERT_MODE,
@@ -2237,8 +2246,9 @@ const init_line_wrap_mode=()=>{//«
 	scroll_num = 0;
 	y = Math.floor(hx/Term.w);
 	x = hx%Term.w;
-	Term.reset_x_scroll();
+	Term.resetXScroll();
 	Term.setLines(lines, []);
+	num_lines = lines.length;
 	num_line_wrap_actions = 0;
 	alt_screen_escape_handler = async if_enter => {//«
 		if (if_enter) {
@@ -2257,8 +2267,9 @@ const init_line_wrap_mode=()=>{//«
 		fold_mode = hold_fold;
 		lines = hold_lines;
 		hold_lines = null;
-		set_ry();
+//		set_ry();
 		Term.setLines(lines, line_colors);
+		set_line_lens();
 		this.mode = COMMAND_MODE;
 		render();
 //		scroll_screen_to_cursor();

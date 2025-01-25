@@ -391,7 +391,7 @@ const KC = {
 }
 
 //»
-
+//«Terminal
 const TERM_ENV = {};
 const TERM_FUNCS = {};
 const TERM_STAT_TYPES={
@@ -400,6 +400,21 @@ const TERM_STAT_TYPES={
 	STAT_WARN:2,
 	STAT_ERR:3
 };
+const VIM_MODES={
+	COMMAND_MODE: 1,
+	INSERT_MODE: 2,
+	REPLACE_MODE: 3,
+	VIS_LINE_MODE: 4,
+	VIS_MARK_MODE: 5,
+	VIS_BLOCK_MODE: 6,
+	CUT_BUFFER_MODE: 7,
+	LINE_WRAP_MODE: 8,
+	SYMBOL_MODE: 9,
+	FILE_MODE: 10,
+	COMPLETE_MODE: 11,
+	REF_MODE: 12,
+};
+//»
 export const globals = {//«
 	workers:{
 //		faust: new Worker("/wasm/faust.js"),
@@ -422,6 +437,7 @@ export const globals = {//«
 	TERM_ENV,
 	TERM_FUNCS,
 	TERM_STAT_TYPES,
+	VIM_MODES,
 	SHELL_ERROR_CODES,
 
 	HOME_PATH,
@@ -491,7 +507,8 @@ what.another_old_func
 	refs:{},
 	api,
 
-};//»
+}
+;//»
 NS.globals = globals;
 
 //»
