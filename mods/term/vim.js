@@ -1154,6 +1154,8 @@ const copy_fold_lines=(lns, all)=>{//«
 //»
 //Save/Devel«
 
+let is_saving = false;
+
 const test_js=()=>{//«
 	let scr = document.createElement('script');
 	if (stat_message_type) {
@@ -1200,7 +1202,7 @@ const toggle_reload_win=async()=>{//«
 	}
 	reload_win.ownedBy = topwin;
 };//»
-const reload_dev_win=async()=>{
+const reload_dev_win=async()=>{//«
 //Want to be able to pass in a command line flag to delete the local app/mod
 //that we are editing in this file.
 	if (!reload_win) return;
@@ -1213,7 +1215,7 @@ cwarn("NO RELOAD_WIN._DATA_URL!!?");
 	stat("Reloading...");
 	let rv = await reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([`(function(){"use strict";${get_edit_str()}})()`]))});
 	stat("Done!");
-}
+}/*»*/
 const ondevreload=()=>{//«
 	return reload_dev_win();
 };//»
@@ -1274,44 +1276,55 @@ const try_revert = ()=>{//«
 	edit_ftype = edit_fobj.type;
 	edit_fobj_hold = undefined;
 }//»
+
 const try_save = (if_saveas)=>{//«
 	if (no_save_mode) return stat_warn("no_save_mode is on!");
+	if (is_saving) {
+		return stat_warn(`is_saving: ${is_saving}`);
+	}
+	is_saving = true;
 	if (edit_fullpath&&!if_saveas) return edit_save();
 	init_stat_input("Save As: ");
 	render({}, 110);
 };//»
+const try_save_as=()=>{//«
+	if (!edit_fullpath) return try_save();
+	try_save(true);	
+};//»
 const edit_save = async(if_nostat)=>{//«
 	let write_err = "";
-const write_cb_func = async(ret)=>{//«
-	if (ret) {
-		let {node} = ret;
-		if (!edit_fobj){
-			edit_fobj = node;
-			edit_fullpath = edit_fobj.fullpath;
-			edit_ftype = edit_fobj.type;
-			Term.curEditNode = edit_fobj;
-			edit_fobj.lockFile();
+	const write_cb_func = async(ret)=>{//«
+		if (ret) {
+			let {node} = ret;
+			if (!edit_fobj){
+				edit_fobj = node;
+				edit_fullpath = edit_fobj.fullpath;
+				edit_ftype = edit_fobj.type;
+				Term.curEditNode = edit_fobj;
+				edit_fobj.lockFile();
+			}
+			if (Desk) Desk.make_icon_if_new(node);
+			if (!if_nostat) {
+				if (write_err) stat_message_type = STAT_ERROR;
+				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${ret.size}C written${write_err}`;
+			}
+			else{
+	log("Saved",ret.size);
+			}
+			dirty_flag = false;
+			Term.is_dirty = false;
 		}
-		if (Desk) Desk.make_icon_if_new(node);
-		if (!if_nostat) {
-			if (write_err) stat_message_type = STAT_ERROR;
-			stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${ret.size}C written${write_err}`;
+		else {
+			stat_message = "The file could not be saved";
+			try_revert();
 		}
-		else{
-log("Saved",ret.size);
-		}
-		dirty_flag = false;
-		Term.is_dirty = false;
-	}
-	else {
-		stat_message = "The file could not be saved";
-		try_revert();
-	}
-	render({},73);
-	return !Term.is_dirty;
-};//»
+		render({},73);
+		is_saving = false;
+		return !Term.is_dirty;
+	};//»
 	let arr = get_edit_save_arr();
 	if (detect_fold_error(arr)) {
+		is_saving = false;
 		return;
 	}
 	let val = arr[0];
@@ -1328,6 +1341,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 		stat_message = rv.mess;
 		stat_message_type = rv.type||STAT_NONE;
 		render();
+		is_saving = false;
 		return;
 	}
 	let opts={retObj: true};
@@ -1340,6 +1354,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 			stat_message = `Invalid file system type:  ${edit_ftype}`;
 			try_revert();
 			render({},80);
+			is_saving = false;
 			return;
 		}
 	}
@@ -1373,6 +1388,7 @@ if (!(rv&&rv.node)){
 stat_err("There was a problem writing the file (see console)");
 cwarn("Here is the returned value from node.setValue");
 log(rv);
+is_saving = false;
 return;
 }
 	}
@@ -1447,10 +1463,6 @@ stat_cb = ch=>{
 stat_warn(`${fname}: file exists! Overwrite? [y/N]`);
 
 }//»
-const try_save_as=()=>{//«
-	if (!edit_fullpath) return try_save();
-	try_save(true);	
-};//»
 
 //»
 //Stat/Com«

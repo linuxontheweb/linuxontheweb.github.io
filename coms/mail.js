@@ -227,7 +227,7 @@ On the server
 »*/
 
 //»
-
+const E_NEED_NODEJS = "Commands in the 'mail' module requires a Node.js installation!";
 //Imports«
 
 const {globals}=LOTW;
@@ -237,7 +237,8 @@ const {
 	DEF_EDITOR_MOD_NAME,
 	MAIL_DB_NAME,
 	MAIL_DB_VERNUM,
-	ShellMod
+	ShellMod,
+	isNodeJS
 } = globals;
 const{isStr, isNum, isObj, log, jlog, cwarn, cerr, mkdv, make}=util;
 const {Com} = ShellMod.comClasses;
@@ -295,7 +296,7 @@ const do_imap_op = async(com, op, opts={}) => {//«
 
 //»
 
-const mail_loop = (com, user) => {//«
+const mail_loop = (com, emuser) => {//«
 return new Promise(async(Y,N)=>{
 
 const{term}=com;
@@ -306,9 +307,9 @@ const help=()=>{//«
 const hang=()=>{return new Promise((Y,N)=>{});}
 const do_update=async()=>{//«
 
-	let uid = await user.lastUID();
+	let uid = await emuser.lastUID();
 	if (!isNum(uid)){
-		com.err("user.lastUID() did not return a numerical value (see console)");
+		com.err("emuser.lastUID() did not return a numerical value (see console)");
 		return;
 	}
 
@@ -320,7 +321,7 @@ com.inf(`!!! USING LOCAL FILE: /home/me/ENVSOUT !!!`);
 
 let envs = await "/home/me/ENVSOUT".toJson();
 try{
-	let rv = await user.saveNew(envs);
+	let rv = await emuser.saveNew(envs);
 	if (isStr(rv)) com.inf(rv);
 }
 catch(e){
@@ -386,7 +387,7 @@ const exit=rv=>{//«
 };//»
 
 const download_and_move_to_saved = async arr => {//«
-cwarn("Download, put into user.saved and delete from user.new");
+cwarn("Download, put into emuser.saved and delete from emuser.new");
 //log(arr);
 for (let obj of arr) {
 	let uid = obj.uid;
@@ -397,12 +398,12 @@ for (let obj of arr) {
 	com.inf(`Got ${uid} OK!`, {noBr: true});
 	term.render({noCursor: true});
 	obj.bodyText= rv;
-	if (!await user.addItem("saved", obj)){
-		com.err(`Add item (uid=${uid}) to user.saved: FAILED!`);
+	if (!await emuser.addItem("saved", obj)){
+		com.err(`Add item (uid=${uid}) to emuser.saved: FAILED!`);
 		continue;
 	}
-	if (!await user.delItemByKey("new", uid)){
-		com.err(`Delete item (uid=${uid}) from user.new: FAILED!`);
+	if (!await emuser.delItemByKey("new", uid)){
+		com.err(`Delete item (uid=${uid}) from emuser.new: FAILED!`);
 	}
 }
 };//»
@@ -414,7 +415,7 @@ if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 	com.err("could not load the pager module");
 	return;
 }
-let new_arr = await user.getAll("new");
+let new_arr = await emuser.getAll("new");
 if (!new_arr.length){
 	com.wrn("No new emails!");
 	return;
@@ -453,7 +454,7 @@ Let's do this sequentially, showing the progress of each on the terminal
 await download_and_move_to_saved(out_arr);
 }
 else if (ch==="d"){
-log("Delete from server then from user.new");
+log("Delete from server then from emuser.new");
 }
 term.render();
 //cwarn("GOT UIDS");
@@ -468,7 +469,7 @@ if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 	com.err("could not load the pager module");
 	return;
 }
-let saved_arr = await user.getAll("saved");
+let saved_arr = await emuser.getAll("saved");
 if (!saved_arr.length){
 	com.wrn("No saved emails!");
 	return;
@@ -521,7 +522,7 @@ for (let i=0; i < sels.length; i++){
 }
 if (!out_arr.length) return;
 if (ch==="d"){
-log("Delete from server then from user.saved");
+log("Delete from server then from emuser.saved");
 }
 term.render();
 //cwarn("GOT UIDS");
@@ -665,7 +666,7 @@ await editor.init(use_text, draft_node.fullpath, {
 };//»
 const show_contacts_list = async()=>{//«
 
-let contacts_dir = await user.getContactsDir();
+let contacts_dir = await emuser.getContactsDir();
 if (isStr(contacts_dir)) return com.err(contacts_dir);
 let contacts_kids = contacts_dir.kids;
 let arr=[];
@@ -716,7 +717,7 @@ if (pager.exitChar) return;
 
 let use_contact = objs[pager.y + pager.scroll_num];
 
-let drafts_dir = await user.getDraftsDir();
+let drafts_dir = await emuser.getDraftsDir();
 if (isStr(drafts_dir)) return com.err(drafts_dir);
 let drafts_kids = drafts_dir.kids;
 
@@ -743,7 +744,7 @@ await edit_draft(draft_node);
 };//»
 const show_drafts_list = async()=>{//«
 
-let drafts_dir = await user.getDraftsDir();
+let drafts_dir = await emuser.getDraftsDir();
 if (isStr(drafts_dir)) return com.err(drafts_dir);
 let drafts_kids = drafts_dir.kids;
 let arr=[];
@@ -813,7 +814,7 @@ if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 
 let use_contact = objs[pager.y + pager.scroll_num];
 
-let drafts_dir = await user.getDraftsDir();
+let drafts_dir = await emuser.getDraftsDir();
 if (isStr(drafts_dir)) return com.err(drafts_dir);
 let drafts_kids = drafts_dir.kids;
 
@@ -884,7 +885,7 @@ await editor.init("", draft_path, {
 »*/
 
 //const{term}=com;
-const addr = user.emailAddr;
+const addr = emuser.emailAddr;
 
 const base_imap_url = `/_imap?user=${addr}`;
 const base_smtp_url = `/_smtp?user=${addr}`;
@@ -1381,7 +1382,7 @@ const com_mail = class extends Com{//«
 
 //static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
 static opts={s:{r: 1, u: 3}, l: {user: 3}};
-
+init(){if (!isNodeJS) this.no(E_NEED_NODEJS);}
 async run(){//«
 
 const{args, opts, term, env}=this;
@@ -1403,50 +1404,50 @@ cerr(mess);
 const addr = opts.user || opts.u || env.EMAIL_USER;
 if (!addr) return this.no(`no --user, -u option or 'EMAIL_USER' in the environment!`);
 
-const user = new EmailUser(addr);
+const emuser = new EmailUser(addr);
 
-rv = await user.initMailDir();
-if (!this.checkStrOrTrue(rv, "user.initMailDir")) return;
+rv = await emuser.initMailDir();
+if (!this.checkStrOrTrue(rv, "emuser.initMailDir")) return;
 
 const cmd = args.shift();
 
 if (!cmd){//«
-	if (!await user.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
-	rv = await user.initDB();
+	if (!await emuser.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	rv = await emuser.initDB();
 	if (!rv) return this.no(`could not initialize the database for: ${addr}`);
 
 //SBSNOWP
 //cwarn("Mail REPL here...");
 	this.inf(`Starting mail REPL for: '${addr}'`);
-	rv = await mail_loop(this, user);
+	rv = await mail_loop(this, emuser);
 log("MAIL LOOP RET", rv);
-	user.close();
+	emuser.close();
 	this.ok();
 	return;
 }//»
 
 if (cmd === "init"){//«
 
-	if (await user.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
+	if (await emuser.getUserDir()) return this.no(`the user: '${addr}' has already been initialized`);
 	rv = await term.getch(`Create user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not creating");
-	rv = await user.mkUserDir();
+	rv = await emuser.mkUserDir();
 	if (!this.checkStrOrTrue(rv, "mkUserDir")) return;
-	rv = await user.initDB();
+	rv = await emuser.initDB();
 	if (!rv) return this.no(`could not initialize the object stores for: ${addr}`);
 	this.ok();
 	return;
 
 }//»
 //The remaining commands assume that 'addr' has already been initialized
-if (!await user.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
+if (!await emuser.getUserDir(addr)) return this.no(`the user directory for '${addr}' does not exist!`);
 if (cmd === "del"){//«
 
 	rv = await term.getch(`Delete user: '${addr}'? [y/N]`);
 	if (!(rv==="y"||rv==="Y")) return this.no("not deleting");
 
-	if (!await user.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
-	if (!await user.dropDatabase()) return this.no(`error dropping the database`);
+	if (!await emuser.rmUserDir()) return this.no(`error removing user directory: '${addr}'`);
+	if (!await emuser.dropDatabase()) return this.no(`error dropping the database`);
 	this.ok();
 
 }//»
@@ -1463,16 +1464,19 @@ cwarn("HI CANCEL");
 }//»
 
 const com_imapcon = class extends Com{//«
+	init(){if (!isNodeJS) this.no(E_NEED_NODEJS);}
 	async run(){
 		do_imap_op(this, "connect");
 	}
 };//»
 const com_imapdis = class extends Com{//«
+	init(){if (!isNodeJS) this.no(E_NEED_NODEJS);}
 	async run(){
 		do_imap_op(this, "logout");
 	}
 };//»
 const com_imapgetenvs = class extends Com{//«
+	init(){if (!isNodeJS) this.no(E_NEED_NODEJS);}
 	async run(){
 		let days_ago = this.args.shift();
 		if (!days_ago) return this.no("need a 'days_ago' argument");
@@ -1500,6 +1504,7 @@ this.ok();
 };//»
 
 const com_curaddr = class extends Com{//«
+	init(){if (!isNodeJS) this.no(E_NEED_NODEJS);}
 	async run(){
 		let rv = await fetch('/_env?key=EMAIL_USER');
 		if (!rv.ok) return this.no("EMAIL_USER: not found");
@@ -1507,6 +1512,7 @@ const com_curaddr = class extends Com{//«
 		this.ok();
 	}
 }//»
+
 const com_dblist = class extends Com{//«
 	async run(){
 		for (let db of (await indexedDB.databases())){
@@ -1548,18 +1554,19 @@ const com_mkcontact = class extends Com{//«
 
 static opts = {l: {name: 3, addr: 3, user: 3}, s:{u: 3}};
 
+init(){if (!isNodeJS) this.no(E_NEED_NODEJS);}
 async run(){//«
 
 	const{opts,env}=this;
 	const addr = opts.user || opts.u || env.EMAIL_USER;
 	if (!addr) return this.no(`no --user, -u option or 'EMAIL_USER' in the environment!`);
-	const user = new EmailUser(addr);
-	if (!await user.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
+	const emuser = new EmailUser(addr);
+	if (!await emuser.getUserDir()) return this.no(`the user: '${addr}' has not been initialized`);
 
 	const{name, addr: to_addr} = opts;
 	if (!(name&&to_addr)) return this.no("Need 'name' and 'addr' options!");
 
-	let dir = await user.getContactsDir();
+	let dir = await emuser.getContactsDir();
 	if (isStr(dir)) return this.no(dir);
 	let num = 1;
 	let kids = dir.kids;
