@@ -91,8 +91,11 @@ const {
 	isMobile,
 	dev_mode,
 	admin_mode,
-	EOF
+	EOF,
+	isNodeJS,
+	TERM_STAT_TYPES,
 } = globals;
+const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
 const fsapi = fs.api;
 const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
@@ -202,7 +205,7 @@ globals.ShellMod = new function() {
 
 //Var«
 const shellmod = this;
-const mail_coms=[
+const mail_coms=[/*«*/
 	"mkcontact",
 	"mail",
 	"curaddr",
@@ -211,7 +214,7 @@ const mail_coms=[
 	"imapcon",
 	"imapdis",
 	"imapgetenvs"
-];
+];/*»*/
 const fs_coms=[//«
 	"_purge",
 	"_clearstorage",
@@ -234,7 +237,7 @@ const fs_coms=[//«
 //	"mount",
 //	"unmount",
 ];//»
-const test_coms = [
+const test_coms = [/*«*/
 "pipe",
 "deadpipe",
 "badret",
@@ -247,9 +250,10 @@ const test_coms = [
 "weirdarr",
 "hang",
 "norun"
-]
+]/*»*/
 //const preload_libs={fs: fs_coms, test: test_coms};
-const preload_libs={fs: fs_coms, mail: mail_coms};
+const preload_libs={fs: fs_coms};
+if (isNodeJS) preload_libs.mail = mail_coms;
 
 const OPERATOR_CHARS=[//«
 "|",
@@ -6307,13 +6311,14 @@ this.minTermWid = 15;
 this.maxTabSize = 256;
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
 this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
+/*
 this.stat={
 	none: 0,
 	ok: 1,
 	warning: 2,
 	error: 3
 };
-
+*/
 this.x=0;
 this.y=0;
 this.numCtrlD = 0;
@@ -7179,13 +7184,13 @@ if (num2 > this.w) {
 				let typ = stat_message_type;
 				let bgcol=null;
 				let tcol="#000";
-				if (typ==this.stat.ok) {
+				if (typ==STAT_OK) {
 					bgcol="#070";
 					tcol="#fff";
 				}
-				else if (typ==this.stat.warning) bgcol="#dd6";
-				else if (typ==this.stat.error) {
-					bgcol="#c44";
+				else if (typ==STAT_WARN) bgcol="#dd6";
+				else if (typ==STAT_ERR) {
+					bgcol="#900";
 					tcol="#fff";
 				}
 				if (bgcol) mess = `<span style="color:${tcol};background-color:${bgcol}">${mess}</span>`;

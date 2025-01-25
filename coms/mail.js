@@ -227,7 +227,7 @@ On the server
 »*/
 
 //»
-const E_NEED_NODEJS = "Commands in the 'mail' module requires a Node.js installation!";
+const E_NEED_NODEJS = "Commands in the 'mail' library require a Node.js installation!";
 //Imports«
 
 const {globals}=LOTW;
@@ -238,22 +238,12 @@ const {
 	MAIL_DB_NAME,
 	MAIL_DB_VERNUM,
 	ShellMod,
+	TERM_STAT_TYPES,
 	isNodeJS
 } = globals;
 const{isStr, isNum, isObj, log, jlog, cwarn, cerr, mkdv, make}=util;
 const {Com} = ShellMod.comClasses;
-const STAT_NONE=0;
-const STAT_OK=1;
-const STAT_WARN=2;
-const STAT_ERR=3;
-/*
-this.stat={
-    none: 0,
-    ok: 1,
-    warning: 2,
-    error: 3
-};
-*/
+const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
 
 //»
 

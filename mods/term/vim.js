@@ -1,4 +1,12 @@
+/*1/25/25: When doing Ctrl+p "autocomplete", I don't want the current word«
+included, if there are only one of them. So now @WOLMFGHJ, we are passing in
+an argument to get_all_words, which tests to see (@DJKUYTKM) if the indexOf
+and lastIndexOf values of the given word are the same (which would mean that 
+there is only one occurrence of them).
+»*/
+
 //Historical development notes (and old code) are kept in doc/dev/VIM
+//«Notes
 /*12/29/24: Just did some internal tab detection logic to decide whether it would«
 be safe to determine the "graphical" x position by way of multiplying the number
 of leading tabs by tab size and then adding the rest of the remaining characters.
@@ -8,7 +16,7 @@ cycle.
 »*/
 //12/28/24: BUG: I WASN'T ABLE TO ESCAPE FROM INSERT MODE!?!?!?!?
 /*12/27/24  !!!  IMPORTANT: the 'num_lines' variable  !!!  «
-@ZPLROTUS: Here we are exporing num_lines to the terminal's renderer. This variable 
+@ZPLROTUS: Here we are exporting num_lines to the terminal's renderer. This variable 
 is important because the length of the lines array is different from the logical
 number of lines in the file whenever there are folds. So we need to update this
 variable (like @CKJEPOIL) whenever the logical number of lines changes (rather than
@@ -98,7 +106,6 @@ and using other pathways (in-line with the LOTW system) to do debugging of compl
 objects that are currently output through console.log(...).
 
 »*/
-//«Notes
 /*11/30/24: While doing "visual line select" in "file mode", it gave an«
 error like: "yank_buffer is not iterable" when trying to do a weird
 operation like do_line_wrap, so @WUIOPHMDL, we are checking for the
@@ -171,8 +178,10 @@ const globals = LOTW.globals;
 const{
 dev_mode,
 ShellMod,
+TERM_STAT_TYPES,
 }=globals;
 const{isArr, isStr, isEOF, log, jlog, cwarn, cerr, consoleLog: con}=LOTW.api.util;
+const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
 //const{log:clog, nlog: cnlog}=consoleLog;
 const{fs,FS_TYPE,SHM_TYPE,NS}=globals;
 const fsapi = fs.api;
@@ -185,7 +194,6 @@ const NUM=(v)=>Number.isFinite(v);
 
 
 //»
-
 
 //Vim«
 
@@ -242,17 +250,9 @@ const PREV_DEF_SYMS=["TAB_", "j_C", "v_C", "l_C"];
 //const OK_DIRTY_QUIT = true;
 const OK_DIRTY_QUIT = false;
 const QUIT_WHEN_DIRTY_DEFAULT_YES=true;
-//const QUIT_WHEN_DIRTY_DEFAULT_YES=false;
 
-const STAT_NONE = 0;
-const STAT_OK=1;
-const STAT_WARNING=2;
-const STAT_ERROR=3;
-const UND = undefined;
+const MIN_COMPLETE_WORD_LEN = 4;
 
-//let viewOnly;
-
-//let initial_sha1;
 const MARKS={};
 
 let initial_str;
@@ -629,8 +629,8 @@ const stat_file=(len, chars)=>{//«
 const stat_timer=(mess,ms)=>{setTimeout(()=>{stat(mess)},ms);};
 const set_stat=(mess)=>{stat_message=mess;stat_message_type=null;};
 const set_stat_ok=(mess)=>{stat_message=mess;stat_message_type=STAT_OK;};
-const set_stat_warn=(mess)=>{stat_message=mess;stat_message_type=STAT_WARNING;};
-const set_stat_err=(mess)=>{stat_message=mess;stat_message_type=STAT_ERROR;};
+const set_stat_warn=(mess)=>{stat_message=mess;stat_message_type=STAT_WARN;};
+const set_stat_err=(mess)=>{stat_message=mess;stat_message_type=STAT_ERR;};
 const cancel=()=>{stat_render("Cancelled");};
 const quit=()=>{//«
 	delete this.command_str;
@@ -700,8 +700,8 @@ const curnum = (addx)=>{//«
 }//»
 const cy = curnum;
 const stat_ok=mess=>{stat_message=mess;stat_message_type=STAT_OK;render({},13);};
-const stat_warn=mess=>{stat_message=mess;stat_message_type=STAT_WARNING;render({},14);};
-const stat_err=mess=>{stat_message=mess;stat_message_type=STAT_ERROR;render({},15);};
+const stat_warn=mess=>{stat_message=mess;stat_message_type=STAT_WARN;render({},14);};
+const stat_err=mess=>{stat_message=mess;stat_message_type=STAT_ERR;render({},15);};
 const stat_render=(mess)=>{stat_message=mess;stat_message_type=STAT_NONE;render({},16);};
 const stat = stat_render;
 const is_vis_mode=()=>{//«
@@ -1305,7 +1305,7 @@ const edit_save = async(if_nostat)=>{//«
 			}
 			if (Desk) Desk.make_icon_if_new(node);
 			if (!if_nostat) {
-				if (write_err) stat_message_type = STAT_ERROR;
+				if (write_err) stat_message_type = STAT_ERR;
 				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${ret.size}C written${write_err}`;
 			}
 			else{
@@ -1400,7 +1400,7 @@ const save_as = async name=>{//«
 const err=s=>{//«
 	stat_message = s;
 	try_revert();
-	stat_message_type = STAT_ERROR;
+	stat_message_type = STAT_ERR;
 	x = this.hold_x;
 	render({},82);
 };//»
@@ -1447,7 +1447,7 @@ if (!gotkid) return save_ok(true);
 if (gotkid.writeLocked()){
 	stat_message = `${fname}: the file is write locked`;
 	try_revert();
-	stat_message_type = STAT_ERROR;
+	stat_message_type = STAT_ERR;
 	render();
 	return;
 }
@@ -1881,81 +1881,21 @@ functions outside of this scope.
 //»
 //Symbols/Complete«
 
-/*
-const get_all_words=()=>{//«
-//This just gets words that are not in quotes or comments.
-//Strict quote escaping rules are not enforced, so in quotes, use:
-//\x22 = "
-//\x27 = '
-//\x60 = `
-let qtype;
-let words={};
-//let consts = {};
-//let thiss = {};
-//let lets = {};
-let lns = get_edit_lines();
-for (let arr of lns){//«
-
-if (qtype=="'"||qtype=='"') qtype = null;
-let word;
-let prevword;
-let prevch;
-
-for (let i=0; i < arr.length; i++){
-	let ch1 = arr[i];
-	let ch2 = arr[i+1];
-	let ch3 = arr[i+2];
-	if (qtype){
-		if (qtype=="/*"){
-			if (ch1=="*"&&ch2=="/"){
-				qtype = null;
-				i++;
-			}
-		}
-		else if (ch1==qtype) qtype = null;
-	}
-	else {
-		if (ch1=="/"&&ch2=="/"){
-			break;
-		}
-		if (ch1=="/"&&ch2=="*"){
-			qtype = "/*";
-			i++;
-		}
-		else if (ch1 == '"' || ch1 == "'" || ch1 == "\x60"){
-			qtype=ch1;
-		}
-		else if (ch1.match(/[a-z_]/i)){//«
-			if (word) word+=ch1;
-			else word = ch1;
-		}//»
-		else if(word){//«
-			if (word.length >= MIN_WORD_LEN) {
-				let val = words[word] || 0;
-				words[word]=++val;
-			}
-			prevword = word;
-			prevch = ch1;
-			word = null;
-		}//»
-	}
-}
-
-}//»
-let word_arr = Object.keys(words);
-if (SYMBOL_WORDS) ALLWORDSYMBOLS = word_arr.concat(SYMBOL_WORDS).sort();
-ALLWORDS = word_arr.sort();
-ALLWORDS_HASH=words;
-};//»
-*/
-const get_all_words=()=>{//«
+const get_all_words=(not_this_word)=>{//«
 	let lns = get_edit_save_arr()[0].split("\n");
 	let all=[];
 	for (let ln of lns){
 		let arr = ln.split(/\W+/);
 		all.push(...arr);
 	}
-	ALLWORDS = all.sort().uniq().filter((word)=>word.length>3&&word[0].match(/^[^0-9]/));
+	if (not_this_word){
+		let ind1 = all.indexOf(not_this_word);
+//DJKUYTKM
+		if (ind1 > -1 && (ind1 === all.lastIndexOf(not_this_word))){
+			all.splice(ind1, 1);
+		}
+	}
+	ALLWORDS = all.sort().uniq().filter((word)=>word.length>=MIN_COMPLETE_WORD_LEN&&word[0].match(/^[^0-9]/));
 }//»
 const update_symbols = () => {//«
 	let uselines;
@@ -2102,8 +2042,9 @@ const init_complete_mode=async(opts={})=>{//«
 		}
 		render();
 	};//»
-
-	get_all_words();
+/*
+What is the current word?
+*/
 	let use_x;
 	if (opts.stat)use_x = stat_x;
 	else use_x = x;
@@ -2115,6 +2056,9 @@ const init_complete_mode=async(opts={})=>{//«
 	else x++;
 	let wrd = rv.word;
 	if (!wrd) return;
+//WOLMFGHJ
+	get_all_words(wrd);
+
 //	if (!ALLWORDS) get_all_words();
 	let re = new RegExp("^"+wrd);
 	let usewords;
@@ -2158,7 +2102,7 @@ const init_complete_mode=async(opts={})=>{//«
 		this.stat_input_type = sit_hold;
 		stat_x = stat_x_hold;
 		alt_screen_escape_handler = null;
-		symbol_len = UND;
+		symbol_len = undefined;
 		x=hx;
 		y=hy;
 		fold_mode = hold_fold;
@@ -5482,13 +5426,13 @@ return;
 			if (x > 0 && ln.slice(0,x).join("").match(/^[^\t]+/)){
 				has_internal_tabs = true;
 				stat_message = "Internal tab detected";
-				stat_message_type = STAT_WARNING;
+				stat_message_type = STAT_WARN;
 			}
 		}
 		else if (ln[x]==="\t"){
 			has_internal_tabs = true;
 			stat_message = "Internal tab detected";
-			stat_message_type = STAT_WARNING;
+			stat_message_type = STAT_WARN;
 		}
 	}
 */
@@ -5960,7 +5904,6 @@ const KEY_DOWN_EDIT_FUNCS={//«
 	ENTER_C: nobreak_enter,
 };//»
 const KEY_DOWN_FUNCS={//«
-
 //Edit (must apply Action)
 o_A: create_open_fold,
 c_A: create_closed_fold,
@@ -5979,8 +5922,8 @@ x_CA:()=>{
 	Term.execute_background_command(cur_background_command);
 },
 w_CAS:()=>{//«
-get_all_words();
-cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
+//get_all_words();
+//cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
 },//»
 /*
 s_CAS:()=>{//«
