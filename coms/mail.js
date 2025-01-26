@@ -521,19 +521,15 @@ term.render();
 };//»
 const send_email=async(draft)=>{//«
 
-cwarn("SENDING...");
 let url = `${base_smtp_url}&to=${encodeURIComponent(draft.toContact.address)}&subject=${encodeURIComponent(draft.subject)}`;
-cwarn(url);
-log(draft.bodyText);
-return true;
-
-/*«
-Need to put the user on here
-
-await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(sub)}`, {
-    method:"POST", body: txt
+let rv = await fetch(url, {
+    method:"POST",
+	body: draft.bodyText
 });
-»*/
+if (rv.ok) return true;
+let txt = await rv.text();
+if (!txt) txt = "there was an unspecified SMTP error";
+return txt;
 
 };//»
 const edit_draft = async(draft_node, opts={})=>{//«
@@ -629,13 +625,17 @@ return com.wrn("Cancelled");
 com.wrn("Trying to send...");
 //term.render();
 //Here we are mimicking the 'send' function
-if (!await send_email(draft_val)){
-//	return {mess: "Send error", type: STAT_ERR};
-	return com.err("Send error");
+rv = await send_email(draft_val);
+if (rv === true){}
+else if (isStr(rv)) return com.err(rv);
+else{
+cwarn("Here is the non-true/non-string value");
+log(rv);
+return com.err("What value returned from send_email (not true or Error string)? (see console)");
 }
+
 //Upon successful completion, we need to remove draft_node from MUD/Drafts and
 //put it into MUD/Sent...
-//await util.sleep(1500);
 
 let sent_kids = sent_dir.kids;
 let sent_num = 1;
@@ -643,12 +643,10 @@ while (sent_kids[`${sent_num}`]) {
 	sent_num++;
 }
 if (!await fsapi.comMv([draft_node.fullpath, `${sent_dir.fullpath}/${sent_num}`])){
-//	return {mess: "Sent OK. Failed moving email from 'Drafts' to 'Sent'", type: STAT_ERR};
 com.err("Sent OK. Failed moving email from 'Drafts' to 'Sent'");
 return;
 }
 com.suc("Sent OK");
-//return {mess: "Sent OK", type: STAT_OK};
 
 };//»
 }
@@ -744,7 +742,6 @@ await edit_draft(draft_node);
 
 
 };//»
-
 const show_drafts_list = async()=>{//«
 
 let drafts_dir = await emuser.getDraftsDir();
@@ -786,94 +783,29 @@ if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
 }
 
 let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
-pager.stat_message = `*Drafts menu*  [q]uit or [Enter] to select`;
-pager.exitChars=["q"];
+pager.stat_message = `*Drafts menu*  [q]uit [d]el or [Enter] to edit`;
+pager.exitChars=["q", "d"];
 
-let rv = await pager.init(arr, "*drafts*", {opts:{}, lineSelect: true});
-if (pager.exitChar) return;
+await pager.init(arr, "*drafts*", {opts:{}, lineSelect: true});
+if (pager.exitChar){/*«*/
+	if (pager.exitChar==="q") return;
+	let draft_node = objs[pager.y + pager.scroll_num];
+	let draft = draft_node.data.value;
+
+	let rv = await term.getch(`Really delete: ${draft.toContact.name}: ${draft.subject} (y/N)? `);
+	if (!(rv==="y"||rv==="Y")){
+		com.wrn("Not deleting!");
+		return;
+	}
+	rv = await fsapi.doFsRm([draft_node.fullpath], mess=>{
+cerr(mess);
+	}, {root: true});
+	if (!rv) com.err("there was an error deleting the draft (see console)");
+	return;
+}/*»*/
 await edit_draft(objs[pager.y + pager.scroll_num]);
 
-/*//«
-if (!arr.length){
-com.wrn("No contacts to show!");
-return;
-}
-if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
-	com.err("could not load the pager module");
-	return;
-}
-
-let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
-pager.stat_message = `*Contacts menu*  [q]uit or [Enter] to select`;
-pager.exitChars=["q"];
-
-let rv = await pager.init(arr, "*contacts*", {opts:{}, lineSelect: true});
-if (pager.exitChar) return;
-
-if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
-	com.err("could not load the editor module");
-	return;
-}
-
-let use_contact = objs[pager.y + pager.scroll_num];
-
-let drafts_dir = await emuser.getDraftsDir();
-if (isStr(drafts_dir)) return com.err(drafts_dir);
-let drafts_kids = drafts_dir.kids;
-
-let draft_num = 1;
-while(drafts_kids[`${draft_num}`]){
-	draft_num++;
-}
-
-let draft_path = `${drafts_dir.fullpath}/${draft_num}`
-let draft_obj = {type: "email", value: {
-	subject:"",
-	toContact: use_contact,
-	bodyText:""
-}};
-let draft_node = await fsapi.writeDataFile(draft_path, draft_obj, {newOnly: true});
-if (!draft_node){
-	com.err(`Could not create the new draft (${draft_path})`);
-	return;
-}
-
-let editor = new LOTW.mods[DEF_EDITOR_MOD_NAME](term);
-editor.saveFunc = async (val) => {//«
-	draft_obj.subject="";
-	draft_obj.bodyText="";
-	let arr = val.split("\n");
-	let sub = arr.shift();
-	if (!(sub && sub.match(/\w+/))) return {mess: "Subject not found!", type: STAT_WARN};
-	draft_obj.subject = sub;
-	if (arr.length){
-		let blank = arr.shift();
-		if (!blank.match(/^\s*$/)){
-			return {mess: "Non-blank line found under the subject", type: STAT_ERR};
-		}
-		if (arr.length) {
-			let body = arr.join("\n");
-			draft_obj.bodyText = body;
-		}
-	}
-	if (!await draft_node.setDataValue(draft_obj)){
-		return {mess:"Could not save the draft", type: STAT_ERR};
-	}
-	return {mess: "Saved Okay", type: STAT_OK};
 };//»
-await editor.init("", draft_path, {
-	opts:{},
-	node: draft_node,
-//	node,
-//	type: typ,
-//	command_str,
-//	opts,
-//	symbols,
-});
-»*/
-
-};//»
-
 const show_sent_list = async()=>{//«
 
 let sent_dir = await emuser.getSentDir();
@@ -924,6 +856,7 @@ await edit_draft(objs[pager.y + pager.scroll_num], {noSend: true});
 
 
 };//»
+
 /*«
 	log[i]n
 	log[o]ut
