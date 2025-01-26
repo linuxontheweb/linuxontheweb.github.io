@@ -6645,16 +6645,17 @@ cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
 	}
 }
 //»
-forceNewline(){
+forceNewline(){//«
 	const{lines}=this;
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		this.lineBreak();
 		this.curPromptLine = this.y+this.scrollNum-1;
 	}
 	this.x=0;
-}
+}//»
 async getch(promptarg, def_ch){//«
 	this.forceNewline();
+	this.scrollIntoView();
 	if (promptarg){
 		for (let ch of promptarg) this.handleLetterPress(ch);
 	}
@@ -6667,6 +6668,7 @@ async getch(promptarg, def_ch){//«
 //»
 async readLine(promptarg){//«
 	this.forceNewline();
+	this.scrollIntoView();
 	this.sleeping = false;
 	if (promptarg){
 		this.#readLinePromptLen = promptarg.length;
@@ -7128,6 +7130,10 @@ throw new Error("WUTUTUTU");
 //				let num1 = parseInt(numstr)-x_scroll;
 				let num1 = parseInt(numstr);
 				let obj = colobj[numstr];
+if (obj[0] < 1){
+cwarn("GOT INVALID colobj", obj);
+continue;
+}
 				let num2 = num1 + obj[0]-1;
 				let col = obj[1];
 				let bgcol = obj[2];
@@ -7320,9 +7326,9 @@ if (num2 > this.w) {
 		tabdiv.innerHTML = outarr.join("\n");
 	}
 }//»
-resetXScroll(){
+resetXScroll(){//«
 	this.tabdiv._x=0;
-}
+}//»
 setXScroll(ln, usex){//«
 	const{tabdiv}=this;
 	tabdiv._x=0;
@@ -8569,6 +8575,10 @@ return;
 }
 	if (out == "" && out.isNL){
 		out=" \n ";
+	}
+	else if (out.match(/\n$/)){
+cwarn("Chomping ending NEWLINE!!!");
+		out = out.replace(/\n$/,"");
 	}
 	out = out.split("\n");
 /*«

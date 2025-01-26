@@ -1,4 +1,41 @@
+/*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS @SKPLMJFY. WHEN WE GET ERROR MESSAGES
+BACK FROM THE SERVER.
+The issue is that this is how we were handling errors in the server:
 
+const no = (res, arg) => {
+    res.writeHead(404, {'Content-Type': "text/plain"});
+    if (arg.match(/error/i)) res.end(`${arg}\n`);
+    else if (arg) res.end(`Error: ${arg}\n`);
+    else res.end("Error\n");
+};
+
+And so now I just got rid of the ending newlines:
+
+const no = (res, arg) => {
+    res.writeHead(404, {'Content-Type': "text/plain"});
+    if (arg.match(/error/i)) res.end(`${arg}`);
+    else if (arg) res.end(`Error: ${arg}`);
+    else res.end("Error");
+};
+
+The only reason I can imagine wanted to put a newline there at the end
+is that the response would *actually* end unless there was one there.
+If I put them there (a loooong time ago in a galaxy far far away) for
+some trivial kind of reason related to client-side formatting, then that
+was pretty stupid.
+
+Regardless, the terminal's render mechanism gets all weird when there is a line
+color object that looks like: {0: [0, "#f99"]} ...which means that we are
+starting the coloring (#f99 in this case) at the beginning of the line. But
+instead of the coloring spanning some number (1 or more) characters, this
+tells the renderer to span 0 characters, which leads to...
+
+THe weird result that this entire process ends up creating a coloring span
+that spans as many lines as there are on the screen (but naturally goes away
+when the beginning line scrolls behind the "top" of the terminal screen), so
+that all of the lines will inherit this same coloring scheme.
+
+*/
 //«Notes
 
 /*1/20/25: Notes for email REPL @SBSNOWP«
@@ -526,8 +563,11 @@ let rv = await fetch(url, {
     method:"POST",
 	body: draft.bodyText
 });
-if (rv.ok) return true;
 let txt = await rv.text();
+if (rv.ok) {
+log("OK RESPONSE FROM SERVER:", txt);
+	return true;
+}
 if (!txt) txt = "there was an unspecified SMTP error";
 return txt;
 
@@ -622,12 +662,23 @@ return com.wrn("Cancelled");
 }
 //editor.stat_message = "Trying to send...";
 //editor.stat_message_type = STAT_WARN;
-com.wrn("Trying to send...");
+cwarn("SENDING...");
+com.inf("Sending...");
+//term.scrollIntoView();
 //term.render();
 //Here we are mimicking the 'send' function
 rv = await send_email(draft_val);
 if (rv === true){}
-else if (isStr(rv)) return com.err(rv);
+else if (isStr(rv)) {
+
+//SKPLMJFY
+	com.err(rv);//<---- !!!!! BAD !!!!!
+//	com.err(rv.split("\n")[0]);
+
+//	term.scrollIntoView();
+//	term.render();
+	return 
+}
 else{
 cwarn("Here is the non-true/non-string value");
 log(rv);
@@ -662,7 +713,7 @@ await editor.init(use_text, draft_node.fullpath, {
 	opts:{},
 	node: draft_node,
 });
-
+log("EDITOR DONE!");
 };//»
 const show_contacts_list = async()=>{//«
 
@@ -856,7 +907,6 @@ await edit_draft(objs[pager.y + pager.scroll_num], {noSend: true});
 
 
 };//»
-
 /*«
 	log[i]n
 	log[o]ut
@@ -882,6 +932,7 @@ let num_invalid = 0;
 help();
 while(true){
 //log("UM HELLO MAIL...");
+
 	let rv = await term.getch("mail> ");
 	term.lineBreak();
 	if (!OK_CHARS.includes(rv)){

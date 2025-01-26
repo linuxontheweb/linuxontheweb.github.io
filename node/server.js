@@ -71,9 +71,9 @@ const ok = (res, mime) => {//«
 };//»
 const no = (res, arg) => {//«
 	res.writeHead(404, {'Content-Type': "text/plain"});
-	if (arg.match(/error/i)) res.end(`${arg}\n`);
-	else if (arg) res.end(`Error: ${arg}\n`);
-	else res.end("Error\n");
+	if (arg.match(/error/i)) res.end(`${arg}`);
+	else if (arg) res.end(`Error: ${arg}`);
+	else res.end("Error");
 };//»
 const text_mime = ()=>{return EXT_TO_MIME.txt}
 //»

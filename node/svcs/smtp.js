@@ -40,6 +40,9 @@ const sendMail = async(opts={})=>{
 	opts.from = USER;
 	const send=()=>{
 		return new Promise((Y,N)=>{
+//log(opts);
+//Y({error: "If this is the thing in the time of the place, thennnnn......"});
+//return;
 			transporter.sendMail(opts, (error, info) => {
 				if (error) {
 					let s = error.toString();
