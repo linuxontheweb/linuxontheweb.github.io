@@ -1,41 +1,3 @@
-/*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS @SKPLMJFY. WHEN WE GET ERROR MESSAGES
-BACK FROM THE SERVER.
-The issue is that this is how we were handling errors in the server:
-
-const no = (res, arg) => {
-    res.writeHead(404, {'Content-Type': "text/plain"});
-    if (arg.match(/error/i)) res.end(`${arg}\n`);
-    else if (arg) res.end(`Error: ${arg}\n`);
-    else res.end("Error\n");
-};
-
-And so now I just got rid of the ending newlines:
-
-const no = (res, arg) => {
-    res.writeHead(404, {'Content-Type': "text/plain"});
-    if (arg.match(/error/i)) res.end(`${arg}`);
-    else if (arg) res.end(`Error: ${arg}`);
-    else res.end("Error");
-};
-
-The only reason I can imagine wanted to put a newline there at the end
-is that the response would *actually* end unless there was one there.
-If I put them there (a loooong time ago in a galaxy far far away) for
-some trivial kind of reason related to client-side formatting, then that
-was pretty stupid.
-
-Regardless, the terminal's render mechanism gets all weird when there is a line
-color object that looks like: {0: [0, "#f99"]} ...which means that we are
-starting the coloring (#f99 in this case) at the beginning of the line. But
-instead of the coloring spanning some number (1 or more) characters, this
-tells the renderer to span 0 characters, which leads to...
-
-THe weird result that this entire process ends up creating a coloring span
-that spans as many lines as there are on the screen (but naturally goes away
-when the beginning line scrolls behind the "top" of the terminal screen), so
-that all of the lines will inherit this same coloring scheme.
-
-*/
 //«Notes
 
 /*1/20/25: Notes for email REPL @SBSNOWP«
@@ -313,7 +275,8 @@ const do_imap_op = async(com, op, opts={}) => {//«
 	let is_ok = rv.ok;
 	let txt = await rv.text();
 	if (!is_ok) {
-		com.no(txt.split("\n")[0]);
+//		com.no(txt.split("\n")[0]);
+		com.no(txt);
 		return false;
 	}
 	if (opts.retOnly) return txt;
@@ -393,7 +356,8 @@ const do_get = async(url, opts={})=>{//«
 	let is_ok = rv.ok;
 	let txt = await rv.text();
 	if (!is_ok) {
-		com.err(txt.split("\n")[0]);
+//		com.err(txt.split("\n")[0]);
+		com.err(txt);
 	}
 	else if (opts.isSuc){
 		com.suc(txt);
@@ -672,8 +636,8 @@ if (rv === true){}
 else if (isStr(rv)) {
 
 //SKPLMJFY
-	com.err(rv);//<---- !!!!! BAD !!!!!
-//	com.err(rv.split("\n")[0]);
+	com.err(rv);//<---- !!!!! (WAS) BAD (Because the server was sending an ending newline, and the renderer was choking on the combination of color objects with length = 0 and lines of 0 length...) !!!!!
+//	com.err(rv.split("\n")[0]);//<--- Don't need to do this anymore
 
 //	term.scrollIntoView();
 //	term.render();

@@ -1,3 +1,61 @@
+/*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
+WHEN WE GET ERROR MESSAGES BACK FROM THE SERVER.
+The issue is that this is how we were handling errors in the server:
+
+const no = (res, arg) => {
+    res.writeHead(404, {'Content-Type': "text/plain"});
+    if (arg.match(/error/i)) res.end(`${arg}\n`);
+    else if (arg) res.end(`Error: ${arg}\n`);
+    else res.end("Error\n");
+};
+
+And so now I just got rid of the ending newlines:
+
+const no = (res, arg) => {
+    res.writeHead(404, {'Content-Type': "text/plain"});
+    if (arg.match(/error/i)) res.end(`${arg}`);
+    else if (arg) res.end(`Error: ${arg}`);
+    else res.end("Error");
+};
+
+The only reason I can imagine wanted to put a newline there at the end
+is that the response would *actually* end unless there was one there.
+If I put them there (a loooong time ago in a galaxy far far away) for
+some trivial kind of reason related to client-side formatting, then that
+was pretty stupid.
+
+Regardless, the terminal's render mechanism gets all weird when there is a line
+color object that looks like: {0: [0, "#f99"]} ...which means that we are
+starting the coloring (#f99 in this case) at the beginning of the line. But
+instead of the coloring spanning some number (1 or more) characters, this
+tells the renderer to span 0 characters, which leads to...
+
+THe weird result that this entire process ends up creating a coloring span
+that spans as many lines as there are on the screen (but naturally goes away
+when the beginning line scrolls behind the "top" of the terminal screen), so
+that all of the lines will inherit this same coloring scheme.
+
+Now there are 3 different mechanisms in place to stop this off-putting
+result from happening. 
+
+1) As mentioned above, the server is no longer responding with ending newlines.
+
+2) The terminal's response method does this test on the string:
+
+	else if (out.match(/\n$/)){
+cwarn("Chomping ending NEWLINE!!!");
+		out = out.replace(/\n$/,"");
+	}
+
+3) The terminal's render method checks that the color object's "how many 
+characters to span" number is at no less than 1:
+
+if (obj[0] < 1){
+cwarn("GOT INVALID colobj", obj);
+continue;
+}
+
+»*/
 /*1/22/25 BUG @ZOPIRUTKS: The 'fname' argument to normPath was a Word object, «
 so this failed with Error: "path.match is not a function".  This error was caught 
 by the try/catch @LSPOEIRK, and was only printed in red on the terminal (rather than 
