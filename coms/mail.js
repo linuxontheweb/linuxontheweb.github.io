@@ -536,7 +536,7 @@ await fetch(`/_smtp?to=${encodeURIComponent(to)}&subject=${encodeURIComponent(su
 »*/
 
 };//»
-const edit_draft = async(draft_node)=>{//«
+const edit_draft = async(draft_node, opts={})=>{//«
 
 if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 	com.err("could not load the editor module");
@@ -566,13 +566,22 @@ const validate_draft = val => {//«
 	}
 	return true;
 };//»
+if (!opts.noSend) {
 editor.sendFunc = async(val) => {//«
-	let rv = validate_draft(val);
-	if (rv !== true) return rv;
-	if (!(draft_val.subject.match(/\w/)&&draft_val.bodyText.match(/\w/))){
-		return {mess: "Invalid email", type: STAT_ERR}
-	}
-/*
+
+let rv = validate_draft(val);
+if (rv !== true) return rv;
+if (!(draft_val.subject.match(/\w/)&&draft_val.bodyText.match(/\w/))){
+//	return {mess: "Invalid email", type: STAT_ERR}
+	return com.err("Invalid email");
+}
+let sent_dir = await emuser.getSentDir();
+if (isStr(sent_dir)) {
+	return com.err(sent_dir);
+}
+//return {mess: sent_dir, type: STAT_ERR};
+
+/*«
 
 Pop up a window with...
 To: Name <address>
@@ -589,12 +598,7 @@ We can do some kind of an "EmailConf" application that renders all of this,
 and has "Send" and "Cancel" buttons. So we will need to await either one
 of the buttons here...
 
-*/
-//cwarn("SEND");
-//log(draft_val);
-//log(`Subject: <${draft_val.subject}>`);
-
-//log(util.linesToParas(draft_val.bodyText.split("\n"), {skipNLs: true}));
+»*/
 
 let body_arr = util.linesToParas(draft_val.bodyText.split("\n"));
 let div = mkdv();
@@ -617,29 +621,37 @@ div.appendChild(bodylabdiv);
 div.appendChild(bodydiv);
 
 if (!await LOTW.api.widgets.popyesno(div,{title: "Send this email?", veryBig: true})){
-	return {mess: "Cancelled", type: STAT_WARN};
+//	return {mess: "Cancelled", type: STAT_WARN};
+return com.wrn("Cancelled");
 }
-editor.stat_message = "Trying to send...";
-editor.stat_message_type = STAT_WARN;
-term.render();
+//editor.stat_message = "Trying to send...";
+//editor.stat_message_type = STAT_WARN;
+com.wrn("Trying to send...");
+//term.render();
 //Here we are mimicking the 'send' function
 if (!await send_email(draft_val)){
-	return {mess: "Send error", type: STAT_ERR};
+//	return {mess: "Send error", type: STAT_ERR};
+	return com.err("Send error");
 }
 //Upon successful completion, we need to remove draft_node from MUD/Drafts and
 //put it into MUD/Sent...
 //await util.sleep(1500);
 
-//log("GOT",rv);
-	return {mess: "Send OK", type: STAT_OK};
+let sent_kids = sent_dir.kids;
+let sent_num = 1;
+while (sent_kids[`${sent_num}`]) {
+	sent_num++;
+}
+if (!await fsapi.comMv([draft_node.fullpath, `${sent_dir.fullpath}/${sent_num}`])){
+//	return {mess: "Sent OK. Failed moving email from 'Drafts' to 'Sent'", type: STAT_ERR};
+com.err("Sent OK. Failed moving email from 'Drafts' to 'Sent'");
+return;
+}
+com.suc("Sent OK");
+//return {mess: "Sent OK", type: STAT_OK};
+
 };//»
-/*
-Want to have a persistent message (for normal mode) on the bottom?
-
-//editor.persistent_message = "Ctrl+Alt+Shift+s to send";
-*/
-//editor.stat_message = `*saved* [q]uit [d]el`;
-
+}
 editor.saveFunc = async (val) => {//«
 	let rv = validate_draft(val);
 	if (rv !== true) return rv;
@@ -732,6 +744,7 @@ await edit_draft(draft_node);
 
 
 };//»
+
 const show_drafts_list = async()=>{//«
 
 let drafts_dir = await emuser.getDraftsDir();
@@ -861,6 +874,56 @@ await editor.init("", draft_path, {
 
 };//»
 
+const show_sent_list = async()=>{//«
+
+let sent_dir = await emuser.getSentDir();
+if (isStr(sent_dir)) return com.err(sent_dir);
+let sent_kids = sent_dir.kids;
+let arr=[];
+let objs=[];
+for (let key in sent_kids){
+	if (!key.match(/^\d+$/)) continue;
+
+	let node = sent_kids[key];
+	if (node.isData!==true){
+		com.wrn(`Skipping non-data node: '${key}'`);
+		continue;
+	}
+	let data = node.data;
+	if (data.type!=="email"){
+		com.wrn(`Skipping data node type != "email": '${key}'`);
+		continue;
+	}
+	let val = data.value;
+	if (!isObj(data.value) && isStr(val.subject) && isStr(val.bodyText) && isObj(val.toContact)){
+		com.wrn(`Skipping invalid email node: '${key}'`);
+		continue;
+	}
+	let ln1 = val.bodyText.split("\n")[0];
+	let str = `${val.toContact.name}) ${val.subject}: ${ln1}`;
+	arr.push(str.slice(0, term.w));
+	objs.push(node);
+}
+
+if (!arr.length){
+	com.wrn("No sent emails to show!");
+	return;
+}
+if (!await util.loadMod(DEF_PAGER_MOD_NAME)) {
+	com.err("could not load the pager module");
+	return;
+}
+
+let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);
+pager.stat_message = `*Sent menu*  [q]uit or [Enter] to select`;
+pager.exitChars=["q"];
+
+let rv = await pager.init(arr, "*sent*", {opts:{}, lineSelect: true});
+if (pager.exitChar) return;
+await edit_draft(objs[pager.y + pager.scroll_num], {noSend: true});
+
+
+};//»
 /*«
 	log[i]n
 	log[o]ut
@@ -885,7 +948,7 @@ const OK_CHARS=["i","o","q","u","n","s","c","d","t","h"];
 let num_invalid = 0;
 help();
 while(true){
-
+//log("UM HELLO MAIL...");
 	let rv = await term.getch("mail> ");
 	term.lineBreak();
 	if (!OK_CHARS.includes(rv)){
@@ -921,7 +984,7 @@ while(true){
 		await show_drafts_list();
 	}
 	else if (rv==="t"){
-com.wrn("SHOW SENT SCREEN...");
+		await show_sent_list();
 	}
 	else {
 		com.wrn(`Got command: ${rv}`);
@@ -1095,7 +1158,7 @@ cerr(mess);
 async getUserDir(){//«
 	return await (`${this.#mailDataPath}/${this.emailAddr}`).toNode();
 }//»
-async getSomeDir(which){/*«*/
+async getSomeDir(which){//«
 	let path = `${this.#mailDataPath}/${this.emailAddr}/${which}`;
 	let dir = await path.toNode({doPopDir: true});
 	if (!dir){
@@ -1105,9 +1168,10 @@ async getSomeDir(which){/*«*/
 		return `'${which}' is not a directory!`;
 	}
 	return dir;
-}/*»*/
+}//»
 getContactsDir(){return this.getSomeDir("Contacts");}
 getDraftsDir(){return this.getSomeDir("Drafts");}
+getSentDir(){return this.getSomeDir("Sent");}
 
 async dropDatabase(){//«
 	return new Promise((Y,N)=>{

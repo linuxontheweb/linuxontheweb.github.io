@@ -1349,8 +1349,12 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 		let rv = await this.saveFunc(val);
 		stat_message = rv.mess;
 		stat_message_type = rv.type||STAT_NONE;
-		render();
+		if (rv.type===STAT_OK){
+			dirty_flag = false;
+			Term.is_dirty = false;
+		}
 		is_saving = false;
+		render();
 		return;
 	}
 	let opts={retObj: true};
@@ -5959,21 +5963,31 @@ cerr(e);
 },//»
 */
 s_CAS:async()=>{
-//cwarn("EDITOR.SEND???");
-if (!vim.sendFunc) return;
-
+if (!vim.sendFunc) {
+	stat_warn("Sending not enabled");
+	return;
+}
+if (Term.is_dirty) {
+	stat_warn("Please save before sending!");
+	return;
+}
 let arr = get_edit_save_arr();
 if (detect_fold_error(arr)) {
 	return;
 }
-let val = arr[0];
+edit_fobj.unlockFile();
+delete Term.curEditNode;
+edit_fobj = null;
+await vim.sendFunc(arr[0]);
+quit();
+
+/*
 let rv = await vim.sendFunc(val);
 if (!(rv && isStr(rv.mess))) return;
 stat_message = rv.mess;
 stat_message_type = rv.type||STAT_NONE;
 render();
-//log("RV", rv);
-
+*/
 },
 //Init/Toggle modes
 p_C: init_complete_mode,
