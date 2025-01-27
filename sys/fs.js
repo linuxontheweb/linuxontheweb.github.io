@@ -405,8 +405,6 @@ const sleep = ()=>{return new Promise((Y,N)=>{});};
 const NOOP=()=>{};
 const FATAL=s=>{throw new Error(s);};
 
-let move_icon_by_path = NOOP;
-
 String.prototype.regpath = function(if_full) {//«
     let str = this;
     if (if_full) str = "/" + str;
@@ -1364,7 +1362,7 @@ for (let arr of mvarr) {//«
 			}
 		}
 		gotfrom = null;
-		await move_icon_by_path(gotfrom, gotto, app, {
+		await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
 			node: newnode,
 			icon: fromicon,
 			win: towin
@@ -1396,7 +1394,7 @@ for (let arr of mvarr) {//«
 cwarn("DELETE node.appName", node.appName);
 			delete node.appName;
 		}
-		await move_icon_by_path(gotfrom, gotto, app, {
+		await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
 			node,
 			icon: fromicon,
 			win: towin
