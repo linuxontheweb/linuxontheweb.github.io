@@ -1562,7 +1562,7 @@ const writeFile = async(path, val, opts = {}) => {//«
 	if (root_dirs.includes(rootdir)||path.match(/\/dev\/shm/)){
 		let node = await saveFsByPath(path, val, opts);
 		if (!(exists || opts.noMakeIcon)) {
-			move_icon_by_path(null, path, node.appName, {node});
+			NS.Desk.move_icon_by_path(null, path, node.appName, {node});
 		}
 		return node;
 	}
