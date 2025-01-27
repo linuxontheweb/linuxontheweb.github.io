@@ -1629,7 +1629,7 @@ this.shell.fatal("Non-numerical return value");
 		}
 	}
 	if (this.fallback){
-		rv = await this.shell.executeStatements2(this.fallback, opts)
+		let rv = await this.shell.executeStatements2(this.fallback, opts)
 		if (this.shell.cancelled) return;
 		return this.end(rv);
 	}
