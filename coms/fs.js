@@ -800,8 +800,11 @@ async init(){
 	for (let ln of arr){
 		if (is_term) {
 			if (marr = re.exec(ln)) {
-				let obj = this.fmtColLn(ln, marr.index, marr[0].length, "#f99");
-				this.out(obj.lines.join("\n"), {colors: obj.colors, didFmt: true});
+				if (!marr[0].length) this.out(ln);//This apparently matched an empty string
+				else{
+					let obj = this.fmtColLn(ln, marr.index, marr[0].length, "#f99");
+					this.out(obj.lines.join("\n"), {colors: obj.colors, didFmt: true});
+				}
 			}
 		}
 		else{

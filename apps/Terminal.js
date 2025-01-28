@@ -1,16 +1,17 @@
-/*1/28/25: In com_read, there was, first, an error because the command expected
-'stdin' to be an array, but it was really a string, due to recent changes. Then we 
-made it an array by splitting the 'stdin' string on newlines in com_read @XDUITOYL, 
-but this made the command:
+/*1/28/25: In com_read, there was, at first, an *error* because the command expected
+'stdin' to be an array (it wanted to do stdin.shift()), but it was really a string, 
+due to recent changes. Then we *did* make it an array by splitting the 'stdin' string 
+on newlines in com_read @XDUITOYL, but this made the command:
 
 ~$ { while read line; do echo HERE IS A LINE: $line; done; } < SOMEFILE.txt
 
-...do an infinite loop, since we kept on splitting the same constant string. Then
-I tried to hunt down the proper place to create a stdinLns arg, which turned out to
-be in the area of VOPDUKKD (in shell.executePipeline2). Then the stdinLns arg finally
-gets passed into the appropriate command in shell.makeCommand. This is all still
-pretty complicated, and there should probably be some more refactoring (plus lots of 
-testing).
+...do an infinite loop, since we kept on splitting the same constant string for
+every time the read command was invoked in the while loop. Then I tried to hunt
+down the proper place to create a stdinLns arg (i.e. an array, which is what the
+'stdin' parameter previously was), which turned out to be in the area of VOPDUKKD (in
+shell.executePipeline2). Then the stdinLns arg finally gets passed into the
+appropriate command in shell.makeCommand. This is all still pretty complicated,
+and there should probably be some more refactoring (plus lots of testing).
 
 */
 /*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
@@ -1651,6 +1652,11 @@ constructor(shell, opts, list){
 	this.list = list;
 }
 async run(){//«
+//log("FUNC?",this.isFunc);
+	if (this.isFunc){
+		this.opts.scriptArgs = this.args.slice();
+		this.opts.scriptName = "sh";
+	}
 	let rv = await this.shell.executeStatements2(this.list, this.opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
@@ -1790,6 +1796,10 @@ async init(){//«
 	let func;
 	if (typ==="brace_group"){
 		func = (shell, args, opts, com_env) => { 
+//log("ARGS???", args);
+//log(opts);
+//opts = sdup(opts);
+//opts.args = args;
 			let com = new BraceGroupCom(shell, opts, dup(this.com));
 			com.args = args;
 			return com;
@@ -1929,6 +1939,15 @@ run(){
 //YWPOEKRN
 //XXXXXXXXXXXX
 
+const com_shift = class extends Com{//«
+	run(){
+		if (!this.scriptArgs) {
+			return this.no("no scriptArgs!");
+		}
+		this.scriptArgs.shift();
+		this.ok();
+	}
+}//»
 const com_brackettest = class extends Com{//«
 init(){
 	if (!this.args.length || this.args.pop() !=="]") return this.no("missing ']'");
@@ -2617,7 +2636,7 @@ async run(){
 
 
 this.defCommands={//«
-
+shift: com_shift,
 "[": com_brackettest,
 workman: com_workman,
 bindwin: com_bindwin,
@@ -2750,7 +2769,7 @@ const ErrorHandler = class {
 	};//»
 
 };//»
-/*Token Classes (Words, Quotes, Subs)«*/
+//Token Classes (Words, Quotes, Subs)«
 
 const Sequence = class {//«
 	constructor(start, env){
@@ -3130,26 +3149,26 @@ dup(){//«
 const ParamSub = class extends Sequence{//«
 
 //KLSDHSKD
-expand(shell, term, opts){/*«*/
+expand(shell, term, opts){//«
 const{env,scriptName, scriptArgs}=opts;
+//cwarn("PARAM", scriptName, scriptArgs);
 //expand(shell, term, env, scriptName, scriptArgs){
-for (let ch of this.val){
-if (!isStr(ch)){
-//log(this.val.toString());
-throw new Error("sh: bad substitution");
-}
-}
+	for (let ch of this.val){
+		if (!isStr(ch)){
+			throw new Error("sh: bad substitution");
+		}
+	}
 	let s = this.val.join("");
 	let marr;
 	if (s.match(/^[_a-zA-Z]/)){
 		return env[s]||"";
 	}
-	if (marr = s.match(/^([1-9])$/)){/*«*/
+	if (marr = s.match(/^([1-9])$/)){//«
 		if (!scriptName) return "";
 		let n = parseInt(marr[1])-1;
 		return scriptArgs[n]||"";
-	}/*»*/
-	if (SPECIAL_SYMBOLS.includes(s)){/*«*/
+	}//»
+	if (SPECIAL_SYMBOLS.includes(s)){//«
 		if (s==="0"){
 			return scriptName||"sh";
 		}
@@ -3162,11 +3181,11 @@ throw new Error("sh: bad substitution");
 			return scriptArgs.length+"";
 		}
 		return s;
-	}/*»*/
+	}//»
 cwarn("HERE IS THE WEIRD PARAM SUB...");
 log(s);
 throw new Error("WHAT KIND OF PARAM SUB IS THIS???");
-}/*»*/
+}//»
 dup(){//«
 	let param = new ParamSub(this.start, this.par, this.env);
 	let arr = param.val;
@@ -3235,7 +3254,7 @@ this.seqClasses={
 	Sequence, Newlines, Word, SQuote, DSQuote, DQuote, BQuote, ParamSub, ComSub, MathSub
 }
 
-/*»*/
+//»
 //Scanner«
 
 //These 2 functions are "holdover" logic from esprima, which seems too "loose" for 
@@ -5894,7 +5913,9 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		command_str: this.commandStr,
 		shell: this,
 		envPipeInCb,
-		envRedirLines
+		envRedirLines,
+		scriptArgs,
+		scriptName,
 	}//»
 	if (!name) {
 		return new NoCom();
@@ -5949,6 +5970,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		if (isStr(com)) return com;
 	}//»
 	if (term.funcs[usecomword]){
+com_env.isFunc = true;
 let func = term.funcs[usecomword](this, arr, opts, com_env);
 func.isFunc = true;
 return func;
@@ -6049,8 +6071,9 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 
 //DNGZXER
 		let in_redir, out_redir;
-		let redirs = com.redirs;
+		let redirs = com.redirs||[];
 //log(com);
+//log(redirs);
 		for (let red of redirs){
 			if (red.isStdin) in_redir = red;
 			else if (red.isStdout) out_redir = red;
