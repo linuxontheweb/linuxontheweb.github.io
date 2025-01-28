@@ -794,9 +794,20 @@ async init(){
 		return;
 	}
 	else arr = val;	
+
+	let is_term = this.isTermOut();
+	let marr;
 	for (let ln of arr){
-		if (re.test(ln)) {
-			this.out(ln);
+		if (is_term) {
+			if (marr = re.exec(ln)) {
+				let obj = this.fmtColLn(ln, marr.index, marr[0].length, "#f99");
+				this.out(obj.lines.join("\n"), {colors: obj.colors, didFmt: true});
+			}
+		}
+		else{
+			if (re.test(ln)) {
+				this.out(ln);
+			}
 		}
 	}
 }

@@ -1462,6 +1462,9 @@ log(num);
 		}
 		this.resp(val, opts);
 	}//»
+	isTermOut(){
+		return !(this.redirLines || this.envRedirLines || this.nextCom || this.envPipeInCb || this.scriptOut || this.subLines);
+	}
 	err(str, opts={}){
 		opts.isErr=true;
 		this.resp(str, opts);
@@ -1501,6 +1504,56 @@ log(val);
 		else this.no(mess);
 		return false;
 	}//»
+	fmtColLn(ln, ind, len, col){//«
+/*This takes as arguments:
+1) An unformatted line, which may take up many lines upon being output to the terminal
+2) An index into the line where the color value begins
+3) The length (number of chars) that the color spans
+4) The color to use
+
+This is used by grep to indicate the matched substring of a line that might possibly
+be wrapped when output onto the terminal
+*/
+		let to_ind = ind+len;
+		let lnarr = this.term.fmt(ln);
+		let cols=[];
+		let did_chars = 0;
+		let got_start;
+		let got_end;
+//		let use_col = "#f99";
+		for (let i=0; i < lnarr.length; i++){
+			let ln = lnarr[i];
+			let lnlen = ln.length;
+			if (!got_start) {
+				if (ind >= did_chars && ind < did_chars+lnlen){
+					got_start = true;
+					let from = ind-did_chars;
+					if (to_ind < did_chars+lnlen){
+						got_end = true;
+						cols.push({[from]: [len, col]});
+					}
+					else{
+						cols.push({[from]: [to_ind-from, col]});
+					}
+				}
+			}
+			else if (!got_end){
+				if (to_ind < did_chars+lnlen){
+					got_end = true;
+					cols.push({0: [to_ind-did_chars, col]});
+				}
+				else{
+					cols.push({0: [lnlen, col]});
+				}
+			}
+			else{
+				cols.push({});
+			}
+			did_chars += ln.length;
+		}
+		return {lines: lnarr, colors: cols};
+	}//»
+
 }//»
 const ScriptCom = class extends Com{//«
 	constructor(shell, name, text, args, env){
@@ -2012,12 +2065,12 @@ const com_echodelay = class extends Com{//«
 }//»
 const com_ls = class extends Com{//«
 
-init(){
+init(){//«
 	let {opts, args}=this;
 	if (!args.length) args.push("./");
 	this.optAll = opts.all||opts.a;
 	this.optRecur = opts.recursive || opts.R;
-}
+}//»
 async run(){//«
 	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
 	const{pipeTo, isSub, term, args} = this;
@@ -2027,7 +2080,7 @@ async run(){//«
 	const err=(...args)=>{
 		this.err(...args);
 	};
-	let no_fmt = pipeTo|| isSub;
+	let is_term = this.isTermOut();
 	let nargs = args.length;
 	let dir_was_last = false;
 	let all = this.optAll;
@@ -2100,10 +2153,7 @@ async run(){//«
 			}
 		}
 		dir_arr = dir_arr.sort();
-		if (no_fmt) {
-			out(dir_arr.join("\n"));
-		}
-		else {//«
+		if (is_term) {//«
 			for (let nm of dir_arr){
 				let n = kids[nm];
 				if (nm.match(/\x20/)){
@@ -2130,6 +2180,9 @@ async run(){//«
 				else out(ret.join("\n"), {didFmt: true});
 			}
 		}//»
+		else {
+			out(dir_arr.join("\n"));
+		}
 		if (recur) {
 			for (let dir of recur_dirs) await do_path(dir);
 		}
@@ -4046,7 +4099,9 @@ eol(){//«
 eos(){//end-of-script«
 	return (!this.isInteractive && this.tokNum === this.numToks);
 }//»
-unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
+unexp(tok){
+	this.fatal(`syntax error near unexpected token '${tok.toString()}'`);
+}
 unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
 end(){//«
 //SLKIURUJ
@@ -4190,36 +4245,6 @@ eatRedirects(){//«
 	}
 	return list;
 }//»
-/*
-eatRedirects(){//«
-//	const{toks}=this;
-//	const toks = this.tokens;
-	let err = this.fatal;
-	let tok = this.curTok();
-	let list=[];
-	while(tok && tok.isRedir){
-		let rop = tok;
-if (rop.isHeredoc){
-//XPJSKLAJ
-cwarn("SKIPPING THIS HEREDOC...");
-log(rop.value);
-}
-else {
-		this.tokNum++;
-		let fname = this.tokens[this.tokNum];
-		if (!fname) err("syntax error near unexpected token 'newline'");
-		if (!fname.isWord) err(`syntax error near unexpected token '${fname.toString()}'`);
-		if (!fname.isChars) err(`wanted characters only in the filename`);
-		list.push({redir: [rop, fname], isRedir: true, dup:()=>{
-			return {redir: [rop, fname.dup()], isRedir: true};
-		}});
-}
-		this.tokNum++;
-		tok = this.curTok();
-	}
-	return list;
-}//»
-*/
 async parseList(seq_arg){//«
 	let seq = seq_arg || [];
 	let andor = await this.parseAndOr();
@@ -6227,7 +6252,10 @@ async devexecute(command_str, opts){//«
 	catch(e){
 //LSPOEIRK
 cerr(e);
-term.response(e.message,{isErr: true});
+//log(e.message);
+let mess = e.message;
+if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
+term.response(mess,{isErr: true});
 	}
 //	term.response_end();
 
@@ -8672,14 +8700,14 @@ propagating through the pipeline).
 //The two fatal results are major bugs, and should be treated "calamitously"
 		if (!didFmt){
 			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
-			Win._fatal(e);
+			this.Win._fatal(e);
 			throw e;
 		}
 		if (colors.length !== out.length){
 log("response lines",out);
 log("response colors",colors);
 			let e = new Error(`The output array and colors array are not equal length!`);
-			Win._fatal(e);
+			this.Win._fatal(e);
 			throw e;
 		}
 
@@ -8717,8 +8745,6 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 		let arr;
 		if (pretty) arr = this.fmt2(ln);
 		else arr = this.fmt(ln);
-//cwarn("ARR");
-//log(arr);
 		for (let l of arr){
 			use_lines[curnum] = l.split("");
 			if (use_color) use_line_colors[curnum] = {0: [l.length, use_color]};
@@ -8909,7 +8935,7 @@ handleBackspace(){//«
 			if (this.lines[this.cy()].length < this.w) {//«
 				let char_arg = this.lines[this.cy()][0];
 				if (char_arg) {
-					check_line_len(-1);
+					this.checkLineLen(-1);
 					is_zero = true;
 					this.lines[this.cy()].splice(this.x, 1);
 					this.lines[this.cy()-1].pop();
@@ -8923,7 +8949,7 @@ handleBackspace(){//«
 					this.lines.splice(this.cy(), 1);
 					this.y--;
 					this.x=this.lines[this.cy()].length;
-					check_line_len();
+					this.checkLineLen();
 					this.render();
 					return;
 				}
@@ -9087,6 +9113,7 @@ handleLetterPress(char_arg, if_no_render){//«
 	this.x = usex;
 	this.y = usey;
 	dounshift(lines);
+	this.scrollIntoView();
 	if (!if_no_render) this.render();
 	this.textarea.value = "";
 }
