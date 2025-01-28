@@ -391,7 +391,7 @@ log(val);
 		symbols,
 	});
 }//»
-async run(){/*«*/
+async run(){//«
 	await this.awaitCb;
 	if (this.pipeTo || this.opts["force-stdout"]){
 		this.out(this.editor.get_lines({str: true}).join("\n"));
@@ -401,17 +401,19 @@ async run(){/*«*/
 		this.redirLines.push(...lns);
 	}
 	this.ok();
-}/*»*/
-pipeIn(val){/*«*/
+}//»
+pipeIn(val){//«
 	if (this.killed) return;
 	if (this.#noPipe) return;
 	this.editor.addLines(val);
-}/*»*/
-cancel(){
+}//»
+cancel(){//«
+//This method is never invoked because vim eats up the ^C that *would* cancel it
 //this.killed = true;
-this.editor.quit();
-this.ok();
-}
+//this.editor.quit();
+//this.ok();
+}//»
+
 }//»
 
 /*«The algorithm for LOTW's 'cat'
@@ -454,6 +456,7 @@ const com_cat = class extends Com{//«
 			let ln = await this.term.readLine();
 			this.out(ln);
 		}
+//Never get here
 		this.ok();
 	}
 	async run() {//«

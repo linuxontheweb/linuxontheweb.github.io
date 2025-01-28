@@ -1592,6 +1592,14 @@ const ScriptCom = class extends Com{//«
 	}
 }//»
 const NoCom=class{//«
+	constructor(env){
+		for (let k in env) {
+			this[k]=env[k];
+		}
+		if (this.outRedir){
+			this.redirLines = [];
+		}
+	}
 	init(){
 		this.awaitEnd=new Promise((Y,N)=>{
 			this.ok=()=>{
@@ -5918,7 +5926,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		scriptName,
 	}//»
 	if (!name) {
-		return new NoCom();
+		return new NoCom(com_env);
 	}
 	let arr = [name, ...args];
 //	rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
@@ -6113,6 +6121,7 @@ log(red);
 		}
 		else if (com.simple_command){
 			rv = await this.makeCommand(com.simple_command, comopts, errmess)
+//log(rv);
 		}
 		else{//«
 cwarn("Here is the command");
