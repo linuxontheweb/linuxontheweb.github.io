@@ -1,4 +1,4 @@
-/*1/28/25: In com_read, there was, at first, an *error* because the command expected
+/*1/28/25: In com_read, there was, at first, an *error* because the command expected«
 'stdin' to be an array (it wanted to do stdin.shift()), but it was really a string, 
 due to recent changes. Then we *did* make it an array by splitting the 'stdin' string 
 on newlines in com_read @XDUITOYL, but this made the command:
@@ -7,13 +7,19 @@ on newlines in com_read @XDUITOYL, but this made the command:
 
 ...do an infinite loop, since we kept on splitting the same constant string for
 every time the read command was invoked in the while loop. Then I tried to hunt
-down the proper place to create a stdinLns arg (i.e. an array, which is what the
-'stdin' parameter previously was), which turned out to be in the area of VOPDUKKD (in
+down the proper place to create a stdinLns arg (i.e. an array, which is what 
+'stdin' previously was), which turned out to be in the area of @VOPDUKKD (in
 shell.executePipeline2). Then the stdinLns arg finally gets passed into the
 appropriate command in shell.makeCommand. This is all still pretty complicated,
 and there should probably be some more refactoring (plus lots of testing).
 
-*/
+
+We started work today in com_grep trying to get the highlighting of the match working.
+So we created a method 'fmtColLn' (of the Com class, @XVEOIP), which is meant to format 
+(wrap to the terminal width) and color the output line, in the case that the output
+goes to the terminal rather than anywhere else (like a pipe or redirLines array).
+
+»*/
 /*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
 WHEN WE GET ERROR MESSAGES BACK FROM THE SERVER.
 The issue is that this is how we were handling errors in the server:
@@ -1520,6 +1526,7 @@ log(val);
 		else this.no(mess);
 		return false;
 	}//»
+//XVEOIP
 	fmtColLn(ln, ind, len, col){//«
 /*This takes as arguments:
 1) An unformatted line, which may take up many lines upon being output to the terminal
@@ -1677,6 +1684,10 @@ constructor(shell, opts, list){
 }
 async run(){
 //log(this.opts.env);
+	if (this.isFunc){
+		this.opts.scriptArgs = this.args.slice();
+		this.opts.scriptName = "sh";
+	}
 	let opts = sdup(this.opts);
 	opts.env = sdup(this.opts.env);
 	let rv = await this.shell.executeStatements2(this.list, opts)
