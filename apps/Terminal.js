@@ -1,3 +1,18 @@
+/*1/28/25: In com_read, there was, first, an error because the command expected
+'stdin' to be an array, but it was really a string, due to recent changes. Then we 
+made it an array by splitting the 'stdin' string on newlines in com_read @XDUITOYL, 
+but this made the command:
+
+~$ { while read line; do echo HERE IS A LINE: $line; done; } < SOMEFILE.txt
+
+...do an infinite loop, since we kept on splitting the same constant string. Then
+I tried to hunt down the proper place to create a stdinLns arg, which turned out to
+be in the area of VOPDUKKD (in shell.executePipeline2). Then the stdinLns arg finally
+gets passed into the appropriate command in shell.makeCommand. This is all still
+pretty complicated, and there should probably be some more refactoring (plus lots of 
+testing).
+
+*/
 /*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
 WHEN WE GET ERROR MESSAGES BACK FROM THE SERVER.
 The issue is that this is how we were handling errors in the server:
@@ -2469,7 +2484,8 @@ const com_curcol = class extends Com{/*«*/
 const com_read = class extends Com{//«
 
 async run(){
-	const {args, opts, term, stdin} = this;
+//XDUITOYL
+	const {args, opts, term, stdin, stdinLns: stdin_lines} = this;
 	const ENV=this.env;
 	let have_error = false;
 	const err=mess=>{
@@ -2481,12 +2497,10 @@ async run(){
 		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
 		return;
 	}
-//cwarn("READ!!!");
-//log(stdin);
 	let ln;
-	if (stdin) {
-		if (!stdin.length) return this.no();
-		ln = stdin.shift();
+	if (stdin_lines){
+		if (!stdin_lines.length) return this.no();
+		ln = stdin_lines.shift();
 	}
 	else ln = await term.readLine(use_prompt);
 	let vals = ln.trim().split(/ +/);
@@ -4975,7 +4989,7 @@ if (tok.isWord) {//«
 	if (force_compound) return false;
 	return this.parseSimpleCommand();
 }//»
-else if(tok.isOp){//«
+else if(tok.isOp||tok.isRedir){//«
 //	if (tok.isSubStart) return this.parseSubshell();
 	if (tok.isSubStart) return this.parseCompoundCommand();
 	if (tok.isRedir){
@@ -5855,7 +5869,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const{term}=this;
 //	const make_sh_err_com = ShellMod.util.make_sh_err_com;
 //	const make_sh_err_com = make_sh_error_com;
-	const {envRedirLines, envPipeInCb, scriptOut, stdin, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 //log(assigns);
 	let rv
@@ -5871,6 +5885,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	else use_env = env;
 	const com_env = {//«
 		stdin,
+		stdinLns,
 		outRedir,
 		isSub: !!subLines,
 		scriptOut,
@@ -6058,13 +6073,14 @@ log(red);
 			}
 		}
 
+//VOPDUKKD
+		let have_lines = opts.stdinLns;
 		let comopts=sdup(opts);
-/*
-		for (let k in opts){
-			comopts[k] = opts[k];
-		}
-*/
 		comopts.stdin = stdin || optStdin;
+		if (comopts.stdin){
+			if (have_lines) comopts.stdinLns = have_lines;
+			else comopts.stdinLns = comopts.stdin.split("\n");
+		}
 		comopts.outRedir = out_redir;
 		if (errmess){
 			rv = make_sh_err_com(null, errmess, {term, shell: this});
