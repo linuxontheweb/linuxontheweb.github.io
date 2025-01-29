@@ -61,6 +61,8 @@ const okint = val=>{//«
 const quit=(rv)=>{
 //	termobj.onescape=onescape;
 	termobj.quitNewScreen(hold_screen_state);
+//log(less.cb);
+	less.cb&&less.cb();
 };
 const render = () => {//«
 	termobj.refresh();

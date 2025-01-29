@@ -454,6 +454,10 @@ const com_cat = class extends Com{//«
 		let ln;
 		while (true){
 			let ln = await this.term.readLine();
+			if (isEOF(ln)){
+				this.ok();
+				return;
+			}
 			this.out(ln);
 		}
 //Never get here
@@ -476,6 +480,10 @@ const com_cat = class extends Com{//«
 		}
 		this.nok();
 	}//»
+	cancel(){
+cwarn("CANCEL CAT");
+		this.ok();
+	}
 };//»
 const com_touch = class extends Com{//«
 

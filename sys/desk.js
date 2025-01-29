@@ -1,11 +1,9 @@
-/*1/29/24: Shouldn't win.childWin more appropriately be win.childWins? 
+/*1/29/24: Shouldn't Win.childWin more appropriately be Win.childWins? «
 Whichever workspace the parent window goes to, its childWins should follow.
-We aren't giving "ownedBy" windows the ability to invoke switch_to_workspace
-from within its context menu (@GSKRBSJTK).
-*/
-/*1/1/24:«
-
-Just looking at the whole api.saveAs Workflow, from Initialization
+We're not allowing "ownedBy" windows to have the ability to invoke switch_to_workspace
+from within its context menu (see @GSKRBSJTK).
+»*/
+/*1/1/24:« Just looking at the whole api.saveAs Workflow, from Initialization
 @DWEUNFKL to:
 1) Cancel
 2) Success
@@ -15,7 +13,7 @@ Let's look into Window.onkill, and giving it options, in order to know when it i
 2) window.onbeforeunload @SMKLDKSF
 
 Also, when doing the saveAs workflow, we need the Folder to list the files of the
-same type (e.g. .txt), as well as the folders. The question is, when it comes to one
+same type (e.g. .txt), **AS WELL AS** the subfolders. The question is, when it comes to one
 of the icons of our same type, what do we do upon "selecting" it? 
 
 Upon clicking it: we put the name into the textarea.
@@ -39,7 +37,6 @@ The body is what has the color and desk_imgdiv has the image.
 toggle_icon_display @XKNFIUHJ is my working prototype for doing the kind of
 changing of desktop styles when switching to different workspaces that I have
 in mind.
-
 
 
 Need to finish up tile_windows, and allow for Workspaces to "own" their own
@@ -2189,7 +2186,7 @@ setWinArgs(args){//«
 				switch_win_to_workspace(this, current_workspace_num);
 				for (let chwin of this.childWins){
 					switch_win_to_workspace(chwin, i);
-					chwin.on();
+//					chwin.on();
 					chwin.winElem._dis="block";
 				}
 			}
