@@ -1,3 +1,8 @@
+/*1/29/24: Shouldn't win.childWin more appropriately be win.childWins? 
+Whichever workspace the parent window goes to, its childWins should follow.
+We aren't giving "ownedBy" windows the ability to invoke switch_to_workspace
+from within its context menu (@GSKRBSJTK).
+*/
 /*1/1/24:«
 
 Just looking at the whole api.saveAs Workflow, from Initialization
@@ -1536,8 +1541,6 @@ constructor(arg){//«
 	this.type = "window";
 	if (arg.appArgs) this.noSave = true;
 	else this.noSave = null;
-	this.ownedBy = undefined;
-
 
 	this.makeDOMElem(arg);
 	this.addDOMListeners();
@@ -1571,6 +1574,10 @@ constructor(arg){//«
 		this.fsHoldW=dims.W;
 		this.fsHoldH=dims.H;
 	}
+
+	this.childWins = [];
+	this.ownedBy = undefined;
+
 }//»
 
 //Methods«
@@ -2084,25 +2091,32 @@ cwarn("No drop on main window");
 }//»
 contextMenuOn(e){//«
 	let {imgDiv: img_div, winElem: win, winId: winid} = this;
-
 	if (!this.app.get_context) return;
 	let items = this.app.get_context();
 	if (!items) items = [];
-	items.push("Switch\xa0to\xa0workspace");
-	let choices = [];
-	for (let i=0; i < num_workspaces; i++){
-		if (i!=current_workspace_num){
-			choices.push(`${i+1}`);
-			choices.push(()=>{
-				if (windows.layout_mode) toggle_layout_mode();
-				switch_win_to_workspace(this, i);
-				this.off();
-				win._dis="none";
-				top_win_on();
-			});
+//GSKRBSJTK
+	if (!this.ownedBy) {
+		items.push("Switch\xa0to\xa0workspace");
+		let choices = [];
+		for (let i=0; i < num_workspaces; i++){
+			if (i!=current_workspace_num){
+				choices.push(`${i+1}`);
+				choices.push(()=>{
+					if (windows.layout_mode) toggle_layout_mode();
+					switch_win_to_workspace(this, i);
+					for (let chwin of this.childWins){
+						switch_win_to_workspace(chwin, i);
+						chwin.off();
+						chwin.winElem._dis="none";
+					}
+					this.off();
+					win._dis="none";
+					top_win_on();
+				});
+			}
 		}
+		items.push(choices);
 	}
-	items.push(choices);
 	items.push(`Window ${winid.replace(/^win_/,"")} properties...`, ()=>{
 		let rect = win._gbcr();
 		let str = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
@@ -2173,8 +2187,10 @@ setWinArgs(args){//«
 			}
 			else {
 				switch_win_to_workspace(this, current_workspace_num);
-				if (this.childWin){
-					switch_win_to_workspace(this.childWin, current_workspace_num);
+				for (let chwin of this.childWins){
+					switch_win_to_workspace(chwin, i);
+					chwin.on();
+					chwin.winElem._dis="block";
 				}
 			}
 		}
@@ -2217,7 +2233,7 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		}
 		if (this.isScrollable) this.main.focus();
 		if (this.isMinimized) this.taskbarButton.onmousedown();
-		if (this.childWin) this.childWin.on();
+//		if (this.childWin) this.childWin.on();
 		CWIN = this;
 	};
 	//»
@@ -3565,9 +3581,8 @@ this.cleanup_deleted_wins_and_icons = path => {//«
     }  
 }//»
 
-const switch_win_to_workspace = (w, num) => {//«
+const switch_win_to_workspace = (w, num, opts={}) => {//«
 	let oldwins = workspaces[w.workspaceNum].windows;
-//log(12345);
 	let which = oldwins.indexOf(w);
 	if (which < 0){
 		poperr("Could not find the window in the windows array!");
@@ -6205,10 +6220,14 @@ const make_file = () => {//«
 
 const raise_app_if_open=(appname)=>{//«
 	for (let w of get_all_windows()){
+		if (w.ownedBy) continue;
 		if (w.appName==appname){
 			if (w.isMinimized) w.unminimize();
 			else w.on();
-			if (w.workspaceNum !== current_workspace_num) switch_win_to_workspace(w, current_workspace_num);
+			if (w.workspaceNum !== current_workspace_num) {
+				switch_win_to_workspace(w, current_workspace_num);
+
+			}
 			return w;
 		}
 	}

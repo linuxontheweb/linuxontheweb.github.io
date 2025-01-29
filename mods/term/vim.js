@@ -259,6 +259,7 @@ let FOLD_MARKERS_IN_TERM_WIDTH = false;
 let AUTO_INSERT_ON_LINE_SEEKS = false;
 //let AUTO_INSERT_ON_LINE_SEEKS = true;
 
+let use_devreload;
 let no_save_mode = false;
 let one_line_mode;
 let quit_on_enter;
@@ -652,6 +653,13 @@ const quit=()=>{//«
 	}
 	if (reload_win) {
 		delete LOTW.apps[reload_win.appName];
+		let ind = topwin.childWins.indexOf(reload_win);
+		if (ind < 0){
+cerr("The reload_win was not in topwin.childWins!?!?!");
+		}
+		else{
+			topwin.childWins.splice(ind, 1);
+		}
 		delete reload_win.ownedBy;
 		reload_win.close();
 	}
@@ -1185,8 +1193,19 @@ const test_js=()=>{//«
 	scr.src = URL.createObjectURL(new Blob([str]));
 };//»
 const toggle_reload_win=async()=>{//«
+if (!use_devreload){
+stat_warn("ondevreload was not enabled!");
+return;
+}
 	if (reload_win){
 		delete LOTW.apps[reload_win.appName];
+		let ind = topwin.childWins.indexOf(reload_win);
+		if (ind < 0){
+cerr("The reload_win was not in topwin.childWins!?!?!");
+		}
+		else{
+			topwin.childWins.splice(ind, 1);
+		}
 		delete reload_win.ownedBy;
 		reload_win.close();
 		reload_win = null;
@@ -1210,11 +1229,15 @@ const toggle_reload_win=async()=>{//«
 		return;
 	}
 	reload_win.ownedBy = topwin;
+	topwin.childWins.push(reload_win);
 };//»
 const reload_dev_win=async()=>{//«
 //Want to be able to pass in a command line flag to delete the local app/mod
 //that we are editing in this file.
-	if (!reload_win) return;
+	if (!reload_win) {
+stat_warn(`No "reload window" was found! (use Ctrl+Alt+r)`);
+		return;
+	}
 	if (!reload_win._data_url){
 cwarn("NO RELOAD_WIN._DATA_URL!!?");
 	}
@@ -6301,12 +6324,14 @@ else{
 //Term.setLines(lines, line_colors);
 //Term.init_edit_mode(this, num_stat_lines);
 //hold_screen_state = Term.init_new_screen(vim, appclass, lines, line_colors, num_stat_lines, onescape);
-let use_reload;
+//let use_reload;
 if (opts.r||opts["dev-name"]||opts["use-dev-reload"]) {
-	use_reload = ondevreload;
+//	use_reload = ondevreload;
+	use_devreload = ondevreload;
 cwarn("Using ondevreload");
 }
-hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
+//hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
+hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_devreload});
 this.fname = edit_fname;
 
 syntax_multiline_comments();

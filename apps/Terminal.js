@@ -1,3 +1,15 @@
+/*1/29/25: On my way towards enabling 'cat | less'...
+Just doing refactoring of the key handlers (to make everything less Byzantine).
+Also, I got rid of the terminal's own ondevreload mechanism, although it still
+works in vim with the '-r' flag, so that:
+  $ vim  CoolStuff.js -r
+
+After doing Ctrl+Alt+r (to invoke vim's toggle_reload_win in order to create a
+"reload window"), we can then use Alt+r in order to go through the vim interface
+in order to reload it. Since that window is "owned" by the terminal window, we
+can't really do anything with it from the system level (including closing it).
+
+*/
 /*1/28/25: In com_read, there was, at first, an *error* because the command expected«
 'stdin' to be an array (it wanted to do stdin.shift()), but it was really a string, 
 due to recent changes. Then we *did* make it an array by splitting the 'stdin' string 
@@ -2071,24 +2083,23 @@ this.ok();
 }
 }//»
 const com_bindwin = class extends Com{//«
-	init(){
-	}
 	run(){
-		const{args, no}=this;
+		const{args}=this;
 		let numstr = args.shift();
-		if (!numstr) return no(`expected a window id arg`);
-		if (!numstr.match(/[0-9]+/)) return no(`${numstr}: invalid numerical argument`);
+		if (!numstr) return this.no(`expected a window id arg`);
+		if (!numstr.match(/[0-9]+/)) return this.no(`${numstr}: invalid numerical argument`);
 		let num = parseInt(numstr);
 		let elem = document.getElementById(`win_${num}`);
-		if (!elem) return no(`${numstr}: window not found`);
+		if (!elem) return this.no(`${numstr}: window not found`);
 		let win = elem._winObj;
-		if (!win) return no(`${numstr}: the window doesn't have an associated object!?!?`);
+		if (!win) return this.no(`${numstr}: the window doesn't have an associated object!?!?`);
+		if (win.ownedBy) return this.no("Cannot bind 'owned' windows!");
 		let use_key = args.shift();
-		if (!(use_key && use_key.match(/^[1-9]$/))) return no(`expected a 'key' arg (1-9)`);
+		if (!(use_key && use_key.match(/^[1-9]$/))) return this.no(`expected a 'key' arg (1-9)`);
 		let desc = this.opts.desc || this.opts.d || win.appName;
 		globals.boundWins[use_key] = {win, desc};
 		win.bindNum = use_key;
-		this.ok(`Ctrl+Alt+${use_key} -> win_${numstr}`);
+		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
 	}
 }//»
 const com_echo = class extends Com{//«
