@@ -20,6 +20,8 @@ So we created a method 'fmtColLn' (of the Com class, @XVEOIP), which is meant to
 goes to the terminal rather than anywhere else (like a pipe or redirLines array).
 
 »*/
+//«Notes
+
 /*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
 WHEN WE GET ERROR MESSAGES BACK FROM THE SERVER.
 The issue is that this is how we were handling errors in the server:
@@ -93,8 +95,6 @@ to:
 I JUST CAN'T BELIEVE THAT WE HADN'T TESTED REDIRECTS ***AT ALL*** SINCE WE "FINISHED" THE
 SHELL UP A COUPLE WEEKS AGO!?!?!
 »*/
-//«Notes
-
 /*1/19/25:« This doesn't work: $ cat | less
 
 ...because less is the "actor" in the terminal (@CLKIRYUT), which eats up all key strokes,
@@ -6381,7 +6381,7 @@ ShellMod.init();
 
 //Terminal«
 
-let USE_ONDEVRELOAD = false;
+//let USE_ONDEVRELOAD = false;
 
 export const app = class {
 
@@ -6530,7 +6530,7 @@ this.setFontSize();
 this.resize();
 
 }//»
-
+//«DOM
 makeDOMElem(){//«
 
 const{main}=this;
@@ -6630,18 +6630,6 @@ overlay.id = "overlay_"+this.winid;
 //»
 
 //Listeners«
-const onpaste = e =>{//«
-//	if (pager) return;
-	textarea.value="";
-	setTimeout(()=>{
-		let val = textarea.value;
-		if (!(val&&val.length)) return;
-		if (this.isEditor) this.actor.check_paste(val);
-		else this.doPaste();
-	}
-	,25);
-}//»
-textarea.onpaste = onpaste;
 main.onwheel=e=>{//«
 	if (!this.sleeping){
 		let dy = e.deltaY;
@@ -6699,8 +6687,14 @@ this.bgdiv = bgdiv;
 this.wrapdiv = wrapdiv;
 this.overlay = overlay;
 this.statdiv = statdiv;
-}//»
 
+//textarea.onpaste = this.onPaste;
+textarea.onpaste=(e)=>{
+	this.onPaste(e);
+};
+
+}//»
+//»
 //Execute«
 
 async execute(str, opts={}){//«
@@ -6762,9 +6756,20 @@ executeBackgroundCommand(s){//«
 }//»
 
 //»
-
 //Util«
 
+onPaste(e){//«
+//	if (pager) return;
+	let{textarea} = this;
+	textarea.value="";
+	setTimeout(()=>{
+		let val = textarea.value;
+		if (!(val&&val.length)) return;
+		if (this.isEditor) this.actor.check_paste(val);
+		else this.doPaste();
+	}
+	,25);
+}//»
 setFontSize(){//«
 	let gotfs = localStorage.Terminal_fs;
 	if (gotfs) {
@@ -6859,7 +6864,7 @@ cwarn("No history lines from", path);
 //»
 
 togglePaste(){//«
-	const{textarea}=this;
+	let{textarea, areadiv}=this;
 	if (textarea){
 		textarea._del();
 		this.textarea = null;	
@@ -6871,11 +6876,15 @@ togglePaste(){//«
 	textarea.width = 1;
 	textarea.height = 1;
 	textarea.style.opacity = 0;
-	textarea.onpaste = onpaste;
+//	textarea.onpaste = onpaste;
 	areadiv.appendChild(textarea);
 	textarea.focus();
 	this.textarea = textarea;
 	this.doOverlay("Pasting is on");
+//	textarea.onpaste = this.onPaste;
+	textarea.onpaste=(e)=>{
+		this.onPaste(e);
+	};
 }
 //»
 
@@ -7011,6 +7020,7 @@ doCopyBuffer()  {//«
 
 doClipboardCopy(if_buffer, strarg){//«
 	const{textarea}=this;
+	if (!textarea) return;
 const do_copy=str=>{//«
     if (!str) return;
     str = str.replace(/^[\/a-zA-Z]*[$#] /,"");
@@ -7051,7 +7061,7 @@ const do_copy=str=>{//«
 }
 //»
 doClipboardPaste(){//«
-//	if (!textarea) return;
+	if (!this.textarea) return;
 	this.textarea.value = "";
 	document.execCommand("paste")
 }
@@ -7076,7 +7086,7 @@ doOverlay(strarg){//«
 setNewFs(val){//«
 	this.grFs = val;
 	localStorage.Terminal_fs = this.grFs;
-	wrapdiv._fs = this.grFs;
+	this.wrapdiv._fs = this.grFs;
 	this.resize();
 }
 //»
@@ -7707,15 +7717,15 @@ resize()  {//«
 		tabdiv._dis="none";
 		wrapdiv._bgcol="#400";
 		main._bgcol="#400";
-		this.locked = true;
+		this.isLocked = true;
 		this.doOverlay(`Min\xa0width:\xa0${this.minTermWid}`);
 		return;
 	}
 	if (!(this.nCols&&this.nRows)) {
-		this.locked = true;
+		this.isLocked = true;
 		return;
 	}
-	this.locked = false;
+	this.isLocked = false;
 	this.w = this.nCols;
 	this.h = this.nRows;
 	if (!(oldw==this.w&&oldh==this.h)) this.doOverlay();
@@ -8634,9 +8644,9 @@ fmtLinesSync(arr, startx){//«
 async respInit(addMessage){//«
 
 	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
-	if(dev_mode){
-		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-	}
+//	if(dev_mode){
+//		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
+//	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
 	}
@@ -8817,7 +8827,44 @@ into the appropriate lines (otherwise, the message gets primted onto the actor's
 
 //»
 
-//Keys/Handlers«
+//Key handlers«
+
+termAlwaysEats(sym, e){//«
+	if (sym == "=_C") {
+		e.preventDefault();
+		this.setNewFs(this.grFs+1);
+		return true;
+	}
+	else if (sym == "-_C") {
+		e.preventDefault();
+		if (this.grFs-1 <= this.minFs) return true;
+		this.setNewFs(this.grFs-1);
+		return true;
+	}
+	else if (sym=="0_C") {
+		this.grFs = this.defFs;
+		this.setNewFs(this.grFs);
+		return true;
+	}
+	else if (sym=="c_CS") {
+		this.doClipboardCopy();
+		return true; 
+	}
+	else if (sym=="v_CS") {
+		this.doClipboardPaste();
+		return true;
+	}
+	else if (sym=="a_CA") {
+		 this.doCopyBuffer();
+		return true;
+	}
+	else if (sym=="p_CA"){
+		this.paragraphSelectMode = !this.paragraphSelectMode;
+		this.doOverlay(`Paragraph select: ${this.paragraphSelectMode}`);
+		return true;
+	}
+	return false;
+}//»
 
 doCtrlD(){//«
 this.numCtrlD++;
@@ -8833,8 +8880,8 @@ doCtrlC(){//«
 		}
 	}
 	else {
-		this.handlePriv(null,"^".charCodeAt(), null, true);
-		this.handlePriv(null,"C".charCodeAt(), null, true);
+		this.handleKey(null,"^".charCodeAt(), null, true);
+		this.handleKey(null,"C".charCodeAt(), null, true);
 		this.rootState = null;
 		this.bufPos = 0;
 		this.commandHold = null;
@@ -8858,7 +8905,7 @@ handleInsert(val){//«
 			gotspace = true;
 		}
 		else gotspace = false;
-		this.handlePriv(null,code, null, true);
+		this.handleKey(null,code, null, true);
 	}
 }
 //»
@@ -9177,12 +9224,33 @@ handleLetterPress(char_arg, if_no_render){//«
 	this.textarea.value = "";
 }
 //»
-handlePriv(sym, code, mod, ispress, e){//«
+handleReadlineEnter(){//«
+	const{lines}=this;
+	let s='';
+	let from = this.curPromptLine+1;
+	for (let i=from; i < lines.length; i++) {
+		if (i==from) {
+			s+=lines[i].slice(this.#readLinePromptLen).join("");
+		}
+		else {
+			s+=lines[i].join("");
+		}
+	}
+	if (!s){
+		s = new String("");
+		s.isNL = true;
+	}
+	this.#readLineCb(s);
+	this.#readLineCb = null;
+	this.sleeping = true;
+}//»
+handleKey(sym, code, mod, ispress, e){//«
 	const{lines}=this;
 	if (this.sleeping) {
 		if (ispress || sym=="BACK_") return;
 	}
 	if (this.curShell){//«
+
 		if (sym==="c_C") {//«
 //			this.curShell.cancelled_time = (new Date).getTime();
 			this.curShell.cancel();
@@ -9208,29 +9276,14 @@ handlePriv(sym, code, mod, ispress, e){//«
 			}
 		}//»
 		else if (this.#readLineCb){//«
+//this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 			if (ispress || this.okReadlineSyms.includes(sym)){
 				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
 //LOUORPR
 //else: let the 'ispress' characters/okReadlineSyms (DEL_, BACK_, LEFT_, RIGHT_) pass through...
 			}
 			else if (sym==="ENTER_"){
-				let s='';
-				let from = this.curPromptLine+1;
-				for (let i=from; i < lines.length; i++) {
-					if (i==from) {
-						s+=lines[i].slice(this.#readLinePromptLen).join("");
-					}
-					else {
-						s+=lines[i].join("");
-					}
-				}
-				if (!s){
-					s = new String("");
-					s.isNL = true;
-				}
-				this.#readLineCb(s);
-				this.#readLineCb = null;
-				this.sleeping = true;
+				this.handleReadlineEnter();
 				return;
 			}
 			else{
@@ -9240,6 +9293,9 @@ handlePriv(sym, code, mod, ispress, e){//«
 		else return;
 	}//»
 
+//log("IS THIS EVER TRUE???", !this.lines[this.cy()]);
+//Try uncommenting the above line to see if the stuff below would ever get executed....
+/*I'm not sure what all this was originally for...
 	if (!this.lines[this.cy()]) {//«
 		if (code == 75 && alt) return;
 		else {
@@ -9249,7 +9305,8 @@ handlePriv(sym, code, mod, ispress, e){//«
 			}
 		}
 	}//»
-	let ret = null;
+*/
+
 	if (ispress) {//«
 		this.numCtrlD = 0;
 		if (this.curScrollCommand) this.insertCurScroll();
@@ -9262,11 +9319,66 @@ handlePriv(sym, code, mod, ispress, e){//«
 		this.handleLetterPress(String.fromCharCode(code)); 
 		return;
 	}//»
+
 	if (sym == "d_C") return this.doCtrlD();
 	this.numCtrlD = 0;
-	if (code >= 37 && code <= 40) this.handleArrow(code, mod, sym);
+	if (code >= 37 && code <= 40) {
+		this.handleArrow(code, mod, sym);
+		return;
+	}
+	if (code == KC['DEL']) {
+		this.handleDelete(mod);
+		return;
+	}
+	switch(sym) {
+		case "HOME_":
+		case "END_":
+			this.handlePage(sym)
+			break;
+		case "p_CAS":
+			this.togglePaste();
+			break;
+		case "TAB_": 
+			this.handleTab();
+			break;
+		case "BACK_":  
+			this.handleBackspace();
+			break;
+		case "ENTER_": 
+			this.handleEnter();
+			break;
+		case "c_C": 
+			this.doCtrlC();
+			break;
+		case "k_C": 
+			this.doClearLine();
+			break;
+		case "y_C": 
+			this.insertCutStr();
+			break;
+		case "c_CAS": 
+			this.clear();
+			this.responseEnd();
+			break;	
+		case "a_C": 
+			e.preventDefault();
+			this.seekLineStart();
+			break;
+		case "e_C": 
+			this.seekLineEnd();
+			break;
+		case "g_CAS":
+			this.saveSpecialCommand();
+			break;
+		case "h_CAS":
+			this.selectFromHistory(HISTORY_PATH);
+			break;	
+		case "s_CAS":
+			this.selectFromHistory(HISTORY_PATH_SPECIAL);
+			break;
+	}
+/*«
 	else if (sym == "HOME_"|| sym == "END_") this.handlePage(sym);
-	else if (code == KC['DEL']) this.handleDelete(mod);
 	else if (sym == "p_CAS") this.togglePaste();
 	else if (sym == "TAB_") this.handleTab();
 	else if (sym == "BACK_")  this.handleBackspace();
@@ -9274,7 +9386,6 @@ handlePriv(sym, code, mod, ispress, e){//«
 	else if (sym == "c_C") this.doCtrlC();
 	else if (sym == "k_C") this.doClearLine();
 	else if (sym == "y_C") this.insertCutStr();
-	
 	else if (sym == "c_CAS") {
 		this.clear();
 		this.responseEnd();
@@ -9290,6 +9401,8 @@ handlePriv(sym, code, mod, ispress, e){//«
 	else if (sym=="s_CAS"){
 		this.selectFromHistory(HISTORY_PATH_SPECIAL);
 	}
+»*/
+/*
 	else if (sym=="r_CAS"){//«
 if (!dev_mode){
 cwarn("Not dev_mode");
@@ -9302,75 +9415,172 @@ this.doOverlay(`Reload terminal: ${!this.ondevreload}`);
 	}//»
 else if (sym=="d_CAS"){
 }
+*/
+}
+
+//»
+
+//»
+
+//System callbacks«
+/*
+async _ondevreload(){//«
+
+	this.doOverlay("ondevreload: start");
+
+//EIOFJKL
+	let use_str;
+	if (this.curShell){
+		use_str = this.curShell.commandStr;
+		this.curShell.cancel();
+		this.responseEnd();
+	}
+//	await load_new_shell();
+	ShellMod.util.deleteMods(DEL_MODS);
+	if (use_str){
+		this.handleLineStr(use_str);
+		this.handleEnter();
+	}
+//	ShellMod.util.deleteComs(DEL_COMS);
+//	await ShellMod.util.doImports(ADD_COMS, cerr);
+	this.doOverlay("ondevreload: done");
+
 }
 //»
-handle(sym, e, ispress, code, mod){//«
+*/
+
+onkill(if_dev_reload){//«
+	if (this.curEditNode) this.curEditNode.unlockFile();
+	if (!if_dev_reload) {
+		return;
+	}
+
+	this.reInit={
+		termBuffer: this.history,
+//		useOnDevReload: !!this.ondevreload
+	};
+
+	if (this.actor) {
+		this.reInit.commandStr = this.actor.command_str;
+	}
+
+	ShellMod.util.deleteMods(DEL_MODS);
+	ShellMod.util.deleteComs(DEL_COMS);
+
+	delete globals.shell_commands;
+	delete globals.shell_command_options;
+}
+//»
+
+async onappinit(appargs={}){//«
+	let {reInit} = appargs;
+	if (!reInit) reInit = {};
+//	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
+	let {termBuffer, addMessage, commandStr, histories} = reInit;
+//	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
+	await this.initHistory(termBuffer);
+	await this.respInit(addMessage);
+	this.didInit = true;
+	this.sleeping = false;
+	this.isFocused = true;
+	this.setPrompt();
+	this.render();
+	if (commandStr) {
+		for (let c of commandStr) this.handleLetterPress(c); 
+		this.handleEnter({noSave: true});
+	};
+//	if (USE_ONDEVRELOAD) this.ondevreload = this._ondevreload;
+}//»
+
+onescape(){//«
+	this.textarea.focus();
+	if (this.checkScrolling()) return true;
+	if (this.statusBar.innerText){
+		this.statusBar.innerText = "";
+		return true;
+	}
+	return false;
+}//»
+onsave(){//«
 	const{actor}=this;
-	let marr;
-	if (this.locked) {
+//	if (editor) editor.save();
+	if (actor && actor.save) actor.save();
+}
+//»
+
+onfocus(){//«
+	this.isFocused=true;
+	if (this.curScrollCommand) this.insertCurScroll();
+	this.textarea.focus();
+	this.render();
+}
+//»
+onblur(){//«
+	this.isFocused=false;
+	if (this.curScrollCommand) this.insertCurScroll();
+	this.textarea.blur();
+	this.render();
+}
+//»
+
+onresize(){this.resize();}
+onkeydown(e,sym,mod){//«
+//onkeydown(e,sym,mod){this.oldHandleKey(e, sym, false,e.keyCode,mod);}
+	if (this.isLocked) {
 		return;
 	}
 	if (this.isScrolling){//«
-		if (!ispress) {
-			if (sym.match(/^[A-Z]+_$/)){
-				if (sym==="SPACE_") return;
-			}
-			else return;
+		if (sym.match(/^[A-Z]+_$/)){//This means it is something like UP_ or DOWN_
+			if (sym==="SPACE_") return;
 		}
+		else return;
 		this.scrollNum = this.scrollNumHold;
 		this.isScrolling = false;
 		this.render();
 		return;
 	}//»
 	if (e && sym=="d_C") e.preventDefault();
-	if (!ispress) {//«
-		if (sym == "=_C") {
-			e.preventDefault();
-			set_new_fs(this.grFs+1);
-			return;
-		}
-		else if (sym == "-_C") {
-			e.preventDefault();
-			if (this.grFs-1 <= min_fs) return;
-			set_new_fs(this.grFs-1);
-			return;
-		}
-		else if (sym=="0_C") {
-			this.grFs = this.defFs;
-			set_new_fs(this.grFs);
-			return;
-		}
-		else if (sym=="c_CS") return this.doClipboardCopy();
-		else if (sym=="v_CS") return this.doClipboardPaste();
-		else if (sym=="a_CA") return this.doCopyBuffer();
-		else if (sym=="p_CA"){
-			this.paragraphSelectMode = !this.paragraphSelectMode;
-			this.doOverlay(`Paragraph select: ${this.paragraphSelectMode}`);
-			return;
-		}
-	}//»
+	if (this.termAlwaysEats(sym, e)) return;
+	let code = e.keyCode;
 	if (code == KC['TAB'] && e) e.preventDefault();
 	else this.awaitNextTab = null;
 	if (e&&sym=="o_C") e.preventDefault();
 
 //CLKIRYUT
+	const{actor}=this;
 	if (actor){
-//	if (actor && !this.#readLineCb){
-		if (ispress){
-			if (actor.onkeypress) actor.onkeypress(e, sym, code);
-		}
-		else{
-			if (actor.onkeydown) actor.onkeydown(e ,sym, code);
-		}
+		if (actor.onkeydown) actor.onkeydown(e ,sym, code);
 		return;
 	}
-
-	if (ispress){}
-	else if (!sym) return;
-
-	this.handlePriv(sym, code, mod, ispress, e);
-}
-//»
+	if (!sym) return;
+	this.handleKey(sym, code, mod, false, e);
+}//»
+onkeypress(e){//«
+//onkeypress(e){this.oldHandleKey(e, e.key, true,    e.charCode,"");}
+//onkeypress(e, sym, mod){
+//	let sym = e.key;
+	if (this.isLocked) {
+		return;
+	}
+	if (this.isScrolling){//«
+		this.scrollNum = this.scrollNumHold;
+		this.isScrolling = false;
+		this.render();
+		return;
+	}//»
+	const{actor}=this;
+	if (actor){
+//		if (actor.onkeypress) actor.onkeypress(e, sym, code);
+		if (actor.onkeypress) actor.onkeypress(e, e.key, e.keyCode);
+		return;
+	}
+//handleKey(sym, code, mod, ispress, e){
+//	this.handleKey(sym, code, mod, true, e);
+	this.handleKey(e.key, e.keyCode, "", true, e);
+}//»
+onkeyup(e,sym){//«
+	if (this.actor&&this.actor.onkeyup) this.actor.onkeyup(e, sym);
+}//»
 
 //»
 
@@ -9499,118 +9709,88 @@ quitNewScreen(screen){//«
 
 //»
 
-//System callbacks«
-
-async _ondevreload(){//«
-
-	this.doOverlay("ondevreload: start");
-
-//EIOFJKL
-	let use_str;
-	if (this.curShell){
-		use_str = this.curShell.commandStr;
-		this.curShell.cancel();
-		this.responseEnd();
-	}
-//	await load_new_shell();
-	ShellMod.util.deleteMods(DEL_MODS);
-	if (use_str){
-		this.handleLineStr(use_str);
-		this.handleEnter();
-	}
-//	ShellMod.util.deleteComs(DEL_COMS);
-//	await ShellMod.util.doImports(ADD_COMS, cerr);
-	this.doOverlay("ondevreload: done");
-
-}
-//»
-onkill(if_dev_reload){//«
-	if (this.curEditNode) this.curEditNode.unlockFile();
-	if (!if_dev_reload) {
-		return;
-	}
-
-	this.reInit={
-		termBuffer: this.history,
-		useOnDevReload: !!this.ondevreload
-	};
-
-	if (this.actor) {
-		this.reInit.commandStr = this.actor.command_str;
-	}
-
-	ShellMod.util.deleteMods(DEL_MODS);
-	ShellMod.util.deleteComs(DEL_COMS);
-
-	delete globals.shell_commands;
-	delete globals.shell_command_options;
-}
-//»
-
-async onappinit(appargs={}){//«
-	let {reInit} = appargs;
-	if (!reInit) reInit = {};
-	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
-	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
-	await this.initHistory(termBuffer);
-	await this.respInit(addMessage);
-	this.didInit = true;
-	this.sleeping = false;
-	this.isFocused = true;
-	this.setPrompt();
-	this.render();
-	if (commandStr) {
-		for (let c of commandStr) this.handleLetterPress(c); 
-		this.handleEnter({noSave: true});
-	};
-	if (USE_ONDEVRELOAD) this.ondevreload = this._ondevreload;
-}//»
-
-onescape(){//«
-	this.textarea.focus();
-	if (this.checkScrolling()) return true;
-	if (this.statusBar.innerText){
-		this.statusBar.innerText = "";
-		return true;
-	}
-	return false;
-}//»
-onsave(){//«
-	const{actor}=this;
-//	if (editor) editor.save();
-	if (actor && actor.save) actor.save();
-}
-//»
-
-onfocus(){//«
-	this.isFocused=true;
-	if (this.curScrollCommand) this.insertCurScroll();
-	this.textarea.focus();
-	this.render();
-}
-//»
-onblur(){//«
-	this.isFocused=false;
-	if (this.curScrollCommand) this.insertCurScroll();
-	this.textarea.blur();
-	this.render();
-}
-//»
-
-onresize(){this.resize();}
-onkeydown(e,sym,mod){this.handle(sym,e,false,e.keyCode,mod);}
-onkeypress(e){this.handle(e.key,e,true,e.charCode,"");}
-onkeyup(e,sym){//«
-	if (this.actor&&this.actor.onkeyup) this.actor.onkeyup(e, sym);
-}//»
-
-//»
-
 }; 
 
 //»
 
 
+
+
+
+
+
+
+
+
+
+/*
+oldHandleKey(e, sym, ispress, code, mod){//«
+	const{actor}=this;
+	let marr;
+	if (this.locked) {
+		return;
+	}
+	if (this.isScrolling){//«
+		if (!ispress) {
+			if (sym.match(/^[A-Z]+_$/)){
+				if (sym==="SPACE_") return;
+			}
+			else return;
+		}
+		this.scrollNum = this.scrollNumHold;
+		this.isScrolling = false;
+		this.render();
+		return;
+	}//»
+	if (e && sym=="d_C") e.preventDefault();
+	if (!ispress) {//«
+		if (sym == "=_C") {
+			e.preventDefault();
+			set_new_fs(this.grFs+1);
+			return;
+		}
+		else if (sym == "-_C") {
+			e.preventDefault();
+			if (this.grFs-1 <= min_fs) return;
+			set_new_fs(this.grFs-1);
+			return;
+		}
+		else if (sym=="0_C") {
+			this.grFs = this.defFs;
+			set_new_fs(this.grFs);
+			return;
+		}
+		else if (sym=="c_CS") return this.doClipboardCopy();
+		else if (sym=="v_CS") return this.doClipboardPaste();
+		else if (sym=="a_CA") return this.doCopyBuffer();
+		else if (sym=="p_CA"){
+			this.paragraphSelectMode = !this.paragraphSelectMode;
+			this.doOverlay(`Paragraph select: ${this.paragraphSelectMode}`);
+			return;
+		}
+	}//»
+	if (code == KC['TAB'] && e) e.preventDefault();
+	else this.awaitNextTab = null;
+	if (e&&sym=="o_C") e.preventDefault();
+
+//CLKIRYUT
+	if (actor){
+		if (ispress){
+			if (actor.onkeypress) actor.onkeypress(e, sym, code);
+		}
+		else{
+			if (actor.onkeydown) actor.onkeydown(e ,sym, code);
+		}
+		return;
+	}
+
+	if (ispress){}
+	else if (!sym) return;
+
+	this.handleKey(sym, code, mod, ispress, e);
+}
+//»
+*/
 /*From class Shell{}
 stripRedirs(com){//«
 	let redirs = [];
@@ -9646,3 +9826,4 @@ stripRedirs(com){//«
 	return redirs;
 }//»
 */
+

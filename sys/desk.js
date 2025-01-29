@@ -2735,6 +2735,7 @@ return new Promise((Y,N)=>{
 	const load_cb = async() => {//«
 		try {
 			if (data_url){
+cwarn(`Using app: '${winapp}'`);
 				this.app = new NS.apps[winapp](this, Desk);
 			}
 			else {
