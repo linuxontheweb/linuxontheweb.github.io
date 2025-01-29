@@ -11,6 +11,45 @@ Ctrl+c stops the eternal readLine mechanism from cat, but then pressing "q"
 the screen back to the terminal's REPL. Instead, we have to do *ANOTHER* Ctrl+c 
 in order to get back to our terminal screen...
 
+So, it looks like the trick to 'cat | less' was to send an EOF into readLineCb (@RMLDURHTJ),
+which gets returned into the 'cat' command, and allows it to terminate its
+otherwise interminable loop:
+	while (true){
+		let ln = await this.term.readLine();
+		if (isEOF(ln)){
+			this.ok();
+			return;
+		}
+		this.out(ln);
+	}
+
+...this means that awaiting the cat command gets finished in executePipeline2,
+allowing us to get to @XJPMNYSHK, and allowing us to "normally" complete the
+executePipeline2 function (and the rest of the functions that get called by
+Shell.devexecute @SLDPEHDBF).
+
+I figure this is a fairly crucial thing to get "right" because it speaks to
+so many little things at the heart of the interactive shell mechanism.
+
+!!! Invalid paragraph below !!!
+
+But, I had to do a bunch of tortuous stuff related to printing onto the
+terminal's own REPL screen even when another screen (e.g. less's screen) was
+active.  For example, you can see in Terminal.handleLetterPress (@ZKLDUTHSK)
+that I am now this.termLines and this.termThis, in order to print the incoming
+characters onto the backgrounded terminal lines, so they don't get printed onto
+the current screen lines. But really, the "real" version of 'cat | less' does
+*NOT* do this at all.
+
+UPDATE: I JUST GOT IT WORKING LIKE THE "real" 'cat | less' by creating a
+Term.#readLineStr property when initiating the readLineCb (@XKLRYTJTK),
+which is "concatenated to" (@VEOMRUI), and then "sent along" @HWURJIJE.
+SO THIS GETS OF THE NEED TO HAVE ANY OF THE "TORTUOUS LOGIC" MENTIONED
+IN THE ABOVE PARAGRAPH. SO I JUST GOT RID OF IT (except for in the respone 
+mechanism)!!!
+
+
+
 
 Also, I got rid of the terminal's own ondevreload mechanism, although it still
 works in vim with the '-r' flag, so that:
@@ -2578,6 +2617,10 @@ async run(){
 		ln = stdin_lines.shift();
 	}
 	else ln = await term.readLine(use_prompt);
+	if (isEOF(ln)){
+		this.no();
+		return;
+	}
 	let vals = ln.trim().split(/ +/);
 	while (args.length){
 		let arg = args.shift();
@@ -6200,7 +6243,7 @@ log(`Not running (was killed): ${com.name}`);
 }//»
 for (let com of pipeline){//«
 	lastcomcode = await com.awaitEnd;
-//log(com.name, lastcomcode);
+//XJPMNYSHK
 	if (this.cancelled) {
 //		return;
 		continue;
@@ -6428,6 +6471,7 @@ export const app = class {
 
 //Private Vars«
 #readLineCb;
+#readLineStr;
 #readLinePromptLen;
 #getChCb;
 #getChDefCh;
@@ -6798,20 +6842,12 @@ executeBackgroundCommand(s){//«
 //»
 //Util«
 //MSFUNPEJ
-get termThis(){//«
-	if (this.holdTerminalScreen) return this.holdTerminalScreen;
-	return this;
-}//»
 get termLines(){//«
-	if (this.holdTerminalScreen){
-		return this.holdTerminalScreen.lines;
-	}
+	if (this.holdTerminalScreen) return this.holdTerminalScreen.lines;
 	return this.lines;
 }//»
 get termLineColors(){//«
-	if (this.holdTerminalScreen){
-		return this.holdTerminalScreen.lineColors;
-	}
+	if (this.holdTerminalScreen) return this.holdTerminalScreen.lineColors;
 	return this.lineColors;
 }//»
 
@@ -6853,13 +6889,12 @@ cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
 }
 //»
 forceNewline(){//«
-	const{termLines: lines, termThis}=this;
-
+	const{lines}=this;
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		this.lineBreak();
-		this.curPromptLine = termThis.y+termThis.scrollNum-1;
+		this.curPromptLine = this.y+this.scrollNum-1;
 	}
-	termThis.x=0;
+	this.x=0;
 }//»
 async getch(promptarg, def_ch){//«
 	this.forceNewline();
@@ -6875,16 +6910,20 @@ async getch(promptarg, def_ch){//«
 }
 //»
 async readLine(promptarg){//«
-	this.forceNewline();
-	this.scrollIntoView();
 	this.sleeping = false;
-	if (promptarg){
-		this.#readLinePromptLen = promptarg.length;
-		for (let ch of promptarg) this.handleLetterPress(ch);
+	if (!this.actor) {
+		this.forceNewline();
+		this.scrollIntoView();
+		if (promptarg){
+			this.#readLinePromptLen = promptarg.length;
+			for (let ch of promptarg) this.handleLetterPress(ch);
+		}
+		else this.#readLinePromptLen = 0;
+		this.x = this.#readLinePromptLen;
 	}
-	else this.#readLinePromptLen = 0;
-	this.x = this.#readLinePromptLen;
 	return new Promise((Y,N)=>{
+//XKLRYTJTK
+		if (this.actor) this.#readLineStr="";
 		this.#readLineCb = Y;
 	});
 }
@@ -7719,11 +7758,10 @@ shiftLine(x1, y1, x2, y2){//«
 }
 //»
 lineBreak(){//«
-	const{termLines: lines}=this;
+	const{lines}=this;
 	if (lines[lines.length-1] && !lines[lines.length-1].length) return;
 	lines.push([]);
-//	this.y++;
-	this.termThis.y++;
+	this.y++;
 	this.scrollIntoView();
 	this.render();
 }
@@ -8764,11 +8802,14 @@ responseEnd(opts={})  {//«
 response(out, opts={}){//«
 	if (isEOF(out)) return;
 
-/*The response mechanism is *ONLY* meant for the terminal's REPL mode. If there is
-an 'actor' in a pipeline, and a previous command in the pipeline has some non-output-stream
-message, then it always gets sent here, so we need to make sure we are putting the message
-into the appropriate lines array (otherwise, the message gets printed onto the actor's screen.
+/*
+The response mechanism is *ONLY* meant for the terminal's REPL mode. If there
+is an 'actor' in a pipeline, and a previous command in the pipeline has some
+non-output-stream message (like an error message), then it always gets sent
+here, so we need to make sure we are putting the message into the appropriate
+lines array (otherwise, the message gets printed onto the actor's screen.
 */
+
 	const{termLines: lines, termLineColors: line_colors}=this;
 	if (!isStr(out)) {
 //		this.Win._fatal(new Error("Non-string given to term.response"));
@@ -9184,53 +9225,47 @@ async handleEnter(opts={}){//«
 //»
 handleLetterPress(char_arg, if_no_render){//«
 	const dounshift=()=>{//«
-//		let cy = termThis.y+termThis.scrollNum;
-		if ((lines[termThis.y+termThis.scrollNum].length) > w) {
-			let use_char = lines[termThis.y+termThis.scrollNum].pop()
-			if (!lines[termThis.y+termThis.scrollNum+1]) lines[termThis.y+termThis.scrollNum+1] = [use_char];
-			else lines[termThis.y+termThis.scrollNum+1].unshift(use_char);
-			if (termThis.x==w) {
-				termThis.x=0;
-				termThis.y++;
+//		let cy = this.y+this.scrollNum;
+		if ((lines[this.y+this.scrollNum].length) > w) {
+			let use_char = lines[this.y+this.scrollNum].pop()
+			if (!lines[this.y+this.scrollNum+1]) lines[this.y+this.scrollNum+1] = [use_char];
+			else lines[this.y+this.scrollNum+1].unshift(use_char);
+			if (this.x==w) {
+				this.x=0;
+				this.y++;
 			}
-			for (let i=1; line = lines[termThis.y+termThis.scrollNum+i]; i++) {
+			for (let i=1; line = lines[this.y+this.scrollNum+i]; i++) {
 				if (line.length > w) {
-					if (lines[termThis.y+termThis.scrollNum+i+1]) lines[termThis.y+termThis.scrollNum+i+1].unshift(line.pop());
-					else lines[termThis.y+termThis.scrollNum+i+1] = [line.pop()];
+					if (lines[this.y+this.scrollNum+i+1]) lines[this.y+this.scrollNum+i+1].unshift(line.pop());
+					else lines[this.y+this.scrollNum+i+1] = [line.pop()];
 				}
 				else {
-					if (lines[termThis.y+termThis.scrollNum+i-1].length > w) {
-						line.unshift(lines[termThis.y+termThis.scrollNum+i-1].pop());
+					if (lines[this.y+this.scrollNum+i-1].length > w) {
+						line.unshift(lines[this.y+this.scrollNum+i-1].pop());
 					}
 				}
 			}
 		}
 	};//»
-//	const{lines}=this;
-	const{termLines: lines, termThis, w}=this;
-//log(lines);
-//	let termThis = this.termThis;
-//	if (this.holdTerminalScreen) termThis = this.holdTerminalScreen;
-//	else termThis = this;
-
+	const{lines, w}=this;
 	let cy;
 	let line;
-	if (lines && lines[termThis.scrollNum + termThis.y]) {
-		if (termThis.x < lines[termThis.scrollNum + termThis.y].length && lines[termThis.scrollNum + termThis.y][0]) {
-			lines[termThis.scrollNum + termThis.y].splice(termThis.x, 0, char_arg);
-			termThis.shiftLine(termThis.x-1, termThis.y, termThis.x, termThis.y);
+	if (lines && lines[this.scrollNum + this.y]) {
+		if (this.x < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
+			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
+			this.shiftLine(this.x-1, this.y, this.x, this.y);
 		}
 	}
 
-	let usex = termThis.x+1;
-	let usey = termThis.y;
-	termThis.y = usey;
+	let usex = this.x+1;
+	let usey = this.y;
+	this.y = usey;
 
 	let endch = null;
 	let didinc = false;
-	cy = termThis.y+termThis.scrollNum;
-	if (usex == termThis.w) {
-		if (lines[cy][termThis.x+1]) endch = lines[cy].pop();
+	cy = this.y+this.scrollNum;
+	if (usex == w) {
+		if (lines[cy][this.x+1]) endch = lines[cy].pop();
 		didinc = true;
 		usey++;
 		usex=0;
@@ -9241,33 +9276,33 @@ handleLetterPress(char_arg, if_no_render){//«
 	}//»
 	else if (lines[cy] && char_arg) {//«
 		let do_line = null;
-		if (lines[cy][termThis.x]) do_line = true;
-		lines[cy][termThis.x] = char_arg;
+		if (lines[cy][this.x]) do_line = true;
+		lines[cy][this.x] = char_arg;
 	}//»
-	let ln = lines[termThis.scrollNum+usey];
+	let ln = lines[this.scrollNum+usey];
 	if (ln && ln[usex]) {//«
-		if (termThis.x+1==this.w) {
+		if (this.x+1==w) {
 			if (!didinc) {
 				usey++;
 				usex=0;
 			}
 			if (endch) {
-				if (!ln||!ln.length||ln[0]===null) lines[termThis.scrollNum+usey] = [endch];
+				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
 				else ln.unshift(endch);	
 			}
 		}
-		else usex = termThis.x+1;
+		else usex = this.x+1;
 	}//»
 	else {//«
 		if (!ln||!ln.length||ln[0]===null) {
-			lines[termThis.scrollNum+usey] = [endch];
+			lines[this.scrollNum+usey] = [endch];
 		}
 	}//»
 //log("USEY",usey);
-	termThis.x = usex;
-	termThis.y = usey;
+	this.x = usex;
+	this.y = usey;
 	dounshift();
-	if (this.holdTerminalScreen) return;
+//	if (this.holdTerminalScreen) return;
 
 	this.scrollIntoView({noSetY: true});
 	if (!if_no_render) this.render();
@@ -9275,8 +9310,15 @@ handleLetterPress(char_arg, if_no_render){//«
 }
 //»
 handleReadlineEnter(){//«
-	const{termLines: lines}=this;
+	if (this.actor){
+//HWURJIJE
+		this.#readLineCb(this.#readLineStr);
+		this.#readLineCb = null;
+		return;
+	}
+	const{lines}=this;
 	let s='';
+
 	let from = this.curPromptLine+1;
 	for (let i=from; i < lines.length; i++) {
 		if (i==from) {
@@ -9329,6 +9371,11 @@ handleKey(sym, code, mod, ispress, e){//«
 		else if (this.#readLineCb){//«
 //this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 			if (ispress || this.okReadlineSyms.includes(sym)){
+				if (this.actor){
+//VEOMRUI
+					if (ispress) this.#readLineStr+=String.fromCharCode(code);
+					return;
+				}
 				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
 //LOUORPR
 //else: let the 'ispress' characters/okReadlineSyms (DEL_, BACK_, LEFT_, RIGHT_) pass through...
@@ -9498,6 +9545,7 @@ onkeydown(e,sym,mod){//«
 	if (e&&sym=="o_C") e.preventDefault();
 	if (this.#readLineCb){
 		if (sym=="c_C"){
+//RMLDURHTJ
 			this.#readLineCb(EOF);
 			this.#readLineCb = undefined;
 			this.doOverlay("Readline: cancelled");
