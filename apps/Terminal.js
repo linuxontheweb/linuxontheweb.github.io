@@ -7824,18 +7824,21 @@ resize(opts={}) {//«
 		return;
 	}
 	this.isLocked = false;
-	let ins_str;
+	let ins_str = null;
 	if(!(actor || this.sleeping || this.curShell)){
 		if (this.curScrollCommand) ins_str = this.insertCurScroll();
 		else ins_str = this.getComArr().join("");
 		if (ins_str){
-			this.popPromptLines();
+//			this.popPromptLines();
+			this.trimLines();
 		}
+		if (!isInit) this.lines.pop();
 	}
-	if (!isInit) this.lines.pop();
+//	if (!isInit) this.lines.pop();
 	this.w = this.nCols;
 	this.h = this.nRows;
-	if (!isInit) this.setPrompt();
+//	if (!isInit) this.setPrompt();
+	if (!isInit && ins_str !== null) this.setPrompt();
 	if (ins_str){
 		this.handleLineStr(ins_str);
 	}
@@ -7992,15 +7995,6 @@ seekLineEnd(){//«
 
 //»
 //History/Saving«
-popPromptLines(){//«
-	while (this.curPromptLine+1 != this.lines.length) { 
-		if (!this.lines.length){
-			cerr("COULDA BEEN INFINITE LOOP: "+(this.curPromptLine+1) +" != "+this.lines.length);
-			break;
-		}
-		this.lines.pop();
-	}
-}//»
 historyUp(){//«
 	if (!(this.bufPos < this.history.length)) return;
 	if (this.commandHold == null && this.bufPos == 0) {
@@ -8011,7 +8005,8 @@ historyUp(){//«
 	let str = this.history[this.history.length - this.bufPos];
 	if (!str) return;
 
-	this.popPromptLines();
+//	this.popPromptLines();
+	this.trimLines();
 
 	this.handleLineStr(str.trim());
 	this.comScrollMode = true;
@@ -8166,20 +8161,22 @@ getPromptStr(){//«
 	str = str+"$";
 	if ((new RegExp("^/home/"+user+"\\$$")).test(str)) str = "~$";
 	else if ((new RegExp("^/home/"+user+"/")).test(str)) str = str.replace(/^\/home\/[^\/]+\x2f/,"~/");
-	return str + " ";
+//	return str + " ";
+	str = str + " ";
+	if (str.length+1 >= this.w) {
+		let len_half = Math.floor((this.w - 5)/2);
+		let half_1 = str.slice(0, len_half);
+		let half_2 = str.slice(str.length - len_half);
+		str = `${half_1}...${half_2}`;
+	}
+	return str;
 }
 //»
-setPrompt(opts={}) {//«
-	let use_str = opts.prompt || this.getPromptStr();
-	if (use_str.length+1 >= this.w) {
-		let len_half = Math.floor((this.w - 5)/2);
-		let half_1 = use_str.slice(0, len_half);
-		let half_2 = use_str.slice(use_str.length - len_half);
-		use_str = `${half_1}...${half_2}`;
-	}
-	this.Win.title=use_str.replace(/..$/,"");
+setPrompt() {//«
+	let prompt_str = this.getPromptStr();
+	this.Win.title=prompt_str.replace(/..$/,"");
 	let len_min1;
-	let lnarr = use_str.split("");
+	let lnarr = prompt_str.split("");
 	if (!this.lines.length) {
 		this.lines = [lnarr];
 		len_min1 = this.lines.length-1;
@@ -8201,7 +8198,13 @@ setPrompt(opts={}) {//«
 	this.y=this.lines.length - 1 - this.scrollNum;
 }//»
 
-trimLines(){while (this.curPromptLine+1 != this.lines.length) this.lines.pop();}
+trimLines() {//«
+	let cpl_plus1 = this.curPromptLine+1;
+//cwarn(`${this.lines.length} > ${cpl_plus1} ???`);
+	while (this.lines.length > cpl_plus1) {
+		this.lines.pop();
+	}
+}//»
 insertCurScroll()  {//«
 	this.comScrollMode = false;
 	if (this.linesHold2) this.lines = this.linesHold2.slice(0, this.lines.length);
@@ -9843,7 +9846,7 @@ quitNewScreen(screen){//«
 
 
 
-/*
+/*«OLD
 oldHandleKey(e, sym, ispress, code, mod){//«
 	const{actor}=this;
 	let marr;
@@ -9910,8 +9913,7 @@ oldHandleKey(e, sym, ispress, code, mod){//«
 	this.handleKey(sym, code, mod, ispress, e);
 }
 //»
-*/
-/*From class Shell{}
+//From class Shell{}
 stripRedirs(com){//«
 	let redirs = [];
 	if (!com.prefix) com.prefix=[];
@@ -9945,5 +9947,5 @@ stripRedirs(com){//«
 	}
 	return redirs;
 }//»
-*/
+»*/
 
