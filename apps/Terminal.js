@@ -6475,7 +6475,7 @@ export const app = class {
 #readLinePromptLen;
 #getChCb;
 #getChDefCh;
-#doContinue;
+//#doContinue;
 //»
 constructor(Win){//«
 
@@ -6612,7 +6612,7 @@ this.cwd = this.cur_dir;
 this.makeDOMElem();
 
 this.setFontSize();
-this.resize();
+this.resize({isInit: true});
 
 }//»
 //«DOM
@@ -7798,9 +7798,10 @@ setBgRows(){//«
 	}
 	this.bgRowStyles = stys;
 }//»
-resize()  {//«
-	const{actor, tabdiv, wrapdiv, main}=this;
+resize(opts={}) {//«
 	if (this.Win.killed) return;
+	const{actor, tabdiv, wrapdiv, main}=this;
+	let {isInit}=opts;
 	wrapdiv._w = main._w;
 	wrapdiv._h = main._h;
 	let oldw = this.w;
@@ -7823,16 +7824,29 @@ resize()  {//«
 		return;
 	}
 	this.isLocked = false;
+	let ins_str;
+	if(!(actor || this.sleeping || this.curShell)){
+		if (this.curScrollCommand) ins_str = this.insertCurScroll();
+		else ins_str = this.getComArr().join("");
+		if (ins_str){
+			this.popPromptLines();
+		}
+	}
+	if (!isInit) this.lines.pop();
 	this.w = this.nCols;
 	this.h = this.nRows;
+	if (!isInit) this.setPrompt();
+	if (ins_str){
+		this.handleLineStr(ins_str);
+	}
 	if (!(oldw==this.w&&oldh==this.h)) this.doOverlay();
 	this.lineHeight = wrapdiv.clientHeight/this.h;
 	this.setBgRows();
 	this.scrollIntoView();
 	this.scrollMiddle();
 	if (this.numStatLines) this.generateStatHtml();
-	if (actor && actor.resize){
-		actor.resize(this.w,this.h);
+	if (actor){
+		if (actor.resize) actor.resize(this.w,this.h);
 		return;
 	}
 	this.render();
@@ -7978,7 +7992,15 @@ seekLineEnd(){//«
 
 //»
 //History/Saving«
-
+popPromptLines(){//«
+	while (this.curPromptLine+1 != this.lines.length) { 
+		if (!this.lines.length){
+			cerr("COULDA BEEN INFINITE LOOP: "+(this.curPromptLine+1) +" != "+this.lines.length);
+			break;
+		}
+		this.lines.pop();
+	}
+}//»
 historyUp(){//«
 	if (!(this.bufPos < this.history.length)) return;
 	if (this.commandHold == null && this.bufPos == 0) {
@@ -7988,15 +8010,10 @@ historyUp(){//«
 	this.bufPos++;
 	let str = this.history[this.history.length - this.bufPos];
 	if (!str) return;
-	let diffy = this.scrollNum - this.curPromptLine;
-	while (this.curPromptLine+1 != this.lines.length) { 
-		if (!this.lines.length){
-			cerr("COULDA BEEN INFINITE LOOP: "+(this.curPromptLine+1) +" != "+this.lines.length);
-			break;
-		}
-		this.lines.pop();
-	}
-	this.handleLineStr(str.trim(), true);
+
+	this.popPromptLines();
+
+	this.handleLineStr(str.trim());
 	this.comScrollMode = true;
 }//»
 historyDown(){//«
@@ -8008,7 +8025,8 @@ historyDown(){//«
 	let pos = this.history.length - this.bufPos;
 	if (this.bufPos == 0) {
 		this.trimLines();
-		this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
+//		this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
+		this.handleLineStr(this.commandHold.replace(/\n$/,""),true);
 		this.x = this.commandPosHold;
 		this.commandHold = null;
 		this.render();
@@ -8017,7 +8035,7 @@ historyDown(){//«
 		let str = this.history[this.history.length - this.bufPos];
 		if (str) {
 			this.trimLines();
-			this.handleLineStr(str.trim(), true);
+			this.handleLineStr(str.trim());
 			this.comScrollMode = true;
 		}
 	}
@@ -8034,7 +8052,7 @@ historyUpMatching(){//«
 		let str = this.history[this.history.length - this.bufPos];
 		if (re.test(str)) {
 			this.trimLines();
-			this.handleLineStr(str.trim(), true);
+			this.handleLineStr(str.trim());
 			this.comScrollMode = true;
 			break;
 		}
@@ -8048,14 +8066,14 @@ historyDownMatching(){//«
 		let str = this.history[this.history.length - this.bufPos];
 		if (re.test(str)) {
 			this.trimLines();
-			this.handleLineStr(str.trim(), true);
+			this.handleLineStr(str.trim());
 			this.comScrollMode = true;
 			return;
 		}
 	}
 	if (this.commandHold) {
 		this.trimLines();
-		this.handleLineStr(this.commandHold.trim(), true);
+		this.handleLineStr(this.commandHold.trim());
 		this.comScrollMode = true;
 		this.commandHold = null;
 	}
@@ -8151,33 +8169,27 @@ getPromptStr(){//«
 	return str + " ";
 }
 //»
-setPrompt(opts={})  {//«
+setPrompt(opts={}) {//«
 	let use_str = opts.prompt || this.getPromptStr();
-	this.Win.title=use_str.replace(/..$/,"");
-	let plines;
-	if (use_str==="") plines = [[""]];
-	else{
-		if (use_str.length+1 >= this.w) use_str = "..."+use_str.substr(-(this.w-5));
-		plines = [use_str.split("")];
+	if (use_str.length+1 >= this.w) {
+		let len_half = Math.floor((this.w - 5)/2);
+		let half_1 = use_str.slice(0, len_half);
+		let half_2 = use_str.slice(use_str.length - len_half);
+		use_str = `${half_1}...${half_2}`;
 	}
-	let line;
+	this.Win.title=use_str.replace(/..$/,"");
 	let len_min1;
+	let lnarr = use_str.split("");
 	if (!this.lines.length) {
-		this.lines = plines;
+		this.lines = [lnarr];
 		len_min1 = this.lines.length-1;
 		this.curPromptLine = 0;
 	}
 	else {
 		len_min1 = this.lines.length-1;
-		line = plines.shift();
-		if (!this.lines[len_min1][0]) this.lines[len_min1] = line;
+		if (!this.lines[len_min1][0]) this.lines[len_min1] = lnarr;
 		else {
-			this.lines.push(line);
-			len_min1++;
-		}
-		while(plines.length) {
-			line = plines.shift();
-			this.lines.push(line);
+			this.lines.push(lnarr);
 			len_min1++;
 		}
 		this.curPromptLine = len_min1;
@@ -8187,8 +8199,7 @@ setPrompt(opts={})  {//«
 	if (this.promptLen==1 && this.lines[len_min1][0]==="") this.promptLen=0;
 	this.x=this.promptLen;
 	this.y=this.lines.length - 1 - this.scrollNum;
-}
-//»
+}//»
 
 trimLines(){while (this.curPromptLine+1 != this.lines.length) this.lines.pop();}
 insertCurScroll()  {//«
@@ -8789,7 +8800,8 @@ responseEnd(opts={})  {//«
 //Why does (did) this line exist???
 //	if (this.isPager) return;
 
-	this.#doContinue = false;
+//	this.#doContinue = false;
+
 	this.setPrompt();
 	this.scrollIntoView();
 	this.sleeping = null;
@@ -8988,7 +9000,8 @@ handleInsert(val){//«
 	}
 }
 //»
-handleLineStr(str, from_scroll, uselen, if_no_render){//«
+handleLineStr(str, if_no_render){//«
+//handleLineStr(str, from_scroll, uselen, if_no_render){
 	let did_fail = false;
 	const copy_lines=(arr, howmany)=>{//«
 		let newarr = [];
@@ -9005,9 +9018,12 @@ handleLineStr(str, from_scroll, uselen, if_no_render){//«
 	if (str=="") {}
 	else if (!str) return;
 	let curnum = this.curPromptLine;
-	let curx;
-	if (typeof uselen=="number") curx=uselen;
-	else curx = this.promptLen;
+//	let curx;
+//	if (typeof uselen=="number") curx=uselen;
+//	else curx = this.promptLen;
+
+	let curx = this.promptLen;
+
 	this.linesHold2 = this.lines;
 	if (!this.comScrollMode) {
 		this.lines = copy_lines(this.lines, this.curPromptLine)
@@ -9091,7 +9107,7 @@ handlePage(sym){//«
 			let str = this.history[0];
 			if (str) {
 				this.trimLines();
-				this.handleLineStr(str.trim(), true);
+				this.handleLineStr(str.trim());
 			}
 		}
 	}//»
@@ -9101,7 +9117,7 @@ handlePage(sym){//«
 			this.bufPos = 0;
 			if (this.commandHold!=null) {
 				this.trimLines();
-				this.handleLineStr(this.commandHold.trim(), true);
+				this.handleLineStr(this.commandHold.trim());
 				this.commandHold = null;
 			}
 		}
@@ -9193,36 +9209,26 @@ handleDelete(mod){//«
 }
 //»
 async handleEnter(opts={}){//«
-	if (!this.sleeping){
-		this.bufPos = 0;
-		this.commandHold = null;
-		let str;
-		if (this.curShell) return;
-		else {//«
-			if (this.curScrollCommand) str = this.insertCurScroll();
-			else str = this.getComArr().join("");
-			if (!this.#doContinue && !str) {
-				this.env['?']="0";
-				this.responseEnd();
-				return;
-			}
-		}//»
-		this.x=0;
-		this.y++;
-		this.lines.push([]);
-		if (!this.#doContinue && (!str || str.match(/^ +$/))) {
-			return this.responseEnd();
-		}
-		if (str) {
-			this.lastComStr = str;
-		}
-		this.scrollIntoView();
-		this.render();
-		await this.execute(str, opts);
-		this.sleeping = null;
+	if (this.sleeping) return;
+	this.bufPos = 0;
+	this.commandHold = null;
+	if (this.curShell) return;
+
+	let str;
+	if (this.curScrollCommand) str = this.insertCurScroll();
+	else str = this.getComArr().join("");
+	if (str.match(/^ *$/)) {
+		this.responseEnd();
+		return;
 	}
-}
-//»
+	this.x=0;
+	this.y++;
+	this.lines.push([]);
+	this.scrollIntoView();
+	this.render();
+	await this.execute(str, opts);
+	this.sleeping = null;
+}//»
 handleLetterPress(char_arg, if_no_render){//«
 	const dounshift=()=>{//«
 //		let cy = this.y+this.scrollNum;
