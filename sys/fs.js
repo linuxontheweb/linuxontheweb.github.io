@@ -100,11 +100,12 @@ const FILE_FS_TYPE="f";
 
 //»
 
-const FsDB = function(){//«
+//const FsDB = function(){
+const FsDB = class {//«
+#db;
+//let db;
 
-let db;
-
-const init_db=()=>{//«
+initDB(){//«
 	return new Promise((Y,N)=>{
 		let req = indexedDB.open(FS_DB_NAME, 1);
 		req.onerror=e=>{
@@ -112,7 +113,7 @@ cerr(e);
 			Y();
 		};
 		req.onsuccess=e=>{
-			db = e.target.result;
+			this.#db = e.target.result;
 			Y(true);
 		};
 		req.onblocked=e=>{
@@ -127,12 +128,12 @@ cerr(e);
 		}
 	});
 };//»
-const get_store=if_write=>{//«
-	return db.transaction([NODES_TABLE_NAME],if_write?"readwrite":"readonly").objectStore(NODES_TABLE_NAME);
-};//»
-const get_by_path=(path, if_key_only)=>{//«
+getStore(if_write){//«
+	return this.#db.transaction([NODES_TABLE_NAME],if_write?"readwrite":"readonly").objectStore(NODES_TABLE_NAME);
+}//»
+getByPath(path, if_key_only){//«
 	return new Promise((Y,N)=>{
-		let ind = get_store().index("path");
+		let ind = this.getStore().index("path");
 		let req;
 		if (if_key_only) req = ind.getKey(path);
 		else req = ind.get(path);
@@ -145,9 +146,9 @@ const get_by_path=(path, if_key_only)=>{//«
 		};
 	});
 };//»
-const get_by_id=(id)=>{//«
+getById(id){//«
 	return new Promise((Y,N)=>{
-		let req = get_store().get(id);
+		let req = this.getStore().get(id);
 		req.onerror=(e)=>{
 			cerr(e);
 			Y();
@@ -157,9 +158,9 @@ const get_by_id=(id)=>{//«
 		};
 	});
 };//»
-const put_by_id=(id, node)=>{//«
+putById(id, node){//«
 	return new Promise((Y,N)=>{
-		let req = get_store(true).put(node, id);
+		let req = this.getStore(true).put(node, id);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -169,9 +170,9 @@ cerr(e);
 		};
 	});
 };//»
-const del_by_id=(id)=>{//«
+delById(id){//«
 	return new Promise((Y,N)=>{
-		let req = get_store(true).delete(id);
+		let req = this.getStore(true).delete(id);
 		req.onerror=(e)=>{
 cerr(e);
 			Y();
@@ -181,7 +182,7 @@ cerr(e);
 		};
 	});
 };//»
-const get_dir_kids=(which, dirid)=>{//«
+getDirKids(which, dirid){//«
 return new Promise((Y,N)=>{
 
 	const doit=()=>{//«
@@ -202,7 +203,7 @@ log("IDS",ids);
 	};//»
 
 //	let ind = db.transaction([NODES_TABLE_NAME],"readonly").objectStore(NODES_TABLE_NAME).index(which);
-	let ind = get_store().index(which);
+	let ind = this.getStore().index(which);
 	let nodes, ids;
 	let req1 = ind.getAll(dirid);
 	req1.onerror=e=>{
@@ -228,9 +229,9 @@ cerr(e);
 
 });
 };//»
-const add_node=node=>{//«
+addNode(node){//«
 	return new Promise((Y,N)=>{
-		let store= db.transaction([NODES_TABLE_NAME],"readwrite").objectStore(NODES_TABLE_NAME);
+		let store= this.#db.transaction([NODES_TABLE_NAME],"readwrite").objectStore(NODES_TABLE_NAME);
 		let req=store.add(node);
 		req.onerror=(e)=>{
 cerr(e);
@@ -242,22 +243,22 @@ cerr(e);
 	});
 };//»
 
-this.init=async(root, branch_name)=>{//«
-	if (db) {
+async init(root, branch_name){//«
+	if (this.#db) {
 cwarn("WHO CALLED FsDB.INIT?");
 		return;
 	}
-	if (!await init_db()) {
-throw new Error("init_db() failed!");
+	if (!await this.initDB()) {
+throw new Error("initDB() failed!");
 	}
 	let path = `0/${branch_name}`;
-	let rootid = await get_by_path(path, true);
+	let rootid = await this.getByPath(path, true);
 	if (!rootid) {
-		if (!await add_node({parId: 0, path, type: DIRECTORY_FS_TYPE})){
+		if (!await this.addNode({parId: 0, path, type: DIRECTORY_FS_TYPE})){
 throw new Error("Could not add the root node!");
 			return;
 		}
-		rootid = await get_by_path(path, true);
+		rootid = await this.getByPath(path, true);
 		if (!rootid){
 throw new Error(`WUT NO ROOTID RETURNED AFTER ADDING ROOT NODE (${path}) ?!?!?`);
 		}
@@ -266,17 +267,17 @@ throw new Error(`WUT NO ROOTID RETURNED AFTER ADDING ROOT NODE (${path}) ?!?!?`)
 	return true;
 }//»
 
-this.createNode=async(name, type, parId, value)=>{//«
+async createNode(name, type, parId, value){//«
 
 if (type===DIRECTORY_FS_TYPE||type===NULL_BLOB_FS_TYPE||type==LINK_FS_TYPE||(type===FILE_FS_TYPE && Number.isFinite(value))||type==IDB_DATA_TYPE) {
 	let path = `${parId}/${name}`;
 	let node = {parId, path, type: type};
 	if (value) node.value = value;
-	let rv = await add_node(node);
+	let rv = await this.addNode(node);
 	if (!rv){
 	}
 	else{
-		rv = await get_by_path(path, true);
+		rv = await this.getByPath(path, true);
 		if (rv) return rv;
 	}
 cerr("TEOINMTV");
@@ -287,66 +288,66 @@ cwarn("createNode: ADD TYPE", type);
 }
 
 };//»
-this.getAll=async dirid=>{//«
-	let rv = await get_dir_kids("parId", dirid);
+async getAll (dirid){//«
+	let rv = await this.getDirKids("parId", dirid);
 	return {rows: rv||[]};
-};//»
-this.getNodesByBlobId=async blobid=>{//«
-	let rv = await get_dir_kids("value", blobid);
+}//»
+async getNodesByBlobId(blobid){//«
+	let rv = await this.getDirKids("value", blobid);
 	return {rows: rv||[]};
-};//»
-this.getNodeByNameAndParId=async (name, parid)=>{//«
+}//»
+async getNodeByNameAndParId (name, parid){//«
 	let path = `${parid}/${name}`;
-	let node = await get_by_path(path);
+	let node = await this.getByPath(path);
 	if (!node) return {rows:[]};
-	let id = await get_by_path(path, true);
+	let id = await this.getByPath(path, true);
 	if (!id){
-cerr(`Could not get_by_path(${path},true)`);
+cerr(`Could not getByPath(${path},true)`);
 	}
 	else return {rows:[{id, value: node.type, data: node.value}]}
 }//»
 
-this.setNodeBlobID=async(nodeid, blobid)=>{//«
-	let node = await get_by_id(nodeid);
+async setNodeBlobID(nodeid, blobid){//«
+	let node = await this.getById(nodeid);
 	if (!node) return;
 	node.type=FILE_FS_TYPE;
 	node.value=blobid;
-	if (!await put_by_id(nodeid, node)) return;
+	if (!await this.putById(nodeid, node)) return;
 	return true;
 };//»
-this.setNodeData=async(nodeid, data)=>{//«
-	let node = await get_by_id(nodeid);
+async setNodeData(nodeid, data){//«
+	let node = await this.getById(nodeid);
 	if (!node) return;
 	node.value=data;
-	if (!await put_by_id(nodeid, node)) return;
+	if (!await this.putById(nodeid, node)) return;
 	return true;
 };//»
 
-this.moveNode=async(id, fromId, toId, newName)=>{//«
-	let node = await get_by_id(id);
+async moveNode(id, fromId, toId, newName){//«
+	let node = await this.getById(id);
 	let parr = node.path.split("/");
 	if (fromId !== toId) {
 		node.parId = toId;
 	}
 	let usename = newName || parr[1];
 	node.path=`${toId}/${usename}`;
-	if (!await put_by_id(id, node)) return;
+	if (!await this.putById(id, node)) return;
 	return true;
-};//»
-this.getById=(id)=>{return get_by_id(id);};
+}//»
+getById(id){return this.getById(id);}
 
-this.removeNode=async(id, parId)=>{//«
+async removeNode(id, parId){//«
 
-if (!await del_by_id(id)) return;
+if (!await this.delById(id)) return;
 
 return true;
 
-};//»
+}//»
 
-this.dropDatabase = () => {//«
+dropDatabase(){//«
 //throw new Error("Comment me out to use dropDatabase()!");
 	return new Promise((Y,N)=>{
-		db.close();
+		this.#db.close();
 		const req = window.indexedDB.deleteDatabase(FS_DB_NAME);
 		req.onerror = (event) => {
 cerr("Error deleting database.");
@@ -360,7 +361,7 @@ cwarn("BLOCKED");
 			Y(true);
 		};
 	});
-};//»
+}//»
 
 }//»
 

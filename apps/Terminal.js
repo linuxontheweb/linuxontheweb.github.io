@@ -1340,16 +1340,19 @@ const {val: op}=tok;
 let fullpath = normPath(fname.toString(), term.cur_dir);
 let node = await fsapi.pathToNode(fullpath);
 if (node) {/*«*/
+	if (!node.isFile){
+		return `${fname}: not a regular file`;
+	}
 	if (node.type == FS_TYPE && op===">" && !ok_clobber) {
 		if (env.CLOBBER_OK==="true"){}
-		else return `not clobbering '${fname}' (shell.var.allowRedirClobber==${ok_clobber})`;
+		else return `not clobbering '${fname}' (allowRedirClobber==${ok_clobber})`;
 	}
 	if (node.writeLocked()){
 		return `${fname}: the file is "write locked" (${node.writeLocked()})`;
 	}
-	if (node.data){
-		return `${fname}: cannot write to the data file`;
-	}
+//	if (node.data){
+//		return `${fname}: cannot write to the data file`;
+//	}
 }/*»*/
 let patharr = fullpath.split("/");
 patharr.pop();
