@@ -100,7 +100,7 @@ const FILE_FS_TYPE="f";
 
 //»
 
-const DB = function(){//«
+const FsDB = function(){//«
 
 let db;
 
@@ -244,7 +244,7 @@ cerr(e);
 
 this.init=async(root, branch_name)=>{//«
 	if (db) {
-cwarn("WHO CALLED DB.INIT?");
+cwarn("WHO CALLED FsDB.INIT?");
 		return;
 	}
 	if (!await init_db()) {
@@ -381,7 +381,7 @@ root.root = root;
 //root.par = root;
 this.root = root;
 globals.root = root;
-const db = new DB();
+const db = new FsDB();
 
 
 let VERNUM=1;
@@ -417,221 +417,50 @@ const bad_link_cbs = {};
 
 //»
 
-//FSNode
+//FSNode«
 
 const LOCKED_BLOBS = {};
+
 class FSNode {//«
 
-constructor(arg){//«
-	this.isDir = arg.isDir;
-	this.isLink = arg.isLink;
-	this.isData = arg.isData;
-	this.isFile = arg.isFile;
-	for (let k of Object.keys(arg)){//«
+constructor(name, par, path){//«
+	this.setName(name);
+	this.par = par;
+	this.root = par.root;
+	this.icons = [];
+/*//«
+//	this.path = path;
+//this.name = name
+//	this.isDir = arg.isDir;
+//	this.isLink = arg.isLink;
+//	this.isData = arg.isData;
+//	this.isFile = arg.isFile;
+	for (let k of Object.keys(arg)){
 		this[k] = arg[k];
 		if (k=="name") this.setName(arg[k]);
 		if (k=="kids"){
 			this.kids["."]=this; 
 			this.kids[".."]=this.par;
 		}
-	}//»
-	this.writeLocked=()=>{
-		return LOCKED_BLOBS[this.blobId];
-	};
-	this.icons = [];
+	}
+//»*/
 }//»
 
-	okGet(){//«
-		if (this.type==MOUNT_TYPE||this.type==SHM_TYPE) return true;
-		let bid = this.blobId;
-		if (!bid || bid < FIRST_BLOB_ID) {
-			return;
-		}
-		return true;
-	};//»
-	okSet(){//«
-		if (this.type!==FS_TYPE) {
-			if (this.type==SHM_TYPE) return true;
-			return false;
-		}
-		let bid = this.blobId;
-		if (!bid || bid < FIRST_BLOB_ID) return false;
-//		if (this.data) return false;
-		return true;
-	};//»
-	setName(val){//«
-		this._name = val;
-		if (this.isDir||this.isLink){
-			this.baseName = val;
-			return;
-		}
-		let arr = getNameExt(val);
-		if (arr[1]) {
-			this.ext = arr[1];
-			this.baseName = arr[0];
-		}
-		else {
-			this.ext="";
-			this.baseName = val;
-		}
-	};//»
-	async getRealBlobId(){//«
-		let bid = get_blob_id();
-		this.blobId = bid;
-		if (!await db.setNodeBlobID(this.id, bid)) {
-cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
-			return;
-		}
-		return true;
-	};//»
-	async getValue(opts={}){//«
-		if (!this.okGet()) return;
-		if (this.blobId == IDB_DATA_TYPE) {
-			if (opts && opts.text) {
-cwarn("This is a data node, but opts.text was specified in getValue!");
-				try{
-					return JSON.stringify(this.data);
-				}catch(e){
-cerr(e);
-				}
-				return this.data.toString();
-			}
-			let dat = this.data;
-			return dat;
-		}
-		return getBlob(this, opts);
-	};//»
-	getDataType(){//«
-		if (this.blobId !== IDB_DATA_TYPE) return;
-		return this.data.type;
-	};//»
-	getDataValue(){//«
-		if (this.blobId !== IDB_DATA_TYPE) return;
-		return this.data.value;
-	};//»
-	async setDataValue(val){//«
-		if (this.blobId != IDB_DATA_TYPE){
-cerr("Cannot set data value on non-data node");
-			return;
-		}
-		let dat = this.data;
-		if (!dat){
-cerr("Data not found");
-log(this);
-			return;
-		}
-		if (!isDef(val)){
-cerr("Data types *require* a 'value' field (util.isDef() === true)");
-return;
-		}
-		dat.value = val;
-		if (!await db.setNodeData(this.id, this.data)) {
-cerr("Could not set node data");
-			return;
-		}
-		return true;
-	};//»
-	async setValue(val, opts={}){//«
-		if (this.blobId == IDB_DATA_TYPE){
-			if (!(isObj(val) && isStr(val.type))){
-cerr(`Expected an object with a 'type' field! (for inline data storage)`);
-				return;
-			}
-			if (!isDef(val.value)){
-cerr("Data types *require* a 'value' field (util.isDef() === true)");
-return;
-			}
-			if (this.data.type !== val.type){
-cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
-			}
-			if (!await db.setNodeData(this.id, val)) {
-cerr("Could not set node data", this);
-				return;
-			}
-			this.data = val;
-			return true;
-		}
-		if (!this.okSet()) return;
-		let blob = toBlob(val);
-		if (!blob){
-cerr("Unknown value", val);
-			return;
-		}
-		opts.node = this;
-		if (this.blobId===NULL_BLOB_FS_TYPE){//«
-			if (!await this.getRealBlobId()){
-cerr("Could not getRealBlobId()!?!?!?");
-				return;
-			}
-		}//»
-		opts.node = this;
-		let rv = await write_blob(await this.entry, blob, opts);
-		rv.node = this;
-		return rv;
-	};//»
-
-get entry(){//«
-	return new Promise(async(Y,N)=>{
-		if (this._entry) return Y(this._entry);
-		if (!this.okGet()) return Y();
-		let id = this.blobId;
-		if (id === NULL_BLOB_FS_TYPE){
-			id = get_blob_id();
-			this.blobId = id;
-		}
-		else if (this.type==SHM_TYPE) return Y();
-		else if (!Number.isFinite(id)) {
-cerr(`The node does not have a valid blobId: ${id}`);
-log(this);
-			return Y();
-		}
-		let ent = await get_blob_entry(id);
-		this._entry = ent;
-		Y(ent);
-	});
-}//»
-set entry(ent){//«
-cwarn("WHO SET ENTRY?", this, ent);
-	this._entry = ent;
-}//»
-get buffer(){//«
-//	Object.defineProperty(this,"buffer",{get:()=>{if(!okget())return;return getBlob(this,{buffer:true});}});
-	if (!this.okGet()) return;
-	return getBlob(this, {
-		buffer: true
-	});
-}//»
-get bytes(){//«
-//	Object.defineProperty(this,"bytes",{get:()=>{if(!okget())return;return getBlob(this,{bytes:true});}});
-	if (!this.okGet()) return;
-	return getBlob(this, {
-		bytes: true
-	});
-}//»
-get text(){//«
-//	Object.defineProperty(this,"text",{get:()=>{if(!okget())return;return getBlob(this,{text:true});}});
-	if (!this.okGet()) return;
-	return getBlob(this, {
-		text: true
-	});
-}//»
-get link(){//«
-//	if(isLink){Object.defineProperty(this,"link",{get:()=>{let symlink=this.symLink;if(symlink.match(/^\x2f/))return symlink;return `${this.path}/${symlink}`;}});Object.defineProperty(this,"ref",{get:()=>{return pathToNode(this.link);}});}
-	if (!this.isLink) return;
-	let symlink = this.symLink;
-	if (symlink.match(/^\x2f/)) return symlink;
-	return `${this.path}/${symlink}`;
-}//»
-get ref(){//«
-	if (!this.isLink) return;
-	return pathToNode(this.link);
-}//»
-get _file(){//«
-//	Object.defineProperty(this,"_file",{get:()=>{if(!okget())return;return getBlob(this,{getFileOnly:true});}});
-	if (!this.okGet()) return;
-	return getBlob(this, {
-		getFileOnly: true
-	});
+setName(val){//«
+	this._name = val;
+//	if (this.isDir||this.isLink){
+//		this.baseName = val;
+//		return;
+//	}
+	let arr = getNameExt(val);
+	if (arr[1]) {
+		this.ext = arr[1];
+		this.baseName = arr[0];
+	}
+	else {
+		this.ext="";
+		this.baseName = val;
+	}
 }//»
 get fullpath(){//«
 //	Object.defineProperty(this,"fullpath",{get:()=>{let str=this.name;if(!str)return null;let curobj=this;let i=0;while(true){if(curobj && curobj.par)str=`${curobj.par.name}/${str}`;else break;curobj=curobj.par;i++;}let arr=str.split("/");while(!arr[0] && arr.length){arr.shift();i++;}str=arr.join("/");return("/"+str).regpath();}});
@@ -653,25 +482,235 @@ get fullpath(){//«
 	str = arr.join("/");
 	return ("/" + str).regpath();
 }//»
-//Object.defineProperty(this, "type", {get:()=>this.root._type});
 get type(){return this.root._type;}
 get name(){return this._name;}
-set name(name){//«
-//	Object.defineProperty(this,"name",{set:setname,get:()=>this._name});
-	return this.setName(name);
-}//»
+set name(name){return this.setName(name);}
 get path(){//«
-//	Object.defineProperty(this,"path",{get:()=>{if(this._path)return this._path;return this.par.fullpath;}});
 	if (this._path) return this._path;
 	return this.par.fullpath;
 }//»
+writeLocked(){return false;}
 
-}
-const isNode=n=>{return n instanceof FSNode;};
+}//»
+
+class DirNode extends FSNode{//«
+
+constructor(name, par){//«
+	super(name, par);
+	this.isDir = true;
+	this.appName = FOLDER_APP;
+//	appName: FOLDER_APP,
+}//»
+
+setName(val){//«
+	this._name = val;
+	this.baseName = val;
+}//»
+
+}//»
+class LinkNode extends FSNode{//«
+
+constructor(name, par){//«
+	super(name, par);
+	this.isLink = true;
+}//»
+setName(val){//«
+	this._name = val;
+	this.baseName = val;
+}//»
+get link(){//«
+//	if(isLink){Object.defineProperty(this,"link",{get:()=>{let symlink=this.symLink;if(symlink.match(/^\x2f/))return symlink;return `${this.path}/${symlink}`;}});Object.defineProperty(this,"ref",{get:()=>{return pathToNode(this.link);}});}
+	let symlink = this.symLink;
+	if (symlink.match(/^\x2f/)) return symlink;
+	return `${this.path}/${symlink}`;
+}//»
+get ref(){return pathToNode(this.link);}
+
+}//»
+class DataNode extends FSNode{//«
+
+constructor(name, par){//«
+	super(name, par);
+	this.isData = true;
+}//»
+setName(val){//«
+	this._name = val;
+	this.baseName = val;
+}//»
+
+getDataType(){return this.data.type;}
+getDataValue(){return this.data.value;}
+async setDataValue(val){//«
+	let dat = this.data;
+	if (!dat){
+cerr("Data not found");
+log(this);
+		return;
+	}
+	if (!isDef(val)){
+cerr("Data types *require* a 'value' field (util.isDef() === true)");
+return;
+	}
+	dat.value = val;
+	if (!await db.setNodeData(this.id, this.data)) {
+cerr("Could not set node data");
+		return;
+	}
+	return true;
+}//»
+async setValue(val, opts={}){//«
+	if (!(isObj(val) && isStr(val.type))){
+cerr(`Expected an object with a 'type' field! (for inline data storage)`);
+		return;
+	}
+	if (!isDef(val.value)){
+cerr("Data types *require* a 'value' field (util.isDef() === true)");
+return;
+	}
+	if (this.data.type !== val.type){
+cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
+	}
+	if (!await db.setNodeData(this.id, val)) {
+cerr("Could not set node data", this);
+		return;
+	}
+	this.data = val;
+	return true;
+}//»
+async getValue(opts={}){//«
+	if (opts && opts.text) {
+cwarn("This is a data node, but opts.text was specified in getValue!");
+		try{
+			return JSON.stringify(this.data);
+		}catch(e){
+cerr(e);
+		}
+		return this.data.toString();
+	}
+	return this.data;
+}//»
+
+
+}//»
+class FileNode extends FSNode{//«
+
+constructor(name, par){//«
+	super(name, par);
+	this.isFile = true;
+}//»
+writeLocked(){return LOCKED_BLOBS[this.blobId];}
+okGet(){//«
+	if (this.type==MOUNT_TYPE||this.type==SHM_TYPE) return true;
+	let bid = this.blobId;
+	if (!bid || bid < FIRST_BLOB_ID) {
+		return;
+	}
+	return true;
+}//»
+okSet(){//«
+	if (this.type!==FS_TYPE) {
+		if (this.type==SHM_TYPE) return true;
+		return false;
+	}
+	let bid = this.blobId;
+	if (!bid || bid < FIRST_BLOB_ID) return false;
+	return true;
+}//»
+async getRealBlobId(){//«
+	let bid = get_blob_id();
+	this.blobId = bid;
+	if (!await db.setNodeBlobID(this.id, bid)) {
+cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
+		return;
+	}
+	return true;
+}//»
+async getValue(opts={}){//«
+	if (!this.okGet()) return;
+	return getBlob(this, opts);
+}//»
+async setValue(val, opts={}){//«
+	if (!this.okSet()) return;
+	let blob = toBlob(val);
+	if (!blob){
+cerr("Unknown value", val);
+		return;
+	}
+	opts.node = this;
+	if (this.blobId===NULL_BLOB_FS_TYPE){//«
+		if (!await this.getRealBlobId()){
+cerr("Could not getRealBlobId()!?!?!?");
+			return;
+		}
+	}//»
+	opts.node = this;
+	let rv = await write_blob(await this.entry, blob, opts);
+	rv.node = this;
+	return rv;
+}//»
+get entry(){//«
+	return new Promise(async(Y,N)=>{
+		if (this._entry) return Y(this._entry);
+		if (!this.okGet()) return Y();
+		let id = this.blobId;
+		if (id === NULL_BLOB_FS_TYPE){
+			id = get_blob_id();
+			this.blobId = id;
+		}
+		else if (this.type==SHM_TYPE) return Y();
+		else if (!Number.isFinite(id)) {
+cerr(`The node does not have a valid blobId: ${id}`);
+log(this);
+			return Y();
+		}
+		let ent = await get_blob_entry(id);
+		this._entry = ent;
+		Y(ent);
+	});
+}//»
+get buffer(){//«
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		buffer: true
+	});
+}//»
+get bytes(){//«
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		bytes: true
+	});
+}//»
+get text(){//«
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		text: true
+	});
+}//»
+get _file(){//«
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		getFileOnly: true
+	});
+}//»
+
+}//»
+class DevNode extends FSNode{//«
+
+constructor(name, par){//«
+	super(name, par);
+	this.isDevice = true;
+	this.appName = "Device";
+}//»
+
+}//»
+
+const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof LinkNode || n instanceof DataNode || n instanceof DevNode);};
 util.isNode = isNode;
-const isDir=n=>{return (n instanceof FSNode && n.isDir===true);};
+//const isDir=n=>{return (n instanceof FSNode && n.isDir===true);};
+const isDir=n=>{return (n instanceof DirNode);};
 util.isDir = isDir;
-const isFile=n=>{return (n instanceof FSNode && n.isFile===true);};
+//const isFile=n=>{return (n instanceof FSNode && n.isFile===true);};
+const isFile=n=>{return (n instanceof FileNode);};
 util.isFile = isFile;
 
 //»
@@ -1894,6 +1933,12 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	let kid;
 	if (opts.useKid) kid = opts.useKid;
 	else {
+		if (isFile) kid = new FileNode(name, par, path);
+		else if (isDir) kid = new DirNode(name, par, path);
+		else if (isLink) kid = new LinkNode(name, par, path);
+		else if (isData) kid = new DataNode(name, par, path);
+		else FATAL("WHAT KIND OF NODE???");
+/*«
 		kid = new FSNode({
 			name: name,
 			par: par,
@@ -1905,6 +1950,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 //			isFile: !(is_data||is_dir||is_link)
 //			path: path
 		});
+»*/
 	}
 //log(kid);
 	if (isDir) {
@@ -1943,6 +1989,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 const popDir = (dirobj, opts = {}) => {return populate_dirobj(dirobj, opts);};
 const popDirByPath=(patharg, opts={})=>{return populate_dirobj_by_path(patharg, opts);};
 const mount_tree=(name, type, pararg)=>{//«
+/*«
 	let dir = new FSNode({
 		name: name,
 		_type: type,
@@ -1953,16 +2000,23 @@ const mount_tree=(name, type, pararg)=>{//«
 //		fullpath: `/${name}`,
 		par: pararg||root
 	});
+»*/
+	let dir = new DirNode(name, pararg||root);
+	dir._type = type;
+	dir.kids = {};
+	dir.sys = true;
+
 	if (!pararg) dir._path = "/";
 	else dir._path = dir.par.fullpath;
-if (pararg) pararg.kids[name]=dir;
-else root.kids[name]=dir;
+	if (pararg) pararg.kids[name]=dir;
+	else root.kids[name]=dir;
 	dir.root=dir;
 //	dir.kids['.']=dir;
 	return dir;
 }//»
 const make_fs_tree = async name => {//«
 	const new_root_tree = (name, type) => {//«
+/*«
 		return new FSNode({
 			appName: FOLDER_APP,
 			isDir: true,
@@ -1971,6 +2025,11 @@ const make_fs_tree = async name => {//«
 			_type: FS_TYPE,
 			par: root
 		});
+»*/
+		let dir = new DirNode(name, root);
+		dir.kids={};
+		dir._type = FS_TYPE;
+		return dir;
 	};//»
 	let dirstr = null;
 	let tree = new_root_tree(name);
@@ -1995,12 +2054,17 @@ const make_dev_tree = ()=>{//«
 	let kids = par.kids;
 	let arr = ["null", "log"];
 	for (let name of arr){
+/*«
 		let kid = new FSNode({
 			name: name,
 			appName: "Device",
 			par,
 			root: par
 		});
+»*/
+//		let kid = new FSNode(name, par);
+		let kid = new DevNode(name, par);
+//		kid.appName = "Device";
 		kid.root = par;
 		kids[name]=kid;
 	}   
