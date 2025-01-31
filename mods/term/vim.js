@@ -1328,6 +1328,13 @@ const edit_save = async(if_nostat)=>{//«
 	let write_err = "";
 	const write_cb_func = async(ret)=>{//«
 		if (ret) {
+//We were doing a "save as" from another file, so we need to unlock it since we
+//aren't using that file anymore
+			if (edit_fobj_hold){
+				edit_fobj_hold.unlockFile();
+				edit_fobj_hold = null;
+			}
+
 			let {node} = ret;
 			if (!edit_fobj){
 				edit_fobj = node;
@@ -1480,7 +1487,9 @@ let rv = checkok();
 if (isStr(rv)) return err(rv);
 //MDOPILKL
 let gotkid = parobj.kids[fname];
-if (!gotkid) return save_ok(true);
+if (!gotkid) {
+	return save_ok(true);
+}
 if (gotkid.writeLocked()){
 	stat_message = `${fname}: the file is write locked`;
 	try_revert();
@@ -1628,11 +1637,12 @@ cerr("Fold error detected, line: ", i);
 	return false;
 };//»
 
-const handle_tab_path_completion = async(if_ctrl)=>{//«
+const handle_tab_path_completion = async(if_ctrl, gotpath, stat_com_pref)=>{//«
 	if (if_ctrl) num_completion_tabs = 0;
-	let gotpath = stat_com_arr.join("").trim();
+//	let gotpath;
+//	gotpath = stat_com_arr.join("").trim();
 	let usedir, usename;
-	if(!num_completion_tabs) {
+	if(!num_completion_tabs) {/*«*/
 		if (gotpath.match(/^\//)){
 			let arr = gotpath.split("/");
 			usename = arr.pop();
@@ -1661,7 +1671,7 @@ const handle_tab_path_completion = async(if_ctrl)=>{//«
 		cur_completion_str = gotpath;
 		cur_completion_name = usename;
 		cur_completion_dir = usedir;
-	}
+	}/*»*/
 	let rv = await Term.getDirContents(cur_completion_dir, cur_completion_name);
 	if (!rv.length) return;
 	rv.push([cur_completion_name]);
@@ -1676,9 +1686,10 @@ const handle_tab_path_completion = async(if_ctrl)=>{//«
 		str=str+"/";
 		is_folder = true;
 	}
-	stat_com_arr=(cur_completion_str+str).split("");
+	stat_com_arr=(stat_com_pref+(cur_completion_str+str)).split("");
 	stat_x=stat_com_arr.length;
 	render({},81);
+
 	if (is_folder&&rv.length==1) num_completion_tabs=0;
 	else num_completion_tabs++;
 
@@ -1732,7 +1743,10 @@ if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
 			return;
 		};
 		if (com=="q"||com=="quit")maybe_quit();
-		else if (com.match(/^w(rite)?( +(.+))?$/))stat_warn("Ctrl+s to save!");
+		else if (marr = com.match(/^w(rite)?( +(.+))?$/)){
+			save_as(marr[3]);
+			return;
+		}
 		else if (marr = com.match(/^set( +(.+))?$/)){//«
 			if (!marr[2]) return stat("Nothing to set!");
 			let arr = marr[2].split(/ +/);
@@ -5738,13 +5752,13 @@ const handle_stat_char=ch=>{//«
 const handle_stat_input_keydown=(sym)=>{//«
 	if (sym=="TAB_"||sym=="TAB_C") {
 		let sit = this.stat_input_type;
-		if (sit==="Save As: ") return handle_tab_path_completion(sym==="TAB_C");
-//		else if (sit===":"&&stat_com_arr.join("").match(/^w(rite)? /)){
-//cwarn("TAB ON WRITE SUMPUMB");
-//		}
-//		else{
+
+		if (sit==="Save As: ") return handle_tab_path_completion(sym==="TAB_C", stat_com_arr.join("").trim(), "");
+		let marr;
+		if (sit===":"&&(marr=stat_com_arr.join("").match(/^(w(rite)? +)(.+)$/))){
+			return handle_tab_path_completion(sym==="TAB_C", marr[3], marr[1]);
+		}
 		init_complete_mode({stat: true});
-//		}
 		return;
 	}
 	num_completion_tabs = 0;
