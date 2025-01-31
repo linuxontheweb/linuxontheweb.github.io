@@ -283,7 +283,8 @@ async init(){//«
 			return this.no(`${fullpath}: is a directory`);
 		}
 		let val = await node.getValue({text:true});
-		arr = val.split("\n");
+		if (val) arr = val.split("\n");
+		else arr = [];
 		name = node.name;
 	}
 

@@ -281,7 +281,7 @@ const LEFT_KEYCODE = KC.LEFT;
 const DEL_MODS=[
 //	"util.less",
 	"term.vim",
-	"term.log"
+//	"term.log"
 ];
 const DEL_COMS=[
 //	"audio"
@@ -7281,13 +7281,15 @@ render(opts={}){//«
 	let outarr = [];
 	let donum;
 //»
+	let push_empty_line = !(this.isEditor||this.isPager);
 	for (let i=slicefrom; i < sliceto; i++) {//«
 		let ln = this.lines[i];
+//		if (ln&&ln.length){
 		if (ln){
 			uselines.push(ln.slice());
 			continue;
 		}
-		if (!this.isEditor){
+		if (push_empty_line){
 			uselines.push([""]);
 			continue;
 		}

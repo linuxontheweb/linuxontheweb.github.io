@@ -233,7 +233,8 @@ const{
 	topwin,
 //	quit_new_screen,
 //	x_scroll_terminal,
-	get_dir_contents,
+//	get_dir_contents,
+//getDir
 	Desk
 } = Term;
 
@@ -669,7 +670,6 @@ cerr("The reload_win was not in topwin.childWins!?!?!");
 };//»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
 const onescape=()=>{//«
-//	KEY_LOG.push("ESC");
 	if (stat_cb){
 		if (this.mode===CUT_BUFFER_MODE) alt_screen_escape_handler();
 		else {
@@ -679,6 +679,7 @@ const onescape=()=>{//«
 		return true;
 	}
 	if (this.stat_input_type){
+		is_saving = false;
 		this.stat_input_type = null;
 		render();
 		return true;
@@ -1637,13 +1638,15 @@ const handle_tab_path_completion = async(if_ctrl)=>{//«
 			usename = arr.pop();
 			usedir = ("/"+arr.join("/")).regpath();
 		}
+
 		else if (gotpath.match(/^~\//)){
 			let arr = gotpath.split("/");
 			arr.shift();
 			usename = arr.pop();
 			usedir = (globals.home_path+arr.join("/")).regpath();
-			gotpath = gotpath.replace(/^~/, globals.home_path);
+//			gotpath = gotpath.replace(/^~/, globals.home_path);
 		}
+
 		else if (gotpath.match(/\//)){
 			let arr = gotpath.split("/");
 			usename = arr.pop();
@@ -1659,8 +1662,9 @@ const handle_tab_path_completion = async(if_ctrl)=>{//«
 		cur_completion_name = usename;
 		cur_completion_dir = usedir;
 	}
-	let rv = await get_dir_contents(cur_completion_dir, cur_completion_name);
+	let rv = await Term.getDirContents(cur_completion_dir, cur_completion_name);
 	if (!rv.length) return;
+	rv.push([cur_completion_name]);
 	if (!num_completion_tabs) {
 		num_completion_tabs = 0;
 	}
@@ -5747,14 +5751,13 @@ const handle_stat_input_keydown=(sym)=>{//«
 	if (sym=="ENTER_") return handle_edit_input_enter();
 	if (sym=="LEFT_"){if (stat_x > 0) stat_x--;}
 	else if(sym=="RIGHT_"){if(stat_x<stat_com_arr.length)stat_x++;}
-	else if (sym == "BACK_") {/*«*/
+	else if (sym == "BACK_") {//«
 		if (stat_x > 0) {
 			stat_x--;
 			stat_com_arr.splice(stat_x, 1);
 		} 
 		else this.stat_input_type = "";
-		
-	}/*»*/
+	}//»
 	else if(sym=="DEL_"){if(stat_com_arr.length)stat_com_arr.splice(stat_x,1);}
 	else if(sym=="a_C"){if(stat_x==0)return;stat_x=0;}
 	else if(sym=="e_C"){if(stat_x==stat_com_arr.length)return;stat_x=stat_com_arr.length;}
