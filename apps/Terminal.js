@@ -1255,7 +1255,7 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 
 //Classes     (Com, ErrCom, Stdin/Stdout, ScriptCom...)«
 
-class Stdin{/*«*/
+class Stdin{//«
 
 constructor(tok, arg){
 	this.tok=tok;
@@ -1264,7 +1264,7 @@ constructor(tok, arg){
 	this.isRedir = true;
 }
 
-async setValue(shell, term, opts={}){/*«*/
+async setValue(shell, term, opts={}){//«
 //async setValue(shell, term, env, scriptName, scriptArgs){
 const{env, scriptName, scriptArgs} = opts;
 
@@ -1274,7 +1274,7 @@ if (this.tok.isHeredoc) {
 }
 const{tok, arg}=this;
 const {r_op}=tok;
-if (r_op==="<"){/*«*/
+if (r_op==="<"){//«
 	let arg = this.arg;
 	let raw = arg.raw;
 	if (!arg.isSimple){
@@ -1296,25 +1296,25 @@ if (r_op==="<"){/*«*/
 	}
 	this.value = rv;
 	return true;
-}/*»*/
-if (r_op==="<<<"){/*«*/
+}//»
+if (r_op==="<<<"){//«
 //	await this.arg.expandSubs(shell, term, env, scriptName, scriptArgs);
 	await this.arg.expandSubs(shell, term, opts);
 //	this.arg.quoteRemoval();
 //log(this.arg.val);
 	this.value = this.arg.fields.join("\n");
 	return true;
-}/*»*/
+}//»
 return `Unknown stdin redirection: ${rop}`;
 
-}/*»*/
+}//»
 
 dup(){
 	return new Stdin(this.tok, this.arg&&this.arg.dup());
 }
 
-}/*»*/
-class Stdout{/*«*/
+}//»
+class Stdout{//«
 
 constructor(tok, file){
 	this.tok=tok;
@@ -1323,7 +1323,7 @@ constructor(tok, file){
 	this.isRedir = true;
 }
 
-async write(term, val, env, ok_clobber){/*«*/
+async write(term, val, env, ok_clobber){//«
 
 if (!(isStr(val)||(val instanceof Uint8Array))){
 return "Invalid value to write to stdout (want string or Uint8Array)";
@@ -1339,7 +1339,7 @@ const {val: op}=tok;
 //ZOPIRUTKS------------------vvvvvvvvvvv
 let fullpath = normPath(fname.toString(), term.cur_dir);
 let node = await fsapi.pathToNode(fullpath);
-if (node) {/*«*/
+if (node) {//«
 	if (!node.isFile){
 		return `${fname}: not a regular file`;
 	}
@@ -1350,10 +1350,7 @@ if (node) {/*«*/
 	if (node.writeLocked()){
 		return `${fname}: the file is "write locked" (${node.writeLocked()})`;
 	}
-//	if (node.data){
-//		return `${fname}: cannot write to the data file`;
-//	}
-}/*»*/
+}//»
 let patharr = fullpath.split("/");
 patharr.pop();
 let parpath = patharr.join("/");
@@ -1369,13 +1366,13 @@ if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) return `${fname}: Could not write to the file`;
 return true;
 
-	}/*»*/
+	}//»
 
 dup(){
 	return new Stdin(this.tok, this.arg.dup());
 }
 
-}/*»*/
+}//»
 
 const Com = class {//«
 
@@ -9616,7 +9613,6 @@ onkeyup(e,sym){//«
 }//»
 
 //»
-
 
 //System callbacks«
 

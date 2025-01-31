@@ -100,8 +100,8 @@ const FILE_FS_TYPE="f";
 
 //»
 
-//const FsDB = function(){
 const FsDB = class {//«
+//const FsDB = function(){
 #db;
 //let db;
 
@@ -145,8 +145,8 @@ getByPath(path, if_key_only){//«
 			Y(e.target.result);
 		};
 	});
-};//»
-getById(id){//«
+}//»
+_getById(id){//«
 	return new Promise((Y,N)=>{
 		let req = this.getStore().get(id);
 		req.onerror=(e)=>{
@@ -157,7 +157,7 @@ getById(id){//«
 			Y(e.target.result);
 		};
 	});
-};//»
+}//»
 putById(id, node){//«
 	return new Promise((Y,N)=>{
 		let req = this.getStore(true).put(node, id);
@@ -169,7 +169,7 @@ cerr(e);
 			Y(true);
 		};
 	});
-};//»
+}//»
 delById(id){//«
 	return new Promise((Y,N)=>{
 		let req = this.getStore(true).delete(id);
@@ -181,7 +181,7 @@ cerr(e);
 			Y(true);
 		};
 	});
-};//»
+}//»
 getDirKids(which, dirid){//«
 return new Promise((Y,N)=>{
 
@@ -228,7 +228,7 @@ cerr(e);
 	};
 
 });
-};//»
+}//»
 addNode(node){//«
 	return new Promise((Y,N)=>{
 		let store= this.#db.transaction([NODES_TABLE_NAME],"readwrite").objectStore(NODES_TABLE_NAME);
@@ -241,7 +241,7 @@ cerr(e);
 			Y(true);
 		};
 	});
-};//»
+}//»
 
 async init(root, branch_name){//«
 	if (this.#db) {
@@ -287,7 +287,7 @@ else{
 cwarn("createNode: ADD TYPE", type);
 }
 
-};//»
+}//»
 async getAll (dirid){//«
 	let rv = await this.getDirKids("parId", dirid);
 	return {rows: rv||[]};
@@ -308,23 +308,23 @@ cerr(`Could not getByPath(${path},true)`);
 }//»
 
 async setNodeBlobID(nodeid, blobid){//«
-	let node = await this.getById(nodeid);
+	let node = await this._getById(nodeid);
 	if (!node) return;
 	node.type=FILE_FS_TYPE;
 	node.value=blobid;
 	if (!await this.putById(nodeid, node)) return;
 	return true;
-};//»
+}//»
 async setNodeData(nodeid, data){//«
-	let node = await this.getById(nodeid);
+	let node = await this._getById(nodeid);
 	if (!node) return;
 	node.value=data;
 	if (!await this.putById(nodeid, node)) return;
 	return true;
-};//»
+}//»
 
 async moveNode(id, fromId, toId, newName){//«
-	let node = await this.getById(id);
+	let node = await this._getById(id);
 	let parr = node.path.split("/");
 	if (fromId !== toId) {
 		node.parId = toId;
@@ -334,7 +334,7 @@ async moveNode(id, fromId, toId, newName){//«
 	if (!await this.putById(id, node)) return;
 	return true;
 }//»
-getById(id){return this.getById(id);}
+getById(id){return this._getById(id);}
 
 async removeNode(id, parId){//«
 
