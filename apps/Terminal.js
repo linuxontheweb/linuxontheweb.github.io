@@ -1,6 +1,6 @@
 /*2/3/25: Piping into compound commands (is there not a mechanism for this?):
-  cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
 
+  cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
 
 Whereas there is a mechanism for:
   while read LINE; do echo "HERE IS LINE: $LINE"; done <BLAH.txt
@@ -10,6 +10,19 @@ a nextCom property and pipeTo = true; The "next" command gets pipeFrom = true, a
 it is its responsibility to create a pipeIn on its command object.
 
 So for this, we need a pipeIn on the WhileCom object.
+
+TEMPORARY BAND-AID SOLUTION: @NEKIUTYK, in our new pipeIn method on WhileCom.
+we are collecting everything into an internal buffer until we get an EOF,
+at which point we call the doRun method.
+
+Additionally, in order to get the following to work properly:
+
+  echo HELLO | while read LINE; do echo "HERE IS LINE: $LINE"; done
+
+...we had to insert a sleep(0) in com_echo @XQMNHI, in between this.out and this.ok.
+
+Otherwise, the prompt was returning *BEFORE* the echo inside the while loop got a
+chance to print onto the terminal.
 
 */
 /*1/29/25: On my way towards enabling 'cat | less' (not that anyone *really* needs it to work)...«
@@ -1718,6 +1731,8 @@ const ErrCom = class extends Com{//«
 
 class CompoundCom{//«
 
+#buffer;
+#isBuffering;
 constructor(shell, opts){//«
 	this.shell = shell;
 	this.opts=opts;
@@ -1729,8 +1744,11 @@ constructor(shell, opts){//«
 		};
 	});
 }//»
-
-init(){//«
+runOk(from_pipe){/*«*/
+	if (this.#buffer && !from_pipe) return false;
+	return true;
+}/*»*/
+_init(){//«
 	let opts={};
 	for (let k in this.opts){
 		opts[k]=this.opts[k];
@@ -1748,24 +1766,44 @@ init(){//«
 		opts.envRedirLines = this.redirLines;
 	}
 	this.opts = opts;
+	if (this.prevCom && !this.opts.stdin){
+		this.#buffer = [];
+		this.#isBuffering = true;
+	}
 }//»
-cancel(){this.killed=true;}
-/*
-pipeIn(rv){
-//cwarn("HIHI");
-//log(rv);
+init(){
+	this._init();
 }
-*/
+cancel(){this.killed=true;}
+pipeIn(val){//«
+	if (isEOF(val)) {
+		this.opts.stdin = this.#buffer.join("\n");
+		this.opts.stdinLns = this.#buffer;
+		this.isBuffering = false;
+		return this.run(true);
+	}
+	if (isStr(val)) {
+		let arr = val.split("\n");
+		this.#buffer.push(...arr);
+	}
+	else{
+cerr("WTF IS IN until.pipeIn????");
+log(val);
+	}
+}//»
+
 }//»
 
 class BraceGroupCom extends CompoundCom{//«
-constructor(shell, opts, list){
+
+constructor(shell, opts, list){/*«*/
 	super(shell, opts);
 	this.list = list;
 	this.name="brace_group";
-}
-async run(){//«
-//log("FUNC?",this.isFunc);
+}/*»*/
+async run(isPipe){//«
+//	if (!this.runOk()) return;
+	if (!this.runOk(isPipe)) return;
 	if (this.isFunc){
 		this.opts.scriptArgs = this.args.slice();
 		this.opts.scriptName = "sh";
@@ -1774,6 +1812,7 @@ async run(){//«
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }//»
+
 }//»
 class SubshellCom extends CompoundCom{//«
 constructor(shell, opts, list){
@@ -1781,8 +1820,10 @@ constructor(shell, opts, list){
 	this.list = list;
 	this.name="subshell";
 }
-async run(){
+async run(isPipe){
+	if (!this.runOk(isPipe)) return;
 //log(this.opts.env);
+//	if (!this.runOk()) return;
 	if (this.isFunc){
 		this.opts.scriptArgs = this.args.slice();
 		this.opts.scriptName = "sh";
@@ -1795,27 +1836,8 @@ async run(){
 }
 }//»
 
-/*
-
-The following 2 commands (WhileCom and UntilCom) are the conditional loops.
-ForCom is a loop that is meant to iterate through a given list (e.g. a bunch of files).
-
-There is a massive difference between "all at once" commands like:
-
-$ cat SOMEFILE.txt
-
-... and streaming commands:
-
-$ echodelay -d 1000 each word is emitted after a one second delay
-
-FIRST SIMPLE SOLUTION (NOT SATISFACTORY FOR "REALTIME STREAMING" PURPOSES):
-ALL WE HAVE TO DO IS BUFFER EVERYTHING UP UNTIL THERE IS AN EOF AND THEN TURN IT
-INTO: this.opts.stdin.
-
-So: if this.prevCom && !this.opts.stdin
-
-*/
 class WhileCom extends CompoundCom{//«
+
 #buffer;
 constructor(shell, opts, cond, do_group){//«
 	super(shell, opts);
@@ -1823,11 +1845,11 @@ constructor(shell, opts, cond, do_group){//«
 	this.do_group = do_group;
 	this.name = "while";
 }//»
-init(){
-	if (!this.prevCom || this.opts.stdin) {}
-	else this.#buffer=[];
-}
-async doRun(){//«
+async run(isPipe){
+//	if (this.#buffer && this.isBuffering) return;
+	if (!this.runOk(isPipe)) return;
+//log(this.runOk());
+//	if (!this.runOk()) return;
 	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
 	if (this.shell.cancelled) return;
 	while (!rv){
@@ -1837,15 +1859,13 @@ async doRun(){//«
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
+	await sleep(0);
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
 	this.end(rv);
-}//»
-run(){
-	if (!this.prevCom || this.opts.stdin) this.doRun();
+//	if (!this.prevCom || this.opts.stdin) this.doRun();
 }
+/*
 pipeIn(val){//«
-//cwarn("IN");
-//log(val);
 	if (isEOF(val)) {
 		this.opts.stdin = this.#buffer.join("\n");
 		this.opts.stdinLns = this.#buffer;
@@ -1860,9 +1880,10 @@ cerr("WTF IS IN while.pipeIn????");
 log(val);
 	}
 }//»
-
+*/
 }//»
 class UntilCom extends CompoundCom{//«
+
 #buffer;
 constructor(shell, opts, cond, do_group){//«
 	super(shell, opts);
@@ -1870,11 +1891,12 @@ constructor(shell, opts, cond, do_group){//«
 	this.do_group = do_group;
 	this.name="until";
 }//»
-init(){
-	if (!this.prevCom || this.opts.stdin) {}
-	else this.#buffer=[];
-}
 async doRun(){//«
+}//»
+async run(isPipe){
+	if (!this.runOk(isPipe)) return;
+//	if (!this.runOk()) return;
+//	if (this.#buffer && this.isBuffering) return;
 	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
 	if (this.shell.cancelled) return;
 	while (rv){
@@ -1884,12 +1906,11 @@ async doRun(){//«
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
+	await sleep(0);
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
 	this.end(rv);
-}//»
-run(){
-	if (!this.prevCom || this.opts.stdin) this.doRun();
 }
+/*
 pipeIn(val){//«
 	if (isEOF(val)) {
 		this.opts.stdin = this.#buffer.join("\n");
@@ -1905,7 +1926,7 @@ cerr("WTF IS IN until.pipeIn????");
 log(val);
 	}
 }//»
-
+*/
 }//»
 
 class IfCom extends CompoundCom{//«
@@ -1916,8 +1937,10 @@ constructor(shell, opts, conds, conseqs, fallback){//«
 	this.fallback = fallback;
 	this.name = "if";
 }//»
-init(){}
-async run(){//«
+//init(){}
+async run(isPipe){//«
+//	if (!this.runOk()) return;
+	if (!this.runOk(isPipe)) return;
 	const{conds, conseqs, opts}=this;
 	for (let i=0; i < conds.length; i++){
 		let rv = await this.shell.executeStatements2(conds[i], opts);
@@ -1953,10 +1976,14 @@ constructor(shell, opts, name, in_list, do_group){//«
 }//»
 async init(){//«
 //	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
+	this._init();
 	this.in_list = await this.shell.allExpansions(this.in_list, this.opts);
 	if (this.shell.cancelled) return;
 }//»
-async run(){//«
+async run(isPipe){//«
+	if (!this.runOk(isPipe)) return;
+
+///if (this.#buffer && !from_pipe) return;
 	const{shell}=this;
 	let env = this.opts.env;
 	let nm = this.var_name+"";
@@ -1981,6 +2008,7 @@ constructor(shell, opts, name, com){//«
 	this.redirs = com.redirs;
 }//»
 async init(){//«
+	this._init();
 	let typ = this.type;
 	let name = this.name
 	const funcs = this.shell.term.funcs;
@@ -2008,7 +2036,9 @@ async init(){//«
 	}
 	funcs[name] = func;
 }//»
-run(){
+run(isPipe){
+	if (!this.runOk(isPipe)) return;
+//	if (!this.runOk()) return;
 //As commands themselves, function definitions don't do much of anything, e.g.:
 //echo blah blah blah | 
 	this.end(E_SUC);
@@ -2022,6 +2052,7 @@ this.list=list;
 this.name="case";
 }//»
 async init(){//«
+	this._init();
 	this.word.tildeExpansion();
 //AKDMFLS
 //	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
@@ -2031,7 +2062,9 @@ async init(){//«
 	this.word.quoteRemoval();
 	this.word = this.word.fields.join("")
 }//»
-async run(){//«
+async run(isPipe){//«
+if (!this.runOk(isPipe)) return;
+//if (!this.runOk()) return;
 /*«
 For everything, do:
 
@@ -2267,9 +2300,11 @@ const com_echo = class extends Com{//«
 	async run(){
 		this.out(this.args.join(" "));
 
+//XQMNHI
 //For some reason, this sleep is *required* in order to make this behave correctly:
 // $ echo HELLO | while read LINE; do echo $LINE; done
-		await sleep(0);
+//		await sleep(0);
+
 		this.ok();
 	}
 }//»
@@ -6331,7 +6366,7 @@ log(com);
 			rv.pipeFrom = true;
 			rv.prevCom = last_com;
 if (!rv.pipeIn){
-this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${rv.name}')`);
+//this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${rv.name}')`);
 }
 		}
 		pipeline.push(rv);
