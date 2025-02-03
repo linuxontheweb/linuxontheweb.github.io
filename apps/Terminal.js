@@ -1,30 +1,29 @@
-/*2/3/25: Piping into compound commands (is there not a mechanism for this?):
+/*2/3/25: Piping into compound commands (is there not a mechanism for this?): «
 
   cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
 
 Whereas there is a mechanism for:
   while read LINE; do echo "HERE IS LINE: $LINE"; done <BLAH.txt
 
+
+OKAY: I just created a pipeIn method on the CompoundCom class (which all
+compound commands inherit from), and I changed init to _init, and turned the
+default init method to simply calling _init (so everybody with their own init
+methods must first call _init). At the end of _init, we are checking for
+prevCom and no stdin (@CWOPLIU). In that case, we are setting this.#buffer to
+[] (otherwise it is undefined). Now, when the system calls the run methods
+"normally" (@CWJKOI), we are promptly returning from *THAT* invocation -- if we
+have a defined buffer -- because we added a runOk method (@EJKFKJ), which the
+run methods *must* call first before proceeding.  Once the pipeIn method
+receives an EOF (from the preceeding command in the pipeline), then it calls
+this.run(true), which causes runOk to return true, and allows us to continue on
+with the run method.
+
 @FSHSKEOK is where we are constructing the pipelines. The "previous" command gets
 a nextCom property and pipeTo = true; The "next" command gets pipeFrom = true, and
 it is its responsibility to create a pipeIn on its command object.
 
-So for this, we need a pipeIn on the WhileCom object.
-
-TEMPORARY BAND-AID SOLUTION: @NEKIUTYK, in our new pipeIn method on WhileCom.
-we are collecting everything into an internal buffer until we get an EOF,
-at which point we call the doRun method.
-
-Additionally, in order to get the following to work properly:
-
-  echo HELLO | while read LINE; do echo "HERE IS LINE: $LINE"; done
-
-...we had to insert a sleep(0) in com_echo @XQMNHI, in between this.out and this.ok.
-
-Otherwise, the prompt was returning *BEFORE* the echo inside the while loop got a
-chance to print onto the terminal.
-
-*/
+»*/
 /*1/29/25: On my way towards enabling 'cat | less' (not that anyone *really* needs it to work)...«
 Just need to do refactoring of the key handlers, to make everything less Byzantine, and
 get some clarity about what is *really* going on there.
@@ -1732,7 +1731,6 @@ const ErrCom = class extends Com{//«
 class CompoundCom{//«
 
 #buffer;
-#isBuffering;
 constructor(shell, opts){//«
 	this.shell = shell;
 	this.opts=opts;
@@ -1744,10 +1742,11 @@ constructor(shell, opts){//«
 		};
 	});
 }//»
-runOk(from_pipe){/*«*/
+//EJKFKJ
+runOk(from_pipe){//«
 	if (this.#buffer && !from_pipe) return false;
 	return true;
-}/*»*/
+}//»
 _init(){//«
 	let opts={};
 	for (let k in this.opts){
@@ -1766,20 +1765,17 @@ _init(){//«
 		opts.envRedirLines = this.redirLines;
 	}
 	this.opts = opts;
+//CWOPLIU
 	if (this.prevCom && !this.opts.stdin){
 		this.#buffer = [];
-		this.#isBuffering = true;
 	}
 }//»
-init(){
-	this._init();
-}
+init(){this._init();}
 cancel(){this.killed=true;}
 pipeIn(val){//«
 	if (isEOF(val)) {
 		this.opts.stdin = this.#buffer.join("\n");
 		this.opts.stdinLns = this.#buffer;
-		this.isBuffering = false;
 		return this.run(true);
 	}
 	if (isStr(val)) {
@@ -1838,18 +1834,14 @@ async run(isPipe){
 
 class WhileCom extends CompoundCom{//«
 
-#buffer;
 constructor(shell, opts, cond, do_group){//«
 	super(shell, opts);
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name = "while";
 }//»
-async run(isPipe){
-//	if (this.#buffer && this.isBuffering) return;
+async run(isPipe){//«
 	if (!this.runOk(isPipe)) return;
-//log(this.runOk());
-//	if (!this.runOk()) return;
 	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
 	if (this.shell.cancelled) return;
 	while (!rv){
@@ -1859,44 +1851,21 @@ async run(isPipe){
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
-	await sleep(0);
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
 	this.end(rv);
-//	if (!this.prevCom || this.opts.stdin) this.doRun();
-}
-/*
-pipeIn(val){//«
-	if (isEOF(val)) {
-		this.opts.stdin = this.#buffer.join("\n");
-		this.opts.stdinLns = this.#buffer;
-		return this.doRun();
-	}
-	if (isStr(val)) {
-		let arr = val.split("\n");
-		this.#buffer.push(...arr);
-	}
-	else{
-cerr("WTF IS IN while.pipeIn????");
-log(val);
-	}
 }//»
-*/
+
 }//»
 class UntilCom extends CompoundCom{//«
 
-#buffer;
 constructor(shell, opts, cond, do_group){//«
 	super(shell, opts);
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name="until";
 }//»
-async doRun(){//«
-}//»
-async run(isPipe){
+async run(isPipe){//«
 	if (!this.runOk(isPipe)) return;
-//	if (!this.runOk()) return;
-//	if (this.#buffer && this.isBuffering) return;
 	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
 	if (this.shell.cancelled) return;
 	while (rv){
@@ -1906,27 +1875,11 @@ async run(isPipe){
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
-	await sleep(0);
+//	await sleep(0);
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
 	this.end(rv);
-}
-/*
-pipeIn(val){//«
-	if (isEOF(val)) {
-		this.opts.stdin = this.#buffer.join("\n");
-		this.opts.stdinLns = this.#buffer;
-		return this.doRun();
-	}
-	if (isStr(val)) {
-		let arr = val.split("\n");
-		this.#buffer.push(...arr);
-	}
-	else{
-cerr("WTF IS IN until.pipeIn????");
-log(val);
-	}
 }//»
-*/
+
 }//»
 
 class IfCom extends CompoundCom{//«
@@ -1937,9 +1890,7 @@ constructor(shell, opts, conds, conseqs, fallback){//«
 	this.fallback = fallback;
 	this.name = "if";
 }//»
-//init(){}
 async run(isPipe){//«
-//	if (!this.runOk()) return;
 	if (!this.runOk(isPipe)) return;
 	const{conds, conseqs, opts}=this;
 	for (let i=0; i < conds.length; i++){
@@ -2036,13 +1987,13 @@ async init(){//«
 	}
 	funcs[name] = func;
 }//»
-run(isPipe){
+run(isPipe){//«
 	if (!this.runOk(isPipe)) return;
-//	if (!this.runOk()) return;
 //As commands themselves, function definitions don't do much of anything, e.g.:
 //echo blah blah blah | 
 	this.end(E_SUC);
-}
+}//»
+
 }//»
 class CaseCom extends CompoundCom{//«
 constructor(shell, opts, word, list){//«
@@ -2064,7 +2015,6 @@ async init(){//«
 }//»
 async run(isPipe){//«
 if (!this.runOk(isPipe)) return;
-//if (!this.runOk()) return;
 /*«
 For everything, do:
 
@@ -4493,11 +4443,18 @@ getNextNonNewlinesTok(){//«
 }//»
 async getNonEmptyLineFromTerminal(){//«
 	let rv;
-	while ((rv = await this.term.readLine("> ")).match(/^[\x20\t]*(#.+)?$/)){}
+//	while ((rv = await this.term.readLine("> ")).match(/^[\x20\t]*(#.+)?$/)){}
+	while (rv = await this.term.readLine("> ")){
+		if (isEOF(rv)) return rv;
+		if (rv.match(/^[\x20\t]*(#.+)?$/)) continue
+	}
 	return rv;
 }//»
 async getMoreTokensFromTerminal(){//«
 	let rv = await this.getNonEmptyLineFromTerminal();
+	if (isEOF(rv)){
+		return this.fatal("continue operation aborted");
+	}
 	let newtoks = await this.parseContinueStr(rv);
 	if (isStr(newtoks)) this.fatal(newtoks);
 	this.tokens = this.tokens.concat(newtoks);
@@ -6379,7 +6336,7 @@ for (let com of pipeline){//«
 	if (this.cancelled) return;
 }//»
 for (let com of pipeline){//«
-	if (!com.killed) com.run();
+	if (!com.killed) com.run();//CWJKOI
 	else{
 log(`Not running (was killed): ${com.name}`);	
 	}
