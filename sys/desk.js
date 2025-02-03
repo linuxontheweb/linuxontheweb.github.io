@@ -837,7 +837,8 @@ const DESK_CONTEXT_MENU=[
 	],
 	"Explorer::Alt+e",open_home_folder,
 	"Terminal::Alt+t", open_terminal,
-	"Help::Alt+h", open_help,
+//	"Help::Alt+h", open_help,
+	"Help", open_help,
 	"Github\xa0Link", ()=>{
 		popok('<a href="https://github.com/linuxontheweb/linuxontheweb.github.io">Direct link</a> (opens in new window)',{title:"LOTW Github repo"});
 	}

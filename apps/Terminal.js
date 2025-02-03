@@ -1,3 +1,17 @@
+/*2/3/25: Piping into compound commands (is there not a mechanism for this?):
+  cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
+
+
+Whereas there is a mechanism for:
+  while read LINE; do echo "HERE IS LINE: $LINE"; done <BLAH.txt
+
+@FSHSKEOK is where we are constructing the pipelines. The "previous" command gets
+a nextCom property and pipeTo = true; The "next" command gets pipeFrom = true, and
+it is its responsibility to create a pipeIn on its command object.
+
+So for this, we need a pipeIn on the WhileCom object.
+
+*/
 /*1/29/25: On my way towards enabling 'cat | less' (not that anyone *really* needs it to work)...«
 Just need to do refactoring of the key handlers, to make everything less Byzantine, and
 get some clarity about what is *really* going on there.
@@ -1398,10 +1412,7 @@ const Com = class {//«
 			};
 			this.ok=(mess)=>{
 				if (mess) this.suc(mess);
-//log(this.name.toString(), this.pipeTo);
-//				if (this.pipeTo) {
 				this.out(EOF);
-//				}
 				Y(E_SUC);
 				this.killed = true;
 			};
@@ -1702,9 +1713,11 @@ const ErrCom = class extends Com{//«
 		this.no(this.errorMessage);
 	}
 }//»
+
 //«Compounds
 
 class CompoundCom{//«
+
 constructor(shell, opts){//«
 	this.shell = shell;
 	this.opts=opts;
@@ -1716,6 +1729,7 @@ constructor(shell, opts){//«
 		};
 	});
 }//»
+
 init(){//«
 	let opts={};
 	for (let k in this.opts){
@@ -1736,12 +1750,19 @@ init(){//«
 	this.opts = opts;
 }//»
 cancel(){this.killed=true;}
+/*
+pipeIn(rv){
+//cwarn("HIHI");
+//log(rv);
+}
+*/
 }//»
 
 class BraceGroupCom extends CompoundCom{//«
 constructor(shell, opts, list){
 	super(shell, opts);
 	this.list = list;
+	this.name="brace_group";
 }
 async run(){//«
 //log("FUNC?",this.isFunc);
@@ -1758,6 +1779,7 @@ class SubshellCom extends CompoundCom{//«
 constructor(shell, opts, list){
 	super(shell, opts);
 	this.list = list;
+	this.name="subshell";
 }
 async run(){
 //log(this.opts.env);
@@ -1773,12 +1795,126 @@ async run(){
 }
 }//»
 
+/*
+
+The following 2 commands (WhileCom and UntilCom) are the conditional loops.
+ForCom is a loop that is meant to iterate through a given list (e.g. a bunch of files).
+
+There is a massive difference between "all at once" commands like:
+
+$ cat SOMEFILE.txt
+
+... and streaming commands:
+
+$ echodelay -d 1000 each word is emitted after a one second delay
+
+FIRST SIMPLE SOLUTION (NOT SATISFACTORY FOR "REALTIME STREAMING" PURPOSES):
+ALL WE HAVE TO DO IS BUFFER EVERYTHING UP UNTIL THERE IS AN EOF AND THEN TURN IT
+INTO: this.opts.stdin.
+
+So: if this.prevCom && !this.opts.stdin
+
+*/
+class WhileCom extends CompoundCom{//«
+#buffer;
+constructor(shell, opts, cond, do_group){//«
+	super(shell, opts);
+	this.cond = cond;
+	this.do_group = do_group;
+	this.name = "while";
+}//»
+init(){
+	if (!this.prevCom || this.opts.stdin) {}
+	else this.#buffer=[];
+}
+async doRun(){//«
+	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
+	if (this.shell.cancelled) return;
+	while (!rv){
+		await this.shell.executeStatements2(dup(this.do_group), this.opts);
+		if (this.shell.cancelled) return;
+		rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
+		if (this.shell.cancelled) return;
+		await sleep(0);
+	}
+	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+	this.end(rv);
+}//»
+run(){
+	if (!this.prevCom || this.opts.stdin) this.doRun();
+}
+pipeIn(val){//«
+//cwarn("IN");
+//log(val);
+	if (isEOF(val)) {
+		this.opts.stdin = this.#buffer.join("\n");
+		this.opts.stdinLns = this.#buffer;
+		return this.doRun();
+	}
+	if (isStr(val)) {
+		let arr = val.split("\n");
+		this.#buffer.push(...arr);
+	}
+	else{
+cerr("WTF IS IN while.pipeIn????");
+log(val);
+	}
+}//»
+
+}//»
+class UntilCom extends CompoundCom{//«
+#buffer;
+constructor(shell, opts, cond, do_group){//«
+	super(shell, opts);
+	this.cond = cond;
+	this.do_group = do_group;
+	this.name="until";
+}//»
+init(){
+	if (!this.prevCom || this.opts.stdin) {}
+	else this.#buffer=[];
+}
+async doRun(){//«
+	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
+	if (this.shell.cancelled) return;
+	while (rv){
+		await this.shell.executeStatements2(dup(this.do_group), this.opts)
+		if (this.shell.cancelled) return;
+		rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
+		if (this.shell.cancelled) return;
+		await sleep(0);
+	}
+	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+	this.end(rv);
+}//»
+run(){
+	if (!this.prevCom || this.opts.stdin) this.doRun();
+}
+pipeIn(val){//«
+	if (isEOF(val)) {
+		this.opts.stdin = this.#buffer.join("\n");
+		this.opts.stdinLns = this.#buffer;
+		return this.doRun();
+	}
+	if (isStr(val)) {
+		let arr = val.split("\n");
+		this.#buffer.push(...arr);
+	}
+	else{
+cerr("WTF IS IN until.pipeIn????");
+log(val);
+	}
+}//»
+
+}//»
+
 class IfCom extends CompoundCom{//«
 constructor(shell, opts, conds, conseqs, fallback){//«
 	super(shell, opts);
 	this.conds = conds;
 	this.conseqs = conseqs
 	this.fallback = fallback;
+	this.name = "if";
 }//»
 init(){}
 async run(){//«
@@ -1813,6 +1949,7 @@ constructor(shell, opts, name, in_list, do_group){//«
 	this.name=name;
 	this.in_list=in_list;
 	this.do_group=do_group;
+	this.name="for";
 }//»
 async init(){//«
 //	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
@@ -1830,49 +1967,6 @@ async run(){//«
 		await sleep(0);
 	}
 	this.end(E_SUC);
-}//»
-
-}//»
-class WhileCom extends CompoundCom{//«
-
-constructor(shell, opts, cond, do_group){//«
-	super(shell, opts);
-	this.cond = cond;
-	this.do_group = do_group;
-}//»
-async run(){//«
-	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
-	if (this.shell.cancelled) return;
-	while (!rv){
-		await this.shell.executeStatements2(dup(this.do_group), this.opts);
-		if (this.shell.cancelled) return;
-		rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
-		if (this.shell.cancelled) return;
-		await sleep(0);
-	}
-	this.end(rv);
-}//»
-
-}//»
-class UntilCom extends CompoundCom{//«
-constructor(shell, opts, cond, do_group){//«
-	super(shell, opts);
-	this.cond = cond;
-	this.do_group = do_group;
-}//»
-init(){}
-
-async run(){//«
-	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
-	if (this.shell.cancelled) return;
-	while (rv){
-		await this.shell.executeStatements2(dup(this.do_group), this.opts)
-		if (this.shell.cancelled) return;
-		rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
-		if (this.shell.cancelled) return;
-		await sleep(0);
-	}
-	this.end(rv);
 }//»
 
 }//»
@@ -1924,6 +2018,7 @@ constructor(shell, opts, word, list){//«
 super(shell, opts);
 this.word=word;
 this.list=list;
+this.name="case";
 }//»
 async init(){//«
 	this.word.tildeExpansion();
@@ -2168,8 +2263,12 @@ const com_bindwin = class extends Com{//«
 	}
 }//»
 const com_echo = class extends Com{//«
-	run(){
+	async run(){
 		this.out(this.args.join(" "));
+
+//For some reason, this sleep is *required* in order to make this behave correctly:
+// $ echo HELLO | while read LINE; do echo $LINE; done
+		await sleep(0);
 		this.ok();
 	}
 }//»
@@ -2597,9 +2696,11 @@ const com_curcol = class extends Com{/*«*/
 }/*»*/
 const com_read = class extends Com{//«
 
-async run(){
+async run(){//«
 //XDUITOYL
 	const {args, opts, term, stdin, stdinLns: stdin_lines} = this;
+//cwarn("STDIN_LINES");
+//log(stdin_lines);
 	const ENV=this.env;
 	let have_error = false;
 	const err=mess=>{
@@ -2635,10 +2736,11 @@ async run(){
 		}
 		else useval = vals.shift();
 		if (!useval) useval = "";
+//log(`ENV[${arg}] = ${useval}`);
 		ENV[arg] = useval;
 	}
 	have_error?this.no():this.ok();
-}
+}//»
 
 }//»
 const com_math = class extends Com{//«
@@ -6171,8 +6273,6 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 //DNGZXER
 		let in_redir, out_redir;
 		let redirs = com.redirs||[];
-//log(com);
-//log(redirs);
 		for (let red of redirs){
 			if (red.isStdin) in_redir = red;
 			else if (red.isStdout) out_redir = red;
@@ -6221,11 +6321,18 @@ log(com);
 		}//»
 		if (this.cancelled) return;
 		if (isStr(rv)) return rv;
+//FSHSKEOK
 		if (last_com){
 			last_com.nextCom = rv;
 			last_com.pipeTo = true;
 		}
-		if (j > 0) rv.pipeFrom = true;
+		if (j > 0) {
+			rv.pipeFrom = true;
+			rv.prevCom = last_com;
+if (!rv.pipeIn){
+this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${rv.name}')`);
+}
+		}
 		pipeline.push(rv);
 		last_com = rv;
 	}//»
