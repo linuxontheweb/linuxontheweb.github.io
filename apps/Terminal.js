@@ -1946,7 +1946,7 @@ class ForCom extends CompoundCom{//«
 
 constructor(shell, opts, name, in_list, do_group){//«
 	super(shell, opts);
-	this.name=name;
+	this.var_name=name;
 	this.in_list=in_list;
 	this.do_group=do_group;
 	this.name="for";
@@ -1959,9 +1959,10 @@ async init(){//«
 async run(){//«
 	const{shell}=this;
 	let env = this.opts.env;
-	let nm = this.name+"";
+	let nm = this.var_name+"";
 	for (let val of this.in_list){
 		env[nm] = val+"";
+//log(`env[${nm}] = ${val}`);
 		await shell.executeStatements2(dup(this.do_group), this.opts)
 		if (shell.cancelled) return;
 		await sleep(0);
