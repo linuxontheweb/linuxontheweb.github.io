@@ -452,9 +452,8 @@ const com_cat = class extends Com{//«
 		}
 	}
 	async doTermLoop(){
-		let ln;
 		while (true){
-			let ln = await this.term.readLine();
+			let ln = await this.readLine();
 			if (isEOF(ln)){
 				this.ok();
 				return;
@@ -462,7 +461,7 @@ const com_cat = class extends Com{//«
 			this.out(ln);
 		}
 //Never get here
-		this.ok();
+//		this.ok();
 	}
 	async run() {//«
 		if (this.#useTerm)return this.doTermLoop();

@@ -1,3 +1,41 @@
+/*2/4/25: Want some kind of envReadline for when piping into compound commands, so
+that the internal commands have something to read if they are first in their own
+pipeline, with no args or stdin redirect (i.e. just before "hitting" the terminal's
+readline. This is an update to my "solution" of having an internal buffer, to be 
+used in place of a stdin redirect (below). So the given command will do:
+
+await this.opts.envReadline, so that com_cat will now go from:
+
+while (true){
+	let ln = await this.term.readLine();
+	if (isEOF(ln)){
+		this.ok();
+		return;
+	}
+	this.out(ln);
+}
+
+...to...
+
+let use_env = !!this.opts.envReadlineCb;
+while (true){
+	let ln;
+	if (use_env) ln = await this.opts.envReadlineCb();
+	else ln = await this.term.readLine();
+	if (isEOF(ln)){
+		this.ok();
+		return;
+	}
+	this.out(ln);
+}
+
+...and envReadlineCb will look something like:
+
+???
+
+
+
+*/
 /*2/3/25: Piping into compound commands (is there not a mechanism for this?): «
 
   cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
@@ -49,10 +87,10 @@ otherwise interminable loop:
 		this.out(ln);
 	}
 
-...this means that awaiting the cat command gets finished in executePipeline2,
+...this means that awaiting the cat command gets finished in executePipeline,
 allowing us to get to @XJPMNYSHK, and allowing us to "normally" complete the
-executePipeline2 function (and the rest of the functions that get called by
-Shell.devexecute @SLDPEHDBF).
+executePipeline function (and the rest of the functions that get called by
+Shell.execute @SLDPEHDBF).
 
 I figure this is a fairly crucial thing to get "right" because it speaks to
 so many little things at the heart of the interactive shell mechanism.
@@ -99,7 +137,7 @@ on newlines in com_read @XDUITOYL, but this made the command:
 every time the read command was invoked in the while loop. Then I tried to hunt
 down the proper place to create a stdinLns arg (i.e. an array, which is what 
 'stdin' previously was), which turned out to be in the area of @VOPDUKKD (in
-shell.executePipeline2). Then the stdinLns arg finally gets passed into the
+shell.executePipeline). Then the stdinLns arg finally gets passed into the
 appropriate command in shell.makeCommand. This is all still pretty complicated,
 and there should probably be some more refactoring (plus lots of testing).
 
@@ -1279,7 +1317,61 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 
 //»
 
-//Classes     (Com, ErrCom, Stdin/Stdout, ScriptCom...)«
+//Classes     (Com, CompoundCom, ErrCom, Stdin/Stdout, ScriptCom...)«
+
+const EnvReadLine = class{//«
+
+#lines;
+#cb;
+constructor(){
+	this.#lines = [];
+}
+end(){this.killed=true;}
+addLn(ln){/*«*/
+/*
+	if (this.killed) {
+cerr("addLn called after being killed!");
+		return;
+	}
+	if (isEOF(ln)){
+		this.killed = true;
+		return;
+	}
+*/
+	if (this.#cb) {
+		this.#cb(ln);
+		this.#cb = undefined;
+		return;
+	}
+	this.#lines.push(ln);
+}/*»*/
+addLns(lns){/*«*/
+	if (isEOF(lns)) return this.addLn(lns);
+	let arr = lns.split("\n");
+	for (let ln of arr){
+		this.addLn(ln);
+	}
+}/*»*/
+readLine(){/*«*/
+//log("READLINE!!!", this.killed);
+	if (this.#lines.length){
+		return this.#lines.shift();
+	}
+/*
+	if (this.killed) {
+		if (this.#cb){
+			this.#cb(EOF);
+		}
+		return;
+//		return EOF;
+	}
+*/
+	return new Promise((Y,N)=>{
+		this.#cb = Y;
+	});
+}/*»*/
+
+};//»
 
 class Stdin{//«
 
@@ -1403,6 +1495,7 @@ dup(){
 const Com = class {//«
 
 	constructor(name, args, opts, env={}){//«
+		this.isSimple = true;
 		this.name =name;
 		this.args=args;
 		this.opts=opts;
@@ -1543,8 +1636,15 @@ log(num);
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
 			let next_com = this.nextCom;
-			if (next_com && next_com.pipeIn && !next_com.noPipe) {
-				next_com.pipeIn(val);
+			if (next_com && next_com.pipeIn) {//LSKDJSG
+				if (!next_com.noPipe) next_com.pipeIn(val);
+			}
+			else if (this.envPipeOutLns){
+				this.envPipeOutLns(val);
+			}
+			else{
+cwarn("Dropping output");
+log(val);
 			}
 			return;
 		}
@@ -1584,8 +1684,17 @@ log(num);
 		}
 		this.resp(val, opts);
 	}//»
+	async readLine(use_prompt){//«
+//XCJEKRNK
+		let ln;
+		if (this.envReadLine){
+			ln = await this.envReadLine.readLine();
+		}
+		else ln = await this.term.readLine(use_prompt);
+		return ln;
+	}//»
 	isTermOut(){
-		return !(this.redirLines || this.envRedirLines || this.nextCom || this.envPipeInCb || this.scriptOut || this.subLines);
+		return !(this.redirLines || this.envRedirLines || this.nextCom || this.envPipeInCb || this.envPipeOutLns || this.scriptOut || this.subLines);
 	}
 	err(str, opts={}){
 		opts.isErr=true;
@@ -1688,7 +1797,7 @@ const ScriptCom = class extends Com{//«
 		const scriptOut=(val)=>{
 			this.out(val);
 		};
-		let code = await this.shell.devexecute(this.text, {
+		let code = await this.shell.execute(this.text, {
 			shell: this.shell,
 			scriptOut,
 			scriptName: this.name,
@@ -1732,6 +1841,7 @@ class CompoundCom{//«
 
 #buffer;
 constructor(shell, opts){//«
+	this.isCompound = true;
 	this.shell = shell;
 	this.opts=opts;
 	this.outRedir = opts.outRedir;
@@ -1744,8 +1854,9 @@ constructor(shell, opts){//«
 }//»
 //EJKFKJ
 runOk(from_pipe){//«
-	if (this.#buffer && !from_pipe) return false;
-	return true;
+return true;
+//	if (this.#buffer && !from_pipe) return false;
+//	return true;
 }//»
 _init(){//«
 	let opts={};
@@ -1772,6 +1883,7 @@ _init(){//«
 }//»
 init(){this._init();}
 cancel(){this.killed=true;}
+/*
 pipeIn(val){//«
 	if (isEOF(val)) {
 		this.opts.stdin = this.#buffer.join("\n");
@@ -1787,7 +1899,7 @@ cerr("WTF IS IN until.pipeIn????");
 log(val);
 	}
 }//»
-
+*/
 }//»
 
 class BraceGroupCom extends CompoundCom{//«
@@ -1804,7 +1916,7 @@ async run(isPipe){//«
 		this.opts.scriptArgs = this.args.slice();
 		this.opts.scriptName = "sh";
 	}
-	let rv = await this.shell.executeStatements2(this.list, this.opts)
+	let rv = await this.shell.executeStatements(this.list, this.opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }//»
@@ -1826,7 +1938,7 @@ async run(isPipe){
 	}
 	let opts = sdup(this.opts);
 	opts.env = sdup(this.opts.env);
-	let rv = await this.shell.executeStatements2(this.list, opts)
+	let rv = await this.shell.executeStatements(this.list, opts)
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }
@@ -1842,12 +1954,12 @@ constructor(shell, opts, cond, do_group){//«
 }//»
 async run(isPipe){//«
 	if (!this.runOk(isPipe)) return;
-	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
+	let rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 	if (this.shell.cancelled) return;
 	while (!rv){
-		await this.shell.executeStatements2(dup(this.do_group), this.opts);
+		await this.shell.executeStatements(dup(this.do_group), this.opts);
 		if (this.shell.cancelled) return;
-		rv = await this.shell.executeStatements2(dup(this.cond), this.opts);
+		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
@@ -1866,12 +1978,12 @@ constructor(shell, opts, cond, do_group){//«
 }//»
 async run(isPipe){//«
 	if (!this.runOk(isPipe)) return;
-	let rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
+	let rv = await this.shell.executeStatements(dup(this.cond), this.opts)
 	if (this.shell.cancelled) return;
 	while (rv){
-		await this.shell.executeStatements2(dup(this.do_group), this.opts)
+		await this.shell.executeStatements(dup(this.do_group), this.opts)
 		if (this.shell.cancelled) return;
-		rv = await this.shell.executeStatements2(dup(this.cond), this.opts)
+		rv = await this.shell.executeStatements(dup(this.cond), this.opts)
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
@@ -1894,7 +2006,7 @@ async run(isPipe){//«
 	if (!this.runOk(isPipe)) return;
 	const{conds, conseqs, opts}=this;
 	for (let i=0; i < conds.length; i++){
-		let rv = await this.shell.executeStatements2(conds[i], opts);
+		let rv = await this.shell.executeStatements(conds[i], opts);
 		if (this.shell.cancelled) return;
 if (!Number.isFinite(rv)){
 cwarn("HERE IT IS");
@@ -1902,14 +2014,14 @@ log(rv);
 this.shell.fatal("Non-numerical return value");
 }
 		if (!rv){
-			rv = await this.shell.executeStatements2(conseqs[i], opts)
+			rv = await this.shell.executeStatements(conseqs[i], opts)
 			if (this.shell.cancelled) return;
 			this.end(rv);
 			return;
 		}
 	}
 	if (this.fallback){
-		let rv = await this.shell.executeStatements2(this.fallback, opts)
+		let rv = await this.shell.executeStatements(this.fallback, opts)
 		if (this.shell.cancelled) return;
 		return this.end(rv);
 	}
@@ -1941,7 +2053,7 @@ async run(isPipe){//«
 	for (let val of this.in_list){
 		env[nm] = val+"";
 //log(`env[${nm}] = ${val}`);
-		await shell.executeStatements2(dup(this.do_group), this.opts)
+		await shell.executeStatements(dup(this.do_group), this.opts)
 		if (shell.cancelled) return;
 		await sleep(0);
 	}
@@ -1966,10 +2078,6 @@ async init(){//«
 	let func;
 	if (typ==="brace_group"){
 		func = (shell, args, opts, com_env) => { 
-//log("ARGS???", args);
-//log(opts);
-//opts = sdup(opts);
-//opts.args = args;
 			let com = new BraceGroupCom(shell, opts, dup(this.com));
 			com.args = args;
 			return com;
@@ -2047,7 +2155,7 @@ LOOP: for (let obj of this.list){
 	let item = obj.case_item;
 	let end = item.end;
 	if (did_match){
-		rv = await shell.executeStatements2(item.compound_list, this.opts)
+		rv = await shell.executeStatements(item.compound_list, this.opts)
 		if(shell.cancelled) return;
 		if (end.isSemiAnd) continue LOOP;
 		break LOOP;
@@ -2079,7 +2187,7 @@ LOOP: for (let obj of this.list){
 		const re = new RegExp("^" + patstr + "$");
 		if (re.test(word)){
 			did_match = true;
-			rv = await this.shell.executeStatements2(item.compound_list, this.opts)
+			rv = await this.shell.executeStatements(item.compound_list, this.opts)
 			if(shell.cancelled) return;
 			if (end.isSemiAnd) continue LOOP;
 			break LOOP;
@@ -2269,13 +2377,13 @@ const com_echodelay = class extends Com{//«
 			}
 		}
 		else delay = 0;
-
 		for (let arg of this.args){
 			this.out(arg);
 			await sleep(delay);
 		}
 		this.ok();
 	}
+
 }//»
 const com_ls = class extends Com{//«
 
@@ -2681,7 +2789,9 @@ const com_curcol = class extends Com{/*«*/
 	}
 }/*»*/
 const com_read = class extends Com{//«
-
+init(){
+//log("HI READ", this);
+}
 async run(){//«
 //XDUITOYL
 	const {args, opts, term, stdin, stdinLns: stdin_lines} = this;
@@ -2689,6 +2799,7 @@ async run(){//«
 //log(stdin_lines);
 	const ENV=this.env;
 	let have_error = false;
+//	let use_env_readline = !!this.envReadLine;
 	const err=mess=>{
 		have_error = true;
 		this.err(mess);
@@ -2703,7 +2814,15 @@ async run(){//«
 		if (!stdin_lines.length) return this.no();
 		ln = stdin_lines.shift();
 	}
+	else{
+		ln = await this.readLine(use_prompt);
+	}
+/*
+	else if (this.envReadLine){
+		ln = await this.envReadLine.readLine();
+	}
 	else ln = await term.readLine(use_prompt);
+*/
 	if (isEOF(ln)){
 		this.no();
 		return;
@@ -5513,7 +5632,7 @@ pushed into the quote's characters.
 	}
 	let sub_lines = [];
 	try{
-		await this.devexecute(s, {subLines: sub_lines, env: sdup(this.env), shell: this});
+		await this.execute(s, {subLines: sub_lines, env: sdup(this.env), shell: this});
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -6077,12 +6196,12 @@ makeCompoundCommand(com, opts){//«
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
-//async makeCommand(arr, opts){
 async makeCommand({assigns=[], name, args=[]}, opts){//«
+//async makeCommand(arr, opts){
 	const{term}=this;
 //	const make_sh_err_com = ShellMod.util.make_sh_err_com;
 //	const make_sh_err_com = make_sh_error_com;
-	const {envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {envReadLine, envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 //log(assigns);
 	let rv
@@ -6097,6 +6216,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	}
 	else use_env = env;
 	const com_env = {//«
+		envReadLine,
 		stdin,
 		stdinLns,
 		outRedir,
@@ -6164,6 +6284,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		if (isStr(com)) return com;
 	}//»
 	if (term.funcs[usecomword]){
+
 com_env.isFunc = true;
 let func = term.funcs[usecomword](this, arr, opts, com_env);
 func.isFunc = true;
@@ -6242,7 +6363,7 @@ cerr(e);
 //SKIOPRHJT
 }//»
 
-async executePipeline2(pipe, loglist, loglist_iter, opts){//«
+async executePipeline(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
 //	const make_sh_err_com = ShellMod.util.make_sh_err_com;
 //	const make_sh_err_com = make_sh_error_com;
@@ -6260,19 +6381,19 @@ async executePipeline2(pipe, loglist, loglist_iter, opts){//«
 	let screenGrab = {grabber: ""};
 	let last_com;
 	for (let j=0; j < pipelist.length; j++) {//«
-		let com = pipelist[j];
-		let rv;
+		let com_ast = pipelist[j];
+		let com;
 
 //DNGZXER
 		let in_redir, out_redir;
-		let redirs = com.redirs||[];
+		let redirs = com_ast.redirs||[];
 		for (let red of redirs){
 			if (red.isStdin) in_redir = red;
 			else if (red.isStdout) out_redir = red;
 			else{
 cwarn("Here is the non stdin/stdout redir");
 log(red);
-				this.fatal("Unknown token in com.redirs!?!?! (see console)");
+				this.fatal("Unknown token in com_ast.redirs!?!?! (see console)");
 			}
 		}
 		let stdin;
@@ -6290,44 +6411,93 @@ log(red);
 
 //VOPDUKKD
 		let have_lines = opts.stdinLns;
-		let comopts=sdup(opts);
+		let comopts = sdup(opts);
 		comopts.stdin = stdin || optStdin;
 		if (comopts.stdin){
 			if (have_lines) comopts.stdinLns = have_lines;
 			else comopts.stdinLns = comopts.stdin.split("\n");
 		}
 		comopts.outRedir = out_redir;
+
+if (last_com){//«
+/*«
+If we are piping into a compound_command, and we want
+to allow the compound_command to make use of as an "envReadline" function, which is
+used just before performing term.readline. We can actually provide this "envReadline"
+no matter what, but commands that are *inside* a pipeline will simply read from
+pipeIn. What about putting readline directly in the command?
+
+Now @XCJEKRNK, we have a com.readLine method. If there is an 'envReadLine' in our
+opts, then will will use that. We will only get here if we are the first in our
+immediate pipeline, and we are embedded in a compound command that is *inside* of
+a pipeline..
+
+Need to hook up the output of last_com's 'out' method with this compound_commands
+readLine.
+
+comopts.envReadLine = new EnvReadLine();
+
+//comopts.readLine = async()=>{
+//};
+»*/
+	let env_readline = new EnvReadLine();
+
+//This *should* be ignored for everything that has next_com.pipeIn in its out method (@LSKDJSG)
+	last_com.envPipeOutLns = lns => {
+
+if (!(isStr(lns)||isEOF(lns))){
+cwarn("Skipping non-string/non-EOF", lns);
+return;
+}
+		env_readline.addLns(lns);
+	};
+	comopts.envReadLine = env_readline;
+
+}//»
+
 		if (errmess){
-			rv = make_sh_err_com(null, errmess, {term, shell: this});
+			com = make_sh_err_com(null, errmess, {term, shell: this});
 		}
-		else if (com.compound_command){
-			rv = await this.makeCompoundCommand(com, comopts, errmess)
+		else if (com_ast.compound_command){
+			com = await this.makeCompoundCommand(com_ast, comopts, errmess)
 		}
-		else if (com.simple_command){
-			rv = await this.makeCommand(com.simple_command, comopts, errmess)
-//log(rv);
+		else if (com_ast.simple_command){
+			com = await this.makeCommand(com_ast.simple_command, comopts, errmess)
+//log(com);
 		}
 		else{//«
 cwarn("Here is the command");
-log(com);
+log(com_ast);
 			this.fatal("What type of command is this (not 'simple' or 'compound'!!! (see console))");
 		}//»
 		if (this.cancelled) return;
-		if (isStr(rv)) return rv;
+		if (isStr(com)) return com;
 //FSHSKEOK
 		if (last_com){
-			last_com.nextCom = rv;
+			last_com.nextCom = com;
 			last_com.pipeTo = true;
 		}
 		if (j > 0) {
-			rv.pipeFrom = true;
-			rv.prevCom = last_com;
-if (!rv.pipeIn){
-//this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${rv.name}')`);
+if (!com.pipeIn && com.isSimple === true){
+	this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
 }
+			com.pipeFrom = true;
+			com.prevCom = last_com;
+/*
+if (!com.pipeIn){
+	if (com.isCompound === true){
+//		this.fatal(`TODO: implement 'envReadLine' for compound command: '${com.name}'`);
+comopts.envReadLine = "Blarney stone in the YADDER YADDER YADDER MCSLADDER!?!?!?";
+//log(com);
+	}
+	else {
+		this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
+	}
+}
+*/
 		}
-		pipeline.push(rv);
-		last_com = rv;
+		pipeline.push(com);
+		last_com = com;
 	}//»
 	this.pipeline = pipeline;
 
@@ -6408,7 +6578,7 @@ ShellMod.var.lastExitCode = lastcomcode;
 }
 //»
 
-async executeAndOr2(andor_list, andor_sep, opts){//«
+async executeAndOr(andor_list, andor_sep, opts){//«
 
 let loglist=[];
 let last = andor_list.pop();
@@ -6425,7 +6595,7 @@ andor_list.push(last);
 let lastcomcode;
 for (let i=0; i < loglist.length; i++){//«
 
-	let rv = await this.executePipeline2(loglist[i], loglist, i, opts);
+	let rv = await this.executePipeline(loglist[i], loglist, i, opts);
 //continue;
 	if (this.cancelled) return;
 //	if (this.cancelled) continue;
@@ -6458,18 +6628,18 @@ return lastcomcode;
 
 }//»
 
-async executeStatements2(statements, opts){//«
+async executeStatements(statements, opts){//«
 	const{term}=this;
 	let lastcomcode;
 	for (let i=0; i < statements.length-1; i+=2){
-		lastcomcode = await this.executeAndOr2(statements[i].andor, statements[i+1], opts);
+		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts);
 		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
 	}
 	return lastcomcode;
 }//»
 
 //SLDPEHDBF
-async devexecute(command_str, opts){//«
+async execute(command_str, opts){//«
 	const{term}=this;
 	let parser = new Parser(command_str.split(""), opts);
 	try{
@@ -6486,7 +6656,7 @@ async devexecute(command_str, opts){//«
 			let list = compcoms.complete_command.list;
 			statements.push(...list);
 		}
-		let rv = await this.executeStatements2(statements, opts);
+		let rv = await this.executeStatements(statements, opts);
 		return rv;
 //log(statements);
 	}
@@ -6888,7 +7058,7 @@ async execute(str, opts={}){//«
 
 	this.curShell = shell;
 	let gotstr = str.trim();
-
+	shell.curComStr = gotstr;
 	str = str.replace(/\x7f/g, "");
 
 //XKLRSMFLE
@@ -6907,7 +7077,7 @@ async execute(str, opts={}){//«
 	}//»
 
 //PLDYHJKU
-	await this.curShell.devexecute(str, {
+	await this.curShell.execute(str, {
 		env: this.env,
 		heredocScanner,
 		isInteractive: true,
@@ -6915,19 +7085,9 @@ async execute(str, opts={}){//«
 		shell: this.curShell
 	});
 	if (this.curShell === shell && !shell.cancelled) this.responseEnd();
-
 	if (opts.noSave) return;
-
-	let ind = this.history.indexOf(gotstr);
-	if (ind >= 0) {
-		this.history.splice(ind, 1);
-	}
-	else{
-		await this.appendToHistory(gotstr);
-	}
-	this.history.push(gotstr);
-}
-//»
+	await this.updateHistory(gotstr);
+}//»
 executeBackgroundCommand(s){//«
 
 	let shell = new this.Shell(this, true);
@@ -8191,15 +8351,20 @@ cwarn(`Could not write to history: ${HISTORY_PATH}`);
 	}
 };
 //»
-/*
-async saveHistory(){//«
-	if (!await fsapi.writeFile(HISTORY_PATH, this.history.join("\n")+"\n")){
-		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
+async updateHistory(str){//«
+	if (!str){
+cerr("updateHistory called with no 'str' arg!");
+		return;
 	}
-};
-
-//»
-*/
+	let ind = this.history.indexOf(str);
+	if (ind >= 0) {
+		this.history.splice(ind, 1);
+	}
+	else{
+		await this.appendToHistory(str);
+	}
+	this.history.push(str);
+}//»
 async initHistory(termBuffer){//«
 	if (termBuffer) {
 		this.history = termBuffer;
@@ -8214,6 +8379,17 @@ async initHistory(termBuffer){//«
 		this.history = arr.reverse();
 	}
 }//»
+
+/*
+async saveHistory(){//«
+	if (!await fsapi.writeFile(HISTORY_PATH, this.history.join("\n")+"\n")){
+		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
+	}
+};
+
+//»
+*/
+
 //»
 //Prompt/Command line«
 
@@ -9456,7 +9632,7 @@ handleKey(sym, code, mod, ispress, e){//«
 	if (this.curShell){//«
 
 		if (sym==="c_C") {//«
-//			this.curShell.cancelled_time = (new Date).getTime();
+			this.updateHistory(this.curShell.curComStr);
 			this.curShell.cancel();
 			this.curShell = null;
 			this.sleeping = false;
