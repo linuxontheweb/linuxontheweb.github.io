@@ -1,9 +1,50 @@
-/*2/4/25: Just created class EnvReadLine{...}, in order to give compound commands
-an "environmental variable" when they are
+/*2/4/25: Just created class EnvReadLine{...}, in order to give compound commands «
+an "environmental variable" to allow them to provide a readline functionality
+from a preceding pipe. This overrides the crappy solution from yesterday.
+The point yesterday was to implement a pipeIn method for CompoundCom, and  wait for 
+the preceding command to finish, by pushing everything into an internal buffer
+and the waiting for the EOF, before setting stdin/stdinLns and then invoking 'run'.
+The *obvious* issue with this was that it didn't allow for "realtime" streaming,
+which is the way that the shell works. So instead of treating this as a stdin redirection,
+we are treating it as a readline-type of thing. So in Shell.executePipeline (@XWMNJUO), if
+there is a last_com, we create a new EnvReadLine, and then hook up the wiring.
+
+(Need to hook up the output of last_com's 'out' method with this compound_command's
+readLine.)
+
+If we are piping into a compound_command, and we want to allow the
+compound_command to make use of as an "envReadline" function, which is used
+just before performing term.readline. We can actually provide this
+"envReadline" no matter what, but commands that are *inside* a pipeline will
+simply read from pipeIn. What about putting readline directly in the command?
+
+Now @XCJEKRNK, we have a com.readLine method. If there is an 'envReadLine' in our
+opts, then will will use that. We will only get here if we are the first in our
+immediate pipeline, and we are embedded in a compound command that is *inside* of
+a pipeline..
 
 
 
-*/
+!!! VERY WEIRD BEHAVIOR !!!
+
+
+$ brum() { while read L; do echo FUNT: $L; done | while read L; do echo GUNT: $L; done; }
+$ echodelay -d 0 hi ho he | brum
+
+> GUNT: FUNT: hi
+> GUNT: he
+> GUNT: FUNT: he
+
+This only seems to happen with the combination of setting the delay to '0' *AND* using
+the same variable for both calls to read!?!?!?
+
+THIS ALSO DOESN'T WORK WITH MULTILINE ECHO:
+
+$ echo $'1111\n2222\n3333\n44444' | brum
+
+HOWEVER, AS LONG AS WE USE DIFFERENT VARIABLES, THEN IT ALL SEEMS TO WORK!!!!!
+
+»*/
 /*2/3/25: Piping into compound commands (is there not a mechanism for this?): «
 
   cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
@@ -11,7 +52,7 @@ an "environmental variable" when they are
 Whereas there is a mechanism for:
   while read LINE; do echo "HERE IS LINE: $LINE"; done <BLAH.txt
 
-
+*** THIS IS NOT TRUE ANYMORE (SEE ABOVE) ***
 OKAY: I just created a pipeIn method on the CompoundCom class (which all
 compound commands inherit from), and I changed init to _init, and turned the
 default init method to simply calling _init (so everybody with their own init
@@ -1297,7 +1338,7 @@ constructor(term){
 	this.term = term;
 }
 end(){this.killed=true;}
-addLn(ln){//«
+#addLn(ln){//«
 	if (this.#cb) {
 		this.#cb(ln);
 		this.#cb = undefined;
@@ -1306,15 +1347,18 @@ addLn(ln){//«
 	this.#lines.push(ln);
 }//»
 addLns(lns){//«
-	if (isEOF(lns)) return this.addLn(lns);
+	if (isEOF(lns)) return this.#addLn(lns);
+if (!isStr(lns)){
+cwarn("Skipping non-string/non-EOF", lns);
+return;
+}
 	let arr = lns.split("\n");
 	for (let ln of arr){
-		this.addLn(ln);
+		this.#addLn(ln);
 	}
 }//»
-readLine(){//«
+async readLine(){//«
 	this.term.forceNewline();
-	this.term.scrollIntoView();
 	if (this.#lines.length){
 		return this.#lines.shift();
 	}
@@ -2315,11 +2359,12 @@ const com_echodelay = class extends Com{//«
 		if (this.opts.d) {
 			delay = parseInt(this.opts.d);
 			if (isNaN(delay)) {
-				delay = 0;
-				this.wrn(`invalid delay value (using 0 ms)`);
+				delay = 1;
+				this.wrn(`invalid delay value (using 1 ms)`);
 			}
+//			else if (!delay) delay = 1;
 		}
-		else delay = 0;
+		else delay = 1;
 		for (let arg of this.args){
 			this.out(arg);
 			await sleep(delay);
@@ -6363,35 +6408,12 @@ log(red);
 		comopts.outRedir = out_redir;
 
 if (last_com){//«
-/*«
-If we are piping into a compound_command, and we want
-to allow the compound_command to make use of as an "envReadline" function, which is
-used just before performing term.readline. We can actually provide this "envReadline"
-no matter what, but commands that are *inside* a pipeline will simply read from
-pipeIn. What about putting readline directly in the command?
-
-Now @XCJEKRNK, we have a com.readLine method. If there is an 'envReadLine' in our
-opts, then will will use that. We will only get here if we are the first in our
-immediate pipeline, and we are embedded in a compound command that is *inside* of
-a pipeline..
-
-Need to hook up the output of last_com's 'out' method with this compound_commands
-readLine.
-
-comopts.envReadLine = new EnvReadLine();
-
-//comopts.readLine = async()=>{
-//};
-»*/
+//XWMNJUO
 	let env_readline = new EnvReadLine(term);
+
 //This *should* be ignored for everything that has next_com.pipeIn in its out method (@LSKDJSG)
-	last_com.envPipeOutLns = lns => {//«
-if (!(isStr(lns)||isEOF(lns))){
-cwarn("Skipping non-string/non-EOF", lns);
-return;
-}
-		env_readline.addLns(lns);
-	};//»
+	last_com.envPipeOutLns=lns=>{env_readline.addLns(lns);};
+
 	comopts.envReadLine = env_readline;
 
 }//»
@@ -7096,10 +7118,10 @@ forceNewline(){//«
 		this.curPromptLine = this.y+this.scrollNum-1;
 	}
 	this.x=0;
+	this.scrollIntoView();
 }//»
 async getch(promptarg, def_ch){//«
 	this.forceNewline();
-	this.scrollIntoView();
 	if (promptarg){
 		for (let ch of promptarg) this.handleLetterPress(ch);
 	}
@@ -7114,7 +7136,6 @@ async readLine(promptarg){//«
 	this.sleeping = false;
 	if (!this.actor) {
 		this.forceNewline();
-		this.scrollIntoView();
 		if (promptarg){
 			this.#readLinePromptLen = promptarg.length;
 			for (let ch of promptarg) this.handleLetterPress(ch);
