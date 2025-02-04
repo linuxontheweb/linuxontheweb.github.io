@@ -1292,8 +1292,9 @@ const EnvReadLine = class{//«
 #lines;
 #cb;
 
-constructor(){
+constructor(term){
 	this.#lines = [];
+	this.term = term;
 }
 end(){this.killed=true;}
 addLn(ln){//«
@@ -1312,6 +1313,8 @@ addLns(lns){//«
 	}
 }//»
 readLine(){//«
+	this.term.forceNewline();
+	this.term.scrollIntoView();
 	if (this.#lines.length){
 		return this.#lines.shift();
 	}
@@ -6380,7 +6383,7 @@ comopts.envReadLine = new EnvReadLine();
 //comopts.readLine = async()=>{
 //};
 »*/
-	let env_readline = new EnvReadLine();
+	let env_readline = new EnvReadLine(term);
 //This *should* be ignored for everything that has next_com.pipeIn in its out method (@LSKDJSG)
 	last_com.envPipeOutLns = lns => {//«
 if (!(isStr(lns)||isEOF(lns))){
