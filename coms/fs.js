@@ -101,14 +101,14 @@ const get_file_lines_from_args = async(args, term, errcb)=>{//«
 
 //Commands«
 
-/*
+/*«
 const com_ = class extends Com{
 async init(){
 }
 async run(){
 }
 }
-*/
+»*/
 
 const com_brep = class extends Com{/*«*/
 /*«
@@ -417,6 +417,8 @@ cancel(){//«
 
 }//»
 
+const com_cat = class extends Com{//«
+
 /*«The algorithm for LOTW's 'cat'
 
 init:
@@ -437,32 +439,14 @@ run:
 		- It isn't an error for there *not* to be a next arg (null is returned when this.args is empty)
 
 »*/
-const com_cat = class extends Com{//«
+
 	#useTerm = false;
-	init(){
+	init(){//«
 		if (this.noInputOrArgs({noErr: true})){
 			this.#useTerm = true;
 		}
 		this.maybeSetNoPipe();
-	}
-	pipeIn(val){
-		this.out(val);
-		if (isEOF(val)){
-			this.ok();
-		}
-	}
-	async doTermLoop(){
-		while (true){
-			let ln = await this.readLine();
-			if (isEOF(ln)){
-				this.ok();
-				return;
-			}
-			this.out(ln);
-		}
-//Never get here
-//		this.ok();
-	}
+	}//»
 	async run() {//«
 		if (this.#useTerm)return this.doTermLoop();
 		const{stdin}=this;
@@ -480,11 +464,106 @@ const com_cat = class extends Com{//«
 		}
 		this.nok();
 	}//»
-	cancel(){
-cwarn("CANCEL CAT");
+	pipeIn(val){//«
+		this.out(val);
+		if (isEOF(val)){
+			this.ok();
+		}
+	}//»
+
+	async doTermLoop(){//«
+		while (true){
+			let ln = await this.readLine();
+			if (isEOF(ln)){
+				this.ok();
+				return;
+			}
+			this.out(ln);
+		}
+	}//»
+
+/*
+	cancel(){//«
 		this.ok();
-	}
+	}//»
+*/
+
 };//»
+const com_grep = class extends Com{//«
+#re;
+
+async init(){//«
+
+	let patstr = this.args.shift();
+	if (!patstr) {
+		this.no("no pattern given");
+		return;
+	}
+
+	try {
+		this.#re = new RegExp(patstr);
+	}
+	catch(e) {
+		this.no("invalid pattern: " + patstr);
+		return;
+	}
+	if (!this.args.length && !this.pipeFrom) this.no("no file args and not in a pipeline!");
+}//»
+async run(){//«
+	if (this.killed) return;
+	let{args}=this;
+	let have_error = false;
+	const err=mess=>{
+		if (!mess) return;
+		have_error=true;
+		this.err(mess);
+	};
+	let rv = await get_file_lines_from_args(args, this.term, err);
+//	if (rv.err && rv.err.length) err(rv.err);
+	if (rv.out&&rv.out.length) this.#doGrep(rv.out);
+	have_error?this.no():this.ok();	
+}//»
+pipeIn(val){//«
+	if (isEOF(val)){
+		this.out(val);
+		this.ok();
+		return;
+	}
+	this.#doGrep(val.split("\n"));
+}//»
+
+#doGrep(val){//«
+	const re = this.#re;
+	if (!re) return;
+	let arr;
+	if (isStr(val)) arr=[val];
+	else if (!isArr(val)){
+		cwarn("Dropping", val);
+		return;
+	}
+	else arr = val;	
+
+	let is_term = this.isTermOut();
+	let marr;
+	for (let ln of arr){
+		if (is_term) {
+			if (marr = re.exec(ln)) {
+				if (!marr[0].length) this.out(ln);//This apparently matched an empty string
+				else{
+					let obj = this.fmtColLn(ln, marr.index, marr[0].length, "#f99");
+					this.out(obj.lines.join("\n"), {colors: obj.colors, didFmt: true});
+				}
+			}
+		}
+		else{
+			if (re.test(ln)) {
+				this.out(ln);
+			}
+		}
+	}
+}//»
+
+}//»
 const com_touch = class extends Com{//«
 
 init(){
@@ -775,80 +854,6 @@ async run(){
 }
 
 }//»
-const com_grep = class extends Com{//«
-#re;
-async init(){
-
-	let patstr = this.args.shift();
-	if (!patstr) {
-		this.no("no pattern given");
-		return;
-	}
-
-	try {
-		this.#re = new RegExp(patstr);
-	}
-	catch(e) {
-		this.no("invalid pattern: " + patstr);
-		return;
-	}
-	if (!this.args.length && !this.pipeFrom) this.no("no file args and not in a pipeline!");
-}
-#doGrep(val){
-	const re = this.#re;
-	if (!re) return;
-//	const {out}=this;
-	let arr;
-	if (isStr(val)) arr=[val];
-	else if (!isArr(val)){
-		cwarn("Dropping", val);
-		return;
-	}
-	else arr = val;	
-
-	let is_term = this.isTermOut();
-	let marr;
-	for (let ln of arr){
-		if (is_term) {
-			if (marr = re.exec(ln)) {
-				if (!marr[0].length) this.out(ln);//This apparently matched an empty string
-				else{
-					let obj = this.fmtColLn(ln, marr.index, marr[0].length, "#f99");
-					this.out(obj.lines.join("\n"), {colors: obj.colors, didFmt: true});
-				}
-			}
-		}
-		else{
-			if (re.test(ln)) {
-				this.out(ln);
-			}
-		}
-	}
-}
-async run(){
-	if (this.killed) return;
-	let{args}=this;
-	let have_error = false;
-	const err=mess=>{
-		if (!mess) return;
-		have_error=true;
-		this.err(mess);
-	};
-	let rv = await get_file_lines_from_args(args, this.term, err);
-//	if (rv.err && rv.err.length) err(rv.err);
-	if (rv.out&&rv.out.length) this.#doGrep(rv.out);
-	have_error?this.no():this.ok();	
-}
-pipeIn(val){
-	if (isEOF(val)){
-		this.out(val);
-		this.ok();
-		return;
-	}
-	this.#doGrep(val.split("\n"));
-}
-
-}//»
 const com_wc = class extends Com{//«
 #noPipe;
 #lines=0;
@@ -1086,7 +1091,6 @@ async run(){
 	this.ok("please refresh the page!");
 }
 }/*»*/
-
 
 /*
 const com_unmount = async (args,opts, _) => {//«

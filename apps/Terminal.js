@@ -1,37 +1,5 @@
-/*2/4/25: Want some kind of envReadline for when piping into compound commands, so
-that the internal commands have something to read if they are first in their own
-pipeline, with no args or stdin redirect (i.e. just before "hitting" the terminal's
-readline. This is an update to my "solution" of having an internal buffer, to be 
-used in place of a stdin redirect (below). So the given command will do:
-
-await this.opts.envReadline, so that com_cat will now go from:
-
-while (true){
-	let ln = await this.term.readLine();
-	if (isEOF(ln)){
-		this.ok();
-		return;
-	}
-	this.out(ln);
-}
-
-...to...
-
-let use_env = !!this.opts.envReadlineCb;
-while (true){
-	let ln;
-	if (use_env) ln = await this.opts.envReadlineCb();
-	else ln = await this.term.readLine();
-	if (isEOF(ln)){
-		this.ok();
-		return;
-	}
-	this.out(ln);
-}
-
-...and envReadlineCb will look something like:
-
-???
+/*2/4/25: Just created class EnvReadLine{...}, in order to give compound commands
+an "environmental variable" when they are
 
 
 
@@ -1318,58 +1286,39 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 //»
 
 //Classes     (Com, CompoundCom, ErrCom, Stdin/Stdout, ScriptCom...)«
-
+//ZJDEXWL
 const EnvReadLine = class{//«
 
 #lines;
 #cb;
+
 constructor(){
 	this.#lines = [];
 }
 end(){this.killed=true;}
-addLn(ln){/*«*/
-/*
-	if (this.killed) {
-cerr("addLn called after being killed!");
-		return;
-	}
-	if (isEOF(ln)){
-		this.killed = true;
-		return;
-	}
-*/
+addLn(ln){//«
 	if (this.#cb) {
 		this.#cb(ln);
 		this.#cb = undefined;
 		return;
 	}
 	this.#lines.push(ln);
-}/*»*/
-addLns(lns){/*«*/
+}//»
+addLns(lns){//«
 	if (isEOF(lns)) return this.addLn(lns);
 	let arr = lns.split("\n");
 	for (let ln of arr){
 		this.addLn(ln);
 	}
-}/*»*/
-readLine(){/*«*/
-//log("READLINE!!!", this.killed);
+}//»
+readLine(){//«
 	if (this.#lines.length){
 		return this.#lines.shift();
 	}
-/*
-	if (this.killed) {
-		if (this.#cb){
-			this.#cb(EOF);
-		}
-		return;
-//		return EOF;
-	}
-*/
 	return new Promise((Y,N)=>{
 		this.#cb = Y;
 	});
-}/*»*/
+}//»
 
 };//»
 
@@ -1592,6 +1541,7 @@ const Com = class {//«
 	}//»
 	get noStdin(){return(!(this.pipeFrom || this.stdin));}
 	get noArgs(){return(this.args.length===0);}
+	isTermOut(){return !(this.redirLines || this.envRedirLines || this.nextCom || this.envPipeInCb || this.envPipeOutLns || this.scriptOut || this.subLines);}
 	expectArgs(num){//«
 		if (!isNum(num)) {
 			this.err(`invalid argument given to expectArgs (see console)`);
@@ -1653,7 +1603,7 @@ log(val);
 			return;
 		}
 		//WLKUIYDP
-		if (redir_lns) {/*«*/
+		if (redir_lns) {//«
 		//KIUREUN
 			if (isEOF(val)) return;
 			if (val instanceof Uint8Array){
@@ -1671,7 +1621,7 @@ log(val);
 			}
 			redir_lns.push(val);
 			return;
-		}/*»*/
+		}//»
 		if (this.scriptOut) {
 			return this.scriptOut(val);
 		}
@@ -1684,18 +1634,7 @@ log(val);
 		}
 		this.resp(val, opts);
 	}//»
-	async readLine(use_prompt){//«
-//XCJEKRNK
-		let ln;
-		if (this.envReadLine){
-			ln = await this.envReadLine.readLine();
-		}
-		else ln = await this.term.readLine(use_prompt);
-		return ln;
-	}//»
-	isTermOut(){
-		return !(this.redirLines || this.envRedirLines || this.nextCom || this.envPipeInCb || this.envPipeOutLns || this.scriptOut || this.subLines);
-	}
+//«Output helpers
 	err(str, opts={}){
 		opts.isErr=true;
 		this.resp(str, opts);
@@ -1712,10 +1651,20 @@ log(val);
 		opts.isInf=true;
 		this.resp(str,opts);
 	}
-	cancel(){
+//»
+	async readLine(use_prompt){//«
+//XCJEKRNK
+		let ln;
+		if (this.envReadLine){
+			ln = await this.envReadLine.readLine();
+		}
+		else ln = await this.term.readLine(use_prompt);
+		return ln;
+	}//»
+	cancel(){//«
 		this.killed = true;
 cwarn(`${this.name}: cancelled`);
-	}
+	}//»
 	checkStrOrTrue(val, fname, opts={}){//«
 /*This is for function calls that return either:
 1) true upon success
@@ -1839,7 +1788,6 @@ const ErrCom = class extends Com{//«
 
 class CompoundCom{//«
 
-#buffer;
 constructor(shell, opts){//«
 	this.isCompound = true;
 	this.shell = shell;
@@ -1847,17 +1795,20 @@ constructor(shell, opts){//«
 	this.outRedir = opts.outRedir;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
+			if (this.nextCom) {
+				if (this.nextCom.pipeIn){
+					this.nextCom.pipeIn(EOF);
+				}
+				else if (this.envPipeOutLns){
+					this.envPipeOutLns(EOF);
+				}
+			}
 			Y(rv);
 			this.killed = true;
 		};
 	});
 }//»
 //EJKFKJ
-runOk(from_pipe){//«
-return true;
-//	if (this.#buffer && !from_pipe) return false;
-//	return true;
-}//»
 _init(){//«
 	let opts={};
 	for (let k in this.opts){
@@ -1865,41 +1816,30 @@ _init(){//«
 	}
 	if (this.nextCom){
 		if (this.nextCom.pipeIn){
-			opts.envPipeInCb=(...args)=>{
-				this.nextCom.pipeIn(...args);
-			}
+			opts.envPipeInCb=(val)=>{
+				this.nextCom.pipeIn(val);
+			};
 		}
-		else opts.envPipeInCb = ()=>{};
+		else if (this.envPipeOutLns){
+			opts.envPipeInCb=val=>{
+				if (isEOF(val)) return;
+				this.envPipeOutLns(val);
+			};
+		}
+		else {
+cwarn("Setting envPipeInCb to NOOP!");
+			opts.envPipeInCb = ()=>{};
+		}
 	}
 	if (this.outRedir){
 		this.redirLines = [];
 		opts.envRedirLines = this.redirLines;
 	}
 	this.opts = opts;
-//CWOPLIU
-	if (this.prevCom && !this.opts.stdin){
-		this.#buffer = [];
-	}
 }//»
 init(){this._init();}
 cancel(){this.killed=true;}
-/*
-pipeIn(val){//«
-	if (isEOF(val)) {
-		this.opts.stdin = this.#buffer.join("\n");
-		this.opts.stdinLns = this.#buffer;
-		return this.run(true);
-	}
-	if (isStr(val)) {
-		let arr = val.split("\n");
-		this.#buffer.push(...arr);
-	}
-	else{
-cerr("WTF IS IN until.pipeIn????");
-log(val);
-	}
-}//»
-*/
+
 }//»
 
 class BraceGroupCom extends CompoundCom{//«
@@ -1909,9 +1849,7 @@ constructor(shell, opts, list){/*«*/
 	this.list = list;
 	this.name="brace_group";
 }/*»*/
-async run(isPipe){//«
-//	if (!this.runOk()) return;
-	if (!this.runOk(isPipe)) return;
+async run(){//«
 	if (this.isFunc){
 		this.opts.scriptArgs = this.args.slice();
 		this.opts.scriptName = "sh";
@@ -1928,10 +1866,7 @@ constructor(shell, opts, list){
 	this.list = list;
 	this.name="subshell";
 }
-async run(isPipe){
-	if (!this.runOk(isPipe)) return;
-//log(this.opts.env);
-//	if (!this.runOk()) return;
+async run(){
 	if (this.isFunc){
 		this.opts.scriptArgs = this.args.slice();
 		this.opts.scriptName = "sh";
@@ -1952,8 +1887,7 @@ constructor(shell, opts, cond, do_group){//«
 	this.do_group = do_group;
 	this.name = "while";
 }//»
-async run(isPipe){//«
-	if (!this.runOk(isPipe)) return;
+async run(){//«
 	let rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 	if (this.shell.cancelled) return;
 	while (!rv){
@@ -1976,8 +1910,7 @@ constructor(shell, opts, cond, do_group){//«
 	this.do_group = do_group;
 	this.name="until";
 }//»
-async run(isPipe){//«
-	if (!this.runOk(isPipe)) return;
+async run(){//«
 	let rv = await this.shell.executeStatements(dup(this.cond), this.opts)
 	if (this.shell.cancelled) return;
 	while (rv){
@@ -2002,8 +1935,7 @@ constructor(shell, opts, conds, conseqs, fallback){//«
 	this.fallback = fallback;
 	this.name = "if";
 }//»
-async run(isPipe){//«
-	if (!this.runOk(isPipe)) return;
+async run(){//«
 	const{conds, conseqs, opts}=this;
 	for (let i=0; i < conds.length; i++){
 		let rv = await this.shell.executeStatements(conds[i], opts);
@@ -2043,10 +1975,7 @@ async init(){//«
 	this.in_list = await this.shell.allExpansions(this.in_list, this.opts);
 	if (this.shell.cancelled) return;
 }//»
-async run(isPipe){//«
-	if (!this.runOk(isPipe)) return;
-
-///if (this.#buffer && !from_pipe) return;
+async run(){//«
 	const{shell}=this;
 	let env = this.opts.env;
 	let nm = this.var_name+"";
@@ -2057,6 +1986,7 @@ async run(isPipe){//«
 		if (shell.cancelled) return;
 		await sleep(0);
 	}
+//	this.out(EOF);
 	this.end(E_SUC);
 }//»
 
@@ -2095,8 +2025,7 @@ async init(){//«
 	}
 	funcs[name] = func;
 }//»
-run(isPipe){//«
-	if (!this.runOk(isPipe)) return;
+run(){//«
 //As commands themselves, function definitions don't do much of anything, e.g.:
 //echo blah blah blah | 
 	this.end(E_SUC);
@@ -2121,8 +2050,7 @@ async init(){//«
 	this.word.quoteRemoval();
 	this.word = this.word.fields.join("")
 }//»
-async run(isPipe){//«
-if (!this.runOk(isPipe)) return;
+async run(){//«
 /*«
 For everything, do:
 
@@ -6441,16 +6369,14 @@ comopts.envReadLine = new EnvReadLine();
 //};
 »*/
 	let env_readline = new EnvReadLine();
-
 //This *should* be ignored for everything that has next_com.pipeIn in its out method (@LSKDJSG)
-	last_com.envPipeOutLns = lns => {
-
+	last_com.envPipeOutLns = lns => {//«
 if (!(isStr(lns)||isEOF(lns))){
 cwarn("Skipping non-string/non-EOF", lns);
 return;
 }
 		env_readline.addLns(lns);
-	};
+	};//»
 	comopts.envReadLine = env_readline;
 
 }//»
@@ -8497,7 +8423,7 @@ insertCurScroll()  {//«
 		this.x = curarr.length;
 		curarr = [];
 	}
-	if (this.x == this.w-1) {
+	if (this.x == this.w) {
 		this.x=0;
 		this.y++;
 	}
@@ -9416,6 +9342,7 @@ handleBackspace(){//«
 		if (this.curScrollCommand) this.insertCurScroll();
 		if (this.x==0 && this.cy() > 0) {//«
 //JEPOIKLMJYH
+//log(this.x, this.y, this.scrollNum);
 			if (this.lines[this.cy()].length < this.w) {//«
 				let char_arg = this.lines[this.cy()][0];
 				if (char_arg) {
