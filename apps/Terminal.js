@@ -1737,13 +1737,15 @@ be wrapped when output onto the terminal
 
 }//»
 const ScriptCom = class extends Com{//«
+
 	constructor(shell, name, text, args, env){
 		super(name, args, {}, env);
 		this.text = text;
 		this.shell = shell;
 	}
-	async run(){
+	async run(){//«
 		const scriptOut=(val)=>{
+			if (isEOF(val)) return;
 			this.out(val);
 		};
 		let code = await this.shell.execute(this.text, {
@@ -1753,8 +1755,17 @@ const ScriptCom = class extends Com{//«
 			scriptArgs: this.args,
 			env: sdup(this.env)
 		});
+		if (this.nextCom) {
+			if (this.nextCom.pipeIn){
+				this.nextCom.pipeIn(EOF);
+			}
+			else if (this.envPipeOutLns){
+				this.envPipeOutLns(EOF);
+			}
+		}
 		this.end(code);
-	}
+	}//»
+
 }//»
 const NoCom=class{//«
 	constructor(env){
@@ -1817,6 +1828,7 @@ _init(){//«
 	if (this.nextCom){
 		if (this.nextCom.pipeIn){
 			opts.envPipeInCb=(val)=>{
+//				if (isEOF(val)) return;
 				this.nextCom.pipeIn(val);
 			};
 		}
