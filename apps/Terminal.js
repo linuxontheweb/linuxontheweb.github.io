@@ -1633,10 +1633,10 @@ log(num);
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
 			let next_com = this.nextCom;
-			if (next_com && next_com.pipeIn) {//LSKDJSG
+			if (next_com && next_com.pipeIn) {//LSKDJSG: Simple commands define this
 				if (!next_com.noPipe) next_com.pipeIn(val);
 			}
-			else if (this.envPipeOutLns){
+			else if (this.envPipeOutLns){//All compound commands in pipelines have this
 				this.envPipeOutLns(val);
 			}
 			else{
@@ -1875,12 +1875,12 @@ _init(){//«
 	if (this.nextCom){
 		if (this.nextCom.pipeIn){
 			opts.envPipeInCb=(val)=>{
-//				if (isEOF(val)) return;
 				this.nextCom.pipeIn(val);
 			};
 		}
 		else if (this.envPipeOutLns){
 			opts.envPipeInCb=val=>{
+//Don't want compound commands passing through internal EOFs
 				if (isEOF(val)) return;
 				this.envPipeOutLns(val);
 			};
@@ -2350,6 +2350,7 @@ const com_echo = class extends Com{//«
 // $ echo HELLO | while read LINE; do echo $LINE; done
 //		await sleep(0);
 
+//		await sleep(0);
 		this.ok();
 	}
 }//»
@@ -4426,9 +4427,7 @@ eol(){//«
 eos(){//end-of-script«
 	return (!this.isInteractive && this.tokNum === this.numToks);
 }//»
-unexp(tok){
-	this.fatal(`syntax error near unexpected token '${tok.toString()}'`);
-}
+unexp(tok){this.fatal(`syntax error near unexpected token '${tok.toString()}'`);}
 unexpeof(){this.fatal(`syntax error: unexpected end of file`);}
 end(){//«
 //SLKIURUJ
@@ -4554,8 +4553,8 @@ async getNonEmptyLineFromTerminal(){//«
 	while (rv = await this.term.readLine("> ")){
 		if (isEOF(rv)) return rv;
 		if (rv.match(/^[\x20\t]*(#.+)?$/)) continue
+		return rv;
 	}
-	return rv;
 }//»
 async getMoreTokensFromTerminal(){//«
 	let rv = await this.getNonEmptyLineFromTerminal();
