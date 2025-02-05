@@ -1,3 +1,38 @@
+
+/*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands:«
+
+Here is an example command:
+$ while read LN; do echo Hi from echo1: $LN; done | while read LN; do echo Hi from echo2:
+ $LN; done;
+
+In Terminal.readLine, I created a readLineStartLine variable (@WMNYTUE), which
+is used by Terminal.handleReadlineEnter in order to figure out the readline
+string.  But this was not enough because of the possibility of, e.g. certain
+compound commands with pipeline chains (like above) to output their responses onto the
+terminal *after* a readline call has been initiated. So in the terminal's
+response, I checked for the existence of the readLineStartLine variable, and
+then reset it to the internal 'curnum' variable (@QCKLURYH). Finally, after
+this was all finished, I get rid of the readLineStartLine variable (set it to null)
+at the end of Terminal.handleReadlineEnter.
+
+This appears to be "okay", as long as the user hasn't had time to type anything between
+the point that Terminal.readLine is first initiated and when there has been some additional
+output on the terminal. To solve that problem, all we would need to do is to pop off
+the existing readline lines, save them, and put them back on, at the end of the response
+function, ideally keeping the cursor's x position the same.
+
+But is there not *ANOTHER* solution, which would be to await the conclusion of this
+particular instance of pipeline propagation? I'm not sure this would be a "better"
+solution because of the amount of internal complexity required to make it work.
+Besides, there's no necessary reason to make use of pipelines, i.e:
+
+$ while read LN; do true; done | while read LN; do echo Hi from echo2: $LN; done;
+
+So, all in all, the best solution (assuming it is needed, which there is *probably* a
+way to invent a scenario) seems to be that first one about doing the popping off,
+saving them, putting them back on, and resetting Terminal.readLineStartLine.
+
+»*/
 /*2/4/25: Just created class EnvReadLine{...}, in order to give compound commands «
 an "environmental variable" to allow them to provide a readline functionality
 from a preceding pipe. This overrides the crappy solution from yesterday.
@@ -22,7 +57,6 @@ Now @XCJEKRNK, we have a com.readLine method. If there is an 'envReadLine' in ou
 opts, then will will use that. We will only get here if we are the first in our
 immediate pipeline, and we are embedded in a compound command that is *inside* of
 a pipeline..
-
 
 
 !!! VERY WEIRD BEHAVIOR !!!
@@ -1949,9 +1983,11 @@ constructor(shell, opts, cond, do_group){//«
 async run(){//«
 	let rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 	if (this.shell.cancelled) return;
+//	await sleep(0);
 	while (!rv){
 		await this.shell.executeStatements(dup(this.do_group), this.opts);
 		if (this.shell.cancelled) return;
+		await sleep(0);
 		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 		if (this.shell.cancelled) return;
 		await sleep(0);
@@ -1972,9 +2008,11 @@ constructor(shell, opts, cond, do_group){//«
 async run(){//«
 	let rv = await this.shell.executeStatements(dup(this.cond), this.opts)
 	if (this.shell.cancelled) return;
+//	await sleep(0);
 	while (rv){
 		await this.shell.executeStatements(dup(this.do_group), this.opts)
 		if (this.shell.cancelled) return;
+		await sleep(0);
 		rv = await this.shell.executeStatements(dup(this.cond), this.opts)
 		if (this.shell.cancelled) return;
 		await sleep(0);
@@ -2586,23 +2624,28 @@ const com_clear = class extends Com{/*«*/
 		this.ok();
 	}
 }/*»*/
-const com_true = class extends Com{/*«*/
+const com_colon = class extends Com{//«
+	run(){
+		this.ok();
+	}
+}//»
+const com_true = class extends Com{//«
 	run(){
 		let mess;
 		if (this.args.length) mess = this.args.join(" ");
 		else mess = "I'm true";
 		this.ok(mess);
 	}
-}/*»*/
-const com_false = class extends Com{/*«*/
+}//»
+const com_false = class extends Com{//«
 	run(){
 		let mess;
 		if (this.args.length) mess = this.args.join(" ");
 		else mess = "I'm false";
 		this.no(mess);
 	}
-}/*»*/
-const com_cd = class extends Com{/*«*/
+}//»
+const com_cd = class extends Com{//«
 init(){
 	if (!this.args.length) {
 		this.args.push(this.term.getHomedir());
@@ -2625,7 +2668,7 @@ async run(){
 	this.ok();
 }
 }
-/*»*/
+//»
 const com_app = class extends Com{//«
 
 async run(){
@@ -2832,7 +2875,6 @@ async run(){//«
 		}
 		else useval = vals.shift();
 		if (!useval) useval = "";
-//log(`ENV[${arg}] = ${useval}`);
 		ENV[arg] = useval;
 	}
 	have_error?this.no():this.ok();
@@ -2934,6 +2976,7 @@ async run(){
 
 this.defCommands={//«
 shift: com_shift,
+":": com_colon,
 "[": com_brackettest,
 workman: com_workman,
 bindwin: com_bindwin,
@@ -6186,6 +6229,11 @@ makeCompoundCommand(com, opts){//«
 
 async makeCommand({assigns=[], name, args=[]}, opts){//«
 //async makeCommand(arr, opts){
+//cwarn(name.toString());
+//for (let arg of args){
+//log(arg);
+//}
+//log(args);
 	const{term}=this;
 //	const make_sh_err_com = ShellMod.util.make_sh_err_com;
 //	const make_sh_err_com = make_sh_error_com;
@@ -7133,6 +7181,7 @@ async getch(promptarg, def_ch){//«
 }
 //»
 async readLine(promptarg){//«
+	const{lines}=this;
 	this.sleeping = false;
 	if (!this.actor) {
 		this.forceNewline();
@@ -7143,6 +7192,7 @@ async readLine(promptarg){//«
 		else this.#readLinePromptLen = 0;
 		this.x = this.#readLinePromptLen;
 	}
+	this.readLineStartLine = this.cy();//WMNYTUE
 	return new Promise((Y,N)=>{
 //XKLRYTJTK
 		if (this.actor) this.#readLineStr="";
@@ -9133,10 +9183,12 @@ log("response colors",colors);
 	}
 	else colors = [];
 
-	if (lines.length && (noBr || !lines[lines.length-1].length)) lines.pop();
-
+	if (lines.length && (noBr || !lines[lines.length-1].length)) {
+		let gotln = lines.pop();
+	}
 	let len = out.length;
-	for (let i=0, curnum = lines.length; i < len; i++){
+	let curnum = lines.length;
+	for (let i=0; i < len; i++){
 		let ln = out[i];
 		let col = colors[i];
 		if (didFmt){
@@ -9154,6 +9206,9 @@ log("response colors",colors);
 			else line_colors[curnum] = col;
 			curnum++;
 		}
+	}
+	if (Number.isFinite(this.readLineStartLine)) {
+		this.readLineStartLine = curnum;//QCKLURYH
 	}
 }
 //»
@@ -9460,7 +9515,9 @@ async handleEnter(opts={}){//«
 
 	let str;
 	if (this.curScrollCommand) str = this.insertCurScroll();
-	else str = this.getComArr().join("");
+	else {
+		str = this.getComArr().join("");
+	}
 	if (str.match(/^ *$/)) {
 		this.responseEnd();
 		return;
@@ -9569,7 +9626,12 @@ handleReadlineEnter(){//«
 	const{lines}=this;
 	let s='';
 
-	let from = this.curPromptLine+1;
+//This '1' ONLY correct when the line does not wrap
+//	let from = this.curPromptLine+1;
+
+//	let num_com_lines = lines.length - this.curPromptLine - 1;
+//	let from = this.curPromptLine+num_com_lines;
+	let from = this.readLineStartLine;
 	for (let i=from; i < lines.length; i++) {
 		if (i==from) {
 			s+=lines[i].slice(this.#readLinePromptLen).join("");
@@ -9584,6 +9646,7 @@ handleReadlineEnter(){//«
 	}
 	this.#readLineCb(s);
 	this.#readLineCb = null;
+	this.readLineStartLine = null;
 	this.sleeping = true;
 	this.forceNewline();
 }//»
