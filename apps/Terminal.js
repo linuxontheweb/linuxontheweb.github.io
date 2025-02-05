@@ -2356,6 +2356,7 @@ const com_echo = class extends Com{//«
 }//»
 const com_echodelay = class extends Com{//«
 //	echodelay:{s:{d: 3}},
+	static opts = {s: {d: 3}};
 	async run(){
 		let delay;
 		if (this.opts.d) {
