@@ -1,6 +1,12 @@
 
 /*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands:«
 
+THE PROBLEM IS THAT THE LINE FROM WHICH THE READLINE STARTS (AND THEREFORE
+KNOWING THE EXACT LINES THAT CONSTITUTE THE READLINE INPUT) *MIGHT* BECME
+INVALIDATED BY OUTPUT ONTO THE TERMINAL *AFTER* THE READLINE IS INITIATED, AND
+*BEFORE* THE READLINE-TERMINATE ENTER IS PRESSED.
+
+
 Here is an example command:
 $ while read LN; do echo Hi from echo1: $LN; done | while read LN; do echo Hi from echo2:
  $LN; done;
@@ -8,29 +14,41 @@ $ while read LN; do echo Hi from echo1: $LN; done | while read LN; do echo Hi fr
 In Terminal.readLine, I created a readLineStartLine variable (@WMNYTUE), which
 is used by Terminal.handleReadlineEnter in order to figure out the readline
 string.  But this was not enough because of the possibility of, e.g. certain
-compound commands with pipeline chains (like above) to output their responses onto the
-terminal *after* a readline call has been initiated. So in the terminal's
-response, I checked for the existence of the readLineStartLine variable, and
-then reset it to the internal 'curnum' variable (@QCKLURYH). Finally, after
-this was all finished, I get rid of the readLineStartLine variable (set it to null)
-at the end of Terminal.handleReadlineEnter.
+compound commands with pipeline chains (like above) to output their responses
+onto the terminal *after* a readline call has been initiated. So in the
+terminal's response, I checked for the existence of the readLineStartLine
+variable, and then reset it to the response method's internal 'curnum' variable
+(@QCKLURYH). Finally, after this is all finished, I get rid of the
+readLineStartLine variable (set it to null) at the end of Terminal.handleReadlineEnter.
 
 This appears to be "okay", as long as the user hasn't had time to type anything between
 the point that Terminal.readLine is first initiated and when there has been some additional
-output on the terminal. To solve that problem, all we would need to do is to pop off
+output on the terminal. To solve *that* problem, all we would need to do is to pop off
 the existing readline lines, save them, and put them back on, at the end of the response
-function, ideally keeping the cursor's x position the same.
+function, ideally keeping the cursor's x position the same (so the user would hardly need to 
+blink during this entire process).
 
-But is there not *ANOTHER* solution, which would be to await the conclusion of this
-particular instance of pipeline propagation? I'm not sure this would be a "better"
-solution because of the amount of internal complexity required to make it work.
-Besides, there's no necessary reason to make use of pipelines, i.e:
+But is there not *ANOTHER* solution, which would be to await the conclusion of
+this particular instance of pipeline propagation? I'm not sure this would be a
+"better" solution (if even really "doable") because of the amount of internal
+complexity required to make it work.  Besides, there's no necessary reason to
+make use of pipelines, i.e:
 
 $ while read LN; do true; done | while read LN; do echo Hi from echo2: $LN; done;
 
 So, all in all, the best solution (assuming it is needed, which there is *probably* a
-way to invent a scenario) seems to be that first one about doing the popping off,
-saving them, putting them back on, and resetting Terminal.readLineStartLine.
+way to invent a scenario) seems to be that one about doing the popping off,
+saving, and putting back on, and then resetting Terminal.readLineStartLine.
+
+LO AND BEHOLD, A SCENARIO HAS BEEN INVENTED:
+
+$ while read LN; do echo Hi from echo1: $LN; done | while read LN; do msleep 1000; echo Hi from echo2:
+ $LN; done;
+
+WE SEEM TO BE MAKING PROGRESS HERE, BUT I'M JUST NOT QUITE SURE WHAT POSSESSED US TO PUT
+A Terminal.forceNewline @SZKLIEPO!?!? I DON'T SEE HOW THIS PURELY INTERNAL OPERATION
+HAS ANYTHING TO TO WITH THE WORKINGS OF THE TERMINAL...
+
 
 »*/
 /*2/4/25: Just created class EnvReadLine{...}, in order to give compound commands «
@@ -1392,7 +1410,8 @@ return;
 	}
 }//»
 async readLine(){//«
-	this.term.forceNewline();
+//SZKLIEPO
+//	this.term.forceNewline();
 	if (this.#lines.length){
 		return this.#lines.shift();
 	}
@@ -9116,6 +9135,12 @@ lines array (otherwise, the message gets printed onto the actor's screen.
 */
 
 	const{termLines: lines, termLineColors: line_colors}=this;
+	let readline_lines;
+	if (Number.isFinite(this.readLineStartLine)) {
+		readline_lines = [];
+		while (lines.length > this.readLineStartLine) readline_lines.unshift(lines.pop());
+	}
+
 	if (!isStr(out)) {
 //		this.Win._fatal(new Error("Non-string given to term.response"));
 cwarn("Here is the non-string object");
@@ -9207,8 +9232,10 @@ log("response colors",colors);
 			curnum++;
 		}
 	}
-	if (Number.isFinite(this.readLineStartLine)) {
+	if (readline_lines){
+		lines.push(...readline_lines);
 		this.readLineStartLine = curnum;//QCKLURYH
+		this.scrollIntoView();
 	}
 }
 //»
@@ -9689,7 +9716,10 @@ handleKey(sym, code, mod, ispress, e){//«
 					if (ispress) this.#readLineStr+=String.fromCharCode(code);
 					return;
 				}
-				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
+//				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
+				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.readLineStartLine) {
+					return;
+				}
 //LOUORPR
 //else: let the 'ispress' characters/okReadlineSyms (DEL_, BACK_, LEFT_, RIGHT_) pass through...
 			}
