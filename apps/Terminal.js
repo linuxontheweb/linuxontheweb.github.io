@@ -1,8 +1,8 @@
 
-/*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands:«
+/*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands: «
 
 THE PROBLEM IS THAT THE LINE FROM WHICH THE READLINE STARTS (AND THEREFORE
-KNOWING THE EXACT LINES THAT CONSTITUTE THE READLINE INPUT) *MIGHT* BECME
+KNOWING THE EXACT LINES THAT CONSTITUTE THE READLINE INPUT) *MIGHT* BECOME
 INVALIDATED BY OUTPUT ONTO THE TERMINAL *AFTER* THE READLINE IS INITIATED, AND
 *BEFORE* THE READLINE-TERMINATE ENTER IS PRESSED.
 
@@ -42,12 +42,14 @@ saving, and putting back on, and then resetting Terminal.readLineStartLine.
 
 LO AND BEHOLD, A SCENARIO HAS BEEN INVENTED:
 
-$ while read LN; do echo Hi from echo1: $LN; done | while read LN; do msleep 1000; echo Hi from echo2:
- $LN; done;
+$ while read LN; do echo Hi from echo1: $LN; done | while read LN; do msleep 5000; echo Hi from echo2: $LN; done;
 
-WE SEEM TO BE MAKING PROGRESS HERE, BUT I'M JUST NOT QUITE SURE WHAT POSSESSED US TO PUT
-A Terminal.forceNewline @SZKLIEPO!?!? I DON'T SEE HOW THIS PURELY INTERNAL OPERATION
-HAS ANYTHING TO TO WITH THE WORKINGS OF THE TERMINAL...
+WE SEEM TO BE MAKING PROGRESS HERE, BUT I'M JUST NOT QUITE SURE WHAT POSSESSED
+US TO PUT A Terminal.forceNewline @SZKLIEPO (this "tacks" another line onto
+things, but it doesn't seem to mess up the end result too much... in fact, we
+can still use the backspace key to get back onto the line that we were previously
+on)!?!? I DON'T SEE HOW THIS PURELY INTERNAL OPERATION HAS ANYTHING TO TO WITH
+THE WORKINGS OF THE TERMINAL...
 
 
 »*/
