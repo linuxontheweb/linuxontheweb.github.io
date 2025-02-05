@@ -2355,6 +2355,7 @@ const com_echo = class extends Com{//«
 	}
 }//»
 const com_echodelay = class extends Com{//«
+//	echodelay:{s:{d: 3}},
 	async run(){
 		let delay;
 		if (this.opts.d) {
@@ -3001,7 +3002,6 @@ Long options may be given an argument like this:
 	},//»
 	read:{l:{prompt:3}},
 	import:{s:{d:1},l:{delete: 1}},
-	echodelay:{s:{d: 3}},
 	bindwin:{s:{d:3},l:{desc: 3}},
 	test: true,
 	"[": true
