@@ -1320,11 +1320,11 @@ const try_save = (if_saveas)=>{//«
 	init_stat_input("Save As: ");
 	render({}, 110);
 };//»
-const try_save_as=()=>{//«
+const try_save_as=(opts={})=>{//«
 	if (!edit_fullpath) return try_save();
 	try_save(true);	
 };//»
-const edit_save = async(if_nostat)=>{//«
+const edit_save = async(if_nostat, com_opts={})=>{//«
 	let write_err = "";
 	const write_cb_func = async(ret)=>{//«
 		if (ret) {
@@ -1353,6 +1353,9 @@ const edit_save = async(if_nostat)=>{//«
 			}
 			dirty_flag = false;
 			Term.is_dirty = false;
+if (com_opts.doQuit){
+quit();
+}
 		}
 		else {
 			stat_message = "The file could not be saved";
@@ -1439,7 +1442,7 @@ return;
 	return write_cb_func(rv);
 }
 //»
-const save_as = async name=>{//«
+const save_as = async (name)=>{//«
 
 const err=s=>{//«
 	stat_message = s;
@@ -1745,6 +1748,14 @@ if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
 		if (com=="q"||com=="quit")maybe_quit();
 		else if (marr = com.match(/^w(rite)?( +(.+))?$/)){
 			save_as(marr[3]);
+			return;
+		}
+		else if (com=="wq"){
+			if (!edit_fullpath){
+				stat_err("No file name");
+				return;
+			}
+			edit_save(false, {doQuit: true});
 			return;
 		}
 		else if (marr = com.match(/^set( +(.+))?$/)){//«
