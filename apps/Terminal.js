@@ -1662,7 +1662,8 @@ log(num);
 	}//»
 	maybeSetNoPipe(){if(this.args.length || this.stdin)this.noPipe=true;}
 	noInputOrArgs(opts={}){//«
-		let have_none = !(this.args.length || this.pipeFrom || this.stdin);
+//		let have_none = !(this.args.length || this.pipeFrom || this.stdin);
+		let have_none = !(this.args.length || this.pipeFrom || this.stdinLns);
 		if (have_none && !opts.noErr){
 			this.err("no args or input received");
 			this.numErrors++;
@@ -6469,8 +6470,11 @@ log(red);
 //VOPDUKKD
 		let have_lines = opts.stdinLns;
 		let comopts = sdup(opts);
-		comopts.stdin = stdin || optStdin;
-		if (comopts.stdin){
+		if (isStr(stdin)) comopts.stdin = stdin;
+		else comopts.stdin = optStdin;
+//		comopts.stdin = stdin || optStdin;
+//		if (comopts.stdin){
+		if (isStr(comopts.stdin)){
 			if (have_lines) comopts.stdinLns = have_lines;
 			else comopts.stdinLns = comopts.stdin.split("\n");
 		}
@@ -6775,6 +6779,7 @@ export const app = class {
 #readLineCb;
 #readLineStr;
 #readLinePromptLen;
+#readLineStartLine;
 #getChCb;
 #getChDefCh;
 //#doContinue;
@@ -7213,7 +7218,7 @@ async readLine(promptarg){//«
 		else this.#readLinePromptLen = 0;
 		this.x = this.#readLinePromptLen;
 	}
-	this.readLineStartLine = this.cy();//WMNYTUE
+	this.#readLineStartLine = this.cy();//WMNYTUE
 	return new Promise((Y,N)=>{
 //XKLRYTJTK
 		if (this.actor) this.#readLineStr="";
@@ -9138,9 +9143,9 @@ lines array (otherwise, the message gets printed onto the actor's screen.
 
 	const{termLines: lines, termLineColors: line_colors}=this;
 	let readline_lines;
-	if (Number.isFinite(this.readLineStartLine)) {
+	if (Number.isFinite(this.#readLineStartLine)) {
 		readline_lines = [];
-		while (lines.length > this.readLineStartLine) readline_lines.unshift(lines.pop());
+		while (lines.length > this.#readLineStartLine) readline_lines.unshift(lines.pop());
 	}
 
 	if (!isStr(out)) {
@@ -9236,7 +9241,7 @@ log("response colors",colors);
 	}
 	if (readline_lines){
 		lines.push(...readline_lines);
-		this.readLineStartLine = curnum;//QCKLURYH
+		this.#readLineStartLine = curnum;//QCKLURYH
 		this.scrollIntoView();
 	}
 }
@@ -9650,6 +9655,7 @@ handleReadlineEnter(){//«
 //HWURJIJE
 		this.#readLineCb(this.#readLineStr);
 		this.#readLineCb = null;
+		this.#readLineStartLine = null;
 		return;
 	}
 	const{lines}=this;
@@ -9660,7 +9666,7 @@ handleReadlineEnter(){//«
 
 //	let num_com_lines = lines.length - this.curPromptLine - 1;
 //	let from = this.curPromptLine+num_com_lines;
-	let from = this.readLineStartLine;
+	let from = this.#readLineStartLine;
 	for (let i=from; i < lines.length; i++) {
 		if (i==from) {
 			s+=lines[i].slice(this.#readLinePromptLen).join("");
@@ -9675,7 +9681,7 @@ handleReadlineEnter(){//«
 	}
 	this.#readLineCb(s);
 	this.#readLineCb = null;
-	this.readLineStartLine = null;
+	this.#readLineStartLine = null;
 	this.sleeping = true;
 	this.forceNewline();
 }//»
@@ -9715,11 +9721,17 @@ handleKey(sym, code, mod, ispress, e){//«
 			if (ispress || this.okReadlineSyms.includes(sym)){
 				if (this.actor){
 //VEOMRUI
-					if (ispress) this.#readLineStr+=String.fromCharCode(code);
+					if (ispress) {
+						this.#readLineStr+=String.fromCharCode(code);
+						if (this.#readLineStr.length === this.w){
+							this.#readLineCb(this.#readLineStr);
+							this.#readLineStr="";
+						}
+					}
 					return;
 				}
 //				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
-				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.readLineStartLine) {
+				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.#readLineStartLine) {
 					return;
 				}
 //LOUORPR
@@ -9892,7 +9904,8 @@ onkeydown(e,sym,mod){//«
 		if (sym=="c_C"){
 //RMLDURHTJ
 			this.#readLineCb(EOF);
-			this.#readLineCb = undefined;
+			this.#readLineCb = null;
+			this.#readLineStartLine = null;
 			this.doOverlay("Readline: cancelled");
 //			this.curShell.cancel();
 			return;

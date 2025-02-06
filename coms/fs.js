@@ -451,7 +451,7 @@ run:
 		if (this.#useTerm)return this.doTermLoop();
 		const{stdin}=this;
 		if (!this.args.length){
-			if (stdin){
+			if (isStr(stdin)){
 				this.out(stdin);
 				this.ok();
 			}
