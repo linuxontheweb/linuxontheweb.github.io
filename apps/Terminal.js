@@ -1,4 +1,16 @@
+/*2/6/25: Just updated com_cat to check for stdinLns (instead of stdin), in case of
+this kind of this:
+  $ cat<<<$NOTHINGHERE
 
+Now I guess I can have a loopNum variable for embedded for/until/while loops, which
+can make use of continue [n] and break [n] (especially for interesting cases when n > 1).
+
+When the argument is more than the number of embedded loops, I guess we just
+end up using the outermost loop.
+
+
+
+*/
 /*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands: «
 
 THE PROBLEM IS THAT THE LINE FROM WHICH THE READLINE STARTS (AND THEREFORE
@@ -1998,6 +2010,8 @@ class WhileCom extends CompoundCom{//«
 
 constructor(shell, opts, cond, do_group){//«
 	super(shell, opts);
+	if (this.opts.loopNum) this.opts.loopNum++;
+	else this.opts.loopNum = 1;
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name = "while";
@@ -2023,6 +2037,8 @@ class UntilCom extends CompoundCom{//«
 
 constructor(shell, opts, cond, do_group){//«
 	super(shell, opts);
+	if (this.opts.loopNum) this.opts.loopNum++;
+	else this.opts.loopNum = 1;
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name="until";
@@ -2083,6 +2099,8 @@ class ForCom extends CompoundCom{//«
 
 constructor(shell, opts, name, in_list, do_group){//«
 	super(shell, opts);
+	if (this.opts.loopNum) this.opts.loopNum++;
+	else this.opts.loopNum = 1;
 	this.var_name=name;
 	this.in_list=in_list;
 	this.do_group=do_group;
@@ -3510,8 +3528,11 @@ dup(){//«
 const ParamSub = class extends Sequence{//«
 
 //KLSDHSKD
-expand(shell, term, opts){//«
-const{env,scriptName, scriptArgs}=opts;
+
+expand(shell, term, com_opts, opts={}){//«
+
+//if opts.isMath, then we can substitute "0" for non-existent things
+	const{env,scriptName, scriptArgs}=com_opts;
 //cwarn("PARAM", scriptName, scriptArgs);
 //expand(shell, term, env, scriptName, scriptArgs){
 	for (let ch of this.val){
@@ -3522,6 +3543,7 @@ const{env,scriptName, scriptArgs}=opts;
 	let s = this.val.join("");
 	let marr;
 	if (s.match(/^[_a-zA-Z]/)){
+		if (opts.isMath) return env[s]||"0";
 		return env[s]||"";
 	}
 	if (marr = s.match(/^([1-9])$/)){//«
@@ -3587,7 +3609,7 @@ term.response(mess, {isErr: true});
 	let s='';
 	let vals = this.val;
 	for (let ent of vals){
-		if (ent.expand) s+=await ent.expand(shell, term, opts);
+		if (ent.expand) s+=await ent.expand(shell, term, opts, {isMath: true});
 		else s+=ent.toString();
 	}
 
@@ -6496,6 +6518,8 @@ if (last_com){//«
 		}
 		else if (com_ast.compound_command){
 			com = await this.makeCompoundCommand(com_ast, comopts, errmess)
+//log(com);
+//if (com)
 		}
 		else if (com_ast.simple_command){
 			com = await this.makeCommand(com_ast.simple_command, comopts, errmess)
