@@ -37,3 +37,17 @@ You can optionally specify a custom port number like so:
 
 The site should be live at http://localhost:12345.
 
+
+## Viewing and editing source code
+
+vim is the recommended text editor, although any editor that allows the usage
+of custom fold markers should also work. The lines to put in your ~/.vimrc file
+to enable the convenient usage of row folding as it is used in the LOTW project
+are as follows.
+
+	set foldmethod=marker
+	set foldmarker=«,»
+	set foldlevelstart=0
+	nmap <enter> za
+
+In command mode, the Enter key is used to toggle between open and closed folds.
