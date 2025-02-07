@@ -8780,9 +8780,9 @@ const dokeyup = function(e) {//«
 	if (localStorage[`taskbar_hidden:${globals.current_user}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
 
-	if (dev_mode && !(qObj["no-desk-init"])) {
-		await makeScript("/init/my_setup.js", {module: true});
-	}
+//	if (dev_mode && !(qObj["no-desk-init"])) {
+//		await makeScript("/init/my_setup.js", {module: true});
+//	}
 
 	document.onkeypress = dokeypress;
 	document.onkeydown = dokeydown;
