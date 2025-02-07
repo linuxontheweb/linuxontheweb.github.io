@@ -839,9 +839,14 @@ const DESK_CONTEXT_MENU=[
 	"Terminal::Alt+t", open_terminal,
 //	"Help::Alt+h", open_help,
 	"Help", open_help,
-	"Github\xa0Link", ()=>{
-		popok('<a href="https://github.com/linuxontheweb/linuxontheweb.github.io">Direct link</a> (opens in new window)',{title:"LOTW Github repo"});
-	}
+	"Links",[
+		"Github\xa0Repo",()=>{
+			popok('<a href="https://github.com/linuxontheweb/linuxontheweb.github.io">Direct link</a> (opens in new window)',{title:"LOTW Github repo"});
+		},
+		"Chatroom",()=>{
+			popok('<a href="https://app.gitter.im/#/room/#linuxontheweb_community:gitter.im">Direct link</a> (opens in new window)',{title:"LOTW Chatroom"});
+		}
+	]
 //"XMark\xa0Test __XMARK__",()=>{log(12345)},
 //"Check\xa0Test __CHECK__",()=>{log(12345)}
 
