@@ -1,4 +1,8 @@
-/*2/6/25: Just updated com_cat to check for stdinLns (instead of stdin), in case of
+/*2/8/25: Yesterday was a little crazy what with my linuxontheweb gitter chat room starting
+to get active. Before going back there, I would like to get loop continues and breaks
+working...
+*/
+/*2/6/25: Just updated com_cat to check for stdinLns (instead of stdin), in case of«
 this kind of this:
   $ cat<<<$NOTHINGHERE
 
@@ -10,7 +14,7 @@ end up using the outermost loop.
 
 
 
-*/
+»*/
 /*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands: «
 
 THE PROBLEM IS THAT THE LINE FROM WHICH THE READLINE STARTS (AND THEREFORE
@@ -408,6 +412,23 @@ const {
 	REF_MODE
 } = VIM_MODES;
 
+const isLoopCont = val => {
+	return (isObj(val) && Number.isFinite(val.continue) && val.continue > 0);
+};
+const doLoopCont = (val, com) => {
+//Perform the continue operation in the current loop
+    if (val.continue === 1 || com.loopNum === 1) return true;
+//Decrement the continue value by 1 and return the object
+    return false;
+};
+const isLoopBreak = val => {
+	return (isObj(val) && Number.isFinite(val.break) && val.break > 0);
+};
+const doLoopBreak = (val, com) => {
+//Perform the continue operation in the current loop
+    if (val.break === 1 || com.loopNum === 1) return true;
+    return false;
+};
 const fsapi = fs.api;
 const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
@@ -1014,7 +1035,9 @@ if (arg1.match(/^\d+$/)){/*«*/
 let n1 = parseInt(arg1);
 let n2 = parseInt(arg2);
 switch(op){
-	case "-eq": return maybe_neg(n1 === n1);
+	case "-eq": {
+		return maybe_neg(n1 === n2);
+	}
 	case "-ne": return maybe_neg(n1 !== n2);
 	case "-ge": return maybe_neg(n1 >= n2);
 	case "-gt": return maybe_neg(n1 > n2);
@@ -1022,8 +1045,10 @@ switch(op){
 	case "-lt": return maybe_neg(n1 < n2);
 }
 }/*»*/
-if (op==="-eq"||op==="=") return maybe_neg(arg1 === arg2);
-if (op==="-ne"||op==="!=") return maybe_neg(arg1 !== arg2);
+if (op==="=") {
+	return maybe_neg(arg1 === arg2);
+}
+if (op==="!=") return maybe_neg(arg1 !== arg2);
 //cwarn("EVAL", arg1, op, arg2);
 let node1 = await arg1.toNode({cwd});
 let node2 = await arg2.toNode({cwd});
@@ -2017,15 +2042,44 @@ constructor(shell, opts, cond, do_group){//«
 	this.name = "while";
 }//»
 async run(){//«
-	let rv = await this.shell.executeStatements(dup(this.cond), this.opts);
-	if (this.shell.cancelled) return;
-//	await sleep(0);
-	while (!rv){
-		await this.shell.executeStatements(dup(this.do_group), this.opts);
-		if (this.shell.cancelled) return;
-		await sleep(0);
+	let rv;
+	while (true){
 		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 		if (this.shell.cancelled) return;
+		await sleep(0);
+		if (rv === E_SUC){
+//log("Keep going");
+		}
+		else if (Number.isFinite(rv)){
+//log("DONE", rv);
+			break;
+		}
+		else{
+cerr("WHAT IS THIS RV");
+log(rv);
+		}
+		rv = await this.shell.executeStatements(dup(this.do_group), this.opts);
+		if (this.shell.cancelled) return;
+
+		if (isLoopCont(rv)){
+			if (doLoopCont(rv, this)){
+				continue;
+			}
+			else{
+				rv = {continue: rv.continue - 1};
+				break;
+			}
+		}
+		if (isLoopBreak(rv)){
+			if (doLoopBreak(rv, this)){
+				rv = E_SUC;
+				break;
+			}
+			else{
+				rv = {break: rv.break - 1};
+				break;
+			}
+		}
 		await sleep(0);
 	}
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
@@ -2044,9 +2098,51 @@ constructor(shell, opts, cond, do_group){//«
 	this.name="until";
 }//»
 async run(){//«
+	let rv;
+	while (true){
+		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
+		if (this.shell.cancelled) return;
+		await sleep(0);
+		if (Number.isFinite(rv)){
+			if (rv === E_SUC){
+				break;
+			}
+		}
+		else{
+cerr("WHAT IS THIS RV");
+log(rv);
+		}
+		rv = await this.shell.executeStatements(dup(this.do_group), this.opts);
+		if (this.shell.cancelled) return;
+		if (isLoopCont(rv)){
+			if (doLoopCont(rv, this)){
+				continue;
+			}
+			else{
+				rv = {continue: rv.continue - 1};
+				break;
+			}
+		}
+		if (isLoopBreak(rv)){
+			if (doLoopBreak(rv, this)){
+				rv = E_SUC;
+				break;
+			}
+			else{
+				rv = {break: rv.break - 1};
+				break;
+			}
+		}
+		await sleep(0);
+	}
+	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+	this.end(rv);
+}//»
+
+
+async run(){//«
 	let rv = await this.shell.executeStatements(dup(this.cond), this.opts)
 	if (this.shell.cancelled) return;
-//	await sleep(0);
 	while (rv){
 		await this.shell.executeStatements(dup(this.do_group), this.opts)
 		if (this.shell.cancelled) return;
@@ -2055,7 +2151,6 @@ async run(){//«
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
-//	await sleep(0);
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
 	this.end(rv);
 }//»
@@ -2116,11 +2211,33 @@ async run(){//«
 	const{shell}=this;
 	let env = this.opts.env;
 	let nm = this.var_name+"";
+	let rv;
 	for (let val of this.in_list){
 		env[nm] = val+"";
 //log(`env[${nm}] = ${val}`);
-		await shell.executeStatements(dup(this.do_group), this.opts)
+		rv = await shell.executeStatements(dup(this.do_group), this.opts)
 		if (shell.cancelled) return;
+		if (isLoopCont(rv)){
+			if (doLoopCont(rv, this)){
+				continue;
+			}
+			else{
+				this.end({continue: rv.continue-1});
+				return;
+			}
+		}
+		if (isLoopBreak(rv)){
+			if (doLoopBreak(rv, this)){
+//				rv = E_SUC;
+				break;
+			}
+			else{
+				this.end({break: rv.break - 1});
+				return;
+//				break;
+			}
+		}
+
 		await sleep(0);
 	}
 //	this.out(EOF);
@@ -2286,6 +2403,75 @@ run(){
 
 //YWPOEKRN
 //XXXXXXXXXXXX
+/*
+continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
+*/
+const com_continue = class extends Com{/*«*/
+	#loopCnt;
+	constructor(...args){
+		super(...args);
+		this.isLoopCtrl = true;
+	}
+	init(){//«
+		if (!this.loopNum){
+			this.no(`only meaningful in a 'for', 'while', or 'until' loop`);
+			return;
+		}
+		if (this.args.length > 1){
+			this.no("too many arguments");
+			return;
+		}
+		let num = this.args[0];
+		if (num){
+			if (!num.match(/^-?[0-9]+$/)){
+				this.no(`${num}: numeric argument required`);
+				return;
+			}
+			if (parseInt(num) < 1) {
+				this.no(`${num}: loop count out of range`);
+				return;
+			}
+			this.#loopCnt = parseInt(num);
+		}
+		else this.#loopCnt = 1;
+	}//»
+	run(){
+		this.end({continue: this.#loopCnt});
+	}
+}/*»*/
+const com_break = class extends Com{/*«*/
+	#loopCnt;
+	constructor(...args){
+		super(...args);
+		this.isLoopCtrl = true;
+	}
+	init(){//«
+		if (!this.loopNum){
+			this.no(`only meaningful in a 'for', 'while', or 'until' loop`);
+			return;
+		}
+		if (this.args.length > 1){
+			this.no("too many arguments");
+			return;
+		}
+		let num = this.args[0];
+		if (num){
+			if (!num.match(/^-?[0-9]+$/)){
+				this.no(`${num}: numeric argument required`);
+				return;
+			}
+			if (parseInt(num) < 1) {
+				this.no(`${num}: loop count out of range`);
+				return;
+			}
+			this.#loopCnt = parseInt(num);
+		}
+		else this.#loopCnt = 1;
+	}//»
+	run(){
+		this.end({break: this.#loopCnt});
+	}
+}/*»*/
 
 const com_shift = class extends Com{//«
 	run(){
@@ -2302,8 +2488,10 @@ init(){
 }
 async run(){
 //	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
+//cwarn(this.args);
 	let rv = await eval_shell_expr(this.args, this.term.cwd);
 	if (isStr(rv)) return this.no(rv);
+//log(rv);
 	this.end(rv);
 }
 }//»
@@ -3015,6 +3203,9 @@ async run(){
 
 
 this.defCommands={//«
+
+continue: com_continue,
+break: com_break,
 shift: com_shift,
 ":": com_colon,
 "[": com_brackettest,
@@ -6272,16 +6463,8 @@ makeCompoundCommand(com, opts){//«
 }//»
 
 async makeCommand({assigns=[], name, args=[]}, opts){//«
-//async makeCommand(arr, opts){
-//cwarn(name.toString());
-//for (let arg of args){
-//log(arg);
-//}
-//log(args);
 	const{term}=this;
-//	const make_sh_err_com = ShellMod.util.make_sh_err_com;
-//	const make_sh_err_com = make_sh_error_com;
-	const {envReadLine, envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {loopNum, envReadLine, envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 //log(assigns);
 	let rv
@@ -6296,6 +6479,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	}
 	else use_env = env;
 	const com_env = {//«
+		loopNum,
 		envReadLine,
 		stdin,
 		stdinLns,
@@ -6449,7 +6633,8 @@ async executePipeline(pipe, loglist, loglist_iter, opts){//«
 //	const make_sh_err_com = make_sh_error_com;
 	let lastcomcode;
 //	let {stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-	let {stdin: optStdin, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+//	let {stdin: optStdin, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive, loopNum}=opts;
+	let {stdin: optStdin, env}=opts;
 	let in_background = false;
 	let pipelist = pipe.pipe;
 	if (!pipelist){
@@ -6479,7 +6664,6 @@ log(red);
 		let stdin;
 		let errmess;
 		if (in_redir){
-//			let rv2 = await in_redir.setValue(this, term, env, scriptName, scriptArgs);
 			let rv2 = await in_redir.setValue(this, term, opts);
 			if (isStr(rv2)){
 				errmess = rv2;
@@ -6494,8 +6678,6 @@ log(red);
 		let comopts = sdup(opts);
 		if (isStr(stdin)) comopts.stdin = stdin;
 		else comopts.stdin = optStdin;
-//		comopts.stdin = stdin || optStdin;
-//		if (comopts.stdin){
 		if (isStr(comopts.stdin)){
 			if (have_lines) comopts.stdinLns = have_lines;
 			else comopts.stdinLns = comopts.stdin.split("\n");
@@ -6578,7 +6760,14 @@ for (let com of pipeline){//«
 //		return;
 		continue;
 	}
+//log(lastcomcode);
 	if (!(isNum(lastcomcode))) {
+		if (isLoopCont(lastcomcode)){
+			return {code: lastcomcode, breakLoop: true};
+		}
+		if (isLoopBreak(lastcomcode)){
+			return {code: lastcomcode, breakLoop: true};
+		}
 		lastcomcode = E_ERR;
 	}
 	if (!com.redirLines) continue;
@@ -6604,6 +6793,11 @@ if (hasBang){//«
 }//»
 ShellMod.var.lastExitCode = lastcomcode;
 
+/*
+If this is a loop operation (from continue or break), then
+we *ALWAYS* break from the logic list, so we return
+{code: lastcomcode, breakLoop: true}
+*/
 //LEUIKJHX
 	if (lastcomcode==E_SUC){//SUCCESS«
 		if (pipetype=="||"){
@@ -6694,6 +6888,8 @@ async executeStatements(statements, opts){//«
 	for (let i=0; i < statements.length-1; i+=2){
 		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts);
 		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
+		if (isLoopCont(lastcomcode)||isLoopBreak(lastcomcode)) return lastcomcode;
+//log("LCC",lastcomcode);
 	}
 	return lastcomcode;
 }//»
