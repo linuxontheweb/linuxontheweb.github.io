@@ -297,6 +297,7 @@ const sharedStart=(array)=>{//«
 	return a1.substring(0, i);
 };//»
 const linesToParas = (lns, opts={}) => {//«
+	if (isStr(lns)) lns = lns.split("\n");
 	let paras = [];
 	let curln = "";
 	for (let ln of lns){
@@ -323,6 +324,7 @@ const linesToParas = (lns, opts={}) => {//«
 		curln = curln + ln;
 	}
 	if (curln) paras.push(curln);
+	if (opts.toStr) return paras.join("\n");
 	return paras;
 }//»
 const consoleLog = new class{//«

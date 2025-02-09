@@ -7183,7 +7183,9 @@ tabdiv.id="termtabdiv_"+this.winid;
 tabdiv.style.userSelect = "text"
 tabdiv._w="100%";
 tabdiv._pos="absolute";
-tabdiv.onmousedown=(e)=>{this.downEvt=e;};
+tabdiv.onmousedown=(e)=>{
+	this.downEvt=e;
+};
 tabdiv.onmouseup=e=>{//«
 	if (!this.downEvt) return;
 	let d = util.dist(e.clientX,e.clientY,this.downEvt.clientX, this.downEvt.clientY);
@@ -7681,6 +7683,12 @@ const do_copy=str=>{//«
 //cwarn("Do you really ever want this string to be stripped of newlines and the prompt? this.cleanCopiedStringMode==false !!!");
 	}
 
+	if (this.paragraphSelectMode) {
+cwarn("PARAMODE!");
+//		str = str.split("\n").join("");
+		str = linesToParas(str, {toStr: true});
+log(str);
+	}
 	do_copy(str);
 	this.textarea.focus();
 	this.doOverlay(`Copied: ${str.slice(0,9)}...`);
@@ -10376,6 +10384,7 @@ initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}
 	this.numStatLines=n_stat_lines;
 	if (this.numStatLines) {
 		this.wrapdiv.appendChild(this.statdiv);
+		this.wrapdiv.appendChild(this.tabdiv);
 		this.generateStatHtml();
 	}
 	return screen;
