@@ -916,6 +916,7 @@ async run(){
 	have_error?this.no():this.ok();	
 }
 pipeIn(val){
+	if (this.killed) return;
 	if (this.#noPipe) return;
 	if (isEOF(val)){
 		this.out(val);

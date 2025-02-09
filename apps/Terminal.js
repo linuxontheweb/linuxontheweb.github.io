@@ -1,7 +1,17 @@
-/*2/8/25: Yesterday was a little crazy what with my linuxontheweb gitter chat room starting
-to get active. Before going back there, I would like to get loop continues and breaks
-working...
+/*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that
+are inside of a pipeline in order to filter out all EOF's that are coming from the commands
+inside of it, so that the following command only spits out 1 line instead of 4:
+  $ for LET in A B C; do echo LET is $LET; done | wc
+...and now that I just update the 'wc' command to stop reporting results after the first
+EOF is received, it only spits out the result from the first echo command.
+
+I guess all I needed to do was add the EOF filter @NDKSLRJL... just like I had it right
+below that in the other envPipeInCb!
+
 */
+/*2/8/25: Yesterday was a little crazy what with my linuxontheweb gitter chat room starting«
+to get active. Before going back there, I would like to get loop continues and breaks
+working...»*/
 /*2/6/25: Just updated com_cat to check for stdinLns (instead of stdin), in case of«
 this kind of this:
   $ cat<<<$NOTHINGHERE
@@ -1722,7 +1732,6 @@ log(num);
 		if (this.shell.cancelled) return;
 		const{term}=this;
 		let redir_lns = this.redirLines || this.envRedirLines;
-//log("REDIR_LNS", redir_lns);
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
 			let next_com = this.nextCom;
@@ -1968,6 +1977,8 @@ _init(){//«
 	if (this.nextCom){
 		if (this.nextCom.pipeIn){
 			opts.envPipeInCb=(val)=>{
+//NDKSLRJL
+				if (isEOF(val)) return;
 				this.nextCom.pipeIn(val);
 			};
 		}
@@ -2044,9 +2055,9 @@ constructor(shell, opts, cond, do_group){//«
 async run(){//«
 	let rv;
 	while (true){
+		await sleep(0);
 		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
 		if (this.shell.cancelled) return;
-		await sleep(0);
 		if (rv === E_SUC){
 //log("Keep going");
 		}
@@ -2080,7 +2091,7 @@ log(rv);
 				break;
 			}
 		}
-		await sleep(0);
+//		await sleep(0);
 	}
 	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
 	this.end(rv);
@@ -2213,6 +2224,7 @@ async run(){//«
 	let nm = this.var_name+"";
 	let rv;
 	for (let val of this.in_list){
+		await sleep(0);
 		env[nm] = val+"";
 //log(`env[${nm}] = ${val}`);
 		rv = await shell.executeStatements(dup(this.do_group), this.opts)
@@ -2238,7 +2250,6 @@ async run(){//«
 			}
 		}
 
-		await sleep(0);
 	}
 //	this.out(EOF);
 	this.end(E_SUC);
