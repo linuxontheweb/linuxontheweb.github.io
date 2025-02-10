@@ -1,3 +1,14 @@
+/*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment
+set up by the for loop has not had a chance to get activated.
+
+THE QUESTION IS: WHY WOULD WE ***EVER*** WANT TO PERFORM SUBSTITTIONS ***BEFORE***
+DOING SHELL.EXECUTE, @XMSKSLEO???
+
+SO THEN ALL COMSUBS SHOULD JUST REALLY WANT TO SAVE THE RAW STRINGS.
+
+$ HAR=`for LET in A B; do echo LET is: $LET; done` && echo $HAR 
+
+*/
 /*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that«
 are inside of a pipeline in order to filter out all EOF's that are coming from the commands
 inside of it, so that the following command only spits out 1 line instead of 4:
@@ -423,7 +434,7 @@ const {
 } = VIM_MODES;
 
 const isLoopCont = val => {
-	return (isObj(val) && Number.isFinite(val.continue) && val.continue > 0);
+	return (isObj(val) && isNum(val.continue) && val.continue > 0);
 };
 const doLoopCont = (val, com) => {
 //Perform the continue operation in the current loop
@@ -432,7 +443,7 @@ const doLoopCont = (val, com) => {
     return false;
 };
 const isLoopBreak = val => {
-	return (isObj(val) && Number.isFinite(val.break) && val.break > 0);
+	return (isObj(val) && isNum(val.break) && val.break > 0);
 };
 const doLoopBreak = (val, com) => {
 //Perform the continue operation in the current loop
@@ -2037,6 +2048,9 @@ async run(){
 	let opts = sdup(this.opts);
 	opts.env = sdup(this.opts.env);
 	let rv = await this.shell.executeStatements(this.list, opts)
+	if (this.isScript && isObj(rv) && rv.abortScript === true){
+		rv = E_ERR;
+	}
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }
@@ -2071,7 +2085,6 @@ log(rv);
 		}
 		rv = await this.shell.executeStatements(dup(this.do_group), this.opts);
 		if (this.shell.cancelled) return;
-
 		if (isLoopCont(rv)){
 			if (doLoopCont(rv, this)){
 				continue;
@@ -2087,8 +2100,8 @@ log(rv);
 				break;
 			}
 			else{
-				rv = {break: rv.break - 1};
-				break;
+				rv = {break: rv.break - 1, abortScript: rv.abortScript};
+			break;
 			}
 		}
 //		await sleep(0);
@@ -2140,7 +2153,8 @@ log(rv);
 				break;
 			}
 			else{
-				rv = {break: rv.break - 1};
+//				rv = {break: rv.break - 1};
+				rv = {break: rv.break - 1, abortScript: rv.abortScript};
 				break;
 			}
 		}
@@ -2226,7 +2240,6 @@ async run(){//«
 	for (let val of this.in_list){
 		await sleep(0);
 		env[nm] = val+"";
-//log(`env[${nm}] = ${val}`);
 		rv = await shell.executeStatements(dup(this.do_group), this.opts)
 		if (shell.cancelled) return;
 		if (isLoopCont(rv)){
@@ -2244,7 +2257,8 @@ async run(){//«
 				break;
 			}
 			else{
-				this.end({break: rv.break - 1});
+//				rv = {break: rv.break - 1, abortScript: rv.abortScript};
+				this.end({break: rv.break - 1, abortScript: rv.abortScript});
 				return;
 //				break;
 			}
@@ -2417,6 +2431,58 @@ run(){
 /*
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
+
+const com_loopctrl = class extends Com{/*«*/
+	static opts = true;
+	#loopCnt;
+	#doBreakInf;
+	constructor(...args){
+		super(...args);
+		this.isLoopCtrl = true;
+	}
+	init(){//«
+		if (!this.loopNum){
+			this.no(`only meaningful in a 'for', 'while', or 'until' loop`);
+			return;
+		}
+//		if (this.args.length > 1){
+//			this.no("too many arguments");
+//			return;
+//		}
+		let num = this.args[0];
+		if (num){
+			if (!num.match(/^-?[0-9]+$/)){
+/*
+Abort the command line, command sub or script that we are in.
+*/
+				this.err(`${this.name}: ${num}: numeric argument required`);
+//				this.end({abortScript: true});
+				this.end({break: Infinity, abortScript: true});
+				return;
+			}
+			if (parseInt(num) < 1) {
+//This breaks of all loops, so we do this.end({break: Infinity});
+				this.err(`${this.name}: ${num}: loop count out of range`);
+				this.#doBreakInf = true;
+				return;
+			}
+			this.#loopCnt = parseInt(num);
+		}
+		else this.#loopCnt = 1;
+		if (this.args[1]){
+			this.err(`${this.name}: too many arguments`);
+			this.#doBreakInf = true;
+		}
+	}//»
+	run(){
+		if (this.#doBreakInf) {
+			this.end({break: Infinity});
+		}
+		else if (this.name==="continue") this.end({continue: this.#loopCnt});
+		else this.end({break: this.#loopCnt});
+	}
+}/*»*/
+
 const com_continue = class extends Com{/*«*/
 	#loopCnt;
 	constructor(...args){
@@ -3215,8 +3281,10 @@ async run(){
 
 this.defCommands={//«
 
-continue: com_continue,
-break: com_break,
+//continue: com_continue,
+//break: com_break,
+continue: com_loopctrl,
+break: com_loopctrl,
 shift: com_shift,
 ":": com_colon,
 "[": com_brackettest,
@@ -4114,6 +4182,9 @@ cwarn("SKIP OIMPET");
 		}
 		return null;
 	}
+	quote.raw = this.source.slice(start+1, this.index);
+//log(raw);
+//log(quote);
 	return quote;
 }//»
 scanParam(){//«
@@ -4262,6 +4333,8 @@ else if (is_param && ch==="}"){
 }
 else if (paren_depth === 0 && is_comsub && ch===")"){//«
 	this.index = cur;
+	sub.raw = this.source.slice(start+2, this.index);
+//log(sub.raw);
 	return sub;
 }//»
 else if (paren_depth === 0 && is_math && ch===")"){//«
@@ -5867,21 +5940,24 @@ constructor(term){//«
 fatal(mess){throw new Error(mess);}
 async expandComsub(tok, opts){//«
 //const expand_comsub=async(tok, shell, term)=>
+//log(tok.val.join(""));
 	const{term}=this;
 //	const err = term.resperr;
 const err=(mess)=>{
 term.response(mess, {isErr: true});
 };
+	let s = tok.raw.join("");
+/*«
 	let s='';
 	let vals = tok.val;
 	for (let ent of vals){
 		if (ent.expand) {
 			if (ent instanceof DQuote){
-/*Amazingly, having internal newline characters works here because they
-are treated like any other character inside of scanQuote()
-@DJJUTILJJ is where all the "others" characters (including newlines, "\n") are 
-pushed into the quote's characters.
-*/
+//Amazingly, having internal newline characters works here because they
+//are treated like any other character inside of scanQuote()
+//@DJJUTILJJ is where all the "others" characters (including newlines, "\n") are 
+//pushed into the quote's characters.
+
 				s+='"'+(await ent.expand(this, term, opts))+'"';
 			}
 			else if (ent instanceof DSQuote){
@@ -5895,7 +5971,12 @@ pushed into the quote's characters.
 				if (ent instanceof SQuote) {
 					s+="'"+ent.toString()+"'";
 				}
-				else s+=(await ent.expand(this, term, opts)).split("\n").join(" ");
+				else {
+//log(opts.env);
+//log(ent.val);
+//DOPMNRUK--------------------vvvvvvvvvv
+					s+=(await ent.expand(this, term, opts)).split("\n").join(" ");
+				}
 			}
 		}
 		else {
@@ -5907,9 +5988,11 @@ pushed into the quote's characters.
 			}
 		}
 	}
+»*/
 	let sub_lines = [];
 	try{
-		await this.execute(s, {subLines: sub_lines, env: sdup(this.env), shell: this});
+//XMSKSLEO
+		let rv = await this.execute(s, {subLines: sub_lines, env: sdup(this.env), shell: this, term: this.term});
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -6573,41 +6656,13 @@ return func;
 		if (CONTROL_WORDS.includes(comword)){
 			return `sh: ${comword}: control structures are not implemented`;
 		}
-//		if (!comword.match(/\x2f/)) {
-//It doesn't look like a file (no slashes in the word).
 		ShellMod.var.lastExitCode = E_ERR;
 		return make_sh_err_com(comword, `command not found`, com_env);
-//		}
-/*«
-		let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
-		if (!node) {
-			ShellMod.var.lastExitCode = E_ERR;
-			return make_sh_err_com(comword, `file not found`, com_env);
-		}
-		let app = node.appName;
-		if (app===FOLDER_APP) {
-			ShellMod.var.lastExitCode = E_ERR;
-			return make_sh_err_com(comword, `is a directory`, com_env);
-		}
-		if (app!==TEXT_EDITOR_APP) {
-			ShellMod.var.lastExitCode = E_ERR;
-			return make_sh_err_com(comword, `not a text file`, com_env);
-		}
-		if (!comword.match(/\.sh$/i)){
-			ShellMod.var.lastExitCode = E_ERR;
-			return make_sh_err_com(comword, `only executing files with '.sh' extension`, com_env);
-		}
-		let text = await node.text;
-		if (!text) {
-			ShellMod.var.lastExitCode = E_ERR;
-			return make_sh_err_com(comword, `no text returned`, com_env);
-		}
-		comobj = new ScriptCom(this, comword, text, arr, com_env);
-		comobj.scriptOut = scriptOut;
-		comobj.subLines = subLines;
-		return comobj;
-*//*»*/
 	}//»
+//if (comword==="echo"){
+//log(use_env.LET);
+//}
+//cwarn(comword);
 	let com_opts;
 	let gotopts = com.opts || Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
@@ -6706,7 +6761,7 @@ log(red);
 			comopts.envReadLine = env_readline;
 		}//»
 
-		if (com_ast.simple_command && com_ast.simple_command.name.toString().match(/\x2f/)){/*«*/
+		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){/*«*/
 			let simp_com = com_ast.simple_command;
 			let comword = simp_com.name.toString();
 			let com_env = {term, shell: this};
@@ -6745,6 +6800,7 @@ log(red);
 							comopts.scriptName = comword;
 							comopts.scriptArgs = simp_com.args;
 							com = await this.makeCompoundCommand(rv[0].andor[0].pipeline.pipe_sequence[0], comopts)
+							com.isScript = true;
 						}
 					}
 				}
@@ -6825,6 +6881,7 @@ for (let com of pipeline){//«
 			return {code: lastcomcode, breakLoop: true};
 		}
 		if (isLoopBreak(lastcomcode)){
+			if (lastcomcode.abortScript) return {code: lastcomcode, breakStatementLoop: true};
 			return {code: lastcomcode, breakLoop: true};
 		}
 		lastcomcode = E_ERR;
@@ -6946,9 +7003,11 @@ async executeStatements(statements, opts){//«
 	let lastcomcode;
 	for (let i=0; i < statements.length-1; i+=2){
 		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts);
-		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
+//		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
+		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
+			return lastcomcode.code;
+		}
 		if (isLoopCont(lastcomcode)||isLoopBreak(lastcomcode)) return lastcomcode;
-//log("LCC",lastcomcode);
 	}
 	return lastcomcode;
 }//»
