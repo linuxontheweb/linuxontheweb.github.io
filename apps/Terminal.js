@@ -1,4 +1,4 @@
-/*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that
+/*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that«
 are inside of a pipeline in order to filter out all EOF's that are coming from the commands
 inside of it, so that the following command only spits out 1 line instead of 4:
   $ for LET in A B C; do echo LET is $LET; done | wc
@@ -8,7 +8,7 @@ EOF is received, it only spits out the result from the first echo command.
 I guess all I needed to do was add the EOF filter @NDKSLRJL... just like I had it right
 below that in the other envPipeInCb!
 
-*/
+»*/
 /*2/8/25: Yesterday was a little crazy what with my linuxontheweb gitter chat room starting«
 to get active. Before going back there, I would like to get loop continues and breaks
 working...»*/
@@ -6573,13 +6573,12 @@ return func;
 		if (CONTROL_WORDS.includes(comword)){
 			return `sh: ${comword}: control structures are not implemented`;
 		}
-
-		if (!comword.match(/\x2f/)) {
-//It doesn't look like a file.
-			ShellMod.var.lastExitCode = E_ERR;
-			return make_sh_err_com(comword, `command not found`, com_env);
-		}
-
+//		if (!comword.match(/\x2f/)) {
+//It doesn't look like a file (no slashes in the word).
+		ShellMod.var.lastExitCode = E_ERR;
+		return make_sh_err_com(comword, `command not found`, com_env);
+//		}
+/*«
 		let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
 		if (!node) {
 			ShellMod.var.lastExitCode = E_ERR;
@@ -6607,6 +6606,7 @@ return func;
 		comobj.scriptOut = scriptOut;
 		comobj.subLines = subLines;
 		return comobj;
+*//*»*/
 	}//»
 	let com_opts;
 	let gotopts = com.opts || Shell.activeOptions[usecomword];
@@ -6695,34 +6695,76 @@ log(red);
 		}
 		comopts.outRedir = out_redir;
 
-if (last_com){//«
+		if (last_com){//«
 //XWMNJUO
-	let env_readline = new EnvReadLine(term);
+			let env_readline = new EnvReadLine(term);
 
 //This *should* be ignored for everything that has next_com.pipeIn in its out method (@LSKDJSG)
-	last_com.envPipeOutLns=lns=>{env_readline.addLns(lns);};
+			last_com.envPipeOutLns = lns => {
+				env_readline.addLns(lns);
+			};
+			comopts.envReadLine = env_readline;
+		}//»
 
-	comopts.envReadLine = env_readline;
-
-}//»
-
-		if (errmess){
+		if (com_ast.simple_command && com_ast.simple_command.name.toString().match(/\x2f/)){/*«*/
+			let simp_com = com_ast.simple_command;
+			let comword = simp_com.name.toString();
+			let com_env = {term, shell: this};
+			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
+			if (!node) {
+				ShellMod.var.lastExitCode = E_ERR;
+				com = make_sh_err_com(comword, `file not found`, com_env);
+			}
+			else {
+				let app = node.appName;
+				if (app===FOLDER_APP) {
+					ShellMod.var.lastExitCode = E_ERR;
+					com = make_sh_err_com(comword, `is a directory`, com_env);
+				}
+				else if (app!==TEXT_EDITOR_APP) {
+					ShellMod.var.lastExitCode = E_ERR;
+					com = make_sh_err_com(comword, `not a text file`, com_env);
+				}
+				else if (!comword.match(/\.sh$/i)){
+					ShellMod.var.lastExitCode = E_ERR;
+					com = make_sh_err_com(comword, `only executing files with '.sh' extension`, com_env);
+				}
+				else {
+					let text = await node.text;
+					if (!text) {
+						ShellMod.var.lastExitCode = E_ERR;
+						com = make_sh_err_com(comword, `no text returned`, com_env);
+					}
+					else{
+						let rv = await this.compile(`(\n${text}\n)`, {retErrStr: true});
+						if (isStr(rv)) com = make_sh_err_com(comword, rv, com_env);
+						else if (!isArr(rv) && rv[0].andor){
+							com = make_sh_err_com(comword, `Unknown value return from shell.compile`, com_env);
+						}
+						else{
+							comopts.scriptName = comword;
+							comopts.scriptArgs = simp_com.args;
+							com = await this.makeCompoundCommand(rv[0].andor[0].pipeline.pipe_sequence[0], comopts)
+						}
+					}
+				}
+			}
+		}/*»*/
+		else if (errmess){
 			com = make_sh_err_com(null, errmess, {term, shell: this});
 		}
 		else if (com_ast.compound_command){
-			com = await this.makeCompoundCommand(com_ast, comopts, errmess)
-//log(com);
-//if (com)
+			com = await this.makeCompoundCommand(com_ast, comopts)
 		}
 		else if (com_ast.simple_command){
-			com = await this.makeCommand(com_ast.simple_command, comopts, errmess)
-//log(com);
+			com = await this.makeCommand(com_ast.simple_command, comopts)
 		}
 		else{//«
 cwarn("Here is the command");
 log(com_ast);
 			this.fatal("What type of command is this (not 'simple' or 'compound'!!! (see console))");
 		}//»
+
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
 //FSHSKEOK
@@ -6732,7 +6774,13 @@ log(com_ast);
 		}
 		if (j > 0) {
 if (!com.pipeIn && com.isSimple === true){
+//if (com instanceof ScriptCom){
+//	this.fatal("NEED TO IMPLEMENT PIPELINES INTO SCRIPTS!!!");
+//}
+	
+//else {
 	this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
+//}
 }
 			com.pipeFrom = true;
 			com.prevCom = last_com;
@@ -6906,6 +6954,56 @@ async executeStatements(statements, opts){//«
 }//»
 
 //SLDPEHDBF
+async compile(command_str, opts={}){//«
+	const{term}=this;
+	let parser = new Parser(command_str.split(""), opts);
+	try{
+
+		let errmess;
+//Must use await because it could possibly need more lines from the terminal, so we can't do
+//this in the constructor (like esprima does)
+		await parser.scanNextTok();
+		await parser.tokenize();
+		let ast = await parser.compile();
+		if (!ast) return;
+		let statements=[];
+		for (let compcoms of ast.program.complete_commands){
+			let list = compcoms.complete_command.list;
+			statements.push(...list);
+		}
+		return statements;
+//		let rv = await this.executeStatements(statements, opts);
+//		return rv;
+//log(statements);
+	}
+	catch(e){
+//LSPOEIRK
+cerr(e);
+//log(e.message);
+let mess = e.message;
+if (opts.retErrStr) return mess;
+if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
+term.response(mess,{isErr: true});
+	}
+//	term.response_end();
+
+}/*»*/
+async execute(command_str, opts){/*«*/
+//	const{term}=this;
+	let statements = await this.compile(command_str, opts);
+	if (!statements) return;
+try{
+	let rv = await this.executeStatements(statements, opts);
+	return rv;
+}
+catch(e){
+let mess = e.message;
+if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
+this.term.response(mess,{isErr: true});
+}
+//	return 
+}/*»*/
+/*
 async execute(command_str, opts){//«
 	const{term}=this;
 	let parser = new Parser(command_str.split(""), opts);
@@ -6937,8 +7035,8 @@ term.response(mess,{isErr: true});
 	}
 //	term.response_end();
 
-}/*»*/
-
+}//»
+*/
 cancel(){//«
 	this.cancelled = true;
 	let pipe = this.pipeline;
