@@ -1,14 +1,27 @@
-/*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment
+/*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment «
 set up by the for loop has not had a chance to get activated.
+  
+	$ HAR=`for LET in A B; do echo LET is: $LET; done` && echo $HAR 
 
 THE QUESTION IS: WHY WOULD WE ***EVER*** WANT TO PERFORM SUBSTITTIONS ***BEFORE***
 DOING SHELL.EXECUTE, @XMSKSLEO???
 
 SO THEN ALL COMSUBS SHOULD JUST REALLY WANT TO SAVE THE RAW STRINGS.
 
-$ HAR=`for LET in A B; do echo LET is: $LET; done` && echo $HAR 
+...
 
-*/
+Now that we just used the raw strings (as newly enabled in the Scanner @ZOHJKL
+and @XMDJKT, this no longer works (since it lets the escapes pass through):
+
+  $ echo `echo \`ls\`` 
+
+...while these DO work (since there aren't any escapes to worry about):
+
+  $ echo `echo $(ls)` 
+  $ echo $(echo $(ls))
+  $ echo $(echo `ls`)
+
+»*/
 /*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that«
 are inside of a pipeline in order to filter out all EOF's that are coming from the commands
 inside of it, so that the following command only spits out 1 line instead of 4:
@@ -4182,6 +4195,7 @@ cwarn("SKIP OIMPET");
 		}
 		return null;
 	}
+//ZOHJKL
 	quote.raw = this.source.slice(start+1, this.index);
 //log(raw);
 //log(quote);
@@ -4333,6 +4347,7 @@ else if (is_param && ch==="}"){
 }
 else if (paren_depth === 0 && is_comsub && ch===")"){//«
 	this.index = cur;
+//XMDJKT
 	sub.raw = this.source.slice(start+2, this.index);
 //log(sub.raw);
 	return sub;
@@ -7841,10 +7856,10 @@ const do_copy=str=>{//«
 	}
 
 	if (this.paragraphSelectMode) {
-cwarn("PARAMODE!");
+//cwarn("PARAMODE!");
 //		str = str.split("\n").join("");
 		str = linesToParas(str, {toStr: true});
-log(str);
+//log(str);
 	}
 	do_copy(str);
 	this.textarea.focus();
