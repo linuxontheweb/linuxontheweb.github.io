@@ -21,8 +21,8 @@ web browser". The "VM" in this case just happens to load the various parts of
 guest OS, incrementally, from some backend service (local or remote), in
 response to the user's immediate requirements. Thinking in this way allows
 users to quickly get beyond whatever biases they might have regarding whatever
-user experiences that they imagine "web sites" -- something happening inside of
-a web browser -- are "supposed" to offer.
+user experiences that they imagine "web pages" -- things that happen inside of
+web browsers -- are "supposed" to offer.
 
 Try out the current version at 
 <a href="https://linuxontheweb.github.io">linuxontheweb.github.io</a>.
