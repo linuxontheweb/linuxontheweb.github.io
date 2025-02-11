@@ -21,6 +21,12 @@ and @XMDJKT, this no longer works (since it lets the escapes pass through):
   $ echo $(echo $(ls))
   $ echo $(echo `ls`)
 
+Now that the first one works, don't we also need to, @JLXOPKEUJ, do the same thing
+with stripping the escapes from in front of the '$' character?
+
+
+  $ echo `echo \`ls \$DIR\`` 
+
 »*/
 /*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that«
 are inside of a pipeline in order to filter out all EOF's that are coming from the commands
@@ -5961,7 +5967,25 @@ async expandComsub(tok, opts){//«
 const err=(mess)=>{
 term.response(mess, {isErr: true});
 };
-	let s = tok.raw.join("");
+//	let s = tok.raw.join("");
+let arr = tok.raw;
+let s = '';
+let len = arr.length;
+//JLXOPKEUJ
+for (let i=0; i < len; i++){
+	let ch = arr[i];
+	if (ch==="\\" && arr[i+1]==="\\"){
+		s+="\\";
+		i++;
+	}
+	else if (ch==="\\" && arr[i+1]==="`"){
+		s+="`";
+		i++;
+	}
+	else{
+		s+=ch;
+	}
+}
 /*«
 	let s='';
 	let vals = tok.val;
