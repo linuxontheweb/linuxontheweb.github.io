@@ -16,7 +16,7 @@ a:visited{
 <div style="margin: auto;max-width: 85ch;">
 <br>
 <p>
-This document contains helpful instructions for using <a href="/">the system</a>.</p>
+This document contains helpful instructions for using <a href="/">the LOTW system</a>.</p>
 <br>
 </div>
 <div style="margin: auto;max-width: 85ch;">
@@ -168,8 +168,19 @@ i.e. https://linuxontheweb.github.io/?expert=1.
 <br>
 <hr><hr>
 <br>
-<h2>Using the terminal</h2>
+<h2>Using the terminal application</h2>
 <br>
+<hr>
+
+<h3>Shell scripts</h3>
+
+<p>The shell will attempt to execute all files that are entered as commands,
+and that use a case-insensitive '.sh' file extension. The current goal of the
+LOTW project is to be fully in compliance with the Shell Command Language, 
+<a href="https://pubs.opengroup.org/onlinepubs/9799919799/utilities/V3_chap02.html">
+as published by the IEEE and the Open Group</a>.  Enabling various extensions
+to the Shell Command Language (such as exist in popular shells like bash) is
+not currently a priority.
 <hr>
 <h3>Tab completion</h3>
 
@@ -179,9 +190,7 @@ will be shown). For every other token, a file path completion will be
 attempted.
 
 <hr>
-<h3>Limited support for redirection</h3>
-<p>The '&gt;' (write) and '&gt;&gt;' (append) redirection tokens are supported.
-<hr>
+
 <h3>Piping</h3>
 <p>Piping between commands via the '|' token is supported. For example:
 <br><br>
@@ -202,19 +211,6 @@ the '*' and '?' characters is (largely) supported.
 <code>
 file1.txt file2.txt file3.txt file4.txt file5.txt file6.txt file7.txt file8.txt file9.txt file10.txt
 </code>
-<hr>
-
-<h3>Shell scripts</h3>
-<p>The shell will attempt to execute all files that are entered as the first
-token (i.e. in the place of a command), and that use a case-insensitive '.sh'
-file extension. Each command must be contained on a single line (i.e. newlines
-cannot be escaped and all quotes must be opened and closed on the same lines). 
-Scripts are not aborted due to errors.
-
-<p>There is not currently any support for algorithmic control semantics to enable
-branching and looping (such as if..elif..fi, for..do...done or select). Developers are
-instead enouraged to extend the underlying system by programming directly in 
-JavaScript.
 
 <hr>
 

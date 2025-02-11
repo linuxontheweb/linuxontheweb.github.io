@@ -1889,8 +1889,8 @@ const init = async()=>{//«
 	}
 	rootId = root.id;
 	await make_dev_tree();
-	mount_tree("loc", "data");
-	mount_tree("glb", "data");
+//	mount_tree("loc", "data");
+//	mount_tree("glb", "data");
 	for (let name of root_dirs){
 		let ret = await make_fs_tree(name);
 		if (!ret) return;
