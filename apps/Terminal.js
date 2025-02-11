@@ -1,3 +1,5 @@
+//«Notes
+
 /*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment «
 set up by the for loop has not had a chance to get activated.
   
@@ -267,8 +269,6 @@ So we created a method 'fmtColLn' (of the Com class, @XVEOIP), which is meant to
 goes to the terminal rather than anywhere else (like a pipe or redirLines array).
 
 »*/
-//«Notes
-
 /*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
 WHEN WE GET ERROR MESSAGES BACK FROM THE SERVER.
 The issue is that this is how we were handling errors in the server:
@@ -1915,6 +1915,7 @@ be wrapped when output onto the terminal
 	}//»
 
 }//»
+/*
 const ScriptCom = class extends Com{//«
 
 	constructor(shell, name, text, args, env){
@@ -1946,6 +1947,7 @@ const ScriptCom = class extends Com{//«
 	}//»
 
 }//»
+*/
 const NoCom=class{//«
 	constructor(env){
 		for (let k in env) {
@@ -2430,7 +2432,8 @@ else {
 
 //»
 
-this.comClasses={Com,ScriptCom,NoCom,ErrCom};
+//this.comClasses={Com,ScriptCom,NoCom,ErrCom};
+this.comClasses={Com,NoCom,ErrCom};
 
 //»
 
@@ -6830,7 +6833,7 @@ log(red);
 						com = make_sh_err_com(comword, `no text returned`, com_env);
 					}
 					else{
-						let rv = await this.compile(`(\n${text}\n)`, {retErrStr: true});
+						let rv = await this.compile(text, {retErrStr: true});
 						if (isStr(rv)) com = make_sh_err_com(comword, rv, com_env);
 						else if (!isArr(rv) && rv[0].andor){
 							com = make_sh_err_com(comword, `Unknown value return from shell.compile`, com_env);
@@ -6838,7 +6841,7 @@ log(red);
 						else{
 							comopts.scriptName = comword;
 							comopts.scriptArgs = simp_com.args;
-							com = await this.makeCompoundCommand(rv[0].andor[0].pipeline.pipe_sequence[0], comopts)
+							com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {term: rv}}}, comopts)
 							com.isScript = true;
 						}
 					}
@@ -6868,15 +6871,9 @@ log(com_ast);
 			last_com.pipeTo = true;
 		}
 		if (j > 0) {
-if (!com.pipeIn && com.isSimple === true){
-//if (com instanceof ScriptCom){
-//	this.fatal("NEED TO IMPLEMENT PIPELINES INTO SCRIPTS!!!");
-//}
-	
-//else {
-	this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
-//}
-}
+			if (!com.pipeIn && com.isSimple === true){
+				this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
+			}
 			com.pipeFrom = true;
 			com.prevCom = last_com;
 /*
