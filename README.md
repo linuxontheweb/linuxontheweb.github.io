@@ -30,6 +30,7 @@ Try out the current version at
 <a href="https://linuxontheweb.github.io/www/docs/help.html">Here is the 
 official help page</a> for system users.
 
+<a href="https://app.gitter.im/#/room/#linuxontheweb_community:gitter.im">Here is the chatroom on Gitter.</a>
 
 ## Local deployment
 
