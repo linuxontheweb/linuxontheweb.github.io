@@ -1,14 +1,47 @@
-//«Notes
-/*3/30/25: @WMPLKXED: Here is the *FINAL* command string (after all of the scanner/parser 
+
+/*3/30/25: TODO XXX POSSIBLE BUG XXX TODO
+
+@WSFOKGKDH: For comsubs we were doing tok.raw, but this was *NOT* being updated properly
+when doing multiline stuff like:
+
+$ echo $(
+> ls
+> )
+
+...so we switched it to tok.val, and everything was working okay.
+
+!!!   SO NOW WE NEED TO SEE ABOUT *EITHER* PROPERLY UPDATING tok.raw *OR* JUST USING tok.val 
+IF THAT IS APPROPRIATE, WHICH BEGS THE QUESTION: WHY DOES tok.raw EVEN EXIST?   !!!
+
+
+The heredoc parsing error @SGFKGLSJR occurs when you are editing a heredoc in a
+multi-line command, and you happened to edit the heredoc.delim token (e.g. "eof" or 
+"EOF" somesuch nonsense). In pure interactive mode, the REPL keeps on going until
+you complete all the heredocs, and in pure script mode, the error right after the
+one we are barfing with ("warning: heredoc delimited by end-of-file") happens when
+we run out of lines. So we were searching for a combination of script (until running out),
+followed by the interactive (until all matches). But seeing as this is trying to
+"mix and match" radically different pathways, it isn't too easy to get working, and
+it doesn't seem worth the effort simply because the user is trying to do something as
+trivial as editing one of the previously matching delimeter tokens. If we actually *do*
+want to change a delimeter, we just need to make sure that both the beginning and
+the ending ones are changed to the same one!
+
+
+
+@WMPLKXED: Here is the *FINAL* command string (after all of the scanner/parser 
 continuation prompts, if any, have finished), with embedded newlines. We can save this
 to command history by replacing the newlines with tabs (since tabs are *NEVER* inside
 of interactive shell scripts), then upon scrolling the history, we have to split the
 string on tabs, and then put all of the lines onto the terminal.
 
-Now scrutinizing handleBackspace @MSKEUTJDK. We called a checkLineLen method, which I'm
-not quite sure what for...
+Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-line editing...
+
 
 */
+
+//«Notes
+
 /*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment «
 set up by the for loop has not had a chance to get activated.
   
@@ -4719,7 +4752,7 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 	return newlines;
 
 }/*»*/
-scanNextLineNot(delim){/*«*/
+scanNextLineNot(delim){//«
 	let cur = this.index;
 //	let this.source = this.source;
 	let ln='';
@@ -4736,7 +4769,7 @@ scanNextLineNot(delim){/*«*/
 	}
 	if (this.eof()) return false;
 	return ln;
-}/*»*/
+}//»
 async lex(heredoc_flag){//«
 
 if (this.eof()) {//«
@@ -4922,7 +4955,8 @@ nextLinesUntilDelim(delim){//«
 		rv = this.scanner.scanNextLineNot(delim);
 	}
 	if (rv===true) return out;
-	return false;
+	return {partial: out};
+//	return false;
 }//»
 getNextNonNewlinesTok(){//«
 	let iter=0;
@@ -5840,7 +5874,6 @@ catch(e){
 async tokenize(){//«
 	let toks = [];
 	let next = this.lookahead;
-	let cur_iohere_tok;
 	let heredocs;
 	let heredoc_num;
 	let cur_heredoc_tok;
@@ -5850,6 +5883,7 @@ async tokenize(){//«
 
 //If !heredocs && next is "<<" or "<<-", we need to:
 		if (heredocs && isNLs(next)){//«
+//		if (!interactive && heredocs && isNLs(next)){
 /*if (interactive){
 //This happens now when using history scrolling with commands that have embedded 
 //newlines that are saved in the history file with tabs replacing the newlines
@@ -5859,7 +5893,13 @@ throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
 				let heredoc = heredocs[i];
 				let rv = this.nextLinesUntilDelim(heredoc.delim);
 				if (!isStr(rv)){
-					this.fatal("warning: here-document at line ? delimited by end-of-file");
+if (interactive) {
+//SGFKGLSJR
+	this.fatal(`error parsing the interactive heredoc (looking for "${heredoc.delim}")`);
+}
+else {
+  this.fatal("warning: here-document at line ? delimited by end-of-file");
+}
 				}
 				heredoc.tok.value = rv;
 			}
@@ -5981,7 +6021,11 @@ const err=(mess)=>{
 term.response(mess, {isErr: true});
 };
 //	let s = tok.raw.join("");
-let arr = tok.raw;
+//cwarn("COMSUB");
+//log(tok);
+//WSFOKGKDH
+//let arr = tok.raw;
+let arr = tok.val;
 let s = '';
 let len = arr.length;
 //JLXOPKEUJ
@@ -6044,6 +6088,7 @@ for (let i=0; i < len; i++){
 	let sub_lines = [];
 	try{
 //XMSKSLEO
+
 		let rv = await this.execute(s, {subLines: sub_lines, env: sdup(this.env), shell: this, term: this.term});
 		return sub_lines.join("\n");
 	}
@@ -7517,9 +7562,12 @@ async execute(str, opts={}){//«
 		term: this,
 		shell: this.curShell
 	});
-
-	gotstr = this.curShell.parser.finalComStr.replace(/\n/g, "\t");
-
+	try {
+		gotstr = this.curShell.parser.finalComStr.replace(/\n/g, "\t");
+	}catch(e){
+cwarn("CAUGHT")
+cerr(e);
+	}
 	if (this.curShell === shell && !shell.cancelled) this.responseEnd();
 	if (opts.noSave) return;
 
@@ -8796,14 +8844,13 @@ cerr("updateHistory called with no 'str' arg!");
 	if (str==this.history[this.history.length-1]){
 		return;
 	}
-	if (str.length < this.minHistStrLen){
-		return;
-	}
 	let ind = this.history.indexOf(str);
 	if (ind >= 0) {
 		this.history.splice(ind, 1);
 	}
-	await this.appendToHistory(str);
+	if (str.length >= this.minHistStrLen){
+		await this.appendToHistory(str);
+	}
 	this.history.push(str);
 
 }//»
