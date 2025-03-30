@@ -1,5 +1,10 @@
 //«Notes
-
+/*3/30/25: @WMPLKXED: Here is the *FINAL* command string (after all of the scanner/parser 
+continuation prompts, if any, have finished), with embedded newlines. We can save this
+to command history by replacing the newlines with tabs (since tabs are *NEVER* inside
+of interactive shell scripts), then upon scrolling the history, we have to split the
+string on tabs, and then put all of the lines onto the terminal.
+*/
 /*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment «
 set up by the for loop has not had a chance to get activated.
   
@@ -728,7 +733,6 @@ const sdup=(obj)=>{//Shallow copy
 //«Funcs
 
 //Helpers (this.util)«
-//{
 
 const eval_shell_expr = async (args, cwd) => {//«
 /*«From https://www.man7.org/linux/man-pages/man1/test.1.html
@@ -4002,7 +4006,7 @@ eof() {//«
 eol(){//«
 	return this.isInteractive && (this.index >= this.length);
 }//»
-async more(no_nl){/*«*/
+async more(no_nl){//«
 	if (!this.eol()){
 		throw new Error("more() was call, but NOT at eol()");
 	}
@@ -4013,7 +4017,7 @@ async more(no_nl){/*«*/
 //log(RV, `${rv}`);
 	this.source = this.source.concat(...rv);
 	this.length = this.source.length;
-}/*»*/
+}//»
 throwUnexpectedToken(message) {//«
 	if (message === void 0) { message = Messages.UnexpectedTokenIllegal; }
 	return this.errorHandler.throwError(this.index, this.lineNumber, this.index - this.lineStart + 1, message);
@@ -4729,7 +4733,7 @@ scanNextLineNot(delim){/*«*/
 	if (this.eof()) return false;
 	return ln;
 }/*»*/
-async lex(heredoc_flag){/*«*/
+async lex(heredoc_flag){//«
 
 if (this.eof()) {//«
 	return {
@@ -4748,22 +4752,13 @@ let ch = this.source[this.index];
 //or sending them through one-by-one via ScriptCom.
 if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
 
-//if (ch==="\n") this.scanNewlines();
-
-/*
-if (ch==="\\"){
-	let next = this.source[this.index+1];
-	if (!next || next === "\n") this.throwUnexpectedToken("unsupported line continuation");
-	return this.scanWord();
-}
-*/
 if (OPERATOR_CHARS.includes(ch)) {
 	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
 }
 return await this.scanWord(null, this.env);
 
-}/*»*/
+}//»
 
 };
 
@@ -4774,6 +4769,7 @@ return await this.scanWord(null, this.env);
 const Parser = class {
 
 constructor(code, opts={}) {//«
+	this.mainParser = opts.mainParser || this;
 	this.env = opts.env;
 	this.term = opts.term;
 	this.isInteractive = opts.isInteractive;
@@ -5817,6 +5813,7 @@ return {program: complete_coms};
 async parseContinueStr(str){//«
 
 let parser = new Parser(str.split(""), {
+	mainParser: this,
 	term: this.term,
 	heredocScanner: this.heredocScanner,
 	env: this.env,
@@ -5836,7 +5833,7 @@ catch(e){
 }
 
 }//»
-async tokenize(){/*«*/
+async tokenize(){//«
 	let toks = [];
 	let next = this.lookahead;
 	let cur_iohere_tok;
@@ -5849,9 +5846,9 @@ async tokenize(){/*«*/
 
 //If !heredocs && next is "<<" or "<<-", we need to:
 		if (heredocs && isNLs(next)){//«
-if (interactive){
-throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
-}
+//if (interactive){
+//throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
+//}
 			for (let i=0; i < heredocs.length; i++){
 				let heredoc = heredocs[i];
 				let rv = this.nextLinesUntilDelim(heredoc.delim);
@@ -5898,56 +5895,63 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		next = this.lookahead;
 
 	}
+	let heredocs_str = null;
 	if (heredocs){//«
 		if (!interactive) this.fatal("warning: here-document at line ? delimited by end-of-file");
 		for (let i=0; i < heredocs.length; i++){
 			let heredoc = heredocs[i];
 			let rv = await this.heredocScanner(heredoc.delim);
 			heredoc.tok.value = rv.join("\n");
+			if (heredocs_str === null) heredocs_str = "\n"+heredoc.tok.value;
+			else heredocs_str += "\n"+heredoc.tok.value;
+			heredocs_str += `\n${heredoc.delim}`;
 		}
 		heredocs = null;
 	}//»
 	if (cur_heredoc_tok){//«
 		this.fatal("syntax error near unexpected token 'newline'");
 	}//»
-
+//cwarn("HEREDOCS");
+//log(heredocs_str);
 //YJDHSLFJS
 
-for (let i=0; i < toks.length; i++){
-let tok = toks[i];
-if (!tok.isRedir) {
-//log("TOK",tok);
-	continue;
-}
-let next = toks[i+1];
-let rop = tok.r_op;
-if (tok.isHeredoc){/*«*/
-	toks[i] = new Stdin(tok);
-	toks[i].isHeredoc = true;
-}/*»*/
-else if (OK_OUT_REDIR_TOKS.includes(rop)){/*«*/
-	if (!next) this.unexp("newline");
-	if (!next.isWord) this.unexp(next);
-	toks[i] = new Stdout(tok, next);
-	toks.splice(i+1, 1);
-} /*»*/
-else if (OK_IN_REDIR_TOKS.includes(rop)) {/*«*/
-	if (!next) this.unexp("newline");
-	if (!next.isWord) this.unexp(next);
-	toks[i] = new Stdin(tok, next);
-	toks.splice(i+1, 1);
-}/*»*/
-else this.fatal(`unsupported operator: '${rop}'`);
-}
-
+	for (let i=0; i < toks.length; i++){//«
+		let tok = toks[i];
+		if (!tok.isRedir) {
+			continue;
+		}
+		let next = toks[i+1];
+		let rop = tok.r_op;
+		if (tok.isHeredoc){//«
+			toks[i] = new Stdin(tok);
+			toks[i].isHeredoc = true;
+		}//»
+		else if (OK_OUT_REDIR_TOKS.includes(rop)){//«
+			if (!next) this.unexp("newline");
+			if (!next.isWord) this.unexp(next);
+			toks[i] = new Stdout(tok, next);
+			toks.splice(i+1, 1);
+		} //»
+		else if (OK_IN_REDIR_TOKS.includes(rop)) {//«
+			if (!next) this.unexp("newline");
+			if (!next.isWord) this.unexp(next);
+			toks[i] = new Stdin(tok, next);
+			toks.splice(i+1, 1);
+		}//»
+		else this.fatal(`unsupported operator: '${rop}'`);
+	}//»
+//log(this.mainParser===this);
+//log(this.scanner.source);
+	if (!this.mainParser.finalComStr) this.mainParser.finalComStr = this.scanner.source.join("");
+	else this.mainParser.finalComStr += "\n"+this.scanner.source.join("");
+	if (heredocs_str !== null){
+		this.mainParser.finalComStr += heredocs_str;
+	}
+//log(this.mainParser.finalComStr);
 	this.tokens = toks;
 	this.numToks = toks.length;
 	return true;
-}/*»*/
-//async parse() {//«
-//	return await this.compile();
-//
-//};//»
+}//»
 
 };
 
@@ -7052,6 +7056,7 @@ async executeStatements(statements, opts){//«
 async compile(command_str, opts={}){//«
 	const{term}=this;
 	let parser = new Parser(command_str.split(""), opts);
+	this.parser = parser;
 	try{
 
 		let errmess;
@@ -7067,14 +7072,10 @@ async compile(command_str, opts={}){//«
 			statements.push(...list);
 		}
 		return statements;
-//		let rv = await this.executeStatements(statements, opts);
-//		return rv;
-//log(statements);
 	}
 	catch(e){
 //LSPOEIRK
 cerr(e);
-//log(e.message);
 let mess = e.message;
 if (opts.retErrStr) return mess;
 if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
@@ -7098,40 +7099,6 @@ this.term.response(mess,{isErr: true});
 }
 //	return 
 }/*»*/
-/*
-async execute(command_str, opts){//«
-	const{term}=this;
-	let parser = new Parser(command_str.split(""), opts);
-	try{
-
-		let errmess;
-//Must use await because it could possibly need more lines from the terminal, so we can't do
-//this in the constructor (like esprima does)
-		await parser.scanNextTok();
-		await parser.tokenize();
-		let ast = await parser.compile();
-		if (!ast) return;
-		let statements=[];
-		for (let compcoms of ast.program.complete_commands){
-			let list = compcoms.complete_command.list;
-			statements.push(...list);
-		}
-		let rv = await this.executeStatements(statements, opts);
-		return rv;
-//log(statements);
-	}
-	catch(e){
-//LSPOEIRK
-cerr(e);
-//log(e.message);
-let mess = e.message;
-if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
-term.response(mess,{isErr: true});
-	}
-//	term.response_end();
-
-}//»
-*/
 cancel(){//«
 	this.cancelled = true;
 	let pipe = this.pipeline;
@@ -7278,7 +7245,6 @@ Toggling of this.paragraphSelectMode is now done with Ctrl+Alt+p (p_CA).
 »*/
 this.paragraphSelectMode = true;
 
-
 this.isScrolling = false;
 this.didInit = false;
 this.winid = this.Win.id;
@@ -7287,6 +7253,7 @@ this.numId = this.winid.split("_")[1];
 
 this.tabSize=4;
 this.minTermWid = 15;
+this.minHistStrLen = 8;
 this.maxTabSize = 256;
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
 this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
@@ -7527,14 +7494,11 @@ async execute(str, opts={}){//«
 //XKLRSMFLE
 	const heredocScanner=async(eof_tok)=>{//«
 		let doc = [];
-		let didone = false;
 		let prmpt="> ";
-		let rv;
 		while (true){
 			let rv = await this.readLine(prmpt);
 			if (rv===eof_tok) break;
 			doc.push(rv);
-			didone = true;
 		}
 		return doc;
 	}//»
@@ -7547,9 +7511,17 @@ async execute(str, opts={}){//«
 		term: this,
 		shell: this.curShell
 	});
+
+	gotstr = this.curShell.parser.finalComStr.replace(/\n/g, "\t");
+
 	if (this.curShell === shell && !shell.cancelled) this.responseEnd();
 	if (opts.noSave) return;
+
+//WMPLKXED
+//	await this.updateHistory(this.curShell.parser.mainParser.finalComStr.replace(/\n/g, "\t"));
+
 	await this.updateHistory(gotstr);
+
 }//»
 executeBackgroundCommand(s){//«
 
@@ -8727,6 +8699,7 @@ seekLineEnd(){//«
 
 //»
 //History/Saving«
+
 historyUp(){//«
 	if (!(this.bufPos < this.history.length)) return;
 	if (this.commandHold == null && this.bufPos == 0) {
@@ -8739,8 +8712,9 @@ historyUp(){//«
 
 //	this.popPromptLines();
 	this.trimLines();
-
-	this.handleLineStr(str.trim());
+//.replace(/\n/g, "\t")
+//	this.handleLineStr(str.trim());
+	this.handleLineStr(str.trim().replace(/\t/g, "\n"));
 	this.comScrollMode = true;
 }//»
 historyDown(){//«
@@ -8753,7 +8727,8 @@ historyDown(){//«
 	if (this.bufPos == 0) {
 		this.trimLines();
 //		this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
-		this.handleLineStr(this.commandHold.replace(/\n$/,""),true);
+//		this.handleLineStr(this.commandHold.replace(/\n$/,""),true);
+		this.handleLineStr(this.commandHold.replace(/\n$/,"").replace(/\t/g, "\n"),true);
 		this.x = this.commandPosHold;
 		this.commandHold = null;
 		this.render();
@@ -8762,7 +8737,8 @@ historyDown(){//«
 		let str = this.history[this.history.length - this.bufPos];
 		if (str) {
 			this.trimLines();
-			this.handleLineStr(str.trim());
+//			this.handleLineStr(str.trim());
+			this.handleLineStr(str.trim().replace(/\t/g, "\n"));
 			this.comScrollMode = true;
 		}
 	}
@@ -8826,14 +8802,19 @@ async updateHistory(str){//«
 cerr("updateHistory called with no 'str' arg!");
 		return;
 	}
+	if (str==this.history[this.history.length-1]){
+		return;
+	}
+	if (str.length < this.minHistStrLen){
+		return;
+	}
 	let ind = this.history.indexOf(str);
 	if (ind >= 0) {
 		this.history.splice(ind, 1);
 	}
-	else{
-		await this.appendToHistory(str);
-	}
+	await this.appendToHistory(str);
 	this.history.push(str);
+
 }//»
 async initHistory(termBuffer){//«
 	if (termBuffer) {
@@ -9844,12 +9825,9 @@ handleTab(){//«
 handleArrow(code, mod, sym){//«
 	if (this.curShell) return;
 	if (mod == "") {//«
-//		if (code == KC['UP']) this.historyUp();
 		if (code == UP_KC) this.historyUp();
-//		else if (code == KC['DOWN']) this.historyDown();
 		else if (code == DOWN_KC) this.historyDown();
 		else if (code == LEFT_KEYCODE) this.charLeft();
-//		else if (code == KC["RIGHT"]) this.charRight();
 		else if (code == RIGHT_KC) this.charRight();
 	}//»
 	else if (mod=="C") {//«

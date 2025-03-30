@@ -1,4 +1,4 @@
-/*
+/*«
 Fundamental combinatorial theory:
 
 Poker, as a game to be solved via all possible concrete combinations (without
@@ -51,7 +51,7 @@ thinking is that there is only one combination hand (straight flush), which
 does not occur often enough to be statistically significant enough for a "first
 approximation" type of algorithmic solution to poker.
 
-*/
+»*/
 
 /*«
 Just put this into a web worker and add in logic to periodically pull the
@@ -1613,7 +1613,6 @@ act(){
 PokerPlayerClass = AllInPlayer;
 
 //»
-
 
 onmessage=(e)=>{//«
 	let s = e.data;
