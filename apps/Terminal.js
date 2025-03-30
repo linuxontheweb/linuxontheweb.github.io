@@ -4,6 +4,10 @@ continuation prompts, if any, have finished), with embedded newlines. We can sav
 to command history by replacing the newlines with tabs (since tabs are *NEVER* inside
 of interactive shell scripts), then upon scrolling the history, we have to split the
 string on tabs, and then put all of the lines onto the terminal.
+
+Now scrutinizing handleBackspace @MSKEUTJDK. We called a checkLineLen method, which I'm
+not quite sure what for...
+
 */
 /*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment «
 set up by the for loop has not had a chance to get activated.
@@ -5846,9 +5850,11 @@ async tokenize(){//«
 
 //If !heredocs && next is "<<" or "<<-", we need to:
 		if (heredocs && isNLs(next)){//«
-//if (interactive){
-//throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
-//}
+/*if (interactive){
+//This happens now when using history scrolling with commands that have embedded 
+//newlines that are saved in the history file with tabs replacing the newlines
+throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
+}*/
 			for (let i=0; i < heredocs.length; i++){
 				let heredoc = heredocs[i];
 				let rv = this.nextLinesUntilDelim(heredoc.delim);
@@ -7896,21 +7902,6 @@ getMaxLen(){//«
 	return max_len;
 }
 //»
-checkLineLen(dy){//«
-	const{lines, w}=this;
-//	const{cy}=this.cy();
-	if (!dy) dy = 0;
-	const new_y = this.cy()+dy;
-	if (lines[new_y].length > w) {
-		let diff = lines[new_y].length-w;
-		for (let i=0; i < diff; i++) lines[new_y].pop();
-	}
-//	if (lines[this.cy()+dy].length > this.w) {
-//		let diff = lines[this.cy()+dy].length-this.w;
-//		for (let i=0; i < diff; i++) lines[this.cy()+dy].pop();
-//	}
-}
-//»
 cy(){//«
 	return this.y + this.scrollNum;
 }//»
@@ -9866,58 +9857,73 @@ handlePage(sym){//«
 	}//»
 }
 //»
-handleBackspace(){//«
-	let prevch = this.lines[this.cy()][this.x-1];
+handleBackspace(){//MSKEUTJDK«
+
+/*
+If we are at 0 and backing onto a line that is less than the width, then we need to 
+try to fill that line with the extra characters that are on the current line.
+*/
+
+//Return if we've hit the prompt
 	if (((this.y+this.scrollNum) ==  this.curPromptLine) && (this.x == this.promptLen)) return;
-	else {
-		let do_check = true;
-		let is_zero = null;
-		if (this.x==0 && this.y==0) return;
-		if (this.x==0 && (this.cy()-1) < this.curPromptLine) return;
-		if (this.curScrollCommand) this.insertCurScroll();
-		if (this.x==0 && this.cy() > 0) {//«
-//JEPOIKLMJYH
-//log(this.x, this.y, this.scrollNum);
-			if (this.lines[this.cy()].length < this.w) {//«
-				let char_arg = this.lines[this.cy()][0];
-				if (char_arg) {
-					this.checkLineLen(-1);
-					is_zero = true;
-					this.lines[this.cy()].splice(this.x, 1);
-					this.lines[this.cy()-1].pop();
-					this.lines[this.cy()-1].push(char_arg);
-					this.y--;
-					this.x = this.lines[this.cy()].length - 1;
-					this.render();
-				}
-				else {
-					this.lines[this.cy()-1].pop();
-					this.lines.splice(this.cy(), 1);
-					this.y--;
-					this.x=this.lines[this.cy()].length;
-					this.checkLineLen();
-					this.render();
-					return;
-				}
-			}//»
-			else {//«
-				this.y--;
-				do_check = true;
-				this.lines[this.cy()].pop();
-				this.x = this.lines[this.cy()].length;
-				this.render();
-			}//»
-		}//»
-		else {//«
-			this.x--;
-			this.lines[this.cy()].splice(this.x, 1);
-		}//»
-		let usey=2;
-		if (!is_zero) {
-			usey = 1;
-			do_check = true;
+
+//At the top of the screen, and we're not scrolling back with a backspace
+	if (this.x==0 && this.y==0) return;
+//Not quite sure what this means. We are apparently on the curPromptLine, with a prompt of 0 length
+	if (this.x==0 && (this.cy()-1) < this.curPromptLine) return;
+
+	if (this.curScrollCommand) this.insertCurScroll();
+
+	let is_zero;
+
+	if (this.x > 0){//«
+//Simple rubout on the same line. In case this line is less than the width, we can just return
+		this.x--;
+		this.lines[this.cy()].splice(this.x, 1);
+		if (this.lines[this.cy()].length == this.w-1){
 		}
-		if (do_check && this.lines[this.cy()+usey] && this.lines[this.cy()].length == this.w-1) {//«
+		else if (this.lines[this.cy()].length < this.w-1){
+			this.render();
+			return;
+		}
+		else{
+cerr("HOW IS THE LINE LENGTH *GREATER* THAN Term.w-1???");
+log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
+		}
+	}//»
+	else if (!this.lines[this.cy()][0]){//«
+//Just a very simple matter of deleting a newline
+		this.lines[this.cy()-1].pop();
+		this.lines.splice(this.cy(), 1);
+		this.y--;
+		this.x = this.lines[this.cy()].length;
+		this.render();
+		return;
+	}//»
+	else {//«
+//JEPOIKLMJYH
+//The line is less than the width
+		let thisln = this.lines[this.cy()];
+		let prevln = this.lines[this.cy()-1];
+		let donum = this.w - prevln.length;
+		is_zero = true;
+		let gotchs;
+		if (donum){
+			gotchs = thisln.splice(0, donum);
+		}
+		else{
+			gotchs = thisln.splice(0, donum+1);
+			prevln.pop();
+		}
+		prevln.push(...gotchs);
+		this.y--;
+		this.x = prevln.length - (gotchs.length);
+	}//»
+
+	let usey = is_zero ? 2 : 1;
+//log("USEY",usey);
+	if (this.lines[this.cy()+usey]) {//«
+		if (this.lines[this.cy()].length == this.w-1) {
 			let char_arg = this.lines[this.cy()+usey][0];
 			if (char_arg) this.lines[this.cy()].push(char_arg);
 			else this.lines.splice(this.cy()+usey, 1);
@@ -9933,8 +9939,13 @@ handleBackspace(){//«
 					}
 				}
 			}//»
-		}//»
-	}
+		}
+		else{
+			if (!this.lines[this.cy()+usey-1].length){
+				this.lines.splice(this.cy()+usey-1, 1);
+			}
+		}
+	}//»
 	this.render();
 }
 //»
