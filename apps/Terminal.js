@@ -6811,6 +6811,48 @@ cerr(e);
 	}//»
 //SKIOPRHJT
 }//»
+async makeScriptCom(com_ast, comopts){//«
+	const{term}=this;
+	const mkerr=(mess)=>{
+		ShellMod.var.lastExitCode = E_ERR;
+		return make_sh_err_com(comword, mess, com_env);
+	};
+	let com;
+	let simp_com = com_ast.simple_command;
+	let comword = simp_com.name.toString();
+	let com_env = {term, shell: this};
+	let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
+
+	if (!node) return mkerr(`file not found`);
+
+	let app = node.appName;
+	let err;
+	if (app===FOLDER_APP) err = `is a directory`;
+	else if (app!==TEXT_EDITOR_APP) err = `not a text file`;
+	else if (!comword.match(/\.sh$/i)) err = `only executing files with '.sh' extension`;
+
+	if (err) return mkerr(err);
+
+	let text = await node.text;
+	if (!text) return mkerr(`no text returned`);
+	
+	let rv = await this.compile(text, {
+		retErrStr: true,
+//SEYIAW
+		mainParser: comopts.shell.parser.mainParser,
+	});
+	if (isStr(rv)) return mkerr(rv);
+	if (!isArr(rv) && rv[0].andor){
+		return mkerr(`Unknown value return from shell.compile`);
+	}
+	comopts.scriptName = comword;
+	comopts.scriptArgs = simp_com.args;
+//SAKROAP
+	delete comopts.isInteractive;
+	com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {term: rv}}}, comopts)
+	com.isScript = true;
+	return com;
+}//»
 
 async executePipeline(pipe, loglist, loglist_iter, opts){//«
 	const{term}=this;
@@ -6880,61 +6922,9 @@ log(red);
 			comopts.envReadLine = env_readline;
 		}//»
 
-		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){//«
-			let simp_com = com_ast.simple_command;
-			let comword = simp_com.name.toString();
-			let com_env = {term, shell: this};
-			let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
-			if (!node) {
-				ShellMod.var.lastExitCode = E_ERR;
-				com = make_sh_err_com(comword, `file not found`, com_env);
-			}
-			else {
-				let app = node.appName;
-				if (app===FOLDER_APP) {
-					ShellMod.var.lastExitCode = E_ERR;
-					com = make_sh_err_com(comword, `is a directory`, com_env);
-				}
-				else if (app!==TEXT_EDITOR_APP) {
-					ShellMod.var.lastExitCode = E_ERR;
-					com = make_sh_err_com(comword, `not a text file`, com_env);
-				}
-				else if (!comword.match(/\.sh$/i)){
-					ShellMod.var.lastExitCode = E_ERR;
-					com = make_sh_err_com(comword, `only executing files with '.sh' extension`, com_env);
-				}
-				else {
-					let text = await node.text;
-					if (!text) {
-						ShellMod.var.lastExitCode = E_ERR;
-						com = make_sh_err_com(comword, `no text returned`, com_env);
-					}
-					else{
-//cwarn("MAINPARSER");
-//log(comopts.shell.parser.mainParser);
-
-//						let rv = await this.compile(text, {retErrStr: true});
-						let rv = await this.compile(text, {
-							retErrStr: true,
-//SEYIAW
-							mainParser: comopts.shell.parser.mainParser,
-						});
-						if (isStr(rv)) com = make_sh_err_com(comword, rv, com_env);
-						else if (!isArr(rv) && rv[0].andor){
-							com = make_sh_err_com(comword, `Unknown value return from shell.compile`, com_env);
-						}
-						else{
-							comopts.scriptName = comword;
-							comopts.scriptArgs = simp_com.args;
-//SAKROAP
-							delete comopts.isInteractive;
-							com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {term: rv}}}, comopts)
-							com.isScript = true;
-						}
-					}
-				}
-			}
-		}//»
+		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){
+			com = await this.makeScriptCom(com_ast, comopts);
+		}
 		else if (errmess){
 			com = make_sh_err_com(null, errmess, {term, shell: this});
 		}
