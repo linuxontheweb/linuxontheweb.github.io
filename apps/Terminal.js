@@ -1,5 +1,16 @@
+/*3/31/25: In order to do readline editing, in handleArrow @SBSORJJS Just added the check for:
+	if (this.curShell && !this.#readLineCb) return
 
-/*3/30/25: TODO XXX POSSIBLE BUG XXX TODO
+In Term.handleEnter @VSHEUROJ: Just added forceNewline (instead of the lower level crap...),
+which internally updates curPromptLine (which is important for when we are starting a heredoc).
+We want to update curPromptLine *AFTER EVERY ENTER*.
+
+@KSDJJSAKJR: Just went ahead and directly set promptLen. Should probably just get rid
+of ALL readLinePromptLen's, since we want to simplify the idea of what/where a "prompt line"
+is.
+
+*/
+/*3/30/25: TODO XXX POSSIBLE BUG XXX TODO«
 
 @WSFOKGKDH: For comsubs we were doing tok.raw, but this was *NOT* being updated properly
 when doing multiline stuff like:
@@ -38,7 +49,7 @@ string on tabs, and then put all of the lines onto the terminal.
 Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-line editing...
 
 
-*/
+»*/
 
 //«Notes
 
@@ -5947,6 +5958,9 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		for (let i=0; i < heredocs.length; i++){
 			let heredoc = heredocs[i];
 			let rv = await this.heredocScanner(heredoc.delim);
+if (rv===EOF){
+this.fatal("aborted");
+}
 			heredoc.tok.value = rv.join("\n");
 			if (heredocs_str === null) heredocs_str = "\n"+heredoc.tok.value;
 			else heredocs_str += "\n"+heredoc.tok.value;
@@ -7220,7 +7234,7 @@ export const app = class {
 //Private Vars«
 #readLineCb;
 #readLineStr;
-#readLinePromptLen;
+//#readLinePromptLen;
 #readLineStartLine;
 #getChCb;
 #getChDefCh;
@@ -7307,7 +7321,8 @@ this.minTermWid = 15;
 this.minHistStrLen = 8;
 this.maxTabSize = 256;
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
-this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
+//this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
+this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "LEFT_C", "RIGHT_", "RIGHT_C", "a_C", "e_C"];
 /*
 this.stat={
 	none: 0,
@@ -7538,44 +7553,24 @@ async execute(str, opts={}){//«
 	const shell = new this.Shell(this);
 
 	this.curShell = shell;
-	let gotstr = str.trim();
-	shell.curComStr = gotstr;
 	str = str.replace(/\x7f/g, "");
-
-//XKLRSMFLE
-	const heredocScanner=async(eof_tok)=>{//«
-		let doc = [];
-		let prmpt="> ";
-		while (true){
-			let rv = await this.readLine(prmpt);
-			if (rv===eof_tok) break;
-			doc.push(rv);
-		}
-		return doc;
-	}//»
-
-//PLDYHJKU
 	await this.curShell.execute(str, {
 		env: this.env,
-		heredocScanner,
-		isInteractive: true,
 		term: this,
-		shell: this.curShell
+		isInteractive: true,
+		shell: this.curShell,
+		heredocScanner:eof=>{return this.heredocScanner(eof);},
 	});
-	try {
-		gotstr = this.curShell.parser.finalComStr.replace(/\n/g, "\t");
-	}catch(e){
-cwarn("CAUGHT")
-cerr(e);
+	if (this.curShell.cancelled) {
+		this.responseEnd();
+		return;
 	}
-	if (this.curShell === shell && !shell.cancelled) this.responseEnd();
+	let save_str;
+	if (this.curShell.parser.finalComStr) save_str = this.curShell.parser.finalComStr.replace(/\n/g, "\t");
+	this.responseEnd();
+//log(`<${save_str}>`);
 	if (opts.noSave) return;
-
-//WMPLKXED
-//	await this.updateHistory(this.curShell.parser.mainParser.finalComStr.replace(/\n/g, "\t"));
-
-	await this.updateHistory(gotstr);
-
+	await this.updateHistory(save_str);
 }//»
 executeBackgroundCommand(s){//«
 
@@ -7641,7 +7636,8 @@ forceNewline(){//«
 	const{lines}=this;
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		this.lineBreak();
-		this.curPromptLine = this.y+this.scrollNum-1;
+//		this.curPromptLine = this.y+this.scrollNum-1;
+		this.curPromptLine = this.y+this.scrollNum;
 	}
 	this.x=0;
 	this.scrollIntoView();
@@ -7658,17 +7654,35 @@ async getch(promptarg, def_ch){//«
 	});
 }
 //»
+async heredocScanner(eof_tok){//«
+	let doc = [];
+	let prmpt="> ";
+	while (true){
+		let rv = await this.readLine(prmpt);
+		if (rv === EOF) return EOF;
+		if (rv===eof_tok) {
+			break;
+		}
+		doc.push(rv);
+	}
+	return doc;
+}//»
 async readLine(promptarg){//«
 	const{lines}=this;
 	this.sleeping = false;
 	if (!this.actor) {
 		this.forceNewline();
 		if (promptarg){
-			this.#readLinePromptLen = promptarg.length;
+//			this.#readLinePromptLen = promptarg.length;
+			this.promptLen = promptarg.length;
 			for (let ch of promptarg) this.handleLetterPress(ch);
 		}
-		else this.#readLinePromptLen = 0;
-		this.x = this.#readLinePromptLen;
+//		else this.#readLinePromptLen = 0;
+		else this.promptLen = 0;
+//KSDJJSAKJR
+//		this.promptLen = this.#readLinePromptLen;
+//		this.x = this.#readLinePromptLen;
+		this.x = this.promptLen;
 	}
 	this.#readLineStartLine = this.cy();//WMNYTUE
 	return new Promise((Y,N)=>{
@@ -8598,7 +8612,13 @@ resize(opts={}) {//«
 	this.render();
 }
 //»
-
+checkNegY(){
+	if (this.y<0) {
+		this.scrollNum+=this.y;
+		this.y=0;
+		this.render();
+	}
+}
 charLeft(){//«
 	if (this.curScrollCommand) {
 		this.insertCurScroll();
@@ -8666,6 +8686,7 @@ wordLeft(){//«
 	let char_pos = null;
 	let use_pos = null;
 	let add_x = this.getComPos();
+//log(add_x);
 	if (add_x==0) return;
 	start_x = add_x;
 	if (arr[add_x] && arr[add_x] != " " && arr[add_x-1] == " ") add_x--;
@@ -8679,6 +8700,7 @@ wordLeft(){//«
 	while(char_pos > 0 && arr[char_pos] != " ") char_pos--;
 	if (char_pos == 0) use_pos = 0;
 	else use_pos = char_pos+1;
+//log(start_x, use_pos);
 	for (let i=0; i < start_x - use_pos; i++) this.handleArrow(LEFT_KEYCODE, "");
 }//»
 wordRight(){//«
@@ -8716,12 +8738,10 @@ wordRight(){//«
 }//»
 seekLineStart(){//«
 	if (this.curScrollCommand) this.insertCurScroll();
+//	this.setXStart();
 	this.x=this.promptLen;
 	this.y=this.curPromptLine - this.scrollNum;
-	if (this.y<0) {
-		this.scrollNum+=this.y;
-		this.y=0;
-	}
+	this.checkNegY();
 	this.render();
 }//»
 seekLineEnd(){//«
@@ -8755,6 +8775,7 @@ historyUp(){//«
 //	this.handleLineStr(str.trim());
 	this.handleLineStr(str.trim().replace(/\t/g, "\n"));
 	this.comScrollMode = true;
+	this.checkNegY();
 }//»
 historyDown(){//«
 
@@ -8765,8 +8786,6 @@ historyDown(){//«
 	let pos = this.history.length - this.bufPos;
 	if (this.bufPos == 0) {
 		this.trimLines();
-//		this.handleLineStr(this.commandHold.replace(/\n$/,""),null,null,true);
-//		this.handleLineStr(this.commandHold.replace(/\n$/,""),true);
 		this.handleLineStr(this.commandHold.replace(/\n$/,"").replace(/\t/g, "\n"),true);
 		this.x = this.commandPosHold;
 		this.commandHold = null;
@@ -8776,11 +8795,11 @@ historyDown(){//«
 		let str = this.history[this.history.length - this.bufPos];
 		if (str) {
 			this.trimLines();
-//			this.handleLineStr(str.trim());
 			this.handleLineStr(str.trim().replace(/\t/g, "\n"));
 			this.comScrollMode = true;
 		}
 	}
+	this.checkNegY();
 }//»
 historyUpMatching(){//«
 	if (!(this.bufPos < this.history.length)) return;
@@ -8838,7 +8857,7 @@ cwarn(`Could not write to history: ${HISTORY_PATH}`);
 //»
 async updateHistory(str){//«
 	if (!str){
-cerr("updateHistory called with no 'str' arg!");
+//cerr("updateHistory called with no 'str' arg!");
 		return;
 	}
 	if (str==this.history[this.history.length-1]){
@@ -9861,7 +9880,11 @@ handleTab(){//«
 }
 //»
 handleArrow(code, mod, sym){//«
-	if (this.curShell) return;
+//SBSORJJS
+	if (this.curShell && !this.#readLineCb) {
+//	if (this.curShell) {
+		return;
+	}
 	if (mod == "") {//«
 		if (code == UP_KC) this.historyUp();
 		else if (code == DOWN_KC) this.historyDown();
@@ -9915,7 +9938,9 @@ try to fill that line with the extra characters that are on the current line.
 	if (((this.y+this.scrollNum) ==  this.curPromptLine) && (this.x == this.promptLen)) return;
 
 //At the top of the screen, and we're not scrolling back with a backspace
-	if (this.x==0 && this.y==0) return;
+//	if (this.x==0 && this.y==0) {
+//		return;
+//	}
 //Not quite sure what this means. We are apparently on the curPromptLine, with a prompt of 0 length
 	if (this.x==0 && (this.cy()-1) < this.curPromptLine) return;
 
@@ -9967,8 +9992,12 @@ log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
 		this.x = prevln.length - (gotchs.length);
 	}//»
 
+	if (this.y == -1) {
+		this.y = 0;
+		this.scrollNum--;
+	}
+
 	let usey = is_zero ? 2 : 1;
-//log("USEY",usey);
 	if (this.lines[this.cy()+usey]) {//«
 		if (this.lines[this.cy()].length == this.w-1) {
 			let char_arg = this.lines[this.cy()+usey][0];
@@ -9994,6 +10023,7 @@ log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
 		}
 	}//»
 	this.render();
+
 }
 //»
 handleDelete(mod){//«
@@ -10025,9 +10055,13 @@ async handleEnter(opts={}){//«
 		return;
 	}
 	this.x=0;
-	this.y++;
-	this.lines.push([]);
-	this.scrollIntoView();
+
+//VSHEUROJ
+//	this.y++;
+//	this.lines.push([]);
+//	this.scrollIntoView();
+	this.forceNewline();
+
 	this.render();
 	await this.execute(str, opts);
 	this.sleeping = null;
@@ -10137,7 +10171,8 @@ handleReadlineEnter(){//«
 	let from = this.#readLineStartLine;
 	for (let i=from; i < lines.length; i++) {
 		if (i==from) {
-			s+=lines[i].slice(this.#readLinePromptLen).join("");
+//			s+=lines[i].slice(this.#readLinePromptLen).join("");
+			s+=lines[i].slice(this.promptLen).join("");
 		}
 		else {
 			s+=lines[i].join("");
@@ -10152,6 +10187,7 @@ handleReadlineEnter(){//«
 	this.#readLineStartLine = null;
 	this.sleeping = true;
 	this.forceNewline();
+//log(this.curPromptLine);
 }//»
 handleKey(sym, code, mod, ispress, e){//«
 	const{lines}=this;
@@ -10161,7 +10197,6 @@ handleKey(sym, code, mod, ispress, e){//«
 	if (this.curShell){//«
 
 		if (sym==="c_C") {//«
-			this.updateHistory(this.curShell.curComStr);
 			this.curShell.cancel();
 			this.curShell = null;
 			this.sleeping = false;
@@ -10199,7 +10234,8 @@ handleKey(sym, code, mod, ispress, e){//«
 					return;
 				}
 //				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
-				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.#readLineStartLine) {
+//				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.#readLineStartLine) {
+				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.promptLen && this.y+this.scrollNum == this.#readLineStartLine) {
 					return;
 				}
 //LOUORPR
@@ -10375,7 +10411,7 @@ onkeydown(e,sym,mod){//«
 			this.#readLineCb = null;
 			this.#readLineStartLine = null;
 			this.doOverlay("Readline: cancelled");
-//			this.curShell.cancel();
+			this.curShell.cancel();
 			return;
 		}
 		this.handleKey(sym, code, mod, false, e);
