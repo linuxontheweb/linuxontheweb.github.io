@@ -9,6 +9,13 @@ We want to update curPromptLine *AFTER EVERY ENTER*.
 of ALL readLinePromptLen's, since we want to simplify the idea of what/where a "prompt line"
 is.
 
+Now we are having problems keeping track of where we are in terms of being in the
+top/interactive level (including in sub parsers that need to do line continuations),
+and being in scripts. Right now, script text is being placed into finalComStr @AGRHSORJF.
+@SAKROAP, when making a script just deleted comopts.isInteractive.
+
+@SEYIAW: JUST ADDED MAINPARSER TO THE OPTS TO COMPILE!!!
+
 */
 /*3/30/25: TODO XXX POSSIBLE BUG XXX TODO«
 
@@ -626,7 +633,7 @@ that is relevant to the thing called the "shell" (as opposed to the thing called
 the "terminal") into a singular thing. We want to do this in a totally 
 methodical/non-destrutive kind of way, so we can be very assured of the fact that 
 everything always works as ever.»*/
-
+let parserId = 1;
 globals.ShellMod = new function() {
 
 //Var«
@@ -1967,39 +1974,6 @@ be wrapped when output onto the terminal
 	}//»
 
 }//»
-/*
-const ScriptCom = class extends Com{//«
-
-	constructor(shell, name, text, args, env){
-		super(name, args, {}, env);
-		this.text = text;
-		this.shell = shell;
-	}
-	async run(){//«
-		const scriptOut=(val)=>{
-			if (isEOF(val)) return;
-			this.out(val);
-		};
-		let code = await this.shell.execute(this.text, {
-			shell: this.shell,
-			scriptOut,
-			scriptName: this.name,
-			scriptArgs: this.args,
-			env: sdup(this.env)
-		});
-		if (this.nextCom) {
-			if (this.nextCom.pipeIn){
-				this.nextCom.pipeIn(EOF);
-			}
-			else if (this.envPipeOutLns){
-				this.envPipeOutLns(EOF);
-			}
-		}
-		this.end(code);
-	}//»
-
-}//»
-*/
 const NoCom=class{//«
 	constructor(env){
 		for (let k in env) {
@@ -4764,6 +4738,10 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 
 }/*»*/
 scanNextLineNot(delim){//«
+	if (this.eof()) {
+//cwarn("GOTEOF");
+		return false;
+	}
 	let cur = this.index;
 //	let this.source = this.source;
 	let ln='';
@@ -4778,7 +4756,10 @@ scanNextLineNot(delim){//«
 	if (ln===delim) {
 		return true;
 	}
-	if (this.eof()) return false;
+//log(this.isInteractive);
+//	if (this.eof()) return false;
+	if (!this.isInteractive && this.eof()) return false;
+//log("HI", this.eof(), ln);
 	return ln;
 }//»
 async lex(heredoc_flag){//«
@@ -4818,6 +4799,7 @@ const Parser = class {
 
 constructor(code, opts={}) {//«
 	this.mainParser = opts.mainParser || this;
+	this.id = parserId++;
 	this.env = opts.env;
 	this.term = opts.term;
 	this.isInteractive = opts.isInteractive;
@@ -5890,22 +5872,28 @@ async tokenize(){//«
 	let cur_heredoc_tok;
 	let cur_heredoc;
 	let interactive = this.isInteractive;
-	while (next.type !== EOF_Type) {
+	TOKENIZE_LOOP: while (next.type !== EOF_Type) {
 
 //If !heredocs && next is "<<" or "<<-", we need to:
 		if (heredocs && isNLs(next)){//«
-//		if (!interactive && heredocs && isNLs(next)){
+//		if (!interactive && heredocs && isNLs(next)){«
 /*if (interactive){
 //This happens now when using history scrolling with commands that have embedded 
 //newlines that are saved in the history file with tabs replacing the newlines
 throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
 }*/
+/*
 			for (let i=0; i < heredocs.length; i++){
 				let heredoc = heredocs[i];
 				let rv = this.nextLinesUntilDelim(heredoc.delim);
 				if (!isStr(rv)){
 if (interactive) {
 //SGFKGLSJR
+//log(rv);
+if (isObj(rv) && isStr(rv.partial)){
+//This is always an EOF condition, so we can break out of the outer loop
+//cwarn("PARTIAL", rv.partial);
+}
 	this.fatal(`error parsing the interactive heredoc (looking for "${heredoc.delim}")`);
 }
 else {
@@ -5913,6 +5901,22 @@ else {
 }
 				}
 				heredoc.tok.value = rv;
+			}
+»*/
+			while (heredocs.length){
+				let heredoc = heredocs.shift();
+				let rv = this.nextLinesUntilDelim(heredoc.delim);
+				if (isStr(rv)){
+					heredoc.tok.value = rv;
+					continue;
+				}
+				if (!interactive) return this.fatal("warning: here-document at line ? delimited by end-of-file");
+				if (isObj(rv) && isStr(rv.partial)){
+					heredoc.tok.partial = rv.partial;
+					heredocs.unshift(heredoc);
+					break TOKENIZE_LOOP;
+				}
+				return this.fatal(`error parsing the interactive heredoc (looking for "${heredoc.delim}")`);
 			}
 			this.scanner.index--;
 			heredocs = null;
@@ -5961,7 +5965,8 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 if (rv===EOF){
 this.fatal("aborted");
 }
-			heredoc.tok.value = rv.join("\n");
+			if (heredoc.tok.partial) heredoc.tok.value = heredoc.tok.partial + rv.join("\n");
+			else heredoc.tok.value = rv.join("\n");
 			if (heredocs_str === null) heredocs_str = "\n"+heredoc.tok.value;
 			else heredocs_str += "\n"+heredoc.tok.value;
 			heredocs_str += `\n${heredoc.delim}`;
@@ -5971,8 +5976,6 @@ this.fatal("aborted");
 	if (cur_heredoc_tok){//«
 		this.fatal("syntax error near unexpected token 'newline'");
 	}//»
-//cwarn("HEREDOCS");
-//log(heredocs_str);
 //YJDHSLFJS
 
 	for (let i=0; i < toks.length; i++){//«
@@ -6000,14 +6003,16 @@ this.fatal("aborted");
 		}//»
 		else this.fatal(`unsupported operator: '${rop}'`);
 	}//»
-//log(this.mainParser===this);
-//log(this.scanner.source);
-	if (!this.mainParser.finalComStr) this.mainParser.finalComStr = this.scanner.source.join("");
-	else this.mainParser.finalComStr += "\n"+this.scanner.source.join("");
-	if (heredocs_str !== null){
-		this.mainParser.finalComStr += heredocs_str;
+	if (this.isInteractive) {
+		if (!this.mainParser.finalComStr) {
+//AGRHSORJF
+			this.mainParser.finalComStr = this.scanner.source.join("");
+		}
+		else this.mainParser.finalComStr += "\n"+this.scanner.source.join("");
+		if (heredocs_str !== null){
+			this.mainParser.finalComStr += heredocs_str;
+		}
 	}
-//log(this.mainParser.finalComStr);
 	this.tokens = toks;
 	this.numToks = toks.length;
 	return true;
@@ -6728,12 +6733,19 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	}//»
 	else usecomword = comword;
 	if (usecomword=="exit"){//«
-		if (opts.isTopLevel){
+//log(opts);
+//		if (opts.isTopLevel){
+//log(opts);
+		let code;
+		if (opts.isInteractive){
 			term.response("sh: not exiting the toplevel shell", {isWrn: true});
-			return {code: lastcomcode, breakStatementLoop: true};
+//			return {code: lastcomcode, breakStatementLoop: true};
+			code = new Number(code);
+			code.breakStatementLoop = true;
+//			return {code: 1, breakStatementLoop: true};
+			return code;
 		}
 		let numstr = arr.shift();
-		let code;
 		if (numstr){
 			if (!numstr.match(/^-?[0-9]+$/)) term.response("sh: exit: numeric argument required", {isErr: true});
 			else code = parseInt(numstr);
@@ -6743,7 +6755,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		}
 		if (!Number.isFinite(code)) code = E_ERR;
 		code = new Number(code);
-		code.isExit = true;
+		code.breakStatementLoop = true;
 		return code;
 	}//»
 	let com = Shell.activeCommands[usecomword];
@@ -6770,10 +6782,6 @@ return func;
 		ShellMod.var.lastExitCode = E_ERR;
 		return make_sh_err_com(comword, `command not found`, com_env);
 	}//»
-//if (comword==="echo"){
-//log(use_env.LET);
-//}
-//cwarn(comword);
 	let com_opts;
 	let gotopts = com.opts || Shell.activeOptions[usecomword];
 //Parse the options and fail if there is an error message
@@ -6872,7 +6880,7 @@ log(red);
 			comopts.envReadLine = env_readline;
 		}//»
 
-		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){/*«*/
+		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){//«
 			let simp_com = com_ast.simple_command;
 			let comword = simp_com.name.toString();
 			let com_env = {term, shell: this};
@@ -6902,7 +6910,15 @@ log(red);
 						com = make_sh_err_com(comword, `no text returned`, com_env);
 					}
 					else{
-						let rv = await this.compile(text, {retErrStr: true});
+//cwarn("MAINPARSER");
+//log(comopts.shell.parser.mainParser);
+
+//						let rv = await this.compile(text, {retErrStr: true});
+						let rv = await this.compile(text, {
+							retErrStr: true,
+//SEYIAW
+							mainParser: comopts.shell.parser.mainParser,
+						});
 						if (isStr(rv)) com = make_sh_err_com(comword, rv, com_env);
 						else if (!isArr(rv) && rv[0].andor){
 							com = make_sh_err_com(comword, `Unknown value return from shell.compile`, com_env);
@@ -6910,13 +6926,15 @@ log(red);
 						else{
 							comopts.scriptName = comword;
 							comopts.scriptArgs = simp_com.args;
+//SAKROAP
+							delete comopts.isInteractive;
 							com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {term: rv}}}, comopts)
 							com.isScript = true;
 						}
 					}
 				}
 			}
-		}/*»*/
+		}//»
 		else if (errmess){
 			com = make_sh_err_com(null, errmess, {term, shell: this});
 		}
@@ -6925,6 +6943,9 @@ log(red);
 		}
 		else if (com_ast.simple_command){
 			com = await this.makeCommand(com_ast.simple_command, comopts)
+//log(com);
+//if (com.isExit === true) return com;
+			if (com.breakStatementLoop === true) return com;
 		}
 		else{//«
 cwarn("Here is the command");
@@ -7149,7 +7170,7 @@ term.response(mess,{isErr: true});
 //	term.response_end();
 
 }/*»*/
-async execute(command_str, opts){/*«*/
+async execute(command_str, opts){//«
 //	const{term}=this;
 	let statements = await this.compile(command_str, opts);
 	if (!statements) return;
@@ -7163,7 +7184,7 @@ if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
 this.term.response(mess,{isErr: true});
 }
 //	return 
-}/*»*/
+}//»
 cancel(){//«
 	this.cancelled = true;
 	let pipe = this.pipeline;
@@ -7566,10 +7587,11 @@ async execute(str, opts={}){//«
 		return;
 	}
 	let save_str;
-	if (this.curShell.parser.finalComStr) save_str = this.curShell.parser.finalComStr.replace(/\n/g, "\t");
+//cwarn("EXE",this.curShell.parser.mainParser.id, this.curShell.parser.mainParser.finalComStr);
+	if (this.curShell.parser.mainParser.finalComStr) save_str = this.curShell.parser.mainParser.finalComStr.replace(/\n/g, "\t");
 	this.responseEnd();
-//log(`<${save_str}>`);
 	if (opts.noSave) return;
+//log(`<${save_str}>`);
 	await this.updateHistory(save_str);
 }//»
 executeBackgroundCommand(s){//«
