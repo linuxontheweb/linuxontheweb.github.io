@@ -1,4 +1,19 @@
-/*3/31/25: In order to do readline editing, in handleArrow @SBSORJJS Just added the check for:
+/*4/1/25: In handleLineStr (esp for history scrolling) @PAKJSHFK, just created
+a lastln variable in order to do backward/forward linking of "implicit" line continuations (via
+_contPrev/_contNext variables tagged to the relevant lines), so that we can
+unambiguously know how to treat the various kinds of edits vis-a-vis these
+lines. So, when we are backspacing the beginning of a wrapped line onto a previous
+shorter line (previous lines can only ever be shorter when inserted via the history scrolling
+mechanism)...
+
+So, let's look at handleBackspace @GFUIABRM, which is a really old/crappy algorithm
+that is really just meant for standard (non-history inserted) 1-character adjustments.
+
+It's actually the stuff @JEPOIKLMJYH
+
+*/
+
+/*3/31/25: In order to do readline editing, in handleArrow @SBSORJJS Just added the check for:«
 	if (this.curShell && !this.#readLineCb) return
 
 In Term.handleEnter @VSHEUROJ: Just added forceNewline (instead of the lower level crap...),
@@ -16,7 +31,7 @@ and being in scripts. Right now, script text is being placed into finalComStr @A
 
 @SEYIAW: JUST ADDED MAINPARSER TO THE OPTS TO COMPILE!!!
 
-*/
+»*/
 /*3/30/25: TODO XXX POSSIBLE BUG XXX TODO«
 
 @WSFOKGKDH: For comsubs we were doing tok.raw, but this was *NOT* being updated properly
@@ -7245,11 +7260,9 @@ export const app = class {
 //Private Vars«
 #readLineCb;
 #readLineStr;
-//#readLinePromptLen;
 #readLineStartLine;
 #getChCb;
 #getChDefCh;
-//#doContinue;
 //»
 constructor(Win){//«
 
@@ -7390,6 +7403,7 @@ this.setFontSize();
 this.resize({isInit: true});
 
 }//»
+
 //«DOM
 makeDOMElem(){//«
 
@@ -7721,19 +7735,21 @@ async getLineFromPager(arr, name){//«
 		return poperr("Could not load the pager module");
 	}
 	let less = new LOTW.mods[DEF_PAGER_MOD_NAME](this);
-	if (await less.init(arr, name, {lineSelect: true, opts: {}})) return arr[less.y+less.this.scrollNum];
+	if (await less.init(arr, name, {lineSelect: true, opts: {}})) return arr[less.y+less.scroll_num];
 
 }//»
+///*
 async selectFromHistory(path){//«
 	let arr = await path.toLines();
-	if (!isArr(arr) && arr.length) {
+	if (!(isArr(arr) && arr.length)) {
 cwarn("No history lines from", path);
 		return;
 	}
-	this.curScrollCommand = await this.getLineFromPager(arr, path.split("/").pop());
-	if (this.curScrollCommand) this.insertCurScroll();
+	let str = await this.getLineFromPager(arr, path.split("/").pop());
+	if (str) this.handleLineStr(str);
 	this.render();
 }
+//*/
 //»
 
 togglePaste(){//«
@@ -8511,21 +8527,6 @@ clear(){//«
 	this.scrollNum = 0;
 	this.render();
 }//»
-shiftLine(x1, y1, x2, y2){//«
-	const{lines, scrollNum}=this;
-	let str_arr = [];
-	let start_len = 0;
-	if (lines[scrollNum + y1]) {
-		str_arr = lines[scrollNum + y1].slice(x1);
-		start_len = lines[scrollNum + y1].length;
-	}
-	if (y1 == (y2 + 1)) {
-		if (lines[scrollNum + y2]) lines[scrollNum + y2] = lines[scrollNum + y2].concat(str_arr);
-		lines.splice(y1 + scrollNum, 1);
-	}
-	return str_arr;
-}
-//»
 lineBreak(){//«
 	const{lines}=this;
 	if (lines[lines.length-1] && !lines[lines.length-1].length) return;
@@ -8595,8 +8596,7 @@ resize(opts={}) {//«
 	this.isLocked = false;
 	let ins_str = null;
 	if(!(actor || this.sleeping || this.curShell)){
-		if (this.curScrollCommand) ins_str = this.insertCurScroll();
-		else ins_str = this.getComArr().join("");
+		ins_str = this.getComArr().join("");
 		if (ins_str){
 //			this.popPromptLines();
 			this.trimLines();
@@ -8624,17 +8624,14 @@ resize(opts={}) {//«
 	this.render();
 }
 //»
-checkNegY(){
+checkNegY(){//«
 	if (this.y<0) {
 		this.scrollNum+=this.y;
 		this.y=0;
 		this.render();
 	}
-}
-charLeft(){//«
-	if (this.curScrollCommand) {
-		this.insertCurScroll();
-	}
+}//»
+charLeft(no_render){//«
 	if (this.x == 0) {
 		if (this.cy() == 0) return;
 		if (this.cy() > this.curPromptLine) {
@@ -8645,18 +8642,17 @@ charLeft(){//«
 			this.x = this.lines[this.cy()].length;
 			if (this.x==this.w) this.x--;
 			if (this.x<0) this.x = 0;
-			this.render();
+			if (!no_render) this.render();
 			return;
 		}
 		else return;
 	}
 	if (this.cy()==this.curPromptLine && this.x==this.promptLen) return;
 	this.x--;
-	this.render();
+	if (!no_render) this.render();
 }//»
-charRight(){//«
+charRight(no_render){//«
 
-	if (this.curScrollCommand) this.insertCurScroll();
 	//Or if this is less than w-2 with a newline for a CONT like current CLI environment.
 	let nextline = this.lines[this.cy()+1];
 	let thisline = this.lines[this.cy()];
@@ -8673,83 +8669,79 @@ charRight(){//«
 			this.x=0;
 			if (this.y+1==this.h) this.scrollNum++;
 			else this.y++;
-			this.render();
+			if (!no_render) this.render();
 		}
 		else { 
 			this.lines.push([]);
 			this.x=0;
 			this.y++;
-			if (!this.scrollIntoView()) this.render();
+			if (!this.scrollIntoView()) {
+				if (!no_render) this.render();
+			}
 			return;
 		}
 	}//»
 	else {
 		if (this.x==thislinelen||!thisch) return;
 		this.x++;
-		this.render();
+		if (!no_render) this.render();
 	}
-
 }//»
-wordLeft(){//«
-	if (this.curScrollCommand) this.insertCurScroll();
-	let arr = this.getComArr();
-	let pos;
-	let start_x;
-	let char_pos = null;
-	let use_pos = null;
-	let add_x = this.getComPos();
-//log(add_x);
-	if (add_x==0) return;
-	start_x = add_x;
-	if (arr[add_x] && arr[add_x] != " " && arr[add_x-1] == " ") add_x--;
-	if (!arr[add_x] || arr[add_x] == " ") {
-		add_x--;
-		while(add_x > 0 && (!arr[add_x] || arr[add_x] == " ")) add_x--;
-		char_pos = add_x;
+wordOver(is_left){//«
+	const getch = ()=>{
+		return this.lines[this.y+this.scrollNum][this.x];
+	};
+	const curpos = ()=>{
+		return [this.x, this.y+this.scrollNum];
+	};
+	const samepos = (pos1, pos2) =>{
+		return pos1[0]===pos2[0] && pos1[1] === pos2[1];
+	};
+/*
+	let kc1, kc2;
+	if (is_left) {
+		kc1 = LEFT_KEYCODE;
+		kc2 = RIGHT_KC;
 	}
-	else char_pos = add_x;
-	if (char_pos > 0 && arr[char_pos-1] == " ") use_pos = char_pos;
-	while(char_pos > 0 && arr[char_pos] != " ") char_pos--;
-	if (char_pos == 0) use_pos = 0;
-	else use_pos = char_pos+1;
-//log(start_x, use_pos);
-	for (let i=0; i < start_x - use_pos; i++) this.handleArrow(LEFT_KEYCODE, "");
-}//»
-wordRight(){//«
-
-	if (this.curScrollCommand) this.insertCurScroll();
-	let arr;
-	arr = this.getComArr();
-	let pos;
-	let start_x;
-	let char_pos = null;
-	let use_pos = null;
-	let add_x = this.getComPos();
-	if (add_x == arr.length) return;
-	else if (!arr[add_x]) return;
-	start_x = add_x;
-	if (arr[add_x] != " ") {
-		add_x++;
-		while(add_x != arr.length && arr[add_x] != " ") add_x++;
-		char_pos = add_x;
-		if (char_pos == arr.length) use_pos = char_pos;
-		else {
-			char_pos++;
-			while(char_pos != arr.length && arr[char_pos] == " ") char_pos++;
-			use_pos = char_pos;
+	else{
+		kc1 = RIGHT_KC;
+		kc2 = LEFT_KEYCODE;
+	}
+*/
+//	this.handleArrow(kc1, "");
+	is_left ? this.charLeft(true) : this.charRight(true);
+	let pos1 = curpos();	
+	let ch = getch();
+	let have_space = ch === " ";
+	if (have_space){
+//Rewind to the end of a word
+		while (true){
+			is_left ? this.charLeft(true) : this.charRight(true);
+			if (getch() !== " ") break;
+			let pos2 = curpos();
+			if (samepos(pos1, pos2)) break;
+			pos1 = pos2;
 		}
 	}
-	else {
-		add_x++;
-		while(add_x != arr.length && arr[add_x] == " ") add_x++;
-		use_pos = add_x;
-	}
-//	for (let i=0; i < use_pos - start_x; i++) this.handleArrow(KC['RIGHT'], "");
-	for (let i=0; i < use_pos - start_x; i++) this.handleArrow(RIGHT_KC, "");
 
+	pos1 = curpos();	
+	while (true){
+		is_left ? this.charLeft(true) : this.charRight(true);
+		let ch = getch();
+		if (ch==" "){
+			is_left ? this.charRight(true) : null;
+			break;
+		}
+		else if ((is_left && this.x === 0 && ch && ch != " ") || (!is_left && !ch)){
+			break;
+		}
+		let pos2 = curpos();
+		if (samepos(pos1, pos2)) break;
+		pos1 = pos2;
+	}
+	this.render();
 }//»
 seekLineStart(){//«
-	if (this.curScrollCommand) this.insertCurScroll();
 //	this.setXStart();
 	this.x=this.promptLen;
 	this.y=this.curPromptLine - this.scrollNum;
@@ -8757,7 +8749,6 @@ seekLineStart(){//«
 	this.render();
 }//»
 seekLineEnd(){//«
-	if (this.curScrollCommand) this.insertCurScroll();
 	this.y=this.lines.length-this.scrollNum-1;
 	if (this.y>=this.h){
 		this.scrollNum+=this.y-this.h+1
@@ -8767,6 +8758,24 @@ seekLineEnd(){//«
 	else this.x=this.lines[this.cy()].length;
 	this.render();
 }//»
+
+/*UNUSED: «shiftLine(x1, y1, x2, y2){
+	const{lines, scrollNum}=this;
+	let str_arr = [];
+	if (lines[scrollNum + y1]) {
+		str_arr = lines[scrollNum + y1].slice(x1);
+	}
+	if (y1 == (y2 + 1)) {
+//This was always called once, and then with y1===y2, so we would never get into here,
+//so this entide function appears to be pointless
+		if (lines[scrollNum + y2]) {
+			lines[scrollNum + y2] = lines[scrollNum + y2].concat(str_arr);
+		}
+		lines.splice(y1 + scrollNum, 1);
+	}
+	return str_arr;
+}
+»*/
 
 //»
 //History/Saving«
@@ -8929,6 +8938,10 @@ getComArr(from_x){//«
 	let j, line;
 	for (let i = this.curPromptLine; i < lines.length; i++) {
 		line = lines[i];
+//if (!line){
+//cwarn("??? NO LINE ???", i);
+//break;
+//}
 		if (i==this.curPromptLine) j=this.promptLen;
 		else j=0;
 		let len = line.length;
@@ -9003,28 +9016,7 @@ trimLines() {//«
 		this.lines.pop();
 	}
 }//»
-insertCurScroll()  {//«
-	this.comScrollMode = false;
-	if (this.linesHold2) this.lines = this.linesHold2.slice(0, this.lines.length);
-	let str = this.curScrollCommand;
-	let arr = this.fmtLinesSync(str.split("\n"), this.promptLen);
-	let curarr = this.getPromptStr().split("");
-	for (let i=0; i < arr.length; i++) {
-		let charr = arr[i].split("");
-		for (let j=0; j < charr.length; j++) curarr.push(charr[j]);
-		this.lines[this.curPromptLine + i] = curarr;
-		this.y = this.curPromptLine + i - this.scrollNum;
-		this.x = curarr.length;
-		curarr = [];
-	}
-	if (this.x == this.w) {
-		this.x=0;
-		this.y++;
-	}
-	this.curScrollCommand = null;
-	return str;
-}
-//»
+
 insertCutStr(){//«
 	for (let i=0; i < this.currentCutStr.length; i++) this.handleLetterPress(this.currentCutStr[i]);
 }//»
@@ -9832,12 +9824,7 @@ handleLineStr(str, if_no_render){//«
 	if (str=="") {}
 	else if (!str) return;
 	let curnum = this.curPromptLine;
-//	let curx;
-//	if (typeof uselen=="number") curx=uselen;
-//	else curx = this.promptLen;
-
 	let curx = this.promptLen;
-
 	this.linesHold2 = this.lines;
 	if (!this.comScrollMode) {
 		this.lines = copy_lines(this.lines, this.curPromptLine)
@@ -9848,12 +9835,19 @@ handleLineStr(str, if_no_render){//«
 	}
 	this.lines[this.lines.length-1] = this.lines[this.lines.length-1].slice(0, this.promptLen);
 	let curpos = this.promptLen;
-	this.curScrollCommand = str;
 	let arr = str.split("\n");
 	let addlines = 0;
+//log(arr);
 	for (let lnstr of arr) {
 		let i;
-		if (!lnstr) lnstr = "";
+		if (!lnstr) {
+			if (curnum !== this.curPromptLine) this.lines[curnum] = [];
+			curnum++;
+			continue;
+		}
+//log();
+//PAKJSHFK
+		let lastln;
 		for (i=curnum;lnstr.length>0;i++) {
 			let curln = this.lines[i];
 			if (!curln) curln = [];
@@ -9862,12 +9856,21 @@ handleLineStr(str, if_no_render){//«
 			curln.push(...strbeg);
 			this.lines[i] = curln;
 			lnstr = lnstr.slice(this.w-curpos);
+			if (lastln){
+				lastln._contNext = curln;
+				curln._contPrev = lastln;
+			}
 			if (lnstr.length > 0) {
 				curnum++;
 				curx = 0;
+				lastln = curln;
+			}
+			else{
+				lastln = null;
 			}
 			curpos = 0;
 			addlines++;
+//log(curln);
 		}
 		curnum++;
 	}
@@ -9886,7 +9889,6 @@ handleLineStr(str, if_no_render){//«
 }
 //»
 handleTab(){//«
-	if (this.curScrollCommand) this.insertCurScroll();
 	if (this.curShell) return;
 	this.doCompletion();
 }
@@ -9906,8 +9908,12 @@ handleArrow(code, mod, sym){//«
 	else if (mod=="C") {//«
 		if (kc(code,"UP")) this.historyUpMatching();
 		else if (kc(code,"DOWN")) this.historyDownMatching();
-		else if (kc(code,"LEFT")) this.wordLeft();
-		else if (kc(code,"RIGHT")) this.wordRight();
+		else if (kc(code,"LEFT")) {
+			this.wordOver(true);
+		}
+		else if (kc(code,"RIGHT")) {
+			this.wordOver(false);
+		}
 	}//»
 }//»
 handlePage(sym){//«
@@ -9955,8 +9961,6 @@ try to fill that line with the extra characters that are on the current line.
 //	}
 //Not quite sure what this means. We are apparently on the curPromptLine, with a prompt of 0 length
 	if (this.x==0 && (this.cy()-1) < this.curPromptLine) return;
-
-	if (this.curScrollCommand) this.insertCurScroll();
 
 	let is_zero;
 
@@ -10010,6 +10014,7 @@ log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
 	}
 
 	let usey = is_zero ? 2 : 1;
+//GFUIABRM
 	if (this.lines[this.cy()+usey]) {//«
 		if (this.lines[this.cy()].length == this.w-1) {
 			let char_arg = this.lines[this.cy()+usey][0];
@@ -10056,12 +10061,7 @@ async handleEnter(opts={}){//«
 	this.bufPos = 0;
 	this.commandHold = null;
 	if (this.curShell) return;
-
-	let str;
-	if (this.curScrollCommand) str = this.insertCurScroll();
-	else {
-		str = this.getComArr().join("");
-	}
+	let str = this.getComArr().join("");
 	if (str.match(/^ *$/)) {
 		this.responseEnd();
 		return;
@@ -10081,59 +10081,69 @@ async handleEnter(opts={}){//«
 handleLetterPress(char_arg, if_no_render){//«
 	const dounshift=()=>{//«
 //		let cy = this.y+this.scrollNum;
-		if ((lines[this.y+this.scrollNum].length) > w) {
-			let use_char = lines[this.y+this.scrollNum].pop()
-			if (!lines[this.y+this.scrollNum+1]) lines[this.y+this.scrollNum+1] = [use_char];
-			else lines[this.y+this.scrollNum+1].unshift(use_char);
-			if (this.x==w) {
-				this.x=0;
-				this.y++;
+		if ((lines[this.y+this.scrollNum].length) <= w) return;
+//		if ((lines[this.y+this.scrollNum].length) > w) {
+		let use_char = lines[this.y+this.scrollNum].pop()
+		if (!lines[this.y+this.scrollNum+1]) lines[this.y+this.scrollNum+1] = [use_char];
+		else lines[this.y+this.scrollNum+1].unshift(use_char);
+		if (this.x==w) {
+			this.x=0;
+			this.y++;
+		}
+		for (let i=1; line = lines[this.y+this.scrollNum+i]; i++) {
+			if (line.length > w) {
+				if (lines[this.y+this.scrollNum+i+1]) lines[this.y+this.scrollNum+i+1].unshift(line.pop());
+				else lines[this.y+this.scrollNum+i+1] = [line.pop()];
 			}
-			for (let i=1; line = lines[this.y+this.scrollNum+i]; i++) {
-				if (line.length > w) {
-					if (lines[this.y+this.scrollNum+i+1]) lines[this.y+this.scrollNum+i+1].unshift(line.pop());
-					else lines[this.y+this.scrollNum+i+1] = [line.pop()];
-				}
-				else {
-					if (lines[this.y+this.scrollNum+i-1].length > w) {
-						line.unshift(lines[this.y+this.scrollNum+i-1].pop());
-					}
+			else {
+				if (lines[this.y+this.scrollNum+i-1].length > w) {
+					line.unshift(lines[this.y+this.scrollNum+i-1].pop());
 				}
 			}
 		}
+//	}
 	};//»
 	const{lines, w}=this;
-	let cy;
+//	let cy;
 	let line;
+
+//Make room in the current line if the cursor is not at the end of the line
+//This might result in the line being too long.
 	if (lines && lines[this.scrollNum + this.y]) {
 		if (this.x < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
 			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
-			this.shiftLine(this.x-1, this.y, this.x, this.y);
+//			this.shiftLine(this.x-1, this.y, this.x, this.y);
 		}
 	}
 
 	let usex = this.x+1;
 	let usey = this.y;
-	this.y = usey;
+	let cy = usey+this.scrollNum;
+
+//	this.y = usey;
 
 	let endch = null;
 	let didinc = false;
-	cy = this.y+this.scrollNum;
+//	cy = this.y+this.scrollNum;
 	if (usex == w) {
-		if (lines[cy][this.x+1]) endch = lines[cy].pop();
+//		if (lines[cy][this.x+1]) endch = lines[cy].pop();
+		if (lines[cy][usex]) endch = lines[cy].pop();
 		didinc = true;
 		usey++;
 		usex=0;
 	}
-	if (!lines[cy]) {//«
+
+	if (!lines[cy]) {
 		lines[cy] = [];
-		lines[cy][0] = char_arg;
-	}//»
-	else if (lines[cy] && char_arg) {//«
-		let do_line = null;
-		if (lines[cy][this.x]) do_line = true;
-		lines[cy][this.x] = char_arg;
-	}//»
+//		lines[cy][0] = char_arg;
+	}
+//	else{
+	lines[cy][this.x] = char_arg;
+//	}
+//	else if (lines[cy] && char_arg) {
+//		lines[cy][this.x] = char_arg;
+//	}
+
 	let ln = lines[this.scrollNum+usey];
 	if (ln && ln[usex]) {//«
 		if (this.x+1==w) {
@@ -10142,22 +10152,21 @@ handleLetterPress(char_arg, if_no_render){//«
 				usex=0;
 			}
 			if (endch) {
-				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
+//				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
+				if (!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
 				else ln.unshift(endch);	
 			}
 		}
 		else usex = this.x+1;
 	}//»
-	else {//«
-		if (!ln||!ln.length||ln[0]===null) {
-			lines[this.scrollNum+usey] = [endch];
-		}
-	}//»
-//log("USEY",usey);
+	else if (!ln||!ln.length||ln[0]===null) {
+		lines[this.scrollNum+usey] = [endch];
+	}
+
 	this.x = usex;
 	this.y = usey;
+
 	dounshift();
-//	if (this.holdTerminalScreen) return;
 
 	this.scrollIntoView({noSetY: true});
 	if (!if_no_render) this.render();
@@ -10281,7 +10290,6 @@ handleKey(sym, code, mod, ispress, e){//«
 
 	if (ispress) {//«
 		this.numCtrlD = 0;
-		if (this.curScrollCommand) this.insertCurScroll();
 		if (code == 0) return;
 		else if (code == 1 || code == 2) code = 32;
 		else if (code == 8226 || code == 9633) code = "+".charCodeAt();
@@ -10566,14 +10574,12 @@ onsave(){//«
 
 onfocus(){//«
 	this.isFocused=true;
-	if (this.curScrollCommand) this.insertCurScroll();
 	this.textarea.focus();
 	this.render();
 }
 //»
 onblur(){//«
 	this.isFocused=false;
-	if (this.curScrollCommand) this.insertCurScroll();
 	this.textarea.blur();
 	this.render();
 }
@@ -10712,105 +10718,5 @@ quitNewScreen(screen){//«
 
 
 /*«OLD
-oldHandleKey(e, sym, ispress, code, mod){//«
-	const{actor}=this;
-	let marr;
-	if (this.locked) {
-		return;
-	}
-	if (this.isScrolling){//«
-		if (!ispress) {
-			if (sym.match(/^[A-Z]+_$/)){
-				if (sym==="SPACE_") return;
-			}
-			else return;
-		}
-		this.scrollNum = this.scrollNumHold;
-		this.isScrolling = false;
-		this.render();
-		return;
-	}//»
-	if (e && sym=="d_C") e.preventDefault();
-	if (!ispress) {//«
-		if (sym == "=_C") {
-			e.preventDefault();
-			set_new_fs(this.grFs+1);
-			return;
-		}
-		else if (sym == "-_C") {
-			e.preventDefault();
-			if (this.grFs-1 <= min_fs) return;
-			set_new_fs(this.grFs-1);
-			return;
-		}
-		else if (sym=="0_C") {
-			this.grFs = this.defFs;
-			set_new_fs(this.grFs);
-			return;
-		}
-		else if (sym=="c_CS") return this.doClipboardCopy();
-		else if (sym=="v_CS") return this.doClipboardPaste();
-		else if (sym=="a_CA") return this.doCopyBuffer();
-		else if (sym=="p_CA"){
-			this.paragraphSelectMode = !this.paragraphSelectMode;
-			this.doOverlay(`Paragraph select: ${this.paragraphSelectMode}`);
-			return;
-		}
-	}//»
-	if (code == KC['TAB'] && e) e.preventDefault();
-	else this.awaitNextTab = null;
-	if (e&&sym=="o_C") e.preventDefault();
-
-//CLKIRYUT
-	if (actor){
-		if (ispress){
-			if (actor.onkeypress) actor.onkeypress(e, sym, code);
-		}
-		else{
-			if (actor.onkeydown) actor.onkeydown(e ,sym, code);
-		}
-		return;
-	}
-
-	if (ispress){}
-	else if (!sym) return;
-
-	this.handleKey(sym, code, mod, ispress, e);
-}
-//»
-//From class Shell{}
-stripRedirs(com){//«
-	let redirs = [];
-	if (!com.prefix) com.prefix=[];
-	if (!com.suffix) com.suffix=[];
-	let pref = com.prefix;
-	for (let i=0; i < pref.length; i++){
-		if (pref[0].isHeredoc) {
-			redirs.push(pref[0]);
-			pref.splice(i, 1);
-			i--;
-		}
-		else if (pref[0].isRedir) {
-			redirs.push(pref[0].redir);
-			pref.splice(i, 1);
-			i--;
-		}
-	}
-	let suf = com.suffix;
-	for (let i=0; i < suf.length; i++){
-		if (suf[0].isHeredoc) {
-			redirs.push(suf[0]);
-			suf.splice(i, 1);
-			i--;
-		}
-		else if (suf[0].isRedir) {
-			redirs.push(suf[0].redir);
-			suf.splice(i, 1);
-			i--;
-		}
-
-	}
-	return redirs;
-}//»
 »*/
 
