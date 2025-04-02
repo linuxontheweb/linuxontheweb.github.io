@@ -10,7 +10,7 @@ So, let's look at handleBackspace @GFUIABRM, which is a really old/crappy algori
 that is really just meant for standard (non-history inserted) 1-character adjustments.
 
 It's actually the stuff @JEPOIKLMJYH
-
+BL
 */
 
 /*3/31/25: In order to do readline editing, in handleArrow @SBSORJJS Just added the check for:«
