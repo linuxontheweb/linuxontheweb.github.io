@@ -1,4 +1,17 @@
-/*4/1/25: In handleLineStr (esp for history scrolling) @PAKJSHFK, just created
+/*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
+permutations of command line history heredoc editing. So test this out with multiple
+heredocs.
+*/
+/*4/2/25:
+Just created an updated version of handleLetterPress, and added an adjustLinesAdd method 
+as a helper for helping with the overflow.
+
+Now need an updated handleBackspace @MSKEUTJDK
+
+*/
+
+//Notes«
+/*4/1/25: In handleLineStr (esp for history scrolling) @PAKJSHFK, just created«
 a lastln variable in order to do backward/forward linking of "implicit" line continuations (via
 _contPrev/_contNext variables tagged to the relevant lines), so that we can
 unambiguously know how to treat the various kinds of edits vis-a-vis these
@@ -11,8 +24,7 @@ that is really just meant for standard (non-history inserted) 1-character adjust
 
 It's actually the stuff @JEPOIKLMJYH
 BL
-*/
-
+»*/
 /*3/31/25: In order to do readline editing, in handleArrow @SBSORJJS Just added the check for:«
 	if (this.curShell && !this.#readLineCb) return
 
@@ -72,384 +84,6 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 
 
 »*/
-
-//«Notes
-
-/*2/10/25: BUG: Expanding ComSubs FAILS for this @DOPMNRUK, since the environment «
-set up by the for loop has not had a chance to get activated.
-  
-	$ HAR=`for LET in A B; do echo LET is: $LET; done` && echo $HAR 
-
-THE QUESTION IS: WHY WOULD WE ***EVER*** WANT TO PERFORM SUBSTITTIONS ***BEFORE***
-DOING SHELL.EXECUTE, @XMSKSLEO???
-
-SO THEN ALL COMSUBS SHOULD JUST REALLY WANT TO SAVE THE RAW STRINGS.
-
-...
-
-Now that we just used the raw strings (as newly enabled in the Scanner @ZOHJKL
-and @XMDJKT, this no longer works (since it lets the escapes pass through):
-
-  $ echo `echo \`ls\`` 
-
-...while these DO work (since there aren't any escapes to worry about):
-
-  $ echo `echo $(ls)` 
-  $ echo $(echo $(ls))
-  $ echo $(echo `ls`)
-
-Now that the first one works, don't we also need to, @JLXOPKEUJ, do the same thing
-with stripping the escapes from in front of the '$' character?
-
-
-  $ echo `echo \`ls \$DIR\`` 
-
-»*/
-/*2/9/25: I want to put a gain-node-like thing directly behind all compound commands that«
-are inside of a pipeline in order to filter out all EOF's that are coming from the commands
-inside of it, so that the following command only spits out 1 line instead of 4:
-  $ for LET in A B C; do echo LET is $LET; done | wc
-...and now that I just update the 'wc' command to stop reporting results after the first
-EOF is received, it only spits out the result from the first echo command.
-
-I guess all I needed to do was add the EOF filter @NDKSLRJL... just like I had it right
-below that in the other envPipeInCb!
-
-»*/
-/*2/8/25: Yesterday was a little crazy what with my linuxontheweb gitter chat room starting«
-to get active. Before going back there, I would like to get loop continues and breaks
-working...»*/
-/*2/6/25: Just updated com_cat to check for stdinLns (instead of stdin), in case of«
-this kind of this:
-  $ cat<<<$NOTHINGHERE
-
-Now I guess I can have a loopNum variable for embedded for/until/while loops, which
-can make use of continue [n] and break [n] (especially for interesting cases when n > 1).
-
-When the argument is more than the number of embedded loops, I guess we just
-end up using the outermost loop.
-
-
-
-»*/
-/*2/5/25 Issue with Terminal.readLine, when mixed with certain wonky commands: «
-
-THE PROBLEM IS THAT THE LINE FROM WHICH THE READLINE STARTS (AND THEREFORE
-KNOWING THE EXACT LINES THAT CONSTITUTE THE READLINE INPUT) *MIGHT* BECOME
-INVALIDATED BY OUTPUT ONTO THE TERMINAL *AFTER* THE READLINE IS INITIATED, AND
-*BEFORE* THE READLINE-TERMINATE ENTER IS PRESSED.
-
-
-Here is an example command:
-$ while read LN; do echo Hi from echo1: $LN; done | while read LN; do echo Hi from echo2:
- $LN; done;
-
-In Terminal.readLine, I created a readLineStartLine variable (@WMNYTUE), which
-is used by Terminal.handleReadlineEnter in order to figure out the readline
-string.  But this was not enough because of the possibility of, e.g. certain
-compound commands with pipeline chains (like above) to output their responses
-onto the terminal *after* a readline call has been initiated. So in the
-terminal's response, I checked for the existence of the readLineStartLine
-variable, and then reset it to the response method's internal 'curnum' variable
-(@QCKLURYH). Finally, after this is all finished, I get rid of the
-readLineStartLine variable (set it to null) at the end of Terminal.handleReadlineEnter.
-
-This appears to be "okay", as long as the user hasn't had time to type anything between
-the point that Terminal.readLine is first initiated and when there has been some additional
-output on the terminal. To solve *that* problem, all we would need to do is to pop off
-the existing readline lines, save them, and put them back on, at the end of the response
-function, ideally keeping the cursor's x position the same (so the user would hardly need to 
-blink during this entire process).
-
-But is there not *ANOTHER* solution, which would be to await the conclusion of
-this particular instance of pipeline propagation? I'm not sure this would be a
-"better" solution (if even really "doable") because of the amount of internal
-complexity required to make it work.  Besides, there's no necessary reason to
-make use of pipelines, i.e:
-
-$ while read LN; do true; done | while read LN; do echo Hi from echo2: $LN; done;
-
-So, all in all, the best solution (assuming it is needed, which there is *probably* a
-way to invent a scenario) seems to be that one about doing the popping off,
-saving, and putting back on, and then resetting Terminal.readLineStartLine.
-
-LO AND BEHOLD, A SCENARIO HAS BEEN INVENTED:
-
-$ while read LN; do echo Hi from echo1: $LN; done | while read LN; do msleep 5000; echo Hi from echo2: $LN; done;
-
-WE SEEM TO BE MAKING PROGRESS HERE, BUT I'M JUST NOT QUITE SURE WHAT POSSESSED
-US TO PUT A Terminal.forceNewline @SZKLIEPO (this "tacks" another line onto
-things, but it doesn't seem to mess up the end result too much... in fact, we
-can still use the backspace key to get back onto the line that we were previously
-on)!?!? I DON'T SEE HOW THIS PURELY INTERNAL OPERATION HAS ANYTHING TO TO WITH
-THE WORKINGS OF THE TERMINAL...
-
-
-»*/
-/*2/4/25: Just created class EnvReadLine{...}, in order to give compound commands «
-an "environmental variable" to allow them to provide a readline functionality
-from a preceding pipe. This overrides the crappy solution from yesterday.
-The point yesterday was to implement a pipeIn method for CompoundCom, and  wait for 
-the preceding command to finish, by pushing everything into an internal buffer
-and the waiting for the EOF, before setting stdin/stdinLns and then invoking 'run'.
-The *obvious* issue with this was that it didn't allow for "realtime" streaming,
-which is the way that the shell works. So instead of treating this as a stdin redirection,
-we are treating it as a readline-type of thing. So in Shell.executePipeline (@XWMNJUO), if
-there is a last_com, we create a new EnvReadLine, and then hook up the wiring.
-
-(Need to hook up the output of last_com's 'out' method with this compound_command's
-readLine.)
-
-If we are piping into a compound_command, and we want to allow the
-compound_command to make use of as an "envReadline" function, which is used
-just before performing term.readline. We can actually provide this
-"envReadline" no matter what, but commands that are *inside* a pipeline will
-simply read from pipeIn. What about putting readline directly in the command?
-
-Now @XCJEKRNK, we have a com.readLine method. If there is an 'envReadLine' in our
-opts, then will will use that. We will only get here if we are the first in our
-immediate pipeline, and we are embedded in a compound command that is *inside* of
-a pipeline..
-
-
-!!! VERY WEIRD BEHAVIOR !!!
-
-
-$ brum() { while read L; do echo FUNT: $L; done | while read L; do echo GUNT: $L; done; }
-$ echodelay -d 0 hi ho he | brum
-
-> GUNT: FUNT: hi
-> GUNT: he
-> GUNT: FUNT: he
-
-This only seems to happen with the combination of setting the delay to '0' *AND* using
-the same variable for both calls to read!?!?!?
-
-THIS ALSO DOESN'T WORK WITH MULTILINE ECHO:
-
-$ echo $'1111\n2222\n3333\n44444' | brum
-
-HOWEVER, AS LONG AS WE USE DIFFERENT VARIABLES, THEN IT ALL SEEMS TO WORK!!!!!
-
-»*/
-/*2/3/25: Piping into compound commands (is there not a mechanism for this?): «
-
-  cat BLAH.txt | while read LINE; do echo "HERE IS LINE: $LINE"; done
-
-Whereas there is a mechanism for:
-  while read LINE; do echo "HERE IS LINE: $LINE"; done <BLAH.txt
-
-*** THIS IS NOT TRUE ANYMORE (SEE ABOVE) ***
-OKAY: I just created a pipeIn method on the CompoundCom class (which all
-compound commands inherit from), and I changed init to _init, and turned the
-default init method to simply calling _init (so everybody with their own init
-methods must first call _init). At the end of _init, we are checking for
-prevCom and no stdin (@CWOPLIU). In that case, we are setting this.#buffer to
-[] (otherwise it is undefined). Now, when the system calls the run methods
-"normally" (@CWJKOI), we are promptly returning from *THAT* invocation -- if we
-have a defined buffer -- because we added a runOk method (@EJKFKJ), which the
-run methods *must* call first before proceeding.  Once the pipeIn method
-receives an EOF (from the preceeding command in the pipeline), then it calls
-this.run(true), which causes runOk to return true, and allows us to continue on
-with the run method.
-
-@FSHSKEOK is where we are constructing the pipelines. The "previous" command gets
-a nextCom property and pipeTo = true; The "next" command gets pipeFrom = true, and
-it is its responsibility to create a pipeIn on its command object.
-
-»*/
-/*1/29/25: On my way towards enabling 'cat | less' (not that anyone *really* needs it to work)...«
-Just need to do refactoring of the key handlers, to make everything less Byzantine, and
-get some clarity about what is *really* going on there.
-
-Just created two "getter" methods (@MSFUNPEJ) in order to get the terminal's (the REPL's) 
-own lines and line_colors arrays (as "getters", they are invoked without call parens).
-
-I am able to get the basic 'cat | less' functionality working now, such that
-Ctrl+c stops the eternal readLine mechanism from cat, but then pressing "q"
-(which at this point gets feed into less's onkeypress handler) does *NOT* set 
-the screen back to the terminal's REPL. Instead, we have to do *ANOTHER* Ctrl+c 
-in order to get back to our terminal screen...
-
-So, it looks like the trick to 'cat | less' was to send an EOF into readLineCb (@RMLDURHTJ),
-which gets returned into the 'cat' command, and allows it to terminate its
-otherwise interminable loop:
-	while (true){
-		let ln = await this.term.readLine();
-		if (isEOF(ln)){
-			this.ok();
-			return;
-		}
-		this.out(ln);
-	}
-
-...this means that awaiting the cat command gets finished in executePipeline,
-allowing us to get to @XJPMNYSHK, and allowing us to "normally" complete the
-executePipeline function (and the rest of the functions that get called by
-Shell.execute @SLDPEHDBF).
-
-I figure this is a fairly crucial thing to get "right" because it speaks to
-so many little things at the heart of the interactive shell mechanism.
-
-!!! Invalid paragraph below !!!
-
-But, I had to do a bunch of tortuous stuff related to printing onto the
-terminal's own REPL screen even when another screen (e.g. less's screen) was
-active.  For example, you can see in Terminal.handleLetterPress (@ZKLDUTHSK)
-that I am now this.termLines and this.termThis, in order to print the incoming
-characters onto the backgrounded terminal lines, so they don't get printed onto
-the current screen lines. But really, the "real" version of 'cat | less' does
-*NOT* do this at all.
-
-UPDATE: I JUST GOT IT WORKING LIKE THE "real" 'cat | less' by creating a
-Term.#readLineStr property when initiating the readLineCb (@XKLRYTJTK),
-which is "concatenated to" (@VEOMRUI), and then "sent along" @HWURJIJE.
-SO THIS GETS OF THE NEED TO HAVE ANY OF THE "TORTUOUS LOGIC" MENTIONED
-IN THE ABOVE PARAGRAPH. SO I JUST GOT RID OF IT (except for in the respone 
-mechanism)!!!
-
-
-
-
-Also, I got rid of the terminal's own ondevreload mechanism, although it still
-works in vim with the '-r' flag, so that:
-  $ vim  CoolStuff.js -r
-
-...allows you to use Ctrl+Alt+r (to invoke vim's toggle_reload_win in order to create a
-"reload window"), and we can then use "Alt+r" in order to go through the vim interface
-in order to reload it. Since that window is "owned" by the terminal window, we
-can't really do anything with it from the system level (including closing it via the
-"X" box on the upper right).
-
-»*/
-/*1/28/25: In com_read, there was, at first, an *error* because the command expected«
-'stdin' to be an array (it wanted to do stdin.shift()), but it was really a string, 
-due to recent changes. Then we *did* make it an array by splitting the 'stdin' string 
-on newlines in com_read @XDUITOYL, but this made the command:
-
-~$ { while read line; do echo HERE IS A LINE: $line; done; } < SOMEFILE.txt
-
-...do an infinite loop, since we kept on splitting the same constant string for
-every time the read command was invoked in the while loop. Then I tried to hunt
-down the proper place to create a stdinLns arg (i.e. an array, which is what 
-'stdin' previously was), which turned out to be in the area of @VOPDUKKD (in
-shell.executePipeline). Then the stdinLns arg finally gets passed into the
-appropriate command in shell.makeCommand. This is all still pretty complicated,
-and there should probably be some more refactoring (plus lots of testing).
-
-
-We started work today in com_grep trying to get the highlighting of the match working.
-So we created a method 'fmtColLn' (of the Com class, @XVEOIP), which is meant to format 
-(wrap to the terminal width) and color the output line, in the case that the output
-goes to the terminal rather than anywhere else (like a pipe or redirLines array).
-
-»*/
-/*1/26/26: MAJOR TERMINAL WEIRDNESS/BUGGINESS IN COMS/MAIL.JS (@SKPLMJFY). «
-WHEN WE GET ERROR MESSAGES BACK FROM THE SERVER.
-The issue is that this is how we were handling errors in the server:
-
-const no = (res, arg) => {
-    res.writeHead(404, {'Content-Type': "text/plain"});
-    if (arg.match(/error/i)) res.end(`${arg}\n`);
-    else if (arg) res.end(`Error: ${arg}\n`);
-    else res.end("Error\n");
-};
-
-And so now I just got rid of the ending newlines:
-
-const no = (res, arg) => {
-    res.writeHead(404, {'Content-Type': "text/plain"});
-    if (arg.match(/error/i)) res.end(`${arg}`);
-    else if (arg) res.end(`Error: ${arg}`);
-    else res.end("Error");
-};
-
-The only reason I can imagine wanted to put a newline there at the end
-is that the response would *actually* end unless there was one there.
-If I put them there (a loooong time ago in a galaxy far far away) for
-some trivial kind of reason related to client-side formatting, then that
-was pretty stupid.
-
-Regardless, the terminal's render mechanism gets all weird when there is a line
-color object that looks like: {0: [0, "#f99"]} ...which means that we are
-starting the coloring (#f99 in this case) at the beginning of the line. But
-instead of the coloring spanning some number (1 or more) characters, this
-tells the renderer to span 0 characters, which leads to...
-
-THe weird result that this entire process ends up creating a coloring span
-that spans as many lines as there are on the screen (but naturally goes away
-when the beginning line scrolls behind the "top" of the terminal screen), so
-that all of the lines will inherit this same coloring scheme.
-
-Now there are 3 different mechanisms in place to stop this off-putting
-result from happening. 
-
-1) As mentioned above, the server is no longer responding with ending newlines.
-
-2) The terminal's response method does this test on the string:
-
-	else if (out.match(/\n$/)){
-cwarn("Chomping ending NEWLINE!!!");
-		out = out.replace(/\n$/,"");
-	}
-
-3) The terminal's render method checks that the color object's "how many 
-characters to span" number is at no less than 1:
-
-if (obj[0] < 1){
-cwarn("GOT INVALID colobj", obj);
-continue;
-}
-
-»*/
-/*1/22/25 BUG @ZOPIRUTKS: The 'fname' argument to normPath was a Word object, «
-so this failed with Error: "path.match is not a function".  This error was caught 
-by the try/catch @LSPOEIRK, and was only printed in red on the terminal (rather than 
-having the full error stack sent to the JS console). So I just changed it back to 
-logging to the JS console via cerr(...).
-
-And just above that, we had to change
-the line: 
-  const {op}=tok;//WRONG!!!
-to:
-  const {val: op}=tok;
-
-I JUST CAN'T BELIEVE THAT WE HADN'T TESTED REDIRECTS ***AT ALL*** SINCE WE "FINISHED" THE
-SHELL UP A COUPLE WEEKS AGO!?!?!
-»*/
-/*1/19/25:« This doesn't work: $ cat | less
-
-...because less is the "actor" in the terminal (@CLKIRYUT), which eats up all key strokes,
-before the readLine mechanism can take effect @LOUORPR.
-
-An "actor" is whatever grabs the screen. We should distinguish between different kinds
-of actors:
-  editors: greedily grab every key event there is (editors want maximum control)
-  pagers: grab only key downs (command keys) unless there is an active "input line"
-    at the bottom of the screen to handle textual "command lines" (like searching 
-	for a string).
-
-Because 'grep' is *not* an "actor", the following command works:
-  $ cat | grep blah
-
-In the "real Linux" version of less, the command input mechanism doesn't seem
-to work ('cat' appears to eat up all the keystrokes).
-
-So we would need to check for #readLineCb before sending into the actor, which
-should eat up all...
-
-»*/
-/*1/18/25: Just made a 'bgdiv' under the 'tabdiv', which internally consists of«
-'nRows' worth of divs (@SJRMSJR), to be used for such things as multiline selection 
-toggling within a pager. We now have a 'bgRowStyles' array property on the terminal 
-object, so that the render loop can quickly set (or unset) the backgroundColor properties.
-
-Now we have "multiline toggling" (via multilineSels) plus exitChars -> exitChar
-functionality in less, and the saveFunc functionality in vim, in order to allow
-for more application-controllable workflows with these modules.
-
-»*/
-
 //»
 
 //Terminal Imports«
@@ -4752,9 +4386,13 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 	return newlines;
 
 }/*»*/
+spliceSource(len){
+	this.source.splice(this.index-len, len);
+	this.index-=len;
+}
 scanNextLineNot(delim){//«
 	if (this.eof()) {
-//cwarn("GOTEOF");
+//cwarn("GOTEOF", this.isInteractive);
 		return false;
 	}
 	let cur = this.index;
@@ -4963,6 +4601,17 @@ nextLinesUntilDelim(delim){//«
 		rv = this.scanner.scanNextLineNot(delim);
 	}
 	if (rv===true) return out;
+
+/*SAYEJSLSJ
+This hack of splicing the scanner's source text is needed in order to ensure that 
+the saved string (finalComStr) does *not* include a repetition of the partial part.
+This issue only ever happens when we editing a previously good heredoc delimeter token,
+after scrolling back in the command history, so we end up doing one part "auto
+heredoc parsing" (in this pathway), followed by another part of standard interactive
+parsing.
+*/
+	this.scanner.spliceSource(out.length+1);//Is this 1 always needed to account for the newline
+
 	return {partial: out};
 //	return false;
 }//»
@@ -5891,33 +5540,6 @@ async tokenize(){//«
 
 //If !heredocs && next is "<<" or "<<-", we need to:
 		if (heredocs && isNLs(next)){//«
-//		if (!interactive && heredocs && isNLs(next)){«
-/*if (interactive){
-//This happens now when using history scrolling with commands that have embedded 
-//newlines that are saved in the history file with tabs replacing the newlines
-throw new Error("AMIWRONG OR UCAN'T HAVENEWLINESININTERACTIVEMODE");
-}*/
-/*
-			for (let i=0; i < heredocs.length; i++){
-				let heredoc = heredocs[i];
-				let rv = this.nextLinesUntilDelim(heredoc.delim);
-				if (!isStr(rv)){
-if (interactive) {
-//SGFKGLSJR
-//log(rv);
-if (isObj(rv) && isStr(rv.partial)){
-//This is always an EOF condition, so we can break out of the outer loop
-//cwarn("PARTIAL", rv.partial);
-}
-	this.fatal(`error parsing the interactive heredoc (looking for "${heredoc.delim}")`);
-}
-else {
-  this.fatal("warning: here-document at line ? delimited by end-of-file");
-}
-				}
-				heredoc.tok.value = rv;
-			}
-»*/
 			while (heredocs.length){
 				let heredoc = heredocs.shift();
 				let rv = this.nextLinesUntilDelim(heredoc.delim);
@@ -5971,7 +5593,9 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		next = this.lookahead;
 
 	}
+
 	let heredocs_str = null;
+
 	if (heredocs){//«
 		if (!interactive) this.fatal("warning: here-document at line ? delimited by end-of-file");
 		for (let i=0; i < heredocs.length; i++){
@@ -5980,8 +5604,13 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 if (rv===EOF){
 this.fatal("aborted");
 }
-			if (heredoc.tok.partial) heredoc.tok.value = heredoc.tok.partial + rv.join("\n");
-			else heredoc.tok.value = rv.join("\n");
+			if (heredoc.tok.partial) {
+				heredoc.tok.value = heredoc.tok.partial + rv.join("\n");
+			}
+			else {
+				heredoc.tok.value = rv.join("\n");
+			}
+
 			if (heredocs_str === null) heredocs_str = "\n"+heredoc.tok.value;
 			else heredocs_str += "\n"+heredoc.tok.value;
 			heredocs_str += `\n${heredoc.delim}`;
@@ -6019,18 +5648,29 @@ this.fatal("aborted");
 		else this.fatal(`unsupported operator: '${rop}'`);
 	}//»
 	if (this.isInteractive) {
+/*
+The partial part can be in both the scanner source *AND* the heredocs_str.
+cwarn("SRC");
+log(this.scanner.source.join(""));
+cwarn("HDS");
+log(heredocs_str);
+*/
 		if (!this.mainParser.finalComStr) {
 //AGRHSORJF
 			this.mainParser.finalComStr = this.scanner.source.join("");
 		}
 		else this.mainParser.finalComStr += "\n"+this.scanner.source.join("");
 		if (heredocs_str !== null){
+//cwarn("WUT");
+//log(this.mainParser.finalComStr);
+//log(heredocs_str);
 			this.mainParser.finalComStr += heredocs_str;
 		}
 	}
 	this.tokens = toks;
 	this.numToks = toks.length;
 	return true;
+
 }//»
 
 };
@@ -8759,23 +8399,61 @@ seekLineEnd(){//«
 	this.render();
 }//»
 
-/*UNUSED: «shiftLine(x1, y1, x2, y2){
-	const{lines, scrollNum}=this;
-	let str_arr = [];
-	if (lines[scrollNum + y1]) {
-		str_arr = lines[scrollNum + y1].slice(x1);
+adjustLinesAdd(charg, fromy){//«
+/*This is for lines that are overflowing after splicing in a character.
+charg is whatever is left over from the previous line
+fromy is the line number where we start this process
+*/
+/*
+THe trivial case is that there is no line at fromy
+Here we need to check the line at fromy to see if it is a continuation.
+If not, we simply insert a new line, and call this a continuation.
+*/
+	const{lines, w} = this;
+	let ln = lines[fromy];
+	let prevln = lines[fromy-1];
+//cwarn(charg, fromy);
+	if (!ln){
+//The trivial case is that there is no line at fromy (we are at the end of the buffer)
+//cwarn("Push a new line");
+		ln = [charg];
+		ln._contPrev = prevln;
+		prevln._contNext = ln;
+		lines.push(ln);
+		return;
 	}
-	if (y1 == (y2 + 1)) {
-//This was always called once, and then with y1===y2, so we would never get into here,
-//so this entide function appears to be pointless
-		if (lines[scrollNum + y2]) {
-			lines[scrollNum + y2] = lines[scrollNum + y2].concat(str_arr);
+	if (!ln._contPrev){
+//This is *not* continued from the previous line, so insert one before this one
+//This case depends on weird stuff like history completion of multiline commands
+//cwarn("Create a new line and splice it in");
+		ln = [charg];
+		ln._contPrev = prevln;
+		prevln._contNext = ln;
+		lines.splice(fromy, 0, ln);
+		return;
+	}
+
+//	while (ln._contPrev){
+	while (true){
+		ln.unshift(charg);
+		if (ln.length <= w) break;
+		charg = ln.pop();
+//log("CH",charg);
+		let prev = ln;
+		ln = lines[++fromy];
+		if (ln) {
+			if (ln._contPrev) continue;
 		}
-		lines.splice(y1 + scrollNum, 1);
+		ln = [charg];
+		ln._contPrev = prev;
+		prev._contNext = ln;
+		lines.splice(fromy, 0, ln);
+//		lines.push(ln);
+		break;
 	}
-	return str_arr;
-}
-»*/
+
+}//»
+
 
 //»
 //History/Saving«
@@ -9787,6 +9465,52 @@ doCtrlC(){//«
 	}
 }
 //»
+handleLetterPress(char_arg, no_render){//«
+	const{lines, w} = this;
+	const end=()=>{
+		if (no_render) return;
+		this.render();
+	};
+	let {x} = this;
+	let y = this.cy();
+
+	const ln = lines[y];
+	if (!ln[x]) ln[x] = char_arg;
+	else ln.splice(x, 0, char_arg);
+	x+=1;
+	this.x = x;
+	let endch;
+	let fromy;
+	if (x === w){
+		endch = ln[x];
+		if (endch) ln.pop();
+		this.x = 0;
+		this.y++;
+		fromy = this.y + this.scrollNum;
+		this.scrollIntoView({noSetY: true});
+	}
+	else if (ln.length <= w){
+		return end();
+	}
+	else{
+		endch = ln.pop();
+	//The cursor is before the end and the line is too long
+		fromy = this.y+1 + this.scrollNum;
+	}
+
+	if (!endch){
+//This always means that we are at the *VERY END* of the terminal buffer, so the
+//new line always gets trivially pushed onto the end
+		let newln = [];
+		ln._contNext = newln;
+		newln._contPrev = ln;
+//		lines.push(newln);
+		lines.splice(fromy, 0, newln);
+		return end();
+	}
+	this.adjustLinesAdd(endch, fromy);
+	end();
+}//»
 
 handleInsert(val){//«
 	let arr = val.split("");
@@ -9840,14 +9564,17 @@ handleLineStr(str, if_no_render){//«
 //log(arr);
 	for (let lnstr of arr) {
 		let i;
+		let lastln;
 		if (!lnstr) {
-			if (curnum !== this.curPromptLine) this.lines[curnum] = [];
+			if (curnum !== this.curPromptLine) {
+				this.lines[curnum] = [];
+				lastln = null;
+			}
 			curnum++;
 			continue;
 		}
 //log();
 //PAKJSHFK
-		let lastln;
 		for (i=curnum;lnstr.length>0;i++) {
 			let curln = this.lines[i];
 			if (!curln) curln = [];
@@ -9870,7 +9597,6 @@ handleLineStr(str, if_no_render){//«
 			}
 			curpos = 0;
 			addlines++;
-//log(curln);
 		}
 		curnum++;
 	}
@@ -9891,8 +9617,7 @@ handleLineStr(str, if_no_render){//«
 handleTab(){//«
 	if (this.curShell) return;
 	this.doCompletion();
-}
-//»
+}//»
 handleArrow(code, mod, sym){//«
 //SBSORJJS
 	if (this.curShell && !this.#readLineCb) {
@@ -9946,7 +9671,7 @@ handlePage(sym){//«
 }
 //»
 handleBackspace(){//MSKEUTJDK«
-
+const{w}=this;
 /*
 If we are at 0 and backing onto a line that is less than the width, then we need to 
 try to fill that line with the extra characters that are on the current line.
@@ -9965,32 +9690,35 @@ try to fill that line with the extra characters that are on the current line.
 	let is_zero;
 
 	if (this.x > 0){//«
-//Simple rubout on the same line. In case this line is less than the width, we can just return
+//Simple rubout on the same line.
 		this.x--;
 		this.lines[this.cy()].splice(this.x, 1);
-		if (this.lines[this.cy()].length == this.w-1){
-		}
-		else if (this.lines[this.cy()].length < this.w-1){
-			this.render();
-			return;
-		}
-		else{
-cerr("HOW IS THE LINE LENGTH *GREATER* THAN Term.w-1???");
-log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
-		}
 	}//»
+//Everything below backs onto the previous line...
 	else if (!this.lines[this.cy()][0]){//«
 //Just a very simple matter of deleting a newline
-		this.lines[this.cy()-1].pop();
+		if (this.lines[this.cy()-1].length == w) this.lines[this.cy()-1].pop();
+//cwarn("DEL NEWLINE");
+		if (this.lines[this.cy()-1]._contNext) delete this.lines[this.cy()-1]._contNext;
 		this.lines.splice(this.cy(), 1);
 		this.y--;
 		this.x = this.lines[this.cy()].length;
 		this.render();
 		return;
 	}//»
+	else if (!this.lines[this.cy()-1].length){
+		this.lines.splice(this.cy()-1, 1);
+		this.y--;
+		if (this.y == -1) {
+			this.y = 0;
+			this.scrollNum--;
+		}
+		this.render();
+		return;
+	}
 	else {//«
 //JEPOIKLMJYH
-//The line is less than the width
+//Backing onto the prev line, which means we are
 		let thisln = this.lines[this.cy()];
 		let prevln = this.lines[this.cy()-1];
 		let donum = this.w - prevln.length;
@@ -10004,17 +9732,30 @@ log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
 			prevln.pop();
 		}
 		prevln.push(...gotchs);
+		if (!thisln.length){
+			this.lines.splice(this.cy(), 1);
+		}
+		else{
+			thisln._contPrev = prevln;
+			prevln._contNext = thisln;
+		}
 		this.y--;
 		this.x = prevln.length - (gotchs.length);
 	}//»
-
 	if (this.y == -1) {
 		this.y = 0;
 		this.scrollNum--;
 	}
 
-	let usey = is_zero ? 2 : 1;
+	this.adjustLinesDel(is_zero ? 1: 0);
+	this.render();
+	return;
+
+
+//	let usey = is_zero ? 2 : 1;
+//	let usey = is_zero ? 1: 0;
 //GFUIABRM
+
 	if (this.lines[this.cy()+usey]) {//«
 		if (this.lines[this.cy()].length == this.w-1) {
 			let char_arg = this.lines[this.cy()+usey][0];
@@ -10024,6 +9765,7 @@ log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
 				this.lines[this.cy()+usey].splice(0, 1);
 				let line;
 				for (let i=usey+1; line = this.lines[this.cy()+i]; i++) {
+//log(line);
 					let char_arg = line[0];
 					if (char_arg) {
 						line.splice(0,1);
@@ -10041,8 +9783,41 @@ log("LEN:",this.lines[this.cy()].length, "W-1", this.w-1);
 	}//»
 	this.render();
 
-}
-//»
+}//»
+adjustLinesDel(adj){//«
+	const {lines}=this;
+	let{x, w}=this;
+	let y = this.cy()+adj;
+	let ln = lines[y]
+///*
+	if (!ln){
+		lines.push([]);
+//cwarn("NO LINE HERE", y);
+		return;
+	}
+//	if (ln._contNext && !ln._contNext.length){
+//		delete ln._contNext;
+//		return;
+//	}
+//	if (ln && !ln.length){
+//		return;
+//	}
+	while(ln && ln.length < w && ln._contNext){
+		let diff = w - ln.length;
+		let chars = ln._contNext.splice(0, diff);
+		ln.push(...chars);
+		if (!ln._contNext.length){
+//log(ln._contNext);
+//log("????");
+			delete ln._contNext;
+			lines.splice(y+1, 1);
+			break;
+		}
+		ln = ln._contNext;
+		y++;
+//		didone = true;
+	}
+}//»
 handleDelete(mod){//«
 	if (mod == "") {
 		if (this.lines[this.cy()+1]) {
@@ -10078,101 +9853,6 @@ async handleEnter(opts={}){//«
 	await this.execute(str, opts);
 	this.sleeping = null;
 }//»
-handleLetterPress(char_arg, if_no_render){//«
-	const dounshift=()=>{//«
-//		let cy = this.y+this.scrollNum;
-		if ((lines[this.y+this.scrollNum].length) <= w) return;
-//		if ((lines[this.y+this.scrollNum].length) > w) {
-		let use_char = lines[this.y+this.scrollNum].pop()
-		if (!lines[this.y+this.scrollNum+1]) lines[this.y+this.scrollNum+1] = [use_char];
-		else lines[this.y+this.scrollNum+1].unshift(use_char);
-		if (this.x==w) {
-			this.x=0;
-			this.y++;
-		}
-		for (let i=1; line = lines[this.y+this.scrollNum+i]; i++) {
-			if (line.length > w) {
-				if (lines[this.y+this.scrollNum+i+1]) lines[this.y+this.scrollNum+i+1].unshift(line.pop());
-				else lines[this.y+this.scrollNum+i+1] = [line.pop()];
-			}
-			else {
-				if (lines[this.y+this.scrollNum+i-1].length > w) {
-					line.unshift(lines[this.y+this.scrollNum+i-1].pop());
-				}
-			}
-		}
-//	}
-	};//»
-	const{lines, w}=this;
-//	let cy;
-	let line;
-
-//Make room in the current line if the cursor is not at the end of the line
-//This might result in the line being too long.
-	if (lines && lines[this.scrollNum + this.y]) {
-		if (this.x < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
-			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
-//			this.shiftLine(this.x-1, this.y, this.x, this.y);
-		}
-	}
-
-	let usex = this.x+1;
-	let usey = this.y;
-	let cy = usey+this.scrollNum;
-
-//	this.y = usey;
-
-	let endch = null;
-	let didinc = false;
-//	cy = this.y+this.scrollNum;
-	if (usex == w) {
-//		if (lines[cy][this.x+1]) endch = lines[cy].pop();
-		if (lines[cy][usex]) endch = lines[cy].pop();
-		didinc = true;
-		usey++;
-		usex=0;
-	}
-
-	if (!lines[cy]) {
-		lines[cy] = [];
-//		lines[cy][0] = char_arg;
-	}
-//	else{
-	lines[cy][this.x] = char_arg;
-//	}
-//	else if (lines[cy] && char_arg) {
-//		lines[cy][this.x] = char_arg;
-//	}
-
-	let ln = lines[this.scrollNum+usey];
-	if (ln && ln[usex]) {//«
-		if (this.x+1==w) {
-			if (!didinc) {
-				usey++;
-				usex=0;
-			}
-			if (endch) {
-//				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
-				if (!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
-				else ln.unshift(endch);	
-			}
-		}
-		else usex = this.x+1;
-	}//»
-	else if (!ln||!ln.length||ln[0]===null) {
-		lines[this.scrollNum+usey] = [endch];
-	}
-
-	this.x = usex;
-	this.y = usey;
-
-	dounshift();
-
-	this.scrollIntoView({noSetY: true});
-	if (!if_no_render) this.render();
-	this.textarea.value = "";
-}
-//»
 handleReadlineEnter(){//«
 	if (this.actor){
 //HWURJIJE
@@ -10718,5 +10398,113 @@ quitNewScreen(screen){//«
 
 
 /*«OLD
+shiftLine(x1, y1, x2, y2){//«
+	const{lines, scrollNum}=this;
+	let str_arr = [];
+	if (lines[scrollNum + y1]) {
+		str_arr = lines[scrollNum + y1].slice(x1);
+	}
+	if (y1 == (y2 + 1)) {
+//This was always called once, and then with y1===y2, so we would never get into here,
+//so this entide function appears to be pointless
+		if (lines[scrollNum + y2]) {
+			lines[scrollNum + y2] = lines[scrollNum + y2].concat(str_arr);
+		}
+		lines.splice(y1 + scrollNum, 1);
+	}
+	return str_arr;
+}//»
+handleLetterPress(char_arg, if_no_render){//«
+	const dounshift=()=>{//«
+		if ((lines[this.y+this.scrollNum].length) <= w) return;
+		let use_char = lines[this.y+this.scrollNum].pop()
+		if (!lines[this.y+this.scrollNum+1]) lines[this.y+this.scrollNum+1] = [use_char];
+		else lines[this.y+this.scrollNum+1].unshift(use_char);
+		if (this.x==w) {
+			this.x=0;
+			this.y++;
+		}
+		for (let i=1; line = lines[this.y+this.scrollNum+i]; i++) {
+			if (line.length > w) {
+				if (lines[this.y+this.scrollNum+i+1]) lines[this.y+this.scrollNum+i+1].unshift(line.pop());
+				else lines[this.y+this.scrollNum+i+1] = [line.pop()];
+			}
+			else {
+				if (lines[this.y+this.scrollNum+i-1].length > w) {
+					line.unshift(lines[this.y+this.scrollNum+i-1].pop());
+				}
+			}
+		}
+	};//»
+	const{lines, w}=this;
+//	let cy;
+	let line;
+
+//Make room in the current line if the cursor is not at the end of the line
+//This might result in the line being too long.
+	if (lines && lines[this.scrollNum + this.y]) {
+		if (this.x < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
+			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
+//			this.shiftLine(this.x-1, this.y, this.x, this.y);
+		}
+	}
+
+	let usex = this.x+1;
+	let usey = this.y;
+	let cy = usey+this.scrollNum;
+
+//	this.y = usey;
+
+	let endch = null;
+	let didinc = false;
+//	cy = this.y+this.scrollNum;
+	if (usex == w) {
+//		if (lines[cy][this.x+1]) endch = lines[cy].pop();
+		if (lines[cy][usex]) endch = lines[cy].pop();
+		didinc = true;
+		usey++;
+		usex=0;
+	}
+
+	if (!lines[cy]) {
+		lines[cy] = [];
+//		lines[cy][0] = char_arg;
+	}
+//	else{
+	lines[cy][this.x] = char_arg;
+//	}
+//	else if (lines[cy] && char_arg) {
+//		lines[cy][this.x] = char_arg;
+//	}
+
+	let ln = lines[this.scrollNum+usey];
+	if (ln && ln[usex]) {//«
+		if (this.x+1==w) {
+			if (!didinc) {
+				usey++;
+				usex=0;
+			}
+			if (endch) {
+//				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
+				if (!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
+				else ln.unshift(endch);	
+			}
+		}
+		else usex = this.x+1;
+	}//»
+	else if (!ln||!ln.length||ln[0]===null) {
+		lines[this.scrollNum+usey] = [endch];
+	}
+
+	this.x = usex;
+	this.y = usey;
+
+	dounshift();
+
+	this.scrollIntoView({noSetY: true});
+	if (!if_no_render) this.render();
+	this.textarea.value = "";
+}
+//»
 »*/
 
