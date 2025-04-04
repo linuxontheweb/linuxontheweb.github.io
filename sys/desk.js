@@ -824,12 +824,14 @@ const open_help=()=>{open_app("Help");}
 
 const DESK_CONTEXT_MENU=[
 	"New",[
-		"Folder::Ctrl+Alt+d",
+//		"Folder::Ctrl+Alt+d",
+		"Folder",
 		()=>{
 			if (!SHOW_ICONS) return show_overlay(`SHOW_ICONS == ${SHOW_ICONS}`);
 			make_new_icon(desk, FOLDER_APP)
 		},
-		"Text File::Ctrl+Alt+f",
+//		"Text File::Ctrl+Alt+f",
+		"Text File",
 		()=>{
 			if (!SHOW_ICONS) return show_overlay(`SHOW_ICONS == ${SHOW_ICONS}`);
 			make_new_icon(desk, "Text")

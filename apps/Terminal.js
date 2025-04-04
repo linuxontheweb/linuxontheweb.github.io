@@ -138,6 +138,8 @@ const RIGHT_KC = KC['RIGHT'];
 const UP_KC = KC['UP'];
 const DOWN_KC = KC['DOWN'];
 const DEL_KC = KC['DEL'];
+
+const INT_ALNUM_RE = /[0-9\p{Letter}]/u;
 /*
 RIGHT
 UP
@@ -8099,7 +8101,7 @@ cerr("What is the array size different from the numStatLines????");
 //»
 
 //»
-//Curses«
+//Cursor/Curses«
 
 getGrid(){//«
 
@@ -8328,36 +8330,28 @@ charRight(no_render){//«
 	}
 }//»
 wordOver(is_left){//«
-	const getch = ()=>{
+//	const INT_ALNUM_RE = /[0-9A-Za-z\u00C0-\u1FFF\u2800-\uFFFD]/;
+	const getch = () => {
 		return this.lines[this.y+this.scrollNum][this.x];
 	};
-	const curpos = ()=>{
+	const curpos = () => {
 		return [this.x, this.y+this.scrollNum];
 	};
-	const samepos = (pos1, pos2) =>{
+	const samepos = (pos1, pos2) => {
 		return pos1[0]===pos2[0] && pos1[1] === pos2[1];
 	};
-/*
-	let kc1, kc2;
-	if (is_left) {
-		kc1 = LEFT_KEYCODE;
-		kc2 = RIGHT_KC;
-	}
-	else{
-		kc1 = RIGHT_KC;
-		kc2 = LEFT_KEYCODE;
-	}
-*/
-//	this.handleArrow(kc1, "");
 	is_left ? this.charLeft(true) : this.charRight(true);
 	let pos1 = curpos();	
 	let ch = getch();
-	let have_space = ch === " ";
+//	let have_space = (ch && !ch.match(/^[a-zA-Z0-9]$/));
+	let have_space = !INT_ALNUM_RE.test(ch);
 	if (have_space){
 //Rewind to the end of a word
 		while (true){
 			is_left ? this.charLeft(true) : this.charRight(true);
-			if (getch() !== " ") break;
+			let ch = getch();
+//			if (ch && ch.match(/^[a-zA-Z0-9]$/)) break;
+			if (INT_ALNUM_RE.test(ch)) break;
 			let pos2 = curpos();
 			if (samepos(pos1, pos2)) break;
 			pos1 = pos2;
@@ -8368,11 +8362,17 @@ wordOver(is_left){//«
 	while (true){
 		is_left ? this.charLeft(true) : this.charRight(true);
 		let ch = getch();
-		if (ch==" "){
+//		if (ch==" "){
+//		if (ch && !ch.match(/^[a-zA-Z0-9]$/)){
+		if (ch && !INT_ALNUM_RE.test(ch)) {
 			is_left ? this.charRight(true) : null;
 			break;
 		}
-		else if ((is_left && this.x === 0 && ch && ch != " ") || (!is_left && !ch)){
+//		else if (is_left && ch && ch.match(/^[a-zA-Z0-9]$/)&& this.x === 0 && !this.lines[this.y+this.scrollNum]._contPrev){
+		else if (is_left && ch && INT_ALNUM_RE.test(ch) && this.x === 0 && !this.lines[this.y+this.scrollNum]._contPrev){
+			break;
+		}
+		else if (!is_left && !ch){
 			break;
 		}
 		let pos2 = curpos();
@@ -8459,10 +8459,15 @@ If not, we simply insert a new line, and call this a continuation.
 //History/Saving«
 
 historyUp(){//«
+
 	if (!(this.bufPos < this.history.length)) return;
 	if (this.commandHold == null && this.bufPos == 0) {
 		this.commandHold = this.getComArr().join("");
 		this.commandPosHold = this.getComPos() + this.promptLen;
+	}
+	else if (this.bufPos){
+//Always update the history to include any edits made (that weren't entered as commands)
+		this.history[this.history.length - this.bufPos] = this.getComArr().join("");
 	}
 	this.bufPos++;
 	let str = this.history[this.history.length - this.bufPos];
@@ -8479,6 +8484,9 @@ historyUp(){//«
 historyDown(){//«
 
 	if (!(this.bufPos > 0)) return;
+
+//Always update the history to include any edits made (that weren't entered as commands)
+	this.history[this.history.length - this.bufPos] = this.getComArr().join("");
 
 	this.bufPos--;
 	if (this.commandHold==null) return;
@@ -9329,7 +9337,7 @@ return;
 		out=" \n ";
 	}
 	else if (out.match(/\n$/)){
-cwarn("Chomping ending NEWLINE!!!");
+//cwarn("Chomping ending NEWLINE!!!");
 		out = out.replace(/\n$/,"");
 	}
 	out = out.split("\n");
@@ -9515,19 +9523,27 @@ handleLetterPress(char_arg, no_render){//«
 handleInsert(val){//«
 	let arr = val.split("");
 	let gotspace = false;
+	let num_skipped = 0;
 	for (let ch of arr) {
 		let code = ch.charCodeAt();
-		if (!(code >= 32 && code <= 126)) {
-			if (code==10) continue;
+		if (INT_ALNUM_RE.test(ch)){}
+//		else if (code === 10) continue;
+		else {
 			code = 32;
+			num_skipped++;
 		}
+//		if (!(code >= 32 && code <= 126)) {
+//			if (code==10) continue;
+//			code = 32;
+//		}
 		if (code==32) {
 			if (gotspace) continue;
 			gotspace = true;
 		}
 		else gotspace = false;
-		this.handleKey(null,code, null, true);
+		this.handleKey(null, code, null, true);
 	}
+	if (num_skipped) this.doOverlay(`Skipped: ${num_skipped} chars`);
 }
 //»
 handleLineStr(str, if_no_render){//«
@@ -9547,11 +9563,14 @@ handleLineStr(str, if_no_render){//«
 	}//»
 	if (str=="") {}
 	else if (!str) return;
-	let curnum = this.curPromptLine;
+	let cpl = this.curPromptLine;
+//	let curnum = this.curPromptLine;
+	let curnum = cpl;
 	let curx = this.promptLen;
 	this.linesHold2 = this.lines;
 	if (!this.comScrollMode) {
-		this.lines = copy_lines(this.lines, this.curPromptLine)
+//		this.lines = copy_lines(this.lines, this.curPromptLine)
+		this.lines = copy_lines(this.lines, cpl)
 		if (did_fail) {
 			this.clear();
 			return 
@@ -9566,14 +9585,14 @@ handleLineStr(str, if_no_render){//«
 		let i;
 		let lastln;
 		if (!lnstr) {
-			if (curnum !== this.curPromptLine) {
+//			if (curnum !== this.curPromptLine) {
+			if (curnum !== cpl) {
 				this.lines[curnum] = [];
 				lastln = null;
 			}
 			curnum++;
 			continue;
 		}
-//log();
 //PAKJSHFK
 		for (i=curnum;lnstr.length>0;i++) {
 			let curln = this.lines[i];
@@ -9600,8 +9619,8 @@ handleLineStr(str, if_no_render){//«
 		}
 		curnum++;
 	}
-	this.scrollIntoView();
 	this.y = this.lines.length-1-this.scrollNum;
+//	this.scrollIntoView();
 	this.x = curx;
 	if (this.x==this.w) {
 		this.y++;
@@ -9609,11 +9628,27 @@ handleLineStr(str, if_no_render){//«
 			this.lines.push([]);
 		}
 		this.x=0;
-		this.scrollIntoView();
 	}
+	this.scrollIntoView();
+
+//If the prompt is offscreen, scroll forward as much as possible in order to show as much
+//of the command as possible. For commands that take up too many lines, the prompt will
+//always be offscreen, since we are keeping the cursor on the last line of the command.
+	if (cpl - this.scrollNum < 0){
+		let h_min_1 = this.h-1;
+		let y = this.y;
+		let scr_num = this.scrollNum;
+		while (y < h_min_1 && scr_num > 0) {
+			y++;
+			scr_num--;
+			if (scr_num === cpl) break;
+		}
+		this.y = y;
+		this.scrollNum = scr_num;
+	}
+
 	if (!if_no_render) this.render();
-}
-//»
+}//»
 handleTab(){//«
 	if (this.curShell) return;
 	this.doCompletion();
@@ -9829,8 +9864,7 @@ handleDelete(mod){//«
 			this.render();
 		}
 	}
-}
-//»
+}//»
 async handleEnter(opts={}){//«
 	if (this.sleeping) return;
 	this.bufPos = 0;
