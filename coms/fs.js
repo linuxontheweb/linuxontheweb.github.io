@@ -575,7 +575,7 @@ async run(){
 	let{args, err: _err, term}=this;
 	let have_error=false;
 	const err=mess=>{
-		_err(mess);
+		this.err(mess);
 		have_error = true;
 	};
 	while (args.length) {

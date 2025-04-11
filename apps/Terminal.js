@@ -1,3 +1,5 @@
+
+//Notes«
 /*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
 permutations of command line history heredoc editing. So test this out with multiple
 heredocs.
@@ -9,8 +11,6 @@ as a helper for helping with the overflow.
 Now need an updated handleBackspace @MSKEUTJDK
 
 */
-
-//Notes«
 /*4/1/25: In handleLineStr (esp for history scrolling) @PAKJSHFK, just created«
 a lastln variable in order to do backward/forward linking of "implicit" line continuations (via
 _contPrev/_contNext variables tagged to the relevant lines), so that we can
@@ -4204,7 +4204,7 @@ scanOperator(){/*«*/
 //	return {type:"c_op", c_op:str, start, val: str, isOp: true};
 
 }/*»*/
-async scanWord(par, env){/*«*/
+async scanWord(par, env){//«
 /*
 
 Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
@@ -4234,7 +4234,8 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 				if (this.isInteractive){
 //We treat the escape character as if it doesn't exist, and everything continues on the same line
 //with the ps1 prompt
-					this.index++;
+					this.source.pop();
+					this.length--;
 					await this.more(true);
 					continue;
 				}
@@ -4309,9 +4310,9 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			this.index++;
 		}
 		else if (ch==="\n"||ch===" "||ch==="\t") break;
-		else if (OPERATOR_CHARS.includes(ch)) {//«
+		else if (OPERATOR_CHARS.includes(ch)) {
 			break;
-		}//»
+		}
 		else {
 			word.push(ch);
 		}
@@ -4364,7 +4365,7 @@ log(wrd);
 	_word.raw = this.source.slice(start, this.index).join("");
 //log(raw);
 	return _word;
-}/*»*/
+}//»
 scanNewlines(par, env, heredoc_flag){/*«*/
 
 	let start = this.index;
@@ -4388,10 +4389,11 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 	return newlines;
 
 }/*»*/
-spliceSource(len){
+spliceSource(len){//«
 	this.source.splice(this.index-len, len);
 	this.index-=len;
-}
+	this.length-=len;
+}//»
 scanNextLineNot(delim){//«
 	if (this.eof()) {
 //cwarn("GOTEOF", this.isInteractive);
@@ -4444,9 +4446,7 @@ return await this.scanWord(null, this.env);
 
 }//»
 
-};
-
-//»
+};//»
 
 //Parser«
 

@@ -20,7 +20,8 @@ window.LOTW = NS;
 //»
 
 //Query string«
-const qObj={};
+const qObj=(()=>{
+const obj={};
 let srch = window.location.search;
 if (srch) {
 	let rep_qarr = [];
@@ -33,7 +34,7 @@ if (srch) {
 		let key = qelm.shift();
 //		key = key.replace(/-/g,"_")
 		let val = qelm.join("=");
-		qObj[key] = val;
+		obj[key] = val;
 		if (nogo.indexOf(key) > -1) {didrep = true}
 		else rep_qarr.push(qarr[i]);
 	}
@@ -44,7 +45,10 @@ if (srch) {
 		if (!userep) q = ""; 
 		window.history.pushState({newstate: 1}, "System", window.location.origin + window.location.pathname + q + userep);
 	}//»
-}//»
+}
+return obj;
+})();
+//»
 //FS«
 
 //const PROJECT_ROOT_MOUNT_NAME = "this";
@@ -95,7 +99,7 @@ const SHELL_ERROR_CODES={
 
 //Apps/Extensions«
 
-const APPLICATIONS_MENU=[//«
+const APPLICATIONS_MENU = [//«
 	"Text\xa0Editor","TextEdit",
 	"Unicode\xa0Symbols", "util.Unicoder",
 	"Your\xa0App\xa0Here", "YourApp",
@@ -132,7 +136,7 @@ let TE = TEXT_EDITOR_APP;
 let IA = IMAGE_APP;
 let MA = MEDIA_APP;
 let AA = "games.Arcade";
-const EXT_TO_APP_MAP={//«
+const EXT_TO_APP_MAP = {//«
 	app:"Application",
 	txt:TE,
 	js:TE,
@@ -159,7 +163,7 @@ const ALL_EXTENSIONS_RE= new RegExp("^(.+)\\.(" + ALL_EXTENSIONS.join("|") + ")$
 /* Interesting Icons
 Large kitchen knife 1f52a
 */
-const APPICONS={//«
+const APPICONS = {//«
 	Launcher:"1f680",
 	HTML:"1f310",
 	Folder:"1f4c1",
@@ -174,7 +178,8 @@ const APPICONS={//«
 	Noisecraft:"1f3b9",
 	VideoCutter: "1f4fd",//Film Projector
 	Loader:"1f303",//
-	Meta:"1f528"//Hammer
+	Meta:"1f528",//Hammer
+	YourApp: "2615"
 }//»
 //»
 

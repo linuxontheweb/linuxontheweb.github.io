@@ -36,6 +36,7 @@ We are giving a console warning if the type fields do not match upon updating.
 
 //import { util } from "./util.js";
 //import { globals } from "./config.js";
+const NS = LOTW;
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 
@@ -58,9 +59,8 @@ const {
 	toBlob
 } = util;
 
-const sleep=()=>{return new Promise((Y,N)=>{});}
+//const sleep=()=>{return new Promise((Y,N)=>{});}
 
-const NS = LOTW;
 const {
 //	PROJECT_ROOT_MOUNT_NAME,
 	FS_DB_NAME,
@@ -77,7 +77,6 @@ const {
 	ALL_EXTENSIONS_RE
 } = globals;
 
-const ispos = arg=>{return isNum(arg,true);}
 
 //»
 
@@ -375,13 +374,15 @@ globals.fs = new function() {
 
 let rootId;
 
-const root={name:"/",appName:FOLDER_APP,kids:{},treeroot:true,type:"root",sys:true,path:"/",fullpath:"/",done:true};
-root.kids['..'] = root;
-root.kids['.'] = root;
-root.root = root;
-//root.par = root;
-this.root = root;
+const root=(()=>{
+	let o = {name:"/",appName:FOLDER_APP,kids:{},treeroot:true,type:"root",sys:true,path:"/",fullpath:"/",done:true};
+	o.kids['..'] = o;
+	o.kids['.'] = o;
+	o.root = o;
+	return o;
+})();
 globals.root = root;
+this.root = root;
 const db = new FsDB();
 
 
@@ -402,17 +403,10 @@ const root_dirs = ["tmp", "home", "var"];
 const MAX_DAYS = 90;//Used to determine how to format the date string for file listings
 const MAX_LINK_ITERS = 8;
 
-const sleep = ()=>{return new Promise((Y,N)=>{});};
+//const sleep = ()=>{return new Promise((Y,N)=>{});};
 const NOOP=()=>{};
 const FATAL=s=>{throw new Error(s);};
 
-String.prototype.regpath = function(if_full) {//«
-    let str = this;
-    if (if_full) str = "/" + str;
-    str = str.replace(/\/+/g, "/");
-    if (str == "/") return "/";
-    return str.replace(/\/$/, "");
-}//»
 
 const bad_link_cbs = {};
 
@@ -725,15 +719,6 @@ const getNodesByBlobId = async (blobId) =>{//«
 //	log(rv);
 };//»
 
-const pathToNode = async(path, if_link, if_retall) => {//«
-	let [ret,lastdir,usepath] = await path_to_node(path, if_link, 0);
-	if (ret) {
-		if (if_retall) return [ret,lastdir,usepath];
-		return ret;
-	}
-	if (if_retall) return [false,lastdir,usepath];
-	return false;
-};//»
 const try_get_kid=async(nm, curpar)=>{//«
 	let rv = await db.getNodeByNameAndParId(nm, curpar.id);
 	if (!check_db_rv(rv)) return;
@@ -787,8 +772,10 @@ const path_to_node = async(patharg, if_get_link, iter) =>{//«
 2) The node is NOT a link
 3) We have a link, and want the link node iteself
 »*/
-		if (!node||node.appName!==LINK_APP||if_get_link) return [node, curpar, path];
-		if (iter > MAX_LINK_ITERS) return [null, curpar, path];
+//		if (!node||node.appName!==LINK_APP||if_get_link) return [node, curpar, path];
+		if (!node||node.appName!==LINK_APP||if_get_link) return node;
+//		if (iter > MAX_LINK_ITERS) return [null, curpar, path];
+		if (iter > MAX_LINK_ITERS) return null;
 		if (node.type==FS_TYPE){
 			if (!node.link){
 cerr(`NO node.link WITH node.appName==LINK_APP!?!?, (VERIFY IT HERE: ${node.appName})`);
@@ -804,13 +791,16 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 	};//»
 	let node;
 	let path = normPath(patharg);
-	if (path==="/") return [root,null,path];
+//	if (path==="/") return [root,null,path];
+	if (path==="/") return root;
 	let parts = path.split("/");
 	parts.shift();
 	let topname = parts.shift();
 	let curpar = root.kids[topname];
-	if (!curpar) return [null, root, path];
-	if (!parts.length) return [curpar, root, path];
+//	if (!curpar) return [null, root, path];
+	if (!curpar) return null;
+//	if (!parts.length) return [curpar, root, path];
+	if (!parts.length) return curpar;
 
 	let curkids = curpar.kids;
 	let curpath = curpar.fullpath;
@@ -829,18 +819,22 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 				}
 				else await popDir(curpar);
 				gotkid = curkids[nm];
-				if (!gotkid) return [null, curpar, path];
+//				if (!gotkid) return [null, curpar, path];
+				if (!gotkid) return null;
 				curpar = gotkid;
 			}
 			let newpar = curkids[nm];
-			if (!(newpar&&newpar.appName===FOLDER_APP)) return [null, curpar, path];
+//			if (!(newpar&&newpar.appName===FOLDER_APP)) return [null, curpar, path];
+			if (!(newpar&&newpar.appName===FOLDER_APP)) return null;
 			curpar = newpar;
 		}//»
 		if (curpar.appName===LINK_APP){//«
-			if (iter > MAX_LINK_ITERS) return [null, curpar, path];
+//			if (iter > MAX_LINK_ITERS) return [null, curpar, path];
+			if (iter > MAX_LINK_ITERS) return null;
 			if (curpar.type==FS_TYPE){
 				let gotdir = await curpar.ref;
-				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return [null, curpar, curpath];
+//				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return [null, curpar, curpath];
+				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return null;
 				curpar = gotdir;
 			}
 			else {
@@ -849,7 +843,8 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 				let rv = await get_data_from_fs_file(curpar.file,"text");
 				let [gotdir, lastdir, gotpath] = await path_to_node(rv, if_get_link, ++iter);
-				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return [null, curpar, gotpath];
+//				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return [null, curpar, gotpath];
+				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return null;
 				curpar = gotdir;
 			}
 		}//»
@@ -871,7 +866,8 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 	if (curpar.type!==FS_TYPE){//«
 		await popDir(curpar);
 		let gotnode = curkids[fname];
-		if (!gotnode) return [null, curpar, path];
+//		if (!gotnode) return [null, curpar, path];
+		if (!gotnode) return null;
 		node = gotnode;
 		if (!node.root) node.root = curpar.root;
 		return done();
@@ -882,77 +878,19 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 	curkids[fname] = kid;
 	return done();
 
-};//»
-//String.prototype.to(Node|Text|Lines|Bytes|Buffer|Blob)«
-{
-const toNode = async function(opts={}) {//«
-	let s = this+"";
-	if (s.match(/^\x2f/)){}
-	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
-	else {
-cerr("Cannot construct a full path!");
-		return false;
-	}
-	let node = await pathToNode(normPath(s), opts.getLink);
-	if (!node) return node;
-	if (opts.doPopDir && node.isDir===true){
-		await popDir(node, opts);
-	}
-	return node;
-};//»
-let _ = String.prototype;
-_.toNode=toNode;
-_.toParNodeAndName=async function(opts={}){//«
-	let s = this+"";
-	if (s.match(/^\x2f/)){}
-	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
-	s = normPath(s);
-	let arr = s.split("/");
-	let fname = arr.pop();
-	let parpath = arr.join("/");
-	let parnode = await pathToNode(parpath);
-	if (!(parnode && parnode.appName === FOLDER_APP)) {
-cerr(`${parpath}: Not a directory!`);
-		return;
-	}
-	return [parnode, fname, s];
-}//»
-_.toText = async function(opts = {}) {
-	let node = await this.toNode(opts);
-	if (!node) return;
-	if (!node.isFile) return;
-	let txt = await node.text;
-	if (opts.lines) return txt.split("\n");
-	return txt;
 };
-_.toLines=function(opts={}){
-	opts.lines = true;
-	return this.toText(opts);
-}
-_.toBytes=async function(opts={}){let node=await this.toNode(opts);if(node)return node.bytes;};
-_.toBuffer=async function(opts={}){let node=await this.toNode(opts);if(node)return node.buffer;};
-_.toBlob=async function(opts={}){//«
-	let node = await this.toNode(opts);
-	if (!node) return;
-	let buf = await node.buffer;
-	if (!buf) return;
-	if (opts.type) return new Blob([buf], {type: opts.type});
-	return new Blob([buf]);
-};//»
-_.toJson=async function(opts={}){//«
-	let node = await this.toNode(opts);
-	if (!node) return;
-	let text = await node.text;
-	if (!text) return;
-	try{
-		return JSON.parse(text);
+const pathToNode = path_to_node;
+/*«Old implementation of path_to_node returned an array of 3 values
+const pathToNode = async(path, if_link, if_retall) => {
+	let [ret,lastdir,usepath] = await path_to_node(path, if_link, 0);
+	if (ret) {
+		if (if_retall) return [ret,lastdir,usepath];
+		return ret;
 	}
-	catch(e){
-cerr(e);
-	}
-};//»
-}
-
+	if (if_retall) return [false,lastdir,usepath];
+	return false;
+};
+»*/
 //»
 
 const getPathByDirId=async(idarg)=>{//«
@@ -2156,7 +2094,7 @@ return kids;
 /*«This is old stuff (mounting backend folders onto /mnt) that was replaced by a
 //single /site dir which uses a backend generated "list.json" file, that is
 //created each time that the local repo is synced to github. This old method
-//requires a dynamic backed (Node.js).
+//requires a dynamic backend (Node.js).
 
 const populate_rem_dirobj = async(patharg, cb, dirobj, opts = {}) => {//«
 	let holdpath = patharg;
@@ -2277,6 +2215,7 @@ let update_cb, done_cb, error_cb;
 let stream_started = false, stream_ended = false;
 let saving_from_file = false;
 let cancelled = false;
+const ispos = arg=>{return isNum(arg,true);}
 const cerr=str=>{if(error_cb)error_cb(str);else cerr(str);};
 const get_new_fname = (cb, if_force) => {//«
 	const check_fs_by_path = async(fullpath, cb) => {
@@ -2346,7 +2285,8 @@ this.set_cwd = async(arg) => {//«
 cerr(`Invalid cwd: ${arg} (must be a fullpath)"`);
 		return;
 	}
-	let [ret] = await path_to_node(arg);
+//	let [ret] = await path_to_node(arg);
+	let ret = await path_to_node(arg);
 	if (!(ret && ret.appName == FOLDER_APP)) {
 cerr(`Invalid directory path: ${arg}`);
 		return;
@@ -2682,6 +2622,85 @@ const path_to_par_and_name = (path) => {
 	return [arr.join("/"), name];
 }
 */
+//»
+
+//String.prototype.regpath|to(Node|Text|Lines|Bytes|Buffer|Blob)«
+{
+const toNode = async function(opts={}) {//«
+	let s = this+"";
+	if (s.match(/^\x2f/)){}
+	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
+	else {
+cerr("Cannot construct a full path!");
+		return false;
+	}
+	let node = await pathToNode(normPath(s), opts.getLink);
+	if (!node) return node;
+	if (opts.doPopDir && node.isDir===true){
+		await popDir(node, opts);
+	}
+	return node;
+};//»
+let _ = String.prototype;
+_.regpath = function(if_full) {//«
+    let str = this;
+    if (if_full) str = "/" + str;
+    str = str.replace(/\/+/g, "/");
+    if (str == "/") return "/";
+    return str.replace(/\/$/, "");
+}//»
+_.toNode=toNode;
+_.toParNodeAndName=async function(opts={}){//«
+	let s = this+"";
+	if (s.match(/^\x2f/)){}
+	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
+	s = normPath(s);
+	let arr = s.split("/");
+	let fname = arr.pop();
+	let parpath = arr.join("/");
+	let parnode = await pathToNode(parpath);
+	if (!(parnode && parnode.appName === FOLDER_APP)) {
+cerr(`${parpath}: Not a directory!`);
+		return;
+	}
+	return [parnode, fname, s];
+}//»
+_.toText = async function(opts = {}) {
+	let node = await this.toNode(opts);
+	if (!node) return;
+	if (!node.isFile) return;
+	let txt = await node.text;
+	if (opts.lines) return txt.split("\n");
+	return txt;
+};
+_.toLines=function(opts={}){
+	opts.lines = true;
+	return this.toText(opts);
+}
+_.toBytes=async function(opts={}){let node=await this.toNode(opts);if(node)return node.bytes;};
+_.toBuffer=async function(opts={}){let node=await this.toNode(opts);if(node)return node.buffer;};
+_.toBlob=async function(opts={}){//«
+	let node = await this.toNode(opts);
+	if (!node) return;
+	let buf = await node.buffer;
+	if (!buf) return;
+	if (opts.type) return new Blob([buf], {type: opts.type});
+	return new Blob([buf]);
+};//»
+_.toJson=async function(opts={}){//«
+	let node = await this.toNode(opts);
+	if (!node) return;
+	let text = await node.text;
+	if (!text) return;
+	try{
+		return JSON.parse(text);
+	}
+	catch(e){
+cerr(e);
+	}
+};//»
+}
+
 //»
 
 //»

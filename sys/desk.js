@@ -367,6 +367,1218 @@ const {
 
 //»
 
+class ContextMenu {//«
+
+constructor(Desk, elem, loc, prevelem){//«
+
+//this.bgCo
+this.Desk = Desk;
+this.loc = loc;
+this.prevelem = prevelem;
+//this.elem = desk;
+this.elem = elem;
+this.killed = false;
+//this.self = this;
+this.curitem = null;
+this.kids = [];
+let menu = make('div');//«
+menu.style.userSelect="none";
+menu.className="context_menu";
+menu._bor="1px solid #aaa";
+menu.style.borderRadius="2px";
+menu._bgcol="#c0c0c0";
+menu._padt=5;
+menu._padb=2;
+menu._fs=16;
+menu._pos="absolute";
+menu.style.minWidth = 180;
+this.menu = menu;
+
+let usex=loc.X-Desk.winx(), usey=loc.Y-Desk.winy();
+if (prevelem) {
+	usex-=8;
+	usey-=2;
+}
+if (loc.BREL===true){
+	menu._y="";
+	menu._b = usey;
+}
+else {
+	menu._b="";
+	menu._y = usey;
+}
+if (loc.RREL===true) {
+	menu._x = "";
+	menu._r=usex;
+}
+else{
+	menu._r="";
+	menu._x = usex;
+}
+//»
+this.elem.context_menu = this;//«
+this.menuElem = menu;
+this.parelem = this.elem;
+menu.onclick = e => e.stopPropagation();;
+menu.onmousedown = e => e.stopPropagation();;
+menu.ondblclick = e => e.stopPropagation();;
+menu.oncontextmenu = e => e.stopPropagation();;
+menu._z = this.Desk.CG_Z+1;
+menu.prevelem = prevelem;
+//»
+document.body._add(menu);
+}//»
+
+	checkMenuWidth(sp){//«
+		let diff = this.menuElem.offsetWidth - sp.offsetWidth;
+		let mindiff = 77;
+		let diffoff = mindiff - diff;
+		if (diffoff > 0) sp._marr = diffoff;
+	}//»
+	nextItem(){//«
+		let kid;
+		let kids = this.kids;
+		if (!this.curitem) kid = kids[0];
+		else {
+			let pos = kids.indexOf(this.curitem);
+			if (pos < kids.length - 1) kid = kids[pos + 1];
+			else kid = kids[0];
+		}
+		if (kid) kid.on();
+	}//»
+	prevItem(){//«
+		let kid;
+		let kids = this.kids;
+		if (!this.curitem) kid = kids[kids.length - 1];
+		else {
+			let pos = kids.indexOf(this.curitem);
+			if (pos > 0) kid = kids[pos - 1];
+			else kid = kids[kids.length - 1];
+		}
+		if (kid) kid.on();
+	}//»
+	adjustY() {//«
+		let menu = this.menuElem;
+		let y = 0;
+		let winh=window.innerHeight;
+		let r = menu.getBoundingClientRect();
+		let _h = r.height;
+		let _y = menu._y;
+		if (isFin(_y)) {
+			if (_y + _h > winh) {
+				menu._y = winh - _h;
+			}
+			if (menu._y < 0) menu._y = 0;
+			r = menu.getBoundingClientRect();
+			if (r.bottom>winh){
+				menu._h = winh;
+				menu._overy="scroll";
+			}
+		}
+		else if (r.top < 0){
+			menu._b = "";
+			menu._y=0;
+			this.adjustY();
+		}
+	}//»
+	kill() {//«
+		let menu = this.menuElem;
+		if (this.killed) return;
+		delete this.elem.context_menu;
+		menu._del();
+		if (this == this.Desk.deskMenu) {
+			if (this.Desk.deskMenu.kill_cb) this.Desk.deskMenu.kill_cb();
+			this.Desk.deskMenu = null;
+			this.Desk.CG.off()
+		} 
+		this.killed = true;
+		if (this.par) this.par.kill();
+		if (this.kid) this.kid.kill();
+	}//»
+	keyHandler(e, sym) {//«
+		let curitem = this.curitem;
+		e.preventDefault();
+		if (sym == "UP_") this.prevItem();
+		else if (sym == "DOWN_") this.nextItem();
+		else if (sym == "RIGHT_") {
+			if (curitem && curitem._is_array) curitem.select();
+		} else if (sym == "LEFT_") {
+			if (curitem && curitem.menu.par) {
+				curitem.menu.par.curitem.on();
+				delete curitem.menu.par.kid;
+				curitem.menu.menuElem._del();
+			}
+		}
+	}//»
+	select() {//«
+		if (!this.curitem) return cerr("No curitem!!!");
+		this.curitem.select();
+	}//»
+
+	addItem(namearg, val) {//«
+		let curitem = this.curitem;
+		const menu_loc_from = (item) => {//«
+//			let menuobj this;
+			let type = this.type;
+			let parelem = this.parelem;
+			let menuelem = this.menuElem;
+			let l, t, r, b;
+			let w, h;
+			let arr;
+			if (type == "desk") {
+				r = winw();
+				l = menuelem.offsetLeft;
+			} else {
+				let menurect = menuelem.getBoundingClientRect();
+				let parrect = parelem.getBoundingClientRect();
+				l = menurect.left;
+				r = parrect.right;
+			}
+			let newx, newy;
+			if (item) {
+				let r = item._gbcr();
+				newy = r.top - 5;
+			}
+			if (l + 375 < r) newx = menuelem._x + menuelem.offsetWidth;
+			else {
+				newx = menuelem._x;
+				let curelem = menuelem;
+				while (curelem) {
+					curelem._x -= curelem.offsetWidth;
+					curelem = curelem.prevelem;
+				}
+			}
+			return {
+				X: newx,
+				Y: newy
+			};
+		}//»
+		const select = () => {//«
+			let curitem = this.curitem;
+			if (val instanceof Function) {
+				this.kill();
+				val();
+			} 
+			else if (val && typeof val === "object" && typeof val.length !== "undefined") {
+//				this.curitem = curitem;
+				let olditem = curitem;
+				if (curitem) curitem.off();
+				let newmenu = new ContextMenu(this.Desk, this.elem, menu_loc_from(olditem), this.menu);
+				newmenu.kill_cb = this.Desk.deskMenu.kill_cb;
+				this.Desk.deskMenu = newmenu;
+				for (let i = 0; i < val.length; i += 2) {
+					let item = newmenu.addItem(val[i], val[i + 1]);
+					if (i == 0) item.on();
+				}
+				newmenu.par = this;
+				this.kid = newmenu;
+				newmenu.adjustY();
+			}
+		};//»
+		const delete_menus = () => {//«
+			let gotmenu = Desk.deskMenu || this.elem.context_menu;
+			if (!gotmenu) {
+cerr("No gotmenu???");
+				return;
+			}
+			let gotcur = gotmenu.curitem;
+			if (!gotcur) return;
+			
+			let gotmatch = false;
+			let arr = [];
+			while (true) {
+				try {
+					arr.push(gotcur.menu.menuElem);
+					gotcur = gotcur.menu.par.curitem;
+				} catch (e) {
+					break;
+				}
+				if (!gotcur) {
+cerr("!!!! Could not find the previous item! !!!!");
+					break;
+				}
+				if (gotcur.menu === div.menu) {
+					gotmatch = true;
+					break;
+				}
+			}
+			if (!gotmatch) {
+				return;
+			}
+			for (let elm of arr) {
+				if (elem.context_menu.par) delete elem.context_menu.par.kid;
+				elm._del();
+			}
+		};//»
+		let div = make('div');//«
+		let namearr = namearg.split("::");
+		let name = namearr[0];
+		let shortcut;
+		div.menu = this;
+		div._marb = 5;
+		div._padl = 18;
+		div._padr = 15;
+		div._padt = 5;
+		div._padb = 5;
+		div._h = "20px";
+		div._ff = "sans-serif";
+		div._dis = "flex";
+		div.style.justifyContent = "space-between";
+		let namesp = make('span');
+		div._add(namesp);
+		div.className= "context_menu_item";
+		namesp.className ="context_menu_label";
+//		menu._add(div);
+		this.menuElem._add(div);
+//»
+//log(val);
+		if (val && typeof val === "object" && typeof val.length !== "undefined") {//«
+			div._tcol="#000";
+			namesp.innerHTML = name;
+			let sp = make('span');
+			sp._fs = 12;
+			sp.html('&#9654;');
+			div._add(sp);
+			div._is_array = true;
+			this.checkMenuWidth(namesp);
+		} else {
+			if (val) div._tcol="#000";
+			else {
+				div._tcol="#333";
+				div.style.fontStyle="italic";
+			}
+			let mark = null;
+			if (name.match(/\x20*__XMARK__\x20*$/)) {
+				name = name.replace(/\x20*__XMARK__\x20*$/, "");
+				mark = '&#10007;'
+			} else if (name.match(/\x20*__CHECK__\x20*$/)) {
+				name = name.replace(/\x20*__CHECK__\x20*$/, "");
+				mark = '&#10003;'
+			}
+			namesp.innerHTML = name;
+			this.checkMenuWidth(namesp);
+			let gotsp;
+			if (mark) {
+				let sp = make('span');
+				gotsp = sp;
+				sp.innerHTML = mark;
+				sp._fw="bold";
+			}
+			else if (namearr[1]){
+				let sp = make('span');
+				gotsp = sp;
+				sp._tcol="#444";
+				sp.style.fontStyle = "italic";
+				sp.innerHTML = namearr[1];
+				shortcut = sp;
+			}
+			if (gotsp){
+				div._add(gotsp);
+				this.checkMenuWidth(namesp);
+			}
+		}//»
+
+		div.on=(if_mouse)=>{//«
+			let curitem = this.curitem;
+
+			if (curitem) curitem.off();
+//const ACTIVE_MENU_BG = "#006";
+			div._bgcol = "#006";
+			div._hold_tcol = div._tcol;
+//const ACTIVE_MENU_FG = "#fff";
+			div._tcol = "#fff";
+			if (shortcut) shortcut._tcol = "#fff";
+			curitem = div;
+			curitem.scrollIntoViewIfNeeded();
+			this.Desk.deskMenu = curitem.menu;
+//			desk_menu = curitem.menu;
+			curitem.menu.curitem = curitem;
+		};//»
+		div.off=() =>{//«
+//			let curitem = this.curitem;
+//			this.curitem = null;
+//log("HIHI");
+			div._tcol = div._hold_tcol;
+			div._bgcol="";
+			if (shortcut) shortcut._tcol = "#444";
+		};//»
+		div.select = select;
+		div.onclick = () => {//«
+			if(this.kid) {
+				delete_menus();
+				div.on(true);
+				return;
+			}
+			delete_menus();
+			select();
+		};//»
+		div.onmouseenter = e => {//«
+//			let desk_menu = this.Desk.deskMenu;
+			if((this.Desk.deskMenu || elem.context_menu)!==this) return;
+			if (curitem) {
+				div.on(true);
+				return;
+			}
+			delete_menus();
+			div.on(true);
+		};//»
+		div.onmouseover=()=>{div.style.cursor="default";};
+		this.kids.push(div);
+		return div;
+	}//»
+
+}
+//this.ContextMenu = ContextMenu;
+//»
+const Popup = function(Desk) {//«
+//const Widgets = function() {
+
+let prompt_boxshadow = "3px 3px 20px rgba(255,255,255,0.375)";
+let popup_link_col = "#009"
+let popup_queue = [];
+
+const api={};
+
+//const{winw,winh}=Desk;//No reason to do any fancy importing of this stuff
+const winw=()=>{return window.innerWidth;}
+//winh() is called without arguments in here, so Desk's method reduces to this.
+const winh=()=>{return window.innerHeight;}
+const no_select=(elm)=>{elm.style.userSelect="none"}
+const make=x=>{return document.createElement(x);};
+const center = (elem, usewin) => {//«
+	let usew = winw();
+	let useh = winh();
+	if (usewin) {
+		if (usewin.main) {
+			usew = usewin.main._w;
+			useh = usewin.main._h;
+		} else {
+			usew = usewin.offsetWidth;
+			useh = usewin.offsetHeight;
+		}
+	}
+	let elemw = elem.offsetWidth;
+	let elemh = elem.offsetHeight;
+	let usex = (usew / 2) - (elemw / 2);
+	let usey = (useh / 2) - (elemh / 2);
+	if (usex < 0) usex = 0;
+	if (usey < 0) usey = 0;
+	elem._x = usex;
+	elem._y = usey;
+}/*»*/
+const make_popup_str = (which) => {//«
+	let str = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="64px" height="64px">';
+	if (which == "alert") {
+		str += '<path d="M 32.129316,4.1098389 A 1.9399015,1.9399015 0 0 0 30.558815,5.2119455 L 6.6155497,55.137373 a 1.9399015,1.9399015 0 0 0 1.7358178,2.782819 l 49.0437415,0 A 1.9399015,1.9399015 0 0 0 59.130927,55.10982 L 34.03045,5.1843928 a 1.9399015,1.9399015 0 0 0-1.708265,-1.0745539 1.9399015,1.9399015 0 0 0-0.192869,0 z" style="font-size:medium;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-indent:0;text-align:start;text-decoration:none;line-height:normal;letter-spacing:normal;word-spacing:normal;text-transform:none;direction:ltr;block-progression:tb;writing-mode:lr-tb;text-anchor:start;baseline-shift:baseline;color:#000000;fill:' + ALERT_YELLOW + ';fill-opacity:1;stroke:' + ALERT_YELLOW + ';stroke-width:3.87899995;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate;font-family:Sans;-inkscape-font-specification:Sans"/>';
+		str += '<g style="font-size:56px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000;fill-opacity:1;stroke:none;font-family:Times New Roman">';
+		str += '<path d="m 32.621634,45.333283 c-2.575997,0-4.704,2.184002-4.704,4.704 0,2.687997 2.016003,4.76 4.648,4.76 2.687997,0 4.816,-2.072003 4.816,-4.648 0,-2.631998-2.128003,-4.816-4.76,-4.816 m 0.784,-4.368 c 0.727999,-6.887994 1.232002,-9.632006 2.912,-15.008 0.783999,-2.463998 1.008,-3.584002 1.008,-4.872 0,-3.639997-1.736003,-5.712-4.704,-5.712-3.023997,0-4.76,2.072003-4.76,5.6 0,1.399998 0.224001,2.464002 1.008,4.984 1.623998,5.319994 2.184001,8.120006 2.912,15.008 l 1.624,0"/></g>';
+	} else if (which == "error") {
+		str += '<path d="M 12.826086,22.695652 0.62845029,34.752046-16.521739,34.652173-28.578133,22.454537-28.47826,5.304348-16.280624,-6.7520463 0.86956503,-6.6521733 12.925959,5.5454627 z" transform="matrix(1.349617,0,0,1.349617,42.340122,13.11007)" style="color:#000000;fill:#d42121;fill-opacity:1;fill-rule:nonzero;stroke:#c6c6c6;stroke-width:1.3996563;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />';
+		str += '<text x="8.4782629" y="36.608696" xml:space="preserve" style="font-size:13px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffffff;fill-opacity:1;stroke:none;font-family:Sans;-inkscape-font-specification:Sans">';
+		str += '<tspan x="8.4782629" y="36.608696">ERROR</tspan></text>';
+	} else if (which == "ok") {
+		str += '<defs><filter color-interpolation-filters="sRGB" id="pu_FILTER"><feGaussianBlur stdDeviation="0.77384537" /></filter></defs>';
+		str += '<rect width="58.038403" height="58.038403" rx="8.0885181" ry="8.1922169" x="3.4741683" y="3.2831869" style="color:#000000;fill:#42c129;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.45200002;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0;marker:none;visibility:visible;display:inline;overflow:visible;filter:url(#pu_FILTER);enable-background:accumulate" />';
+		str += '<text x="16.18037" y="47.81963" xml:space="preserve" style="font-size:48px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffffff;fill-opacity:1;stroke:none;font-family:Times New Roman;-inkscape-font-specification:\"Times New Roman\"">';
+		str += '<tspan x="15.18037" y="47.81963">&#x2713;</tspan></text>';
+	}
+	str += '</svg>';
+	return str;
+};//»
+const make_func_span = (str, cb) => {//«
+	let sp = make('sp');
+	if (str == "__BR__") str = "<hr style='margin:0px;height:6px;visibility:hidden;'>";
+	sp.html(str);
+	if (cb) {
+		sp.ael('click', cb);
+		sp._tcol = popup_link_col;
+		sp.style.textDecoration = "underline";
+		sp.style.cursor = "pointer";
+	}
+	return sp;
+}//»
+const make_func_div = (all) => {//«
+	let div = make('div');
+	for (let i = 0; i < all.length; i++) {
+		let arr = all[i];
+		if (typeof arr == "string") div._add(make_func_span(arr));
+		else div._add(make_func_span(arr[0], arr[1]));
+	}
+	return div;
+}//»
+
+const popinfo=(str,type)=>{return this.make_popup({'STR':str,'TYP':type,'INF':true});};this.popinfo = popinfo;
+const popok = (str, opts={}) => {//«
+//const popok = (str, timearg) => {
+	this.make_popup({
+		STR: str,
+		TYP: "ok",
+		TIME: opts.time,
+		WIN: opts.win,
+		TIT: opts.title,
+		CB:opts.cb
+	});
+}
+//»
+const poperr = (str, opts = {}) => {//«
+	return this.make_popup({
+		STR: str,
+		TYP: "error",
+		TIME: opts.time,
+		WIN: opts.win,
+		CB: opts.cb,
+		TIT: opts.title,
+		WIDE: opts.wide
+	});
+}
+//»
+const popup = (str, opts={}) => {//«
+	return this.make_popup({
+		TIT: opts.title,
+		STR: str,
+		SEL: opts.sel,
+		WIN: opts.win,
+		CB: opts.cb,
+		WIDE: opts.wide
+	});
+}//»
+const popkey = (arr, cb, opts={}) => {//«
+	let str="";
+	let chars={};
+	let ch;
+	if (opts.alpha){
+		str = arr;
+		for (let i=65; i <= 90; i++){
+			ch = String.fromCharCode(i);
+			chars[ch] = i;
+		}
+		for (let i=97; i <= 122; i++){
+			ch = String.fromCharCode(i);
+			chars[ch] = i;
+		}
+	}
+	else{
+		for (let i = 0; i < arr.length; i++) {
+			if (i<10) ch = String.fromCharCode(i + 48);
+			else if (i<36) ch = String.fromCharCode(i-10 + 97);
+			else if (i < 62) ch = String.fromCharCode(i-36 + 65);
+			else break;
+			str += ch + ")\xa0" + arr[i] + "<br>";
+			chars[ch]=arr[i];
+		}
+	}
+	return this.make_popup({
+		'TIT': opts.title||"Choose one",
+		'STR': str,
+		'KEYS': chars,
+		'CB': cb,
+		WIN:opts.win		
+	});
+}
+//»
+const popin = (str, cb, opts) => {//«
+//const popin = (str, cb, deftxt, title) => {
+	if (!str) str = " ";
+	return this.make_popup({
+		CANCEL:true,
+		ONCANCEL:"",
+		STR: str,
+		INPUT: true,
+		CB: cb,
+		TXT: opts.deftxt,
+		TIT: opts.title
+	});
+}
+//»
+const popwait = (str, cb, type) => {//«
+	return this.make_popup({
+		STR: str,
+		TYP: type,
+		CB: cb
+	});
+}
+//»
+//Keep this in since it might be useful later, but comment out to decrease the system parse/load time for Now
+//const popform=(arr,cb,title)=>{let table=make('table');let focuselm=null;for(let i=0;i<arr.length;i++){let tr=make('tr');let lab_td=make('td');lab_td.style.verticalAlign="top";let elm_td=make('td');let type=arr[i][0];let label=arr[i][1];let def=arr[i][2];let optarg=arr[i][3];let elm;if(type=="select"){if(!def)def=0;else def=parseInt(def);elm=make('select');elm.style.width="85";let list=optarg;for(let j=0;j<list.length;j++){let opt=make('option');opt.setAttribute('value',list[j]);if(j==def)opt.setAttribute("selected","true");opt.html(list[j]);elm._add(opt);}}else if(type=="field"){elm=make('span');elm.innerHTML=def;}else if(type=="check"){elm=make('input');elm.type="checkbox";if(def)elm.checked=true;elm.ael('click',e=>{setTimeout(()=>{elm.checked=!elm.checked;},1);});}else if(type=="text"){elm=make('input');elm.type="text";if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}else if(type=="textarea"){elm=make('textarea');elm.rows=6;elm.style.width=235;if(optarg)elm.setAttribute("maxlength",optarg);if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}elm.ael('mousedown',function(e){e.stopPropagation();});elm.setAttribute("name",label);lab_td.html(label+":");lab_td._tcol="#000";elm_td._add(elm);tr._add(lab_td);tr._add(elm_td);tr.elm=elm;table._add(tr);}return this.make_popup({'STR':table,'TYP':"form",'CB':cb,'TIT':title,'FOCUS':focuselm});};this.popform=popform;api.popform=(arr,title)=>{return new Promise((y,n)=>{popform(arr,y,title);});};
+
+const popyesno = (str, cb, if_rev) => {//«
+	return this.make_popup({
+		STR: str,
+		TYP: "yesno",
+		CB: cb,
+		REV: if_rev
+	});
+}//»
+const poparea = (str_or_arr, title, if_rev_arr, cb, read_only, if_cancel, win) => {//«
+	let arr;
+	if (typeof str_or_arr == "string") arr = str_or_arr.split("\n");
+	else arr = str_or_arr;
+	if (if_rev_arr) arr = arr.reverse();
+	let div = make('div');
+//	div._h="100%";
+	let area = make('textarea');
+	area.value = arr.join("\n");
+	area._bgcol="#211";
+	area._tcol="#EEEEEE";
+	area.style.outline = "none";
+	area.id="prompt_textarea";
+	if (read_only) {
+		area.setAttribute("readonly", "1");
+	}
+	area._w="100%";
+	area._h="95%";
+//log(area);
+
+	area._fs = 20;
+	return this.make_popup({
+		USEINPUT:area,
+		'SEL': true,
+		STR: area,
+		'VERYBIG': true,
+		'CB': cb,
+		'TIT': title,
+		CANCEL:if_cancel,
+		WIN:win
+	});
+}//»
+const mkpopup_imgdiv = (type, use_img, if_big_img) => {//«
+	let imgdiv = make('div');
+	imgdiv._pos='absolute';
+	let usedim = 64;
+	if (if_big_img) usedim = 128;
+	imgdiv._w = usedim;
+	imgdiv._h = usedim;
+	let usetype = type;
+	if (!type || type == "form") usetype = "alert";
+	else if (type == "yesno") usetype = "alert";
+	if (use_img) {
+		let img;
+		if (use_img instanceof HTMLImageElement) img = use_img;
+		if (img && img instanceof HTMLImageElement) {
+			imgdiv.style.backgroundImage = "url(" + img.src + ")";
+			imgdiv.style.backgroundPosition = "center center";
+			imgdiv.style.backgroundRepeat = "no-repeat";
+			imgdiv.style.backgroundSize = "contain";
+		}
+	} else {
+		imgdiv.innerHTML = make_popup_str(usetype);
+	}
+	return imgdiv
+}//»
+const do_links = elm=>{//«
+	let lns = Array.from(elm.getElementsByTagName("a"));
+	for (let ln of lns){
+		let win;
+		ln.onclick=e=>{
+			e.preventDefault();
+			e.stopPropagation();
+			if (win&&!win.closed){
+				win.focus();
+				return;
+			}
+			win = window.open(ln.href, ln.href,`width=${window.outerWidth-100},height=${window.outerHeight-100}`)
+		};      
+		ln.onmousedown=(e)=>{
+			e.preventDefault();
+			e.stopPropagation();
+		}       
+		ln.oncontextmenu=e=>{
+			e.stopPropagation();
+		};
+	}
+};//»
+const mkpopup_tdiv = (str, opts={}) => {//«
+	let w = opts.WIN;
+	let text_fs = opts.FS;
+	let if_big_img = opts.BIGIMG;
+	let selectable = opts.SELECTABLE;
+	let if_verybig = opts.VERYBIG;
+	let if_systerm = opts.SYSTERM;
+	let tdiv = make('div');
+	if (selectable) {
+		tdiv.style.userSelect = "text";
+		tdiv.ael('mousedown', function(e) {
+			e.stopPropagation()
+		});
+	}
+	else no_select(tdiv);
+	if (text_fs) tdiv._fs = text_fs;
+	else tdiv._fs = 18;
+//	if (!(opts.NOBOLD||if_systerm)) tdiv._fw="bold";
+	
+	tdiv._tcol="#eee";
+	tdiv._pos='absolute';
+    tdiv._bor= "0px solid transparent";
+	let usex = 109;
+	if (if_big_img) usex += 64;
+	tdiv._loc(usex, 37);
+	if (if_verybig) {
+		tdiv._bor="1px dotted #333";
+		tdiv.classList.add("scroller");
+		tdiv._overy="auto";
+		if (w){
+			tdiv._w = w._gbcr().width - (20 + 134);
+			tdiv._h = w._gbcr().height - (35 + 79);
+		}
+		else{
+			tdiv._w = winw() - (20 + 134);
+			tdiv._h = winh() - (35 + 79);
+		}
+	} else {
+		tdiv._overy="auto";
+		tdiv._w = opts.WIDTH - 134;
+		tdiv._h = 75;
+	}
+	tdiv._overx="hidden";
+	if (str) {
+		if (typeof str == "string") {
+			tdiv.style.overflowWrap = "break-word";
+			tdiv.innerHTML=str;
+		} 
+		else if (str instanceof HTMLElement) tdiv._add(str);
+		do_links(tdiv);
+	}
+	tdiv.tabIndex="-1";
+	return tdiv;
+}//»
+
+//Old way w/ callback arguments«
+this.popup=popup;
+this.popkey=popkey;
+this.popin = popin;
+this.popwait=popwait;
+this.popyesno = popyesno;
+this.poparea=poparea;
+this.popinarea=(tit, cb)=>{poparea("",tit,null,cb,false,true);};
+this.poperr = poperr;
+this.popok = popok;
+this.pophuge = (str, opts = {}) => {//«
+	return this.make_popup({
+		STR: str,
+		VERYBIG: true,
+		WIN: opts.win,
+		TIT: opts.title,
+		SEL: opts.SEL
+	});
+}//»
+this.popwide=(str,opts={})=>{opts.STR=str;opts.WIDE=true;return this.make_popup(opts);};
+this.popcancel=(str,cb)=>{return this.make_popup({STR:str,CANCEL:true,CB:cb});}
+//»
+//«Promise-based api
+api.popinarea=(tit, opts={})=>{
+	let if_can = true;
+	if (opts.noCancel) if_can = false;
+	return new Promise((y,n)=>{
+		poparea("",tit,null,y,opts.readOnly,if_can, opts.win);
+	})
+}
+api.popyesno = (str, opts = {}) => {
+	return new Promise((Y, N) => {
+		this.make_popup({
+			STR: str,
+			TYP: "yesno",
+			CB: Y,
+			REV: opts.reverse,
+			TIT: opts.title,
+			WIN:opts.win,
+			DEFNO: opts.defNo,
+			VERYBIG: opts.veryBig,
+		});
+	});
+}
+api.popwait = (str, type)=>{
+	return new Promise((y,n)=>{
+		popwait(str,y,type);
+	});
+};
+api.popin = (str, opts = {}) => {
+	return new Promise((Y, N) => {
+		this.make_popup({
+			STR: str,
+			CANCEL:true,
+			INPUT: true,
+			CB: Y,
+			TXT: opts.defTxt,
+			TIT: opts.title,
+			WIN: opts.win,
+			PASSWORD: opts.password,
+			enterOK: opts.enterOK
+		});
+	});
+}
+api.popkey = (arr, opts = {}) => {
+	return new Promise((Y, N) => {
+		popkey(arr,Y,opts);
+	});
+}
+api.popup=(str, opts={})=>{
+	return new Promise((Y,N)=>{
+		if (!opts.cb) opts.cb = Y
+		popup(str, opts);
+	});
+};
+api.poperr = (str, opts={})=>{
+	return new Promise((Y, N) => {
+		if (!opts.cb) opts.cb = Y;
+		poperr(str, opts);
+	});
+}
+api.popok=(str, opts={})=>{
+	return new Promise((Y,N)=>{
+		if (!opts.cb) opts.cb = Y
+		popok(str, opts);
+	});
+};
+//»
+
+this.make_popup = (arg) => {//«
+	const popup_dequeue = () => {//«
+		this.make_popup(_popup_queue.shift());
+	}//»
+	const mkbut=(txt, if_active)=>{//«
+		let d = mkdv();
+//		d.tabIndex=""+(cur_tab_index++);
+		d.onfocus=()=>{
+			d._fw="bold";
+			d._bgcol="#ccf";
+		}
+		d.onblur=()=>{
+			d._fw="";
+			d._bgcol="#aaa";
+		}
+		d.style.textAlign="center";
+		d._fs=14;
+		d._tcol="#000";
+		d.innerText=txt;
+		d._bor="1px solid #ccc";
+		d._bgcol="#aaa";
+		d.onmousedown=()=>{d._bor="1px dotted #ccc";};
+		d.onmouseup=()=>{d._bor="1px solid #ccc";};
+		d.onmouseout=()=>{d._bor="1px solid #ccc";};
+		d._w=68.46;
+		d.type = "popup_button";
+		if (if_active) active_button = d;
+		return d;
+	}//»
+	const do_cancel = ()=>{//«
+		div._del();
+		if (win) delete win.popup;
+		else{
+			Desk.CG.off();
+			Desk.CPR = null;
+		}
+		if (cb) {
+			if ('ONCANCEL' in arg) cb(arg.ONCANCEL);
+			else cb(false);
+		}
+		if (!win){
+			if (_popup_queue.length) popup_dequeue();
+			else if (holdwin) holdwin.on();
+		}
+	};//»
+	const nopropdef=(e)=>{//«
+		e.stopPropagation();
+		e.preventDefault();
+	};//»
+	let cur_tab_index = 1;
+	let active_button;
+	let win = arg.WIN;
+	let _popup_queue = popup_queue;
+	if (!win) {
+		if (Desk.CPR && Desk.CPR !== true) {
+			_popup_queue.push(arg);
+			return;
+		}
+	}
+	let choices;
+	let no_buttons;
+	let if_cancel, if_input, if_password;
+	let if_systerm;
+	let expires;
+	let if_rev, title, str, type;
+	let res_text, cb, if_short, if_info;
+	let text_fs;
+	let verybig;
+	let big_img, use_img, caption, selectable;
+	let keys, timer;
+	let oktxt, cantxt;
+	let comp_keydown;
+	let div = make('div');
+	div.id="system_prompt";
+	let butdiv = make('div');
+	let cancel_button_div;
+	let okbutdiv;
+	butdiv._pos="absolute";
+	butdiv._b=0;
+	butdiv._r=0;
+	butdiv._mar=5;
+	div._add(butdiv);
+	div._fs=18;
+	div.style.userSelect = "none";
+	div.style.boxShadow = prompt_boxshadow;
+	if (document.activeElement) document.activeElement.blur();
+	if (typeof arg == "string") {
+		str = arg;
+		type = typearg;
+	} else if (typeof arg == "object") {
+		str = arg.STR || arg.DIV;
+		if_cancel = arg.CANCEL;
+		verybig = arg.VERYBIG;
+		oktxt = arg.OKTXT;
+		cantxt = arg.CANTXT;
+		caption = arg.CAP;
+		text_fs = arg.FS;
+		use_img = arg.IMG;
+		big_img = arg.BIGIMG;
+		if_input = arg.INPUT;
+		if_password = arg.PASSWORD;
+		res_text = arg.TXT;
+		cb = arg.CB;
+		if_short = arg.SHT;
+		if_info = arg.INF;
+		title = arg.TITLE || arg.TIT;
+		timer = arg.TIME;
+		expires = arg.EXP;
+		keys = arg.KEYS;
+		if_rev = arg.REV;
+		selectable = arg.SEL;
+		type = arg.TYPE || arg.TYP;
+		no_buttons = arg.NOBUTTONS;
+	} else if (arg) str = arg;
+	if (!str) str = "";
+	if (typeof str == "object" && typeof str.length == "number") str = make_func_div(str);
+	else if (typeof str == "string") str = str.replace(/__BR__/g, "<hr style='margin:0px;height:6px;visibility:hidden;'>");
+//	if (str instanceof HTMLElement) div.htelem = str;
+	let usewid = 420;
+	if (big_img||arg.WIDE) usewid += 64;
+	let def_text_h = 75;
+	let def_h = arg.HEIGHT||154;
+	if (big_img) def_h += 32;
+	if (arg.WIDTH) usewid = arg.WIDTH;
+	else if (if_short) usewid = 275;
+	else if (verybig) {
+		if (win){
+			usewid = win._gbcr().width-20;
+			def_h = win._gbcr().height-35;
+		}
+		else{
+			usewid = winw() - 20;
+			def_h = winh() - 35;
+		}
+		def_text_h = def_h - 79;
+	}
+	let holdwin;
+	if (!win) {
+		holdwin = Desk.CWIN;
+		if (holdwin) holdwin.off();
+	}
+	if (keys) {
+		if (keys == "__ANY__") div.keys = true;
+		else div.__keys = keys;
+	}
+	if (win) {
+		win.popup=div;
+		div._z=10000000;
+		win._add(div);
+	}
+	else document.body._add(div);
+	
+	div.ael('dblclick', e => {
+		e.stopPropagation()
+	});
+	if (cb) div.cb = cb;
+	div.nosave = true;
+	div._w = usewid;
+	div._h = def_h;
+//	div._bgcol="#fff";
+//let WIN_COL_OFF="#232333";
+	div._bgcol="#232333";
+//	div._tcol="#ccc";
+	div._pos='absolute';
+	if (!win) {
+		div._z = 10000000;
+		if (Desk.CG) Desk.CG.on();
+		Desk.CPR = div;
+	}
+	let bar = make("div");
+	bar.type = "prompt";
+	bar.style.borderBottom = "1px solid #515151";
+	bar._pos="absolute";
+	bar._h = 21;
+	bar._w = usewid;
+	if (title) {
+		bar.style.textAlign = "center";
+		bar._fw="bold";
+		bar._fs="16px";
+		bar._padt = 4;
+		bar._tcol="#bbb";
+		bar.innerHTML = title;
+	}
+	bar._bgcol="#171717";
+	div._add(bar);
+	let imgdiv = mkpopup_imgdiv(type, use_img, big_img);
+	imgdiv._x = 25;
+	div._add(imgdiv);
+	imgdiv._y = div.offsetHeight / 2 - imgdiv.offsetHeight / 2;
+	if (caption) {
+		let capdiv = make('div');
+		capdiv._tcol="#000";
+		capdiv._pos='absolute';
+		capdiv._loc(25, 100);
+		capdiv.innerHTML = caption;
+		capdiv.style.textAlign = "center";
+		div._add(capdiv);
+		let wid = capdiv.offsetWidth;
+		if (wid > 64) {
+			let diffx = (wid - 64) / 2;
+			if (diffx < 25) capdiv._x = 25 - diffx;
+			else capdiv._x = 0;
+		}
+	}
+	let tdiv = mkpopup_tdiv(str, {
+		NOBOLD: arg.NOBOLD,
+		WIDTH: usewid,
+		WIDE: arg.WIDE,
+		FS: text_fs,
+		BIGIMG: big_img,
+		SELECTABLE: selectable,
+		VERYBIG: verybig,
+		SYSTERM: if_systerm,
+		WIN:win
+	});
+	if (str instanceof HTMLElement) div.htelm = str;
+	div.messdiv = tdiv;
+	div._add(tdiv);
+
+	okbutdiv = make('div');
+	okbutdiv._dis="inline-block";
+	let input;
+	if (if_input||arg.USEINPUT) {
+		if (arg.USEINPUT) {
+			input = arg.USEINPUT;
+//			butdiv._add(okbutdiv);
+		}
+		else {
+			input = make('input');
+			if (res_text) input.value = res_text;
+			if (if_password) input.type="password";
+			else input.type = "text";
+			if (if_short) input._w = 140;
+			else input._w = 250;
+			input._h = 20;
+			tdiv._add(make('br'));
+			tdiv._add(input);
+		}
+		input.tabIndex = ""+(cur_tab_index++);
+		input.ael('mousedown', e => {
+			e.stopPropagation();
+		});
+		setTimeout(() => {
+			input.focus();
+			input.select();
+		}, 1);
+		div.res_input = input;
+	}
+	else if (if_cancel) okbutdiv = null;
+	let useok = "OK";
+	if (oktxt) useok = oktxt;
+	else if (type == "yesno") {
+		useok = "YES";
+	}
+	if (okbutdiv) okbutdiv._add(mkbut(useok, true));
+	div.ok_button = okbutdiv;
+	if (keys||no_buttons) {
+		okbutdiv._op = 0;
+		div.inactive = true;
+	}
+	const ok_cb = () => {//«
+		div._del();
+		delete div.active;
+		if (input && input.matchdiv) input.matchdiv._del();
+		if (!win&&Desk.CG) Desk.CG.off();
+		if (comp_keydown) document.removeEventListener('keydown', comp_keydown);
+		if (type == "form") {
+			let rows = div.htelm.childNodes;
+			let retobj = {};
+			for (let i = 0; i < rows.length; i++) {
+				let elm = rows[i].elm;
+				if (elm.type == "checkbox") retobj[elm.name] = elm.checked;
+				else retobj[elm.name] = elm.value;
+			}
+			if (cb) cb(retobj);
+
+			if (win) {
+				delete win.popup;
+				if (win===Desk.CWIN&&win.app&&win.app.onfocus) {
+					win.app.onfocus();
+					if (win.isScrollable) {
+cwarn("win.isScrollable test passed: WOPMKLYTG");
+						win.main.focus();
+					}
+				}
+			}
+			else Desk.CPR = null;
+			return;
+		}
+		if (div.timer) clearTimeout(div.timer);
+		if (div.cb) {
+			if (div.res_input) div.cb(div.res_input.value);
+			else {
+				if (div.__keys) {
+					if (div.choices) div.cb(div.choices[div.keyok]);
+					else div.cb(div.keyok);
+				}
+				else {
+					div.cb(true);
+				}
+			}
+		}
+		if (win) {
+			delete win.popup;
+			if (win===Desk.CWIN&&win.app&&win.app.onfocus) {
+				win.app.onfocus();
+				if (win.isScrollable) {
+cwarn("win.isScrollable test passed: WPMKIYTGH");
+					win.main.focus();
+				}
+			}
+		}
+		else {
+			Desk.CPR = null;
+			if (_popup_queue.length) {
+				Desk.CPR = true;
+				popup_dequeue();
+			} else if (holdwin) holdwin.on();
+		}
+	};//»
+	div.ok = ok_cb;
+	div.enterOK = arg.enterOK;
+	if (!no_buttons) okbutdiv.ael('click', ok_cb);
+	if (expires || timer) {
+		if (expires) {
+/*«
+const now = if_secs => {
+	var ms = new Date().getTime();
+	if (if_secs) return Math.floor(ms / 1000);
+	return ms;
+}
+timer = expires - now();
+»*/
+			timer = expires - new Date().getTime();
+			if (timer < 0) timer = 0;
+		}
+		let timerdiv = make('div');
+		timerdiv._pos='absolute';
+		timerdiv._loc(1, 1);
+		timerdiv._w = 1;
+		timerdiv._h = 1;
+		timerdiv._op = 0;
+		div._add(timerdiv);
+		div.timeoutdiv = timerdiv;
+		timerdiv.ael('click', e => {
+			e.stopPropagation();
+			div._del();
+			delete div.active;
+			if (!win) Desk.CG.off();
+			if (comp_keydown) document.removeEventListener('keydown', comp_keydown);
+			if (div.cb) div.cb();
+
+			if (win) delete win.popup;
+			else{
+				Desk.CPR = null;
+				if (_popup_queue.length) {
+					Desk.CPR = true;
+					popup_dequeue();
+				} else if (holdwin) holdwin.on();
+			}
+		});
+		div.timer = setTimeout(_ => {
+			if (!win) div.timeoutdiv.click();
+			else if (Desk.CWIN && Desk.CWIN.popup === div) Desk.CWIN.popup.timeoutdiv.click();
+		}, parseInt(timer));
+	}
+	if (if_cancel || type == "form" || type == "yesno" || cantxt) {
+		cancel_button_div = make('div');
+		cancel_button_div._dis="inline-block";
+		cancel_button_div._marl=10;
+		let usecan = "CANCEL";
+		if (cantxt) usecan = cantxt;
+		else if (type == "yesno") {
+//			if (if_rev) usecan = "YES";
+//			else usecan = "NO";
+			usecan = "NO";
+		}
+		cancel_button_div.ael('click', () => {
+			do_cancel();
+		});
+//		butdiv._add(cancel_button_div);
+		if (!if_input && !arg.USEINPUT && if_cancel) {
+			cancel_button_div._add(mkbut(usecan, true));
+			div.cancel_only = true;
+		} else {
+			cancel_button_div._add(mkbut(usecan, false));
+		}
+		div.cancel_button = cancel_button_div;
+	}
+	div.cancel = do_cancel;
+
+	if (verybig){}
+	else if (tdiv.scrollHeight > def_text_h) {
+		let hdiff = tdiv.scrollHeight - def_text_h;
+		let tot_h = window.innerHeight;
+		let hi_h = def_h + hdiff + 20;
+		if (hi_h <= tot_h) {
+			div._h = def_h + hdiff + 5;
+			tdiv._h = def_text_h + hdiff+5;
+			center(div);
+		} else {
+			div._h = tot_h - 20;
+			tdiv._h = (tot_h - 20) - (def_h - def_text_h);
+			center(div);
+		}
+		div._y = div._y - 17;
+	}
+
+let butdiv1, butdiv2;
+if (okbutdiv && cancel_button_div){
+	if (if_rev) {
+		butdiv1 = cancel_button_div;
+		butdiv2 = okbutdiv;
+	}
+	else{
+		butdiv1 = okbutdiv;
+		butdiv2 = cancel_button_div;
+	}
+}
+else if (okbutdiv) butdiv1 = okbutdiv;
+else if (cancel_button_div) butdiv1 = cancel_button_div;
+if (butdiv1) {
+	butdiv._add(butdiv1);
+	butdiv1.childNodes[0].tabIndex=""+(cur_tab_index++);
+}
+if (butdiv2) {
+	butdiv._add(butdiv2);
+	butdiv2.childNodes[0].tabIndex=""+(cur_tab_index++);
+}
+	if (input){}
+	else if (arg.FOCUS) arg.FOCUS.focus();
+	else if (butdiv1) setTimeout(()=>{butdiv1.childNodes[0].focus();},10);
+
+	if (!win) center(div);
+	else center(div, win);
+	div.active = true;
+	return div;
+
+}//»
+
+NS.api.wdg=api;
+NS.api.widgets=api;
+//NS.api.pop = api;
+NS.api.popup = api;
+globals.api.wdg = api;
+
+}//»
+
 //Desk«
 
 //new Desk(){«
@@ -488,7 +1700,7 @@ const RE_SP_PL = / +/,
 	RE_SP_G = / /g;
 //»
 //JS Objects«
-let desk_menu;
+//let desk_menu;
 const api={};
 Desk.api=api;
 //let win_overflow={t:0,b:1,l:1,r:1};
@@ -518,7 +1730,7 @@ let DESK_Z = 0;
 //there is a context menu or an icon's label is being edited.
 //Windows "should never" be able to reach this level!
 let CG_Z = 9999999;
-
+this.CG_Z = CG_Z;
 let ICON_Z = 1;
 
 //Certain desktop elements might want to position themselves against the
@@ -614,7 +1826,6 @@ let ICON_DIM = 44,
 	min_win_hgt = 50
 
 let	window_boxshadow = "3px 3px 20px rgba(255,255,255,0.10)",
-	prompt_boxshadow = "3px 3px 20px rgba(255,255,255,0.375)",
 //	window_boxshadow = "",
 	window_boxshadow_hold;
 
@@ -644,7 +1855,11 @@ DDIE=WDIE=DDX=DDY=null;
 
 //Object.defineProperty(Object.prototype,'_keys',{get:function(){return Object.keys(this);},set:function(){}});
 //Object.defineProperty(Object.prototype,'_vals',{get:function(){let arr=[];let keys=Object.keys(this);for(let k of keys){arr.push(this[k]);}return arr;},set:function(){}});
-Object.defineProperty(this,"CWIN",{get:()=>CWIN});
+Object.defineProperty(this,"CWIN",{
+	get:()=>CWIN,
+	set:arg=>{CWIN = arg;}
+});
+Object.defineProperty(this,"CG",{get:()=>CG});
 Object.defineProperty(this,"ICONS",{get:()=>ICONS});
 Object.defineProperty(this,"WINS",{get:()=>windows});
 
@@ -930,6 +2145,7 @@ set_desk_bgcol();
 	desk._add(DDD);
 //»
 	CG = make('div');//Click Guard«
+//	Desk.CG = CG;
 	CG.id = 'click_guard';
 	CG._dis= 'none';
 	CG._pos= "fixed";
@@ -950,9 +2166,11 @@ set_desk_bgcol();
 	CG.onclick = focus_editing;
 	CG.ondblclick = focus_editing;
 	CG.onmousedown = e => {
-		if (desk_menu) {
+//		if (desk_menu) {
+		let desk_menu = Desk.deskMenu;
+		if (Desk.deskMenu) {
 			e.stopPropagation();
-			return desk_menu.kill();
+			return Desk.deskMenu.kill();
 		}
 		focus_editing(e);
 	};
@@ -2144,7 +3362,8 @@ contextMenuOn(e){//«
 		usey = rect.top+this.titleBar._h;
 	}
 	set_context_menu({X:usex,Y:usey},{items: items});
-	desk_menu.kill_cb = () => {
+//	desk_menu.kill_cb = () => {
+	Desk.deskMenu.kill_cb = () => {
 		img_div._op=op_hold;
 		img_div._bgcol= "";
 		img_div._tcol="#a7a7a7";
@@ -2180,7 +3399,7 @@ setWinArgs(args){//«
 	};//»
 	on(opts={}){//«
 		if (!windows_showing) toggle_show_windows();
-		if (CPR) return;
+		if (Desk.CPR) return;
 		if (CWIN) {
 			if (this === CWIN) return;
 			CWIN&&CWIN.off();
@@ -4198,7 +5417,7 @@ makeDOMElem(){//«
 setApp(){//«
 
 	let {node, ref} = this;
-
+//log(ref);
 	let usenode = node;
 	let ext;
 	let ext_text;
@@ -4227,7 +5446,14 @@ setApp(){//«
 		catch(e){cerr(e);};
 	}
 	else if (islink){
-		app = ref.appName;
+//log(this);
+if (ref){
+	app = ref.appName;
+}
+else{
+//log(this);
+//cwarn("BROKEN LINK???");
+}
 	}
 	else if (node.appName) {
 //WJKNMTYT
@@ -4240,6 +5466,7 @@ setApp(){//«
 
 
 	if (!app) app = DEF_BIN_APP;
+//	if (!app&&!islink) app = DEF_BIN_APP;
 
 	if (app=="Application"&&ref&&ref.appicon){
 		try{
@@ -4263,7 +5490,7 @@ setApp(){//«
 			this.linkPath = ref.par.fullpath;
 			this.ref = ref;
 		}//»
-		this.addLink(!ref);
+//		this.addLink(!ref);
 	}
 	this.useNode = usenode;
 }//»
@@ -4283,7 +5510,12 @@ setImg(){//«
 	}
 	this.extText = ext_text;
 	let ch = getAppIcon(this.linkApp||this.appName,{html:true});
-	wrapper.innerHTML=`${ext_div}<span class="iconi">${ch}</span>`;
+	wrapper.innerHTML = `${ext_div}<span class="iconi">${ch}</span>`;
+if (this.isLink){
+//	this.addLink(!ref);
+	this.addLink();
+//cwarn(`!!this.ref`);
+}
 	this.imgDiv = wrapper.childNodes[wrapper.children.length-1];
 	this.imgDiv.iconElem = this.iconElem;
 };//»
@@ -4353,7 +5585,8 @@ openWin(){//«
 		open_icon(icn, {winCb: Y});
 	});
 };//»
-addLink(if_broken){//«
+addLink(){//«
+	let if_broken = !this.ref;
 	if (this.link_div) this.link_div._del();
 	let l = make('div');
 	this.link_div = l;
@@ -4363,8 +5596,8 @@ addLink(if_broken){//«
 	l._padl=3;
 	l._padr=3;
 	l._bgcol="#000";
-	if (if_broken) l._tcol="#f77";
-	else l._tcol="#fff";
+	if (this.ref) l._tcol="#fff";
+	else l._tcol = "#f77";
 	l._pos= "absolute";
 	l._r="0px";
 	l._b="-5px";
@@ -4569,7 +5802,7 @@ const do_end=async()=>{//«
 		delete icn.disabled;
 		icn.saveToStorage();
 		if (icn.link) {
-			icn.addLink(!(await icn.node.ref));
+//			icn.addLink(!(await icn.node.ref));
 		}
 	}
 	icon_array_off(5);
@@ -5369,7 +6602,7 @@ const save_icon_editing = async() => {//«
 		if (!mess) mess="There was an error";
 		CEDICN.del();
 		if (CEDICN._editcb) {
-			await WDGAPI.poperr(mess);
+			await POPAPI.poperr(mess);
 			CEDICN._editcb();
 			CEDICN._editcb = null;;
 		}
@@ -5646,7 +6879,7 @@ const make_folder_icon = async(winarg) => {//«
 }
 //»
 const make_text_icon=async winarg=>{//«
-	let val = await WDGAPI.popinarea("Input text");
+	let val = await POPAPI.popinarea("Input text");
 if (val===false){//Pressed cancel button
 return;
 }
@@ -6798,1230 +8031,47 @@ this.vizCheck=()=>{//«
 const CUR = new Cursor();
 
 //»
-//Widgets«
-
-const Widgets = function() {//«
-
-//Var«
-const api={};
-
-const MENU_BGCOL="#c0c0c0";
-const ACTIVE_MENU_BG = "#006";
-const ACTIVE_MENU_FG = "#fff";
-
-const make=x=>{return document.createElement(x);};
-const isarr=arg=>{return (arg && typeof arg === "object" && typeof arg.length !== "undefined");}
-const now=if_secs=>{var ms=new Date().getTime();if(if_secs)return Math.floor(ms/1000);return ms;}
-const center = (elem, usewin) => {
-	let usew = winw();
-	let useh = winh();
-	if (usewin) {
-		if (usewin.main) {
-			usew = usewin.main._w;
-			useh = usewin.main._h;
-		} else {
-			usew = usewin.offsetWidth;
-			useh = usewin.offsetHeight;
-		}
+//«Context Menu
+const set_context_menu = (loc, opts={}) => {//«
+	CG.on();
+	let dx = 0;
+	let usex = loc.X - winx();
+	let usey = loc.Y - winy();
+	if (usex + 200 > winw()) dx = usex + 200 - winw();
+//	desk_menu = new WDG.ContextMenu(desk, {
+//	desk_menu = new ContextMenu(Desk, desk, {
+	Desk.deskMenu = new ContextMenu(Desk, desk, {
+		X: usex-dx,
+		Y: usey,
+		BREL:opts.BREL,
+		RREL:opts.RREL
+	});
+	let items = opts.items || get_desk_context();
+	for (let i = 0; i < items.length; i += 2) {
+		Desk.deskMenu.addItem(items[i], items[i + 1]);
 	}
-	let elemw = elem.offsetWidth;
-	let elemh = elem.offsetHeight;
-	let usex = (usew / 2) - (elemw / 2);
-	let usey = (useh / 2) - (elemh / 2);
-	if (usex < 0) usex = 0;
-	if (usey < 0) usey = 0;
-	elem._x = usex;
-	elem._y = usey;
-}
+	Desk.deskMenu.adjustY();
+	return Desk.deskMenu;
+};
+this.set_context_menu=set_context_menu;
 //»
-
-//Context Menu«
-
-const noop=()=>{};
-//const{winw,winh}=Core;
-const noprop=(e)=>{e.stopPropagation();}
-
-const menu_loc_from = (menuobj, item) => {//«
-	let type = menuobj.type;
-	let parelem = menuobj.parelem;
-	let menuelem = menuobj.menuElem;
-	let l, t, r, b;
-	let w, h;
-	let arr;
-	if (type == "desk") {
-		r = winw();
-		l = menuelem.offsetLeft;
-	} else {
-		let menurect = menuelem.getBoundingClientRect();
-		let parrect = parelem.getBoundingClientRect();
-		l = menurect.left;
-		r = parrect.right;
+const get_desk_context=()=>{//«
+	let menu = DESK_CONTEXT_MENU.slice();
+	if (globals.read_only) {
+		menu.shift();
+		menu.shift();
 	}
-	let newx, newy;
-	if (item) {
-		let r = item._gbcr();
-		newy = r.top - 5;
+	let apps_arr = globals.APPLICATIONS_MENU;
+	let apps_menu = [];
+	menu.unshift('Applications', apps_menu);
+	for (let i=0; i < apps_arr.length; i+=2){
+		apps_menu.push(apps_arr[i]);
+		let app = apps_arr[i+1];
+		if (isStr(app)) apps_menu.push(()=>{open_app(app)});
+		else apps_menu.push(app);
 	}
-	if (l + 375 < r) newx = menuelem._x + menuelem.offsetWidth;
-	else {
-		newx = menuelem._x;
-		let curelem = menuelem;
-		while (curelem) {
-			curelem._x -= curelem.offsetWidth;
-			curelem = curelem.prevelem;
-		}
-	}
-	return {
-		X: newx,
-		Y: newy
-	};
-}//»
-const ContextMenu = function(loc, prevelem) {//«
-	let elem = desk;
-
-	let killed = false;//«
-	let self = this;
-	let curitem = null;
-	let kids = [];
-//»
-	let menu = make('div');//«
-	menu.style.userSelect="none";
-	menu.className="context_menu";
-	menu._bor="1px solid #aaa";
-    menu.style.borderRadius="2px";
-    menu._bgcol=MENU_BGCOL;
-    menu._padt=5;
-    menu._padb=2;
-    menu._fs=16;
-	menu._pos="absolute";
-	menu.style.minWidth = 180;
-	let usex=loc.X-winx(), usey=loc.Y-winy();
-	if (prevelem) {
-		usex-=8;
-		usey-=2;
-	}
-	if (loc.BREL===true){
-		menu._y="";
-		menu._b = usey;
-	}
-	else {
-		menu._b="";
-		menu._y = usey;
-	}
-	if (loc.RREL===true) {
-		menu._x = "";
-		menu._r=usex;
-	}
-	else{
-		menu._r="";
-		menu._x = usex;
-	}
-//»
-	const check_menu_width = sp => {//«
-		let diff = menu.offsetWidth - sp.offsetWidth;
-		let mindiff = 77;
-		let diffoff = mindiff - diff;
-		if (diffoff > 0) sp._marr = diffoff;
-	};//»
-	const next_item = () => {//«
-		let kid;
-		if (!curitem) kid = kids[0];
-		else {
-			let pos = kids.indexOf(curitem);
-			if (pos < kids.length - 1) kid = kids[pos + 1];
-			else kid = kids[0];
-		}
-		if (kid) kid.on();
-	};//»
-	const prev_item = () => {//«
-		let kid;
-		if (!curitem) kid = kids[kids.length - 1];
-		else {
-			let pos = kids.indexOf(curitem);
-			if (pos > 0) kid = kids[pos - 1];
-			else kid = kids[kids.length - 1];
-		}
-		if (kid) kid.on();
-	};//»
-
-	this.adjust_y = function() {//«
-		let y = 0;
-		let winh=window.innerHeight;
-		let r = menu.getBoundingClientRect();
-		let _h = r.height;
-		let _y = menu._y;
-		if (isFin(_y)) {
-			if (_y + _h > winh) {
-				menu._y = winh - _h;
-			}
-			if (menu._y < 0) menu._y = 0;
-			r = menu.getBoundingClientRect();
-			if (r.bottom>winh){
-				menu._h = winh;
-				menu._overy="scroll";
-			}
-		}
-		else if (r.top < 0){
-			menu._b = "";
-			menu._y=0;
-			this.adjust_y();
-		}
-	};//»
-	this.kill = function() {//«
-		if (killed) return;
-		delete elem.context_menu;
-		menu._del();
-		if (self == desk_menu) {
-			if (desk_menu.kill_cb) desk_menu.kill_cb();
-			desk_menu = null;
-			CG.off()
-		} 
-		killed = true;
-		if (self.par) self.par.kill();
-		if (self.kid) self.kid.kill();
-	};//»
-	this.key_handler = function(e, sym) {//«
-		e.preventDefault();
-		if (sym == "UP_") prev_item();
-		else if (sym == "DOWN_") next_item();
-		else if (sym == "RIGHT_") {
-			if (curitem && curitem._is_array) curitem.select();
-		} else if (sym == "LEFT_") {
-			if (curitem && curitem.menu.par) {
-				curitem.menu.par.curitem.on();
-				delete curitem.menu.par.kid;
-				curitem.menu.menuElem._del();
-			}
-		}
-	};//»
-	this.select = function() {//«
-		if (!curitem) return cerr("No curitem!!!");
-		curitem.select();
-	};//»
-
-	this.add_item = function(namearg, val) {//«
-		const select = () => {//«
-			if (val instanceof Function) {
-				self.kill();
-				val();
-			} else if (isarr(val)) {
-				self.curitem = curitem;
-				let olditem = curitem;
-				if (curitem) curitem.off();
-				let newmenu = new ContextMenu(menu_loc_from(self, olditem), menu);
-				newmenu.kill_cb = desk_menu.kill_cb;
-				desk_menu = newmenu;
-				for (let i = 0; i < val.length; i += 2) {
-					let item = newmenu.add_item(val[i], val[i + 1]);
-					if (i == 0) item.on();
-				}
-				newmenu.par = self;
-				self.kid = newmenu;
-				newmenu.adjust_y();
-			}
-		};//»
-		const delete_menus = () => {//«
-			let gotmenu = desk_menu || elem.context_menu;
-			if (!gotmenu) {
-cerr("No gotmenu???");
-				return;
-			}
-			let gotcur = gotmenu.curitem;
-			if (!gotcur) return;
-			
-			let gotmatch = false;
-			let arr = [];
-			while (true) {
-				try {
-					arr.push(gotcur.menu.menuElem);
-					gotcur = gotcur.menu.par.curitem;
-				} catch (e) {
-					break;
-				}
-				if (!gotcur) {
-cerr("!!!! Could not find the previous item! !!!!");
-					break;
-				}
-				if (gotcur.menu === div.menu) {
-					gotmatch = true;
-					break;
-				}
-			}
-			if (!gotmatch) {
-				return;
-			}
-			for (let elm of arr) {
-				if (elem.context_menu.par) delete elem.context_menu.par.kid;
-				elm._del();
-			}
-		};//»
-
-		let div = make('div');//«
-		let namearr = namearg.split("::");
-		let name = namearr[0];
-		let shortcut;
-		div.menu = self;
-		div._marb = 5;
-		div._padl = 18;
-		div._padr = 15;
-		div._padt = 5;
-		div._padb = 5;
-		div._h = "20px";
-		div._ff = "sans-serif";
-		div._dis = "flex";
-		div.style.justifyContent = "space-between";
-		let namesp = make('span');
-		div._add(namesp);
-		div.className= "context_menu_item";
-		namesp.className ="context_menu_label";
-		menu._add(div);
-//»
-		if (isarr(val)) {//«
-			div._tcol="#000";
-			namesp.innerHTML = name;
-			let sp = make('span');
-			sp._fs = 12;
-			sp.html('&#9654;');
-			div._add(sp);
-			div._is_array = true;
-			check_menu_width(namesp);
-		} else {
-			if (val) div._tcol="#000";
-			else {
-				div._tcol="#333";
-				div.style.fontStyle="italic";
-			}
-			let mark = null;
-			if (name.match(/\x20*__XMARK__\x20*$/)) {
-				name = name.replace(/\x20*__XMARK__\x20*$/, "");
-				mark = '&#10007;'
-			} else if (name.match(/\x20*__CHECK__\x20*$/)) {
-				name = name.replace(/\x20*__CHECK__\x20*$/, "");
-				mark = '&#10003;'
-			}
-			namesp.innerHTML = name;
-			check_menu_width(namesp);
-			let gotsp;
-			if (mark) {
-				let sp = make('span');
-				gotsp = sp;
-				sp.innerHTML = mark;
-				sp._fw="bold";
-			}
-			else if (namearr[1]){
-				let sp = make('span');
-				gotsp = sp;
-				sp._tcol="#444";
-				sp.style.fontStyle = "italic";
-				sp.innerHTML = namearr[1];
-				shortcut = sp;
-			}
-			if (gotsp){
-				div._add(gotsp);
-				check_menu_width(namesp);
-			}
-		}//»
-		div.on = function(if_mouse) {//«
-			if (curitem) curitem.off();
-			div._bgcol = ACTIVE_MENU_BG;
-			div._hold_tcol = div._tcol;
-			div._tcol = ACTIVE_MENU_FG;
-			if (shortcut) shortcut._tcol = ACTIVE_MENU_FG;
-			curitem = div;
-			curitem.scrollIntoViewIfNeeded();
-			desk_menu = curitem.menu;
-			curitem.menu.curitem = curitem;
-		};//»
-		div.off = function() {//«
-			curitem = null;
-			div._tcol = div._hold_tcol;
-			div._bgcol="";
-			if (shortcut) shortcut._tcol = "#444";
-		};//»
-		div.select = select;
-		div.onclick = () => {//«
-			if(self.kid) {
-				delete_menus();
-				div.on(true);
-				return;
-			}
-			delete_menus();
-			select();
-		};//»
-		div.onmouseenter = e => {//«
-			if((desk_menu || elem.context_menu)!==self) return;
-			if (curitem) {
-				div.on(true);
-				return;
-			}
-			delete_menus();
-			div.on(true);
-		};//»
-		div.onmouseover=()=>{div.style.cursor="default";};
-		kids.push(div);
-		return div;
-	}//»
-
-	elem.context_menu = this;//«
-//	this.type=type;
-	this.menuElem = menu;
-	this.parelem = elem;
-	menu.onclick = noprop;
-	menu.onmousedown = noprop;
-	menu.ondblclick = noprop;
-	menu.oncontextmenu = noprop;
-	menu._z = CG_Z+1;
-	menu.prevelem = prevelem;
-//»
-	document.body._add(menu);
-}
-this.ContextMenu = ContextMenu;
-//»
-
-//»
-
-//Popup/Prompt«
-
-//IGen«
-
-const IGen=function() {
-
-let fs;
-let svg_open = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" ';
-
-const make_popup_str = (which) => {//«
-	let str = svg_open + ' width="64px" height="64px">';
-	if (which == "alert") {
-		str += '<path d="M 32.129316,4.1098389 A 1.9399015,1.9399015 0 0 0 30.558815,5.2119455 L 6.6155497,55.137373 a 1.9399015,1.9399015 0 0 0 1.7358178,2.782819 l 49.0437415,0 A 1.9399015,1.9399015 0 0 0 59.130927,55.10982 L 34.03045,5.1843928 a 1.9399015,1.9399015 0 0 0-1.708265,-1.0745539 1.9399015,1.9399015 0 0 0-0.192869,0 z" style="font-size:medium;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-indent:0;text-align:start;text-decoration:none;line-height:normal;letter-spacing:normal;word-spacing:normal;text-transform:none;direction:ltr;block-progression:tb;writing-mode:lr-tb;text-anchor:start;baseline-shift:baseline;color:#000000;fill:' + ALERT_YELLOW + ';fill-opacity:1;stroke:' + ALERT_YELLOW + ';stroke-width:3.87899995;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate;font-family:Sans;-inkscape-font-specification:Sans"/>';
-		str += '<g style="font-size:56px;font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#000;fill-opacity:1;stroke:none;font-family:Times New Roman">';
-		str += '<path d="m 32.621634,45.333283 c-2.575997,0-4.704,2.184002-4.704,4.704 0,2.687997 2.016003,4.76 4.648,4.76 2.687997,0 4.816,-2.072003 4.816,-4.648 0,-2.631998-2.128003,-4.816-4.76,-4.816 m 0.784,-4.368 c 0.727999,-6.887994 1.232002,-9.632006 2.912,-15.008 0.783999,-2.463998 1.008,-3.584002 1.008,-4.872 0,-3.639997-1.736003,-5.712-4.704,-5.712-3.023997,0-4.76,2.072003-4.76,5.6 0,1.399998 0.224001,2.464002 1.008,4.984 1.623998,5.319994 2.184001,8.120006 2.912,15.008 l 1.624,0"/></g>';
-	} else if (which == "error") {
-		str += '<path d="M 12.826086,22.695652 0.62845029,34.752046-16.521739,34.652173-28.578133,22.454537-28.47826,5.304348-16.280624,-6.7520463 0.86956503,-6.6521733 12.925959,5.5454627 z" transform="matrix(1.349617,0,0,1.349617,42.340122,13.11007)" style="color:#000000;fill:#d42121;fill-opacity:1;fill-rule:nonzero;stroke:#c6c6c6;stroke-width:1.3996563;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0;marker:none;visibility:visible;display:inline;overflow:visible;enable-background:accumulate" />';
-		str += '<text x="8.4782629" y="36.608696" xml:space="preserve" style="font-size:13px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffffff;fill-opacity:1;stroke:none;font-family:Sans;-inkscape-font-specification:Sans">';
-		str += '<tspan x="8.4782629" y="36.608696">ERROR</tspan></text>';
-	} else if (which == "ok") {
-		str += '<defs><filter color-interpolation-filters="sRGB" id="pu_FILTER"><feGaussianBlur stdDeviation="0.77384537" /></filter></defs>';
-		str += '<rect width="58.038403" height="58.038403" rx="8.0885181" ry="8.1922169" x="3.4741683" y="3.2831869" style="color:#000000;fill:#42c129;fill-opacity:1;fill-rule:nonzero;stroke:#000000;stroke-width:1.45200002;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0;marker:none;visibility:visible;display:inline;overflow:visible;filter:url(#pu_FILTER);enable-background:accumulate" />';
-		str += '<text x="16.18037" y="47.81963" xml:space="preserve" style="font-size:48px;font-style:normal;font-variant:normal;font-weight:normal;font-stretch:normal;text-align:start;line-height:125%;letter-spacing:0px;word-spacing:0px;writing-mode:lr-tb;text-anchor:start;fill:#ffffff;fill-opacity:1;stroke:none;font-family:Times New Roman;-inkscape-font-specification:\"Times New Roman\"">';
-		str += '<tspan x="15.18037" y="47.81963">&#x2713;</tspan></text>';
-	}
-	str += '</svg>';
-	return [str];
+	return menu;
 };//»
-const attach = (obj) => {
-	let parelm = obj['PAR'];
-	let type = obj['TYPE'];
-	let idarg = obj['ID'];
-	let subtype = obj['SUBTYPE'];
-	let svgstr, svgelm;
-	let retarr;
-	retarr = make_popup_str(subtype);
-	parelm.innerHTML = retarr.shift();
-	return parelm;
-};
-this.attach = attach;
-
-}
-
-const igen = new IGen();
-
-//»
-let popup_link_col = "#009"
-let popup_queue = [];
-const make_func_span=(str,cb)=>{let sp=make('sp');if(str=="__BR__")str="<hr style='margin:0px;height:6px;visibility:hidden;'>";sp.html(str);if(cb){sp.ael('click',cb);sp._tcol=popup_link_col;sp.style.textDecoration="underline";sp.style.cursor="pointer";}return sp;}
-const make_func_div=(all)=>{let div=make('div');for(let i=0;i<all.length;i++){let arr=all[i];if(typeof arr=="string")div._add(make_func_span(arr));else div._add(make_func_span(arr[0],arr[1]));}return div;}
-this.pophuge=(str,opts={})=>{return make_popup({STR:str,VERYBIG:true,WIN:opts.win,TIT:opts.title,SEL:opts.SEL});}
-
-const popinfo=(str,type)=>{return make_popup({'STR':str,'TYP':type,'INF':true});};this.popinfo = popinfo;
-const popok = (str, opts={}) => {//«
-//const popok = (str, timearg) => {
-	make_popup({
-		STR: str,
-		TYP: "ok",
-		TIME: opts.time,
-		WIN: opts.win,
-		TIT: opts.title,
-		CB:opts.cb
-	});
-}
-this.popok = popok;
-api.popok=(str, opts={})=>{
-	return new Promise((Y,N)=>{
-		if (!opts.cb) opts.cb = Y
-		popok(str, opts);
-	});
-};
-//»
-const poperr = (str, opts = {}) => {//«
-	return make_popup({
-		STR: str,
-		TYP: "error",
-		TIME: opts.time,
-		WIN: opts.win,
-		CB: opts.cb,
-		TIT: opts.title,
-		WIDE: opts.wide
-	});
-}
-this.poperr = poperr;
-api.poperr = (str, opts={})=>{
-	return new Promise((Y, N) => {
-		if (!opts.cb) opts.cb = Y;
-		poperr(str, opts);
-	});
-}//»
-const popup = (str, opts={}) => {//«
-	return make_popup({
-		TIT: opts.title,
-		STR: str,
-		SEL: opts.sel,
-		WIN: opts.win,
-		CB: opts.cb,
-		WIDE: opts.wide
-	});
-}
-this.popup=popup;
-api.popup=(str, opts={})=>{
-	return new Promise((Y,N)=>{
-		if (!opts.cb) opts.cb = Y
-		popup(str, opts);
-	});
-};
-//»
-this.popwide=(str,opts={})=>{opts.STR=str;opts.WIDE=true;return make_popup(opts);};
-const popkey = (arr, cb, opts={}) => {//«
-	let str="";
-	let chars={};
-	let ch;
-	if (opts.alpha){
-		str = arr;
-		for (let i=65; i <= 90; i++){
-			ch = String.fromCharCode(i);
-			chars[ch] = i;
-		}
-		for (let i=97; i <= 122; i++){
-			ch = String.fromCharCode(i);
-			chars[ch] = i;
-		}
-	}
-	else{
-		for (let i = 0; i < arr.length; i++) {
-			if (i<10) ch = String.fromCharCode(i + 48);
-			else if (i<36) ch = String.fromCharCode(i-10 + 97);
-			else if (i < 62) ch = String.fromCharCode(i-36 + 65);
-			else break;
-			str += ch + ")\xa0" + arr[i] + "<br>";
-			chars[ch]=arr[i];
-		}
-	}
-	return make_popup({
-		'TIT': opts.title||"Choose one",
-		'STR': str,
-		'KEYS': chars,
-		'CB': cb,
-		WIN:opts.win		
-	});
-}
-this.popkey=popkey;
-api.popkey = (arr, opts = {}) => {
-	return new Promise((Y, N) => {
-		popkey(arr,Y,opts);
-	});
-}
-//»
-const popin = (str, cb, opts) => {//«
-//const popin = (str, cb, deftxt, title) => {
-	if (!str) str = " ";
-	return make_popup({
-		CANCEL:true,
-		ONCANCEL:"",
-		STR: str,
-		INPUT: true,
-		CB: cb,
-		TXT: opts.deftxt,
-		TIT: opts.title
-	});
-}
-this.popin = popin;
-api.popin = (str, opts = {}) => {
-	return new Promise((Y, N) => {
-		make_popup({
-			STR: str,
-			CANCEL:true,
-			INPUT: true,
-			CB: Y,
-			TXT: opts.defTxt,
-			TIT: opts.title,
-			WIN: opts.win,
-			PASSWORD: opts.password,
-			enterOK: opts.enterOK
-		});
-	});
-}
-//»
-const popwait = (str, cb, type) => {//«
-	return make_popup({
-		STR: str,
-		TYP: type,
-		CB: cb
-	});
-}
-this.popwait=popwait;
-api.popwait = (str, type)=>{
-	return new Promise((y,n)=>{
-		popwait(str,y,type);
-	});
-};
-//»
-//Keep this in since it might be useful later, but comment out to decrease the system parse/load time for now
-//const popform=(arr,cb,title)=>{let table=make('table');let focuselm=null;for(let i=0;i<arr.length;i++){let tr=make('tr');let lab_td=make('td');lab_td.style.verticalAlign="top";let elm_td=make('td');let type=arr[i][0];let label=arr[i][1];let def=arr[i][2];let optarg=arr[i][3];let elm;if(type=="select"){if(!def)def=0;else def=parseInt(def);elm=make('select');elm.style.width="85";let list=optarg;for(let j=0;j<list.length;j++){let opt=make('option');opt.setAttribute('value',list[j]);if(j==def)opt.setAttribute("selected","true");opt.html(list[j]);elm._add(opt);}}else if(type=="field"){elm=make('span');elm.innerHTML=def;}else if(type=="check"){elm=make('input');elm.type="checkbox";if(def)elm.checked=true;elm.ael('click',e=>{setTimeout(()=>{elm.checked=!elm.checked;},1);});}else if(type=="text"){elm=make('input');elm.type="text";if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}else if(type=="textarea"){elm=make('textarea');elm.rows=6;elm.style.width=235;if(optarg)elm.setAttribute("maxlength",optarg);if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}elm.ael('mousedown',function(e){e.stopPropagation();});elm.setAttribute("name",label);lab_td.html(label+":");lab_td._tcol="#000";elm_td._add(elm);tr._add(lab_td);tr._add(elm_td);tr.elm=elm;table._add(tr);}return make_popup({'STR':table,'TYP':"form",'CB':cb,'TIT':title,'FOCUS':focuselm});};this.popform=popform;api.popform=(arr,title)=>{return new Promise((y,n)=>{popform(arr,y,title);});};
-
-this.popcancel=(str,cb)=>{return make_popup({STR:str,CANCEL:true,CB:cb});}
-const popyesno = (str, cb, if_rev) => {//«
-	return make_popup({
-		STR: str,
-		TYP: "yesno",
-		CB: cb,
-		REV: if_rev
-	});
-}
-this.popyesno = popyesno;
-api.popyesno = (str, opts = {}) => {
-	return new Promise((Y, N) => {
-		make_popup({
-			STR: str,
-			TYP: "yesno",
-			CB: Y,
-			REV: opts.reverse,
-			TIT: opts.title,
-			WIN:opts.win,
-			DEFNO: opts.defNo,
-			VERYBIG: opts.veryBig,
-		});
-	});
-}
-//»
-const poparea = (str_or_arr, title, if_rev_arr, cb, read_only, if_cancel, win) => {//«
-	let arr;
-	if (typeof str_or_arr == "string") arr = str_or_arr.split("\n");
-	else arr = str_or_arr;
-	if (if_rev_arr) arr = arr.reverse();
-	let div = make('div');
-//	div._h="100%";
-	let area = make('textarea');
-	area.value = arr.join("\n");
-	area._bgcol="#211";
-	area._tcol="#EEEEEE";
-	area.style.outline = "none";
-	area.id="prompt_textarea";
-	if (read_only) {
-		area.setAttribute("readonly", "1");
-	}
-	area._w="100%";
-	area._h="95%";
-//log(area);
-
-	area._fs = 20;
-	return make_popup({
-		USEINPUT:area,
-		'SEL': true,
-		STR: area,
-		'VERYBIG': true,
-		'CB': cb,
-		'TIT': title,
-		CANCEL:if_cancel,
-		WIN:win
-	});
-}
-this.poparea=poparea;
-this.popinarea=(tit, cb)=>{
-	poparea("",tit,null,cb,false,true);
-};
-api.popinarea=(tit, opts={})=>{
-	let if_can = true;
-	if (opts.noCancel) if_can = false;
-//	let read_only = fa;
-//if (opts.readOnly) read
-	return new Promise((y,n)=>{
-//		poparea(str,tit,null,y,true,true, opts.win);
-		poparea("",tit,null,y,opts.readOnly,if_can, opts.win);
-	})
-}
-//»
-const make_prompt = (str, def_text, cb, if_long) => {//«
-	let isshort = true;
-	if (if_long) isshort = null;
-	make_popup({
-		'STR': str,
-		'ICO': true,
-		'TXT': def_text,
-		'CB': cb,
-		'SHT': isshort
-	});
-}
-this.make_prompt=make_prompt;
-//»
-const mkpopup_imgdiv = (type, use_img, if_big_img) => {//«
-	let imgdiv = make('div');
-	imgdiv._pos='absolute';
-	let usedim = 64;
-	if (if_big_img) usedim = 128;
-	imgdiv._w = usedim;
-	imgdiv._h = usedim;
-	let usetype = type;
-	if (!type || type == "form") usetype = "alert";
-	else if (type == "yesno") usetype = "alert";
-	if (use_img) {
-		let img;
-		if (use_img instanceof HTMLImageElement) img = use_img;
-		if (img && img instanceof HTMLImageElement) {
-			imgdiv.style.backgroundImage = "url(" + img.src + ")";
-			imgdiv.style.backgroundPosition = "center center";
-			imgdiv.style.backgroundRepeat = "no-repeat";
-			imgdiv.style.backgroundSize = "contain";
-		}
-	} else {
-		igen.attach({
-			'PAR': imgdiv,
-			'TYPE': "popup",
-			"SUBTYPE": usetype
-		});
-	}
-	return imgdiv
-}//»
-const do_links = elm=>{//«
-	let lns = Array.from(elm.getElementsByTagName("a"));
-	for (let ln of lns){
-		let win;
-		ln.onclick=e=>{
-			e.preventDefault();
-			e.stopPropagation();
-			if (win&&!win.closed){
-				win.focus();
-				return;
-			}
-			win = window.open(ln.href, ln.href,`width=${window.outerWidth-100},height=${window.outerHeight-100}`)
-		};      
-		ln.onmousedown=(e)=>{
-			e.preventDefault();
-			e.stopPropagation();
-		}       
-		ln.oncontextmenu=e=>{
-			e.stopPropagation();
-		};
-	}
-};//»
-const mkpopup_tdiv = (str, opts={}) => {//«
-	let w = opts.WIN;
-	let text_fs = opts.FS;
-	let if_big_img = opts.BIGIMG;
-	let selectable = opts.SELECTABLE;
-	let if_verybig = opts.VERYBIG;
-	let if_systerm = opts.SYSTERM;
-	let tdiv = make('div');
-	if (selectable) {
-		tdiv.style.userSelect = "text";
-		tdiv.ael('mousedown', function(e) {
-			e.stopPropagation()
-		});
-	}
-	else no_select(tdiv);
-	if (text_fs) tdiv._fs = text_fs;
-	else tdiv._fs = 18;
-//	if (!(opts.NOBOLD||if_systerm)) tdiv._fw="bold";
-	
-	tdiv._tcol="#eee";
-	tdiv._pos='absolute';
-    tdiv._bor= "0px solid transparent";
-	let usex = 109;
-	if (if_big_img) usex += 64;
-	tdiv._loc(usex, 37);
-	if (if_verybig) {
-		tdiv._bor="1px dotted #333";
-		tdiv.classList.add("scroller");
-		tdiv._overy="auto";
-		if (w){
-			tdiv._w = w._gbcr().width - (20 + 134);
-			tdiv._h = w._gbcr().height - (35 + 79);
-		}
-		else{
-			tdiv._w = winw() - (20 + 134);
-			tdiv._h = winh() - (35 + 79);
-		}
-	} else {
-		tdiv._overy="auto";
-		tdiv._w = opts.WIDTH - 134;
-		tdiv._h = 75;
-	}
-	tdiv._overx="hidden";
-	if (str) {
-		if (typeof str == "string") {
-			tdiv.style.overflowWrap = "break-word";
-			tdiv.innerHTML=str;
-		} 
-		else if (str instanceof HTMLElement) tdiv._add(str);
-		do_links(tdiv);
-	}
-//log(tdiv);
-	tdiv.tabIndex="-1";
-//setTimeout(()=>{
-//	tdiv.focus();
-//},100);
-	return tdiv;
-}//»
-const make_popup = (arg) => {//«
-	const popup_dequeue = () => {//«
-		make_popup(_popup_queue.shift());
-	}//»
-	const mkbut=(txt, if_active)=>{//«
-		let d = mkdv();
-//		d.tabIndex=""+(cur_tab_index++);
-		d.onfocus=()=>{
-			d._fw="bold";
-			d._bgcol="#ccf";
-		}
-		d.onblur=()=>{
-			d._fw="";
-			d._bgcol="#aaa";
-		}
-		d.style.textAlign="center";
-		d._fs=14;
-		d._tcol="#000";
-		d.innerText=txt;
-		d._bor="1px solid #ccc";
-		d._bgcol="#aaa";
-		d.onmousedown=()=>{d._bor="1px dotted #ccc";};
-		d.onmouseup=()=>{d._bor="1px solid #ccc";};
-		d.onmouseout=()=>{d._bor="1px solid #ccc";};
-		d._w=68.46;
-		d.type = "popup_button";
-		if (if_active) active_button = d;
-		return d;
-	}//»
-	const do_cancel = ()=>{//«
-		div._del();
-		if (win) delete win.popup;
-		else{
-			CG.off();
-			CPR = null;
-		}
-		if (cb) {
-			if ('ONCANCEL' in arg) cb(arg.ONCANCEL);
-			else cb(false);
-		}
-		if (!win){
-			if (_popup_queue.length) popup_dequeue();
-			else if (holdwin) holdwin.on();
-		}
-	};//»
-	const nopropdef=(e)=>{//«
-		e.stopPropagation();
-		e.preventDefault();
-	};//»
-	const noprop=(e)=>{
-		e.stopPropagation();
-	};
-	let cur_tab_index = 1;
-	let active_button;
-	let win = arg.WIN;
-	let _popup_queue = popup_queue;
-	if (!win) {
-		if (CPR && CPR !== true) {
-			_popup_queue.push(arg);
-			return;
-		}
-	}
-	let choices;
-	let no_buttons;
-	let if_cancel, if_input, if_password;
-	let if_systerm;
-	let expires;
-	let if_rev, title, str, type;
-	let res_text, cb, if_short, if_info;
-	let text_fs;
-	let verybig;
-	let big_img, use_img, caption, selectable;
-	let keys, timer;
-	let oktxt, cantxt;
-	let comp_keydown;
-	let div = make('div');
-	div.id="system_prompt";
-	let butdiv = make('div');
-	let cancel_button_div;
-	let okbutdiv;
-	butdiv._pos="absolute";
-	butdiv._b=0;
-	butdiv._r=0;
-	butdiv._mar=5;
-	div._add(butdiv);
-	div._fs=18;
-	div.style.userSelect = "none";
-	div.style.boxShadow = prompt_boxshadow;
-	if (document.activeElement) document.activeElement.blur();
-	if (typeof arg == "string") {
-		str = arg;
-		type = typearg;
-	} else if (typeof arg == "object") {
-		str = arg.STR || arg.DIV;
-		if_cancel = arg.CANCEL;
-		verybig = arg.VERYBIG;
-		oktxt = arg.OKTXT;
-		cantxt = arg.CANTXT;
-		caption = arg.CAP;
-		text_fs = arg.FS;
-		use_img = arg.IMG;
-		big_img = arg.BIGIMG;
-		if_input = arg.INPUT;
-		if_password = arg.PASSWORD;
-		res_text = arg.TXT;
-		cb = arg.CB;
-		if_short = arg.SHT;
-		if_info = arg.INF;
-		title = arg.TITLE || arg.TIT;
-		timer = arg.TIME;
-		expires = arg.EXP;
-		keys = arg.KEYS;
-		if_rev = arg.REV;
-		selectable = arg.SEL;
-		type = arg.TYPE || arg.TYP;
-		no_buttons = arg.NOBUTTONS;
-	} else if (arg) str = arg;
-	if (!str) str = "";
-	if (typeof str == "object" && typeof str.length == "number") str = make_func_div(str);
-	else if (typeof str == "string") str = str.replace(/__BR__/g, "<hr style='margin:0px;height:6px;visibility:hidden;'>");
-//	if (str instanceof HTMLElement) div.htelem = str;
-	let usewid = 420;
-	if (big_img||arg.WIDE) usewid += 64;
-	let def_text_h = 75;
-	let def_h = arg.HEIGHT||154;
-	if (big_img) def_h += 32;
-	if (arg.WIDTH) usewid = arg.WIDTH;
-	else if (if_short) usewid = 275;
-	else if (verybig) {
-		if (win){
-			usewid = win._gbcr().width-20;
-			def_h = win._gbcr().height-35;
-		}
-		else{
-			usewid = winw() - 20;
-			def_h = winh() - 35;
-		}
-		def_text_h = def_h - 79;
-	}
-	let holdwin;
-	if (!win) {
-		holdwin = CWIN;
-		if (holdwin) holdwin.off();
-	}
-	if (keys) {
-		if (keys == "__ANY__") div.keys = true;
-		else div.__keys = keys;
-	}
-	if (win) {
-		win.popup=div;
-		div._z=10000000;
-		win._add(div);
-	}
-	else document.body._add(div);
-	
-	div.ael('dblclick', e => {
-		e.stopPropagation()
-	});
-	if (cb) div.cb = cb;
-	div.nosave = true;
-	div._w = usewid;
-	div._h = def_h;
-//	div._bgcol="#fff";
-	div._bgcol=WIN_COL_OFF;
-//	div._tcol="#ccc";
-	div._pos='absolute';
-	if (!win) {
-		div._z = 10000000;
-		if (CG) CG.on();
-		CPR = div;
-	}
-	let bar = make("div");
-	bar.type = "prompt";
-	bar.style.borderBottom = "1px solid #515151";
-	bar._pos="absolute";
-	bar._h = 21;
-	bar._w = usewid;
-	if (title) {
-		bar.style.textAlign = "center";
-		bar._fw="bold";
-		bar._fs="16px";
-		bar._padt = 4;
-		bar._tcol="#bbb";
-		bar.innerHTML = title;
-	}
-	bar._bgcol="#171717";
-	div._add(bar);
-	let imgdiv = mkpopup_imgdiv(type, use_img, big_img);
-	imgdiv._x = 25;
-	div._add(imgdiv);
-	imgdiv._y = div.offsetHeight / 2 - imgdiv.offsetHeight / 2;
-	if (caption) {
-		let capdiv = make('div');
-		capdiv._tcol="#000";
-		capdiv._pos='absolute';
-		capdiv._loc(25, 100);
-		capdiv.innerHTML = caption;
-		capdiv.style.textAlign = "center";
-		div._add(capdiv);
-		let wid = capdiv.offsetWidth;
-		if (wid > 64) {
-			let diffx = (wid - 64) / 2;
-			if (diffx < 25) capdiv._x = 25 - diffx;
-			else capdiv._x = 0;
-		}
-	}
-	let tdiv = mkpopup_tdiv(str, {
-		NOBOLD: arg.NOBOLD,
-		WIDTH: usewid,
-		WIDE: arg.WIDE,
-		FS: text_fs,
-		BIGIMG: big_img,
-		SELECTABLE: selectable,
-		VERYBIG: verybig,
-		SYSTERM: if_systerm,
-		WIN:win
-	});
-	if (str instanceof HTMLElement) div.htelm = str;
-	div.messdiv = tdiv;
-	div._add(tdiv);
-
-	okbutdiv = make('div');
-	okbutdiv._dis="inline-block";
-	let input;
-	if (if_input||arg.USEINPUT) {
-		if (arg.USEINPUT) {
-			input = arg.USEINPUT;
-//			butdiv._add(okbutdiv);
-		}
-		else {
-			input = make('input');
-			if (res_text) input.value = res_text;
-			if (if_password) input.type="password";
-			else input.type = "text";
-			if (if_short) input._w = 140;
-			else input._w = 250;
-			input._h = 20;
-			tdiv._add(make('br'));
-			tdiv._add(input);
-		}
-		input.tabIndex = ""+(cur_tab_index++);
-		input.ael('mousedown', e => {
-			e.stopPropagation();
-		});
-		setTimeout(() => {
-			input.focus();
-			input.select();
-		}, 1);
-		div.res_input = input;
-	}
-	else if (if_cancel) okbutdiv = null;
-	let useok = "OK";
-	if (oktxt) useok = oktxt;
-	else if (type == "yesno") {
-		useok = "YES";
-	}
-	if (okbutdiv) okbutdiv._add(mkbut(useok, true));
-	div.ok_button = okbutdiv;
-	if (keys||no_buttons) {
-		okbutdiv._op = 0;
-		div.inactive = true;
-	}
-	const ok_cb = () => {//«
-		div._del();
-		delete div.active;
-		if (input && input.matchdiv) input.matchdiv._del();
-		if (!win&&CG) CG.off();
-		if (comp_keydown) document.removeEventListener('keydown', comp_keydown);
-		if (type == "form") {
-			let rows = div.htelm.childNodes;
-			let retobj = {};
-			for (let i = 0; i < rows.length; i++) {
-				let elm = rows[i].elm;
-				if (elm.type == "checkbox") retobj[elm.name] = elm.checked;
-				else retobj[elm.name] = elm.value;
-			}
-			if (cb) cb(retobj);
-
-			if (win) {
-				delete win.popup;
-				if (win===CWIN&&win.app&&win.app.onfocus) {
-					win.app.onfocus();
-					if (win.isScrollable) {
-cwarn("win.isScrollable test passed: WOPMKLYTG");
-						win.main.focus();
-					}
-				}
-			}
-			else CPR = null;
-			return;
-		}
-		if (div.timer) clearTimeout(div.timer);
-		if (div.cb) {
-			if (div.res_input) div.cb(div.res_input.value);
-			else {
-				if (div.__keys) {
-					if (div.choices) div.cb(div.choices[div.keyok]);
-					else div.cb(div.keyok);
-				}
-				else {
-					div.cb(true);
-				}
-			}
-		}
-		if (win) {
-			delete win.popup;
-			if (win===CWIN&&win.app&&win.app.onfocus) {
-				win.app.onfocus();
-				if (win.isScrollable) {
-cwarn("win.isScrollable test passed: WPMKIYTGH");
-					win.main.focus();
-				}
-			}
-		}
-		else {
-			CPR = null;
-			if (_popup_queue.length) {
-				CPR = true;
-				popup_dequeue();
-			} else if (holdwin) holdwin.on();
-		}
-	};//»
-	div.ok = ok_cb;
-	div.enterOK = arg.enterOK;
-	if (!no_buttons) okbutdiv.ael('click', ok_cb);
-	if (expires || timer) {
-		if (expires) {
-			timer = expires - now();
-			if (timer < 0) timer = 0;
-		}
-		let timerdiv = make('div');
-		timerdiv._pos='absolute';
-		timerdiv._loc(1, 1);
-		timerdiv._w = 1;
-		timerdiv._h = 1;
-		timerdiv._op = 0;
-		div._add(timerdiv);
-		div.timeoutdiv = timerdiv;
-		timerdiv.ael('click', e => {
-			e.stopPropagation();
-			div._del();
-			delete div.active;
-			if (!win) CG.off();
-			if (comp_keydown) document.removeEventListener('keydown', comp_keydown);
-			if (div.cb) div.cb();
-
-			if (win) delete win.popup;
-			else{
-				CPR = null;
-				if (_popup_queue.length) {
-					CPR = true;
-					popup_dequeue();
-				} else if (holdwin) holdwin.on();
-			}
-		});
-		div.timer = setTimeout(_ => {
-			if (!win) div.timeoutdiv.click();
-			else if (CWIN && CWIN.popup === div) CWIN.popup.timeoutdiv.click();
-		}, parseInt(timer));
-	}
-	if (if_cancel || type == "form" || type == "yesno" || cantxt) {
-		cancel_button_div = make('div');
-		cancel_button_div._dis="inline-block";
-		cancel_button_div._marl=10;
-		let usecan = "CANCEL";
-		if (cantxt) usecan = cantxt;
-		else if (type == "yesno") {
-//			if (if_rev) usecan = "YES";
-//			else usecan = "NO";
-			usecan = "NO";
-		}
-		cancel_button_div.ael('click', () => {
-			do_cancel();
-		});
-//		butdiv._add(cancel_button_div);
-		if (!if_input && !arg.USEINPUT && if_cancel) {
-			cancel_button_div._add(mkbut(usecan, true));
-			div.cancel_only = true;
-		} else {
-			cancel_button_div._add(mkbut(usecan, false));
-		}
-		div.cancel_button = cancel_button_div;
-	}
-	div.cancel = do_cancel;
-
-	if (verybig){}
-	else if (tdiv.scrollHeight > def_text_h) {
-		let hdiff = tdiv.scrollHeight - def_text_h;
-		let tot_h = window.innerHeight;
-		let hi_h = def_h + hdiff + 20;
-		if (hi_h <= tot_h) {
-			div._h = def_h + hdiff + 5;
-			tdiv._h = def_text_h + hdiff+5;
-			center(div);
-		} else {
-			div._h = tot_h - 20;
-			tdiv._h = (tot_h - 20) - (def_h - def_text_h);
-			center(div);
-		}
-		div._y = div._y - 17;
-	}
-
-let butdiv1, butdiv2;
-if (okbutdiv && cancel_button_div){
-	if (if_rev) {
-		butdiv1 = cancel_button_div;
-		butdiv2 = okbutdiv;
-	}
-	else{
-		butdiv1 = okbutdiv;
-		butdiv2 = cancel_button_div;
-	}
-}
-else if (okbutdiv) butdiv1 = okbutdiv;
-else if (cancel_button_div) butdiv1 = cancel_button_div;
-if (butdiv1) {
-	butdiv._add(butdiv1);
-	butdiv1.childNodes[0].tabIndex=""+(cur_tab_index++);
-}
-if (butdiv2) {
-	butdiv._add(butdiv2);
-	butdiv2.childNodes[0].tabIndex=""+(cur_tab_index++);
-}
-	if (input){}
-	else if (arg.FOCUS) arg.FOCUS.focus();
-	else if (butdiv1) setTimeout(()=>{butdiv1.childNodes[0].focus();},10);
-
-	if (!win) center(div);
-	else center(div, win);
-	div.active = true;
-	return div;
-
-}//»
-
-this.make_popup = make_popup;
-NS.api.wdg=api;
-NS.api.widgets=api;
-globals.api.wdg = api;
-//»
-
-}//»
-
-const WDG = new Widgets();//«
-globals.widgets = WDG;
-const{popup:_popup,poperr:_poperr,popok:_popok,make_popup:_make_popup}=WDG;
-const WDGAPI = NS.api.widgets
-const{popwait, popyesno} = WDGAPI;
-const popup=(s,opts)=>{_popup(s,opts);};
-const poperr=(s,opts)=>{_poperr(s,opts);};
-const popok=(s,opts)=>{_popok(s,opts);};
-const make_popup = arg=>{return _make_popup(arg);};
-//»
-
 //»
 //Saving«
 
@@ -8149,46 +8199,6 @@ api.saveAs=(win, ext)=>{//«
 };//»
 
 //»
-//«Context Menu
-const set_context_menu = (loc, opts={}) => {//«
-	CG.on();
-	let dx = 0;
-	let usex = loc.X - winx();
-	let usey = loc.Y - winy();
-	if (usex + 200 > winw()) dx = usex + 200 - winw();
-	desk_menu = new WDG.ContextMenu({
-		X: usex-dx,
-		Y: usey,
-		BREL:opts.BREL,
-		RREL:opts.RREL
-	});
-	let items = opts.items || get_desk_context();
-	for (let i = 0; i < items.length; i += 2) {
-		desk_menu.add_item(items[i], items[i + 1]);
-	}
-	desk_menu.adjust_y();
-	return desk_menu;
-};
-this.set_context_menu=set_context_menu;
-//»
-const get_desk_context=()=>{//«
-	let menu = DESK_CONTEXT_MENU.slice();
-	if (globals.read_only) {
-		menu.shift();
-		menu.shift();
-	}
-	let apps_arr = globals.APPLICATIONS_MENU;
-	let apps_menu = [];
-	menu.unshift('Applications', apps_menu);
-	for (let i=0; i < apps_arr.length; i+=2){
-		apps_menu.push(apps_arr[i]);
-		let app = apps_arr[i+1];
-		if (isStr(app)) apps_menu.push(()=>{open_app(app)});
-		else apps_menu.push(app);
-	}
-	return menu;
-};//»
-//»
 //Util«
 
 const NOOP=()=>{}
@@ -8273,10 +8283,10 @@ const show_overlay=(str)=>{//«
 api.showOverlay = show_overlay;
 //»
 const winx=()=>{return 0;};
-this.winx=winx;
 const winy=()=>{return 0;};
-this.winy=winy;
 const winw=()=>{return window.innerWidth;}
+this.winx=winx;
+this.winy=winy;
 this.winw = winw;
 const winarea = ()=>{return window.innerWidth * window.innerHeight;};
 const winh = (if_no_taskbar) => {//«
@@ -8297,6 +8307,17 @@ const noprop=e=>{e.stopPropagation()}
 const nopropdef=e=>{e.preventDefault();e.stopPropagation()}
 const no_select=(elm)=>{elm.style.userSelect="none"}
 
+
+const POP = new Popup(Desk);
+globals.widgets = POP;
+globals.popup = POP;
+const{popup:_popup,poperr:_poperr,popok:_popok,make_popup:_make_popup}=POP;
+const POPAPI = NS.api.popup
+const{popwait, popyesno} = POPAPI;
+const popup=(s,opts)=>{_popup(s,opts);};
+const poperr=(s,opts)=>{_poperr(s,opts);};
+const popok=(s,opts)=>{_popok(s,opts);};
+const make_popup = arg=>{return _make_popup(arg);};
 
 //»
 //Keyboard«
@@ -8340,9 +8361,9 @@ const check_input = ()=>{//«
 	return false;
 };//»
 	const check_prompt=cpr=>{//«
-		if (cpr.key_handler) {
+		if (cpr.keyHandler) {
 			if (kstr == "ENTER_A") kstr = "ENTER_";
-			else return cpr.key_handler(kstr, e, false, code, mod_str);
+			else return cpr.keyHandler(kstr, e, false, code, mod_str);
 		}
 		let okbut;
 		let canbut = cpr.cancel_button;
@@ -8412,7 +8433,7 @@ const check_input = ()=>{//«
 		cobj = cwin.app;
 	}
 
-	let cpr = CPR;
+	let cpr = Desk.CPR;
 	let code = e.keyCode;
 	let mod_str = "";
 	let chr, kstr;
@@ -8480,7 +8501,8 @@ or when there is an active context menu.
 	}//»
 //Enter key selects a menu option or unminimizes a window
 	else if (kstr == "ENTER_") {//«
-		if (desk_menu) return desk_menu.select();
+//		if (desk_menu) return desk_menu.select();
+		if (Desk.deskMenu) return Desk.deskMenu.select();
 		else if (cwin && cwin.context_menu) return cwin.context_menu.select();
 		else if (cwin && cwin.isMinimized) {
 			return cwin.unminimize();
@@ -8488,12 +8510,15 @@ or when there is an active context menu.
 	}//»
 //Direction keys to navigate the current context menu
 	else if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {//«
-		if (desk_menu) return desk_menu.key_handler(e, kstr);
-		else if (cwin && cwin.context_menu) return cwin.context_menu.key_handler(e, kstr);
+//log(typeof desk_menu.keyHandler);
+		if (Desk.deskMenu) {
+			return Desk.deskMenu.keyHandler(e, kstr);
+		}
+		else if (cwin && cwin.context_menu) return cwin.context_menu.keyHandler(e, kstr);
 	} //»
 //We have a context menu on the desktop. Kill it with Escapes, or bail out.
-	else if (desk_menu) {//«
-		if (kstr == "ESC_") desk_menu.kill();
+	else if (Desk.deskMenu) {//«
+		if (kstr == "ESC_") Desk.deskMenu.kill();
 		return;
 	}//» 
 //If there's a click guard, don't window escape things below.
@@ -8708,8 +8733,8 @@ const dokeypress = function(e) {//«
 	if (PREV_DEF_ALL_KEYS) e.preventDefault();
 	if (CEDICN) return;
 	let code = e.charCode;
-	if (CPR) {
-		if (CPR.key_handler && code >= 32 && code <= 126) CPR.key_handler(null, e, true, code, "");
+	if (Desk.CPR) {
+		if (Desk.CPR.keyHandler && code >= 32 && code <= 126) Desk.CPR.keyHandler(null, e, true, code, "");
 		return;
 	}
 	let w = CWIN;
@@ -8726,9 +8751,9 @@ const dokeyup = function(e) {//«
 	last_keyup = Date.now();
 	if (CEDICN) return;
 	let w = CWIN;
-	let cpr = CPR;
+	let cpr = Desk.CPR;
 	let getcpr = () => {
-		return CPR;
+		return Desk.CPR;
 	};
 	let code = e.keyCode; 
 
@@ -8824,4 +8849,5 @@ const dokeyup = function(e) {//«
 //»
 
 //»
+
 
