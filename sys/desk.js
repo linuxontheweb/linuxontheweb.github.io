@@ -1,294 +1,4 @@
-/*1/29/24: Shouldn't Win.childWin more appropriately be Win.childWins? «
-Whichever workspace the parent window goes to, its childWins should follow.
-We're not allowing "ownedBy" windows to have the ability to invoke switch_to_workspace
-from within its context menu (see @GSKRBSJTK).
-»*/
-/*1/1/24:« Just looking at the whole api.saveAs Workflow, from Initialization
-@DWEUNFKL to:
-1) Cancel
-2) Success
 
-Let's look into Window.onkill, and giving it options, in order to know when it is in
-1) Window.reload @DEKLKSMD
-2) window.onbeforeunload @SMKLDKSF
-
-Also, when doing the saveAs workflow, we need the Folder to list the files of the
-same type (e.g. .txt), **AS WELL AS** the subfolders. The question is, when it comes to one
-of the icons of our same type, what do we do upon "selecting" it? 
-
-Upon clicking it: we put the name into the textarea.
-Upon double-clicking, we put the name in the textarea AND click the SAVE button.
-
-EITHER WAY: THIS OPERATION WILL FAIL (UNLESS AN EXPLICIT NUCLEAR_OPTION IS SET).
-
-»*/
-/*12/22/24: Just doing a simple desktop icon toggling routine.«
-
-I'm pretty sure that all icons that are being added to the desktop *MUST*
-got through placeInIconSlot, so I'm cutting everything off about icon
-visibility for newly created desktop icons @LCIUDHJ.
-
-So now each workspace can define what it wants for the background color
-and image just by updating the body element for color (solid or gradient)
-and updating the desk_imgdiv with the image url.
-
-The body is what has the color and desk_imgdiv has the image.
-
-toggle_icon_display @XKNFIUHJ is my working prototype for doing the kind of
-changing of desktop styles when switching to different workspaces that I have
-in mind.
-
-
-Need to finish up tile_windows, and allow for Workspaces to "own" their own
-background color and image divs, and decide whether to have the icon_div visible or not.
-
-OKAY: I'm not saying the algorithm @PMNTYJ is perfect, but it seems to work decently
-enough, and it is trivial to put the workspace into layout mode (l_CA), such that
-the user is given big, fat handles to do fine-grained adjustments to the windows.
-
-You can call tile_windows multiple times, with the fit becoming more "snug" each time
-until it finally detects window overlap, and finally refuses to do the tiling algorithm
-again.
-
-
-»*/
-/*«Notes*/
-/*12/21/24: Now we have Workspace objects that get key events sent to them if there«
-is a focused window. Otherwise, the desktop itself gets to decide what to do with
-the given key event.
-
-I mainly want to make it trivial to set flags on a given workspace, via the WorkMan
-app or the command line, so as to disallow ad-hoc changes to window layout.
-
-In a workspace, we can keep state related to "Workspace global states", such as tiled
-windows or having them be "locked down", such that hotkeys and/or clicks don't work. 
-
-What kinds of flags can we have here?
-
-allowClose
-allowMove
-allowResize//including maximize, fullscreen
-allowMinimize
-allowNone
-
-How about a "winman" command?
-
-We can set these move/close/resize properties on the individual windows and/or
-the workspaces.
-
-Now there are more simplified/ more objective/ more granular methods for allowing/
-blocking window management functions, now we are in a better position to enable higher 
-order methods like various tiling arrangements.
-
-Now that we are checking the key events for these window management functions, we need
-to apply this to the mouse movements as well.
-
-Now we have a new kind of tile_windows @JDURKJS. Here we just have the algorithm
-to find us the closest window with a bottom edge that stops our top edge from going
-all the way to the top of the browser window.
-
-So now we just have to actually extend the edge as necessary, and then do the same
-thing for the remaining edges (bottom, left, right) of all the windows.
-
-We can save on cycles here by "remembering" all of the edges that we've already extended,
-if in fact we are going to bring two edges together to meet in the middle, which 
-seems the most "just" thing for a tiling algorithm to do.
-
-We can set these as flags on our window object, or a sub-object within it, like:
-
-win.tiledEdges = {left: false, right: false, top: false, bottom: false}.
-
-We can also just check of the given edge to see if it is flush with the browser edge.
-
-»*/
-/*12/20/24: Just got rid of the idea that new folder windows are created whenever «
-you navigate to another folder using one of the following methods (such that the
-new windows perfectly "replace" the old ones by copying the dimensions of the
-old ones, making it merely seem like the same window is being used):
-
-1) Pressing the 'b' key: to navigate to the parent folder (if the fullpath of
-the current folder isn't '/')
-2) Pressing the 'f' key: to navigate to the implicit "next child folder" (this
-is only possible when the 'b' key has previously been used)
-3) When double-clicking or using the folder's icon Cursor: to navigate to an
-explicit "next child folder" (this currently clears away the Folder app's prevPaths array)
-
-That was a really embarrasing aspect of how I used to enable folder navigation.
-
-* * * * * * *
-
-Now, the last thing I can really think about in order to really start using this thing
-is better window/application opening and layout management, particularly, I think, via
-the tiling paradigm. I want a command to define the tiling of a given workspace, based
-on layout modes and percentages of filling the browser window's width/height.
-
-Starting with 2 windows, there are only two modes:
-
-1) 2 rows:
-|---------|
-|---------|
-|_________|
-
-2) 2 columns
-_________
-|	|	|
-|	|	|
-|	|	|
----------
-
-Then with 3 windows, we have 6 modes:
-
-1) 3 columns
-_____________
-|	|	|	|
-|	|	|	|
-|	|	|	|
--------------
-
-2) 3 rows
-|---------|
-|---------|
-|---------|
-|_________|
-
-3) 1 column and 2 rows, such that each row's width is the browser width - the column's width
-
-	a) With the column on the left
-	____________
-	|	|	   |
-	|	|______|
-	|	|	   |
-	------------
-
-	b) With the column on the right
-	_____________
-	|	   |	|
-	|______|	|
-	|	   |	|
-	-------------
-
-4) 1 row and 2 column, such that each column's height is the browser height - the row's height
-
-	a) With the row on the bottom
-	___________
-	|    |    |
-	|    |    |
-	|---------|
-	|_________|
-
-
-	a) With the row on the top
-	|---------|
-	|_________|
-	|    |    |
-	|____|____|
-
-As long as these are defined in terms of percentages, then we can resize all of
-the windows whenever the browser's dimension's change, via either 
-1) browser window magnification
-2) opening/closing the developer console
-
-So this gives us 8 distinct layout formats (2 w/ 2 windows; 6 w/ 3 windows)
-
-We can also give a minimum height/width for certain "minor" windows that we don't want
-to shrink any smaller than any absolute value (so that it will take up a larger percentage
-than its given percentage indicates). I am mainly thinking here about the new "term.log"
-thing that I've created.
-
-I actually *really* want a command that opens windows in a given workspace, and
-then tiles them according to a certain layout "prescription".
-
-How about looking for an ~/.init/desk.js during the init phase???
-
-»*/
-/*12/19/24: Want the new Ctrl+Alt+[1-9] window manager stuff to bring me over to the«
-desktop that its on. Where is raise_bound_win
-»*/
-/*12/17/24: Window Manager time! Want an app called WorkMan that gives us a graphical«
-interface into what I starting working on yesterday with the bindwin command.
-Need to give an option to bindwin to allow a string description.
-
-You open it up with Ctrl+Alt+0. Then you just pick the window you want to rearrange
-by pressing the associated number key (without modifiers). Then you move it around
-with the arrow keys (left/right if the window are arranged horizontally, up/down if
-vertically). Toggle between row-wise or column-wise alignment via "/". Escape
-"deselects" the currently selected window.
-»*/
-/*12/16/24: DumHack @FSKEUSHFK to "fit" a little window number indicator into «
-the bottom left corner without breaking all of the delicately balanced (vis-a-vis 
-css display and positioning) stuff in the footer. We had to give the 'footer_wrap'
-a relative positioning, and then create a 'numdiv' with abolute positioning, in
-order to keep things simple (i.e. without having to get into a whole bunch of
-head-scratching about how to work with the flex-display nature of the 'statdiv'
-down on the footer). Putting the number indiscretely here on the bottom left
-adds a sort of "balancing," fung-shui quality to the whole thing, especially
-when the application shows nothing on the statdiv.
-
-The motivation here is to make it trivial to locate the global handle to
-windows, so it can be used by, i.e. the new [1-9]_CA shortcut @XKLEUIM
-or by some kind of Window Manager App (WMA) that can be invoked by 0_CA.
-
-Then we can use the CLI or the WMA to bind our windows to these keysyms. I
-see the WMA version of this as being a kind of "macro", such that there can
-be a two-chord sequence in order to bring up lesser used windows than the
-ones in the quick/easy [1-9]_CA slots. The combination might be as simple
-as 0_CA + a (pressing Ctrl+Alt+0, letting go, and then pressing "a").
-
-This is my quick/dirty way of greatly increasing the available keystrokes that
-exist for the purpose of "random-accessibly" bringing your windows into focus.
-
-Then we can start getting to work on our own internal development of our own
-Shell. Eventually, we are going to want to use this stuff in a desktop
-initialization script (possibly with our shell implementation or some kind of
-*VERY* simple language we can work on, for the purpose of commanding the GUI).
-
-Just created a 'bindwin' command, e.g.:
-~$ bindwin <win_id_num> <key_num[1-9]>
-
-»*/
-/*11/25/24: @WJKNMTYT: When trying to 'mv' a file like this:«
-$ mv blah.txt FOOFOOFOO
-
-... node.appName gets to be the name of the application. So this property needs
-to be deleted at the appropriate point in the whole process. So we are NOT
-choosing @FUIMNTYU to delete it (but rather in fs.com_mv @TUIMN). We might need
-to have a '.isData' property on the nodes (as well as a '.isFile'), in order to
-cover ALL of our bases (Now we are adding these in mk_dir_kid). Then we can just check
-for .isFile if we want to do stuff like deleting the node.appName.
-node.appName is only "dynamically" set in saveFsByPath @DHYUI and mk_dir_kid
-@PYTNM.
-
-»*/
-/*11/22/24 « Want to update the logic in 'make_app' (@DIOLMTNY) to reflect modern 
-standards, namely replacing the callback logic (@BGEIUOP) with Promises. Then, go 
-through all of the ways that application windows are opened to use this new logic.
-
-HAVING ALL SORTS OF PROBLEMS RENAMING ICONS TO DIFFERENT APPLICATIONS (PARTICULARLY TO
-THE DEFAULT BINVIEW APPLICATION), AND THEN OPENING THEM AFTER RENAMING THEM!!!
-
-@FKIOPIU: figured out how to point to the "real" "imgdiv". The one at
-wrapper.childNodes[0] could sometimes be the little thing at the top-left
-corner of the text icons. So when we updateDOMElement (via the Terminal's 'mv' command)
-from a text icon to a DEF_BIN_APP icon, it still keeps the little thing at the
-top-left corner (e.g. "txt" or whatever the text extension is). So we just need
-to delete this dumb thing (created @YPOIKLJ) @LCUITYEP in Icon.updateDOMElement!!! Took
-away the apparently superfluous logic @GJKLIUYT. This attempt to tag
-*everything* with '.iconElem' might be related to the algorithmic "paranoia" of
-making sure that the icon cursor can always select the icon in places like
-@FBVDGHJ.
-
-NEED TO FILTER ALL OF THIS NAMING/IMAGING/RENAMING/REIMAGING LOGIC THROUGH THE VERY 
-SAME METHODS (RATHER THAN DOING THE ONE THING IN THE MAIN BODY OF THE ICON LOGIC
-AND THE OTHER IN A RENAME METHOD)!!!! ALSO, IT IS CONFUSING TO HAVE AN ICON.setLabelName
-method (which only changes the name in the icon's "namespan") AS WELL AS AN
-ICON.updateDOMElement (which internally calls setLabelName and does other stuff besides).
-
-We need a single method that does all of the creation of icon images (including
-deleting anything that might already be there as well, and adding whatever "frills"
-are necessary like those 'txt' things in the upper left corners...).
-
-»*/
-/*»*/
 //Imports«
 
 const NS = LOTW;
@@ -366,6 +76,8 @@ const {
 } = NS.api.util;
 
 //»
+
+//Desk«
 
 class ContextMenu {//«
 
@@ -576,7 +288,7 @@ document.body._add(menu);
 			}
 		};//»
 		const delete_menus = () => {//«
-			let gotmenu = Desk.deskMenu || this.elem.context_menu;
+			let gotmenu = this.Desk.deskMenu || this.elem.context_menu;
 			if (!gotmenu) {
 cerr("No gotmenu???");
 				return;
@@ -606,7 +318,7 @@ cerr("!!!! Could not find the previous item! !!!!");
 				return;
 			}
 			for (let elm of arr) {
-				if (elem.context_menu.par) delete elem.context_menu.par.kid;
+				if (this.elem.context_menu.par) delete this.elem.context_menu.par.kid;
 				elm._del();
 			}
 		};//»
@@ -1579,8 +1291,6 @@ globals.api.wdg = api;
 
 }//»
 
-//Desk«
-
 //new Desk(){«
   new  (function(){
 
@@ -2030,7 +1740,8 @@ _.del = function() {if (this.parentNode) this.parentNode.removeChild(this);}
 
 //»
 
-//Context Menu«
+//Menu«
+
 const open_home_folder=()=>{open_file_by_path(globals.home_path);};
 const open_terminal = () => {
 	open_app(TERMINAL_APP, {force: true});
@@ -2736,7 +2447,7 @@ api.switchToWorkspace = switch_to_workspace;
 
 class Window {//«
 
-#rect;
+//#rect;
 constructor(arg){//«
 
 	this.allowClose = true;
@@ -2810,8 +2521,8 @@ resize(){//«
 	this.app.onresize();
 	if (this.moveDiv) this.moveDiv.update();
 }//»
-sbcr(){this.#rect=this.winElem.getBoundingClientRect();}
-gbcr(){return this.#rect;}
+sbcr(){this._rect=this.winElem.getBoundingClientRect();}
+gbcr(){return this._rect;}
 checkProp(which){//«
 	let workspace = workspaces[this.workspaceNum];
 	if (workspace.allowNone){
@@ -4035,58 +3746,58 @@ set borb(val){this.winElem.style.borderBottom = val;}
 set borl(val){this.winElem.style.borderLeft = val;}
 set borr(val){this.winElem.style.borderRight = val;}
 set bor(val){this.winElem.style.border = val;}
-get rect(){return this.#rect;}
+get rect(){return this._rect;}
 get x(){return parseInt(this.winElem.style.left);}
 get y(){return parseInt(this.winElem.style.top);}
 
 set x(val){
 	if(Number.isFinite)val=`${val}px`;
 	this.winElem.style.left=val;
-	this.#rect=this.winElem.getBoundingClientRect();
+	this._rect=this.winElem.getBoundingClientRect();
 }
 set y(val){
 	if(Number.isFinite)val=`${val}px`;
 	this.winElem.style.top=val;
-	this.#rect=this.winElem.getBoundingClientRect();
+	this._rect=this.winElem.getBoundingClientRect();
 }
 
 set l(val){
-	let diff = this.#rect.left - parseInt(val);
+	let diff = this._rect.left - parseInt(val);
 	this.Main._w += diff;
 	this.winElem._x = val;
-	this.#rect=this.winElem.getBoundingClientRect();
+	this._rect=this.winElem.getBoundingClientRect();
 }
 
-get w(){return this.#rect.width;}
-get h(){return this.#rect.height;}
+get w(){return this._rect.width;}
+get h(){return this._rect.height;}
 set w(val){
 	let per;
 	if (per = getStrPer(val)){
 		this.Main._w = winw() * per;
 	}
-	else this.Main._w += parseInt(val) - this.#rect.width;
-	this.#rect=this.winElem.getBoundingClientRect();
+	else this.Main._w += parseInt(val) - this._rect.width;
+	this._rect=this.winElem.getBoundingClientRect();
 }
 set h(val){
 //Chrome size
 	let per;
 	if (per = getStrPer(val)){
-		let diff = this.#rect.height - this.Main._h;
+		let diff = this._rect.height - this.Main._h;
 		this.Main._h = (winh() * per) - diff;
 	}
-	else this.Main._h += parseInt(val) - this.#rect.height;
-	this.#rect=this.winElem.getBoundingClientRect();
+	else this.Main._h += parseInt(val) - this._rect.height;
+	this._rect=this.winElem.getBoundingClientRect();
 }
 
-get r(){return this.#rect.right;}
+get r(){return this._rect.right;}
 set r(val){
-	this.Main._w += parseInt(val) - this.#rect.right;
-	this.#rect=this.winElem.getBoundingClientRect();
+	this.Main._w += parseInt(val) - this._rect.right;
+	this._rect=this.winElem.getBoundingClientRect();
 }
-get b(){return this.#rect.bottom;}
+get b(){return this._rect.bottom;}
 set b(val){
 	this.Main._h += parseInt(val) - this.gbcr().bottom;
-	this.#rect=this.winElem.getBoundingClientRect();
+	this._rect=this.winElem.getBoundingClientRect();
 }
 
 get fullpath(){//«
@@ -7046,12 +6757,45 @@ throw new Error("WHAT THE IN THE EVERLIVING CRAP IS THIS?????");
 //»
 //Taskbar«
 
-const Taskbar = function(){
+const Taskbar = class {
 
-//DOM«
+constructor(){/*«*/
+	this.lstHidden = `taskbar_hidden:${globals.current_user}`;
+	this.lstExpert = `taskbar_expert:${globals.current_user}`;
+	this.makeDOM();
+	this.addListeners();
+	this.init();
+}/*»*/
+init(){//«
+
+const{taskbarElem: bar, startButElem: st, workspaceNumElem: wn} = this;
+
+taskbar_hidden = localStorage[this.lstHidden];
+taskbar_expert_mode = localStorage[this.lstExpert];
+
+if (taskbar_hidden) this.hide();
+if (taskbar_expert_mode) {
+	st._dis="none";
+	wn._dis="none";
+}
+
+bar._add(st);
+bar._add(this.minWinBarElem);
+if (!qObj["no-switcher"]) {
+	bar._add(wn);
+	desk._add(this.workspaceSwElem);
+}
+if (!isMobile) desk._add(bar);
+
+setTimeout(()=>{
+	bar.style.transition = `bottom ${TASKBAR_TRANS_SECS}s ease 0s`;
+},500);
+
+}
+//»
+makeDOM(){//«
 
 let bar = mkdv();//«
-this.taskbarElem=bar;
 bar.style.justifyContent="space-between";
 bar.style.userSelect="none";
 bar.onmousedown=noprop;
@@ -7090,8 +6834,8 @@ st._bor = TASKBAR_BOR;
 
 //»
 
-let wn = workspace_num_div;//«
 let ws = workspace_switcher_div;
+let wn = workspace_num_div;//«
 wn.style.cursor="pointer";
 wn._marr = wn._marl = 3;
 wn._dis="flex";
@@ -7104,7 +6848,8 @@ wn._ta="center";
 wn._w=TASKBAR_HGT;
 wn.onclick=(e)=>{
 	e.stopPropagation();
-	this.toggleSwitcher();
+	if (this.switcherIsOn()) this.switcherOff();
+	else this.switcherOn();
 };
 set_workspace_num(current_workspace_num);
 //»
@@ -7120,19 +6865,87 @@ ws._b=TASKBAR_HGT+7;
 ws._z=CG_Z-1;
 //»
 
+this.taskbarElem=bar;
+this.startButElem = st;
+this.workspaceNumElem = wn;
+this.workspaceSwElem = ws;
+this.minWinBarElem = mwb;
 
-//»
+}//»
+addListeners(){//«
+const{taskbarElem: bar, startButElem: st}=this;
+bar.onmousedown=e=>{
+	if (CWIN) {
+		CWIN.off();
+		CWIN = null;
+		CUR.todesk();
+	}
+};
+bar.oncontextmenu=e=>{//«
+	e.preventDefault();
+	e.stopPropagation();
 
-//Methods«
+	CWIN&&CWIN.off();
 
-this.hide=(if_temp)=>{//«
+	let items_arr=[];
+	if (taskbar_hidden){
+		items_arr.push("Show\x20Taskbar");
+		items_arr.push(()=>{
+			this.show();
+		});
+	}
+	else{
+		items_arr.push("Hide\x20Taskbar");
+		items_arr.push(()=>{
+			this.hide();
+		});
+	}
+	if (taskbar_expert_mode){
+		items_arr.push("Expert\x20Mode __CHECK__");
+		items_arr.push(()=>{taskbar.toggleExpertMode();});
+	}
+	else{
+		items_arr.push("Expert\x20Mode __XMARK__");
+		items_arr.push(()=>{taskbar.toggleExpertMode();});
+	}
+
+	set_context_menu({
+		X: e.clientX,
+		Y: e.clientY
+	}, {items: items_arr});
+
+}//»
+bar.onmouseleave=()=>{//«
+	if (taskbar_hidden){
+		this.hide();
+	}
+}//»
+bar.onmousemove=noprop;
+st.onmousedown = (e) => {
+	if (e.button !== 0) return;
+	st._bor = `${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
+};
+st.onmouseup=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
+st.onmouseout=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
+st.oncontextmenu=nopropdef;
+st.onclick=(e)=>{//«
+	const doit=()=>{set_context_menu({X:0,Y:bar.clientHeight+3},{BREL:true});}
+	if (e.isTrusted) return doit();
+	st._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
+	setTimeout(()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;doit();},200);
+};//»
+
+}//»
+hide(if_temp){//«
+	const{taskbarElem: bar}=this;
 	bar._z = CG_Z-1;
 	bar._b = -bar._gbcr().height;
 	if (if_temp) return;
 	taskbar_hidden=true;
-	if (!globals.read_only) localStorage[lst_hidden]="true";
-};//»
-this.show=(if_temp)=>{//«
+	if (!globals.read_only) localStorage[this.lstHidden]="true";
+}//»
+show(if_temp){//«
+	const{taskbarElem: bar}=this;
 	bar._b=0;
 	if (if_temp) {
 		bar._z=CG_Z+2;
@@ -7141,26 +6954,27 @@ this.show=(if_temp)=>{//«
 	bar._z=MIN_WIN_Z-1;
 	taskbar_hidden=false;
 	if (!globals.read_only){
-		delete localStorage[lst_hidden];
+		delete localStorage[this.lstHidden];
 	}
-};//»
-this.toggle_expert_mode = ()=>{//«
+}//»
+toggleExpertMode(){//«
 	if (!globals.dev_mode) return;
+	const{startButElem: st, workspaceNumElem: wn} = this;
 	if (taskbar_expert_mode){
 		taskbar_expert_mode = false;
-		delete localStorage[lst_expert];
+		delete localStorage[this.lstExpert];
 		st._dis="flex";
 		wn._dis="flex";
 	}
 	else{
 		taskbar_expert_mode = true;
-		localStorage[lst_expert]="true";
+		localStorage[this.lstExpert]="true";
 		st._dis="none";
 		wn._dis="none";
 	}
 	show_overlay(`Expert mode is ${taskbar_expert_mode?"on":"off"}`);
 }//»
-this.addwin=(w)=>{//«
+addwin(w){//«
 	const dounmin=(if_instant)=>{//«
 		w.winElem._dis="";
 		let rect = d._gbcr();
@@ -7199,6 +7013,7 @@ this.addwin=(w)=>{//«
 			t._h=rect.height;
 		});
 	};//»
+	const{minWinBarElem: mwb} = this;
 	let max_wid = "300px";
 
 	let rect = w.winElem._gbcr();
@@ -7293,9 +7108,10 @@ this.addwin=(w)=>{//«
 		CWIN=null;
 		top_win_on();
 	}
-};//»
-this.resize=()=>{mwb._w=winw()};
-this.renderSwitcher=()=>{//«
+}//»
+resize(){this.minWinBarElem._w=winw();}
+renderSwitcher(){//«
+	const{workspaceSwElem: ws}=this;
 	ws.innerHTML="";
 	for (let i=0; i < num_workspaces; i++){
 		let d = mkdv();
@@ -7328,121 +7144,18 @@ this.renderSwitcher=()=>{//«
 		ws._add(d);
 	}
 };//»
-this.switcherOn=()=>{
-	ws._dis="grid";
-};
-this.switcherOff=()=>{
-	ws._dis="none";
-};
-this.switcherIsOn=()=>{
-	return ws._dis==="grid";
-};
-this.toggleSwitcher=()=>{
-	if (this.switcherIsOn()) this.switcherOff();
-	else this.switcherOn();
-};
-//»
-
-//Listeners«
-bar.onmousedown=e=>{
-	if (CWIN) {
-		CWIN.off();
-		CWIN = null;
-		CUR.todesk();
-	}
-//log(e);
-};
-bar.oncontextmenu=e=>{//«
-	e.preventDefault();
-	e.stopPropagation();
-
-	CWIN&&CWIN.off();
-
-	let items_arr=[];
-	if (taskbar_hidden){
-		items_arr.push("Show\x20Taskbar");
-		items_arr.push(()=>{
-			this.show();
-		});
-	}
-	else{
-		items_arr.push("Hide\x20Taskbar");
-		items_arr.push(()=>{
-			this.hide();
-		});
-	}
-	if (taskbar_expert_mode){
-		items_arr.push("Expert\x20Mode __CHECK__");
-		items_arr.push(taskbar.toggle_expert_mode);
-	}
-	else{
-		items_arr.push("Expert\x20Mode __XMARK__");
-		items_arr.push(taskbar.toggle_expert_mode);
-	}
-
-	set_context_menu({
-		X: e.clientX,
-		Y: e.clientY
-	}, {items: items_arr});
-
+switcherOn(){this.workspaceSwElem._dis="grid";}
+switcherOff(){this.workspaceSwElem._dis="none";}
+switcherIsOn(){return this.workspaceSwElem._dis==="grid";}
+toggle(){//«
+	if (taskbar_hidden) this.show();
+	else this.hide();
 }//»
-bar.onmouseleave=()=>{//«
-	if (taskbar_hidden){
-		this.hide();
-	}
-}//»
-bar.onmousemove=noprop;
-st.onmousedown = (e) => {
-	if (e.button !== 0) return;
-	st._bor = `${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
-};
-st.onmouseup=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
-st.onmouseout=()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;};
-st.oncontextmenu=nopropdef;
-st.onclick=(e)=>{//«
-	const doit=()=>{set_context_menu({X:0,Y:bar.clientHeight+3},{BREL:true});}
-	if (e.isTrusted) return doit();
-	st._bor=`${TASKBAR_BOR_WID} dotted ${TASKBAR_BOR_COL}`;
-	setTimeout(()=>{st._bor=`${TASKBAR_BOR_WID} ${TASKBAR_BOR_STY} ${TASKBAR_BOR_COL}`;doit();},200);
-};//»
 
-//»
-
-//Init«
-
-let curuser = globals.current_user;
-let lst_hidden = `taskbar_hidden:${curuser}`;
-let lst_expert = `taskbar_expert:${curuser}`;
-
-taskbar_hidden = localStorage[lst_hidden];
-taskbar_expert_mode = localStorage[lst_expert];
-
-if (taskbar_hidden) this.hide();
-if (taskbar_expert_mode) {
-	st._dis="none";
-	wn._dis="none";
 }
-
-bar._add(st);
-bar._add(mwb);
-if (!qObj["no-switcher"]) {
-	bar._add(wn);
-	desk._add(ws);
-}
-if (!isMobile) desk._add(bar);
-
-setTimeout(()=>{
-	bar.style.transition = `bottom ${TASKBAR_TRANS_SECS}s ease 0s`;
-},500);
-//»
-
-};
-
-const toggle_taskbar=()=>{if(taskbar_hidden)taskbar.show();else taskbar.hide();};
 
 //»
 //File/App«
-
 
 const open_text_editor = () => {//«
 	return open_app(TEXT_EDITOR_APP, {force: true});
@@ -8693,8 +8406,9 @@ cwarn("There was an unattached icon in ICONS!");
 		case "e_A": return (e.preventDefault(), open_home_folder());
 		case "0_AS": return open_app("WorkMan");
 		case "l_CAS": return console.clear();
-		case "b_A": return toggle_taskbar();
-		case "e_CAS": return taskbar.toggle_expert_mode();
+//		case "b_A": return toggle_taskbar();
+		case "b_A": return taskbar.toggle();
+		case "e_CAS": return taskbar.toggleExpertMode();
 		case "i_CAS": return toggle_icon_display();
 		case "t_CAS": return tile_windows();
 		case "l_CA": return toggle_layout_mode();

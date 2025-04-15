@@ -87,12 +87,12 @@ a:visited{
 	40%,60%{transform:translate3d(1px,0,0);}
 }
 
-/*No application-specific styles here, thanks!
 .card{
 	font-weight: 900;
 	border: 1px solid #666;
 	background-color: #aaa;
 	color: #000;
+	font-size: 125%;
 }
 .cardsuitc{
 	font-size: 120%;
@@ -110,5 +110,4 @@ a:visited{
 	font-size: 120%;
 	color:#000;
 }
-*/
 

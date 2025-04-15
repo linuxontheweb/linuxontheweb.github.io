@@ -26,7 +26,7 @@ It's actually the stuff @JEPOIKLMJYH
 BL
 »*/
 /*3/31/25: In order to do readline editing, in handleArrow @SBSORJJS Just added the check for:«
-	if (this.curShell && !this.#readLineCb) return
+	if (this.curShell && !this.readLineCb) return
 
 In Term.handleEnter @VSHEUROJ: Just added forceNewline (instead of the lower level crap...),
 which internally updates curPromptLine (which is important for when we are starting a heredoc).
@@ -289,7 +289,7 @@ globals.ShellMod = new function() {
 
 //Var«
 const shellmod = this;
-const mail_coms=[/*«*/
+const mail_coms=[//«
 	"mkcontact",
 	"mail",
 	"curaddr",
@@ -298,7 +298,7 @@ const mail_coms=[/*«*/
 	"imapcon",
 	"imapdis",
 	"imapgetenvs"
-];/*»*/
+];//»
 const fs_coms=[//«
 	"_purge",
 	"_clearstorage",
@@ -321,7 +321,7 @@ const fs_coms=[//«
 //	"mount",
 //	"unmount",
 ];//»
-const test_coms = [/*«*/
+const test_coms = [//«
 "pipe",
 "deadpipe",
 "badret",
@@ -334,9 +334,9 @@ const test_coms = [/*«*/
 "weirdarr",
 "hang",
 "norun"
-]/*»*/
+]//»
 //const preload_libs={fs: fs_coms, test: test_coms};
-const preload_libs={fs: fs_coms};
+const preload_libs={fs: fs_coms, esprima: ["esparse"]};
 if (isNodeJS) preload_libs.mail = mail_coms;
 
 const OPERATOR_CHARS=[//«
@@ -1171,41 +1171,41 @@ assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 //ZJDEXWL
 const EnvReadLine = class{//«
 
-#lines;
-#cb;
+//#lines;
+//#cb;
 
 constructor(term){
-	this.#lines = [];
+	this.lines = [];
 	this.term = term;
 }
 end(){this.killed=true;}
-#addLn(ln){//«
-	if (this.#cb) {
-		this.#cb(ln);
-		this.#cb = undefined;
+addLn(ln){//«
+	if (this.cb) {
+		this.cb(ln);
+		this.cb = undefined;
 		return;
 	}
-	this.#lines.push(ln);
+	this.lines.push(ln);
 }//»
 addLns(lns){//«
-	if (isEOF(lns)) return this.#addLn(lns);
+	if (isEOF(lns)) return this.addLn(lns);
 if (!isStr(lns)){
 cwarn("Skipping non-string/non-EOF", lns);
 return;
 }
 	let arr = lns.split("\n");
 	for (let ln of arr){
-		this.#addLn(ln);
+		this.addLn(ln);
 	}
 }//»
 async readLine(){//«
 //SZKLIEPO
 //	this.term.forceNewline();
-	if (this.#lines.length){
-		return this.#lines.shift();
+	if (this.lines.length){
+		return this.lines.shift();
 	}
 	return new Promise((Y,N)=>{
-		this.#cb = Y;
+		this.cb = Y;
 	});
 }//»
 
@@ -2131,10 +2131,13 @@ run(){
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
 
-const com_loopctrl = class extends Com{/*«*/
-	static opts = true;
-	#loopCnt;
-	#doBreakInf;
+const com_loopctrl = class extends Com{//«
+//	static opts = true;
+	static getOpts(){
+		return true;
+	}
+//	#loopCnt;
+//	#doBreakInf;
 	constructor(...args){
 		super(...args);
 		this.isLoopCtrl = true;
@@ -2162,28 +2165,28 @@ Abort the command line, command sub or script that we are in.
 			if (parseInt(num) < 1) {
 //This breaks of all loops, so we do this.end({break: Infinity});
 				this.err(`${this.name}: ${num}: loop count out of range`);
-				this.#doBreakInf = true;
+				this.doBreakInf = true;
 				return;
 			}
-			this.#loopCnt = parseInt(num);
+			this.loopCnt = parseInt(num);
 		}
-		else this.#loopCnt = 1;
+		else this.loopCnt = 1;
 		if (this.args[1]){
 			this.err(`${this.name}: too many arguments`);
-			this.#doBreakInf = true;
+			this.doBreakInf = true;
 		}
 	}//»
 	run(){
-		if (this.#doBreakInf) {
+		if (this.doBreakInf) {
 			this.end({break: Infinity});
 		}
-		else if (this.name==="continue") this.end({continue: this.#loopCnt});
-		else this.end({break: this.#loopCnt});
+		else if (this.name==="continue") this.end({continue: this.loopCnt});
+		else this.end({break: this.loopCnt});
 	}
-}/*»*/
+}//»
 
-const com_continue = class extends Com{/*«*/
-	#loopCnt;
+const com_continue = class extends Com{//«
+//	#loopCnt;
 	constructor(...args){
 		super(...args);
 		this.isLoopCtrl = true;
@@ -2207,16 +2210,16 @@ const com_continue = class extends Com{/*«*/
 				this.no(`${num}: loop count out of range`);
 				return;
 			}
-			this.#loopCnt = parseInt(num);
+			this.loopCnt = parseInt(num);
 		}
-		else this.#loopCnt = 1;
+		else this.loopCnt = 1;
 	}//»
 	run(){
-		this.end({continue: this.#loopCnt});
+		this.end({continue: this.loopCnt});
 	}
-}/*»*/
-const com_break = class extends Com{/*«*/
-	#loopCnt;
+}//»
+const com_break = class extends Com{//«
+//	#loopCnt;
 	constructor(...args){
 		super(...args);
 		this.isLoopCtrl = true;
@@ -2240,14 +2243,14 @@ const com_break = class extends Com{/*«*/
 				this.no(`${num}: loop count out of range`);
 				return;
 			}
-			this.#loopCnt = parseInt(num);
+			this.loopCnt = parseInt(num);
 		}
-		else this.#loopCnt = 1;
+		else this.loopCnt = 1;
 	}//»
 	run(){
-		this.end({break: this.#loopCnt});
+		this.end({break: this.loopCnt});
 	}
-}/*»*/
+}//»
 
 const com_shift = class extends Com{//«
 	run(){
@@ -2340,7 +2343,7 @@ this.ok(`${say_type}[${say_num}].${com} = ${val}`);
 }//»
 const com_log = class extends Com{//«
 
-#promise;
+//#promise;
 //static grabsScreen = true;
 async init(){//«
 	if (this.term.actor) {
@@ -2352,10 +2355,10 @@ async init(){//«
 	}
 	let log = new NS.mods["term.log"](this.term);
 	this.log = log;
-	this.#promise = log.init({opts: this.opts, command_str: this.command_str});
+	this.promise = log.init({opts: this.opts, command_str: this.command_str});
 }//»
 async run(){//«
-	await this.#promise;
+	await this.promise;
 	this.ok();
 }//»
 cancel(){
@@ -2398,7 +2401,11 @@ const com_echo = class extends Com{//«
 }//»
 const com_echodelay = class extends Com{//«
 //	echodelay:{s:{d: 3}},
-	static opts = {s: {d: 3}};
+	static getOpts(){
+//		return true;
+		return {s: {d: 3}};
+	}
+//	static opts = {s: {d: 3}};
 	async run(){
 		let delay;
 		if (this.opts.d) {
@@ -2603,7 +2610,7 @@ const com_stringify = class extends Com{/*«*/
 	}
 	run(){
 	}
-	#tryStringify(val){
+	tryStringify(val){
 		try{
 			this.out(JSON.stringify(val));
 			return true;
@@ -2615,7 +2622,7 @@ const com_stringify = class extends Com{/*«*/
 		}
 	}
 	pipeIn(val){
-		if (!isEOF(val)) this.#tryStringify(val);
+		if (!isEOF(val)) this.tryStringify(val);
 		else {
 			this.numErrors?this.no():this.ok();
 			this.ok();
@@ -2676,7 +2683,7 @@ async run(){
 const com_app = class extends Com{//«
 
 async run(){
-	const{args, out, err: _err, term}=this;
+	const{args, out, term}=this;
 	let list = await util.getList("/site/apps/");
 	if (!args.length) {
 		if (!list){
@@ -2688,11 +2695,11 @@ async run(){
 	let have_error=false;
 	for (let appname of args){
 		if (list && !list.includes(appname)) {
-			_err(`${appname}: not found`);
+			this.err(`${appname}: not found`);
 			continue;
 		}
 		let win = await Desk.api.openApp(appname);
-		if (!win) _err(`${appname}: not found`);
+		if (!win) this.err(`${appname}: not found`);
 	}
 	have_error?this.no():this.ok();
 }
@@ -2886,14 +2893,14 @@ async run(){//«
 
 }//»
 const com_math = class extends Com{//«
-#lines;
-#math;
+//#lines;
+//#math;
 async init(){
 	if (!this.args.length && !this.pipeFrom) {
 		return this.no("nothing to do");
 	}
 	if (!this.args.length){
-		this.#lines=[];
+		this.lines=[];
 	}
 /*math-expression-evaluator npm package/ github repo«
 
@@ -2914,13 +2921,13 @@ Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/ma
 	if (!await util.loadMod("util.math")) {
 		return no("could not load the math module");
 	}
-    this.#math = new NS.mods["util.math"]();
+    this.math = new NS.mods["util.math"]();
 }
-#doMath(str){
+doMath(str){
 
 	try{
 		this.inf(`evaluating: '${str}'`);
-		this.out(this.#math.eval(str)+"");
+		this.out(this.math.eval(str)+"");
 		this.ok();
 	}catch(e){
 //cerr(e);
@@ -2929,17 +2936,17 @@ Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/ma
 }
 run(){
 	if (this.killed || !this.args.length) return;
-	this.#doMath(this.args.join(" "));
+	this.doMath(this.args.join(" "));
 }
 pipeIn(val){
-    if (!this.#lines) return;
+    if (!this.lines) return;
     if (isEOF(val)){
         this.out(val);
-        this.#doMath(this.#lines.join(" "));
+        this.doMath(this.lines.join(" "));
         return;
     }
-    if (isStr(val)) this.#lines.push(val);
-    else if (isArr(val)) this.#lines.push(...val);
+    if (isStr(val)) this.lines.push(val);
+    else if (isArr(val)) this.lines.push(...val);
     else{
 cwarn("WUTISTHIS", val);
     }
@@ -6440,7 +6447,9 @@ return func;
 		return make_sh_err_com(comword, `command not found`, com_env);
 	}//»
 	let com_opts;
-	let gotopts = com.opts || Shell.activeOptions[usecomword];
+//	let gotopts = com.opts || Shell.activeOptions[usecomword];
+	let gotopts = (com.getOpts && com.getOpts()) || Shell.activeOptions[usecomword];
+//log(gotopts);
 //Parse the options and fail if there is an error message
 //OEORMSRU
 	if (gotopts === true) com_opts = {};
@@ -6900,11 +6909,13 @@ ShellMod.init();
 export const app = class {
 
 //Private Vars«
-#readLineCb;
-#readLineStr;
-#readLineStartLine;
-#getChCb;
-#getChDefCh;
+
+//#readLineCb;
+//#readLineStr;
+//#readLineStartLine;
+//#getChCb;
+//#getChDefCh;
+
 //»
 constructor(Win){//«
 
@@ -7317,8 +7328,8 @@ async getch(promptarg, def_ch){//«
 	}
 	this.sleeping = false;
 	return new Promise((Y,N)=>{
-		this.#getChDefCh = def_ch;
-		this.#getChCb = Y;
+		this.getChDefCh = def_ch;
+		this.getChCb = Y;
 	});
 }
 //»
@@ -7352,11 +7363,11 @@ async readLine(promptarg){//«
 //		this.x = this.#readLinePromptLen;
 		this.x = this.promptLen;
 	}
-	this.#readLineStartLine = this.cy();//WMNYTUE
+	this.readLineStartLine = this.cy();//WMNYTUE
 	return new Promise((Y,N)=>{
 //XKLRYTJTK
-		if (this.actor) this.#readLineStr="";
-		this.#readLineCb = Y;
+		if (this.actor) this.readLineStr="";
+		this.readLineCb = Y;
 	});
 }
 //»
@@ -9303,9 +9314,9 @@ lines array (otherwise, the message gets printed onto the actor's screen.
 
 	const{termLines: lines, termLineColors: line_colors}=this;
 	let readline_lines;
-	if (Number.isFinite(this.#readLineStartLine)) {
+	if (Number.isFinite(this.readLineStartLine)) {
 		readline_lines = [];
-		while (lines.length > this.#readLineStartLine) readline_lines.unshift(lines.pop());
+		while (lines.length > this.readLineStartLine) readline_lines.unshift(lines.pop());
 	}
 
 	if (!isStr(out)) {
@@ -9401,7 +9412,7 @@ log("response colors",colors);
 	}
 	if (readline_lines){
 		lines.push(...readline_lines);
-		this.#readLineStartLine = curnum;//QCKLURYH
+		this.readLineStartLine = curnum;//QCKLURYH
 		this.scrollIntoView();
 	}
 }
@@ -9655,7 +9666,7 @@ handleTab(){//«
 }//»
 handleArrow(code, mod, sym){//«
 //SBSORJJS
-	if (this.curShell && !this.#readLineCb) {
+	if (this.curShell && !this.readLineCb) {
 //	if (this.curShell) {
 		return;
 	}
@@ -9890,9 +9901,9 @@ async handleEnter(opts={}){//«
 handleReadlineEnter(){//«
 	if (this.actor){
 //HWURJIJE
-		this.#readLineCb(this.#readLineStr);
-		this.#readLineCb = null;
-		this.#readLineStartLine = null;
+		this.readLineCb(this.readLineStr);
+		this.readLineCb = null;
+		this.readLineStartLine = null;
 		return;
 	}
 	const{lines}=this;
@@ -9903,7 +9914,7 @@ handleReadlineEnter(){//«
 
 //	let num_com_lines = lines.length - this.curPromptLine - 1;
 //	let from = this.curPromptLine+num_com_lines;
-	let from = this.#readLineStartLine;
+	let from = this.readLineStartLine;
 	for (let i=from; i < lines.length; i++) {
 		if (i==from) {
 //			s+=lines[i].slice(this.#readLinePromptLen).join("");
@@ -9917,9 +9928,9 @@ handleReadlineEnter(){//«
 		s = new String("");
 		s.isNL = true;
 	}
-	this.#readLineCb(s);
-	this.#readLineCb = null;
-	this.#readLineStartLine = null;
+	this.readLineCb(s);
+	this.readLineCb = null;
+	this.readLineStartLine = null;
 	this.sleeping = true;
 	this.forceNewline();
 //log(this.curPromptLine);
@@ -9939,38 +9950,38 @@ handleKey(sym, code, mod, ispress, e){//«
 			this.responseEnd();
 			return;
 		}//»
-		else if (this.#getChCb){//«
+		else if (this.getChCb){//«
 			if (ispress) {
 				this.sleeping = true;
-				this.#getChCb(e.key);
-				this.#getChCb = null;
+				this.getChCb(e.key);
+				this.getChCb = null;
 			}
 			else {
 				if (sym=="ENTER_"){
 					this.sleeping = true;
-					this.#getChCb(this.#getChDefCh);
-					this.#getChDefCh = undefined;
+					this.getChCb(this.getChDefCh);
+					this.getChDefCh = undefined;
 				}
 				return;
 			}
 		}//»
-		else if (this.#readLineCb){//«
+		else if (this.readLineCb){//«
 //this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 			if (ispress || this.okReadlineSyms.includes(sym)){
 				if (this.actor){
 //VEOMRUI
 					if (ispress) {
-						this.#readLineStr+=String.fromCharCode(code);
-						if (this.#readLineStr.length === this.w){
-							this.#readLineCb(this.#readLineStr);
-							this.#readLineStr="";
+						this.readLineStr+=String.fromCharCode(code);
+						if (this.readLineStr.length === this.w){
+							this.readLineCb(this.readLineStr);
+							this.readLineStr="";
 						}
 					}
 					return;
 				}
 //				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
-//				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.#readLineStartLine) {
-				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.promptLen && this.y+this.scrollNum == this.#readLineStartLine) {
+//				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.readLineStartLine) {
+				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.promptLen && this.y+this.scrollNum == this.readLineStartLine) {
 					return;
 				}
 //LOUORPR
@@ -10138,12 +10149,12 @@ onkeydown(e,sym,mod){//«
 	else this.awaitNextTab = null;
 
 	if (e&&sym=="o_C") e.preventDefault();
-	if (this.#readLineCb){
+	if (this.readLineCb){
 		if (sym=="c_C"){
 //RMLDURHTJ
-			this.#readLineCb(EOF);
-			this.#readLineCb = null;
-			this.#readLineStartLine = null;
+			this.readLineCb(EOF);
+			this.readLineCb = null;
+			this.readLineStartLine = null;
 			this.doOverlay("Readline: cancelled");
 			this.curShell.cancel();
 			return;
@@ -10179,7 +10190,7 @@ Should we look for a readLineCb here and send it into handleKey before the actor
 But then we need to check that we are putting it into the terminal's lines array,
 rather than the lines array of the current actor.
 */
-	if (this.#readLineCb){
+	if (this.readLineCb){
 		this.handleKey(e.key, e.keyCode, "", true, e);
 		return;
 	}
@@ -10425,120 +10436,4 @@ quitNewScreen(screen){//«
 
 
 
-
-
-
-
-
-
-/*«OLD
-shiftLine(x1, y1, x2, y2){//«
-	const{lines, scrollNum}=this;
-	let str_arr = [];
-	if (lines[scrollNum + y1]) {
-		str_arr = lines[scrollNum + y1].slice(x1);
-	}
-	if (y1 == (y2 + 1)) {
-//This was always called once, and then with y1===y2, so we would never get into here,
-//so this entide function appears to be pointless
-		if (lines[scrollNum + y2]) {
-			lines[scrollNum + y2] = lines[scrollNum + y2].concat(str_arr);
-		}
-		lines.splice(y1 + scrollNum, 1);
-	}
-	return str_arr;
-}//»
-handleLetterPress(char_arg, if_no_render){//«
-	const dounshift=()=>{//«
-		if ((lines[this.y+this.scrollNum].length) <= w) return;
-		let use_char = lines[this.y+this.scrollNum].pop()
-		if (!lines[this.y+this.scrollNum+1]) lines[this.y+this.scrollNum+1] = [use_char];
-		else lines[this.y+this.scrollNum+1].unshift(use_char);
-		if (this.x==w) {
-			this.x=0;
-			this.y++;
-		}
-		for (let i=1; line = lines[this.y+this.scrollNum+i]; i++) {
-			if (line.length > w) {
-				if (lines[this.y+this.scrollNum+i+1]) lines[this.y+this.scrollNum+i+1].unshift(line.pop());
-				else lines[this.y+this.scrollNum+i+1] = [line.pop()];
-			}
-			else {
-				if (lines[this.y+this.scrollNum+i-1].length > w) {
-					line.unshift(lines[this.y+this.scrollNum+i-1].pop());
-				}
-			}
-		}
-	};//»
-	const{lines, w}=this;
-//	let cy;
-	let line;
-
-//Make room in the current line if the cursor is not at the end of the line
-//This might result in the line being too long.
-	if (lines && lines[this.scrollNum + this.y]) {
-		if (this.x < lines[this.scrollNum + this.y].length && lines[this.scrollNum + this.y][0]) {
-			lines[this.scrollNum + this.y].splice(this.x, 0, char_arg);
-//			this.shiftLine(this.x-1, this.y, this.x, this.y);
-		}
-	}
-
-	let usex = this.x+1;
-	let usey = this.y;
-	let cy = usey+this.scrollNum;
-
-//	this.y = usey;
-
-	let endch = null;
-	let didinc = false;
-//	cy = this.y+this.scrollNum;
-	if (usex == w) {
-//		if (lines[cy][this.x+1]) endch = lines[cy].pop();
-		if (lines[cy][usex]) endch = lines[cy].pop();
-		didinc = true;
-		usey++;
-		usex=0;
-	}
-
-	if (!lines[cy]) {
-		lines[cy] = [];
-//		lines[cy][0] = char_arg;
-	}
-//	else{
-	lines[cy][this.x] = char_arg;
-//	}
-//	else if (lines[cy] && char_arg) {
-//		lines[cy][this.x] = char_arg;
-//	}
-
-	let ln = lines[this.scrollNum+usey];
-	if (ln && ln[usex]) {//«
-		if (this.x+1==w) {
-			if (!didinc) {
-				usey++;
-				usex=0;
-			}
-			if (endch) {
-//				if (!ln||!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
-				if (!ln.length||ln[0]===null) lines[this.scrollNum+usey] = [endch];
-				else ln.unshift(endch);	
-			}
-		}
-		else usex = this.x+1;
-	}//»
-	else if (!ln||!ln.length||ln[0]===null) {
-		lines[this.scrollNum+usey] = [endch];
-	}
-
-	this.x = usex;
-	this.y = usey;
-
-	dounshift();
-
-	this.scrollIntoView({noSetY: true});
-	if (!if_no_render) this.render();
-	this.textarea.value = "";
-}
-//»
-»*/
 

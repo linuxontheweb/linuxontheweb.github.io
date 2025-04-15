@@ -1,3 +1,12 @@
+/*
+In order to allow this "import":
+const { app } = await import(script_path);
+I had to change isFutureReservedWord @SDGSKKF and isKeyword @YYSLSDJ
+
+To allow "await" here, changed @UOWEHDK
+for await (const [k, v] of ents){
+
+*/
 /*«Notes
 
 This is the "LOTW-ized" version of the esprima project: https://github.com/jquery/esprima
@@ -752,6 +761,11 @@ const Scanner = class {
 	};//»
 	isFutureReservedWord(id) {//«
 	// https://tc39.github.io/ecma262/#sec-future-reserved-words
+//SDGSKKF
+//Didn't allow "import" here: const { app } = await import(script_path);
+//Failed with Error: future reserved word
+return false;
+/*
 		switch (id) {
 			case 'enum':
 			case 'export':
@@ -761,6 +775,7 @@ const Scanner = class {
 			default:
 				return false;
 		}
+*/
 	};//»
 	isStrictModeReservedWord(id) {//«
 		switch (id) {
@@ -798,7 +813,11 @@ const Scanner = class {
 					(id === 'class') || (id === 'super');
 			case 6:
 				return (id === 'return') || (id === 'typeof') || (id === 'delete') ||
-					(id === 'switch') || (id === 'export') || (id === 'import');
+//YYSLSDJ
+//Failed with Error: Unexpected keyword
+//					(id === 'switch') || (id === 'export') || (id === 'import');
+
+					(id === 'switch') || (id === 'export');
 			case 7:
 				return (id === 'default') || (id === 'finally') || (id === 'extends');
 			case 8:
@@ -3514,6 +3533,10 @@ const Parser = class {
 		var left, right;
 		var node = this.createNode();
 		this.expectKeyword('for');
+//UOWEHDK
+if (this.matchContextualKeyword("await")){
+this.nextToken();
+}
 		this.expect('(');
 		if (this.match(';')) {/*«*/
 			this.nextToken();
@@ -5037,7 +5060,7 @@ init(){
 	if (this.noInputOrArgs() || (this.noStdin && !this.expectArgs(1))) this.no();
 }
 #doEsparse(str){/*«*/
-log(str);
+//log(str);
 	try{
 		let ast = parse(str, {sourceType: "module"});
 log(ast);
@@ -5045,8 +5068,8 @@ log(ast);
 		this.ok();
 	}
 	catch(e){
-log(e);
-//cerr(e.stack);
+//log(e);
+cerr(e.stack);
 		this.err(`${e.message} (${e.lineNumber}:${e.column})`);
 		this.no();
 	}

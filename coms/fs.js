@@ -130,10 +130,6 @@ argument, but it was more fun getting...)
 
 »*/
 
-#bytes;
-#seq1;
-#seq2;
-#noStdin;
 
 async init(){/*«*/
 	let{args, no}=this;
@@ -163,8 +159,8 @@ async init(){/*«*/
 	if (!(seq1.length && seq2.length)){
 		return no("Could not determine both sequences!?!?");
 	}
-	this.#seq1 = seq1;
-	this.#seq2 = seq2;
+	this.seq1 = seq1;
+	this.seq2 = seq2;
 
 	if (!(this.pipeFrom || args.length)) return no("not in pipe and no file args!");
 	if (args.length > 1) return no("too many arguments");
@@ -178,18 +174,18 @@ async init(){/*«*/
 	}
 	let bytes = await node.bytes;
 	if (!(bytes instanceof Uint8Array)) return no(`${f}: no bytes were returned`);
-	this.#bytes = bytes;
-	this.#noStdin = true;
+	this.bytes = bytes;
+	this.noStdin = true;
 
 }/*»*/
-#doBrep(){/*«*/
-	let bytes = this.#bytes;
+doBrep(){/*«*/
+	let bytes = this.bytes;
 	let len = bytes.length;
 	let bout = new Uint8Array(len*10);
 	let i1=0;
 	let i2=0;
-	let seq1 = this.#seq1;
-	let seq2 = this.#seq2;
+	let seq1 = this.seq1;
+	let seq2 = this.seq2;
 	let seq1_0 = seq1[0];
 	let seq1len = seq1.length;
 	let seq1len_min1 = seq1len-1;
@@ -227,24 +223,24 @@ async init(){/*«*/
 
 }/*»*/
 run(){
-	if (this.#noStdin) this.#doBrep();;
+	if (this.noStdin) this.doBrep();;
 }
 pipeIn(val){/*«*/
-	if (this.#noStdin) return;
+	if (this.noStdin) return;
 	if (isEOF(val)){
-		this.#doBrep();
+		this.doBrep();
 		return;
 	}
 	if (!val instanceof Uint8Array){
 		return;
 	}
-	if (!this.#bytes) this.#bytes = val;
+	if (!this.bytes) this.bytes = val;
 	else{
-		let hold = this.#bytes;
+		let hold = this.bytes;
 		let bytes = new Uint8Array(hold.length + val.length);
 		bytes.set(hold, 0);
 		bytes.set(val, hold.length);
-		this.#bytes = bytes;
+		this.bytes = bytes;
 	}
 }/*»*/
 
@@ -310,7 +306,6 @@ pipeIn(val){
 }//»
 const com_vim = class extends Com{//«
 
-#noPipe;
 async init(){//«
 	if (this.term.actor) {
 		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
@@ -382,7 +377,7 @@ log(val);
 			}
 			typ = node.root.type;
 		}
-		if (!opts.pipeok) this.#noPipe = true;
+		if (!opts.pipeok) this.noPipe = true;
 	}
 	this.awaitCb = this.editor.init(val, fullpath, {
 		node,
@@ -405,7 +400,7 @@ async run(){//«
 }//»
 pipeIn(val){//«
 	if (this.killed) return;
-	if (this.#noPipe) return;
+	if (this.noPipe) return;
 	this.editor.addLines(val);
 }//»
 cancel(){//«
@@ -440,15 +435,15 @@ run:
 
 »*/
 
-	#useTerm = false;
+//	#useTerm = false;
 	init(){//«
 		if (this.noInputOrArgs({noErr: true})){
-			this.#useTerm = true;
+			this.useTerm = true;
 		}
 		this.maybeSetNoPipe();
 	}//»
 	async run() {//«
-		if (this.#useTerm)return this.doTermLoop();
+		if (this.useTerm)return this.doTermLoop();
 		const{stdin}=this;
 		if (!this.args.length){
 			if (isStr(stdin)){
@@ -490,7 +485,7 @@ run:
 
 };//»
 const com_grep = class extends Com{//«
-#re;
+//#re;
 
 async init(){//«
 
@@ -501,7 +496,7 @@ async init(){//«
 	}
 
 	try {
-		this.#re = new RegExp(patstr);
+		this.re = new RegExp(patstr);
 	}
 	catch(e) {
 		this.no("invalid pattern: " + patstr);
@@ -520,7 +515,7 @@ async run(){//«
 	};
 	let rv = await get_file_lines_from_args(args, this.term, err);
 //	if (rv.err && rv.err.length) err(rv.err);
-	if (rv.out&&rv.out.length) this.#doGrep(rv.out);
+	if (rv.out&&rv.out.length) this.doGrep(rv.out);
 	have_error?this.no():this.ok();	
 }//»
 pipeIn(val){//«
@@ -529,11 +524,11 @@ pipeIn(val){//«
 		this.ok();
 		return;
 	}
-	this.#doGrep(val.split("\n"));
+	this.doGrep(val.split("\n"));
 }//»
 
-#doGrep(val){//«
-	const re = this.#re;
+doGrep(val){//«
+	const re = this.re;
 	if (!re) return;
 	let arr;
 	if (isStr(val)) arr=[val];
@@ -855,22 +850,22 @@ async run(){
 
 }//»
 const com_wc = class extends Com{//«
-#noPipe;
-#lines=0;
-#words=0;
-#chars=0;
+//#noPipe;
 async init(){
 	if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
 //	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (this.args.length || this.stdin){
-		this.#noPipe = true;
+		this.noPipe = true;
 	}
+	this.lines=0;
+	this.words=0;
+	this.chars=0;
 }
-#doWC(val){
+doWC(val){
 	const {out}=this;
-	let lines = this.#lines;
-	let words = this.#words;
-	let chars = this.#chars;
+	let lines = this.lines;
+	let words = this.words;
+	let chars = this.chars;
 	let arr;
 	if (isStr(val)) arr=[val];
 	else if (!isArr(val)){
@@ -885,20 +880,20 @@ async init(){
 		if (word_arr.length===1 && word_arr[0]==="") continue;
 		words+=word_arr.length;
 	}
-	this.#lines=lines;
-	this.#words=words;
-	this.#chars=chars;
+	this.lines=lines;
+	this.words=words;
+	this.chars=chars;
 }
-#sendCount(){
-	this.out(`${this.#lines} ${this.#words} ${this.#chars+this.#lines}`);
+sendCount(){
+	this.out(`${this.lines} ${this.words} ${this.chars+this.lines}`);
 }
 async run(){
 	if (this.killed) return;
 	let{args, err: _err, out}=this;
 	if (!args.length) {
 		if (this.stdin){
-			this.#doWC(this.stdin);
-			this.#sendCount();
+			this.doWC(this.stdin);
+			this.sendCount();
 			this.ok();
 		}
 		return;
@@ -911,52 +906,48 @@ async run(){
 	};
 	let rv = await get_file_lines_from_args(args, this.term, err);
 //	if (rv.err && rv.err.length) err(rv.err);
-	if (rv.out&&rv.out.length) this.#doWC(rv.out);
-	this.#sendCount();
+	if (rv.out&&rv.out.length) this.doWC(rv.out);
+	this.sendCount();
 	have_error?this.no():this.ok();	
 }
 pipeIn(val){
 	if (this.killed) return;
-	if (this.#noPipe) return;
+	if (this.noPipe) return;
 	if (isEOF(val)){
 		this.out(val);
-		this.#sendCount();
+		this.sendCount();
 		this.ok();
 		return;
 	}
-	this.#doWC(val.split("\n"));
+	this.doWC(val.split("\n"));
 }
 
 }//»
 const com_dl = class extends Com{//«
-#name;
-#noPipe;
-#lines;
-#buffer;
 async init(){
 	const{opts, env, args}=this;
 	let nargs = args.length;
 	if (!nargs && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (!nargs){
-		this.#name = opts.name || opts.n || env["DL_NAME"] || "DL-OUT.txt";
-		this.#lines=[];
+		this.name = opts.name || opts.n || env["DL_NAME"] || "DL-OUT.txt";
+		this.lines=[];
 	}
 	else if(nargs > 1){
 		this.no("too many arguments");
 	}
 	else{
-		this.#noPipe=true;
+		this.noPipe=true;
 	}
 }
-#doDL(){
+doDL(){
 	let val;
-	if (this.#lines) val = this.#lines.join("\n");
-	else if (this.#buffer) val = this.#buffer;
+	if (this.lines) val = this.lines.join("\n");
+	else if (this.buffer) val = this.buffer;
 	else{
 		this.no("NO LINES OR BUFFER?!?!?!");
 return;
 	}
-	util.download(new Blob([val]), this.#name);
+	util.download(new Blob([val]), this.name);
 	this.ok();
 }
 async run(){
@@ -973,19 +964,19 @@ async run(){
 		this.no(`${fullpath}: not a regular file`);
 		return;
 	}
-	this.#buffer = await node.buffer;
-	this.#name = node.name;
-	this.#doDL();
+	this.buffer = await node.buffer;
+	this.name = node.name;
+	this.doDL();
 }
 pipeIn(val){
-	if (this.#noPipe) return;
+	if (this.noPipe) return;
 	if (isEOF(val)){
 		this.out(val);
-		this.#doDL();
+		this.doDL();
 		return;
 	}
-	if (isStr(val)) this.#lines.push(val);
-	else if (isArr(val)) this.#lines.push(...val);
+	if (isStr(val)) this.lines.push(val);
+	else if (isArr(val)) this.lines.push(...val);
 	else{
 cwarn("WUTISTHIS", val);
 	}
@@ -1022,8 +1013,10 @@ async run(){
 	else {
 		let dir = await fsapi.getBlobDir();
 		let ents = dir.entries();
+//log(ents);
 		let tot=0;
 		let num=0;
+
 		for await (const [k, v] of ents){
 			num++;
 			let f = await v.getFile();
