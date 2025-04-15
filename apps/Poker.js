@@ -1265,7 +1265,7 @@ let table_ranks_ch;
 
 this.app=app;
 this.extraChips = 0;
-this.lastCurPos = 0;
+this.lastCurPos = 1;
 this.handNum = 0;
 //this.finished = false;
 
@@ -1447,14 +1447,16 @@ postBlinds(){//«
 	sb_pos = this.playersInAction - 1;
 
 	let sb_player = this.players[sb_pos];
+
 	sb_player.chips -= SMALL_BLIND;
-	sb_player.this.lastBet = SMALL_BLIND;
+//	sb_player.lastBet = SMALL_BLIND;
+	sb_player.last_bet = SMALL_BLIND;
 	sb_player.total_bet_in_round = SMALL_BLIND;
 	sb_player.total_bet = SMALL_BLIND;
 
 	let bb_player = this.players[bb_pos];
 	bb_player.chips -= BIG_BLIND;
-	bb_player.this.lastBet = BIG_BLIND;
+	bb_player.last_bet = BIG_BLIND;
 	bb_player.total_bet_in_round = BIG_BLIND;
 	bb_player.total_bet = BIG_BLIND;
 
@@ -1462,6 +1464,10 @@ postBlinds(){//«
 	this.lastBet = BIG_BLIND;
 	this.lastBettor = bb_player;
 
+	this.curPos = bb_pos;
+
+	this.app.action.innerHTML+= `${sb_player.name}:&nbsp;${SMALL_BLIND}&nbsp;|&nbsp;`;
+	this.app.action.innerHTML+= `${bb_player.name}:&nbsp;${BIG_BLIND}&nbsp;|&nbsp;`;
 }//»
 
 dealCards(){//«
@@ -1473,7 +1479,7 @@ this.app.action.innerHTML= "";
 this.roundNum++;
 this.lastBettor = null;
 this.lastBet = null;
-this.curPos = this.lastCurPos;
+//this.curPos = this.lastCurPos;
 let round_name = ROUNDS[this.roundNum];
 let suit_types;
 if (this.roundNum === FLOP_ROUND){
@@ -1612,6 +1618,7 @@ log(`HAND: ${hand_num}`);
 	}
 	this.curPos = this.lastCurPos;
 	this.pot = 0;
+	this.postBlinds();
 //	this.dealCards();
 //	return true;
 }//»
@@ -1632,7 +1639,9 @@ return;
 		return;
 	}
 	cur_bet = player.act();
-	this.app.action.innerHTML= `${player.name}: ${cur_bet}`;
+
+	this.app.action.innerHTML+= `${player.name}:&nbsp;${cur_bet}&nbsp;|&nbsp;`;
+
 	if (cur_bet == FOLD_ACTION){//«
 		player.folded = true;
 		this.playersInAction--;
