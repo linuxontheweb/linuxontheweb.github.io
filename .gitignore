@@ -1,4 +1,6 @@
 #ignore dotfiles
 .*
+#ignore underscore files
+_*
 #keep .gitignore
 !.gitignore

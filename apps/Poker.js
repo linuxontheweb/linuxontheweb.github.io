@@ -1400,13 +1400,15 @@ if (winners.length > 1){//«
 let chips_per_winner = Math.floor(cur_pot / winners.length);
 //Any extra chips should get awarded to the game winner
 this.extraChips += cur_pot - (chips_per_winner * winners.length);
-cwarn("WINNERS");
+//cwarn("WINNERS");
+this.app.action.innerHTML+= "";
 for (let winner of winners){//«
 	winner.chips += chips_per_winner;
 //log(winner);
-log(`${winner.name}:${winner.result.text} (${winner.chips})`);
+//log(`${winner.name}:${winner.result.text} (${winner.chips})`);
 //log();
 	total_awarded += chips_per_winner;
+	this.app.action.innerHTML+= `${winner.name}:&nbsp;${winner.result.text}&nbsp;(${winner.chips})<br>`;
 }//»
 let net_per_winner = chips_per_winner - cur_total_bet;//«
 if (net_per_winner > 0) {
@@ -1589,7 +1591,11 @@ newHand(){//«
 */
 	this.finished = false;
 	this.handNum++;
-	this.app.board.innerHTML = "";
+//	this.app.board.innerHTML = `<div style="font-size:120%>&nbsp;</div>`;
+	this.app.board.innerHTML = `<div>&nbsp;</div>`;
+//this.app.acti
+	this.app.action.innerHTML= "";
+//log(this.app.board);
 cwarn(`HAND: ${this.handNum}`);
 /*
 	if (!(hand_num%SLEEP_EVERY_NUM_HANDS)){
@@ -1754,13 +1760,13 @@ makeDOM(){/*«*/
 	let b = mkdv();
 	b._ta="center";
 	b._fs="125%";
-
+	b.style.minHeight="35px";
 	this.players = pldv;
 	this.action = a;
 	this.board = b;
 	this.main._add(pldv);
-	this.main._add(a);
 	this.main._add(b);
+	this.main._add(a);
 }/*»*/
 
 onappinit(){/*«*/

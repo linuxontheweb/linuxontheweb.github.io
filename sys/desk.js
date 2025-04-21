@@ -5248,6 +5248,7 @@ setWindowName(){//«
 	win.name = this.name;
 }//»
 addOverlay(){//«
+//	const{icn}=this;
 	let oncontext = (e) => {
 		e.preventDefault();
 		e.stopPropagation();
@@ -5261,12 +5262,12 @@ addOverlay(){//«
 		});
 	};
 	let overdiv = make('div');
-	let rect = icn.iconElem.getBoundingClientRect();
+	let rect = this.iconElem.getBoundingClientRect();
 	overdiv._w= rect.width;
 	overdiv._h = rect.height;
 
 	let od = overdiv;
-	icn.overdiv = od;
+	this.overdiv = od;
 	od._dis= "flex";
 	od.style.alignItems = "center";
 	od.style.justifyContent = "center";
@@ -5280,11 +5281,11 @@ addOverlay(){//«
 	od._w="100%";
 	od._h="100%";
 	od._loc(0, 0);
-	icn.iconElem._add(overdiv);
-	icn.activate = () => {
+	this.iconElem._add(overdiv);
+	this.activate = () => {
 		this.cancel_func = null;
 		overdiv._del();
-		delete icn.disabled;
+		delete this.disabled;
 	};
 	overdiv.oncontextmenu = oncontext;
 	return overdiv;

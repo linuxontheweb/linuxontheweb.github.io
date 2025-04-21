@@ -2131,6 +2131,48 @@ run(){
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
 
+const com_devtest = class extends Com{
+init(){
+}
+async run(){
+const{args, term}=this;
+let f = args.shift();
+let no=num=>{this.no(`Error:${num}`);};
+if (!f) return no(1);
+let o = await f.toJson(term);
+if (!o) return no(2);
+/*
+Types of flushes on flop:
+Holes same
+4: flush
+3: draw
+0: none
+Holes diff
+2: draw
+0: none
+
+Types of flushes on turn:
+Holes Same
+Type 	Same Table Cards
+3 		>=3
+4 		2
+0
+Holes Diff
+Type 	Same Table Cards
+1 		4
+2		3
+0
+*/
+log(o);
+//let keys = Object.keys(o);
+//log(keys);
+
+//log(n);
+
+this.ok();
+
+}
+}
 const com_loopctrl = class extends Com{//«
 //	static opts = true;
 	static getOpts(){
@@ -3024,7 +3066,7 @@ open: com_open,
 msleep: com_msleep,
 test: com_test,
 };
-
+if (dev_mode) this.defCommands.devtest = com_devtest;
 //»
 this.defCommandOpts = {//«
 //const command_options = {
