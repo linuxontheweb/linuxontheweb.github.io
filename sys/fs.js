@@ -2240,7 +2240,8 @@ cerr("NEED FULLPATH IN CHECK_FS_BY_PATH");
 	check_and_save(basename);
 };//»
 const append_slice=async(slice)=>{//«
-	let writer = await fEnt.createWritable();
+	let writer = await fEnt.createWritable({keepExistingData: true});
+//	let writer = await fEnt.createWritable();
 	await writer.seek(curpos);
 	await writer.write(slice);
 	await writer.close();
@@ -2272,7 +2273,7 @@ cerr("save_file_chunk():No blobarg or file!");
 	if (lenret < fSize) {
 //		if (update_cb) update_cb(Math.floor(100 * thisobj.position / fSize));
 		if (update_cb) update_cb(Math.floor(100 * lenret / fSize));
-		save_file_chunk();
+		await save_file_chunk();
 	} 
 	else {
 		if (done_cb) done_cb();
@@ -2345,33 +2346,9 @@ this.save_from_file = (arg) => {//«
 	if (!update_cb) cwarn("update_cb is NOT set!");
 	if (!done_cb) cwarn("done_cb is NOT set!");
 //	save_file_chunk();
-	setTimeout(()=>{
-		save_file_chunk();
+	setTimeout(async()=>{
+		await save_file_chunk();
 	},0);
-};//»
-this.start_blob_stream=()=>{//«
-	if(stream_started)return cerr("blob stream is already started!");
-	if(saving_from_file)return cerr("Already saving from a File object");
-//	if(!writer)return cerr("No writer is set!");
-	if(!fEnt)return cerr("No file entry is set!");
-//	if(!fSize)cwarn("fSize not set,so can't call update_cb with percent update,but with bytes written");
-//	if(!update_cb)cwarn("update_cb is NOT set!");
-//	if(!done_cb)cwarn("done_cb is NOT set!");
-	stream_started=true;
-};//»
-this.append_blob = (arg, cb) => {//«
-	/* If no fSize is set,we can call update_cb with the number of bytes written */
-	if (stream_ended) return cerr("The stream is ended!");
-	if (!stream_started) return cerr("Must call start_blob_stream first!");
-	if (!(arg instanceof Blob)) return cerr("The first arg MUST be a Blob!");
-	setTimeout(()=>{
-		save_file_chunk(arg, cb);
-	},0);
-};//»
-this.end_blob_stream = () => {//«
-	stream_ended = true;
-	if (fObj) fObj.unlockFile();
-	if (done_cb) done_cb();
 };//»
 this.cancel = (cb) => {//«
 //	cwarn("Cancelling... cleaning up!");
@@ -2384,6 +2361,33 @@ this.cancel = (cb) => {//«
 		cb();
 	});
 };//»
+
+/*
+this.start_blob_stream=()=>{//«
+	if(stream_started)return cerr("blob stream is already started!");
+	if(saving_from_file)return cerr("Already saving from a File object");
+//	if(!writer)return cerr("No writer is set!");
+	if(!fEnt)return cerr("No file entry is set!");
+//	if(!fSize)cwarn("fSize not set,so can't call update_cb with percent update,but with bytes written");
+//	if(!update_cb)cwarn("update_cb is NOT set!");
+//	if(!done_cb)cwarn("done_cb is NOT set!");
+	stream_started=true;
+};//»
+this.append_blob = (arg, cb) => {//«
+//	If no fSize is set,we can call update_cb with the number of bytes written
+	if (stream_ended) return cerr("The stream is ended!");
+	if (!stream_started) return cerr("Must call start_blob_stream first!");
+	if (!(arg instanceof Blob)) return cerr("The first arg MUST be a Blob!");
+	setTimeout(async()=>{
+		await save_file_chunk(arg, cb);
+	},0);
+};//»
+this.end_blob_stream = () => {//«
+	stream_ended = true;
+	if (fObj) fObj.unlockFile();
+	if (done_cb) done_cb();
+};//»
+*/
 
 }
 this.FileSaver=FileSaver;

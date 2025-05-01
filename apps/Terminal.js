@@ -2141,7 +2141,7 @@ let no=num=>{this.no(`Error:${num}`);};
 if (!f) return no(1);
 let o = await f.toJson(term);
 if (!o) return no(2);
-/*
+/*«
 Types of flushes on flop:
 Holes same
 4: flush
@@ -2162,9 +2162,56 @@ Type 	Same Table Cards
 1 		4
 2		3
 0
-*/
-log(o);
-//let keys = Object.keys(o);
+»*/
+//for (let)
+//log(o);
+let keys = Object.keys(o);
+//log(keys);
+//log(o["7723J-0"]);
+//this.ok();
+//return;
+let arr = [];
+let lo = Infinity, hi = 0;
+let lo_hand, hi_hand;
+for (let key of keys){
+//	let obj = o[key];
+//	let tot = obj.t
+//	let num = obj.n;
+//	obj.avg = obj.t/obj.n;
+	let n = o[key].n
+	if (n < lo){
+		lo = n;
+		lo_hand = key;
+	}
+	else if (n > hi){
+		hi = n;
+		hi_hand = key;
+	}
+	arr.push({hand: key, ev : o[key].t/n, num: n});
+}
+let sorted = arr.sort((a,b)=>{
+	if (a.ev > b.ev) return 1;
+	if (a.ev < b.ev) return -1;
+	return 0;
+});
+log("LO",lo_hand, lo);
+log("HI",hi_hand, hi);
+log(sorted);
+//log();
+///*
+//log(sorted[0]);
+let perf = 0;
+//log(sorted[sorted.length-1]);
+for (let i = sorted.length-1; i >= 0; i--){
+if (sorted[i].ev === 800){
+perf++;
+//log(sorted[i].hand);
+}
+else break;
+}
+//log(perf);
+//*/
+//log(arr);
 //log(keys);
 
 //log(n);

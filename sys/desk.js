@@ -445,6 +445,7 @@ cerr("!!!! Could not find the previous item! !!!!");
 const Popup = function(Desk) {//«
 //const Widgets = function() {
 
+let ALERT_YELLOW = "#FFBF00";
 let prompt_boxshadow = "3px 3px 20px rgba(255,255,255,0.375)";
 let popup_link_col = "#009"
 let popup_queue = [];
@@ -1427,7 +1428,6 @@ let DEF_NEW_WIN_H_PER = 0.72;
 
 let WORKSPACE_SWITCHER_BOX_SZ=35;
 
-let ALERT_YELLOW = "#FFBF00";
 
 let MIN_WIN_OP=1;
 
