@@ -140,6 +140,8 @@ const DOWN_KC = KC['DOWN'];
 const DEL_KC = KC['DEL'];
 
 const INT_ALNUM_RE = /[0-9\p{Letter}]/u;
+const INT_ALNUM_PRINT_RE = /[\x20-\x7E\p{Letter}]/u;
+//const PRINTABLE_RE = /[\p{Print}]/u;
 /*
 RIGHT
 UP
@@ -3779,7 +3781,7 @@ constructor(code, opts={}, handler) {//«
 
 eof() {//«
 	return this.index >= this.length;
-};//»
+}//»
 eol(){//«
 	return this.isInteractive && (this.index >= this.length);
 }//»
@@ -3798,7 +3800,7 @@ async more(no_nl){//«
 throwUnexpectedToken(message) {//«
 	if (message === void 0) { message = Messages.UnexpectedTokenIllegal; }
 	return this.errorHandler.throwError(this.index, this.lineNumber, this.index - this.lineStart + 1, message);
-};//»
+}//»
 
 skipSingleLineComment() {//«
 	while (!this.eof()) {
@@ -3809,7 +3811,7 @@ skipSingleLineComment() {//«
 		}
 		this.index++;
 	}
-};//»
+}//»
 scanComments() {//«
 	while (!this.eof()) {
 		let code = this.source[this.index].charCodeAt();
@@ -3991,11 +3993,11 @@ cwarn("SKIP OIMPET");
 //log(quote);
 	return quote;
 }//»
-scanParam(){//«
+scanParam(no_adv){//«
 
 	let start = this.index;
 	const sub = new ParamSub(start);
-	this.index++;
+	if (!no_adv) this.index++;
 	let cur = this.index;
 	let out=[this.source[cur]];
 	cur++;
@@ -4060,9 +4062,7 @@ if (ch==="\\"){//«
 	out.push("\\", this.source[cur]);
 	have_space = false;
 }//»
-else if (ch==="("){
-	paren_depth++;
-}
+else if (ch==="(") paren_depth++;
 else if (ch==="$"&&this.source[cur+1]==="'"){//«
 	this.index=cur;
 	let rv = await this.scanQuote(par, "$", in_backquote);
@@ -4119,27 +4119,35 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 	}
 	have_space = false;
 }//»
-		else if (ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)){//«
-			this.index=cur;
-			let sub = await this.scanParam();
-			out.push(sub);
-			cur = this.index;
-		}//»
-		else if (ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){//«
-			let sub = new ParamSub(cur);
-			sub.val=[this.source[cur+1]];
-			out.push(sub);
-			this.index++;
-		}//»
-else if (is_param && ch==="}"){
+else if (ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)){//«
+	this.index=cur;
+	let sub = await this.scanParam();
+	out.push(sub);
+	cur = this.index;
+}//»
+else if (ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){//«
+	let sub = new ParamSub(cur);
+	sub.val=[this.source[cur+1]];
+	out.push(sub);
+	this.index++;
+}//»
+else if (is_math && ch.match(/[_a-zA-Z]/)){//«
+/*
+For math subs, we automatically create a param out of anything that looks like a name
+*/
+	this.index=cur;
+	let sub = await this.scanParam(true);
+	out.push(sub);
+	cur = this.index;
+}//»
+else if (is_param && ch==="}"){//«
 	this.index = cur;
 	return sub;
-}
+}//»
 else if (paren_depth === 0 && is_comsub && ch===")"){//«
 	this.index = cur;
 //XMDJKT
 	sub.raw = this.source.slice(start+2, this.index);
-//log(sub.raw);
 	return sub;
 }//»
 else if (paren_depth === 0 && is_math && ch===")"){//«
@@ -4149,23 +4157,23 @@ else if (paren_depth === 0 && is_math && ch===")"){//«
 	this.index = cur+1;
 	return sub;
 }//»
-else if (ch===")"){
+else if (ch===")"){//«
 	if (paren_depth) {
 		paren_depth--;
 	}
 	else return "unexpected token: ')'";
-}
+}//»
 else if (ch===" " || ch==="\t"){//«
 	out.push(ch);
 	have_space = true;
 }//»
-else{
-if (ch==="#"&&have_space){
-return 'the substitution was terminated by "#"';
-}
+else{//«
+	if (ch==="#"&&have_space){
+		return 'the substitution was terminated by "#"';
+	}
 	out.push(ch);
 	have_space = false;
-}
+}//»
 
 cur++;
 ch = this.source[cur];
@@ -4185,14 +4193,14 @@ if (this.eol()){
 return null;
 
 }//»
-scanOperator(){/*«*/
+scanOperator(){//«
 
 //	let this.source = this.source;
 	let start = this.index;
 	let str = this.source[start];
 	let obj={};
 	switch(str){
-	case '(':/*«*/
+	case '('://«
 		obj.isSubStart = true;
 		obj.isCommandStart = true;
 		++this.index;
@@ -4201,16 +4209,16 @@ scanOperator(){/*«*/
 		obj.isSubEnd = true;
 		obj.isPatListEnd = true;
 		++this.index;
-		break;/*»*/
-	case '&':/*«*/
+		break;//»
+	case '&'://«
 		++this.index;
 		if (this.source[this.index]==="&"){
 			this.index++;
 			str="&&";
 			obj.isAndIf = true;
 		}
-		break;/*»*/
-	case '|':/*«*/
+		break;//»
+	case '|'://«
 		++this.index;
 		if (this.source[this.index]==="|"){
 			this.index++;
@@ -4221,15 +4229,15 @@ scanOperator(){/*«*/
 			obj.isPipe = true;
 			obj.isPatListSep = true;
 		}
-		break;/*»*/
+		break;//»
 	case '>'://«
 		++this.index;
 		if ([">","&","|"].includes(this.source[this.index])){
 			str+=this.source[this.index];
 			++this.index;
 		}
-		break;/*»*/
-	case '<':/*«*/
+		break;//»
+	case '<'://«
 		++this.index;
 	//'<<',
 	//'<>',
@@ -4255,8 +4263,8 @@ scanOperator(){/*«*/
 				obj.isHeredoc = true;
 			}
 		}
-		break;/*»*/
-	case ';':
+		break;//»
+	case ';'://«
 		++this.index;
 		if (this.source[this.index]===";"){
 			this.index++;
@@ -4270,7 +4278,7 @@ scanOperator(){/*«*/
 			obj.isSemiAnd = true;
 			obj.isCaseItemEnd = true;
 		}
-		break;
+		break;//»
 	}
 	if (this.index === start) {
 		this.throwUnexpectedToken(`Unexpected token ${str}`);
@@ -4307,7 +4315,7 @@ scanOperator(){/*«*/
 //	if (str.match(/[<>]/)) return {type:"r_op", r_op:str, val: str, isOp: true};
 //	return {type:"c_op", c_op:str, start, val: str, isOp: true};
 
-}/*»*/
+}//»
 async scanWord(par, env){//«
 /*
 
@@ -8465,7 +8473,6 @@ charRight(no_render){//«
 	}
 }//»
 wordOver(is_left){//«
-//	const INT_ALNUM_RE = /[0-9A-Za-z\u00C0-\u1FFF\u2800-\uFFFD]/;
 	const getch = () => {
 		return this.lines[this.y+this.scrollNum][this.x];
 	};
@@ -8478,7 +8485,6 @@ wordOver(is_left){//«
 	is_left ? this.charLeft(true) : this.charRight(true);
 	let pos1 = curpos();	
 	let ch = getch();
-//	let have_space = (ch && !ch.match(/^[a-zA-Z0-9]$/));
 	let have_space = !INT_ALNUM_RE.test(ch);
 	if (have_space){
 //Rewind to the end of a word
@@ -9647,29 +9653,16 @@ handleLetterPress(char_arg, no_render){//«
 	this.adjustLinesAdd(endch, fromy);
 	end();
 }//»
-
 handleInsert(val){//«
 	let arr = val.split("");
 	let gotspace = false;
 	let num_skipped = 0;
 	for (let ch of arr) {
-		let code = ch.charCodeAt();
-		if (INT_ALNUM_RE.test(ch)){}
-//		else if (code === 10) continue;
-		else {
-			code = 32;
+		if (!INT_ALNUM_PRINT_RE.test(ch)){
 			num_skipped++;
+			ch = " ";
 		}
-//		if (!(code >= 32 && code <= 126)) {
-//			if (code==10) continue;
-//			code = 32;
-//		}
-		if (code==32) {
-			if (gotspace) continue;
-			gotspace = true;
-		}
-		else gotspace = false;
-		this.handleKey(null, code, null, true);
+		this.handleKey(null, ch.charCodeAt(), null, true);
 	}
 	if (num_skipped) this.doOverlay(`Skipped: ${num_skipped} chars`);
 }
