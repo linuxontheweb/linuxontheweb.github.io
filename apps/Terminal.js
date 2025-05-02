@@ -4310,8 +4310,8 @@ scanOperator(){//«
 	if (this.index === start) {
 		this.throwUnexpectedToken(`Unexpected token ${str}`);
 	}
-	let check_unsupported_toks = globals.dev_mode ? UNSUPPORTED_DEV_OPERATOR_TOKS : UNSUPPORTED_OPERATOR_TOKS;
-	if (check_unsupported_toks.includes(str)) this.throwUnexpectedToken(`unsupported operator '${str}'`);
+//	let check_unsupported_toks = globals.dev_mode ? UNSUPPORTED_DEV_OPERATOR_TOKS : UNSUPPORTED_OPERATOR_TOKS;
+//	if (check_unsupported_toks.includes(str)) this.throwUnexpectedToken(`unsupported operator '${str}'`);
 
 	obj.val=str;
 	obj.isOp = true;
