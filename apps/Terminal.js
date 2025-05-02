@@ -1339,7 +1339,6 @@ const Com = class {//«
 		this.opts=opts;
 		this.numErrors = 0;
 		this.noPipe = false;
-//		this.inBack = in_background;
 		for (let k in env) {
 			this[k]=env[k];
 		}
@@ -1463,6 +1462,15 @@ log(num);
 	resp(str, opts={}){//«
 		if (this.shell.cancelled) return;
 		const{term}=this;
+if (this.inBackground){
+if (opts.isErr){
+	console.error(str);
+}
+else{
+	console.log(str);
+}
+return;
+}
 		opts.name = this.name;
 		term.response(str, opts);
 		term.scrollIntoView();
@@ -3885,17 +3893,17 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 			this.index=cur;
 			if (this.source[cur+2]==="("){
 //				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
-				rv = await this.scanSub(quote, {isMath: true, inBack: is_bq||in_backquote});
+				rv = await this.scanSub(quote, {isMath: true, inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			}
 			else if (this.source[cur+1]==="{"){
 //				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
-				rv = await this.scanSub(quote, {isParam: true, inBack: is_bq||in_backquote});
+				rv = await this.scanSub(quote, {isParam: true, inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
 			}
 			else{
 //				rv = await this.scanComSub(quote, null, is_bq||in_backquote);
-				rv = await this.scanSub(quote, {isComSub: true, inBack: is_bq||in_backquote});
+				rv = await this.scanSub(quote, {isComSub: true, inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			}
 			if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -4015,7 +4023,7 @@ let is_comsub = opts.isComSub;
 if (!(is_math||is_param||is_comsub)){
 throw new Error("NOT is_comsub || is_math || is_param ?!?!? HJKHFDK^&*^$*&#");
 }
-let in_backquote = opts.inBack;
+let in_backquote = opts.inBQ;
 let cont_sub = opts.contSub;
 
 ////async scanComSub(par, is_math, in_backquote, cont_sub){
@@ -4085,7 +4093,7 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 	if (this.source[cur+2]==="("){
 		this.index=cur;
 //		let rv = await this.scanComSub(sub, true, in_backquote);
-		let rv = await this.scanSub(sub, {isMath: true, inBack: in_backquote});
+		let rv = await this.scanSub(sub, {isMath: true, inBQ: in_backquote});
 		if (rv===null) return `unterminated math expansion`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -4093,7 +4101,7 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 	}
 	else if (this.source[cur+1]==="{"){
 		this.index=cur;
-		let rv = await this.scanSub(sub, {isParam: true, inBack: in_backquote});
+		let rv = await this.scanSub(sub, {isParam: true, inBQ: in_backquote});
 		if (rv===null) return `unterminated parameter expansion`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -4103,7 +4111,7 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 		this.index=cur;
 ////async scanComSub(par, is_math, in_backquote, cont_sub){
 //		let rv = await this.scanComSub(sub, false, in_backquote);
-		let rv = await this.scanSub(sub, {isComSub: true, inBack: true});
+		let rv = await this.scanSub(sub, {isComSub: true, inBQ: true});
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -4169,7 +4177,7 @@ if (this.eol()){
 	sub.val = out;
 	await this.more();
 //	return await this.scanComSub(par, is_math, in_backquote, sub);
-	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBack: in_backquote, contSub: sub, parenDepth: paren_depth});
+	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBQ: in_backquote, contSub: sub, parenDepth: paren_depth});
 }
 
 
@@ -6609,15 +6617,11 @@ async makeScriptCom(com_ast, comopts){//«
 	return com;
 }//»
 
-async executePipeline(pipe, loglist, loglist_iter, opts){//«
+async executePipeline(pipe, loglist, loglist_iter, opts, in_background){//«
 	const{term}=this;
-//	const make_sh_err_com = ShellMod.util.make_sh_err_com;
-//	const make_sh_err_com = make_sh_error_com;
 	let lastcomcode;
-//	let {stdin: optStdin, scriptOut, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-//	let {stdin: optStdin, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive, loopNum}=opts;
 	let {stdin: optStdin, env}=opts;
-	let in_background = false;
+//	let in_background = false;
 	let pipelist = pipe.pipe;
 	if (!pipelist){
 		return `sh: pipeline list not found!`;
@@ -6625,7 +6629,6 @@ async executePipeline(pipe, loglist, loglist_iter, opts){//«
 	let pipetype = pipe.type;
 	let pipeline = [];
 	let hasBang = pipe.hasBang;
-	let screenGrab = {grabber: ""};
 	let last_com;
 	for (let j=0; j < pipelist.length; j++) {//«
 		let com_ast = pipelist[j];
@@ -6665,7 +6668,7 @@ log(red);
 			else comopts.stdinLns = comopts.stdin.split("\n");
 		}
 		comopts.outRedir = out_redir;
-
+		comopts.inBackground = in_background;
 		if (last_com){//«
 //XWMNJUO
 			let env_readline = new EnvReadLine(term);
@@ -6688,8 +6691,6 @@ log(red);
 		}
 		else if (com_ast.simple_command){
 			com = await this.makeCommand(com_ast.simple_command, comopts)
-//log(com);
-//if (com.isExit === true) return com;
 			if (com.breakStatementLoop === true) return com;
 		}
 		else{//«
@@ -6724,6 +6725,7 @@ comopts.envReadLine = "Blarney stone in the YADDER YADDER YADDER MCSLADDER!?!?!?
 }
 */
 		}
+		com.inBackground = in_background;
 		pipeline.push(com);
 		last_com = com;
 	}//»
@@ -6819,8 +6821,8 @@ we *ALWAYS* break from the logic list, so we return
 }
 //»
 
-async executeAndOr(andor_list, andor_sep, opts){//«
-
+async executeAndOr(andor_list, andor_sep, opts, in_background){//«
+//let in_background = opts.inBackground || andor_sep === "&";
 let loglist=[];
 let last = andor_list.pop();
 for (let i=0; i < andor_list.length-1; i+=2){
@@ -6836,7 +6838,7 @@ andor_list.push(last);
 let lastcomcode;
 for (let i=0; i < loglist.length; i++){//«
 
-	let rv = await this.executePipeline(loglist[i], loglist, i, opts);
+	let rv = await this.executePipeline(loglist[i], loglist, i, opts, in_background);
 //continue;
 	if (this.cancelled) return;
 //	if (this.cancelled) continue;
@@ -6868,12 +6870,45 @@ cwarn("CONTINUE", i, rv.nextIter);
 return lastcomcode;
 
 }//»
-
+/*Safe version
 async executeStatements(statements, opts){//«
 	const{term}=this;
 	let lastcomcode;
 	for (let i=0; i < statements.length-1; i+=2){
-		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts);
+		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, opts.inBackground || statements[i+1] === "&");
+		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
+			return lastcomcode.code;
+		}
+		if (isLoopCont(lastcomcode)||isLoopBreak(lastcomcode)) return lastcomcode;
+	}
+	return lastcomcode;
+}//»
+*/
+///*
+async executeStatements(statements, opts){//«
+	const{term}=this;
+	let lastcomcode;
+	for (let i=0; i < statements.length-1; i+=2){
+		let in_background = opts.inBackground || statements[i+1] === "&";
+		if (statements[i+1] === "&"){
+/*
+In bash, when the '&' is used immediately, like:
+  $ if sleep 1 && false & then echo hi; else echo ho; fi
+this evaluates to true, and hi is output
+*/
+			this.executeAndOr(statements[i].andor, statements[i+1], opts, true);
+			lastcomcode = E_SUC;
+		}
+		else{
+
+/*
+If this is a compound command, invoked like:
+  $ ./myscript.sh &
+This does *not* immediately return, which is particularly noticeable if there are long 
+running processes (or just sleep statements) inside of the script
+*/
+			lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, in_background);
+		}
 //		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
 		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
 			return lastcomcode.code;
@@ -6882,6 +6917,7 @@ async executeStatements(statements, opts){//«
 	}
 	return lastcomcode;
 }//»
+//*/
 
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
@@ -9420,19 +9456,7 @@ log(out);
 		opts = {isErr: true};
 	}
 
-	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, inBack, noBr} = opts;
-if (inBack){
-if (isErr){
-cerr(out);
-}
-else if (isWrn){
-cwarn(out);
-}
-else{
-log(out);
-}
-return;
-}
+	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;
 	if (out == "" && out.isNL){
 		out=" \n ";
 	}
