@@ -3,6 +3,10 @@ command is split into 3 arguments (rather than 1 argument with spaces in it):
 
 	$ cat $(echo file1 file2 file3)
 
+Also we needed to add toString methods to the classes ComSub and BQuote (which wraps the
+raw values in the appropriate `...` or $(...)), so that they can get turned into the
+appropriate strings @PZUELFJ, without looking like "[Object object]". Need to look out
+for whatever else might need to get a toString method.
 */
 //Notes«
 /*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
@@ -1543,7 +1547,8 @@ log(val);
 //«Output helpers
 	err(str, opts={}){
 		opts.isErr=true;
-		this.resp(`${this.name}: ${str}`, opts);
+		if (str.match(/^sh: /)) this.resp(str, opts);
+		else this.resp(`${this.name}: ${str}`, opts);
 	}
 	suc(str, opts={}){
 		opts.isSuc=true;
@@ -3666,6 +3671,9 @@ dup(){//«
 	}
 	return param;
 }//»
+toString(){
+	return `\${${this.val.join("")}}`;
+}
 
 }//»
 const ComSub = class extends Sequence{//«
@@ -3722,6 +3730,9 @@ dup(){//«
 	}
 	return math;
 }//»
+toString(){
+	return `$((${this.val.join("")}))`;
+}
 
 }//»
 this.seqClasses={
@@ -5835,6 +5846,7 @@ async expandComsub(tok, opts){//«
 			i++;
 		}
 		else{
+//PZUELFJ
 			s+=ch;
 		}
 	}
