@@ -465,7 +465,6 @@ run:
 			this.ok();
 		}
 	}//»
-
 	async doTermLoop(){//«
 		while (true){
 			let ln = await this.readLine();

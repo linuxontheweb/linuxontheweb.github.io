@@ -1,4 +1,9 @@
+/*@YSHFKSOK: This is necessary in order to ensure that the output from the following echo
+command is split into 3 arguments (rather than 1 argument with spaces in it):
 
+	$ cat $(echo file1 file2 file3)
+
+*/
 //Notes«
 /*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
 permutations of command line history heredoc editing. So test this out with multiple
@@ -1528,7 +1533,9 @@ log(val);
 		//Save to subLines and call scriptOut
 		if (this.subLines){
 			if (val instanceof Uint8Array) val = `Uint8Array(${val.length})`;
-			this.subLines.push(val);
+//			this.subLines.push(val);
+//YSHFKSOK
+			this.subLines.push(val.split(" ").join("\n"));
 			return;
 		}
 		this.resp(val, opts);
@@ -1536,7 +1543,7 @@ log(val);
 //«Output helpers
 	err(str, opts={}){
 		opts.isErr=true;
-		this.resp(str, opts);
+		this.resp(`${this.name}: ${str}`, opts);
 	}
 	suc(str, opts={}){
 		opts.isSuc=true;
@@ -2256,14 +2263,16 @@ const com_loopctrl = class extends Com{//«
 /*
 Abort the command line, command sub or script that we are in.
 */
-				this.err(`${this.name}: ${num}: numeric argument required`);
+//				this.err(`${this.name}: ${num}: numeric argument required`);
+				this.err(`${num}: numeric argument required`);
 //				this.end({abortScript: true});
 				this.end({break: Infinity, abortScript: true});
 				return;
 			}
 			if (parseInt(num) < 1) {
 //This breaks of all loops, so we do this.end({break: Infinity});
-				this.err(`${this.name}: ${num}: loop count out of range`);
+//				this.err(`${this.name}: ${num}: loop count out of range`);
+				this.err(`${num}: loop count out of range`);
 				this.doBreakInf = true;
 				return;
 			}
@@ -2271,7 +2280,8 @@ Abort the command line, command sub or script that we are in.
 		}
 		else this.loopCnt = 1;
 		if (this.args[1]){
-			this.err(`${this.name}: too many arguments`);
+//			this.err(`${this.name}: too many arguments`);
+			this.err(`too many arguments`);
 			this.doBreakInf = true;
 		}
 	}//»
@@ -3297,6 +3307,7 @@ for (let ent of this.val){
 }
 
 if (curfield) fields.push(curfield);
+//log(fields);
 this.fields = fields;
 }//»
 
@@ -3597,7 +3608,9 @@ dup(){//«
 	}
 	return bq;
 }//»
-
+toString(){
+	return `\`${this.val.join("")}\``;
+}
 }//»
 //XMKJDHE
 const ParamSub = class extends Sequence{//«
@@ -3668,6 +3681,9 @@ dup(){//«
 	}
 	return com;
 }//»
+toString(){
+	return `$(${this.val.join("")})`;
+}
 }//»
 const MathSub = class extends Sequence{//«
 
@@ -5801,83 +5817,34 @@ constructor(term){//«
 
 fatal(mess){throw new Error(mess);}
 async expandComsub(tok, opts){//«
-//const expand_comsub=async(tok, shell, term)=>
-//log(tok.val.join(""));
 	const{term}=this;
-//	const err = term.resperr;
-const err=(mess)=>{
-term.response(mess, {isErr: true});
-};
-//	let s = tok.raw.join("");
-//cwarn("COMSUB");
-//log(tok);
-//WSFOKGKDH
-//let arr = tok.raw;
-let arr = tok.val;
-let s = '';
-let len = arr.length;
-//JLXOPKEUJ
-for (let i=0; i < len; i++){
-	let ch = arr[i];
-	if (ch==="\\" && arr[i+1]==="\\"){
-		s+="\\";
-		i++;
-	}
-	else if (ch==="\\" && arr[i+1]==="`"){
-		s+="`";
-		i++;
-	}
-	else{
-		s+=ch;
-	}
-}
-/*«
-	let s='';
-	let vals = tok.val;
-	for (let ent of vals){
-		if (ent.expand) {
-			if (ent instanceof DQuote){
-//Amazingly, having internal newline characters works here because they
-//are treated like any other character inside of scanQuote()
-//@DJJUTILJJ is where all the "others" characters (including newlines, "\n") are 
-//pushed into the quote's characters.
-
-				s+='"'+(await ent.expand(this, term, opts))+'"';
-			}
-			else if (ent instanceof DSQuote){
-//Don't need to wrap it in $'...' again if we are actuall expanding it
-//				s+="'"+(await ent.expand(shell, term))+"'";
-
-//Otherwise, wrap it up like we found it...
-				s+="$'"+(ent.toString())+"'";
-			}
-			else {
-				if (ent instanceof SQuote) {
-					s+="'"+ent.toString()+"'";
-				}
-				else {
-//log(opts.env);
-//log(ent.val);
-//DOPMNRUK--------------------vvvvvvvvvv
-					s+=(await ent.expand(this, term, opts)).split("\n").join(" ");
-				}
-			}
+	const err=(mess)=>{
+		term.response(mess, {isErr: true});
+	};
+	let arr = tok.val;
+	let s = '';
+	let len = arr.length;
+	for (let i=0; i < len; i++){
+		let ch = arr[i];
+		if (ch==="\\" && arr[i+1]==="\\"){
+			s+="\\";
+			i++;
 		}
-		else {
-			if (ent instanceof SQuote){
-				s+="'"+ent.toString()+"'";
-			}
-			else {
-				 s+=ent.toString();
-			}
+		else if (ch==="\\" && arr[i+1]==="`"){
+			s+="`";
+			i++;
+		}
+		else{
+			s+=ch;
 		}
 	}
-»*/
+//cwarn("COMSUB", s);
 	let sub_lines = [];
 	try{
 //XMSKSLEO
-
 		let rv = await this.execute(s, {subLines: sub_lines, env: sdup(this.env), shell: this, term: this.term});
+//log(sub_lines);
+//log(sub_lines.join("\n"));
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -6291,6 +6258,7 @@ return stdin;
 }//»
 async allExpansions(arr, shopts={}, opts={}){//«
 //async allExpansions(arr, env, scriptName, scriptArgs, opts={}){
+//log(arr);
 const{env,scriptName,scriptArgs} = shopts;
 const{term}=this;
 const{isAssign}=opts;
@@ -6339,14 +6307,7 @@ for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
 		if (isAssign){
-//			let out=[];
-//			let out="";
-//			for (let field of tok.fields) out.push(...field.split("\n"));
-//			for (let field of tok.fields) out+=field+"\n";
-//			tok.val=out.join(" ");
-//tok.val=out;
-tok.val=tok.fields.join("\n");
-//log(tok.val);
+			tok.val=tok.fields.join("\n");
 		}
 		else {
 			let{start} = tok;
@@ -6384,6 +6345,8 @@ for (let k=0; k < arr.length; k++){//quote removal«
 }//»
 //return {arr, inRedir: in_redir, outRedir: out_redir};
 //return {arr, inRedir: in_redir, outRedir: out_redir};
+//cwarn("ARR");
+//log(arr);
 return arr;
 }//»
 async tryImport(com, comword){//«
@@ -6445,11 +6408,9 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	const{term}=this;
 	const {loopNum, envReadLine, envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
-//log(assigns);
 	let rv
 	let use_env;
 	if (assigns.length) {
-//		rv = await this.allExpansions(assigns, env, scriptName, scriptArgs, {isAssign: true});
 		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
 		use_env = name?sdup(env):env;
@@ -6478,8 +6439,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		return new NoCom(com_env);
 	}
 	let arr = [name, ...args];
-//	rv = await this.allExpansions(arr, env, scriptName, scriptArgs);
 	rv = await this.allExpansions(arr, opts);
+//log(rv);
 	if (isStr(rv)) return `sh: ${rv}`;
 	{
 		let hold = arr;
@@ -6686,7 +6647,6 @@ log(red);
 			};
 			comopts.envReadLine = env_readline;
 		}//»
-
 		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){
 			com = await this.makeScriptCom(com_ast, comopts);
 		}
