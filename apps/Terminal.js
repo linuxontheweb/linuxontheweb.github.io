@@ -1307,6 +1307,16 @@ const {val: op}=tok;
 let fullpath = normPath(fname.toString(), term.cur_dir);
 let node = await fsapi.pathToNode(fullpath);
 if (node) {//«
+	if (node.isDevice){
+		if (fullpath == "/dev/null") return;
+		if (fullpath == "/dev/log"){
+			console.log(val);
+		}
+		else{
+cwarn("WHAT KIND OF DEVICE???", fullpath);
+		}
+		return;
+	}
 	if (!node.isFile){
 		return `${fname}: not a regular file`;
 	}
