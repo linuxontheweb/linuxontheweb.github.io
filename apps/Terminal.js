@@ -1073,7 +1073,7 @@ const delete_coms = arr => {//«
 	let sh_opts = globals.shell_command_options;
 	for (let libname of arr){
 if (!this.var.allLibs[libname]){
-cwarn(`The command library: ${libname} is not loaded`);
+//cwarn(`The command library: ${libname} is not loaded`);
 continue;
 }
 		let lib = NS.coms[libname];
@@ -6493,28 +6493,26 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		usecomword = alias;
 	}//»
 	else usecomword = comword;
-	if (usecomword=="exit"){//«
-//log(opts);
-//		if (opts.isTopLevel){
-//log(opts);
+	if (usecomword=="exit"||usecomword=="return"){//«
 		let code;
-		if (opts.isInteractive){
+		if (usecomword=="return" && !opts.isFunc){
+			return make_sh_err_com(comword, "can only `return' from a function", com_env);
+		}
+		if (usecomword=="exit" && opts.isInteractive){
 			term.response("sh: not exiting the toplevel shell", {isWrn: true});
-//			return {code: lastcomcode, breakStatementLoop: true};
-			code = new Number(code);
-			code.breakStatementLoop = true;
-//			return {code: 1, breakStatementLoop: true};
-			return code;
+			code = E_ERR;
 		}
-		let numstr = arr.shift();
-		if (numstr){
-			if (!numstr.match(/^-?[0-9]+$/)) term.response("sh: exit: numeric argument required", {isErr: true});
-			else code = parseInt(numstr);
+		else {		
+			let numstr = arr.shift();
+			if (numstr && !arr.length){
+				if (!numstr.match(/^-?[0-9]+$/)) term.response(`sh: ${usecomword}: numeric argument required`, {isErr: true});
+				else code = parseInt(numstr);
+			}
+			else if (arr.length) {
+				term.response(`sh: ${usecomword}: too many arguments`, {isErr: true});
+			}
+			if (!Number.isFinite(code)) code = E_ERR;
 		}
-		else if (arr.length) {
-			term.response("sh: exit: too many arguments", {isErr: true});
-		}
-		if (!Number.isFinite(code)) code = E_ERR;
 		code = new Number(code);
 		code.breakStatementLoop = true;
 		return code;
@@ -6525,14 +6523,15 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
 	}//»
-	if (term.funcs[usecomword]){
-
-com_env.isFunc = true;
-let func = term.funcs[usecomword](this, arr, opts, com_env);
-func.isFunc = true;
-return func;
-
-	}
+	if (term.funcs[usecomword]){//«
+		com_env.isFunc = true;
+		let newopts = sdup(opts);
+		delete newopts.isInteractive;
+		newopts.isFunc = true;
+		let func = term.funcs[usecomword](this, arr, newopts, com_env);
+		func.isFunc = true;
+		return func;
+	}//»
 	if (!com) {//Command not found!«
 //If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
 //Need to do this for matching stuff
@@ -9617,9 +9616,14 @@ handleLetterPress(char_arg, no_render){//«
 		endch = ln[x];
 		if (endch) ln.pop();
 		this.x = 0;
-		this.y++;
+		if (this.y===this.h-1){
+			this.scrollNum++;
+		}
+		else{
+			this.y++;
+		}
 		fromy = this.y + this.scrollNum;
-		this.scrollIntoView({noSetY: true});
+//		this.scrollIntoView({noSetY: true});
 	}
 	else if (ln.length <= w){
 		return end();
