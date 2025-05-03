@@ -1,6 +1,3 @@
-/*5/2/25: Very sloppy to only handle fmt_lines in the init phase, and not do any kind of 
-mode, so that addLines could be adding to either raw_lines OR fmt_lines. The "toggling"
-between the modes happens @FEAKSJFG (when SPACE_A is pressed)*/
 //Imports«
 const util = LOTW.api.util;
 const globals = LOTW.globals;
@@ -55,15 +52,8 @@ const okint = val=>{//«
     }
     return false;
 };//»        
-//const set_lines = (if_hold) => {
-//	if (if_hold) termobj.hold_lines();
-//	termobj.set_lines(lines, line_colors);
-//};
-//const quit=(rv)=>{termobj.onescape=onescape;modequit(rv);};
 const quit=(rv)=>{
-//	termobj.onescape=onescape;
 	termobj.quitNewScreen(hold_screen_state);
-//log(less.cb);
 	less.cb&&less.cb();
 };
 const render = () => {//«
@@ -228,6 +218,19 @@ return;
 	render();
 }//»
 
+const wrap_lines=arr=>{
+	for (let ln of arr){
+		let wraparr = termobj.wrapLine(ln).split("\n");
+		let len = wraparr.length;
+		let lenmin1 = len-1;
+		for (let i = 0; i < len; i++) {
+			let l = wraparr[i];
+			let a = l.split("");
+			if (i < lenmin1) a._continue = true;
+			lines.push(a);
+		}
+	}
+};
 //»
 //Obj/CB«
 
@@ -236,9 +239,6 @@ const onescape=()=>{//«
 	if (line_colors.length){
 		got=true;
 		line_colors.splice(0,line_colors.length)
-//		line_colors.
-//		line_colors=[];
-//		set_lines();
 	}
 	if (stat_message){
 		got=true;
@@ -312,24 +312,6 @@ this.onkeydown=(e, sym, code)=>{//«
 			render();
 		}
 	}
-/*
-	else if (sym=="SPACE_A"){//«
-//FEAKSJFG
-		if (raw_lines&&fmt_lines){
-			if (lines===raw_lines) {
-				lines = fmt_lines;
-				less.fname = `${filename} -fmt-`;
-			}
-			else {
-				lines = raw_lines;
-				less.fname = `${filename} -raw-`;
-			}
-			if (scroll_num > lines.length) scroll_num=lines.length-termobj.h+1;
-			termobj.setLines(lines, line_colors);
-			render();
-		}
-	}//»
-*/
 	else if (sym=="DOWN_") {//«
 //log(y+scroll_num);
 		if (line_select_mode && y+num_stat_lines < termobj.h-1){
@@ -455,7 +437,46 @@ Object.defineProperty(this, "stat_message", {
 	set: (s) => stat_message = s
 });
 //»
-
+this.resize=()=>{//«
+/*
+If we have no continues and no lines are greater than w, then we don't need to actually
+do anything;
+*/
+	line_colors.splice(0,line_colors.length)
+	const{w,h}=termobj;
+	let arr=[];
+	let curln = null;
+	let have_continue;
+	let have_long;
+	for (let ln of lines){
+		if (ln._continue){
+			have_continue = true;
+			if (curln===null) curln = ln.join("");
+			else curln += ln.join("");
+		}
+		else{
+			if (curln!==null) {
+				curln += ln.join("");
+				arr.push(curln);
+				curln = null;
+			}
+			else {
+				let str = ln.join("");
+				if (!have_continue && !have_long && str.length > w) have_long = true;
+				arr.push(str);
+			}
+		}
+	}
+	if (!have_continue && !have_long){
+		render();
+		return;
+	}
+	lines.splice(0,lines.length)
+	wrap_lines(arr);
+	y=0;
+	scroll_num = 0;
+	render();
+}//»
 this.init = (linesarg, fname, o={})=>{//«
 let {opts}=o;
 this.command_str = o.command_str;
@@ -507,27 +528,9 @@ return new Promise((Y,N)=>{
 		render();
 	}
 »*/
-/*
-	raw_lines=[];
-	raw_lines=[];
-	if (isArr(linesarg)) {
-		let arr = linesarg;
-		for (let i = 0; i < arr.length; i++) raw_lines[i] = arr[i].split("");
-	}
-	else if (isStr(linesarg)) raw_lines = [linesarg.split("")];
-	else {
-cwarn("WHAT KINDA LINESARGGGGG");
-log(linesarg);
-lines = [];
-	}
-	lines = raw_lines;
-*/
 	less.fname = filename;
 	lines=[];
-	for (let ln of linesarg){
-		let wraparr = termobj.wrapLine(ln).split("\n");
-		for (let l of wraparr) lines.push(l.split(""));
-	}
+	wrap_lines(linesarg);
 	hold_screen_state = termobj.initNewScreen(less, appclass, lines, line_colors, num_stat_lines, {onescape});
 	render();
 });
@@ -536,10 +539,7 @@ lines = [];
 this.addLines=(linesarg)=>{//«
 	if (isStr(linesarg)) linesarg = linesarg.split("\n");
 	if (isArr(linesarg)) {
-		for (let ln of linesarg){
-			let wraparr = termobj.wrapLine(ln).split("\n");
-			for (let l of wraparr) lines.push(l.split(""));
-		}
+		wrap_lines(linesarg);
 	}
 	else if (isEOF(linesarg)) {
 		return;
