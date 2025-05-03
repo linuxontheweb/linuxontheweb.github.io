@@ -8,29 +8,18 @@ Linux used to be fun because expectations were low and possibilities were high.
 The online communities that gathered around it were truly pleasurable to be a part of.
 I hope to bring those same feelings back in the context of web development.
 
-Although this project includes a desktop environment, it is not primarily
-about that.  It is mainly about the idea that modern browsers now offer a
-programmatically accessible file system that exists within domain-specific
-"sandboxes."
-<a href="https://linuxontheweb.github.io/www/docs/what-it-is.html">Click here</a> to read
-more.
-
-It is probably better to think of LOTW, first of all, as "something happening
-inside of a VM (virtual machine)" rather than "something happening inside of a
-web browser". The "VM" in this case just happens to load the various parts of
-guest OS, incrementally, from some backend service (local or remote), in
-response to the user's immediate requirements. Thinking in this way allows
-users to quickly get beyond whatever biases they might have regarding whatever
-user experiences that they imagine "web pages" -- things that happen inside of
-web browsers -- are "supposed" to offer.
-
 Try out the current version at 
 <a href="https://linuxontheweb.github.io">linuxontheweb.github.io</a>.
 
-<a href="https://linuxontheweb.github.io/www/docs/help.html">Here is the 
-official help page</a> for system users.
-
 <a href="https://app.gitter.im/#/room/#linuxontheweb_community:gitter.im">Here is the chatroom on Gitter.</a>
+
+## Usage
+
+You can program LOTW!!! Just open up a terminal (via the Alt+t shortcut), and type in an awesome 
+program like this:
+
+	echo "This is the thing in the time of the place!"
+
 
 ## Local deployment
 

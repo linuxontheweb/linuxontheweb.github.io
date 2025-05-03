@@ -25,8 +25,8 @@ let appclass="pager";
 let hold_screen_state;
 
 let ALLOWED_EXTRA_SPACES = 15;
-let fmt_lines;
-let raw_lines;
+//let fmt_lines;
+//let raw_lines;
 let filename;
 
 let lines, line_colors;
@@ -312,6 +312,7 @@ this.onkeydown=(e, sym, code)=>{//«
 			render();
 		}
 	}
+/*
 	else if (sym=="SPACE_A"){//«
 //FEAKSJFG
 		if (raw_lines&&fmt_lines){
@@ -328,6 +329,7 @@ this.onkeydown=(e, sym, code)=>{//«
 			render();
 		}
 	}//»
+*/
 	else if (sym=="DOWN_") {//«
 //log(y+scroll_num);
 		if (line_select_mode && y+num_stat_lines < termobj.h-1){
@@ -505,6 +507,8 @@ return new Promise((Y,N)=>{
 		render();
 	}
 »*/
+/*
+	raw_lines=[];
 	raw_lines=[];
 	if (isArr(linesarg)) {
 		let arr = linesarg;
@@ -517,16 +521,13 @@ log(linesarg);
 lines = [];
 	}
 	lines = raw_lines;
-	less.fname = `${filename} -raw-`;
-	fmt_lines=[];
-//log(lines);
-	for (let ln of lines){
-		let wraparr = termobj.wrapLine(ln.join("")).split("\n");
-//log(wraparr);
-		for (let l of wraparr) fmt_lines.push(l.split(""));
+*/
+	less.fname = filename;
+	lines=[];
+	for (let ln of linesarg){
+		let wraparr = termobj.wrapLine(ln).split("\n");
+		for (let l of wraparr) lines.push(l.split(""));
 	}
-//log(fmt_lines);
-//	hold_screen_state = termobj.init_new_screen(less, appclass, lines, line_colors, num_stat_lines, onescape);
 	hold_screen_state = termobj.initNewScreen(less, appclass, lines, line_colors, num_stat_lines, {onescape});
 	render();
 });
@@ -534,10 +535,10 @@ lines = [];
 }//»
 this.addLines=(linesarg)=>{//«
 	if (isStr(linesarg)) linesarg = linesarg.split("\n");
-
 	if (isArr(linesarg)) {
-		for (let i = 0; i < linesarg.length; i++) {
-			lines.push(linesarg[i].split(""));
+		for (let ln of linesarg){
+			let wraparr = termobj.wrapLine(ln).split("\n");
+			for (let l of wraparr) lines.push(l.split(""));
 		}
 	}
 	else if (isEOF(linesarg)) {

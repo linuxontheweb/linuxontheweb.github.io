@@ -201,8 +201,8 @@ const HISTORY_PATH_SPECIAL = `${HISTORY_FOLDER}/shell_special.txt`;
 const LEFT_KEYCODE = KC.LEFT;
 
 const DEL_MODS=[
-//	"util.less",
-	"term.vim",
+	"term.less",
+//	"term.vim",
 //	"term.log"
 ];
 const DEL_COMS=[
@@ -210,7 +210,7 @@ const DEL_COMS=[
 //	"yt",
 //	"test",
 	"fs",
-	"mail"
+//	"mail"
 //	"esprima",
 //"shell"
 ];
@@ -6752,16 +6752,19 @@ for (let com of pipeline){//«
 	let val;
 	if (com.redirLines instanceof Uint8Array) val = com.redirLines;
 	else val = com.redirLines.join("\n");
+//log(com);
+//log(com.outRedir);
 	let rv = await com.outRedir.write(term, val, env, ShellMod.var.allowRedirClobber)
 //	if (this.cancelled) return;
 	if (this.cancelled) continue;
 	if (rv===true) continue;
 	if (isStr(rv)) term.response(`sh: ${rv}`, {isErr: true});
 	else {
-cwarn("Here is the value below");
+cwarn("Unknown value returned from redir.write:");
 log(rv);
-	return `unknown value returned from redir.write!!! (see console)`
-}
+
+//		return `unknown value returned from redir.write!!! (see console)`
+	}
 
 }//»
 
@@ -10344,7 +10347,7 @@ onkill(if_dev_reload){//«
 	if (this.actor) {
 		this.reInit.commandStr = this.actor.command_str;
 	}
-
+//log(DEL_MODS);
 	ShellMod.util.deleteMods(DEL_MODS);
 	ShellMod.util.deleteComs(DEL_COMS);
 
