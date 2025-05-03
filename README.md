@@ -29,13 +29,20 @@ should suffice for most people:
 
 	python3 -m http.server
 
-You should then be able to visit the site at http://localhost:8000.
+You should then be able to visit the site at localhost:8000.
 You can optionally specify a custom port number like so:
 
 	python3 -m http.server 12345
 
-The site should be live at http://localhost:12345.
+The site should be live at localhost:12345.
 
+But you might have more fun with the Node.js backend. To use it, run the following
+command instead.
+
+	node node/server.js
+
+This will run a server at port 8080. Edit the server.js file if you want to use
+an alternate port.
 
 ## Viewing and editing source code
 
