@@ -1,4 +1,4 @@
-/*5/3/25
+/*5/3/25: Proper field splitting
 
 bash splits the words in $SENT into separate lines:
 
@@ -9656,8 +9656,31 @@ handleLetterPress(char_arg, no_render){//«
 	end();
 }//»
 handleInsert(val){//«
+	let num_skipped = 0;
+	let lines = val.split("\n");
+	for (let i=0; i < lines.length; i++){
+		let ln = lines[i];
+		let arr = ln.split("");
+		for (let ch of arr) {
+			if (!INT_ALNUM_PRINT_RE.test(ch)){
+				num_skipped++;
+				ch = " ";
+			}
+			this.handleKey(null, ch.charCodeAt(), null, true);
+		}
+		if (i < lines.length - 1){
+			this.lines.push([]);
+			this.x=0;
+			this.y++;
+		}
+	}
+	if (num_skipped) this.doOverlay(`Skipped: ${num_skipped} chars`);
+	this.scrollIntoView();
+	this.render();
+}//»
+/*
+handleInsert(val){//«
 	let arr = val.split("");
-	let gotspace = false;
 	let num_skipped = 0;
 	for (let ch of arr) {
 		if (!INT_ALNUM_PRINT_RE.test(ch)){
@@ -9667,8 +9690,8 @@ handleInsert(val){//«
 		this.handleKey(null, ch.charCodeAt(), null, true);
 	}
 	if (num_skipped) this.doOverlay(`Skipped: ${num_skipped} chars`);
-}
-//»
+}//»
+*/
 handleLineStr(str, if_no_render){//«
 //handleLineStr(str, from_scroll, uselen, if_no_render){
 	let did_fail = false;
