@@ -24,7 +24,7 @@ Or if want to see all of those words on their own numbered lines:
 
 	SENTENCE="This is the thing in the time of the place"
 	for WORD in $SENTENCE; do 
-		echo "$((i)): $WORD";
+	    echo "$((i)): $WORD";
 	    i=$((i+1)); 
 	done 
 
