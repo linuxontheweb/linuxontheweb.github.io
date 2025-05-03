@@ -18,8 +18,14 @@ Try out the current version at
 You can program LOTW!!! Just open up a terminal (via the Alt+t shortcut), and type in an awesome 
 program like this:
 
-	echo "This is the thing in the time of the place!"
+	echo "This is the thing in the time of the place"
 
+Or if want to see all of those words on their own numbered lines:
+
+	SENTENCE="This is the thing in the time of the place"
+	for WORD in $SENTENCE;
+		do echo "$((i)): $WORD"; i=$((i+1)); 
+	done 
 
 ## Local deployment
 

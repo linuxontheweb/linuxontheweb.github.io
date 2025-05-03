@@ -1,4 +1,19 @@
-/*@YSHFKSOK: This is necessary in order to ensure that the output from the following echo
+/*5/3/25
+
+bash splits the words in $SENT into separate lines:
+
+$ SENT="THis is the thing"
+$ for WORD in $SENT; do echo "$((i)): $WORD"; i=$((i+1)); done
+0: THis
+1: is
+2: the
+3: thing
+
+The magic fix @YRTHSJLS!?!?
+
+*/
+/*5/2/25«
+@YSHFKSOK: This is necessary in order to ensure that the output from the following echo
 command is split into 3 arguments (rather than 1 argument with spaces in it):
 
 	$ cat $(echo file1 file2 file3)
@@ -7,7 +22,7 @@ Also we needed to add toString methods to the classes ComSub and BQuote (which w
 raw values in the appropriate `...` or $(...)), so that they can get turned into the
 appropriate strings @PZUELFJ, without looking like "[Object object]". Need to look out
 for whatever else might need to get a toString method.
-*/
+»*/
 //Notes«
 /*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
 permutations of command line history heredoc editing. So test this out with multiple
@@ -3264,6 +3279,7 @@ const Newlines = class extends Sequence{//«
 }//»
 const Word = class extends Sequence{//«
 //XNDKSLDK
+
 async expandSubs(shell, term, opts={}){//«
 //async expandSubs(shell, term, env, scriptName, scriptArgs){
 //const{env, scriptName, scriptArgs} = opts;
@@ -3282,25 +3298,23 @@ Here we need a concept of "fields".
 const fields = [];
 let curfield="";
 for (let ent of this.val){
+
 	if (ent instanceof BQuote || ent instanceof ComSub|| ent instanceof ParamSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
 //		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
 		let rv = await ent.expand(shell, term, opts);
 		if (rv) {
-			let arr = rv.split("\n");
-//log(arr);
+//			let arr = rv.split("\n");
+//YRTHSJLS
+			let arr = rv.split(/[\x20\n\t]+/);
 			if (arr.length) {
-
 				curfield+=arr.shift();
 				if (arr.length) {
 					fields.push(curfield);
-
 					let last = arr.pop();
 					fields.push(...arr);
-
 					curfield = last || "";
 				}
-
 			}
 		}
 	}//»
@@ -3316,9 +3330,12 @@ for (let ent of this.val){
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
 		curfield += "'"+ent.toString()+"'";
 	}
-	else{//Must be isStr«
+	else{
+//let arr = ent.toString().split(/\x20+/);
+//log(arr);
 		curfield += ent.toString();
-	}//»
+	}
+
 }
 
 if (curfield) fields.push(curfield);
