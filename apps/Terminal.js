@@ -1,4 +1,4 @@
-/*5/3/25: Proper field splitting
+/*5/3/25: Proper field splitting / Keeping track of mainParser«
 
 bash splits the words in $SENT into separate lines:
 
@@ -9,10 +9,17 @@ $ for WORD in $SENT; do echo "$((i)): $WORD"; i=$((i+1)); done
 2: the
 3: thing
 
-The magic fix @YRTHSJLS!?!?
+The magic fix for field splitting @YRTHSJLS!?!?
 
-*/
-/*5/2/25«
+* * *
+
+@XMSKSLEO: Needed to add this line in order to keep the mainParser member of the shell 
+object (along with its finalComStr) "alive and well". Otherwise it gets overwritten
+@WHKSFLGG (and the save_str variable is undefined/incorrect @GADLFJGMG, so updateHistory
+has nothing to do).
+
+»*/
+/*5/2/25: Splitting subLines in spaces / Adding toString to ComSub, BQuote, etc«
 @YSHFKSOK: This is necessary in order to ensure that the output from the following echo
 command is split into 3 arguments (rather than 1 argument with spaces in it):
 
@@ -4619,6 +4626,7 @@ return await this.scanWord(null, this.env);
 const Parser = class {
 
 constructor(code, opts={}) {//«
+//WHKSFLGG
 	this.mainParser = opts.mainParser || this;
 	this.id = parserId++;
 	this.env = opts.env;
@@ -5816,22 +5824,13 @@ this.fatal("aborted");
 		else this.fatal(`unsupported operator: '${rop}'`);
 	}//»
 	if (this.isInteractive) {
-/*
-The partial part can be in both the scanner source *AND* the heredocs_str.
-cwarn("SRC");
-log(this.scanner.source.join(""));
-cwarn("HDS");
-log(heredocs_str);
-*/
+//The partial part can be in both the scanner source *AND* the heredocs_str.
 		if (!this.mainParser.finalComStr) {
 //AGRHSORJF
 			this.mainParser.finalComStr = this.scanner.source.join("");
 		}
 		else this.mainParser.finalComStr += "\n"+this.scanner.source.join("");
 		if (heredocs_str !== null){
-//cwarn("WUT");
-//log(this.mainParser.finalComStr);
-//log(heredocs_str);
 			this.mainParser.finalComStr += heredocs_str;
 		}
 	}
@@ -5880,10 +5879,15 @@ async expandComsub(tok, opts){//«
 //cwarn("COMSUB", s);
 	let sub_lines = [];
 	try{
+//log(this.parser);
+		let rv = await this.execute(s, {
 //XMSKSLEO
-		let rv = await this.execute(s, {subLines: sub_lines, env: sdup(this.env), shell: this, term: this.term});
-//log(sub_lines);
-//log(sub_lines.join("\n"));
+			mainParser: this.parser.mainParser,
+			subLines: sub_lines,
+			env: sdup(this.env),
+			shell: this,
+			term: this.term
+		});
 		return sub_lines.join("\n");
 	}
 	catch(e){
@@ -6959,7 +6963,7 @@ term.response(mess,{isErr: true});
 	}
 //	term.response_end();
 
-}/*»*/
+}//»
 async execute(command_str, opts){//«
 //	const{term}=this;
 	let statements = await this.compile(command_str, opts);
@@ -7379,10 +7383,11 @@ async execute(str, opts={}){//«
 	}
 	let save_str;
 //cwarn("EXE",this.curShell.parser.mainParser.id, this.curShell.parser.mainParser.finalComStr);
+//GADLFJGMG
 	if (this.curShell.parser.mainParser.finalComStr) save_str = this.curShell.parser.mainParser.finalComStr.replace(/\n/g, "\t");
+//log(this.curShell.parser);
 	this.responseEnd();
 	if (opts.noSave) return;
-//log(`<${save_str}>`);
 	await this.updateHistory(save_str);
 }//»
 executeBackgroundCommand(s){//«
@@ -9678,20 +9683,6 @@ handleInsert(val){//«
 	this.scrollIntoView();
 	this.render();
 }//»
-/*
-handleInsert(val){//«
-	let arr = val.split("");
-	let num_skipped = 0;
-	for (let ch of arr) {
-		if (!INT_ALNUM_PRINT_RE.test(ch)){
-			num_skipped++;
-			ch = " ";
-		}
-		this.handleKey(null, ch.charCodeAt(), null, true);
-	}
-	if (num_skipped) this.doOverlay(`Skipped: ${num_skipped} chars`);
-}//»
-*/
 handleLineStr(str, if_no_render){//«
 //handleLineStr(str, from_scroll, uselen, if_no_render){
 	let did_fail = false;
