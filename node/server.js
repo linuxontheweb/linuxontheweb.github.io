@@ -180,6 +180,33 @@ else if (which==="env"){//«
 	if (!key) return no(res, "'env' requires a 'key' arg");
 	res.end(process.env[key]||"");
 }//»
+else if (which=="get"){//«
+	if (!args.path) return no(res, "Unknown GET request");
+	let rv;
+	try{
+		rv = await fetch(decodeURIComponent(args.path))
+	}
+	catch(e){
+		return no(res, e.message);
+	}
+	ok(res, DEF_MIME);
+	let buf = Buffer.from(await rv.arrayBuffer());
+	res.end(buf);
+
+/*
+		if (!rv.ok){
+			no(res, "Bad response");
+			return;
+		}
+		let blob = await rv.blob();
+		ok(res, DEF_MIME);
+		res.write(blob);
+	}
+	catch(e){
+		return no(res, e.message);
+	}
+*/
+}//»
 else no(res, `Bad service: ${which}`);
 
 };//»

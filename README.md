@@ -45,9 +45,9 @@ You can optionally specify a custom port number like so:
 The site should be live at localhost:12345.
 
 But you might have more fun with the Node.js backend. To use it, run the following
-command instead (Note: you must run this command from the top-level project directory!).
+command instead.
 
-	node node/server.js
+	node node/server.js # Note: this command must be run from the top-level project directory!
 
 This will run a server at port 8080. Edit the server.js file if you want to use
 an alternate port.

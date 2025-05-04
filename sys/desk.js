@@ -1,7 +1,7 @@
 /*Keep it simple: If an app defines onreload, just call *that* instead of doing the
 system default @HGLAURJF. This is for applications that have their own internal 
 development workflows. The point is that we want to keep the r_A hotkey as universal
-as possible (i.e., no r_CA/r_CAS hacks).
+as possible (i.e., no r_CA/r_CAS/ORWHATEVER hacks).
 */
 //Imports«
 
@@ -3683,9 +3683,7 @@ return new Promise((Y,N)=>{
 			this.statusBar.resize();
 			this.on();
 		}
-		if (winapp===FOLDER_APP) {
-			this.app.onappinit(arg.fullPath, arg.prevPaths);
-		}
+		if (winapp===FOLDER_APP) this.app.onappinit(arg.fullPath, arg.prevPaths);
 		else if (arg.appArgs) this.app.onappinit(arg.appArgs);
 		cb(this);
 	};//»

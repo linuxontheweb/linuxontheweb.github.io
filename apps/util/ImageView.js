@@ -88,7 +88,7 @@ const getkids=async(patharg)=>{
     let dir = await fs.pathToNode(path);
     let exts=["jpg","gif","png","webp"];
 	DIRKIDS = dir.kids;
-    kids = DIRKIDS._keys.filter(val=>exts.includes(val.split(".").pop().toLowerCase())).sort();
+    kids = Object.keys(DIRKIDS).filter(val=>exts.includes(val.split(".").pop().toLowerCase())).sort();
     tot = kids.length;
     iter = kids.indexOf(name)
 }

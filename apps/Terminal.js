@@ -1,9 +1,11 @@
+/*Now: wget. Just give it a URL and it will try to fetch it, and output to Uint8Array
+*/
 /* Broken: logging objects to the console via redirect tp /dev/log
   $ echo '{"hi":[1,2,3,4]}' | parse > /dev/log   #  -> [object Object]
 Fixed by putting the check for a String or Uint8Array *AFTER* the writes to devices @YAFHKANT 
 */
-/*Totally: nano clone
-Also: bvi clone!?!?! Want to support "file slice" arguments on the command line, and allow
+/*Totally: nano and bvi clones
+In bvi, want to support "byte slice" arguments on the command line, and allow
 for saving the whole file from this "slice mode", so that we save from the offset, and then
 add the rest to the end of the slice.
 */
@@ -242,8 +244,8 @@ const HISTORY_PATH_SPECIAL = `${HISTORY_FOLDER}/shell_special.txt`;
 const LEFT_KEYCODE = KC.LEFT;
 
 const DEL_MODS=[
-	"term.less",
-//	"term.vim",
+//	"term.less",
+	"term.vim",
 //	"term.log"
 ];
 const DEL_COMS=[
@@ -1191,7 +1193,6 @@ this.util={
 this.util={//«
 	evalShellExpr: eval_shell_expr,
 	make_sh_err_com: make_sh_error_com,
-	getOptions:get_options,
 	addToEnv:add_to_env,
 	importComs:import_coms,
 	doImports:do_imports,
@@ -1435,7 +1436,7 @@ const Com = class {//«
 			};
 			this.no=(mess)=>{
 				if (mess) {
-					if (!this.doNotAddCom) mess = `${this.name}: ${mess}`;
+//					if (!this.doNotAddCom) mess = `${this.name}: ${mess}`;
 					this.err(mess);
 				}
 				if (this.inpipe) this.out(EOF);
@@ -2218,7 +2219,8 @@ run(){
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
 
-const com_devtest = class extends Com{
+const com_devtest = class extends Com{//«
+//Poker crap
 init(){
 }
 async run(){
@@ -2250,21 +2252,11 @@ Type 	Same Table Cards
 2		3
 0
 »*/
-//for (let)
-//log(o);
 let keys = Object.keys(o);
-//log(keys);
-//log(o["7723J-0"]);
-//this.ok();
-//return;
 let arr = [];
 let lo = Infinity, hi = 0;
 let lo_hand, hi_hand;
 for (let key of keys){
-//	let obj = o[key];
-//	let tot = obj.t
-//	let num = obj.n;
-//	obj.avg = obj.t/obj.n;
 	let n = o[key].n
 	if (n < lo){
 		lo = n;
@@ -2284,29 +2276,54 @@ let sorted = arr.sort((a,b)=>{
 log("LO",lo_hand, lo);
 log("HI",hi_hand, hi);
 log(sorted);
-//log();
-///*
-//log(sorted[0]);
 let perf = 0;
-//log(sorted[sorted.length-1]);
 for (let i = sorted.length-1; i >= 0; i--){
 if (sorted[i].ev === 800){
 perf++;
-//log(sorted[i].hand);
 }
 else break;
 }
-//log(perf);
-//*/
-//log(arr);
-//log(keys);
-
-//log(n);
-
 this.ok();
+}
+}//»
+const com_wget = class extends Com{//«
 
+static getOpts(){
+	return {l: {dl: 1, local: 1}};
 }
+async run(){
+	const {args, opts} = this;
+	let patharg = args.shift();
+	if (!patharg) return this.no("missing URL");
+	if (args.length) return this.no("too many arguments");
+	let url;
+	if (!isNodeJS || opts["local"]) url = patharg
+	else url = `/_get?path=${encodeURIComponent(patharg)}`;
+	let rv;
+	try{
+		rv = await fetch(url)
+	}
+	catch(e){
+cerr(e);
+		this.no(e.message);
+		return;
+	}
+	if (!rv.ok){
+		this.err(`invalid response (see console)`);
+log(rv);
+		return;
+	}
+	let buf = await rv.arrayBuffer();
+	if (this.opts.dl){
+		let fname = (new URL(patharg)).pathname.split("/").pop();
+		if (!fname) fname = "WGET-OUT.bin"
+		util.download(new Blob([buf]), fname);
+	}
+	else this.out(new Uint8Array(buf));
+	this.ok();
 }
+
+}//»
 const com_loopctrl = class extends Com{//«
 //	static opts = true;
 	static getOpts(){
@@ -2363,7 +2380,6 @@ Abort the command line, command sub or script that we are in.
 		else this.end({break: this.loopCnt});
 	}
 }//»
-
 const com_continue = class extends Com{//«
 //	#loopCnt;
 	constructor(...args){
@@ -3173,6 +3189,7 @@ this.defCommands={//«
 
 //continue: com_continue,
 //break: com_break,
+wget: com_wget,
 continue: com_loopctrl,
 break: com_loopctrl,
 shift: com_shift,
@@ -6600,7 +6617,6 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 //OEORMSRU
 	if (gotopts === true) com_opts = {};
 	else {
-//		rv = ShellMod.util.getOptions(arr, usecomword, gotopts);
 		rv = get_options(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
 			return make_sh_err_com(comword, rv[1][0], com_env);
@@ -10425,7 +10441,8 @@ async onappinit(appargs={}){//«
 	this.sleeping = false;
 	this.isFocused = true;
 	this.setPrompt();
-	this.render();
+//	this.render();
+	this.onfocus();
 	if (commandStr) {
 		for (let c of commandStr) this.handleLetterPress(c); 
 		this.handleEnter({noSave: true});
