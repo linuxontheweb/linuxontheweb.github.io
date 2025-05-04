@@ -1,3 +1,12 @@
+/* Broken: logging objects to the console via redirect tp /dev/log
+  $ echo '{"hi":[1,2,3,4]}' | parse > /dev/log   #  -> [object Object]
+Fixed by putting the check for a String or Uint8Array *AFTER* the writes to devices @YAFHKANT 
+*/
+/*Totally: nano clone
+Also: bvi clone!?!?! Want to support "file slice" arguments on the command line, and allow
+for saving the whole file from this "slice mode", so that we save from the offset, and then
+add the rest to the end of the slice.
+*/
 /*5/3/25: Proper field splitting / Keeping track of mainParser«
 
 bash splits the words in $SENT into separate lines:
@@ -172,6 +181,7 @@ const DEL_KC = KC['DEL'];
 
 const INT_ALNUM_RE = /[0-9\p{Letter}]/u;
 const INT_ALNUM_PRINT_RE = /[\x20-\x7E\p{Letter}]/u;
+
 //const PRINTABLE_RE = /[\p{Print}]/u;
 /*
 RIGHT
@@ -179,6 +189,15 @@ UP
 DOWN
 DEL
 */
+
+let ALLOW_REDIR_CLOBBER = false;
+const DIR_TYPE="d",LINK_TYPE="l",BAD_LINK_TYPE="b",IDB_DATA_TYPE="i";
+const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s;
+const NO_SET_ENV_VARS = ["USER"];
+const ALIASES = {
+	c: "clear",
+	la: "ls -a",
+};
 
 const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
 const {
@@ -321,7 +340,10 @@ let parserId = 1;
 globals.ShellMod = new function() {
 
 //Var«
+
 const shellmod = this;
+this.allLibs = LOTW.libs;
+
 const mail_coms=[//«
 	"mkcontact",
 	"mail",
@@ -371,6 +393,9 @@ const test_coms = [//«
 //const preload_libs={fs: fs_coms, test: test_coms};
 const preload_libs={fs: fs_coms, esprima: ["esparse"]};
 if (isNodeJS) preload_libs.mail = mail_coms;
+this.preloadLibs = preload_libs;
+
+//Parsing«
 
 const OPERATOR_CHARS=[//«
 "|",
@@ -382,7 +407,8 @@ const OPERATOR_CHARS=[//«
 ")",
 ];//»
 //const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
-const UNSUPPORTED_OPERATOR_CHARS=[];
+//const UNSUPPORTED_OPERATOR_CHARS=[];
+/*
 const UNSUPPORTED_DEV_OPERATOR_TOKS = [];
 const UNSUPPORTED_OPERATOR_TOKS=[//«
 	'&',
@@ -397,8 +423,9 @@ const UNSUPPORTED_OPERATOR_TOKS=[//«
 	'<<-',
 //	'<<<'
 ];//»
-const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
+*/
 
+const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 const INVSUB="invalid/unsupported substitution";
 const START_NAME_CHARS = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "_"];
 //const START_NAME_CHARS = ["A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","_"];
@@ -431,30 +458,32 @@ const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
 const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
 
 const isNLs=val=>{return val instanceof Newlines;};
+//»
 
-//«Expansion 
+//»
+//«Funcs
 
 const dup=(obj)=>{//Deep copy«
-const _dup=(o)=>{//«
-let rv;
-if (isStr(o)) return o;
-if (o.dup) return o.dup();
-if (isObj(o)){
-	rv = {};
-	for (let k in o){
-		if (o[k]) rv[k] = _dup(o[k]);
-		else rv[k] = o[k];
-	}
-}
-else if (isArr(o)){
-	rv = [];
-	for (let i=0; i < o.length; i++){
-		rv.push(_dup(o[i]));
-	}
-}
-return rv;
-};/*»*/
-return _dup(obj);
+	const _dup=(o)=>{//«
+		let rv;
+		if (isStr(o)) return o;
+		if (o.dup) return o.dup();
+		if (isObj(o)){
+			rv = {};
+			for (let k in o){
+				if (o[k]) rv[k] = _dup(o[k]);
+				else rv[k] = o[k];
+			}
+		}
+		else if (isArr(o)){
+			rv = [];
+			for (let i=0; i < o.length; i++){
+				rv.push(_dup(o[i]));
+			}
+		}
+		return rv;
+	};//»
+	return _dup(obj);
 };
 const sdup=(obj)=>{//Shallow copy
 	let out={};
@@ -464,12 +493,7 @@ const sdup=(obj)=>{//Shallow copy
 	return out;
 };
 
-/*»*/
-
 //»
-
-//»
-//«Funcs
 
 //Helpers (this.util)«
 
@@ -1017,7 +1041,8 @@ const add_to_env = (arr, env, opts)=>{//«
 			use = arr[0];
 		};
 //log(use.toString());
-		marr = this.var.assignRE.exec(use.toString());
+//		marr = this.var.assignRE.exec(use.toString());
+		marr = ASSIGN_RE.exec(use.toString());
 		if (!marr){
 			if (!if_export) break;
 			else{
@@ -1027,7 +1052,8 @@ const add_to_env = (arr, env, opts)=>{//«
 			}
 		}
 		which = marr[1];
-		if (this.var.noSetEnvVars.includes(which)){
+//		if (this.var.noSetEnvVars.includes(which)){
+		if (NO_SET_ENV_VARS.includes(which)){
 			err.push(`sh: ${which}: cannot set the constant environment variable`);
 			next();
 			continue;
@@ -1062,7 +1088,7 @@ cwarn(`The command ${com} already exists!`);
 		sh_coms[com] = coms[com];
 		ok_coms.push(com);
 	}
-	this.var.allLibs[libname] = ok_coms;
+	this.allLibs[libname] = ok_coms;
 //do_overlay(`Added ${ok_coms.length} commands from '${libname}'`);
 	let opts = imp.opts||{};
 	let sh_opts = globals.shell_command_options;
@@ -1086,7 +1112,7 @@ const do_imports = async(arr, err_cb) => {//«
 //	let s='';
 	let out=[];
 	for (let name of arr){
-		if (this.var.allLibs[name]) {
+		if (this.allLibs[name]) {
 			continue;
 		}   
 		try{
@@ -1105,13 +1131,13 @@ const delete_coms = arr => {//«
 	let sh_coms = globals.shell_commands;
 	let sh_opts = globals.shell_command_options;
 	for (let libname of arr){
-if (!this.var.allLibs[libname]){
+if (!this.allLibs[libname]){
 //cwarn(`The command library: ${libname} is not loaded`);
 continue;
 }
 		let lib = NS.coms[libname];
 		if (!lib){
-//cwarn(`The command library: ${libname} was in this.var.allLibs, but not in NS.coms!?!?!`);
+//cwarn(`The command library: ${libname} was in this.allLibs, but not in NS.coms!?!?!`);
 			continue;
 		}
 		let coms = lib.coms;
@@ -1137,7 +1163,7 @@ log(`Deleted: ${num_deleted} commands from '${libname}'`);
 			}
 			delete sh_opts[opt];
 		}
-		delete this.var.allLibs[libname];
+		delete this.allLibs[libname];
 		delete NS.coms[libname];
 	}
 };//»
@@ -1178,26 +1204,15 @@ this.util={//«
 
 //»
 //«Exported variables: this.var
-
+/*
 this.var={//«
 
-dirType:"d",
-linkType:"l",
-badLinkType:"b",
-idbDataType:"i",
-allowRedirClobber: false,
-lastExitCode: 0,
-aliases: {
-	c: "clear",
-	la: "ls -a",
-},
-noSetEnvVars: ["USER"],
-preloadLibs: preload_libs,
 allLibs: LOTW.libs,
-assignRE: /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s
 
 }//»
-
+*/
+//this.preloadLibs = preload_libs;
+//this.allLibs = LOTW.libs;
 //»
 
 //Classes     (Com, CompoundCom, ErrCom, Stdin/Stdout, ScriptCom...)«
@@ -1312,11 +1327,19 @@ constructor(tok, file){
 	this.isRedir = true;
 }
 
-async write(term, val, env, ok_clobber){//«
+async write(term, arrarg, env){//«
+//async write(term, arrarg, env, ok_clobber){
 
-if (!(isStr(val)||(val instanceof Uint8Array))){
-return "Invalid value to write to stdout (want string or Uint8Array)";
+let val;
+if (arrarg instanceof Uint8Array) val = arrarg;
+else if (arrarg._isWeird) {
+	val = arrarg;
+	delete val._isWeird;
 }
+else {
+	val = arrarg.join("\n");
+}
+
 
 const{tok, file: fname}=this;
 //const {op}=tok;//WRONG!!!
@@ -1330,9 +1353,13 @@ let fullpath = normPath(fname.toString(), term.cur_dir);
 let node = await fsapi.pathToNode(fullpath);
 if (node) {//«
 	if (node.isDevice){
-		if (fullpath == "/dev/null") return;
+		if (fullpath == "/dev/null") return true;
 		if (fullpath == "/dev/log"){
-			console.log(val);
+//			console.log(val);
+if (isArr(val)) {
+for (let v of val) console.log(v);
+}
+			return true;
 		}
 		else{
 cwarn("WHAT KIND OF DEVICE???", fullpath);
@@ -1342,14 +1369,19 @@ cwarn("WHAT KIND OF DEVICE???", fullpath);
 	if (!node.isFile){
 		return `${fname}: not a regular file`;
 	}
-	if (node.type == FS_TYPE && op===">" && !ok_clobber) {
+//	if (node.type == FS_TYPE && op===">" && !ok_clobber) {
+	if (node.type == FS_TYPE && op===">" && !ALLOW_REDIR_CLOBBER) {
 		if (env.CLOBBER_OK==="true"){}
-		else return `not clobbering '${fname}' (allowRedirClobber==${ok_clobber})`;
+		else return `not clobbering '${fname}' (ALLOW_REDIR_CLOBBER==${ALLOW_REDIR_CLOBBER})`;
 	}
 	if (node.writeLocked()){
 		return `${fname}: the file is "write locked" (${node.writeLocked()})`;
 	}
 }//»
+//YAFHKANT
+if (!(isStr(val)||(val instanceof Uint8Array))){
+	return "Invalid value sent to Stdout.write (want String or Uint8Array)";
+}
 let patharr = fullpath.split("/");
 patharr.pop();
 let parpath = patharr.join("/");
@@ -1365,7 +1397,7 @@ if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) return `${fname}: Could not write to the file`;
 return true;
 
-	}//»
+}//»
 
 dup(){
 	return new Stdin(this.tok, this.arg.dup());
@@ -1559,6 +1591,9 @@ log(val);
 				this.redirLines = redir_lns;
 				return;
 			}
+			if (!isStr(val)){
+				redir_lns._isWeird = true;
+			}
 			redir_lns.push(val);
 			return;
 		}//»
@@ -1576,25 +1611,23 @@ log(val);
 		}
 		this.resp(val, opts);
 	}//»
-//«Output helpers
-	err(str, opts={}){
+	err(str, opts={}){//«
 		opts.isErr=true;
 		if (str.match(/^sh: /)) this.resp(str, opts);
 		else this.resp(`${this.name}: ${str}`, opts);
-	}
-	suc(str, opts={}){
+	}//»
+	suc(str, opts={}){//«
 		opts.isSuc=true;
-		this.resp(str,opts);
-	}
-	wrn(str, opts={}){
+		this.resp(`${this.name}: ${str}`, opts);
+	}//»
+	wrn(str, opts={}){//«
 		opts.isWrn=true;
-		this.resp(str,opts);
-	}
-	inf(str, opts={}){
+		this.resp(`${this.name}: ${str}`, opts);
+	}//»
+	inf(str, opts={}){//«
 		opts.isInf=true;
-		this.resp(str,opts);
-	}
-//»
+		this.resp(`${this.name}: ${str}`, opts);
+	}//»
 	async readLine(use_prompt){//«
 //XCJEKRNK
 		let ln;
@@ -2580,7 +2613,7 @@ init(){//«
 	this.optRecur = opts.recursive || opts.R;
 }//»
 async run(){//«
-	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
+//	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
 	const{pipeTo, isSub, term, args} = this;
 	const out=(...args)=>{
 		this.out(...args);
@@ -2668,13 +2701,17 @@ async run(){//«
 					nm=`'${nm}'`;
 				}
 				if (n.appName===FOLDER_APP) {
-					types.push(dirType);
+//					types.push(dirType);
+					types.push(DIR_TYPE);
 				}
 				else if (n.appName==="Link") {
-					if (!await n.ref) types.push(badLinkType);
-					else types.push(linkType);
+//					if (!await n.ref) types.push(badLinkType);
+					if (!await n.ref) types.push(BAD_LINK_TYPE);
+//					else types.push(linkType);
+					else types.push(LINK_TYPE);
 				}
-				else if (n.blobId === idbDataType) types.push(idbDataType);
+//				else if (n.blobId === idbDataType) types.push(idbDataType);
+				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
 				else types.push(null);
 			}
 			let name_lens = [];
@@ -2887,7 +2924,7 @@ async run(){
 	if (this.killed) return;
 	let lib = this.args.shift();
 	let hold = lib;
-	let got = ShellMod.var.allLibs[lib] || NS.coms[lib];
+	let got = ShellMod.allLibs[lib] || NS.coms[lib];
 	if (got){
 		if (!isArr(got)) got = Object.keys(got);
 		this.out(got.join("\n"));
@@ -3021,7 +3058,8 @@ async run(){//«
 	let vals = ln.trim().split(/ +/);
 	while (args.length){
 		let arg = args.shift();
-		if (ShellMod.var.noSetEnvVars.includes(arg)) {
+//		if (ShellMod.var.noSetEnvVars.includes(arg)) {
+		if (NO_SET_ENV_VARS.includes(arg)) {
 			err(`refusing to modify read-only variable: ${arg}`);
 			vals.shift();
 			continue;
@@ -3413,7 +3451,6 @@ get isAssignment(){//«
 	return (typeof first === "string" && first.match(/^[_a-zA-Z]$/));
 }//»
 get assignmentParts(){//«
-//const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/;
 	let eq_pos = this.val.indexOf("=");
 	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
 	let pre_eq_arr = this.val.slice(0, eq_pos);
@@ -4612,7 +4649,7 @@ let ch = this.source[this.index];
 if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
 
 if (OPERATOR_CHARS.includes(ch)) {
-	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
+//	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
 }
 return await this.scanWord(null, this.env);
@@ -4620,7 +4657,6 @@ return await this.scanWord(null, this.env);
 }//»
 
 };//»
-
 //Parser«
 
 const Parser = class {
@@ -5843,8 +5879,8 @@ this.fatal("aborted");
 };
 
 //»
-
-class Shell {//«
+//Shell«
+class Shell {
 
 constructor(term){//«
 	this.term = term;
@@ -6396,7 +6432,7 @@ async tryImport(com, comword){//«
 //If we have a string rather than a function, do the command library importing routine.
 //The string is always the name of the library (rather than the command)
 //This happens when: 
-//1) libraries are defined in ShellMod.var.preloadLibs, and 
+//1) libraries are defined in ShellMod.preloadLibs, and 
 //2) this is the first invocation of a command from one of those libraries.
 	try{
 //		await ShellMod.util.importComs(com);//com is the library name
@@ -6407,7 +6443,7 @@ async tryImport(com, comword){//«
 cerr(e);
 		return `sh: command library: '${com}' could not be loaded`;
 	}
-	let gotcom = Shell.activeCommands[comword];
+	let gotcom = shellmod.activeCommands[comword];
 	if (!(gotcom instanceof Function)){
 		return `sh: '${comword}' is invalid or missing in command library: '${com}'`;
 	}
@@ -6483,7 +6519,6 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	}
 	let arr = [name, ...args];
 	rv = await this.allExpansions(arr, opts);
-//log(rv);
 	if (isStr(rv)) return `sh: ${rv}`;
 	{
 		let hold = arr;
@@ -6493,10 +6528,12 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		}
 	}
 	let comword = arr.shift();
-	if (ShellMod.var.aliases[comword]){//«
+	if (ALIASES[comword]){//«
+//	if (ShellMod.var.aliases[comword]){
 //Replace with an alias if we can
 //This should allow aliases that expand with options...
-		let alias = ShellMod.var.aliases[comword];
+//		let alias = ShellMod.var.aliases[comword];
+		let alias = ALIASES[comword];
 		let ar = alias.split(/\x20+/);
 		alias = ar.shift();
 		if (ar.length){
@@ -6529,7 +6566,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		code.breakStatementLoop = true;
 		return code;
 	}//»
-	let com = Shell.activeCommands[usecomword];
+//	let com = Shell.activeCommands[usecomword];
+	let com = shellmod.activeCommands[usecomword];
 	if (isStr(com)){//QKIUTOPLK«
 		com = await this.tryImport(com, usecomword);
 		if (this.cancelled) return;
@@ -6551,12 +6589,12 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		if (CONTROL_WORDS.includes(comword)){
 			return `sh: ${comword}: control structures are not implemented`;
 		}
-		ShellMod.var.lastExitCode = E_ERR;
 		return make_sh_err_com(comword, `command not found`, com_env);
 	}//»
 	let com_opts;
 //	let gotopts = com.opts || Shell.activeOptions[usecomword];
-	let gotopts = (com.getOpts && com.getOpts()) || Shell.activeOptions[usecomword];
+//	let gotopts = (com.getOpts && com.getOpts()) || Shell.activeOptions[usecomword];
+	let gotopts = (com.getOpts && com.getOpts()) || shellmod.activeOptions[usecomword];
 //log(gotopts);
 //Parse the options and fail if there is an error message
 //OEORMSRU
@@ -6565,7 +6603,6 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 //		rv = ShellMod.util.getOptions(arr, usecomword, gotopts);
 		rv = get_options(arr, usecomword, gotopts);
 		if (rv[1]&&rv[1][0]) {
-			ShellMod.var.lastExitCode = E_ERR;
 			return make_sh_err_com(comword, rv[1][0], com_env);
 		}
 		com_opts = rv[0];
@@ -6588,7 +6625,6 @@ cerr(e);
 async makeScriptCom(com_ast, comopts){//«
 	const{term}=this;
 	const mkerr=(mess)=>{
-		ShellMod.var.lastExitCode = E_ERR;
 		return make_sh_err_com(comword, mess, com_env);
 	};
 	let com;
@@ -6770,12 +6806,10 @@ for (let com of pipeline){//«
 		lastcomcode = E_ERR;
 	}
 	if (!com.redirLines) continue;
-	let val;
-	if (com.redirLines instanceof Uint8Array) val = com.redirLines;
-	else val = com.redirLines.join("\n");
-//log(com);
-//log(com.outRedir);
-	let rv = await com.outRedir.write(term, val, env, ShellMod.var.allowRedirClobber)
+
+
+//	let rv = await com.outRedir.write(term, com.redirLines, env, ShellMod.var.allowRedirClobber)
+	let rv = await com.outRedir.write(term, com.redirLines, env)
 //	if (this.cancelled) return;
 	if (this.cancelled) continue;
 	if (rv===true) continue;
@@ -6793,7 +6827,6 @@ if (hasBang){//«
 	if (lastcomcode === E_SUC) lastcomcode = E_ERR;
 	else lastcomcode = E_SUC;
 }//»
-ShellMod.var.lastExitCode = lastcomcode;
 
 /*
 If this is a loop operation (from continue or break), then
@@ -6883,21 +6916,6 @@ cwarn("CONTINUE", i, rv.nextIter);
 return lastcomcode;
 
 }//»
-/*Safe version
-async executeStatements(statements, opts){//«
-	const{term}=this;
-	let lastcomcode;
-	for (let i=0; i < statements.length-1; i+=2){
-		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, opts.inBackground || statements[i+1] === "&");
-		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
-			return lastcomcode.code;
-		}
-		if (isLoopCont(lastcomcode)||isLoopBreak(lastcomcode)) return lastcomcode;
-	}
-	return lastcomcode;
-}//»
-*/
-///*
 async executeStatements(statements, opts){//«
 	const{term}=this;
 	let lastcomcode;
@@ -6913,16 +6931,8 @@ this evaluates to true, and hi is output
 			lastcomcode = E_SUC;
 		}
 		else{
-
-/*
-If this is a compound command, invoked like:
-  $ ./myscript.sh &
-This does *not* immediately return, which is particularly noticeable if there are long 
-running processes (or just sleep statements) inside of the script
-*/
 			lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, in_background);
 		}
-//		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) break;
 		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
 			return lastcomcode.code;
 		}
@@ -6930,7 +6940,21 @@ running processes (or just sleep statements) inside of the script
 	}
 	return lastcomcode;
 }//»
-//*/
+
+/*Old/Safe version
+async executeStatements(statements, opts){//«
+	const{term}=this;
+	let lastcomcode;
+	for (let i=0; i < statements.length-1; i+=2){
+		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, opts.inBackground || statements[i+1] === "&");
+		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
+			return lastcomcode.code;
+		}
+		if (isLoopCont(lastcomcode)||isLoopBreak(lastcomcode)) return lastcomcode;
+	}
+	return lastcomcode;
+}//»
+*/
 
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
@@ -7003,29 +7027,31 @@ will be "fs", which points to the coms/fs.js file.  Upon finding this string
 name strings with the proper command functions.
 »*/
 
-let preloads = this.var.preloadLibs;
+let preloads = this.preloadLibs;
 
 for (let k in preloads){
-	this.var.allLibs[k] = preloads[k];
+	this.allLibs[k] = preloads[k];
 }
 
 for (let k in preloads){
 	let arr = preloads[k];
 	for (let com of arr) {
 		if (this.defCommands[com]){
-cwarn(`The shell command: ${com} already exists (also defined in this.var.preloadLibs: ${k})`);
+cwarn(`The shell command: ${com} already exists (also defined in this.preloadLibs: ${k})`);
 			continue;
 		}
 		this.defCommands[com]=k;
 	}
 }
 
-Shell.activeCommands = globals.shell_commands || this.defCommands;
+//Shell.activeCommands = globals.shell_commands || this.defCommands;
+this.activeCommands = globals.shell_commands || this.defCommands;
 if (!globals.shell_commands) {
 	globals.shell_commands = this.defCommands;
 }
 
-Shell.activeOptions = globals.shell_command_options || this.defCommandOpts;
+//Shell.activeOptions = globals.shell_command_options || this.defCommandOpts;
+this.activeOptions = globals.shell_command_options || this.defCommandOpts;
 if (!globals.shell_command_options) {
 	globals.shell_command_options = this.defCommandOpts;
 }
@@ -7036,6 +7062,7 @@ if (!globals.shell_command_options) {
 
 const ShellMod = globals.ShellMod;
 const Shell = ShellMod.Shell;
+
 ShellMod.init();
 
 //»
@@ -9145,11 +9172,11 @@ async doCompletion(){//«
 		return this.doGetDirContents(use_dir, tok, tok0, arr_pos);
 	}
 	if (tokpos==1) {
-		contents = await this.getCommandArr(use_dir, Object.keys(Shell.activeCommands), tok)
+		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
 	}
 	else {
 		if (tok0 == "help"){
-			contents = await this.getCommandArr(use_dir, Object.keys(Shell.activeCommands), tok)
+			contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
 		}
 		else if (tok0 == "lib" || tok0 == "import"){
 			contents = await this.getCommandArr(use_dir, await util.getList("/site/coms/"), tok)
@@ -9172,7 +9199,7 @@ fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
 here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
 efficiently) is an outstanding issue...*/
 	const{w}=this;
-	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
+//	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
 	let pad = this.lsPadding;
 //	if (!start_from) start_from=0;
 	if (col_arg == 1) {//«
@@ -9265,10 +9292,10 @@ efficiently) is an outstanding issue...*/
 		let typ;
 		if (types) typ = types[i];
 		let color;
-		if (typ==dirType) color="#909fff";
-		else if (typ==linkType) color="#0cc";
-		else if (typ==badLinkType) color="#f00";
-		else if (typ==idbDataType) color="#cc0";
+		if (typ==DIR_TYPE) color="#909fff";
+		else if (typ==LINK_TYPE) color="#0cc";
+		else if (typ==BAD_LINK_TYPE) color="#f00";
+		else if (typ==IDB_DATA_TYPE) color="#cc0";
 		col_num = Math.floor(i%num_cols);
 		row_num = Math.floor(i/num_cols);
 		if (row_num != cur_row) {
@@ -9457,15 +9484,14 @@ lines array (otherwise, the message gets printed onto the actor's screen.
 	}
 
 	if (!isStr(out)) {
-//		this.Win._fatal(new Error("Non-string given to term.response"));
-cwarn("Here is the non-string object");
+//cwarn("Here is the non-string object");
 log(out);
 //This is not a bug since it is perfectly "okay" (I think) to pass aribtrary objects
 //*through* a pipeline... but not out the end of it.
-		let str = `non-string object found in standard output stream (see console)`;
+		let str = `non-String object found in output stream (see console)`;
 		if (opts.name) str = `${opts.name}: ${str}`;
 		out = `sh: ${str}`;
-		opts = {isErr: true};
+		opts = {isWrn: true};
 	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;

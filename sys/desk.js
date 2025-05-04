@@ -1,4 +1,8 @@
-
+/*Keep it simple: If an app defines onreload, just call *that* instead of doing the
+system default @HGLAURJF. This is for applications that have their own internal 
+development workflows. The point is that we want to keep the r_A hotkey as universal
+as possible (i.e., no r_CA/r_CAS hacks).
+*/
 //Imports«
 
 const NS = LOTW;
@@ -3613,7 +3617,9 @@ async reload(opts={}){//«
 		return;
 	}
 //	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
-	if (app.ondevreload) return await app.ondevreload();
+//	if (app.ondevreload) return await app.ondevreload();
+//HGLAURJF
+	if (app.onreload) return await app.onreload();
 	if (appName.match(/^local\./)&&!opts.dataUrl){
 		return popup("'local' (development) applications cannot be independently reloaded!");
 	}
