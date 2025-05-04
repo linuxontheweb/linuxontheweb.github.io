@@ -1,4 +1,5 @@
 /*Now: wget. Just give it a URL and it will try to fetch it, and output to Uint8Array
+Also: a 'dl' option.
 */
 /* Broken: logging objects to the console via redirect tp /dev/log
   $ echo '{"hi":[1,2,3,4]}' | parse > /dev/log   #  -> [object Object]
@@ -10441,8 +10442,8 @@ async onappinit(appargs={}){//«
 	this.sleeping = false;
 	this.isFocused = true;
 	this.setPrompt();
-//	this.render();
-	this.onfocus();
+	this.render();
+//	this.onfocus();
 	if (commandStr) {
 		for (let c of commandStr) this.handleLetterPress(c); 
 		this.handleEnter({noSave: true});

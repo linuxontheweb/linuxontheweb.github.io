@@ -3115,10 +3115,7 @@ setWinArgs(args){//«
 	on(opts={}){//«
 		if (!windows_showing) toggle_show_windows();
 		if (Desk.CPR) return;
-		if (CWIN) {
-			if (this === CWIN) return;
-			CWIN&&CWIN.off();
-		}
+		if (this !== CWIN && CWIN) CWIN.off();
 		if (this.workspaceNum !== current_workspace_num) {
 			if (opts.switchToWorkspace){
 				switch_to_workspace(this.workspaceNum);
@@ -3134,7 +3131,6 @@ setWinArgs(args){//«
 			}
 		}
 		if (this.isFolder && !this.isMinimized) {
-//VKUIOKL
 			if (CUR.curElem.parentNode === desk) {
 				let icn = CUR.geticon();
 				if (icn) icn.hideLabelName();
@@ -3145,8 +3141,6 @@ setWinArgs(args){//«
 			CUR.main = this.main;
 			this.main._add(CUR.curElem);
 			this.cursor = CUR;
-//			CUR.set(2);
-
 			CUR.vizCheck();
 			CUR.on();
 		}
