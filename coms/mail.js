@@ -480,7 +480,7 @@ We might want a pager.multilineEnterFuncs in order to, e.g. bring up HTML
 windows to show the email messages.
 */
 	enters.push(()=>{
-		LOTW.Desk.api.openApp("dev.HTML", {force: true, appArgs: {text: obj.bodyText}});
+		LOTW.Desk.api.openApp("util.HTML", {force: true, appArgs: {text: obj.bodyText}});
 	});
 }
 let pager = new LOTW.mods[DEF_PAGER_MOD_NAME](term);

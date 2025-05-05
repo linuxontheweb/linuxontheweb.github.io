@@ -119,7 +119,7 @@ const MEDIA_APP = "MediaPlayer";
 //const MEDIA_APP = "media.VideoCutter";
 //const MEDIA_APP = "media.MediaPlayer";
 const DEF_BIN_APP = "BinView";
-const HTML_APP = "dev.HTML";
+const HTML_APP = "util.HTML";
 const TEXT_EDITOR_APP = "TextEdit";
 
 const FOLDER_APP = "Folder";

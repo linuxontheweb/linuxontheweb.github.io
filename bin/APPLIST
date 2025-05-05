@@ -1,7 +1,0 @@
-
-cd ~/lotw/apps
-rm list.json
-DIRGET ./ > /dev/shm/LOTWAPPLISTOUT
-mv /dev/shm/LOTWAPPLISTOUT list.json
-
-
