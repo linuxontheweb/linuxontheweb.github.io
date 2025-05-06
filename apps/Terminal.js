@@ -3533,7 +3533,7 @@ delete this.ShellMod;
 delete this.Shell;
 this.doOverlay("Reload ShellMod...");
 await this.loadShell();
-//log("SCHMOADDDDD");
+this.doOverlay("Okay!");
 }
 
 /*

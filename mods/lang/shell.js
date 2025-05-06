@@ -1,73 +1,20 @@
-/*«
-${parameter:-[word]}
+/*@EANFJLPM: This is a hack (using a new String with a noSplitNLs property on it) inside 
+ParamSub.expand just to ensure that the embedded newlines are retained while doing the 
+splitting in Word.expandSubs @YRTHSJLS.
 
-Use Default Values. If parameter is unset or null, the expansion of word (or an
-empty string if word is omitted) shall be substituted; otherwise, the value of
-parameter shall be substituted.
+NOW ALL WE NEED TO DO IS THE SUBSTRING REPLACEMENT IN PARAM SUBS @TZKOPKHD. LOOKS LIKE
+WE NEED TO DO QUOTE REMOVAL THERE...
 
-${parameter:=[word]}
-
-Assign Default Values. If parameter is unset or null, quote removal shall be
-performed on the expansion of word and the result (or an empty string if word
-is omitted) shall be assigned to parameter. In all cases, the final value of
-parameter shall be substituted. Only variables, not positional parameters or
-special parameters, can be assigned in this way.
-
-${parameter:?[word]}
-
-Indicate Error if Null or Unset. If parameter is unset or null, the expansion
-of word (or a message indicating it is unset if word is omitted) shall be
-written to standard error and the shell exits with a non-zero exit status.
-Otherwise, the value of parameter shall be substituted. An interactive shell
-need not exit.
-
+*/
+/*5/6/25: We are going to follow the spec for param subs TO THE LETTER:
 ${parameter:+[word]}
-
-Use Alternative Value. If parameter is unset or null, null shall be
-substituted; otherwise, the expansion of word (or an empty string if word is
-omitted) shall be substituted.
-
-${parameter%[word]}
-Remove Smallest Suffix Pattern. The word shall be expanded to produce a
-pattern. The parameter expansion shall then result in parameter, with the
-smallest portion of the suffix matched by the pattern deleted. If present, word
-shall not begin with an unquoted '%'.
-
-${parameter%%[word]}
-Remove Largest Suffix Pattern. The word shall be expanded to produce a pattern.
-The parameter expansion shall then result in parameter, with the largest
-portion of the suffix matched by the pattern deleted.
-
-${parameter#[word]}
-Remove Smallest Prefix Pattern. The word shall be expanded to produce a
-pattern. The parameter expansion shall then result in parameter, with the
-smallest portion of the prefix matched by the pattern deleted. If present, word
-shall not begin with an unquoted '#'.
-
-${parameter##[word]}
-Remove Largest Prefix Pattern. The word shall be expanded to produce a pattern.
-The parameter expansion shall then result in parameter, with the largest
-portion of the prefix matched by the pattern deleted.
-
-»*/
+There can only be exactly 0 or 1 words here, which is delimited by a '}'
+@WUEHSKR we need to add the condition to break on '}'
+Just need to pass in the isParam option to scanWord, when we are inside the 
+*/
 /*5/5/25: «
 @SYAHFLSJ: Need to redo the way that we scan for params, accounting for these 4 cases:
 
-Paramsubs can be like:
-
-USE DEFAULT: 			${param:-[word]} 	${param-[word]}
-ASSIGN DEFAULT: 		${param:=[word]} 	${param=[word]}
-ERROR IF NULL/UNSET: 	${param:?[word]} 	${param?[word]}
-
-Without the colons, when the parameter is SET but NULL, we substitute NULL
-
-USE ALTERNATIVE: 		${param:+[word]} 	${param+[word]}
-
-Without the colon, when the parameter is SET but NULL, we substitute the word
-
-
-REMOVE SUFFIX: 			${param%[word]} 	${param%%[word]}
-REMOVE PREFIX: 			${param#[word]} 	${param##[word]}
 
 
 Parameter expansions like: ${BLAH:[-=?+]SLERM}. Expansions are happening 
@@ -145,7 +92,7 @@ const {
 	nodejs_mode,
 	fs
 } = globals;
-
+const util = LOTW.api.util;
 const {
 	strNum,
 	isArr,
@@ -168,7 +115,7 @@ const {
 	isBool,
 	isEOF,
 	sleep
-} = LOTW.api.util;
+} = util;
 
 const fsapi = fs.api;
 
@@ -181,6 +128,7 @@ const ALIASES = {
     c: "clear",
     la: "ls -a",
 };
+const BADSUB = "bad substitution";
 
 const isLoopCont = val => {
 	return (isObj(val) && isNum(val.continue) && val.continue > 0);
@@ -3239,11 +3187,12 @@ const ErrorHandler = class {
 //Token Classes (Words, Quotes, Subs)«
 
 const Sequence = class {//«
-	constructor(start, env){
+	constructor(start){
 //		this.par = par;
-		this.env = env;
+//		this.env = env;
 		this.val = [];
 		this.start = start;
+//How about a start line?
 	}
 }//»
 const Newlines = class extends Sequence{//«
@@ -3279,7 +3228,13 @@ for (let ent of this.val){
 		if (rv) {
 //			let arr = rv.split("\n");
 //YRTHSJLS
-			let arr = rv.split(/[\x20\n\t]+/);
+			let arr;
+			if (rv.noSplitNLs){
+				arr = rv.split(/[\x20\t]+/);
+			}
+			else{
+				arr = rv.split(/[\x20\n\t]+/);
+			}
 			if (arr.length) {
 				curfield+=arr.shift();
 				if (arr.length) {
@@ -3304,8 +3259,6 @@ for (let ent of this.val){
 		curfield += "'"+ent.toString()+"'";
 	}
 	else{
-//let arr = ent.toString().split(/\x20+/);
-//log(arr);
 		curfield += ent.toString();
 	}
 
@@ -3617,59 +3570,209 @@ toString(){
 }
 }//»
 //XMKJDHE
+const ShellName = class extends Sequence{
+	toString(){
+		return this.val.join("");
+	}
+}
+const ShellNum = class extends Sequence{
+	toString(){
+		return this.val.join("");
+	}
+}
 const ParamSub = class extends Sequence{//«
 
 //KLSDHSKD
 
-expand(shell, term, com_opts, opts={}){//«
+async expand(shell, term, com_opts, opts={}){//«
 
 //if opts.isMath, then we can substitute "0" for non-existent things
 	const{env,scriptName, scriptArgs}=com_opts;
 //cwarn("PARAM", scriptName, scriptArgs);
 //expand(shell, term, env, scriptName, scriptArgs){
-	for (let ch of this.val){
-		if (!isStr(ch)){
-			throw new Error("sh: bad substitution");
-		}
+//log(this.val);
+
+//return "[SUBHERE]";
+//log(this.val);
+/*We can have:
+1) isSym: Single char (SPECIAL_SYMBOLS)
+2) isNum: ShellNum
+3) ShellName
+  - Plain (isPlain)
+  - isSubstitute (subName, haveColon, subWord, subType)
+  - isStrRep (subName, repWord, repType)
+*/
+	let s;
+//if (this.isPlain||this.isSubstitute||this.isStrRep) s = this.toString();
+if (this.isSym){//«
+	s = this.val[0];
+	if (s==="0"){
+		return scriptName||"sh";
 	}
-//log(this);
-	let s = this.val.join("");
+	if (s==="@"||s==="*") {
+		if (!scriptName) return "";
+		return scriptArgs.join(" ");
+	}
+	if (s==="#") {
+		if (!scriptName) return 0;
+		return scriptArgs.length+"";
+	}
+	return s;
+
+}//»
+if (this.isNum){//«
+	let num = parseInt(this.val.join(""));
+	if (num===0){
+		return scriptName||"sh";
+	}
+	if (!scriptName) return "";
+	return scriptArgs[parseInt(num)-1]||"";
+}//»
+	if (this.subName) s = this.subName.toString();
+	else {
+log(this);
+		throw new Error(`UNKNOWN SUBSTITUTION TYPE!!!`);
+	}
 	let marr;
 	if (s.match(/^[_a-zA-Z]/)){
 		if (opts.isMath) return env[s]||"0";
-/*
-//UAJDKFHJ
-let marr;
-log("EXPAND", s);
-if (marr = s.match(/^([_a-zA-Z][_a-zA-Z0-9]*):([-=?+])(.*)$/)) {//«
-log(marr);
-let param = marr[1];
-let which = marr[2];
-let word = marr[3];
-log(`<${param}> ${which} <${word}>`);
+if (this.isSubstitute){//«
+//log(this.subType, !!this.haveColon);
+
+let have_colon = !!this.haveColon;
+let subType = this.subType;
+let is_set = Object.keys(env).includes(s);
+let is_null;
+
+let wrd = this.subWord;
+await wrd.expandSubs(shell, term, com_opts);
+//EANFJLPM
+let newval =  new String(wrd.fields.join(" "));
+newval.noSplitNLs=true;
+//log(newval);
+let subval;
+if (is_set){
+	subval = env[s];
+	is_null = !subval;
+}
+if (is_set && !is_null){
+	if (subType==="+") return newval;
+	return subval;
+}
+
+if (subType==="?"){//«
+	if (!is_set || (is_null&&have_colon)){
+		throw new Error(`sh: ${s}: ${newval}`);
+	}
+	return "";
 }//»
-*/
+else if (subType==="="){//«
+	if (!is_set || (is_null&&have_colon)) {
+		env[s]=newval;
+		return newval;
+	}
+	return "";
+}//»
+else if (subType==="-"){//«
+	if (!is_set || (is_null&&have_colon)) {
+		return newval;
+	}	
+	return "";
+}//»
+else if (subType==="+"){//«
+	if (!is_set || (is_null&&have_colon)) return "";
+	return newval;
+}//»
+else{//«
+	throw new Error(`!!! SHOULD NOT GET HERE SJDBFBS !!!`);
+}//»
+/*«
+
+Paramsubs can be like:
+
+USE DEFAULT: 			${param:-[word]} 	${param-[word]}
+ASSIGN DEFAULT: 		${param:=[word]} 	${param=[word]}
+ERROR IF NULL/UNSET: 	${param:?[word]} 	${param?[word]}
+
+With the colons, if the parameter is NULL or UNSET, substitute WORD
+Without the colons, when the parameter is SET but NULL, substitute NULL
+
+USE ALTERNATIVE: 		${param:+[word]} 	${param+[word]}
+
+Without the colon, when the parameter is SET but NULL, we substitute the word
+
+
+${parameter:-[word]}
+
+Use Default Values. If parameter is unset or null, the expansion of word (or an
+empty string if word is omitted) shall be substituted; otherwise, the value of
+parameter shall be substituted.
+
+${parameter:=[word]}
+
+Assign Default Values. If parameter is unset or null, quote removal shall be
+performed on the expansion of word and the result (or an empty string if word
+is omitted) shall be assigned to parameter. In all cases, the final value of
+parameter shall be substituted. Only variables, not positional parameters or
+special parameters, can be assigned in this way.
+
+${parameter:?[word]}
+
+Indicate Error if Null or Unset. If parameter is unset or null, the expansion
+of word (or a message indicating it is unset if word is omitted) shall be
+written to standard error and the shell exits with a non-zero exit status.
+Otherwise, the value of parameter shall be substituted. An interactive shell
+need not exit.
+
+${parameter:+[word]}
+
+Use Alternative Value. If parameter is unset or null, null shall be
+substituted; otherwise, the expansion of word (or an empty string if word is
+omitted) shall be substituted.
+
+
+»*/
+//term.response(`sh: not doing the parameter substitution (${s})`, {isWrn: true});
+
+}//»
+else if (this.isStrRep){//«
+/*«
+
+REMOVE SUFFIX: 			${param%[word]} 	${param%%[word]}
+REMOVE PREFIX: 			${param#[word]} 	${param##[word]}
+
+${parameter%[word]}
+Remove Smallest Suffix Pattern. The word shall be expanded to produce a
+pattern. The parameter expansion shall then result in parameter, with the
+smallest portion of the suffix matched by the pattern deleted. If present, word
+shall not begin with an unquoted '%'.
+
+${parameter%%[word]}
+Remove Largest Suffix Pattern. The word shall be expanded to produce a pattern.
+The parameter expansion shall then result in parameter, with the largest
+portion of the suffix matched by the pattern deleted.
+
+${parameter#[word]}
+Remove Smallest Prefix Pattern. The word shall be expanded to produce a
+pattern. The parameter expansion shall then result in parameter, with the
+smallest portion of the prefix matched by the pattern deleted. If present, word
+shall not begin with an unquoted '#'.
+
+${parameter##[word]}
+Remove Largest Prefix Pattern. The word shall be expanded to produce a pattern.
+The parameter expansion shall then result in parameter, with the largest
+portion of the prefix matched by the pattern deleted.
+»*/
+//TZKOPKHD
+let typ = this.repType;
+term.response(`sh: not doing the parameter string replacement (${s}${typ})`, {isWrn: true});
+let wrd = this.repWord;
+await wrd.expandSubs(shell, term, com_opts);
+let newval =  wrd.fields.join(" ");
+log(newval);
+}//»
 		return env[s]||"";
 	}
-	if (marr = s.match(/^([1-9])$/)){//«
-		if (!scriptName) return "";
-		let n = parseInt(marr[1])-1;
-		return scriptArgs[n]||"";
-	}//»
-	if (SPECIAL_SYMBOLS.includes(s)){//«
-		if (s==="0"){
-			return scriptName||"sh";
-		}
-		if (s==="@"||s==="*") {
-			if (!scriptName) return "";
-			return scriptArgs.join(" ");
-		}
-		if (s==="#") {
-			if (!scriptName) return 0;
-			return scriptArgs.length+"";
-		}
-		return s;
-	}//»
 cwarn("HERE IS THE WEIRD PARAM SUB...");
 log(s);
 throw new Error(`sh: $\{${s}\}:bad substitution`);
@@ -3841,6 +3944,40 @@ throwUnexpectedToken(message) {//«
 	if (message === void 0) { message = Messages.UnexpectedTokenIllegal; }
 	return this.errorHandler.throwError(this.index, this.lineNumber, this.index - this.lineStart + 1, message);
 }//»
+unexp(which, pref){//«
+	if (pref) this.throwUnexpectedToken(`${pref}: unexpected '${which}'`);
+	else this.throwUnexpectedToken(`unexpected '${which}'`);
+}//»
+check(ch){//«
+	if(this.eof()) return false; 
+	let gotch = this.source[this.index];
+	if (gotch === ch){
+		this.index++;
+		return true;
+	}
+	return false;
+}//»
+checkRE(re){//«
+	if(this.eof()) return false; 
+	let gotch = this.source[this.index];
+	if (re.test(gotch)){
+		this.index++;
+		return gotch;
+	}
+	return false;
+}//»
+expect(ch, pref){//«
+	if(this.eof()) return this.unexp("end-of-file", pref); 
+	let gotch = this.source[this.index];
+	if (gotch===ch){
+		this.index++;
+		return true;
+	}
+	if (gotch==="\n"){
+		return this.unexp("newline", pref);
+	}
+	this.unexp(gotch, pref);
+}//»
 
 skipSingleLineComment() {//«
 	while (!this.eof()) {
@@ -3876,7 +4013,7 @@ scanComments() {//«
 	}
 };//»
 
-async scanQuote(par, which, in_backquote, cont_quote){//«
+async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 //log("scanQuote", which, this.index);
 // If we are in double-quotes or back-quotes, we need to check for:
 // 2) '$(': scanComSub
@@ -3888,9 +4025,9 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 //	let out=[];
 
 	let start;
-	if (!cont_quote){
-	 	start = this.index;
-	}
+	if (cont_quote) start = use_start;
+	else start = this.index;
+
 //	let src = this.source;
 	let len = this.source.length;
 	let is_ds_single = which === "$";
@@ -3934,14 +4071,14 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 		if (check_subs&&ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")) {//«
 			this.index=cur;
 			if (this.source[cur+2]==="("){
-//				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
 				rv = await this.scanSub(quote, {isMath: true, inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			}
 			else if (this.source[cur+1]==="{"){
-//				rv = await this.scanComSub(quote, true, is_bq||in_backquote);
-				rv = await this.scanSub(quote, {isParam: true, inBQ: is_bq||in_backquote});
+//				rv = await this.scanSub(quote, {isParam: true, inBQ: is_bq||in_backquote});
+				rv = await this.scanParamSub();
 				if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
+				this.index--;
 			}
 			else{
 //				rv = await this.scanComSub(quote, null, is_bq||in_backquote);
@@ -3952,12 +4089,14 @@ async scanQuote(par, which, in_backquote, cont_quote){//«
 			out.push(rv);
 			cur=this.index;
 		}//»
-		else if (check_subs && ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)){/*«*/
+		else if (check_subs && ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)){//«
 			this.index=cur;
-			rv = await this.scanParam();
-			out.push(rv);
+			let sub = new ParamSub(cur);
+			sub.val[0] = await this.scanName();
+			sub.subName = sub.val[0];
+			out.push(sub);
 			cur=this.index;
-		}/*»*/
+		}//»
 		else if (check_subs && ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){/*«*/
 			let sub = new ParamSub(cur);
 			sub.val=[this.source[cur+1]];
@@ -4023,23 +4162,22 @@ cwarn("SKIP OIMPET");
 		if (this.eol()){
 			quote.val = out;
 			await this.more();
-			return await this.scanQuote(par, which, in_backquote, quote);
+			return await this.scanQuote(par, which, in_backquote, quote, start);
 		}
 		return null;
 	}
 //ZOHJKL
-	quote.raw = this.source.slice(start+1, this.index);
-//log(raw);
-//log(quote);
+//	quote.raw = this.source.slice(start+1, this.index);
+	quote.raw = this.source.slice(start+1, this.index).join("");
+//	word.raw = this.source.slice(start, this.index).join("");
 	return quote;
 }//»
-scanParam(no_adv){//«
-
-	let start = this.index;
-	const sub = new ParamSub(start);
+scanName(no_adv){//«
 	if (!no_adv) this.index++;
 	let cur = this.index;
-	let out=[this.source[cur]];
+	let sub = new ShellName(cur);
+	let out = sub.val;
+	out.push(this.source[cur]);
 	cur++;
 	let ch = this.source[cur];
 	while(ch && ch.match(/[_0-9a-zA-Z]/)){
@@ -4048,8 +4186,19 @@ scanParam(no_adv){//«
 		ch = this.source[cur];
 	}
 	this.index = cur-1;
-	sub.val = out;
 	return sub;
+}//»
+scanRE(re){//«
+	let cur = this.index;
+	let ch = this.source[cur];
+	let out = [];
+	while(ch && re.test(ch)){
+		out.push(ch);
+		cur++;
+		ch = this.source[cur];
+	}
+	this.index = cur;
+	return out;
 
 }//»
 async scanSub(par, opts={}){//«
@@ -4068,17 +4217,7 @@ throw new Error("NOT is_comsub || is_math || is_param ?!?!? HJKHFDK^&*^$*&#");
 let in_backquote = opts.inBQ;
 let cont_sub = opts.contSub;
 
-////async scanComSub(par, is_math, in_backquote, cont_sub){
-/*
-We need to collect words rather than chars if:
-If par is a top-level word, then 
-or:
-If we are not embedded in any kind of quote
-*/
-//log("scanComSub", this.index);
-
 let start = this.index;
-//const sub = cont_sub || (is_math ? new MathSub(start, par) : new ComSub(start, par));
 let sub = cont_sub || (is_math ? new MathSub(start, par) : 
 	(is_param ? new ParamSub(start, par) : new ComSub(start, par))
 	);
@@ -4161,7 +4300,11 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 }//»
 else if (ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)){//«
 	this.index=cur;
-	let sub = await this.scanParam();
+	let sub = new ParamSub(cur);
+	sub.subName = await this.scanName();
+	sub.val[0] = sub.subName;
+//	sub.subName = sub.val[0];
+//	sub.val[0]
 	out.push(sub);
 	cur = this.index;
 }//»
@@ -4176,9 +4319,12 @@ else if (is_math && ch.match(/[_a-zA-Z]/)){//«
 For math subs, we automatically create a param out of anything that looks like a name
 */
 	this.index=cur;
-	let sub = await this.scanParam(true);
+	let sub = new ParamSub(cur);
+	sub.subName = await this.scanName(true);
+	sub.val[0] = sub.subName;
 	out.push(sub);
 	cur = this.index;
+
 }//»
 else if (is_param && ch==="}"){//«
 //if ()
@@ -4190,7 +4336,8 @@ else if (is_param && ch==="}"){//«
 else if (paren_depth === 0 && is_comsub && ch===")"){//«
 	this.index = cur;
 //XMDJKT
-	sub.raw = this.source.slice(start+2, this.index);
+//	sub.raw = this.source.slice(start+2, this.index);
+	sub.raw = this.source.slice(start+2, this.index).join("");
 	return sub;
 }//»
 else if (paren_depth === 0 && is_math && ch===")"){//«
@@ -4359,7 +4506,108 @@ scanOperator(){//«
 //	return {type:"c_op", c_op:str, start, val: str, isOp: true};
 
 }//»
-async scanWord(par, env){//«
+async scanParamSub(){//«
+const bad=(which)=>{
+	this.unexp(which, BADSUB);
+};
+let sub = new ParamSub(this.index);
+//let val = [];
+this.index+=2;
+let next = this.source[this.index];
+if (!next) bad("EOF");
+if (next==="\n") bad("newline");
+if (next==="}") bad("}");
+if (next.match(/[0-9]/)){//Sequence of numbers ${6} or ${647} or even ${0045}«
+	let num = new ShellNum(this.index);
+	num.val = this.scanRE(/[0-9]/);
+	sub.val.push(num);
+	sub.isNum = true;
+	this.expect("}", BADSUB);
+//this.index--;
+	return sub;
+}//»
+else if (SPECIAL_SYMBOLS.includes(next)){//Can only be this symbol«
+	sub.val=[next];
+	sub.isSym = true;
+	this.index++;
+	this.expect("}", BADSUB);
+	return sub;
+}//»
+else if (!next.match(/[_a-zA-Z]/)) bad(next);
+
+//«
+//Scan forward until the end of the param name, and look for closing "}" or:
+//1) /:?[-=+?]/
+//2) /%%?/
+//3) /##?/
+//Then scan for a word that is delimited by "}" (fail on any other delimiter)
+//»
+//sub.val = this.scanRE(/[_0-9a-zA-Z]/);
+//log("WUT",next);
+let name = this.scanName(true);
+sub.subName = name;
+sub.val.push(name);
+this.index++;
+//log(sub.val);
+
+if (this.check("}")) {
+//log(sub.val);
+	sub.isPlain = true;
+	return sub;//"Normal" sub like: ${FOOD_HERE_HAR}
+}
+//Some kind of alternative param sub scheme: ${FOOD:-`ls`}
+
+let have_colon = this.check(":");
+if (have_colon) sub.val.push(":");
+let gotop;
+if (gotop = this.checkRE(/[-=+?]/)) {//Substitution«
+	sub.haveColon = have_colon;
+	sub.isSubstitute = true;
+	sub.subType = gotop;
+	sub.val.push(gotop);
+	if (this.check("}")){}//This CAN be a null string
+	else{//Need to get a Word that is terminated by only: "}"
+		let word = await this.scanWord({isParam: true});
+		sub.subWord = word;
+		sub.val.push(word);
+		this.index++;
+	}
+	return sub;
+}//»
+
+//Must be substring replacement pattern, like ${FROOMT%%zzlermm*}«
+if (have_colon) bad(":");
+let typ;
+if (this.check("%")){
+	if (this.check("%")) typ = "%%";
+	else typ="%";
+	sub.val.push(typ);
+}
+else if (this.check("#")){
+	if (this.check("#")) typ = "##";
+	else typ="#";
+	sub.val.push(typ);
+}
+else{
+	if (this.eof()) bad("EOF");
+	if (this.check("\n")) bad("newline");
+	bad(this.source[this.index]);
+	return;
+}
+sub.isStrRep = true;
+sub.repType = typ;
+if (this.check("}")){}//This CAN be a null string
+else{//Need to get a Word that is terminated by only: "}"
+	let word = await this.scanWord({isParam: true});
+	sub.repWord = word;
+	sub.val.push(word);
+	this.index++;
+}
+return sub;
+//»
+
+}//»
+async scanWord(opts={}){//«
 /*
 
 Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
@@ -4367,6 +4615,7 @@ can either be in free space or just after "`", "$(" or "$((" that are in free sp
 or in double quotes or in themselves ("`" must be escaped to be "inside of" itself).
 
 */
+
 	let start = this.index;
 //	let src = this.source;
 //	let str='';
@@ -4374,9 +4623,10 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let rv;
 	let start_line_number = this.lineNumber;
 	let start_line_start = this.lineStart;
-	let _word = new Word(start);
-	let word = _word.val;
+	let word = new Word(start);
+	let wordarr = word.val;
 	let is_plain_chars = true;
+	let is_param = opts.isParam;
 // Simple means there are only plain chars, escapes, '...', $'...' and 
 // "..." with no embedded substitutions
 //	let is_simple = true;
@@ -4414,44 +4664,33 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			ch = new String(next1);
 			ch.escaped = true;
 			this.index++;
-			word.push(ch);
+			wordarr.push(ch);
 		}//»
 		else if (ch==="$" && next1 === "(" && next2==="("){//«
 			is_plain_chars = false;
-//			rv = await this.scanComSub(_word, true);
-			rv = await this.scanSub(_word, {isMath: true});
+//			rv = await this.scanComSub(word, true);
+			rv = await this.scanSub(word, {isMath: true});
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
-			word.push(rv);
+			wordarr.push(rv);
 		}//»
 		else if (ch==="$" && next1 === "("){//«
 			is_plain_chars = false;
-//			rv = await this.scanComSub(_word);
-			rv = await this.scanSub(_word, {isComSub: true});
+//			rv = await this.scanComSub(word);
+			rv = await this.scanSub(word, {isComSub: true});
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
-			word.push(rv);
+			wordarr.push(rv);
 		}//»
 		else if (ch==="$" && next1 === "{"){//«
-/*SYAHFLSJ
-!) First we need to check for the 1 char special symbols 
-  a) if followed by "}", return
-  b) otherwise, fail
-2) Then check for a valid param/simple name
-  a) if followed by "}", return
-  b) if followed by ':?[-+=?]', need to get scan for all words until the final unbalanced "}"
-  c) bad substitution, e.g. ${BLAH  hoho  } or ${ BLAH  hoho}
-
-*/
 			is_plain_chars = false;
-			rv = await this.scanSub(_word, {isParam: true});
-			if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
-			else if (isStr(rv)) this.throwUnexpectedToken(rv);
-			word.push(rv);
+			rv = await this.scanParamSub();
+			wordarr.push(rv);
+			continue;
 		}//»
 		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){//«
 			is_plain_chars = false;
-			rv = await this.scanQuote(_word, ch);
+			rv = await this.scanQuote(word, ch);
 			if (rv===null) {
 				if (ch=="'"){
 					this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -4461,75 +4700,87 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 				}
 			}
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
-			word.push(rv);
+			wordarr.push(rv);
 		}//»
-		else if (ch==="$" && next1 && next1.match(/[_a-zA-Z]/)){
+		else if (ch==="$" && next1 && next1.match(/[_a-zA-Z]/)){//«
 			is_plain_chars = false;
-			rv = await this.scanParam();
-			word.push(rv);
-		}
-		else if (ch==="$" && next1 && (next1.match(/[1-9]/)||SPECIAL_SYMBOLS.includes(next1))){
+			let sub = new ParamSub(this.index);
+			sub.val[0] = await this.scanName();
+			sub.subName = sub.val[0];
+			wordarr.push(sub);
+		}//»
+		else if (ch==="$" && next1 && (next1.match(/[1-9]/)||SPECIAL_SYMBOLS.includes(next1))){//«
 			let sub = new ParamSub(this.index);
 			sub.val=[next1];
-			word.push(sub);
+			wordarr.push(sub);
 			this.index++;
-		}
-		else if (ch==="\n"||ch===" "||ch==="\t") break;
-		else if (OPERATOR_CHARS.includes(ch)) {
+		}//»
+		else if (is_param && ch==="}") break;//WUEHSKR
+		else if (ch==="\n"||ch===" "||ch==="\t") {//«
+			if (is_param){
+				return this.unexp("whitespace token", BADSUB);
+			}
 			break;
-		}
-		else {
-			word.push(ch);
-		}
+		}//»
+		else if (OPERATOR_CHARS.includes(ch)) {//«
+			if (is_param){
+				return this.unexp(ch, BADSUB);
+			}
+			break;
+		}//»
+		else wordarr.push(ch);
 		this.index++;
 	}
-	if (is_plain_chars){//«
-		let wrd = word.join("");
-		if (RESERVERD_WORDS.includes(wrd)) {
-			_word.isRes = true;
-			if (RESERVED_START_WORDS.includes(wrd)) {
-				_word.isCommandStart = true;
-				_word.isResStart = true;
-			}
-			else{
-				_word.isCommandStart = false;
-			}
+
+	if (!is_param) {
+		if (is_plain_chars){//«
+			let wrd = wordarr.join("");
+			if (RESERVERD_WORDS.includes(wrd)) {
+				word.isRes = true;
+				if (RESERVED_START_WORDS.includes(wrd)) {
+					word.isCommandStart = true;
+					word.isResStart = true;
+				}
+				else{
+					word.isCommandStart = false;
+				}
 //	if then else elif fi do done case esac while until for { } in
-			switch(wrd){
+				switch(wrd){
 
-			case "if": _word.isIf=true;break;
-			case "then": _word.isThen=true;break;
-			case "else": _word.isElse=true;break;
-			case "elif": _word.isElif=true;break;
-			case "fi": _word.isFi=true;break;
-			case "do": _word.isDo=true;break;
-			case "done": _word.isDone=true;break;
-			case "case": _word.isCase=true;break;
-			case "esac": _word.isEsac=true;break;
-			case "while": _word.isWhile=true;break;
-			case "until": _word.isUntil=true;break;
-			case "for": _word.isFor=true;break;
-			case "{": _word.isLBrace=true;break;
-			case "}": _word.isRBrace=true;break;
-			case "in": _word.isIn=true;break;
-			default: 
-cwarn("What is the word below, not RESERVED_WORDS!!!");
-log(wrd);
-				this.fatal(`WUTTHEHELLISTHISWORD --->${wrd} <---- ^&*^$#&^&*$ (see console)`);
+				case "if": word.isIf=true;break;
+				case "then": word.isThen=true;break;
+				case "else": word.isElse=true;break;
+				case "elif": word.isElif=true;break;
+				case "fi": word.isFi=true;break;
+				case "do": word.isDo=true;break;
+				case "done": word.isDone=true;break;
+				case "case": word.isCase=true;break;
+				case "esac": word.isEsac=true;break;
+				case "while": word.isWhile=true;break;
+				case "until": word.isUntil=true;break;
+				case "for": word.isFor=true;break;
+				case "{": word.isLBrace=true;break;
+				case "}": word.isRBrace=true;break;
+				case "in": word.isIn=true;break;
+				default: 
+	cwarn("What is the word below, not RESERVED_WORDS!!!");
+	log(wrd);
+					this.fatal(`WUTTHEHELLISTHISWORD --->${wrd} <---- ^&*^$#&^&*$ (see console)`);
 
+				}
 			}
+			else{//Not reserverd word (is_plain_chars == true)
+				word.isCommandStart = true;
+			}
+		}//»
+		else{
+	//is_plain_chars == false
+			word.isCommandStart = true;
 		}
-		else{//Not reserverd word (is_plain_chars == true)
-			_word.isCommandStart = true;
-		}
-	}//»
-	else{
-//is_plain_chars == false
-		_word.isCommandStart = true;
 	}
-	_word.raw = this.source.slice(start, this.index).join("");
+	word.raw = this.source.slice(start, this.index).join("");
 //log(raw);
-	return _word;
+	return word;
 }//»
 scanNewlines(par, env, heredoc_flag){/*«*/
 
@@ -4607,7 +4858,8 @@ if (OPERATOR_CHARS.includes(ch)) {
 //	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
 }
-return await this.scanWord(null, this.env);
+//return await this.scanWord(null, this.env);
+return await this.scanWord();
 
 }//»
 
