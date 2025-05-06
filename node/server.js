@@ -16,7 +16,7 @@ let ws_server, ws_client;
 
 //const HOST="0.0.0.0";
 const HOST = "localhost";
-const HOST_SVC_ROOT = '/usr/local/home/lotw/zzhold/writes';
+const HOST_SVC_ROOT = '/usr/local/home/lotw/local/_writes';
 //const PORT = 4443;
 const PORT = 8080;
 //const PORT = 8081;

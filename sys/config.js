@@ -63,6 +63,9 @@ const FS_TYPE= "fs";
 const MOUNT_TYPE= "mnt";
 const SHM_TYPE= "shm";
 
+//Node types
+const DIR_TYPE="d",LINK_TYPE="l",BAD_LINK_TYPE="b",IDB_DATA_TYPE="i";
+
 //»
 
 //User«
@@ -433,6 +436,12 @@ export const globals = {//«
 	FS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
+
+	DIR_TYPE,
+	LINK_TYPE,
+	BAD_LINK_TYPE,
+	IDB_DATA_TYPE,
+
 	BACKGROUND_IMAGE_URL,
 	BACKGROUND_GRADIENT,
 	BEWARE_RED,

@@ -8551,8 +8551,9 @@ const dokeyup = function(e) {//«
 		}
 	},250);
 	body.removeChild(gbid("error_message"));
-	if ((await fetch('/_env?key=MAYBENODEJS')).ok) globals.isNodeJS = true;
-	else globals.isNodeJS = false;
+
+	globals.nodejs_mode = (await fetch('/_env?key=MAYBENODEJS')).ok;
+
 })();
 
 //»
