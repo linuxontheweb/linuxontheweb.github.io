@@ -1,5 +1,30 @@
 
 /*5/7/25:«
+@TEMNGSFDK: While parsing a simple command, we are breaking on any token that is
+*NOT* a word or a redir. So it can be any control operator. But there is one
+control operator that is also allowed to start a compound command: "(".
+
+
+
+$ echo `echo '"hihi"'`
+Want: "hihi"
+Got: hihi
+I think the comsub might be supposed to return the full '"hihi"'
+
+Doesn't work (it doesn't retain the newlines):
+$ echo "${HAR-`ls`}" 
+
+But this works because I fixed it yesterday (with a real HACK):
+$ echo ${HAR-"`ls`"} 
+
+There are also issues with escaped characters in param subs:
+$ echo ${FRUNT##[HDRF]\[UTOF} 
+sh: invalid regex detected 
+
+This should be a parse error but it prompts for a continuation
+$ ass ass(
+
+
 I've decided to *not* worry about scanning for the ending "}" of a parameter substitution
 when you *know* it is invalid. I am treating bad parameter substitutions as "fatal" at
 the level of the scanner/tokenizer, so nothing within those scripts are executed.
@@ -16,6 +41,7 @@ so we have to REVERSE the damn strings (the parameter *and* the regex string, so
 to swap the '[' and ']' characters).
 Next: We lose *ALL* the escape characters after doing expandSubs.
 
+
 Doesn't work: 
 $ echo `echo $'111\n222'`
 Want: 
@@ -24,17 +50,13 @@ Got:
 111n222
 GOT THIS WORKING BY USING tok.raw (instead of tok.val)
 
-$ echo `echo '"hihi"'`
-Want: "hihi"
-Got: hihi
-I think the comsub might be supposed to return the full '"hihi"'
 
 Also: echo '"$USER"' -> $USER (instead of substituting for $USER)
 And: echo $(echo '"$USER"') -> $USER (instead of substituting for $USER)
 
 This works:
 $ echo $(echo $(echo $(echo hi))) 
-But this fails to compile (unexpected EOF while looking for matching ')'):
+But this fails (NOW FIXED) to compile (unexpected EOF while looking for matching ')'):
 $ echo $(echo $(echo `echo hi`)) 
 Even though this works:
 $ echo $(echo `echo $(echo hi)`) 
@@ -47,12 +69,6 @@ $ echo `echo ${HAR+`
 $ echo `echo ${HAR+"` 
 ...I ended up needing to add inBQ options while doing scanParamSub and also while doing
 scanWord, and then *from within* scanWord, passing the inBQ flag into scanSub and scanQuote.
-
-Doesn't work (it doesn't retain the newlines):
-$ echo "${HAR-`ls`}" 
-
-But this works because I fixed it yesterday (with a real HACK):
-$ echo ${HAR-"`ls`"} 
 
 »*/
 /*5/6/25: We are going to follow the spec for param subs TO THE LETTER:«
@@ -5852,6 +5868,8 @@ while(tok){
 		}
 	}//»
 	else{
+//TEMNGSFDK
+		if (tok.isSubStart) this.unexp(tok);
 		break;
 	}
 	this.tokNum++;
@@ -5868,11 +5886,11 @@ async parseCompoundCommand(){//«
 let tok = this.curTok();
 let com;
 
-if (tok.isOp){/*«*/
+if (tok.isOp){//«
 	if (!tok.isSubStart) this.unexp(tok);;
 	com = await this.parseSubshell();
-}/*»*/
-else if (tok.isResStart){/*«*/
+}//»
+else if (tok.isResStart){//«
 	let wrd = tok.toString();
 	switch (wrd){
 		case "if":
@@ -5897,10 +5915,10 @@ else if (tok.isResStart){/*«*/
 			this.fatal(`unknown reserved 'start' word: ${wrd} &^*^$#*& HKHJKH`);
 //			this.unexp(tok);
 	}
-}/*»*/
-else{/*«*/
+}//»
+else{//«
 	this.unexp(tok);
-}/*»*/
+}//»
 
 let redirs = this.eatRedirects();
 com.redirs = redirs;
@@ -5908,10 +5926,13 @@ return com;
 
 }//»
 async parseCommand(force_compound){//«
+
 let toks = this.tokens;
 let err = this.fatal;
 let tok = this.curTok();
 //log("PARSECOM", force_compound, tok.toString());
+//log("parseCommand");
+//log(tok);
 if (tok.isWord) {//«
 	let wrd;
 	if (tok.isRes) {
@@ -5927,6 +5948,7 @@ if (tok.isWord) {//«
 //Want to ensure a certain level of "simplicity" to function names, i.e. they have
 //no substitutions or newlines (maybe disallow $'...')
 		if (force_compound) return false;
+//log("FUNCDEF");
 		return this.parseFuncDef();// blah(  or foo  (
 	}
 	if (force_compound) return false;
