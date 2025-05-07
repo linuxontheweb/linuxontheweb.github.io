@@ -1,9 +1,15 @@
+/*5/7/25: Need to find the pattern/glob matching part. Did a crappy version of
+substring deletion @TZKOPKHD. !THIS IS A VERY BAD HACK!
+First of all: I don't know why quoteRemoval doesn't actually do anything with
+word.FIELDS, it only assigns to word.TOKS @WUSLRJT.
+Next: non-greedy matching doesn't work from the BACK of the string (like it does on bash),
+so we have to REVERSE the damn strings (the parameter *and* the regex string, so that we need
+to swap the '[' and ']' characters).
+Next: We lose *ALL* the escape characters after doing expandSubs.
+*/
 /*@EANFJLPM: This is a hack (using a new String with a noSplitNLs property on it) inside 
 ParamSub.expand just to ensure that the embedded newlines are retained while doing the 
 splitting in Word.expandSubs @YRTHSJLS.
-
-NOW ALL WE NEED TO DO IS THE SUBSTRING REPLACEMENT IN PARAM SUBS @TZKOPKHD. LOOKS LIKE
-WE NEED TO DO QUOTE REMOVAL THERE...
 
 */
 /*5/6/25: We are going to follow the spec for param subs TO THE LETTER:
@@ -3287,7 +3293,9 @@ quoteRemoval(){//«
 		}
 		s+=c.toString();
 	}
+//WUSLRJT
 	this.val = [...s];
+
 }//»
 tildeExpansion(){//«
 	const {val} = this;
@@ -3764,18 +3772,71 @@ The parameter expansion shall then result in parameter, with the largest
 portion of the prefix matched by the pattern deleted.
 »*/
 //TZKOPKHD
+let val = env[s];
+if (!val) return "";
+
 let typ = this.repType;
-term.response(`sh: not doing the parameter string replacement (${s}${typ})`, {isWrn: true});
 let wrd = this.repWord;
+if (!wrd) return val;
 await wrd.expandSubs(shell, term, com_opts);
-let newval =  wrd.fields.join(" ");
-log(newval);
+let str = wrd.fields.join(" ");
+str = str.replace(/[\x22\x27]/g,"");
+let patarr = str.split("");
+let is_non_greedy = typ.length==1;
+let a = [];
+let is_rev = typ.match(/%/);
+
+for (let ch of patarr){
+	if (ch==="."){
+		a.push('\\.');
+	}
+	else if (ch==="*"){
+		if (is_non_greedy) a.push('.*?');
+		else a.push('.*');
+
+	}
+	else if (ch==="?"){
+		a.push('.');
+	}
+	else {
+		if (ch==="[" && is_rev) a.push("]");
+		else if (ch==="]" && is_rev) a.push("[");
+		else a.push(ch);
+	}
+}
+let useval;
+let usepat;
+if (is_rev){
+	useval = val.split("").reverse().join("");
+	usepat = a.reverse().join("");
+}
+else{
+	useval = val;
+	usepat = a.join("");
+}
+let re;
+try{
+//log(`^${usepat}`);
+	re = new RegExp(`^${usepat}`);
+}
+catch(e){
+term.response(`sh: invalid regex detected`, {isWrn: true});
+return val;
+}
+let marr = re.exec(useval);
+if (marr && marr[0].length){
+	useval = useval.slice(marr[0].length);
+	if (is_rev) return useval.split("").reverse().join("");
+	else return useval;
+}
+else return val;
+
 }//»
 		return env[s]||"";
 	}
 cwarn("HERE IS THE WEIRD PARAM SUB...");
 log(s);
-throw new Error(`sh: $\{${s}\}:bad substitution`);
+throw new Error(`sh: bad substitution: $\{${s}\}`);
 //throw new Error("WHAT KIND OF PARAM SUB IS THIS???");
 }//»
 dup(){//«
@@ -6413,8 +6474,6 @@ else if (ch==="?"){
 else {
 	if (ch instanceof String){
 //EORKTIG
-//		if (ch.wasExpanded) patstr+="\\"+ch;
-//		else patstr+=ch.toString();
 		patstr+=ch.toString();
 	}
 	else patstr+=ch;
