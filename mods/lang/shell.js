@@ -6,6 +6,40 @@ Next: non-greedy matching doesn't work from the BACK of the string (like it does
 so we have to REVERSE the damn strings (the parameter *and* the regex string, so that we need
 to swap the '[' and ']' characters).
 Next: We lose *ALL* the escape characters after doing expandSubs.
+
+Doesn't work: 
+$ echo `echo $'111\n222'`
+Want: 
+111 222
+Got:
+111n222
+GOT THIS WORKING BY USING tok.raw (instead of tok.val)
+
+$ echo `echo '"hihi"'`
+Want: "hihi"
+Got: hihi
+I think the comsub might be supposed to return the full '"hihi"'
+
+Also: echo '"$USER"' -> $USER (instead of substituting for $USER)
+And: echo $(echo '"$USER"') -> $USER (instead of substituting for $USER)
+
+This works:
+$ echo $(echo $(echo $(echo hi))) 
+But this fails to compile (unexpected EOF while looking for matching ')'):
+$ echo $(echo $(echo `echo hi`)) 
+Even though this works:
+$ echo $(echo `echo $(echo hi)`) 
+
+The failure was due to an incorrect {inBQ: true} in the scanning options object, which
+was easily fixed, but this led me towards needing to fix stuff like:
+$ echo `${`
+$ echo `echo ${HAR` 
+$ echo `echo ${HAR+` 
+$ echo `echo ${HAR+"` 
+...I ended up needing to add inBQ options while doing scanParamSub and also while doing
+scanWord, and then *from* scanWord, passing the inBQ flag into scanSub and scanQuote.
+
+
 */
 /*@EANFJLPM: This is a hack (using a new String with a noSplitNLs property on it) inside 
 ParamSub.expand just to ensure that the embedded newlines are retained while doing the 
@@ -4126,9 +4160,9 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 	let next;
 	while(ch && ch !== end_quote){
 
-		if (ch==="`" && in_backquote){/*«*/
-			return `unexpected EOF while looking for matching '${which}'`;
-		}/*»*/
+		if (ch==="`" && in_backquote){//«
+			return `command substitution: unexpected EOF while looking for matching '${which}'`;
+		}//»
 		if (check_subs&&ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")) {//«
 			this.index=cur;
 			if (this.source[cur+2]==="("){
@@ -4137,7 +4171,7 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 			}
 			else if (this.source[cur+1]==="{"){
 //				rv = await this.scanSub(quote, {isParam: true, inBQ: is_bq||in_backquote});
-				rv = await this.scanParamSub();
+				rv = await this.scanParamSub({inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
 				this.index--;
 			}
@@ -4319,7 +4353,7 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 		else if (is_math) say_ch="))";
 		else if (is_param) say_ch = "}";
 //		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
-		return `unexpected EOF while looking for matching '${say_ch}'`;
+		return `command substitution: unexpected EOF while looking for matching '${say_ch}'`;
 	}
 	this.index=cur;
 	let rv = await this.scanQuote(sub, ch, in_backquote);
@@ -4351,7 +4385,8 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 		this.index=cur;
 ////async scanComSub(par, is_math, in_backquote, cont_sub){
 //		let rv = await this.scanComSub(sub, false, in_backquote);
-		let rv = await this.scanSub(sub, {isComSub: true, inBQ: true});
+//		let rv = await this.scanSub(sub, {isComSub: true, inBQ: true});
+		let rv = await this.scanSub(sub, {isComSub: true, inBQ: in_backquote});
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
 		out.push(rv);
@@ -4567,10 +4602,12 @@ scanOperator(){//«
 //	return {type:"c_op", c_op:str, start, val: str, isOp: true};
 
 }//»
-async scanParamSub(){//«
+async scanParamSub(opts={}){//«
 const bad=(which)=>{
 	this.unexp(which, BADSUB);
 };
+
+let in_backquote = opts.inBQ;
 let sub = new ParamSub(this.index);
 //let val = [];
 this.index+=2;
@@ -4594,8 +4631,14 @@ else if (SPECIAL_SYMBOLS.includes(next)){//Can only be this symbol«
 	this.expect("}", BADSUB);
 	return sub;
 }//»
-else if (!next.match(/[_a-zA-Z]/)) bad(next);
-
+else if (!next.match(/[_a-zA-Z]/)) {
+//log(next, in_backquote);
+if (next==="`" && in_backquote){
+this.throwUnexpectedToken("command substitution: unexpected EOF while looking for matching '}'");
+return;
+}
+	bad(next);
+}
 //«
 //Scan forward until the end of the param name, and look for closing "}" or:
 //1) /:?[-=+?]/
@@ -4604,7 +4647,7 @@ else if (!next.match(/[_a-zA-Z]/)) bad(next);
 //Then scan for a word that is delimited by "}" (fail on any other delimiter)
 //»
 //sub.val = this.scanRE(/[_0-9a-zA-Z]/);
-//log("WUT",next);
+//log("WUT");
 let name = this.scanName(true);
 sub.subName = name;
 sub.val.push(name);
@@ -4622,13 +4665,15 @@ let have_colon = this.check(":");
 if (have_colon) sub.val.push(":");
 let gotop;
 if (gotop = this.checkRE(/[-=+?]/)) {//Substitution«
+//log("HI");
 	sub.haveColon = have_colon;
 	sub.isSubstitute = true;
 	sub.subType = gotop;
 	sub.val.push(gotop);
 	if (this.check("}")){}//This CAN be a null string
 	else{//Need to get a Word that is terminated by only: "}"
-		let word = await this.scanWord({isParam: true});
+//log("SCAN A WORD!!!");
+		let word = await this.scanWord({isParam: true, inBQ: in_backquote});
 		sub.subWord = word;
 		sub.val.push(word);
 		this.index++;
@@ -4652,6 +4697,10 @@ else if (this.check("#")){
 else{
 	if (this.eof()) bad("EOF");
 	if (this.check("\n")) bad("newline");
+if (this.source[this.index]==="`" && in_backquote){
+this.throwUnexpectedToken("command substitution: unexpected EOF while looking for matching '}'");
+return;
+}
 	bad(this.source[this.index]);
 	return;
 }
@@ -4688,6 +4737,7 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let wordarr = word.val;
 	let is_plain_chars = true;
 	let is_param = opts.isParam;
+	let in_backquote = opts.inBQ;
 // Simple means there are only plain chars, escapes, '...', $'...' and 
 // "..." with no embedded substitutions
 //	let is_simple = true;
@@ -4730,7 +4780,7 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		else if (ch==="$" && next1 === "(" && next2==="("){//«
 			is_plain_chars = false;
 //			rv = await this.scanComSub(word, true);
-			rv = await this.scanSub(word, {isMath: true});
+			rv = await this.scanSub(word, {isMath: true, inBQ: in_backquote});
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			wordarr.push(rv);
@@ -4738,20 +4788,23 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		else if (ch==="$" && next1 === "("){//«
 			is_plain_chars = false;
 //			rv = await this.scanComSub(word);
-			rv = await this.scanSub(word, {isComSub: true});
+			rv = await this.scanSub(word, {isComSub: true, inBQ: in_backquote});
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			wordarr.push(rv);
 		}//»
 		else if (ch==="$" && next1 === "{"){//«
 			is_plain_chars = false;
-			rv = await this.scanParamSub();
+			rv = await this.scanParamSub({inBQ: in_backquote});
 			wordarr.push(rv);
 			continue;
 		}//»
 		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){//«
 			is_plain_chars = false;
-			rv = await this.scanQuote(word, ch);
+if (ch==="`" && in_backquote){
+this.throwUnexpectedToken("unexpected EOF reached");
+}
+			rv = await this.scanQuote(word, ch, in_backquote);
 			if (rv===null) {
 				if (ch=="'"){
 					this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -6162,7 +6215,8 @@ async expandComsub(tok, opts){//«
 	const err=(mess)=>{
 		term.response(mess, {isErr: true});
 	};
-	let arr = tok.val;
+	let arr = tok.raw.split("");   //Should use the raw here!!!
+//	let arr = tok.val;
 	let s = '';
 	let len = arr.length;
 	for (let i=0; i < len; i++){
@@ -6177,10 +6231,11 @@ async expandComsub(tok, opts){//«
 		}
 		else{
 //PZUELFJ
+//log(ch);
 			s+=ch;
 		}
 	}
-//cwarn("COMSUB", s);
+cwarn("COMSUB", s);
 	let sub_lines = [];
 	try{
 //log(this.parser);
