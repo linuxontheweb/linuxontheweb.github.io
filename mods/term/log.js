@@ -48,7 +48,8 @@ const {//«
 	wrap_line,
 	refresh,
 	topwin,
-	quit_new_screen,
+//	quit_new_screen,
+	quitNewScreen,
 	h
 } = termobj;//»
 let appclass="pager";
@@ -109,10 +110,10 @@ const quit=(rv)=>{//«
 	consoleLog.rmCb(log_cb);
 	delete this.command_str;
 	this.killed = true;
-	quit_new_screen(hold_screen_state);
+	termobj.quitNewScreen(hold_screen_state);
 };//»
 const render = () => {//«
-	refresh();
+	termobj.refresh();
 };//»
 
 const set_main_menu=(opts={})=>{//«
@@ -566,7 +567,7 @@ this.command_str = o.command_str;
 return new Promise((Y,N)=>{
 	this.cb=Y;
 //	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, onescape);
-	hold_screen_state = termobj.init_new_screen(this, appclass, lines, line_colors, num_stat_lines, {onescape});
+	hold_screen_state = termobj.initNewScreen(this, appclass, lines, line_colors, num_stat_lines, {onescape});
 //	stat_message="/";
 //	stat_message = MAIN_STAT_STR;
 	set_main_menu();

@@ -1,4 +1,13 @@
-/*5/7/25: Need to find the pattern/glob matching part. Did a crappy version of
+
+/*5/7/25:«
+I've decided to *not* worry about scanning for the ending "}" of a parameter substitution
+when you *know* it is invalid. I am treating bad parameter substitutions as "fatal" at
+the level of the scanner/tokenizer, so nothing within those scripts are executed.
+Normal bash allows for the "hi" to be echoed:
+$ echo `echo ${`; echo hi
+...but I throw a top-level error. I guess you can call this kind of stuff a real edge case.
+
+Need to find the pattern/glob matching part. Did a crappy version of
 substring deletion @TZKOPKHD. !THIS IS A VERY BAD HACK!
 First of all: I don't know why quoteRemoval doesn't actually do anything with
 word.FIELDS, it only assigns to word.TOKS @WUSLRJT.
@@ -37,21 +46,25 @@ $ echo `echo ${HAR`
 $ echo `echo ${HAR+` 
 $ echo `echo ${HAR+"` 
 ...I ended up needing to add inBQ options while doing scanParamSub and also while doing
-scanWord, and then *from* scanWord, passing the inBQ flag into scanSub and scanQuote.
+scanWord, and then *from within* scanWord, passing the inBQ flag into scanSub and scanQuote.
 
+Doesn't work (it doesn't retain the newlines):
+$ echo "${HAR-`ls`}" 
 
-*/
-/*@EANFJLPM: This is a hack (using a new String with a noSplitNLs property on it) inside 
-ParamSub.expand just to ensure that the embedded newlines are retained while doing the 
-splitting in Word.expandSubs @YRTHSJLS.
+But this works because I fixed it yesterday (with a real HACK):
+$ echo ${HAR-"`ls`"} 
 
-*/
-/*5/6/25: We are going to follow the spec for param subs TO THE LETTER:
+»*/
+/*5/6/25: We are going to follow the spec for param subs TO THE LETTER:«
 ${parameter:+[word]}
 There can only be exactly 0 or 1 words here, which is delimited by a '}'
 @WUEHSKR we need to add the condition to break on '}'
 Just need to pass in the isParam option to scanWord, when we are inside the 
-*/
+
+@EANFJLPM: This is a hack (using a new String with a noSplitNLs property on it) inside 
+ParamSub.expand just to ensure that the embedded newlines are retained while doing the 
+splitting in Word.expandSubs @YRTHSJLS.
+»*/
 /*5/5/25: «
 @SYAHFLSJ: Need to redo the way that we scan for params, accounting for these 4 cases:
 
@@ -6235,7 +6248,7 @@ async expandComsub(tok, opts){//«
 			s+=ch;
 		}
 	}
-cwarn("COMSUB", s);
+//cwarn("COMSUB", s);
 	let sub_lines = [];
 	try{
 //log(this.parser);
@@ -7299,6 +7312,8 @@ async compile(command_str, opts={}){//«
 	}
 	catch(e){
 //LSPOEIRK
+
+this.term.addToHistoryBuffer(this.parser.scanner.source.join(""));
 cerr(e);
 let mess = e.message;
 if (opts.retErrStr) return mess;

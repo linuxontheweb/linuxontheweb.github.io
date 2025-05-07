@@ -6359,7 +6359,9 @@ if (opts.r||opts["dev-name"]||opts["use-dev-reload"]) {
 cwarn("Using ondevreload");
 }
 //hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
-hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_devreload});
+hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, onreload: ()=>{
+cwarn("HI VIM RELOAD!!!");
+}});
 this.fname = edit_fname;
 
 syntax_multiline_comments();

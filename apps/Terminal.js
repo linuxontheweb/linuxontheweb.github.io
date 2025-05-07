@@ -95,6 +95,11 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 »*/
 //»
 
+//This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
+//let NO_ONRELOAD = true;
+
+//This means that the terminal app's onreload method is set to _onreload.
+let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
 const util = LOTW.api.util;
@@ -1898,23 +1903,21 @@ cwarn(`Could not write to history: ${HISTORY_PATH}`);
 	}
 };
 //»
-async updateHistory(str){//«
-	if (!str){
-//cerr("updateHistory called with no 'str' arg!");
-		return;
-	}
-	if (str==this.history[this.history.length-1]){
-		return;
+addToHistoryBuffer(str){//«
+	if (!str || str==this.history[this.history.length-1]){
+		return false;
 	}
 	let ind = this.history.indexOf(str);
 	if (ind >= 0) {
 		this.history.splice(ind, 1);
 	}
+	this.history.push(str);
+}//»
+async updateHistory(str){//«
+	if (!this.addToHistoryBuffer(str)) return;
 	if (str.length >= this.minHistStrLen){
 		await this.appendToHistory(str);
 	}
-	this.history.push(str);
-
 }//»
 async initHistory(termBuffer){//«
 	if (termBuffer) {
@@ -3395,6 +3398,17 @@ handleKey(sym, code, mod, ispress, e){//«
 		case "s_CAS":
 			this.selectFromHistory(HISTORY_PATH_SPECIAL);
 			break;
+		case "r_CAS": {//«
+			if (!dev_mode){
+cwarn("Not dev_mode");
+				return;
+			}
+			//VMUIRPOIUYT
+			if (this.onreload) delete this.onreload;
+			else this.onreload = this._onreload;
+			this.doOverlay(`Reload terminal: ${!this.onreload}`);
+			break;
+		}//»
 	}
 /*«
 	else if (sym == "HOME_"|| sym == "END_") this.handlePage(sym);
@@ -3421,20 +3435,10 @@ handleKey(sym, code, mod, ispress, e){//«
 		this.selectFromHistory(HISTORY_PATH_SPECIAL);
 	}
 »*/
-/*
-	else if (sym=="r_CAS"){//«
-if (!dev_mode){
-cwarn("Not dev_mode");
-return;
-}
-//VMUIRPOIUYT
-if (this.ondevreload) delete this.ondevreload;
-else this.ondevreload = ondevreload;
-this.doOverlay(`Reload terminal: ${!this.ondevreload}`);
-	}//»
-else if (sym=="d_CAS"){
-}
-*/
+///*
+//else if (sym=="d_CAS"){
+//}
+//*/
 }
 
 //»
@@ -3525,16 +3529,21 @@ onkeyup(e,sym){//«
 
 //System callbacks«
 
-async onreload(){
+async _onreload(){
 //globals.ShellMod = new 
 delete LOTW.mods["lang.shell"];
 delete globals.ShellMod;
+
+delete globals.shell_commands;
+delete globals.shell_command_options;
+
 delete this.ShellMod;
 delete this.Shell;
 this.doOverlay("Reload ShellMod...");
 await this.loadShell();
 this.doOverlay("Okay!");
 }
+
 
 /*
 async _ondevreload(){//«
@@ -3580,8 +3589,8 @@ onkill(if_dev_reload){//«
 	this.ShellMod.util.deleteMods(DEL_MODS);
 	this.ShellMod.util.deleteComs(DEL_COMS);
 
-	delete globals.shell_commands;
-	delete globals.shell_command_options;
+//	delete globals.shell_commands;
+//	delete globals.shell_command_options;
 }
 //»
 
@@ -3589,7 +3598,10 @@ async onappinit(appargs={}){//«
 
 	await this.loadShell();
 	let {reInit} = appargs;
-	if (!reInit) reInit = {};
+	if (!reInit) {
+		if (!NO_ONRELOAD) this.onreload = this._onreload;
+		reInit = {};
+	}
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {termBuffer, addMessage, commandStr, histories} = reInit;
 //	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
@@ -3688,7 +3700,7 @@ setLines(linesarg, colorsarg){//«
 initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}){//«
 	const{actor}=this;
 	let escape_fn = funcs.onescape;
-	let dev_reload_fn = funcs.ondevreload;
+	let reload_fn = funcs.onreload;
 //	let screen = {actor, appclass, this.lines, this.lineColors, x, y, this.scrollNum, this.numStatLines, onescape: termobj.onescape};
 	let screen = {
 		actor: this.actor,
@@ -3701,12 +3713,17 @@ initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}
 		numStatLines: this.numStatLines,
 		funcs: {
 			onescape: this.onescape,
-			ondevreload: this.ondevreload
+			onreload: this.onreload
 		}
 	};
 	if (!this.actor) this.holdTerminalScreen = screen;
 	this.onescape = escape_fn;
-	this.ondevreload = dev_reload_fn;
+	if (!reload_fn) this.onreload=()=>{
+//cwarn("DEFAULT RELOAD FN");
+this.doOverlay("Default onreload called");
+	};
+	else this.onreload = reload_fn;
+
 	this.actor = actor_arg;
 
 	this.appClass = classarg;
@@ -3742,7 +3759,7 @@ quitNewScreen(screen){//«
 	this.isPager = this.appClass == "pager";
 	if (!screen.funcs) screen.funcs = {};
 	this.onescape = screen.funcs.onescape;
-	this.ondevreload = screen.funcs.ondevreload;
+	this.onreload = screen.funcs.onreload;
 	
 	if (!this.numStatLines){
 		this.statdiv._del();
