@@ -1,4 +1,40 @@
+/*5/8/25: Now: need to understand what this quoteRemoval thing is.
 
+allExpansions is used to turn an array of pre-substitution Word's into post-substitution
+words. The number if words can go up or down depending on substitutions that
+return nothing.
+First: allExpansions is called only in Shell.makeCommand() and ForCom.init()
+
+@SYEORLDJ: We just updated this to call allExpansions, and use each Word's .val
+(rather than expandSubs, and use the .fields). We might need to change it to this 
+@AKDKRKSJ, @DJSLPEKS, @EANFJLPM, @TZKOPKHD.
+$ cat<<<"hi" # -> "hi"
+
+
+The bizarre attachment to the metaphysics of quoted strings. 
+
+Should we not even have BQuote and SQuote types, but rather just keep all
+characters in there? We can just use functions to do all the quote interpretation/removal
+stuff. So we would merge the scanQuote with scanWord. Then everything outside of
+the quotes are split on IFS/whitespace.
+
+Want to do the "letter of the law" when it comes to scanning for the final "}" in
+ParamSubs.
+
+For: 
+$ `` && echo hi
+bash -> hi
+us -> sh: : command not found 
+
+There are 4 main kinds of resources that may need to be reloaded:
+1) The terminal app (no onreload)
+2) The shell
+3) Command libraries
+4) A screen-based module (like vim)
+
+Also, we might occassionally want to do non-screen module
+
+*/
 /*5/7/25:«
 @TEMNGSFDK: While parsing a simple command, we are breaking on any token that is
 *NOT* a word or a redir. So it can be any control operator. But there is one
@@ -384,8 +420,6 @@ const OPERATOR_TOKS=[//«
 const OK_OUT_REDIR_TOKS=[">",">>"];
 const OK_IN_REDIR_TOKS=["<","<<","<<<","<<-"];
 const OK_REDIR_TOKS=[...OK_OUT_REDIR_TOKS, ...OK_IN_REDIR_TOKS];
-
-const CONTROL_WORDS = ["if", "then", "elif", "else", "fi", "do", "while", "until", "for", "in", "done", "select", "case", "esac"];
 
 const isNLs=val=>{return val instanceof Newlines;};
 //»
@@ -1232,10 +1266,12 @@ if (r_op==="<"){//«
 }//»
 if (r_op==="<<<"){//«
 //	await this.arg.expandSubs(shell, term, env, scriptName, scriptArgs);
-	await this.arg.expandSubs(shell, term, opts);
-//	this.arg.quoteRemoval();
-//log(this.arg.val);
-	this.value = this.arg.fields.join("\n");
+//SYEORLDJ
+	let arr = [this.arg];
+	await shell.allExpansions(arr);
+	let s="";
+	for (let wrd of arr) s+=wrd.val.join("")
+	this.value = s;
 	return true;
 }//»
 return `Unknown stdin redirection: ${rop}`;
@@ -1941,7 +1977,6 @@ constructor(shell, opts, name, in_list, do_group){//«
 	this.name="for";
 }//»
 async init(){//«
-//	this.in_list = await this.shell.allExpansions(this.in_list, this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
 	this._init();
 	this.in_list = await this.shell.allExpansions(this.in_list, this.opts);
 	if (this.shell.cancelled) return;
@@ -3334,11 +3369,13 @@ for (let ent of this.val){
 }
 
 if (curfield) fields.push(curfield);
+//if (!fields.length) fields.push("");
 //log(fields);
 this.fields = fields;
 }//»
 
 quoteRemoval(){//«
+
 	let s='';
 	let qtyp;
 	let arr = this.val;
@@ -3641,16 +3678,16 @@ toString(){
 }
 }//»
 //XMKJDHE
-const ShellName = class extends Sequence{
+const ShellName = class extends Sequence{//«
 	toString(){
 		return this.val.join("");
 	}
-}
-const ShellNum = class extends Sequence{
+}//»
+const ShellNum = class extends Sequence{//«
 	toString(){
 		return this.val.join("");
 	}
-}
+}//»
 const ParamSub = class extends Sequence{//«
 
 //KLSDHSKD
@@ -3716,8 +3753,8 @@ let is_set = Object.keys(env).includes(s);
 let is_null;
 
 let wrd = this.subWord;
-await wrd.expandSubs(shell, term, com_opts);
 //EANFJLPM
+await wrd.expandSubs(shell, term, com_opts);
 let newval =  new String(wrd.fields.join(" "));
 newval.noSplitNLs=true;
 //log(newval);
@@ -3834,13 +3871,13 @@ Remove Largest Prefix Pattern. The word shall be expanded to produce a pattern.
 The parameter expansion shall then result in parameter, with the largest
 portion of the prefix matched by the pattern deleted.
 »*/
-//TZKOPKHD
 let val = env[s];
 if (!val) return "";
 
 let typ = this.repType;
 let wrd = this.repWord;
 if (!wrd) return val;
+//TZKOPKHD
 await wrd.expandSubs(shell, term, com_opts);
 let str = wrd.fields.join(" ");
 str = str.replace(/[\x22\x27]/g,"");
@@ -4188,7 +4225,6 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 	let rv;
 	let next;
 	while(ch && ch !== end_quote){
-
 		if (ch==="`" && in_backquote){//«
 			return `command substitution: unexpected EOF while looking for matching '${which}'`;
 		}//»
@@ -4294,6 +4330,9 @@ cwarn("SKIP OIMPET");
 //	quote.raw = this.source.slice(start+1, this.index);
 	quote.raw = this.source.slice(start+1, this.index).join("");
 //	word.raw = this.source.slice(start, this.index).join("");
+if (!out.length) out.push("");
+//log(out);
+//log(out);
 	return quote;
 }//»
 scanName(no_adv){//«
@@ -6092,6 +6131,7 @@ try {
 	return newtoks;
 }
 catch(e){
+cerr(e);
 	return e.message;
 }
 
@@ -6270,7 +6310,9 @@ async expandComsub(tok, opts){//«
 			s+=ch;
 		}
 	}
-//cwarn("COMSUB", s);
+	if (s.match(/^\W*$/)) {
+		return "";
+	}
 	let sub_lines = [];
 	try{
 //log(this.parser);
@@ -6692,12 +6734,9 @@ else if (red==="<<"){
 return stdin;
 }//»
 async allExpansions(arr, shopts={}, opts={}){//«
-//async allExpansions(arr, env, scriptName, scriptArgs, opts={}){
-//log(arr);
 const{env,scriptName,scriptArgs} = shopts;
 const{term}=this;
 const{isAssign}=opts;
-//let in_redir, out_redir;
 for (let k=0; k < arr.length; k++){//«
 	let tok = arr[k];
 	if (tok instanceof Word){
@@ -6721,16 +6760,6 @@ for (let k=0; k < arr.length; k++){//tilde«
 	let tok = arr[k];
 	if (tok instanceof Word) tok.tildeExpansion();
 }//»
-/*
-for (let k=0; k < arr.length; k++){//parameters«
-	let tok = arr[k];
-	if (tok.isWord) {
-		let rv = tok.parameterExpansion(env, scriptName, scriptArgs);
-		if (isStr(rv)) return rv;
-//jlog(tok.val);
-	}
-}//»
-*/
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
@@ -6778,10 +6807,6 @@ for (let k=0; k < arr.length; k++){//quote removal«
 		tok.quoteRemoval();
 	}
 }//»
-//return {arr, inRedir: in_redir, outRedir: out_redir};
-//return {arr, inRedir: in_redir, outRedir: out_redir};
-//cwarn("ARR");
-//log(arr);
 return arr;
 }//»
 async tryImport(com, comword){//«
@@ -6883,7 +6908,15 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 			arr.push(arg.toString());
 		}
 	}
-	let comword = arr.shift();
+	let comword;
+	while (arr.length){
+		comword = arr.shift();
+		if (comword === undefined) continue;
+		break;
+	}
+	if (comword === undefined){
+		return new NoCom(com_env);
+	}
 	if (ALIASES[comword]){//«
 //	if (ShellMod.var.aliases[comword]){
 //Replace with an alias if we can
@@ -6924,7 +6957,8 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	}//»
 //	let com = Shell.activeCommands[usecomword];
 	let com = shellmod.activeCommands[usecomword];
-	if (isStr(com)){//QKIUTOPLK«
+//log(`COM: <${com}>`);
+	if (com && isStr(com)){//QKIUTOPLK«
 		com = await this.tryImport(com, usecomword);
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
@@ -6939,12 +6973,9 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		return func;
 	}//»
 	if (!com) {//Command not found!«
-//If the user attempts to use, e.g. 'if', let them know that this isn't that kind of shell
 //Need to do this for matching stuff
-		comword = comword.toString();
-		if (CONTROL_WORDS.includes(comword)){
-			return `sh: ${comword}: control structures are not implemented`;
-		}
+		if (comword) comword = comword.toString();
+		else comword = new String("");
 		return make_sh_err_com(comword, `command not found`, com_env);
 	}//»
 	let com_opts;
@@ -6977,6 +7008,7 @@ cerr(e);
 	}//»
 //SKIOPRHJT
 }//»
+
 async makeScriptCom(com_ast, comopts){//«
 	const{term}=this;
 	const mkerr=(mess)=>{
@@ -7050,8 +7082,10 @@ log(red);
 		}
 		let stdin;
 		let errmess;
+//log(in_redir);
 		if (in_redir){
 			let rv2 = await in_redir.setValue(this, term, opts);
+//log(rv2);
 			if (isStr(rv2)){
 				errmess = rv2;
 			}
@@ -7059,7 +7093,6 @@ log(red);
 				stdin = in_redir.value;
 			}
 		}
-
 //VOPDUKKD
 		let have_lines = opts.stdinLns;
 		let comopts = sdup(opts);
@@ -7335,8 +7368,8 @@ async compile(command_str, opts={}){//«
 	catch(e){
 //LSPOEIRK
 
-this.term.addToHistoryBuffer(this.parser.scanner.source.join(""));
 cerr(e);
+this.term.addToHistoryBuffer(this.parser.scanner.source.join(""));
 let mess = e.message;
 if (opts.retErrStr) return mess;
 if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
@@ -7354,6 +7387,7 @@ try{
 	return rv;
 }
 catch(e){
+cerr(e);
 let mess = e.message;
 if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
 this.term.response(mess,{isErr: true});
