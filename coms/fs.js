@@ -872,10 +872,11 @@ doWC(val){
 	let arr;
 	if (isStr(val)) arr=[val];
 	else if (!isArr(val)){
-		cwarn("Dropping", val);
+cwarn("Dropping", val);
 		return;
 	}
 	else arr = val;	
+//log(arr);
 	lines+=arr.length
 	for (let ln of arr){
 		chars+=ln.length;

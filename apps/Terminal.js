@@ -2659,11 +2659,12 @@ log(out);
 	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;
+//log();
 	if (out == "" && out.isNL){
 		out=" \n ";
 	}
-	else if (out.match(/\n$/)){
-//cwarn("Chomping ending NEWLINE!!!");
+	else if (!out.noChomp && out.match(/\n$/)){
+cwarn("Chomping ending NEWLINE!!!");
 		out = out.replace(/\n$/,"");
 	}
 	out = out.split("\n");
@@ -2732,7 +2733,6 @@ log("response colors",colors);
 	}
 }
 //»
-
 
 //»
 

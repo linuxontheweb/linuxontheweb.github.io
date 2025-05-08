@@ -1,4 +1,134 @@
-/*5/8/25: Now: need to understand what this quoteRemoval thing is.
+/*5/8/25: «
+
+@SBRILSMF: I'm not sure how necessary it is to duplicate the param.subWord and param.repWord
+fields. This stuff will get called whenever we are in a loop.
+
+for WORD in this is the thing in the time and the place; do
+	echo ${SOMEVAR:-$WORD}
+done;
+
+Need to allow for:
+$ echo ${1:+HAR}
+...but not:
+$ echo ${1:=HAR} # Can't assign to a "special variable"
+
+@EANFJLPM: Did I get rid of the need to do this hack (newval.noSplitNLs = true)?
+If so, then I can get rid of that *stupid* crap @YRTHSJLS: if (rv.noSplitNLs) arr = rv.split(/[\x20\t]+/);
+
+Just got rid of the crappy stuff under @TZKOPKHD, which means that we are
+going more for decent programming constructs rather than STUPID HACKS in
+order to make things work exactly like the bash shell. I guess at this point,
+we can dig into the source code for dash, etc.
+
+The stuff that doesn't work is stuff like non-greedy matching from the back,
+together with the '*' glob.
+MYVAR=ZZZZZ
+echo ${MYVAR%*Z}
+bash says: ZZZZ 	#Just one 'Z' is eaten from the back
+we say: 			# [NOTHING!]: it's all greedily eaten up
+
+IN THE FILE ~/zsave/1dash/DASH.c: We have the full pattern matching system in here.
+Particularly, int ccmatch() @line ~6238, which is called from int pmatch().
+
+Just found these in the header section:
+#define VSNORMAL    0x1     // normal variable:  $var or ${var} 
+#define VSMINUS     0x2     // ${var-text} 
+#define VSPLUS      0x3     // ${var+text} 
+#define VSQUESTION  0x4     // ${var?message} 
+#define VSASSIGN    0x5     // ${var=text} 
+#define VSTRIMRIGHT 0x6     // ${var%pattern} 
+#define VSTRIMRIGHTMAX  0x7     // ${var%%pattern} 
+#define VSTRIMLEFT  0x8     // ${var#pattern} 
+#define VSTRIMLEFTMAX   0x9     // ${var##pattern} 
+#define VSLENGTH    0xa     // ${#var} 
+
+I'm not quite sure if anything is (too) weird with our RegExp's in file path
+expansion @WOSLMVHFK. The main issue with our approach is that we are pretty
+much using the given strings (after substituting "*" with ".*", "?" with ".?", 
+and "." with "\."), meaning that we are correctly implementing the published
+spec for bracket expressions (9.3.5 RE Bracket Expression): 
+https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap09.html#tag_09_03_05.
+
+Specifically this part:
+
+The character sequences "[.", "[=", and "[:" (<left-square-bracket> followed by
+a <period>, <equals-sign>, or <colon>) shall be special inside a bracket
+expression and are used to delimit collating symbols, equivalence class
+expressions, and character class expressions. These symbols shall be followed
+by a valid expression and the matching terminating sequence ".]", "=]", or
+":]", as described in the following items.
+
+For example this doesn't work:
+$ echo [[:digit:]]*
+
+But this ends up doing the same thing:
+$ echo [\\d]* 
+
+Here are all of the shell's character class expressions:
+[:alnum:]   [:cntrl:]   [:lower:]   [:space:]
+[:alpha:]   [:digit:]   [:print:]   [:upper:]
+[:blank:]   [:graph:]   [:punct:]   [:xdigit:]
+
+But: *ALL* of the stuff under @TZKOPKHD is really hacky/crappy, 
+and we *might* be able to do our own hand rolled pattern matcher (if we wanted to given
+the paucity of people doing those kinds of substring replacements), since we only have 3 
+simple kinds of matching:
+
+?
+A <question-mark> is a pattern that shall match any character.
+
+*
+An <asterisk> is a pattern that shall match multiple characters, as described
+in 2.14.2 Patterns Matching Multiple Characters.
+
+[
+
+A <left-square-bracket> shall introduce a bracket expression if the characters
+following it meet the requirements for bracket expressions stated in XBD 9.3.5
+RE Bracket Expression, except that the <exclamation-mark> character ('!') shall
+replace the <circumflex> character ('^') in its role in a non-matching list in
+the regular expression notation. A bracket expression starting with an unquoted
+<circumflex> character produces unspecified results. A <left-square-bracket>
+that does not introduce a valid bracket expression shall match the character
+itself.
+
+
+
+
+Now, doing a *full* tokenizer while collecting the final "}" for param subs, and then
+complain about the full string with "bad substitution". @UDHLPFMSK is where we are
+scanning for the ParamSub token.
+
+@MSYEOKFK we are *not* doing the shell behaviour, which retains the newlines with (unquoted):
+$ cat<<<`ls`
+For this, we are just spitting out everything on one line, sepatarated by spaces.
+But our output is identical with the shell's when we do:
+$ cat<<<"`ls`"
+
+This is supposed to be on newlines (we have it joined on the same line)
+$ cat<<<`ls`
+
+We are supposed to check the return values of backquotes/comsubs that are in
+the command position in order to do all the logic with them, i.e.
+`false` || echo hi # -> hi
+`missingcom` || echo hi # -> hi
+`true`  && echo hi # -> hi
+
+@WJKMDNFK is where we create the new String of escaped characters
+@JDHFKGK is where escaped characters get turned into normal strings via ch.toString()
+@YSHFKSOK is where we are escaping quotes that are pushed into subLines. We might need
+to do the same thing
+
+I think we need a notion of being at the "top-level", just before we are
+going to "render" to the terminal screen *OR* to a file. We don't need to worry about
+pipelines, because these are strings generated purely from the commands, and there is
+no concept of quoting. I want to keep all quotes when returning from a ComSub...
+@YSHFKSOK, we are putting into subLines.
+
+THIS DOESN'T WORK!
+$ echo \"hi\" # -> hi
+
+Now: need to understand what this quoteRemoval thing is.
 
 allExpansions is used to turn an array of pre-substitution Word's into post-substitution
 words. The number if words can go up or down depending on substitutions that
@@ -7,7 +137,9 @@ First: allExpansions is called only in Shell.makeCommand() and ForCom.init()
 
 @SYEORLDJ: We just updated this to call allExpansions, and use each Word's .val
 (rather than expandSubs, and use the .fields). We might need to change it to this 
-@AKDKRKSJ, @DJSLPEKS, @EANFJLPM, @TZKOPKHD.
+1) CaseCom.init(): @AKDKRKSJ
+2) CaseCom.run(): @DJSLPEKS 
+3) ParamSub.expand(): @EANFJLPM and @TZKOPKHD.
 $ cat<<<"hi" # -> "hi"
 
 
@@ -34,7 +166,7 @@ There are 4 main kinds of resources that may need to be reloaded:
 
 Also, we might occassionally want to do non-screen module
 
-*/
+»*/
 /*5/7/25:«
 @TEMNGSFDK: While parsing a simple command, we are breaking on any token that is
 *NOT* a word or a redir. So it can be any control operator. But there is one
@@ -224,7 +356,8 @@ const {
 
 const fsapi = fs.api;
 
-let ALLOW_REDIR_CLOBBER = false;
+//let ALLOW_REDIR_CLOBBER = false;
+let ALLOW_REDIR_CLOBBER = true;
 
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 const ASSIGN_RE = /^([_a-zA-Z][_a-zA-Z0-9]*(\[[_a-zA-Z0-9]+\])?)=(.*)/s;
@@ -302,7 +435,7 @@ that is relevant to the thing called the "shell" (as opposed to the thing called
 the "terminal") into a singular thing. We want to do this in a totally 
 methodical/non-destrutive kind of way, so we can be very assured of the fact that 
 everything always works as ever.»*/
-let parserId = 1;
+//let parserId = 1;
 export const mod = function() {
 
 //Var«
@@ -1269,9 +1402,12 @@ if (r_op==="<<<"){//«
 //SYEORLDJ
 	let arr = [this.arg];
 	await shell.allExpansions(arr);
-	let s="";
-	for (let wrd of arr) s+=wrd.val.join("")
-	this.value = s;
+//MSYEOKFK
+	let out=[];
+	for (let wrd of arr) {
+		out.push(wrd.val.join(""));
+	}
+	this.value = out.join(" ")
 	return true;
 }//»
 return `Unknown stdin redirection: ${rop}`;
@@ -1571,6 +1707,9 @@ log(val);
 			if (val instanceof Uint8Array) val = `Uint8Array(${val.length})`;
 //			this.subLines.push(val);
 //YSHFKSOK
+//log(val);
+			val = val.replace(/\x22/g, '\\"');
+			val = val.replace(/\x27/g, "\\'");
 			this.subLines.push(val.split(" ").join("\n"));
 			return;
 		}
@@ -2545,14 +2684,22 @@ const com_bindwin = class extends Com{//«
 	}
 }//»
 const com_echo = class extends Com{//«
+	static getOpts(){
+		return {s: {n: 1}};
+	}
 	async run(){
-		this.out(this.args.join(" "));
+
+//		this.out(this.args.join(" "));
+		let nl = this.opts.n ? "":"\n";
+//		let str = new String(this.args.join(" ")+"\n");
+		let str = new String(this.args.join(" ")+nl);
+//log(str.length);
+		str.noChomp = true;
+		this.out(str);
 
 //XQMNHI
 //For some reason, this sleep is *required* in order to make this behave correctly:
 // $ echo HELLO | while read LINE; do echo $LINE; done
-//		await sleep(0);
-
 //		await sleep(0);
 		this.ok();
 	}
@@ -3147,7 +3294,6 @@ async run(){
 }
 }/*»*/
 
-
 this.defCommands={//«
 
 //continue: com_continue,
@@ -3331,14 +3477,17 @@ for (let ent of this.val){
 		let rv = await ent.expand(shell, term, opts);
 		if (rv) {
 //			let arr = rv.split("\n");
-//YRTHSJLS
 			let arr;
+//YRTHSJLS
+/*
 			if (rv.noSplitNLs){
 				arr = rv.split(/[\x20\t]+/);
 			}
 			else{
 				arr = rv.split(/[\x20\n\t]+/);
 			}
+*/
+			arr = rv.split(/[\x20\n\t]+/);
 			if (arr.length) {
 				curfield+=arr.shift();
 				if (arr.length) {
@@ -3360,10 +3509,16 @@ for (let ent of this.val){
 		curfield += '"'+await ent.expand(shell, term, opts)+'"';
 	}//»
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
-		curfield += "'"+ent.toString()+"'";
+//		curfield += "'"+ent.toString()+"'";
+		curfield += `'${ent.toString()}'`;
 	}
 	else{
-		curfield += ent.toString();
+//JDHFKGK
+//This might me a '\"' that gets turned into '"', which gets removed by quote removal
+if (ent instanceof String && ent.escaped && (ent=="'"||ent=='"')){
+curfield += `\\${ent}`;
+}
+else curfield += ent.toString();
 	}
 
 }
@@ -3379,8 +3534,16 @@ quoteRemoval(){//«
 	let s='';
 	let qtyp;
 	let arr = this.val;
+//log(arr);
 	for (let l=0; l < arr.length; l++){
 		let c = arr[l];
+///*
+		if (qtyp !== "'" && c==="\\" && (arr[l+1]==="'"||arr[l+1]==='"')){
+s+=arr[l+1];
+l++;
+continue;
+		}
+//*/
 		if (c==='"'||c==="'") {
 			if (c===qtyp){
 				qtyp=null;
@@ -3682,11 +3845,21 @@ const ShellName = class extends Sequence{//«
 	toString(){
 		return this.val.join("");
 	}
+	dup(){
+		let nm = new ShellName(this.start);
+		nm.val = this.val;
+		return nm;
+	}	
 }//»
 const ShellNum = class extends Sequence{//«
 	toString(){
 		return this.val.join("");
 	}
+	dup(){
+		let num = new ShellNum(this.start);
+		num.val = this.val;
+		return num;
+	}	
 }//»
 const ParamSub = class extends Sequence{//«
 
@@ -3753,10 +3926,10 @@ let is_set = Object.keys(env).includes(s);
 let is_null;
 
 let wrd = this.subWord;
-//EANFJLPM
 await wrd.expandSubs(shell, term, com_opts);
 let newval =  new String(wrd.fields.join(" "));
-newval.noSplitNLs=true;
+//EANFJLPM
+//newval.noSplitNLs=true;
 //log(newval);
 let subval;
 if (is_set){
@@ -3899,13 +4072,15 @@ for (let ch of patarr){
 		a.push('.');
 	}
 	else {
-		if (ch==="[" && is_rev) a.push("]");
-		else if (ch==="]" && is_rev) a.push("[");
-		else a.push(ch);
+//		if (ch==="[" && is_rev) a.push("]");//«
+//		else if (ch==="]" && is_rev) a.push("[");
+//		else a.push(ch);//»
+		a.push(ch);
 	}
 }
-let useval;
-let usepat;
+let useval = val;
+let usepat = a.join("");
+/*«
 if (is_rev){
 	useval = val.split("").reverse().join("");
 	usepat = a.reverse().join("");
@@ -3914,10 +4089,17 @@ else{
 	useval = val;
 	usepat = a.join("");
 }
+»*/
 let re;
+let patstr;
+if (is_rev) patstr = `${usepat}$`;
+else patstr = `^${usepat}`;
+
 try{
 //log(`^${usepat}`);
-	re = new RegExp(`^${usepat}`);
+//	re = new RegExp(`^${usepat}`);
+	re = new RegExp(patstr);
+log(re);
 }
 catch(e){
 term.response(`sh: invalid regex detected`, {isWrn: true});
@@ -3925,9 +4107,16 @@ return val;
 }
 let marr = re.exec(useval);
 if (marr && marr[0].length){
+if (is_rev){
+	useval = useval.slice(0, useval.length - marr[0].length);
+}
+else{
 	useval = useval.slice(marr[0].length);
-	if (is_rev) return useval.split("").reverse().join("");
-	else return useval;
+}
+//	useval = useval.slice(marr[0].length);
+return useval;
+//	if (is_rev) return useval.split("").reverse().join("");
+//	else return useval;
 }
 else return val;
 
@@ -3940,7 +4129,24 @@ throw new Error(`sh: bad substitution: $\{${s}\}`);
 //throw new Error("WHAT KIND OF PARAM SUB IS THIS???");
 }//»
 dup(){//«
-	let param = new ParamSub(this.start, this.par, this.env);
+	let param = new ParamSub(this.start);
+
+	if (this.isSym) param.isSym=true;
+	else if (this.isNum) param.isNum=true;
+	else if (this.isSubstitute){
+		param.isSubstitute = true;
+		param.haveColon = this.haveColon;
+		param.subType = this.subType;
+//SBRILSMF
+		param.subWord = this.subWord;//Need to duplicate with this.subWord.dup()???
+	}
+	else if (this.isStrRep){
+		param.isStrRep = true;
+		param.repType = this.repType;
+		param.repWord = this.repWord;//Need to duplicate with this.repWord.dup()???
+	}
+
+	param.subName = this.subName;
 	let arr = param.val;
 	for (let ent of this.val){
 		if (isStr(ent)) arr.push(ent);
@@ -4680,6 +4886,7 @@ let sub = new ParamSub(this.index);
 //let val = [];
 this.index+=2;
 let next = this.source[this.index];
+//UDHLPFMSK
 if (!next) bad("EOF");
 if (next==="\n") bad("newline");
 if (next==="}") bad("}");
@@ -4840,7 +5047,12 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 				continue;
 			}//»
 			is_plain_chars = false;
+//WJKMDNFK
 			ch = new String(next1);
+//if (ch==="'"||ch==='"') ch.toString=function(){
+//return `\\${ch}`;
+//};
+//log(ch);
 			ch.escaped = true;
 			this.index++;
 			wordarr.push(ch);
@@ -5053,7 +5265,7 @@ const Parser = class {
 constructor(code, opts={}) {//«
 //WHKSFLGG
 	this.mainParser = opts.mainParser || this;
-	this.id = parserId++;
+//	this.id = parserId++;
 	this.env = opts.env;
 	this.term = opts.term;
 	this.isInteractive = opts.isInteractive;
@@ -6549,7 +6761,6 @@ else{//«
 }//»
 
 async filepathExpansion(tok, cur_dir){//«
-//const filepath_expansion=async(tok, cur_dir)=>{
 /*«
 First we need to separate everything by "/" (escapes or quotes don't matter)
 
@@ -6566,6 +6777,68 @@ Create a pattern string by removing quotes.
 let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
 
 »*/
+//WOSLMVHFK
+const do_dirs=async(dirs, parr, is_init)=>{//«
+
+let nm = parr.shift();
+let parr_len = parr.length;
+if (!nm) {
+	for (let i=0; i < dirs.length; i++){
+		dirs[i]=dirs[i]+"/";
+	}
+	if (!parr_len) return dirs;
+	return await do_dirs(dirs, parr);
+}
+let is_dot = (nm[0]==="\\"&&nm[1]===".");
+let files_ok = !parr.length;
+let new_paths=[];
+for (let i=0; i < dirs.length; i++){
+	let dirname = dirs[i];
+//log("DIRNAME", dirname);
+	let dir_str = start_dir+"/"+dirname;
+	let dir = await fsapi.pathToNode(dir_str);
+	let kids = dir.kids;
+	if (!kids) continue;
+	let keys = Object.keys(kids);
+	if (nm.match(/[*?]/)||nm.match(/\[[-0-9a-z]+\]/i)) {
+//													  v----REMOVE THIS SPACE
+//		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
+		try{ 
+log(`^${nm}$`);
+
+			let re = new RegExp(`^${nm}$`);
+			for (let key of keys){
+				if (!is_dot && key[0]===".") continue;
+				if (re.test(key)){
+					let node = kids[key];
+					if (!node) continue;
+					if (!files_ok && node.appName!==FOLDER_APP) continue;
+//					if (key==="."||key==="..") continue;
+					if (dirname) new_paths.push(`${dirname}/${key}`);
+					else new_paths.push(key);
+				}
+			}
+		}
+		catch(e){
+cerr(e);
+			continue;
+		}
+	}
+	else{
+		let node = kids[nm];
+		if (!node) continue;
+		if (!files_ok && node.appName!==FOLDER_APP) continue;
+		if (nm==="."||nm==="..") continue;
+		if (dirname) new_paths.push(`${dirname}/${nm}`);
+		else new_paths.push(nm);
+//		new_paths.push(`${dirname}/${nm}`);
+	}
+}
+if (!parr_len) return new_paths;
+return await do_dirs(new_paths, parr);
+
+};//»
+//const filepath_expansion=async(tok, cur_dir)=>{
 let arr = tok.val;
 //EPRORMSIS
 if (!(arr.includes("*")||arr.includes("?")||arr.includes("["))) return tok;
@@ -6577,7 +6850,6 @@ let qtyp;
 let path_arr=[];
 
 for (let ch of arr){//«
-//log(ch);
 if (ch=="/"){
 	path_arr.push(patstr);
 	patstr='';
@@ -6622,64 +6894,6 @@ let path_len = path_arr.length;
 if (!parr0) start_dir = "/";
 else start_dir = cur_dir;
 let dirs=[""];
-const do_dirs=async(dirs, parr, is_init)=>{//«
-
-let nm = parr.shift();
-let parr_len = parr.length;
-if (!nm) {
-	for (let i=0; i < dirs.length; i++){
-		dirs[i]=dirs[i]+"/";
-	}
-	if (!parr_len) return dirs;
-	return await do_dirs(dirs, parr);
-}
-let is_dot = (nm[0]==="\\"&&nm[1]===".");
-let files_ok = !parr.length;
-let new_paths=[];
-for (let i=0; i < dirs.length; i++){
-	let dirname = dirs[i];
-//log("DIRNAME", dirname);
-	let dir_str = start_dir+"/"+dirname;
-	let dir = await fsapi.pathToNode(dir_str);
-	let kids = dir.kids;
-	if (!kids) continue;
-	let keys = Object.keys(kids);
-	if (nm.match(/[*?]/)||nm.match(/\[[-0-9a-z]+\]/i)) {
-//													  v----REMOVE THIS SPACE
-//		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
-		try{ 
-			let re = new RegExp("^" + nm + "$");
-			for (let key of keys){
-				if (!is_dot && key[0]===".") continue;
-				if (re.test(key)){
-					let node = kids[key];
-					if (!node) continue;
-					if (!files_ok && node.appName!==FOLDER_APP) continue;
-//					if (key==="."||key==="..") continue;
-					if (dirname) new_paths.push(`${dirname}/${key}`);
-					else new_paths.push(key);
-				}
-			}
-		}
-		catch(e){
-//cerr(e);
-			continue;
-		}
-	}
-	else{
-		let node = kids[nm];
-		if (!node) continue;
-		if (!files_ok && node.appName!==FOLDER_APP) continue;
-		if (nm==="."||nm==="..") continue;
-		if (dirname) new_paths.push(`${dirname}/${nm}`);
-		else new_paths.push(nm);
-//		new_paths.push(`${dirname}/${nm}`);
-	}
-}
-if (!parr_len) return new_paths;
-return await do_dirs(new_paths, parr);
-
-};//»
 let rv = await do_dirs(dirs, path_arr, true);
 if (rv.length) {
 let words = [];
@@ -6693,7 +6907,8 @@ words.push(word);
 return words;
 }
 return tok;
-};/*»*/
+};//»
+
 async getStdinLines(in_redir, haveSubLines){//«
 //const get_stdin_lines = async(in_redir, term, haveSubLines) => 
 //const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {
@@ -6734,6 +6949,7 @@ else if (red==="<<"){
 return stdin;
 }//»
 async allExpansions(arr, shopts={}, opts={}){//«
+//log(arr[1].val[0]);
 const{env,scriptName,scriptArgs} = shopts;
 const{term}=this;
 const{isAssign}=opts;
