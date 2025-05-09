@@ -52,9 +52,9 @@ const okint = val=>{//«
     }
     return false;
 };//»        
-const quit=(rv)=>{
-	termobj.quitNewScreen(hold_screen_state);
-	less.cb&&less.cb();
+const quit=(if_reload)=>{
+	termobj.quitNewScreen(hold_screen_state, {reload: if_reload});
+//	less.cb&&less.cb();
 };
 const render = () => {//«
 	termobj.refresh();
@@ -383,7 +383,8 @@ else if (sym=="ENTER_"){//«
 		funcs[n]();
 		return;
 	}
-	if (line_select_mode) quit(true);
+//	if (line_select_mode) quit(true);
+	if (line_select_mode) quit();
 }//»
 	else if (sym=="n_") {//«
 		if (scroll_search_str) do_scroll_search();
@@ -531,7 +532,7 @@ return new Promise((Y,N)=>{
 	less.fname = filename;
 	lines=[];
 	wrap_lines(linesarg);
-	hold_screen_state = termobj.initNewScreen(less, appclass, lines, line_colors, num_stat_lines, {onescape});
+	hold_screen_state = termobj.initNewScreen(less, appclass, lines, line_colors, num_stat_lines, {onescape, onreload:()=>{quit(true);}});
 	render();
 });
 

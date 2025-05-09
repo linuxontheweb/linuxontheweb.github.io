@@ -1,4 +1,4 @@
-/*5/6/25: Just put the shell into mods/lang/shell.js.
+/*5/6/25: Just put the shell into mods/lang/shell.js.«
 Now need to figure out how to deal with the onreload situation:
 1) In normal REPL mode, we might want to reload the terminal app (this file) or the shell
 2) For each submode (like vim), we might want to reload it or something that it is controlling
@@ -7,7 +7,7 @@ in order to reload it)
 
 *We deal with it much like the onescape situation (and the old ondevreload situation).
 
-*/
+»*/
 //Notes«
 /*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
 permutations of command line history heredoc editing. So test this out with multiple
@@ -105,7 +105,7 @@ const NS = LOTW;
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{Desk}=LOTW;
-const {
+const {//«
 	strNum,
 	isArr,
 	isStr,
@@ -127,8 +127,8 @@ const {
 	isBool,
 	isEOF,
 	sleep
-} = util;
-const {
+} = util;//»
+const {//«
 	KC,
 	DEF_PAGER_MOD_NAME,
 	TEXT_EDITOR_APP,
@@ -151,7 +151,7 @@ const {
 	nodejs_mode,
 	TERM_STAT_TYPES,
 	VIM_MODES
-} = globals;
+} = globals;//»
 
 const TAB_KC = KC['TAB'];
 const RIGHT_KC = KC['RIGHT'];
@@ -198,7 +198,7 @@ const LEFT_KEYCODE = KC.LEFT;
 
 const DEL_MODS=[
 //	"term.less",
-	"term.vim",
+//	"term.vim",
 //	"term.log"
 ];
 const DEL_COMS=[
@@ -3741,7 +3741,7 @@ this.doOverlay("Default onreload called");
 	}
 	return screen;
 }//»
-quitNewScreen(screen){//«
+quitNewScreen(screen, opts={}){//«
 //	const{actor}=this;
 	let actor;
 	if (screen === this.holdTerminalScreen) this.holdTerminalScreen = null;
@@ -3766,7 +3766,8 @@ quitNewScreen(screen){//«
 	}
 	this.tabdiv._x = 0;
 	if (old_actor&&old_actor.cb) {
-		old_actor.cb(screen);
+//		old_actor.cb(screen);
+		old_actor.cb(!opts.reload);
 	}
 }//»
 

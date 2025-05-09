@@ -1,7 +1,151 @@
+/*5/9/25: 
+
+Let's get into all the issues behind developer reloading.//«
+
+For reloading with the REPL showing (if onreload is defined)://«
+First of all, there are certain modules that have the standard reload pathway involving
+module deletion/script removal and others that might require more sophisticated 
+techniques involving deleting global variables, etc. So we might want to have
+little shim functions for certin modules that are kept in a hash object.
+
+What we can do is define certain env vars (in ~/.env), such as DEV_MODS/DEV_COMS like:
+DEV_MODS=util.what,lang.shell
+DEV_COMS=fs,dev.blert
+...which will show up as env vars in the terminal.
+Then, we will have an object like this hardcoded into the terminal:
+const DEV_MOD_SHIMS = {
+	"util.what":()=>{
+		delete globals.util.someCrazyVar;
+		// Other cleanup stuff here
+	}
+}
+const DEV_COM_SHIMS = {
+	"dev.blert": async()=>{
+		await fspai.writeFile("/some/file.log", "JUST RELOADED dev.blert!!!")
+		// Other cleanup stuff here
+	}
+}
+
+So the reload function will iterate through all the mods/coms and do the normal
+routine for each one, and if it finds a shim function for it, then it will call
+(and await on) that one, before going to the next mod or com. So this means we
+should only need to edit ~/.env in order describe what we want to be deleted/removed,
+and then the terminal file itself if/when there are extra things that need to be
+done for a given resource.
+
+//»
+
+For reloading with a screen-based module showing (like vim)://«
+I think we should implement this from within the command library files.
+What we did is to add an opts object into Terminal.quitNewScreen, with a reload
+option, which then calls the old actor's callback with !opts.reload, so that
+the awaitCb in: const com_whatever = class extends Com{
+	run(){
+		let rv = await this.awaitCb; // <--- This returns false on a reload
+	}
+}
+...returns false. So we have this implemented in a loop, such that every false
+value returned from awaitCb does all the module deletion/script removal, and then
+calls com.init again, and then does await this.awaitCb again. In case there is a syntax
+error in the module file, we needed to do a Terminal.refresh, so that we can just to
+^C and then return control back to the terminal. Then upon fixing the syntax error,
+we can just put the command back into the terminal and start the editing loop all over
+again.
+//»
+
+If a screen-based module is on the screen and the reload hotkey is invoked, //«
+the the terminal's no-op reload cb is called (which currently just shows an
+overlay message).//»
+//»
+
+Time to slow down and figure out a workflow for shell Regex via walt -> WASM
+
+
+
+*/
+//Notes«
+/*«
+
+Paramsubs can be like:
+
+USE DEFAULT: 			${param:-[word]} 	${param-[word]}
+ASSIGN DEFAULT: 		${param:=[word]} 	${param=[word]}
+ERROR IF NULL/UNSET: 	${param:?[word]} 	${param?[word]}
+
+With the colons, if the parameter is NULL or UNSET, substitute WORD
+Without the colons, when the parameter is SET but NULL, substitute NULL
+
+USE ALTERNATIVE: 		${param:+[word]} 	${param+[word]}
+
+Without the colon, when the parameter is SET but NULL, we substitute the word
+
+
+${parameter:-[word]}
+
+Use Default Values. If parameter is unset or null, the expansion of word (or an
+empty string if word is omitted) shall be substituted; otherwise, the value of
+parameter shall be substituted.
+
+${parameter:=[word]}
+
+Assign Default Values. If parameter is unset or null, quote removal shall be
+performed on the expansion of word and the result (or an empty string if word
+is omitted) shall be assigned to parameter. In all cases, the final value of
+parameter shall be substituted. Only variables, not positional parameters or
+special parameters, can be assigned in this way.
+
+${parameter:?[word]}
+
+Indicate Error if Null or Unset. If parameter is unset or null, the expansion
+of word (or a message indicating it is unset if word is omitted) shall be
+written to standard error and the shell exits with a non-zero exit status.
+Otherwise, the value of parameter shall be substituted. An interactive shell
+need not exit.
+
+${parameter:+[word]}
+
+Use Alternative Value. If parameter is unset or null, null shall be
+substituted; otherwise, the expansion of word (or an empty string if word is
+omitted) shall be substituted.
+
+
+»*/
+/*«
+
+REMOVE SUFFIX: 			${param%[word]} 	${param%%[word]}
+REMOVE PREFIX: 			${param#[word]} 	${param##[word]}
+
+${parameter%[word]}
+Remove Smallest Suffix Pattern. The word shall be expanded to produce a
+pattern. The parameter expansion shall then result in parameter, with the
+smallest portion of the suffix matched by the pattern deleted. If present, word
+shall not begin with an unquoted '%'.
+
+${parameter%%[word]}
+Remove Largest Suffix Pattern. The word shall be expanded to produce a pattern.
+The parameter expansion shall then result in parameter, with the largest
+portion of the suffix matched by the pattern deleted.
+
+${parameter#[word]}
+Remove Smallest Prefix Pattern. The word shall be expanded to produce a
+pattern. The parameter expansion shall then result in parameter, with the
+smallest portion of the prefix matched by the pattern deleted. If present, word
+shall not begin with an unquoted '#'.
+
+${parameter##[word]}
+Remove Largest Prefix Pattern. The word shall be expanded to produce a pattern.
+The parameter expansion shall then result in parameter, with the largest
+portion of the prefix matched by the pattern deleted.
+»*/
 /*5/8/25: «
 
 @SBRILSMF: I'm not sure how necessary it is to duplicate the param.subWord and param.repWord
-fields. This stuff will get called whenever we are in a loop.
+fields. This stuff will get called whenever we are in a loop. The question is whether
+the first expansion that happens might "cover over" the next expansions, which 
+might be especially important in a long running process that has plenty of time to
+have different expansions, every time they are called. For example, if this has a
+ComSub/BQuote in it, there might be different results every time in the expansion.
+So that is the kind of stuff that we need to do some "real world" testing on.
 
 for WORD in this is the thing in the time and the place; do
 	echo ${SOMEVAR:-$WORD}
@@ -305,6 +449,7 @@ raw values in the appropriate `...` or $(...)), so that they can get turned into
 appropriate strings @PZUELFJ, without looking like "[Object object]". Need to look out
 for whatever else might need to get a toString method.
 »*/
+//»
 
 //Imports«
 
@@ -3967,83 +4112,10 @@ else if (subType==="+"){//«
 else{//«
 	throw new Error(`!!! SHOULD NOT GET HERE SJDBFBS !!!`);
 }//»
-/*«
-
-Paramsubs can be like:
-
-USE DEFAULT: 			${param:-[word]} 	${param-[word]}
-ASSIGN DEFAULT: 		${param:=[word]} 	${param=[word]}
-ERROR IF NULL/UNSET: 	${param:?[word]} 	${param?[word]}
-
-With the colons, if the parameter is NULL or UNSET, substitute WORD
-Without the colons, when the parameter is SET but NULL, substitute NULL
-
-USE ALTERNATIVE: 		${param:+[word]} 	${param+[word]}
-
-Without the colon, when the parameter is SET but NULL, we substitute the word
-
-
-${parameter:-[word]}
-
-Use Default Values. If parameter is unset or null, the expansion of word (or an
-empty string if word is omitted) shall be substituted; otherwise, the value of
-parameter shall be substituted.
-
-${parameter:=[word]}
-
-Assign Default Values. If parameter is unset or null, quote removal shall be
-performed on the expansion of word and the result (or an empty string if word
-is omitted) shall be assigned to parameter. In all cases, the final value of
-parameter shall be substituted. Only variables, not positional parameters or
-special parameters, can be assigned in this way.
-
-${parameter:?[word]}
-
-Indicate Error if Null or Unset. If parameter is unset or null, the expansion
-of word (or a message indicating it is unset if word is omitted) shall be
-written to standard error and the shell exits with a non-zero exit status.
-Otherwise, the value of parameter shall be substituted. An interactive shell
-need not exit.
-
-${parameter:+[word]}
-
-Use Alternative Value. If parameter is unset or null, null shall be
-substituted; otherwise, the expansion of word (or an empty string if word is
-omitted) shall be substituted.
-
-
-»*/
 //term.response(`sh: not doing the parameter substitution (${s})`, {isWrn: true});
 
 }//»
 else if (this.isStrRep){//«
-/*«
-
-REMOVE SUFFIX: 			${param%[word]} 	${param%%[word]}
-REMOVE PREFIX: 			${param#[word]} 	${param##[word]}
-
-${parameter%[word]}
-Remove Smallest Suffix Pattern. The word shall be expanded to produce a
-pattern. The parameter expansion shall then result in parameter, with the
-smallest portion of the suffix matched by the pattern deleted. If present, word
-shall not begin with an unquoted '%'.
-
-${parameter%%[word]}
-Remove Largest Suffix Pattern. The word shall be expanded to produce a pattern.
-The parameter expansion shall then result in parameter, with the largest
-portion of the suffix matched by the pattern deleted.
-
-${parameter#[word]}
-Remove Smallest Prefix Pattern. The word shall be expanded to produce a
-pattern. The parameter expansion shall then result in parameter, with the
-smallest portion of the prefix matched by the pattern deleted. If present, word
-shall not begin with an unquoted '#'.
-
-${parameter##[word]}
-Remove Largest Prefix Pattern. The word shall be expanded to produce a pattern.
-The parameter expansion shall then result in parameter, with the largest
-portion of the prefix matched by the pattern deleted.
-»*/
 let val = env[s];
 if (!val) return "";
 
@@ -4302,10 +4374,14 @@ async more(no_nl){//«
 	let nl;
 	if (no_nl) nl="";
 	else nl="\n";
-	let rv = nl+(await this.term.readLine("> "));
-//log(RV, `${rv}`);
-	this.source = this.source.concat(...rv);
+//	let rv = nl+(await this.term.readLine("> "));
+	let rv = await this.term.readLine("> ");
+	if (isEOF(rv)){
+		return false;
+	}
+	this.source = this.source.concat(...(nl+rv));
 	this.length = this.source.length;
+	return true;
 }//»
 throwUnexpectedToken(message) {//«
 	if (message === void 0) { message = Messages.UnexpectedTokenIllegal; }
@@ -4527,7 +4603,9 @@ cwarn("SKIP OIMPET");
 	if (ch !== end_quote) {
 		if (this.eol()){
 			quote.val = out;
-			await this.more();
+			if (!await this.more()){
+				throw new Error("EOF");
+			}
 			return await this.scanQuote(par, which, in_backquote, quote, start);
 		}
 		return null;
@@ -7584,9 +7662,10 @@ async compile(command_str, opts={}){//«
 	catch(e){
 //LSPOEIRK
 
-cerr(e);
 this.term.addToHistoryBuffer(this.parser.scanner.source.join(""));
 let mess = e.message;
+if (mess === "EOF") return;
+cerr(e);
 if (opts.retErrStr) return mess;
 if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
 term.response(mess,{isErr: true});

@@ -11,7 +11,6 @@ alt_screen_escape_handler. THIS IS VERY VERY IMPORTANT QUALITY CONTROL
 TYPE STUFF HERE!!!
 
 »*/
-
 //Historical development notes (and old code) are kept in doc/dev/VIM
 //«Notes
 /*12/29/24: Just did some internal tab detection logic to decide whether it would«
@@ -643,7 +642,7 @@ const set_stat_ok=(mess)=>{stat_message=mess;stat_message_type=STAT_OK;};
 const set_stat_warn=(mess)=>{stat_message=mess;stat_message_type=STAT_WARN;};
 const set_stat_err=(mess)=>{stat_message=mess;stat_message_type=STAT_ERR;};
 const cancel=()=>{stat_render("Cancelled");};
-const quit=()=>{//«
+const quit=(if_reload)=>{//«
 	delete this.command_str;
 	Term.is_dirty = false;
 	Term.is_editing = false;
@@ -664,7 +663,7 @@ cerr("The reload_win was not in topwin.childWins!?!?!");
 		delete reload_win.ownedBy;
 		reload_win.close();
 	}
-	Term.quitNewScreen(hold_screen_state);
+	Term.quitNewScreen(hold_screen_state, {reload: if_reload});
 //	quit_new_screen(hold_screen_state);
 //log(quit_new_screen);
 };//»
@@ -6360,7 +6359,8 @@ cwarn("Using ondevreload");
 }
 //hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
 hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, onreload: ()=>{
-cwarn("HI VIM RELOAD!!!");
+//cwarn("HI VIM RELOAD!!!");
+quit(true);
 }});
 this.fname = edit_fname;
 

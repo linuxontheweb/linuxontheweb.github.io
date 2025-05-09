@@ -256,7 +256,8 @@ async init(){//«
 	}
 	this.pager = new NS.mods[DEF_PAGER_MOD_NAME](this.term);
 	this.pager.exitChars=["q"];
-	let path = this.args.shift();
+	let path = this.args[0];
+//	let path = this.args.shift();
 	let arr;
 	let name;
 	if (!path) {
@@ -293,7 +294,17 @@ async init(){//«
 	this.awaitCb = this.pager.init(arr, name, {opts});
 }//»
 async run(){
-	await this.awaitCb;
+//	await this.awaitCb;
+	while (!await this.awaitCb){
+		let scr = document.getElementById(`script_mods.${DEF_PAGER_MOD_NAME}`);
+		if (scr) scr._del();
+		else{
+cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
+		}
+		delete NS.mods[DEF_PAGER_MOD_NAME];
+		this.term.refresh();
+		await this.init();
+	}
 //Reset the terminal background rows
 //this.term.setBgRows();
 	this.ok();
@@ -322,7 +333,9 @@ this.editor.saveFunc = async(val)=>{
 return {mess: "YIM ON THE YIM YIM YIM", type: 2};
 };
 */
-	let path = args.shift();
+//DON'T SHIFT IT OFF BECAUSE WE MIGHT CALL IT WHILE RELOADING!!!
+//	let path = args.shift();
+	let path = args[0];
 	let val;
 	let node;
 	let parnode;
@@ -387,8 +400,20 @@ log(val);
 		symbols,
 	});
 }//»
+
 async run(){//«
-	await this.awaitCb;
+//If this is true, we do a clean exit
+//Otherwise, we need to dev reload
+	while (!await this.awaitCb){
+		let scr = document.getElementById(`script_mods.${DEF_EDITOR_MOD_NAME}`);
+		if (scr) scr._del();
+		else{
+cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
+		}
+		delete NS.mods[DEF_EDITOR_MOD_NAME];
+		this.term.refresh();
+		await this.init();
+	}
 	if (this.pipeTo || this.opts["force-stdout"]){
 		this.out(this.editor.get_lines({str: true}).join("\n"));
 	}
