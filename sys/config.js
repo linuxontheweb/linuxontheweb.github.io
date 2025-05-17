@@ -229,19 +229,6 @@ const ALWAYS_PREVENT = [
 ];
 
 //»
-//Prototypes«
-
-Array.prototype.uniqSort=function(opts={}){//«
-	if (opts.hiToLow){
-		return [...new Set(this)].sort((a,b)=>{if (a<b)return 1; if (a>b) return -1;})
-	}
-	else {
-		return [...new Set(this)].sort((a,b)=>{if (a<b)return -1; if (a>b) return 1;})
-	}
-}//»
-Array.prototype.uniq=function(opts={}){return [...new Set(this)];}
-
-//»
 
 //Keycode map«
 

@@ -1,6 +1,7 @@
 
 import { globals } from "config";
 
+
 const {//«
 	ALL_EXTENSIONS,
 	EXT_TO_APP_MAP,
@@ -412,7 +413,7 @@ for (let cb of this.#cbs) cb(if_clear);
 getLog(){return this.#data;}
 
 };//»
-
+const isFin = Number.isFinite;
 export const util = (()=>{//«
 
 return {
@@ -560,7 +561,8 @@ isJSArr:arg=>{return (arg && typeof arg === "object" && arg.constructor.name==="
 isId:str=>{return !!(str && str.match && str.match(/^[_a-zA-Z][_a-zA-Z0-9]*$/));},
 isFunc:arg=>{return (arg instanceof Function);},
 isBlob:arg=>{return (arg instanceof Blob);},
-isFin: Number.isFinite,
+//isFin: Number.isFinite,
+isFin,
 strNum:strNum,
 strNumMinEx:(str,num)=>{return strNum(str,num,null,true);},
 
@@ -640,4 +642,176 @@ NS.api.util = util;
 //»
 NS.api.util = util;
 
+//System-wide prototypes«
+
+Array.prototype.uniqSort=function(opts={}){//«
+    if (opts.hiToLow){
+        return [...new Set(this)].sort((a,b)=>{if (a<b)return 1; if (a>b) return -1;})
+    }   
+    else {
+        return [...new Set(this)].sort((a,b)=>{if (a<b)return -1; if (a>b) return 1;})
+    }   
+}//»
+Array.prototype.uniq=function(opts={}){return [...new Set(this)];}
+
+const doParseNumber = (thisarg, opts, if_float) => {//«
+	if (thisarg.match(/^0+$/)) thisarg="0";
+	const dec = /^([-+])?[0-9]+(e[-+]?([0-9]+))?$/i,
+		dec_dot = /^([-+])?([0-9]+)?\.[0-9]*(e[-+]?([0-9]+))?$/i,
+		hex = /^([-+])?0x[0-9a-f]+$/i,
+		oct = /^([-+])?0o[0-7]+$/,
+		bin = /^([-+])?0b[01]+$/;
+	let MIN = -Infinity;
+	let MAX = Infinity;
+	let KEYS = ["POS", "NEG", "NOTNEG", "NOTPOS", "NOTZERO", "MIN", "MAX", "DOTOK"];
+	let val;
+	let str;
+	if (!opts) opts = {};
+	for (let k of Object.keys(opts)) {
+		if (!KEYS.includes(k)) throw new Error("Invalid option:" + k);
+	}
+	if (Number.isInteger(opts.MIN)) MIN = opts.MIN;
+	else if (opts.MIN) throw new Error("Invalid value to MIN:" + opts.MIN);
+	if (Number.isInteger(opts.MAX)) MAX = opts.MAX;
+	else if (opts.MAX) throw new Error("Invalid value to MAX:" + opts.MAX);
+
+	if (thisarg.match(dec) || thisarg.match(dec_dot)) {
+		if (thisarg == "0") str = thisarg;
+		else str = thisarg.replace(/^0+/, "");
+	} else str = thisarg;
+	if (str.match(dec) || str.match(hex) || str.match(oct) || str.match(bin)) val = eval(str);
+	else {
+		if ((if_float || opts.DOTOK) && (str.match(dec_dot))) {
+			if (if_float) val = eval(str);
+			else val = Math.floor(eval(str));
+		} else return NaN;
+	}
+	if (opts.POS && val <= 0) return NaN;
+	if (opts.NEG && val >= 0) return NaN;
+	if (opts.NOTNEG && val < 0) return NaN;
+	if (opts.NOTPOS && val > 0) return NaN;
+	if (opts.NOTZERO && val == 0) return NaN;
+	if (val < MIN) return NaN;
+	if (val > MAX) return NaN;
+	return val;
+};//»
+
+const set_style_props_1 = (which, arr) => {//«
+	for (var i = 0; i < arr.length; i += 2) {
+		(function(k, v) {
+			Object.defineProperty(which.prototype, k, {
+				get: function() {
+					return this.style[v];
+				},
+				set: function(arg) {
+					this.style[v] = arg;
+				}
+			});
+		})(arr[i], arr[i + 1]);
+	}
+}//»
+const set_style_props_2 = (which, arr) => {//«
+	for (var i = 0; i < arr.length; i += 2) {
+		(function(k, v) {
+			Object.defineProperty(which.prototype, k, {
+				get: function() {
+					return parseInt(this.style[v]);
+				},
+				set: function(arg) {
+					if (isFin(arg)) this.style[v]=`${arg}px`;
+					else this.style[v]= arg;
+				}
+			});
+		})(arr[i], arr[i + 1]);
+	}
+}//»
+
+set_style_props_1(HTMLElement,//«
+[
+
+// !! If anything is ever inserted up to the _END_, the CSS_PX_NUMBER_START_POS **MUST** be updated !!
+
+"_fw","fontWeight",
+"_tcol","color",
+"_bgcol","backgroundColor",
+"_bor", "border",
+"_pos","position",
+"_dis","display",
+"_op", "opacity",
+"_ta", "textAlign",
+"_ff", "fontFamily",
+"_over", "overflow",
+"_overx", "overflowX",
+"_overy", "overflowY",
+"_z", "zIndex"
+
+]);
+//»
+set_style_props_2(HTMLElement,//«
+[
+"_fs","fontSize",
+"_pad", "padding",
+"_padt", "paddingTop",
+"_padb", "paddingBottom",
+"_padl", "paddingLeft",
+"_padr", "paddingRight",
+"_mar", "margin",
+"_mart", "marginTop",
+"_marb", "marginBottom",
+"_marl", "marginLeft",
+"_marr", "marginRight",
+"_x","left", 
+"_y","top",
+"_r","right",
+"_b","bottom",
+"_w","width",
+"_h", "height"
+]);//»
+set_style_props_1(SVGElement,//«
+[
+"_op","opacity",
+"_dis","display"
+]);//»
+
+Blob.prototype.toString = function() {return '[Blob ('+this.size+', "'+this.type+'")]';}
+
+let _;
+_ = HTMLElement.prototype;
+_._loc=function(x,y){
+	if (isFin(x)) x = `${x}px`;
+	if (isFin(y)) y = `${y}px`;
+	this.style.left=x;
+	this.style.top=y;
+}
+_._del = function(){if (this.parentNode) {this.parentNode.removeChild(this);}}
+_._add=function(...args){for(let kid of args)this.appendChild(kid);}
+_._gbcr=function(){return this.getBoundingClientRect()}
+
+_.ael = function(which, fun){this.addEventListener(which, fun, false);}
+_.html = function(str) {this.innerHTML = str;}
+_.vcenter=function(amount){if(!amount)amount="50%";this._pos="relative";this._y=amount;this.style.transform="translateY(-"+amount+")";}
+_.flexcol=function(if_off){if(if_off){this.style.display="";this.style.alignItems="";this.style.justifyContent="";this.style.flexDirection="";}else{this.style.display="flex";this.style.alignItems="center";this.style.justifyContent="center";this.style.flexDirection="column";}}
+_.scrollIntoViewIfNeeded || (_.scrollIntoViewIfNeeded = _.scrollIntoView);
+
+_ = String.prototype;
+_.toCamel = function(){return this.split("_").reduce((acc,cur)=>{return acc+cur[0].toUpperCase()+cur.slice(1);})}
+_.regstr = function(useend){var endsp="";if(useend)endsp=" ";return this.replace(/^[\x20\t]+/g,"").replace(/[\x20\t]+$/g,endsp).replace(/[\x20\t]+/g," ");}
+_.rep = function (num) {var ret = "";for (var i=0; i < num; i++) {ret = ret + this;}return ret;}
+_.lc = function (){return this.toLowerCase();}
+_.uc = function (){return this.toUpperCase();}
+_.tonbsp = function(){return this.split(/\x20/).join("&nbsp;")}
+_.chomp = function () {return this.replace(/\x20+$/g, "");}
+_.lpad=function(num,fill){var tmp;if(this.length<num)return fill.repeat(num-this.length)+this;return this;}
+_.pi = function(opts) {return doParseNumber(this, opts);}//ParseInt
+_.pir=function(lo,hi){if(!(isFin(lo)&&isFin(hi)&&hi>lo))throw new Error("Invalid arguments to String.pir");return doParseNumber(this,{MIN:lo,MAX:hi});}//ParseIntRange "15".pir(10,20) => 15 , "15".pir(0,10) => NaN
+_.ppi=function(opts){if(!opts)opts={};opts.POS=true;return doParseNumber(this,opts);}//ParsePositiveInt
+_.pnni=function(opts){if(!opts)opts={};opts.NOTNEG=true;return doParseNumber(this,opts);}//ParseNonNegativeInt
+_.pf=function(opts){return doParseNumber(this,opts,true);}//ParseFloat
+
+_=SVGElement.prototype;
+_.ael = function(which, fun){this.addEventListener(which, fun, false);}
+_.add=function(...args){for(let kid of args)this.appendChild(kid);}
+_.del = function() {if (this.parentNode) this.parentNode.removeChild(this);}
+
+//»
 

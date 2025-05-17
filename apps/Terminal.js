@@ -2571,7 +2571,8 @@ fmtLinesSync(arr, startx){//«
 
 async respInit(addMessage){//«
 
-	let init_prompt = `LOTW shell\x20(${this.winid.replace("_","#")})`
+	let init_prompt = `LOTW shell`;
+	if (!Desk.isFake) init_prompt +=`\x20(${this.winid.replace("_","#")})`
 //	if(dev_mode){
 //		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
 //	}

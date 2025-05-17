@@ -5477,6 +5477,7 @@ async scanNextTok(heredoc_flag) {//«
 };//»
 
 eatBang(){//«
+//log(this.tokens);
 	let tok = this.tokens[this.tokNum];
 	if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
 		this.tokNum++;
@@ -7650,6 +7651,11 @@ async compile(command_str, opts={}){//«
 //this in the constructor (like esprima does)
 		await parser.scanNextTok();
 		await parser.tokenize();
+if (!parser.tokens.length){
+//This could just a comment:
+// $ #blah blah blah
+return;
+}
 		let ast = await parser.compile();
 		if (!ast) return;
 		let statements=[];

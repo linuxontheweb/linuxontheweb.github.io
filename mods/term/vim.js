@@ -1746,7 +1746,13 @@ if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
 		};
 		if (com=="q"||com=="quit")maybe_quit();
 		else if (marr = com.match(/^w(rite)?( +(.+))?$/)){
-			save_as(marr[3]);
+			let fname = marr[3];
+			if (!fname){
+				if (edit_fullpath) return edit_save();
+				stat_err("No file name given");
+				return;
+			}
+			save_as(fname);
 			return;
 		}
 		else if (com=="wq"){

@@ -235,7 +235,8 @@ const handler = async(req, res) => {//«
 		return;
 	}
 	if (url=="/") path = "./index.html";
-	else if (url.match(/^\/desk/)) path="./desk/index.html";
+	else if (url.match(/^\/desk\b/)) path="./desk/index.html";
+	else if (url.match(/^\/shell\b/)) path="./shell/index.html";
 	else path = `.${url}`;
 	let ext = path.split(".").pop();
 	if (!ext) mime = DEF_MIME;
