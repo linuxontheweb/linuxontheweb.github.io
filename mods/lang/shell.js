@@ -1,454 +1,7 @@
-/*5/9/25: 
 
-Let's get into all the issues behind developer reloading.//«
-
-For reloading with the REPL showing (if onreload is defined)://«
-First of all, there are certain modules that have the standard reload pathway involving
-module deletion/script removal and others that might require more sophisticated 
-techniques involving deleting global variables, etc. So we might want to have
-little shim functions for certin modules that are kept in a hash object.
-
-What we can do is define certain env vars (in ~/.env), such as DEV_MODS/DEV_COMS like:
-DEV_MODS=util.what,lang.shell
-DEV_COMS=fs,dev.blert
-...which will show up as env vars in the terminal.
-Then, we will have an object like this hardcoded into the terminal:
-const DEV_MOD_SHIMS = {
-	"util.what":()=>{
-		delete globals.util.someCrazyVar;
-		// Other cleanup stuff here
-	}
-}
-const DEV_COM_SHIMS = {
-	"dev.blert": async()=>{
-		await fspai.writeFile("/some/file.log", "JUST RELOADED dev.blert!!!")
-		// Other cleanup stuff here
-	}
-}
-
-So the reload function will iterate through all the mods/coms and do the normal
-routine for each one, and if it finds a shim function for it, then it will call
-(and await on) that one, before going to the next mod or com. So this means we
-should only need to edit ~/.env in order describe what we want to be deleted/removed,
-and then the terminal file itself if/when there are extra things that need to be
-done for a given resource.
-
-//»
-
-For reloading with a screen-based module showing (like vim)://«
-I think we should implement this from within the command library files.
-What we did is to add an opts object into Terminal.quitNewScreen, with a reload
-option, which then calls the old actor's callback with !opts.reload, so that
-the awaitCb in: const com_whatever = class extends Com{
-	run(){
-		let rv = await this.awaitCb; // <--- This returns false on a reload
-	}
-}
-...returns false. So we have this implemented in a loop, such that every false
-value returned from awaitCb does all the module deletion/script removal, and then
-calls com.init again, and then does await this.awaitCb again. In case there is a syntax
-error in the module file, we needed to do a Terminal.refresh, so that we can just to
-^C and then return control back to the terminal. Then upon fixing the syntax error,
-we can just put the command back into the terminal and start the editing loop all over
-again.
-//»
-
-If a screen-based module is on the screen and the reload hotkey is invoked, //«
-the the terminal's no-op reload cb is called (which currently just shows an
-overlay message).//»
-//»
-
-Time to slow down and figure out a workflow for shell Regex via walt -> WASM
-
-
-
-*/
 //Notes«
-/*«
+//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 
-Paramsubs can be like:
-
-USE DEFAULT: 			${param:-[word]} 	${param-[word]}
-ASSIGN DEFAULT: 		${param:=[word]} 	${param=[word]}
-ERROR IF NULL/UNSET: 	${param:?[word]} 	${param?[word]}
-
-With the colons, if the parameter is NULL or UNSET, substitute WORD
-Without the colons, when the parameter is SET but NULL, substitute NULL
-
-USE ALTERNATIVE: 		${param:+[word]} 	${param+[word]}
-
-Without the colon, when the parameter is SET but NULL, we substitute the word
-
-
-${parameter:-[word]}
-
-Use Default Values. If parameter is unset or null, the expansion of word (or an
-empty string if word is omitted) shall be substituted; otherwise, the value of
-parameter shall be substituted.
-
-${parameter:=[word]}
-
-Assign Default Values. If parameter is unset or null, quote removal shall be
-performed on the expansion of word and the result (or an empty string if word
-is omitted) shall be assigned to parameter. In all cases, the final value of
-parameter shall be substituted. Only variables, not positional parameters or
-special parameters, can be assigned in this way.
-
-${parameter:?[word]}
-
-Indicate Error if Null or Unset. If parameter is unset or null, the expansion
-of word (or a message indicating it is unset if word is omitted) shall be
-written to standard error and the shell exits with a non-zero exit status.
-Otherwise, the value of parameter shall be substituted. An interactive shell
-need not exit.
-
-${parameter:+[word]}
-
-Use Alternative Value. If parameter is unset or null, null shall be
-substituted; otherwise, the expansion of word (or an empty string if word is
-omitted) shall be substituted.
-
-
-»*/
-/*«
-
-REMOVE SUFFIX: 			${param%[word]} 	${param%%[word]}
-REMOVE PREFIX: 			${param#[word]} 	${param##[word]}
-
-${parameter%[word]}
-Remove Smallest Suffix Pattern. The word shall be expanded to produce a
-pattern. The parameter expansion shall then result in parameter, with the
-smallest portion of the suffix matched by the pattern deleted. If present, word
-shall not begin with an unquoted '%'.
-
-${parameter%%[word]}
-Remove Largest Suffix Pattern. The word shall be expanded to produce a pattern.
-The parameter expansion shall then result in parameter, with the largest
-portion of the suffix matched by the pattern deleted.
-
-${parameter#[word]}
-Remove Smallest Prefix Pattern. The word shall be expanded to produce a
-pattern. The parameter expansion shall then result in parameter, with the
-smallest portion of the prefix matched by the pattern deleted. If present, word
-shall not begin with an unquoted '#'.
-
-${parameter##[word]}
-Remove Largest Prefix Pattern. The word shall be expanded to produce a pattern.
-The parameter expansion shall then result in parameter, with the largest
-portion of the prefix matched by the pattern deleted.
-»*/
-/*5/8/25: «
-
-@SBRILSMF: I'm not sure how necessary it is to duplicate the param.subWord and param.repWord
-fields. This stuff will get called whenever we are in a loop. The question is whether
-the first expansion that happens might "cover over" the next expansions, which 
-might be especially important in a long running process that has plenty of time to
-have different expansions, every time they are called. For example, if this has a
-ComSub/BQuote in it, there might be different results every time in the expansion.
-So that is the kind of stuff that we need to do some "real world" testing on.
-
-for WORD in this is the thing in the time and the place; do
-	echo ${SOMEVAR:-$WORD}
-done;
-
-Need to allow for:
-$ echo ${1:+HAR}
-...but not:
-$ echo ${1:=HAR} # Can't assign to a "special variable"
-
-@EANFJLPM: Did I get rid of the need to do this hack (newval.noSplitNLs = true)?
-If so, then I can get rid of that *stupid* crap @YRTHSJLS: if (rv.noSplitNLs) arr = rv.split(/[\x20\t]+/);
-
-Just got rid of the crappy stuff under @TZKOPKHD, which means that we are
-going more for decent programming constructs rather than STUPID HACKS in
-order to make things work exactly like the bash shell. I guess at this point,
-we can dig into the source code for dash, etc.
-
-The stuff that doesn't work is stuff like non-greedy matching from the back,
-together with the '*' glob.
-MYVAR=ZZZZZ
-echo ${MYVAR%*Z}
-bash says: ZZZZ 	#Just one 'Z' is eaten from the back
-we say: 			# [NOTHING!]: it's all greedily eaten up
-
-IN THE FILE ~/zsave/1dash/DASH.c: We have the full pattern matching system in here.
-Particularly, int ccmatch() @line ~6238, which is called from int pmatch().
-
-Just found these in the header section:
-#define VSNORMAL    0x1     // normal variable:  $var or ${var} 
-#define VSMINUS     0x2     // ${var-text} 
-#define VSPLUS      0x3     // ${var+text} 
-#define VSQUESTION  0x4     // ${var?message} 
-#define VSASSIGN    0x5     // ${var=text} 
-#define VSTRIMRIGHT 0x6     // ${var%pattern} 
-#define VSTRIMRIGHTMAX  0x7     // ${var%%pattern} 
-#define VSTRIMLEFT  0x8     // ${var#pattern} 
-#define VSTRIMLEFTMAX   0x9     // ${var##pattern} 
-#define VSLENGTH    0xa     // ${#var} 
-
-I'm not quite sure if anything is (too) weird with our RegExp's in file path
-expansion @WOSLMVHFK. The main issue with our approach is that we are pretty
-much using the given strings (after substituting "*" with ".*", "?" with ".?", 
-and "." with "\."), meaning that we are correctly implementing the published
-spec for bracket expressions (9.3.5 RE Bracket Expression): 
-https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap09.html#tag_09_03_05.
-
-Specifically this part:
-
-The character sequences "[.", "[=", and "[:" (<left-square-bracket> followed by
-a <period>, <equals-sign>, or <colon>) shall be special inside a bracket
-expression and are used to delimit collating symbols, equivalence class
-expressions, and character class expressions. These symbols shall be followed
-by a valid expression and the matching terminating sequence ".]", "=]", or
-":]", as described in the following items.
-
-For example this doesn't work:
-$ echo [[:digit:]]*
-
-But this ends up doing the same thing:
-$ echo [\\d]* 
-
-Here are all of the shell's character class expressions:
-[:alnum:]   [:cntrl:]   [:lower:]   [:space:]
-[:alpha:]   [:digit:]   [:print:]   [:upper:]
-[:blank:]   [:graph:]   [:punct:]   [:xdigit:]
-
-But: *ALL* of the stuff under @TZKOPKHD is really hacky/crappy, 
-and we *might* be able to do our own hand rolled pattern matcher (if we wanted to given
-the paucity of people doing those kinds of substring replacements), since we only have 3 
-simple kinds of matching:
-
-?
-A <question-mark> is a pattern that shall match any character.
-
-*
-An <asterisk> is a pattern that shall match multiple characters, as described
-in 2.14.2 Patterns Matching Multiple Characters.
-
-[
-
-A <left-square-bracket> shall introduce a bracket expression if the characters
-following it meet the requirements for bracket expressions stated in XBD 9.3.5
-RE Bracket Expression, except that the <exclamation-mark> character ('!') shall
-replace the <circumflex> character ('^') in its role in a non-matching list in
-the regular expression notation. A bracket expression starting with an unquoted
-<circumflex> character produces unspecified results. A <left-square-bracket>
-that does not introduce a valid bracket expression shall match the character
-itself.
-
-
-
-
-Now, doing a *full* tokenizer while collecting the final "}" for param subs, and then
-complain about the full string with "bad substitution". @UDHLPFMSK is where we are
-scanning for the ParamSub token.
-
-@MSYEOKFK we are *not* doing the shell behaviour, which retains the newlines with (unquoted):
-$ cat<<<`ls`
-For this, we are just spitting out everything on one line, sepatarated by spaces.
-But our output is identical with the shell's when we do:
-$ cat<<<"`ls`"
-
-This is supposed to be on newlines (we have it joined on the same line)
-$ cat<<<`ls`
-
-We are supposed to check the return values of backquotes/comsubs that are in
-the command position in order to do all the logic with them, i.e.
-`false` || echo hi # -> hi
-`missingcom` || echo hi # -> hi
-`true`  && echo hi # -> hi
-
-@WJKMDNFK is where we create the new String of escaped characters
-@JDHFKGK is where escaped characters get turned into normal strings via ch.toString()
-@YSHFKSOK is where we are escaping quotes that are pushed into subLines. We might need
-to do the same thing
-
-I think we need a notion of being at the "top-level", just before we are
-going to "render" to the terminal screen *OR* to a file. We don't need to worry about
-pipelines, because these are strings generated purely from the commands, and there is
-no concept of quoting. I want to keep all quotes when returning from a ComSub...
-@YSHFKSOK, we are putting into subLines.
-
-THIS DOESN'T WORK!
-$ echo \"hi\" # -> hi
-
-Now: need to understand what this quoteRemoval thing is.
-
-allExpansions is used to turn an array of pre-substitution Word's into post-substitution
-words. The number if words can go up or down depending on substitutions that
-return nothing.
-First: allExpansions is called only in Shell.makeCommand() and ForCom.init()
-
-@SYEORLDJ: We just updated this to call allExpansions, and use each Word's .val
-(rather than expandSubs, and use the .fields). We might need to change it to this 
-1) CaseCom.init(): @AKDKRKSJ
-2) CaseCom.run(): @DJSLPEKS 
-3) ParamSub.expand(): @EANFJLPM and @TZKOPKHD.
-$ cat<<<"hi" # -> "hi"
-
-
-The bizarre attachment to the metaphysics of quoted strings. 
-
-Should we not even have BQuote and SQuote types, but rather just keep all
-characters in there? We can just use functions to do all the quote interpretation/removal
-stuff. So we would merge the scanQuote with scanWord. Then everything outside of
-the quotes are split on IFS/whitespace.
-
-Want to do the "letter of the law" when it comes to scanning for the final "}" in
-ParamSubs.
-
-For: 
-$ `` && echo hi
-bash -> hi
-us -> sh: : command not found 
-
-There are 4 main kinds of resources that may need to be reloaded:
-1) The terminal app (no onreload)
-2) The shell
-3) Command libraries
-4) A screen-based module (like vim)
-
-Also, we might occassionally want to do non-screen module
-
-»*/
-/*5/7/25:«
-@TEMNGSFDK: While parsing a simple command, we are breaking on any token that is
-*NOT* a word or a redir. So it can be any control operator. But there is one
-control operator that is also allowed to start a compound command: "(".
-
-
-
-$ echo `echo '"hihi"'`
-Want: "hihi"
-Got: hihi
-I think the comsub might be supposed to return the full '"hihi"'
-
-Doesn't work (it doesn't retain the newlines):
-$ echo "${HAR-`ls`}" 
-
-But this works because I fixed it yesterday (with a real HACK):
-$ echo ${HAR-"`ls`"} 
-
-There are also issues with escaped characters in param subs:
-$ echo ${FRUNT##[HDRF]\[UTOF} 
-sh: invalid regex detected 
-
-This should be a parse error but it prompts for a continuation
-$ ass ass(
-
-
-I've decided to *not* worry about scanning for the ending "}" of a parameter substitution
-when you *know* it is invalid. I am treating bad parameter substitutions as "fatal" at
-the level of the scanner/tokenizer, so nothing within those scripts are executed.
-Normal bash allows for the "hi" to be echoed:
-$ echo `echo ${`; echo hi
-...but I throw a top-level error. I guess you can call this kind of stuff a real edge case.
-
-Need to find the pattern/glob matching part. Did a crappy version of
-substring deletion @TZKOPKHD. !THIS IS A VERY BAD HACK!
-First of all: I don't know why quoteRemoval doesn't actually do anything with
-word.FIELDS, it only assigns to word.TOKS @WUSLRJT.
-Next: non-greedy matching doesn't work from the BACK of the string (like it does on bash),
-so we have to REVERSE the damn strings (the parameter *and* the regex string, so that we need
-to swap the '[' and ']' characters).
-Next: We lose *ALL* the escape characters after doing expandSubs.
-
-
-Doesn't work: 
-$ echo `echo $'111\n222'`
-Want: 
-111 222
-Got:
-111n222
-GOT THIS WORKING BY USING tok.raw (instead of tok.val)
-
-
-Also: echo '"$USER"' -> $USER (instead of substituting for $USER)
-And: echo $(echo '"$USER"') -> $USER (instead of substituting for $USER)
-
-This works:
-$ echo $(echo $(echo $(echo hi))) 
-But this fails (NOW FIXED) to compile (unexpected EOF while looking for matching ')'):
-$ echo $(echo $(echo `echo hi`)) 
-Even though this works:
-$ echo $(echo `echo $(echo hi)`) 
-
-The failure was due to an incorrect {inBQ: true} in the scanning options object, which
-was easily fixed, but this led me towards needing to fix stuff like:
-$ echo `${`
-$ echo `echo ${HAR` 
-$ echo `echo ${HAR+` 
-$ echo `echo ${HAR+"` 
-...I ended up needing to add inBQ options while doing scanParamSub and also while doing
-scanWord, and then *from within* scanWord, passing the inBQ flag into scanSub and scanQuote.
-
-»*/
-/*5/6/25: We are going to follow the spec for param subs TO THE LETTER:«
-${parameter:+[word]}
-There can only be exactly 0 or 1 words here, which is delimited by a '}'
-@WUEHSKR we need to add the condition to break on '}'
-Just need to pass in the isParam option to scanWord, when we are inside the 
-
-@EANFJLPM: This is a hack (using a new String with a noSplitNLs property on it) inside 
-ParamSub.expand just to ensure that the embedded newlines are retained while doing the 
-splitting in Word.expandSubs @YRTHSJLS.
-»*/
-/*5/5/25: «
-@SYAHFLSJ: Need to redo the way that we scan for params, accounting for these 4 cases:
-
-
-
-Parameter expansions like: ${BLAH:[-=?+]SLERM}. Expansions are happening 
-@UAJDKFHJ.
-Test for s.match(/^[A-Za-z_][A-Za-z_0-9]*:[-=?+]/)
-In scanSub
-In ParamSubs, after ':[-=?+]', we need to do a full word scan.
-
-*/
-/*Now: wget. Just give it a URL and it will try to fetch it, and output to Uint8Array
-Also: a 'dl' option.
-*/
-/* Broken: logging objects to the console via redirect tp /dev/log
-  $ echo '{"hi":[1,2,3,4]}' | parse > /dev/log   #  -> [object Object]
-Fixed by putting the check for a String or Uint8Array *AFTER* the writes to devices @YAFHKANT 
-*/
-/*Totally: nano and bvi clones
-In bvi, want to support "byte slice" arguments on the command line, and allow
-for saving the whole file from this "slice mode", so that we save from the offset, and then
-add the rest to the end of the slice.
-»*/
-/*5/3/25: Proper field splitting / Keeping track of mainParser«
-
-bash splits the words in $SENT into separate lines:
-
-$ SENT="THis is the thing"
-$ for WORD in $SENT; do echo "$((i)): $WORD"; i=$((i+1)); done
-0: THis
-1: is
-2: the
-3: thing
-
-The magic fix for field splitting @YRTHSJLS!?!?
-
-* * *
-
-@XMSKSLEO: Needed to add this line in order to keep the mainParser member of the shell 
-object (along with its finalComStr) "alive and well". Otherwise it gets overwritten
-@WHKSFLGG (and the save_str variable is undefined/incorrect @GADLFJGMG, so updateHistory
-has nothing to do).
-
-»*/
-/*5/2/25: Splitting subLines in spaces / Adding toString to ComSub, BQuote, etc«
-@YSHFKSOK: This is necessary in order to ensure that the output from the following echo
-command is split into 3 arguments (rather than 1 argument with spaces in it):
-
-	$ cat $(echo file1 file2 file3)
-
-Also we needed to add toString methods to the classes ComSub and BQuote (which wraps the
-raw values in the appropriate `...` or $(...)), so that they can get turned into the
-appropriate strings @PZUELFJ, without looking like "[Object object]". Need to look out
-for whatever else might need to get a toString method.
-»*/
 //»
 
 //Imports«
@@ -2535,7 +2088,22 @@ this.ok();
 }
 }//»
 const com_wget = class extends Com{//«
+/*How github names their files within repos, and how to fetch them from LOTW«
+If this is the github repo:
+https://github.com/mrdoob/three.js/
 
+The 'playground/' subdir of that repo is here:
+https://github.com/mrdoob/three.js/tree/dev/playground
+
+This is the 'playground/index.html' file:
+https://github.com/mrdoob/three.js/blob/dev/playground/index.html
+
+This is that same file in its raw form, but it is an invalid fetch:
+https://github.com/mrdoob/three.js/raw/refs/heads/dev/playground/index.html
+
+And this is the same file that is okay to fetch:
+https://raw.githubusercontent.com/mrdoob/three.js/refs/heads/dev/playground/index.html
+»*/
 static getOpts(){
 	return {l: {dl: 1, local: 1}, s: {l: 1}};
 }
@@ -2545,9 +2113,8 @@ async run(){
 	if (!patharg) return this.no("missing URL");
 	if (args.length) return this.no("too many arguments");
 	let url;
-
-	if (opts.local || opts.l) url = patharg
-	else url = `/_get?path=${encodeURIComponent(patharg)}`;
+	if (opts.local || opts.l) url = `/_get?path=${encodeURIComponent(patharg)}`;
+	else url = patharg;
 //	if (!nodejs_mode || opts["local"]) url = patharg
 //	else url = `/_get?path=${encodeURIComponent(patharg)}`;
 	let rv;
@@ -2556,11 +2123,11 @@ async run(){
 	}
 	catch(e){
 cerr(e);
-		this.no(e.message);
+		this.no(`${e.message} (see console)`);
 		return;
 	}
 	if (!rv.ok){
-		this.err(`invalid response (see console)`);
+		this.no(`Response code: ${rv.status} (${rv.statusText})`);
 log(rv);
 		return;
 	}
