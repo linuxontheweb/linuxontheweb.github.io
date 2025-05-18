@@ -471,7 +471,7 @@ const {
 	SHELL_ERROR_CODES,
 	dev_mode,
 	EOF,
-	nodejs_mode,
+//	nodejs_mode,
 	fs
 } = globals;
 const util = LOTW.api.util;
@@ -636,7 +636,8 @@ const test_coms = [//«
 ]//»
 //const preload_libs={fs: fs_coms, test: test_coms};
 const preload_libs={fs: fs_coms, esprima: ["esparse"]};
-if (nodejs_mode) preload_libs.mail = mail_coms;
+//if (nodejs_mode) preload_libs.mail = mail_coms;
+if (dev_mode) preload_libs.mail = mail_coms;
 this.preloadLibs = preload_libs;
 
 //Parsing«
@@ -2536,7 +2537,7 @@ this.ok();
 const com_wget = class extends Com{//«
 
 static getOpts(){
-	return {l: {dl: 1, local: 1}};
+	return {l: {dl: 1, local: 1}, s: {l: 1}};
 }
 async run(){
 	const {args, opts} = this;
@@ -2544,8 +2545,11 @@ async run(){
 	if (!patharg) return this.no("missing URL");
 	if (args.length) return this.no("too many arguments");
 	let url;
-	if (!nodejs_mode || opts["local"]) url = patharg
+
+	if (opts.local || opts.l) url = patharg
 	else url = `/_get?path=${encodeURIComponent(patharg)}`;
+//	if (!nodejs_mode || opts["local"]) url = patharg
+//	else url = `/_get?path=${encodeURIComponent(patharg)}`;
 	let rv;
 	try{
 		rv = await fetch(url)

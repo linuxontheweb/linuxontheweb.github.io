@@ -226,7 +226,8 @@ On the server
 »*/
 
 //»
-const E_NEED_NODEJS = "Commands in the 'mail' library require a Node.js installation!";
+//const E_NEED_NODEJS = "Commands in the 'mail' library require a Node.js installation!";
+const E_NEED_NODEJS = "Commands in the 'mail' library require a local Node.js installation!";
 //Imports«
 
 const {globals}=LOTW;
@@ -238,7 +239,8 @@ const {
 	MAIL_DB_VERNUM,
 	ShellMod,
 	TERM_STAT_TYPES,
-	nodejs_mode
+	dev_mode
+//	dev_mode
 } = globals;
 const{isStr, isNum, isObj, log, jlog, cwarn, cerr, mkdv, make}=util;
 const {Com} = ShellMod.comClasses;
@@ -1384,7 +1386,7 @@ const com_mail = class extends Com{//«
 
 //static opts={l:{init: 3, del: 3, use: 3, drop: 1}};
 static opts={s:{r: 1, u: 3}, l: {user: 3}};
-init(){if (!nodejs_mode) this.no(E_NEED_NODEJS);}
+init(){if (!dev_mode) this.no(E_NEED_NODEJS);}
 async run(){//«
 
 const{args, opts, term, env}=this;
@@ -1466,19 +1468,19 @@ cwarn("HI CANCEL");
 }//»
 
 const com_imapcon = class extends Com{//«
-	init(){if (!nodejs_mode) this.no(E_NEED_NODEJS);}
+	init(){if (!dev_mode) this.no(E_NEED_NODEJS);}
 	async run(){
 		do_imap_op(this, "connect");
 	}
 };//»
 const com_imapdis = class extends Com{//«
-	init(){if (!nodejs_mode) this.no(E_NEED_NODEJS);}
+	init(){if (!dev_mode) this.no(E_NEED_NODEJS);}
 	async run(){
 		do_imap_op(this, "logout");
 	}
 };//»
 const com_imapgetenvs = class extends Com{//«
-	init(){if (!nodejs_mode) this.no(E_NEED_NODEJS);}
+	init(){if (!dev_mode) this.no(E_NEED_NODEJS);}
 	async run(){
 		let days_ago = this.args.shift();
 		if (!days_ago) return this.no("need a 'days_ago' argument");
@@ -1506,7 +1508,7 @@ this.ok();
 };//»
 
 const com_curaddr = class extends Com{//«
-	init(){if (!nodejs_mode) this.no(E_NEED_NODEJS);}
+	init(){if (!dev_mode) this.no(E_NEED_NODEJS);}
 	async run(){
 		let rv = await fetch('/_env?key=EMAIL_USER');
 		if (!rv.ok) return this.no("EMAIL_USER: not found");
@@ -1556,7 +1558,7 @@ const com_mkcontact = class extends Com{//«
 
 static opts = {l: {name: 3, addr: 3, user: 3}, s:{u: 3}};
 
-init(){if (!nodejs_mode) this.no(E_NEED_NODEJS);}
+init(){if (!dev_mode) this.no(E_NEED_NODEJS);}
 async run(){//«
 
 	const{opts,env}=this;

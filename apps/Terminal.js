@@ -148,7 +148,7 @@ const {//«
 	dev_mode,
 	admin_mode,
 	EOF,
-	nodejs_mode,
+//	nodejs_mode,
 	TERM_STAT_TYPES,
 	VIM_MODES
 } = globals;//»

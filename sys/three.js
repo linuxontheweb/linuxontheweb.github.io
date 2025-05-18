@@ -8,7 +8,7 @@ const {log, cwarn, cerr, gbid, make, mkdv, evt2Sym} = LOTW.api.util;
 
 //Var«
 
-const TERM_PATH = "/apps/Terminal.js";
+const APP_PATH = "/apps/dev/Three.js";
 
 let APP;
 let WIN;
@@ -18,6 +18,7 @@ let RESIZE_TIMEOUT_MS = 100;
 let MIN_RESIZE_DELAY = 500;
 let LAST_RESIZE_TIME;
 //»
+
 //Funcs«
 const NOOP=()=>{};
 //Shims for the desktop«
@@ -28,9 +29,7 @@ cerr(mess);
 };
 NS.Desk={
 	isFake: true,
-	make_icon_if_new: NOOP,
-	move_icon_by_path: NOOP,
-	update_folder_statuses: NOOP
+	make_icon_if_new: NOOP
 };
 //»
 const add_listeners=()=>{//«
@@ -98,7 +97,7 @@ log(mess);
 const nosel=(elm)=>{elm.style.userSelect="none"}
 //»
 
-const TerminalWindow = class{//«
+const ThreeWindow = class{//«
 
 constructor(){//«
 	this.makeDOM();
@@ -128,9 +127,9 @@ return new Promise((Y,N)=>{//«
 let scr = make('script');
 scr.type="module";
 scr.onload = async() => {//«
-	const { app } = await import(TERM_PATH);
+	const { app } = await import(APP_PATH);
 	APP = new app(this);
-	NS.Terminal = APP;
+//	NS.Terminal = APP;
 	APP.onappinit();
 	Y(true);
 };//»
@@ -138,7 +137,7 @@ scr.onerror=(e)=>{//«
 cerr(e);
 Y();
 };//»
-scr.src= TERM_PATH;
+scr.src= APP_PATH;
 document.head._add(scr);
 });//»
 
@@ -149,24 +148,18 @@ resize(){//«
 	APP.onresize();
 }//»
 
-}//»
+};//»
 
 //Init«
-check_for_other_systems();
 
 (async()=>{
 	if (!await fs.api.init()) return;
 	if (!await fs.mk_user_dirs()) return;
-	WIN = new TerminalWindow();
+	WIN = new ThreeWindow();
 	if (!await WIN.loadApp()) return;
 	Object.freeze(NS);
 	add_listeners();
 	document.body.removeChild(gbid("error_message"));
-	setTimeout(()=>{
-		if (globals.read_only) {
-			APP.doOverlay("LOTW is read-only!");
-		}
-	},250);
 //	globals.nodejs_mode = (await fetch('/_env?key=MAYBENODEJS')).ok;
 })();
 
