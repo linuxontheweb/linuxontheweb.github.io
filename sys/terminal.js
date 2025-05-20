@@ -103,6 +103,7 @@ const TerminalWindow = class{//«
 constructor(){//«
 	this.makeDOM();
 	this.id="win_1";
+	this.statusBar={};
 }//»
 makeDOM(){//«
 	let win = make('div');

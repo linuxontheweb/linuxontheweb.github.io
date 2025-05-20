@@ -1,3 +1,13 @@
+/*URKSPLK: In order to reload the terminal AND the shell with the same Alt+r keypress,
+we have to call Win.reload({appOnly: true}), otherwise there'd be an infinite loop.
+
+The interesting part of passwordMode is @DYWUEORK, where there is a tineout in the toString
+method of the new String's, so that the output is the actual letter before the timeout
+and then a "*" after it. This mimics the way that cellfonez typically handle password
+inputs. Also of relevance is the bit @WZZKUDJK that takes the valueOf() of each individual
+character, which is necessary for password mode chars to return the "real" string rather
+than, e.g. "********".
+*/
 /*5/6/25: Just put the shell into mods/lang/shell.js.«
 Now need to figure out how to deal with the onreload situation:
 1) In normal REPL mode, we might want to reload the terminal app (this file) or the shell
@@ -678,7 +688,7 @@ async heredocScanner(eof_tok){//«
 	}
 	return doc;
 }//»
-async readLine(promptarg){//«
+async readLine(promptarg, opts={}){//«
 	const{lines}=this;
 	this.sleeping = false;
 	if (!this.actor) {
@@ -696,6 +706,7 @@ async readLine(promptarg){//«
 		this.x = this.promptLen;
 	}
 	this.readLineStartLine = this.cy();//WMNYTUE
+	this.passwordMode = opts.passwordMode;
 	return new Promise((Y,N)=>{
 //XKLRYTJTK
 		if (this.actor) this.readLineStr="";
@@ -723,7 +734,6 @@ async getLineFromPager(arr, name){//«
 	if (await less.init(arr, name, {lineSelect: true, opts: {}})) return arr[less.y+less.scroll_num];
 
 }//»
-///*
 async selectFromHistory(path){//«
 	let arr = await path.toLines();
 	if (!(isArr(arr) && arr.length)) {
@@ -2810,6 +2820,15 @@ handleLetterPress(char_arg, no_render){//«
 	let y = this.cy();
 
 	const ln = lines[y];
+//DYWUEORK
+	if (this.passwordMode){
+		char_arg = new String(char_arg);
+		let then = window.performance.now();
+		char_arg.toString=()=>{
+			if (window.performance.now() - then < 100) return char_arg;
+			return "*";
+		};
+	}
 	if (!ln[x]) ln[x] = char_arg;
 	else ln.splice(x, 0, char_arg);
 	x+=1;
@@ -3216,6 +3235,8 @@ async handleEnter(opts={}){//«
 	this.sleeping = null;
 }//»
 handleReadlineEnter(){//«
+	let is_pass = this.passwordMode;
+	this.passwordMode = false;
 	if (this.actor){
 //HWURJIJE
 		this.readLineCb(this.readLineStr);
@@ -3224,28 +3245,20 @@ handleReadlineEnter(){//«
 		return;
 	}
 	const{lines}=this;
-	let s='';
-
+	let rv = [];
 //This '1' ONLY correct when the line does not wrap
-//	let from = this.curPromptLine+1;
-
-//	let num_com_lines = lines.length - this.curPromptLine - 1;
-//	let from = this.curPromptLine+num_com_lines;
 	let from = this.readLineStartLine;
+	let a;
 	for (let i=from; i < lines.length; i++) {
-		if (i==from) {
-//			s+=lines[i].slice(this.#readLinePromptLen).join("");
-			s+=lines[i].slice(this.promptLen).join("");
-		}
-		else {
-			s+=lines[i].join("");
-		}
+		let a = i===from ? lines[i].slice(this.promptLen) : lines[i];
+		for (let c of a){rv.push(c.valueOf());}//WZZKUDJK
 	}
-	if (!s){
-		s = new String("");
-		s.isNL = true;
+	rv = rv.join("");
+	if (!rv && !is_pass){
+		rv = new String("");
+		rv.isNL = true;
 	}
-	this.readLineCb(s);
+	this.readLineCb(rv);
 	this.readLineCb = null;
 	this.readLineStartLine = null;
 	this.sleeping = true;
@@ -3532,6 +3545,7 @@ onkeyup(e,sym){//«
 
 async _onreload(){
 //globals.ShellMod = new 
+
 delete LOTW.mods["lang.shell"];
 delete globals.ShellMod;
 
@@ -3543,8 +3557,12 @@ delete this.Shell;
 this.doOverlay("Reload ShellMod...");
 await this.loadShell();
 this.doOverlay("Okay!");
-}
 
+//URKSPLK
+await this.Win.reload({appOnly: true});
+//log(this.Win);
+
+}
 
 /*
 async _ondevreload(){//«
@@ -3600,9 +3618,9 @@ async onappinit(appargs={}){//«
 	await this.loadShell();
 	let {reInit} = appargs;
 	if (!reInit) {
-		if (!NO_ONRELOAD) this.onreload = this._onreload;
 		reInit = {};
 	}
+	if (!NO_ONRELOAD) this.onreload = this._onreload;
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {termBuffer, addMessage, commandStr, histories} = reInit;
 //	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;

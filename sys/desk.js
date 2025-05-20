@@ -3449,7 +3449,7 @@ async reload(opts={}){//«
 //	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
 //	if (app.ondevreload) return await app.ondevreload();
 //HGLAURJF
-	if (app.onreload) return await app.onreload();
+	if (!opts.appOnly && app.onreload) return await app.onreload();
 	if (appName.match(/^local\./)&&!opts.dataUrl){
 		return popup("'local' (development) applications cannot be independently reloaded!");
 	}

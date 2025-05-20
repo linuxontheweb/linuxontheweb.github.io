@@ -1,4 +1,11 @@
+/*5/20/25: The trivial idea I have is to support a mode of input (for secret passwords, etc)
+that either echoes stars or echoes the letter which gets turned into a star upon the next 
+render. Let's do a command.
 
+Before I do anything though I need to figure out how to get back the old behavior of
+refreshing the shell and the terminal at the same time...
+
+*/
 //Notes«
 //Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 
@@ -2021,69 +2028,11 @@ continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
 
 const com_devtest = class extends Com{//«
-//Poker crap
 init(){
 }
 async run(){
 const{args, term}=this;
-let f = args.shift();
-let no=num=>{this.no(`Error:${num}`);};
-if (!f) return no(1);
-let o = await f.toJson(term);
-if (!o) return no(2);
-/*«
-Types of flushes on flop:
-Holes same
-4: flush
-3: draw
-0: none
-Holes diff
-2: draw
-0: none
-
-Types of flushes on turn:
-Holes Same
-Type 	Same Table Cards
-3 		>=3
-4 		2
-0
-Holes Diff
-Type 	Same Table Cards
-1 		4
-2		3
-0
-»*/
-let keys = Object.keys(o);
-let arr = [];
-let lo = Infinity, hi = 0;
-let lo_hand, hi_hand;
-for (let key of keys){
-	let n = o[key].n
-	if (n < lo){
-		lo = n;
-		lo_hand = key;
-	}
-	else if (n > hi){
-		hi = n;
-		hi_hand = key;
-	}
-	arr.push({hand: key, ev : o[key].t/n, num: n});
-}
-let sorted = arr.sort((a,b)=>{
-	if (a.ev > b.ev) return 1;
-	if (a.ev < b.ev) return -1;
-	return 0;
-});
-log("LO",lo_hand, lo);
-log("HI",hi_hand, hi);
-log(sorted);
-let perf = 0;
-for (let i = sorted.length-1; i >= 0; i--){
-if (sorted[i].ev === 800){
-perf++;
-}
-else break;
-}
+let rv = await term.readLine("? ", {passwordMode: true});
 this.ok();
 }
 }//»
