@@ -1922,6 +1922,7 @@ addToHistoryBuffer(str){//«
 		this.history.splice(ind, 1);
 	}
 	this.history.push(str);
+	return true;
 }//»
 async updateHistory(str){//«
 	if (!this.addToHistoryBuffer(str)) return;
