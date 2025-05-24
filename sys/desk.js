@@ -6171,17 +6171,14 @@ const save_icon_editing = async() => {//«
 		else{
 			oldname = holdname;
 		}
+
 		if (newname){
 			newnameext = newname;
 			if (oldext) newnameext=`${newname}.${oldext}`;
 			newpath = `${parpath}/${newnameext}`;
-			update_all_paths(oldpath, newpath);
-			CEDICN.setWindowName();
-			CEDICN.updateDOMElement();
 		}
-//		else {
-//		}
-		CEDICN.setLabelName();
+
+//		CEDICN.setLabelName();
 		CEDICN.dblclick = null;
 		if (CEDICN._savetext||CEDICN._savetext==="") {
 			let rv = await fsapi.writeFile(newpath, CEDICN._savetext, {noMakeIcon: true });
@@ -6190,12 +6187,18 @@ const save_icon_editing = async() => {//«
 			delete CEDICN._savetext;
 		}
 
+		if (newname){
+			update_all_paths(oldpath, newpath);
+			CEDICN.setWindowName();
+			CEDICN.updateDOMElement();
+		}
+
 		if (CEDICN._editcb) {
 			CEDICN._editcb(CEDICN);
 			CEDICN._editcb = null;
 		}
 		if (CEDICN.iconElem.parentNode===desk && !windows_showing) toggle_show_windows();
-		CEDICN.saveToStorage();
+//		CEDICN.saveToStorage();
 		CEDICN = null;
 		CG.off();
 	};//»
