@@ -1,3 +1,13 @@
+/*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,
+at the top-level, so we had to add them in at the dir mounting points during
+fs init. This bug screwed up the folder app.
+
+We are not able to do any file moving operations to/from SHM_TYPE
+First: intra-SHM_TYPE mv operations are trivial for both files and folders
+Next:  "   "    "   " cp operations are trivial for files
+Then we need to figure out about mv'ing and cp'ing to/from FS_TYPE.
+cp is trivial for files
+*/
 //New Issues«
 /*9/8/2024: Made /dev/shm to allow for arbitrary in-memory files and folders. Files under here
 will use a new SHM_TYPE, which tells the system not to mess with databasing (which
@@ -1173,7 +1183,8 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${path}: cannot move from the mounted directory`});
 	}
-	else if (!(srctype == FS_TYPE || srctype == MOUNT_TYPE)) {
+//	else if (!(srctype == FS_TYPE || srctype == MOUNT_TYPE)) {
+	else if (!(srctype == FS_TYPE || srctype == MOUNT_TYPE || srctype == SHM_TYPE)) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${path}: cannot ${verb} from directory type: ${srctype}`});
 	}
@@ -1274,7 +1285,8 @@ for (let arr of mvarr) {//«
 	}
 	let savetype = savedir.type;
 
-	if (savetype !== FS_TYPE) {
+//	if (savetype !== FS_TYPE) {
+	if (!(savetype == FS_TYPE || savetype == SHM_TYPE)) {
 		werr(`Not (yet) supporting ${verb} to type='${savetype}'`);
 		continue;
 	}
@@ -1834,6 +1846,7 @@ const init = async()=>{//«
 		if (!ret) return;
 		if (name == "tmp") ret.perm = true;
 		else ret.perm = false;
+		ret.kids['.'] = ret;
 		ret.kids['..'] = root;
 		root.kids[name] = ret;
 	}
@@ -1950,7 +1963,8 @@ const mount_tree=(name, type, pararg)=>{//«
 	if (pararg) pararg.kids[name]=dir;
 	else root.kids[name]=dir;
 	dir.root=dir;
-//	dir.kids['.']=dir;
+	dir.kids['.']=dir;
+	dir.kids['..']=root;
 	return dir;
 }//»
 const make_fs_tree = async name => {//«

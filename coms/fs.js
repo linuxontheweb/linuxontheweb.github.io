@@ -637,7 +637,7 @@ const com_mv = class extends Com{//«
 		}
 	}
 	async run(){
-		let{term, err: _err, args}=this;
+		let{term, args}=this;
 		if (!args.length) return;
 		let have_error = false;
 		const err=mess=>{
@@ -656,10 +656,14 @@ const com_cp = class extends Com{//«
 		}
 	}
 	async run(){
-		let{term, err: _err, args}=this;
+		let{term, args}=this;
 		if (!args.length) return;
 		let have_error = false;
-		const err=mess=>{if(!mess)return;have_error=true;_err(mess);};
+		const err=mess=>{
+			if(!mess)return;
+			have_error=true;
+			this.err(mess);
+		};
 		await fsapi.comMv(args, {if_cp: true, exports: {cberr: err, werr: err, cur_dir: term.cur_dir, termobj: term}});
 		have_error?this.no():this.ok();	
 	}

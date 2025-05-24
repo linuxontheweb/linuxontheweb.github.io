@@ -21,7 +21,7 @@ const globals = LOTW.globals;
 //const {getAppIcon}= capi;
 const{NS, FS_TYPE, FOLDER_APP}=globals;
 const{poperr} = globals.widgets;
-const{make,mkdv,mk,mksp,log,cwarn,cerr, getAppIcon, isStr}=util;
+const{make,mkdv,mk,mksp,log,cwarn,cerr, getAppIcon, isStr, jlog}=util;
 const {fs}=NS.api;
 
 //»
@@ -190,10 +190,22 @@ const load_dir=()=>{//«
 
 let typ = dir.type;
 kids = dir.kids;
-
+//log(dir);
 let keys = Object.keys(kids);
-keys.splice(keys.indexOf("."),1);
-keys.splice(keys.indexOf(".."),1);
+
+let ind = keys.indexOf(".");
+if (ind < 0){
+cerr(`The "." entry was not found in the dir kids (${dir.fullpath}!`);
+log(dir);
+}
+else keys.splice(ind, 1);
+ind = keys.indexOf("..");
+if (ind < 0){
+cerr(`The ".," entry was not found in the dir kids (${dir.fullpath}!`);
+log(dir);
+}
+else keys.splice(ind, 1);
+
 
 if (picker_mode){
 	let dirs = [];
