@@ -2688,7 +2688,7 @@ _.toText = async function(opts = {}) {
 	if (!node) return;
 	if (!node.isFile) return;
 	let txt = await node.text;
-	if (opts.lines) return txt.split("\n");
+	if (opts.lines === true) return txt.split("\n");
 	return txt;
 };
 _.toLines=function(opts={}){

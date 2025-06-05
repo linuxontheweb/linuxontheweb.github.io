@@ -1,3 +1,21 @@
+/*CRITICAL BUG:
+THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
+let val = await fname.toText(term);
+_.toText = async function(opts = {}) {
+	let node = await this.toNode(opts);
+	if (!node) return;
+	if (!node.isFile) return;
+	let txt = await node.text;
+
+//	if (opts.lines) return txt.split("\n");//<-- When term is used as the "opts", there is a lines member in it!
+
+	if (opts.lines === true) return txt.split("\n");
+
+	return txt;
+};
+
+
+*/
 /*5/20/25: The trivial idea I have is to support a mode of input (for secret passwords, etc)
 that either echoes stars or echoes the letter which gets turned into a star upon the next 
 render. Let's do a command.
@@ -2030,11 +2048,77 @@ continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 const com_devtest = class extends Com{//«
 init(){
 }
-async run(){
-const{args, term}=this;
-let rv = await term.readLine("? ", {passwordMode: true});
-this.ok();
+run(){
+this.no("no devtest!!!");
 }
+}//»
+
+const com_wat2wasm = class extends Com{//«
+
+async init(){//«
+	if (!window.WabtModule) {
+		if (!await util.makeScript("/mods/util/libwabt.js")) {
+			return this.no("Could not load 'libwabt'");
+		}
+		if (!window.WabtModule) return this.no("window.WabtModule does not exist!");
+	}
+	this.wabt = await window.WabtModule();
+}//»
+compile(text){//«
+	//log(typeof text);
+	let features = {};
+	let outputLog = '';
+	let outputBase64 = 'Error occured, base64 output is not available';
+
+	let binaryOutput;
+	let binaryBlobUrl, binaryBuffer;
+	let module;
+	try {
+		module = this.wabt.parseWat('test.wast', text, features);
+		module.resolveNames();
+		module.validate(features);
+		let binaryOutput = module.toBinary({log: true, write_debug_names:true});
+		outputLog = binaryOutput.log;
+		binaryBuffer = binaryOutput.buffer;
+// binaryBuffer is a Uint8Array, so we need to convert it to a string to use btoa
+// https://stackoverflow.com/questions/12710001/how-to-convert-uint8-array-to-base64-encoded-string
+
+//	outputBase64 = btoa(String.fromCharCode.apply(null, binaryBuffer));
+
+//	let blob = new Blob([binaryBuffer]);
+		this.out(binaryBuffer);
+//	log(blob);
+	//if (binaryBlobUrl) {
+	//	URL.revokeObjectURL(binaryBlobUrl);
+	//}
+	//binaryBlobUrl = URL.createObjectURL(blob);
+	//downloadLink.setAttribute('href', binaryBlobUrl);
+	//downloadEl.classList.remove('disabled');
+	} catch (e) {
+		outputLog += e.toString();
+		cerr(outputLog);
+	//downloadEl.classList.add('disabled');
+	} 
+	finally {
+		if (module) module.destroy();
+	//	outputEl.textContent = outputShowBase64 ? outputBase64 : outputLog;
+	}
+	//log(typeof text);
+}//»
+async run(){//«
+	const{args, term}=this;
+	//log();
+	//let rv = await term.readLine("? ", {passwordMode: true});
+	//let wabt = await WabtModule();
+
+	let fname = args.shift();
+	if (!fname) return this.no("No filename!");
+	let val = await fname.toText({cwd: term.cwd});
+	if (!val) return this.no(`${fname}: nothing returned`);
+	this.compile(val);
+	this.ok();
+}//»
+
 }//»
 const com_wget = class extends Com{//«
 /*How github names their files within repos, and how to fetch them from LOTW«
@@ -2963,6 +3047,7 @@ this.defCommands={//«
 
 //continue: com_continue,
 //break: com_break,
+wat2wasm: com_wat2wasm,
 wget: com_wget,
 continue: com_loopctrl,
 break: com_loopctrl,

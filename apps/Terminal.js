@@ -3560,7 +3560,8 @@ await this.loadShell();
 this.doOverlay("Okay!");
 
 //URKSPLK
-await this.Win.reload({appOnly: true});
+//Uncomment this to reload the terminal also!
+//await this.Win.reload({appOnly: true});
 //log(this.Win);
 
 }
