@@ -1,3 +1,6 @@
+/*FATAL PERFORMANCE BUG: WITH VERY LONG LINES, THE RENDERER DOES *NOT* CHOP THE LINES,
+AND THE FULL LINES ARE IN THE DOM, AND IT TAKES FOREVER TO RENDER!!!
+*/
 /*1/25/25: When doing Ctrl+p "autocomplete", I don't want the current word«
 included, if there are only one of them. So now @WOLMFGHJ, we are passing in
 an argument to get_all_words, which tests to see (@DJKUYTKM) if the indexOf

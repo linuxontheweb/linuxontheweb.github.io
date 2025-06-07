@@ -106,10 +106,10 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 //»
 
 //This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
-//let NO_ONRELOAD = true;
+let NO_ONRELOAD = true;
 
 //This means that the terminal app's onreload method is set to _onreload.
-let NO_ONRELOAD = false;
+//let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
 const util = LOTW.api.util;
@@ -1078,14 +1078,44 @@ render(opts={}){//«
 	let len = uselines.length;//«
 	if (len + this.numStatLines != this.h) donum = this.h - this.numStatLines;
 	else donum = len;//»
+//log(donum);
 
+//	if (docursor&&i==this.y&&this.isEditor&&mode!==LINE_WRAP_MODE) {
+	let slice_from = 0;
+	let slice_to;
+/*
+
+Simple hack to keep the cursor (non-jarringly) at the end of the right edge of
+the screen when it would otherwise be off screen.
+
+*/
+	if (docursor&&this.isEditor&&mode!==LINE_WRAP_MODE) {
+/*
+		let ln = uselines[this.y];
+		let marr = ln.match(/^(\t+)/);
+		if (marr){
+			let n_tabs = marr[1].length;
+//log(n_tabs);
+//			let rem_chars = usex - n_tabs;
+//			x_wid = n_tabs*this.tabWid + rem_chars*this.cellWid;
+		}
+*/
+		let diff = usex - this.w + 1;
+		let no_colors = false;
+		if (diff > 0){
+			slice_from = diff;
+			usex-=slice_from;
+			slice_to = diff + this.w;
+			no_colors = true;
+		}
+//		this.setXScroll(arr.slice(0, usex).join(""), usex);
+	}
 	for (let i = 0; i < donum; i++) {//«
 
 		let arr = uselines[i];
+		if (slice_from) arr = arr.slice(slice_from, slice_to);
+		else arr = arr.slice(0, this.w);
 //DOCURSOR
-		if (docursor&&i==this.y&&this.isEditor&&mode!==LINE_WRAP_MODE) {
-			this.setXScroll(arr.slice(0, usex).join(""), usex);
-		}
 		let ind;
 		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
 		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
@@ -1410,7 +1440,9 @@ There are embedded tabs here, so we have to do this the hard way
 	let scrw = this.screenWid;
 	let cellw = this.cellWid;
 	let dx = scrw/2;
+//log(dx, this.w);
 	let diff = scrw - x_wid;
+//log(dx, scrw);
 	while(diff < cellw){
 		tabdiv._x-=dx;
 		diff += dx;
