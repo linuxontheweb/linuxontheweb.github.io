@@ -107,8 +107,9 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 
 //This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
 //let NO_ONRELOAD = true;
+
 let RELOAD_TERM_ONRELOAD = false;
-//This means that the terminal app's onreload method is set to _onreload.
+//This means that the terminal app's onreload method is set to _onreload (to reload the shell)
 let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;

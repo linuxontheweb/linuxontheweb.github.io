@@ -49,6 +49,8 @@ const set_html = text => {//«
 	}
 	Main.innerHTML = doc.body.innerHTML;
 	Win.statusBar.innerHTML = `${tot} nodes deleted`;
+//let mess_arr = doc.getElementsByClassName("message-bubble");
+//log(mess_arr);
 
 };//»
 

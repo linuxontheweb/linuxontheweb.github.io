@@ -2048,8 +2048,29 @@ continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 const com_devtest = class extends Com{//«
 init(){
 }
-run(){
-this.no("no devtest!!!");
+async run(){
+
+let fname = this.args.shift();
+if (!fname) return this.no("No file!");
+let txt = await fname.toText(this.term);
+if (!txt) return this.no("No file text!");
+
+let parser = new DOMParser();
+let doc = parser.parseFromString(txt, "text/html");
+
+//Easy way to pick out all the "conversation content" divs: class="message-bubble"
+let mess_arr = Array.from(doc.getElementsByClassName("message-bubble"));
+let quests=[];
+let resps=[];
+for (let i=0; i < mess_arr.length; i+=2){
+//Alternate between questions and answers
+	quests.push(mess_arr[i].children[1].innerHTML);
+	resps.push(mess_arr[i+1].children[1].innerHTML);
+}
+cwarn("ALL");
+log(quests);
+log(resps);
+this.ok();
 }
 }//»
 
@@ -2742,7 +2763,8 @@ const com_app = class extends Com{//«
 
 async run(){
 	const{args, out, term}=this;
-	let list = await util.getList("/site/apps/");
+//	let list = await util.getList("/site/apps/");
+/*
 	if (!args.length) {
 		if (!list){
 			return this.no("could not get the app list");
@@ -2750,12 +2772,13 @@ async run(){
 		out(list.join("\n"));
 		return this.ok();
 	}
+*/
 	let have_error=false;
 	for (let appname of args){
-		if (list && !list.includes(appname)) {
-			this.err(`${appname}: not found`);
-			continue;
-		}
+//		if (list && !list.includes(appname)) {
+//			this.err(`${appname}: not found`);
+//			continue;
+//		}
 		let win = await Desk.api.openApp(appname);
 		if (!win) this.err(`${appname}: not found`);
 	}

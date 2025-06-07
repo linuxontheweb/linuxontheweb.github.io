@@ -1,6 +1,17 @@
-/*FATAL PERFORMANCE BUG: WITH VERY LONG LINES, THE RENDERER DOES *NOT* CHOP THE LINES,
-AND THE FULL LINES ARE IN THE DOM, AND IT TAKES FOREVER TO RENDER!!!
-*/
+/*6/7/25: FATAL PERFORMANCE BUG (FIXED): WITH LONG LINES, THE RENDERER DOES *NOT* «
+CHOP THE LINES, AND THE FULL LINES ARE IN THE DOM, AND FILES WITH VERY LONG LINES 
+TAKE FOREVER TO RENDER!!!
+
+Options for being able to use files with arbitrary tabs scattered throughout,
+in normal editing mode (LINE_WRAP_MODE will wrap very long lines):
+1) ":tab 1" 
+2) set_tab_size_cb("1") (via "._CAS"), 
+
+...in order to set the terminal's tab size to 1. This will ensure that the
+terminal's "tab naive" implementation of slicing all lines to fit the width
+will give proper results, and the cursor will be kept at the right edge when
+the cursor has gone beyond it.
+»*/
 /*1/25/25: When doing Ctrl+p "autocomplete", I don't want the current word«
 included, if there are only one of them. So now @WOLMFGHJ, we are passing in
 an argument to get_all_words, which tests to see (@DJKUYTKM) if the indexOf
