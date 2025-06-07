@@ -106,10 +106,10 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 //»
 
 //This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
-let NO_ONRELOAD = true;
-
+//let NO_ONRELOAD = true;
+let RELOAD_TERM_ONRELOAD = false;
 //This means that the terminal app's onreload method is set to _onreload.
-//let NO_ONRELOAD = false;
+let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
 const util = LOTW.api.util;
@@ -714,12 +714,21 @@ async readLine(promptarg, opts={}){//«
 	});
 }
 //»
-setTabSize(s){//«
-	if (!s.match(/[0-9]+/)) return;
-	let n = parseInt(s);
+setTabSize(arg){//«
+	if (isStr(arg)){
+		if (!arg.match(/^[0-9]+$/)) {
+cwarn(`Invalid arg to setTabSize: '${arg}'`);
+			return;
+		}
+	}
+	let n = parseInt(arg);
+	if (!Number.isFinite(n)){
+cwarn(`Invalid arg to setTabSize: '${arg}'`);
+		return;
+	}
 	if (n==0||n>this.maxTabSize) return;
 	this.tabdiv.style.tabSize = n;
-	this.tabSize = tabdiv.style.tabSize;
+	this.tabSize = n;
 	return true;
 }
 //»
@@ -3576,7 +3585,7 @@ onkeyup(e,sym){//«
 
 //System callbacks«
 
-async _onreload(){
+async _reloadShell(){//«
 //globals.ShellMod = new 
 
 delete LOTW.mods["lang.shell"];
@@ -3590,11 +3599,16 @@ delete this.Shell;
 this.doOverlay("Reload ShellMod...");
 await this.loadShell();
 this.doOverlay("Okay!");
-
 //URKSPLK
 //Uncomment this to reload the terminal also!
-//await this.Win.reload({appOnly: true});
+if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
 //log(this.Win);
+
+}//»
+async _onreload(){
+
+	await this._reloadShell();
+//	await this.ShellMod.util.deleteMods(["term.vim"]);
 
 }
 

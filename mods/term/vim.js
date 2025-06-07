@@ -792,6 +792,24 @@ const set_edit_mode = (ch)=>{//«
 	this.mode = INSERT_MODE;
 	render();
 };//»
+const set_tab_size_cb=()=>{//«
+	stat_cb=c=>{
+		stat_cb=null;
+		if (c && c.length==1){
+			if (c.match(/^[1-9]$/)){
+				Term.setTabSize(parseInt(c));
+				render();
+			}
+			else if (c.match(/^[a-fA-F]$/)){
+				Term.setTabSize(parseInt(`0x${c}`));
+				render();
+			}
+			else stat_warn(`Invalid tab size: '${c}'`);
+		}
+		else render();
+	};
+	stat("tabsize (1-F)?");
+};//»
 
 //»
 //Fold«
@@ -1738,7 +1756,7 @@ if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
 		}
 		else if (marr = com.match(/^tab +(.*)$/)){
 			let num = marr[1];
-			if (Term.set_tab_size(num)) return stat_ok(`Tab size is set to: ${num}`);
+			if (Term.setTabSize(num)) return stat_ok(`Tab size is set to: ${num}`);
 			stat_err("Error: invalid tab size");
 			return;
 		}
@@ -6021,33 +6039,6 @@ cerr(e);
 	document.head.appendChild(scr);
 },//»
 */
-s_CAS:async()=>{
-if (!vim.sendFunc) {
-	stat_warn("Sending not enabled");
-	return;
-}
-if (Term.is_dirty) {
-	stat_warn("Please save before sending!");
-	return;
-}
-let arr = get_edit_save_arr();
-if (detect_fold_error(arr)) {
-	return;
-}
-edit_fobj.unlockFile();
-delete Term.curEditNode;
-edit_fobj = null;
-await vim.sendFunc(arr[0]);
-quit();
-
-/*
-let rv = await vim.sendFunc(val);
-if (!(rv && isStr(rv.mess))) return;
-stat_message = rv.mess;
-stat_message_type = rv.type||STAT_NONE;
-render();
-*/
-},
 //Init/Toggle modes
 p_C: init_complete_mode,
 v_C: init_visual_block_mode,
@@ -6074,7 +6065,35 @@ s_CS: try_save_as,
 r_CA:toggle_reload_win,
 o_C: ()=>{init_stat_input("Open: ")},
 x_C: maybe_quit,
-z_CAS:()=>{
+"._CAS":set_tab_size_cb,
+s_CAS:async()=>{//«
+if (!vim.sendFunc) {
+	stat_warn("Sending not enabled");
+	return;
+}
+if (Term.is_dirty) {
+	stat_warn("Please save before sending!");
+	return;
+}
+let arr = get_edit_save_arr();
+if (detect_fold_error(arr)) {
+	return;
+}
+edit_fobj.unlockFile();
+delete Term.curEditNode;
+edit_fobj = null;
+await vim.sendFunc(arr[0]);
+quit();
+
+/*
+let rv = await vim.sendFunc(val);
+if (!(rv && isStr(rv.mess))) return;
+stat_message = rv.mess;
+stat_message_type = rv.type||STAT_NONE;
+render();
+*/
+},//»
+z_CAS:()=>{//«
 let ln = curarr();
 if (ln._fold) return stat_warn("Fold detected");
 ln = ln.join("");
@@ -6096,7 +6115,7 @@ handle_paste("P");
 else{
 stat_warn("No matches!");
 }
-}
+}//»
 };//»
 const LEFTRIGHT_FUNCS={//«
 	LEFT_: left,
