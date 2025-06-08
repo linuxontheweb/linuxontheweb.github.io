@@ -135,10 +135,10 @@ const VIEWONLY_APPS=[];
 
 //File extensions/Unicode icons«
 //Extension points to the array position above
-let TE = TEXT_EDITOR_APP;
-let IA = IMAGE_APP;
-let MA = MEDIA_APP;
-let AA = "games.Arcade";
+const TE = TEXT_EDITOR_APP;
+const IA = IMAGE_APP;
+const MA = MEDIA_APP;
+const AA = "games.Arcade";
 const EXT_TO_APP_MAP = {//«
 	app:"Application",
 	txt:TE,
@@ -157,7 +157,8 @@ const EXT_TO_APP_MAP = {//«
 	mp3:MA,
 	html:HTML_APP,
 	nes: AA,
-	gb: AA
+	gb: AA,
+	grok: "dev.Grok",
 };
 //»
 for (let k in EXT_TO_APP_MAP) ALL_EXTENSIONS.push(k);
@@ -182,7 +183,8 @@ const APPICONS = {//«
 	VideoCutter: "1f4fd",//Film Projector
 	Loader:"1f303",//
 	Meta:"1f528",//Hammer
-	YourApp: "2615"
+	YourApp: "2615",
+	Grok: "2734"
 }//»
 //»
 
