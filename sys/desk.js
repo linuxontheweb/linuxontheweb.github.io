@@ -1,3 +1,24 @@
+/*New: util.GetPoint
+Usage in app:
+
+const get_point=async()=>{
+	let rv = await this.Win.selectPoint({isRelative: true});
+log(rv);
+};
+onkeydown(e,k){
+    if (k=="SPACE_"){
+        get_point();
+    }
+}
+
+The quadrant select keys are:
+Center: s
+Then, from North (going clockwise on the qwerty keyboard):
+w (N), e, d, c, x (S), z, a, q
+
+The enter key
+
+*/
 /*Keep it simple: If an app defines onreload, just call *that* instead of doing the
 system default @HGLAURJF. This is for applications that have their own internal 
 development workflows. The point is that we want to keep the r_A hotkey as universal
@@ -75,7 +96,8 @@ const {//«
 //	detectClick,
 	fsUrl,
 	isFin,
-	makeScript
+	makeScript,
+	GetPoint,	
 } = NS.api.util;//»
 
 //»
@@ -2190,14 +2212,21 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 		}//»
 	}//»
 	if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
+	if (CWIN.pointSelectMode===true){
+		CWIN.handlePointSelect(kstr);
+		return;
+	}
+
 	if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
 }//»
 keyUp(e){//«
 	if (!CWIN) return;
+	if (CWIN.pointSelectMode===true) return;
 	if (CWIN.app.onkeyup) CWIN.app.onkeyup(e, evt2Sym(e));
 }//»
 keyPress(e){//«
 	if (!CWIN) return;
+	if (CWIN.pointSelectMode===true) return;
 	let code = e.charCode;
 	if (code >= 32 && code <= 126 && CWIN.app.onkeypress) CWIN.app.onkeypress(e);
 }//»
@@ -2360,6 +2389,7 @@ resize(){//«
 	this.statusBar.resize();
 	this.app.onresize();
 	if (this.moveDiv) this.moveDiv.update();
+	if (this.pointSelectMode===true) this.pointSelectResize();
 }//»
 sbcr(){this._rect=this.winElem.getBoundingClientRect();}
 gbcr(){return this._rect;}
@@ -3472,7 +3502,6 @@ cwarn(`No script found for app: ${appName}`);
 	main.innerHTML="";
 	return this.loadApp();
 };//»
-
 loadApp(){//Old make_app«
 //DIOLMTNY
 
@@ -3571,6 +3600,82 @@ cwarn(`Using app: '${winapp}'`);
 
 
 }//»
+
+selectPoint(opts={}){/* « */
+return new Promise((Y,N)=>{
+
+//const baseDiv = document.getElementById('baseDiv');
+//const getPoint = new GetPoint(baseDiv);
+//Put the keys into dokeydown just before feeding into the app window.
+//Do not call keypress or keyup if pointSelectMode == true
+
+const{main}=this;
+let div = mkdv();
+div._pos="absolute";
+div._w = main.clientWidth;
+div._h = main.clientHeight;
+div._x=0;
+div._y=0;
+div._z=9999999;
+main._add(div);
+this.pointSelectResize=()=>{
+	div._w = main.clientWidth;
+	div._h = main.clientHeight;
+};
+this.pointSelect = new GetPoint(div);
+this.pointSelectMode = true;
+this.pointSelectDiv = div;
+this.pointSelectCb=Y;
+this.pointSelectOpts=opts;
+
+});
+
+}/* » */
+handlePointSelect(kstr){/* « */
+
+const getPoint = this.pointSelect;
+switch (kstr){
+case 'w_': case 'e_': case 'd_': case 'c_': case 'x_': case 'z_': case 'a_': case 'q_': case 's_':
+getPoint.onKey(event.key);
+break;
+case 'UP_':
+getPoint.onUp();
+break;
+case 'DOWN_':
+getPoint.onDown();
+break;
+case 'LEFT_':
+getPoint.onLeft();
+break;
+case 'RIGHT_':
+getPoint.onRight();
+break;
+case 'ENTER_':
+this.pointSelectCb(getPoint.onSelect(!this.pointSelectOpts.isRelative));
+this.stopPointSelect();
+break;
+
+//case 'ESC_':
+//handled @BSHDKFLG
+//This returns false if we are at the top level, so we can just cancel this mode
+//by calling CWIN.stopPointSelect() in our escape handler
+//getPoint.onEscape();
+//break;
+}
+}/* » */
+stopPointSelect(if_abort){/* « */
+	this.pointSelectCb(null);
+
+	this.pointSelectMode = false;
+	this.pointSelectDiv._del();
+	delete this.pointSelectResize;
+	delete this.pointSelectDiv;
+	delete this.pointSelect;
+	delete this.pointSelectCb;
+	delete this.pointSelectOpts;
+
+
+}/* » */
 
 //»
 
@@ -3714,310 +3819,7 @@ const clear_drag_resize_win=()=>{//«
 		CDW = null;
 	}
 };//»
-const tile_windows = () => {//«
-/*«
-
-
-
-Tiling algorithm?
-
-First we check that there are no overlapping windows.
-Then we visit every side of every window and try to extend them to the window boundary
-or the first window, whichever comes first. If there is a window first, we should extend
-both of the sides till they meet in the middle.
-
-If we are extending a window's TOP, then we need to find all window (X) bottoms, vis-a-viv
-our current_win (CW), such that:
-
-!(X.left > CW.right) && !(X.right < CW.left)		(1)
-
-For all of these windows, we need to find whichever has the largest bottom value that is
-less than our top value (with the smallest positive delta, CW.top - X.bottom).
-
-For extending its BOTTOM, we use formula (1), but then:
-
-For all of these windows, we need to find whichever has the least top value that is
-greater than our bottom value (with the smallest positive delta, X.top - CW.bottom).
-
-Say we are extending a window's LEFT. Then we need to find all window rights (X), vis-a-viv
-our current_win (CW).
-
-!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
-
-For all of these windows, we need to find whichever has the largest right value that is
-less than our left value (with the smallest positive delta, CW.left - X.right).
-
-For extending its RIGHT, we use formula (2), but then:
-
-For all of these windows, we need to find whichever has the least left value that is
-greater than our right value (with the smallest positive delta, X.left - CW.right).
-
-For each of these cases, if there are no windows that satisfy formula (1) or (2) as
-the case may be, we extend the given side all the way to the browser's edge.
-
-»*/
-const overlay_mess=(mess)=>{show_overlay(mess);}
-const OFFSCREEN_MESS = "Offscreen window detected";
-const INTERSECTING_MESS = "Intersecting windows detected";
-const NOT_ENOUGH_WINDOWS_MESS = "Tiling requires at least 2 windows";
-let wid = winw();
-let hgt = winh();
-const intersects = (w1, w2) => {//«
-	let rect1 = w1.gbcr();
-	let rect2 = w2.gbcr();
-	if (!(rect1.left > rect2.right || rect1.right < rect2.left || rect1.top > rect2.bottom || rect1.bottom < rect2.top)) {
-		return true;
-	}
-	return false;
-};//»
-
-const get_nearest_bottom = win =>{//«
-
-let r1 = win.gbcr();
-let cr = r1.right;
-let cl = r1.left;
-let ct = r1.top;
-let cb = r1.bottom;
-let all=[];
-for (let w of arr){//«
-	if (win===w) continue;
-	let r2 = w.gbcr();
-//!(X.left > CW.right) && !(X.right < CW.left)		(1)
-	if (!(r2.left > cr) && !(r2.right < cl)) {
-//For all of these windows, we need to find whichever has the largest bottom value that is
-//less than our top value (with the smallest positive delta, CW.top - X.bottom).
-		let diff = ct - r2.bottom;
-		if (diff > 0) all.push({win: w, diff});
-	}
-}//»
-if (!all.length) return;
-if (all.length===1) return all[0].win;
-all.sort((a, b)=>{
-	if (a.diff < b.diff) return -1;
-	else if (a.diff > b.diff) return 1;
-	else return 0;
-});
-return all[0].win;
-
-}//»
-const get_nearest_top = win =>{//«
-
-let r1 = win.gbcr();
-let cr = r1.right;
-let cl = r1.left;
-let ct = r1.top;
-let cb = r1.bottom;
-let all=[];
-for (let w of arr){//«
-	if (win===w) continue;
-	let r2 = w.gbcr();
-//!(X.left > CW.right) && !(X.right < CW.left)		(1)
-	if (!(r2.left > cr) && !(r2.right < cl)) {
-//For all of these windows, we need to find whichever has the least top value that is
-//greater than our bottom value (with the smallest positive delta, X.top - CW.bottom).
-		let diff = r2.top - cb;
-		if (diff > 0) all.push({win: w, diff});
-	}
-}//»
-if (!all.length) return;
-if (all.length===1) return all[0].win;
-all.sort((a, b)=>{
-	if (a.diff < b.diff) return -1;
-	else if (a.diff > b.diff) return 1;
-	else return 0;
-});
-return all[0].win;
-
-}//»
-const get_nearest_right = win =>{//«
-
-let r1 = win.gbcr();
-let cr = r1.right;
-let cl = r1.left;
-let ct = r1.top;
-let cb = r1.bottom;
-let all=[];
-for (let w of arr){//«
-	if (win===w) continue;
-	let r2 = w.gbcr();
-//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
-	if (!(r2.bottom < ct) && !(r2.top > cb)) {
-//For all of these windows, we need to find whichever has the largest right value that is
-//less than our left value (with the smallest positive delta, CW.left - X.right).
-		let diff = cl - r2.right;
-		if (diff > 0) all.push({win: w, diff});
-
-	}
-}//»
-if (!all.length) return;
-if (all.length===1) return all[0].win;
-all.sort((a, b)=>{
-	if (a.diff < b.diff) return -1;
-	else if (a.diff > b.diff) return 1;
-	else return 0;
-});
-return all[0].win;
-
-}//»
-const get_nearest_left = win =>{//«
-
-let r1 = win.gbcr();
-let cr = r1.right;
-let cl = r1.left;
-let ct = r1.top;
-let cb = r1.bottom;
-let all=[];
-for (let w of arr){//«
-	if (win===w) continue;
-	let r2 = w.gbcr();
-//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
-	if (!(r2.bottom < ct) && !(r2.top > cb)) {
-//For all of these windows, we need to find whichever has the least left value that is
-//greater than our right value (with the smallest positive delta, X.left - CW.right).
-		let diff = r2.left - cr;
-		if (diff > 0) all.push({win: w, diff});
-	}
-}//»
-if (!all.length) return;
-if (all.length===1) return all[0].win;
-all.sort((a, b)=>{
-	if (a.diff < b.diff) return -1;
-	else if (a.diff > b.diff) return 1;
-	else return 0;
-});
-return all[0].win;
-
-}//»
-
-let wins = workspace.windows;
-let got=[];
-for (let w of wins){
-	if (w.isMinimized) continue;
-	if (!w.checkProp("Resize")) return;
-	w.tiledEdges = {};
-	got.push(w);
-}
-if (got.length<2){
-	return overlay_mess(NOT_ENOUGH_WINDOWS_MESS);
-}
-
-let arr = got;
-//Detect offscreen windows
-for (let win of arr){
-	let rect = win.gbcr();
-	if(rect.top<0 || rect.bottom>hgt || rect.left<0 || rect.right>wid) {
-		return overlay_mess(OFFSCREEN_MESS);
-	}
-}
-//Detect intersecting windows
-for (let j = 0; j < arr.length; j++) {//«
-	let w1 = arr[j];
-	for (let i = j + 1; i < arr.length; i++) {
-		let w2 = arr[i];
-		if (intersects(w1, w2)) {
-//			show_overlay();
-			overlay_mess(INTERSECTING_MESS);
-			return;
-		}
-	}
-}//»
-
-//Set all windows to noChromeMode«
-for (let win of arr){
-	if (!win.noChromeMode) win.toggleChrome();
-}
-//»
-//PMNTYJ
-//Tile window top edges//«
-for (let j = 0; j < arr.length; j++) {
-	let w1 = arr[j];
-	if (w1.y === 0 || w1.tiledEdges.top) {
-		continue;
-	}
-	let w2 = get_nearest_bottom(w1);
-	if (!w2){
-		w1.y = 0;
-	}
-	else if (w2.tiledEdges.bottom){
-		w1.y = w2.b;
-	}
-	else{
-		let mid = (w1.y+w2.b)/2;
-		w1.y = mid;
-		w2.b = mid;
-		w2.tiledEdges.bottom = true;
-	}
-	w1.tiledEdges.top = true;
-}//»
-//Tile window bottom edges//«
-for (let j = 0; j < arr.length; j++) {
-	let w1 = arr[j];
-	if ((Math.abs(w1.b-hgt) < 1)  || w1.tiledEdges.bottom) {
-		continue;
-	}
-	let w2 = get_nearest_top(w1);
-	if (!w2){
-		w1.b = hgt;
-	}
-	else if (w2.tiledEdges.top){
-		w1.b = w2.y;
-	}
-	else{
-		let mid = (w1.b+w2.t)/2;
-		w1.b = mid;
-		w2.y = mid;
-		w2.tiledEdges.top= true;
-	}
-	w1.tiledEdges.bottom= true;
-}//»
-//Tile window left edges//«
-for (let j = 0; j < arr.length; j++) {
-	let w1 = arr[j];
-	if (w1.x === 0 || w1.tiledEdges.left) {
-		continue;
-	}
-	let w2 = get_nearest_right(w1);
-	if (!w2){
-		w1.l = 0;
-	}
-	else if (w2.tiledEdges.right){
-		w1.l = w2.r;
-	}
-	else{
-		let mid = (w1.x+w2.r)/2;
-		w1.l = mid;
-		w2.r = mid;
-		w2.tiledEdges.right = true;
-	}
-	w1.tiledEdges.left = true;
-}//»
-//Tile window right edges//«
-for (let j = 0; j < arr.length; j++) {
-	let w1 = arr[j];
-	if ((Math.abs(w1.r-wid) < 1)  || w1.tiledEdges.right) continue;
-
-	let w2 = get_nearest_left(w1);
-	if (!w2){
-		w1.r = wid;
-	}
-	else if (w2.tiledEdges.left){
-		w1.r = w2.x;
-	}
-	else{
-		let mid = (w1.r+w2.x)/2;
-		w1.r = mid;
-		w2.x = mid;
-		w2.tiledEdges.left = true;
-	}
-	w1.tiledEdges.right = true;
-}//»
-/*
-//Call each app's onresize handler«
-for (let win of arr) win.app.onresize();
-//»
-*/
-return arr;
-};//»
+// const tile_windows ???
 const toggle_show_windows = (if_no_current) => {//«
 	let wins = get_active_windows();
 	if (windows_showing) {
@@ -6995,9 +6797,13 @@ toggle(){//«
 //»
 //File/App«
 
-const open_text_editor = () => {//«
-	return open_app(TEXT_EDITOR_APP, {force: true});
-};//»
+const open_text_editor = (opts={}) => {//«
+	opts.force = true;
+//	return open_app(TEXT_EDITOR_APP, {force: true});
+	return open_app(TEXT_EDITOR_APP, opts);
+};
+api.openTextEditor = open_text_editor;
+//»
 const make_file = () => {//«
 	if (!CWIN || CWIN.appName != FOLDER_APP){
 		make_new_icon(desk, "Text");
@@ -8092,6 +7898,16 @@ or when there is an active context menu.
 			icon_array_off(12);
 			return;
 		}
+//BSHDKFLG
+		if (cwin.pointSelectMode) {
+			if (cwin.pointSelect.onEscape()) {
+cwarn("CAUGHT pointSelect ESCAPE");
+				return;
+			}
+cwarn("ABORT pointSelect");
+			cwin.stopPointSelect(true);
+			return;
+		}
 		cwin.off();
 		return;
 	}//»
@@ -8248,7 +8064,7 @@ cwarn("There was an unattached icon in ICONS!");
 		case "b_A": return taskbar.toggle();
 		case "e_CAS": return taskbar.toggleExpertMode();
 		case "i_CAS": return toggle_icon_display();
-		case "t_CAS": return tile_windows();
+//		case "t_CAS": return tile_windows();
 		case "l_CA": return toggle_layout_mode();
 	}
 //»
@@ -8403,4 +8219,309 @@ const dokeyup = function(e) {//«
 
 //»
 
+
+/*Hold«
+const tile_windows = () => {//«
+//«
+
+
+
+//Tiling algorithm?
+//
+//First we check that there are no overlapping windows.
+//Then we visit every side of every window and try to extend them to the window boundary
+//or the first window, whichever comes first. If there is a window first, we should extend
+//both of the sides till they meet in the middle.
+//
+//If we are extending a window's TOP, then we need to find all window (X) bottoms, vis-a-viv
+//our current_win (CW), such that:
+//
+//!(X.left > CW.right) && !(X.right < CW.left)		(1)
+//
+//For all of these windows, we need to find whichever has the largest bottom value that is
+//less than our top value (with the smallest positive delta, CW.top - X.bottom).
+//
+//For extending its BOTTOM, we use formula (1), but then:
+//
+//For all of these windows, we need to find whichever has the least top value that is
+//greater than our bottom value (with the smallest positive delta, X.top - CW.bottom).
+//
+//Say we are extending a window's LEFT. Then we need to find all window rights (X), vis-a-viv
+//our current_win (CW).
+//
+//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
+//
+//For all of these windows, we need to find whichever has the largest right value that is
+//less than our left value (with the smallest positive delta, CW.left - X.right).
+//
+//For extending its RIGHT, we use formula (2), but then:
+//
+//For all of these windows, we need to find whichever has the least left value that is
+//greater than our right value (with the smallest positive delta, X.left - CW.right).
+//
+//For each of these cases, if there are no windows that satisfy formula (1) or (2) as
+//the case may be, we extend the given side all the way to the browser's edge.
+
+//»
+const overlay_mess=(mess)=>{show_overlay(mess);}
+const OFFSCREEN_MESS = "Offscreen window detected";
+const INTERSECTING_MESS = "Intersecting windows detected";
+const NOT_ENOUGH_WINDOWS_MESS = "Tiling requires at least 2 windows";
+let wid = winw();
+let hgt = winh();
+const intersects = (w1, w2) => {//«
+	let rect1 = w1.gbcr();
+	let rect2 = w2.gbcr();
+	if (!(rect1.left > rect2.right || rect1.right < rect2.left || rect1.top > rect2.bottom || rect1.bottom < rect2.top)) {
+		return true;
+	}
+	return false;
+};//»
+
+const get_nearest_bottom = win =>{//«
+
+let r1 = win.gbcr();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.gbcr();
+//!(X.left > CW.right) && !(X.right < CW.left)		(1)
+	if (!(r2.left > cr) && !(r2.right < cl)) {
+//For all of these windows, we need to find whichever has the largest bottom value that is
+//less than our top value (with the smallest positive delta, CW.top - X.bottom).
+		let diff = ct - r2.bottom;
+		if (diff > 0) all.push({win: w, diff});
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+const get_nearest_top = win =>{//«
+
+let r1 = win.gbcr();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.gbcr();
+//!(X.left > CW.right) && !(X.right < CW.left)		(1)
+	if (!(r2.left > cr) && !(r2.right < cl)) {
+//For all of these windows, we need to find whichever has the least top value that is
+//greater than our bottom value (with the smallest positive delta, X.top - CW.bottom).
+		let diff = r2.top - cb;
+		if (diff > 0) all.push({win: w, diff});
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+const get_nearest_right = win =>{//«
+
+let r1 = win.gbcr();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.gbcr();
+//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
+	if (!(r2.bottom < ct) && !(r2.top > cb)) {
+//For all of these windows, we need to find whichever has the largest right value that is
+//less than our left value (with the smallest positive delta, CW.left - X.right).
+		let diff = cl - r2.right;
+		if (diff > 0) all.push({win: w, diff});
+
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+const get_nearest_left = win =>{//«
+
+let r1 = win.gbcr();
+let cr = r1.right;
+let cl = r1.left;
+let ct = r1.top;
+let cb = r1.bottom;
+let all=[];
+for (let w of arr){//«
+	if (win===w) continue;
+	let r2 = w.gbcr();
+//!(X.bottom < CW.top) && !(X.top > CW.bottom)		(2)
+	if (!(r2.bottom < ct) && !(r2.top > cb)) {
+//For all of these windows, we need to find whichever has the least left value that is
+//greater than our right value (with the smallest positive delta, X.left - CW.right).
+		let diff = r2.left - cr;
+		if (diff > 0) all.push({win: w, diff});
+	}
+}//»
+if (!all.length) return;
+if (all.length===1) return all[0].win;
+all.sort((a, b)=>{
+	if (a.diff < b.diff) return -1;
+	else if (a.diff > b.diff) return 1;
+	else return 0;
+});
+return all[0].win;
+
+}//»
+
+let wins = workspace.windows;
+let got=[];
+for (let w of wins){
+	if (w.isMinimized) continue;
+	if (!w.checkProp("Resize")) return;
+	w.tiledEdges = {};
+	got.push(w);
+}
+if (got.length<2){
+	return overlay_mess(NOT_ENOUGH_WINDOWS_MESS);
+}
+
+let arr = got;
+//Detect offscreen windows
+for (let win of arr){
+	let rect = win.gbcr();
+	if(rect.top<0 || rect.bottom>hgt || rect.left<0 || rect.right>wid) {
+		return overlay_mess(OFFSCREEN_MESS);
+	}
+}
+//Detect intersecting windows
+for (let j = 0; j < arr.length; j++) {//«
+	let w1 = arr[j];
+	for (let i = j + 1; i < arr.length; i++) {
+		let w2 = arr[i];
+		if (intersects(w1, w2)) {
+//			show_overlay();
+			overlay_mess(INTERSECTING_MESS);
+			return;
+		}
+	}
+}//»
+
+//Set all windows to noChromeMode«
+for (let win of arr){
+	if (!win.noChromeMode) win.toggleChrome();
+}
+//»
+//PMNTYJ
+//Tile window top edges//«
+for (let j = 0; j < arr.length; j++) {
+	let w1 = arr[j];
+	if (w1.y === 0 || w1.tiledEdges.top) {
+		continue;
+	}
+	let w2 = get_nearest_bottom(w1);
+	if (!w2){
+		w1.y = 0;
+	}
+	else if (w2.tiledEdges.bottom){
+		w1.y = w2.b;
+	}
+	else{
+		let mid = (w1.y+w2.b)/2;
+		w1.y = mid;
+		w2.b = mid;
+		w2.tiledEdges.bottom = true;
+	}
+	w1.tiledEdges.top = true;
+}//»
+//Tile window bottom edges//«
+for (let j = 0; j < arr.length; j++) {
+	let w1 = arr[j];
+	if ((Math.abs(w1.b-hgt) < 1)  || w1.tiledEdges.bottom) {
+		continue;
+	}
+	let w2 = get_nearest_top(w1);
+	if (!w2){
+		w1.b = hgt;
+	}
+	else if (w2.tiledEdges.top){
+		w1.b = w2.y;
+	}
+	else{
+		let mid = (w1.b+w2.t)/2;
+		w1.b = mid;
+		w2.y = mid;
+		w2.tiledEdges.top= true;
+	}
+	w1.tiledEdges.bottom= true;
+}//»
+//Tile window left edges//«
+for (let j = 0; j < arr.length; j++) {
+	let w1 = arr[j];
+	if (w1.x === 0 || w1.tiledEdges.left) {
+		continue;
+	}
+	let w2 = get_nearest_right(w1);
+	if (!w2){
+		w1.l = 0;
+	}
+	else if (w2.tiledEdges.right){
+		w1.l = w2.r;
+	}
+	else{
+		let mid = (w1.x+w2.r)/2;
+		w1.l = mid;
+		w2.r = mid;
+		w2.tiledEdges.right = true;
+	}
+	w1.tiledEdges.left = true;
+}//»
+//Tile window right edges//«
+for (let j = 0; j < arr.length; j++) {
+	let w1 = arr[j];
+	if ((Math.abs(w1.r-wid) < 1)  || w1.tiledEdges.right) continue;
+
+	let w2 = get_nearest_left(w1);
+	if (!w2){
+		w1.r = wid;
+	}
+	else if (w2.tiledEdges.left){
+		w1.r = w2.x;
+	}
+	else{
+		let mid = (w1.r+w2.x)/2;
+		w1.r = mid;
+		w2.x = mid;
+		w2.tiledEdges.left = true;
+	}
+	w1.tiledEdges.right = true;
+}//»
+////Call each app's onresize handler«
+//for (let win of arr) win.app.onresize();
+////»
+return arr;
+};//»
+»*/
 

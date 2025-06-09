@@ -206,6 +206,13 @@ return;
 	area.setSelectionRange(0,0);
 }
 //»
+this.onappinit=(arg={})=>{
+if (arg.text) area.value = arg.text;
+if (arg.selected) {
+	area.select();
+}
+//log("HI ARG", arg);
+};
 this.onescape=()=>{//«
 	if (area.selectionStart!==area.selectionEnd) {
 		area.selectionEnd = area.selectionStart;

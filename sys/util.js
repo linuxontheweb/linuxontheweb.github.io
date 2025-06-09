@@ -36,6 +36,11 @@ const err=(...args)=>{trace(args,2);}
 const cerr = err;
 //»
 const make=(which)=>{return document.createElement(which);}
+const mkdv=s=>{
+	let d=document.createElement('div');
+	if(s)d.innerHTML=s;
+	return d;
+};
 const mk=make;
 //Load/Script«
 
@@ -414,9 +419,200 @@ getLog(){return this.#data;}
 
 };//»
 const isFin = Number.isFinite;
+
 export const util = (()=>{//«
 
 return {
+
+GetPoint: class {//«
+
+constructor(baseDiv) {//«
+	this.baseDiv = baseDiv;
+	this.activeSector = baseDiv;
+	this.crosshair = null;
+	this.crosshairX = 0;
+	this.crosshairY = 0;
+	this.sectors = new Map();
+	this.overlays = new Map();
+	this.quadrantKeys = { s: 'M', w: 'N', e: 'NE', d: 'E', c: 'SE', x: 'S', z: 'SW', a: 'W', q: 'NW' };
+	this.quadrantLines = null;
+	this.initCrosshair();
+	this.initQuadrantLines();
+}//»
+initCrosshair() {//«
+	if (this.crosshair) this.crosshair.remove();
+	this.crosshair = mkdv();
+	this.crosshair.style.position = 'absolute';
+	this.crosshair.style.width = '100%';
+	this.crosshair.style.height = '100%';
+	this.crosshair.style.pointerEvents = 'none';
+
+	const vAxis = mkdv();
+	vAxis.style.position = 'absolute';
+	vAxis.style.width = '1px';
+	vAxis.style.height = '100%';
+//	vAxis.style.backgroundColor = 'red';
+	vAxis.style.backgroundColor = 'rgba(255,0,0,0.5)';
+	vAxis.style.left = '50%';
+
+	const hAxis = mkdv();
+	hAxis.style.position = 'absolute';
+	hAxis.style.width = '100%';
+	hAxis.style.height = '1px';
+//	hAxis.style.backgroundColor = 'red';
+	hAxis.style.backgroundColor = 'rgba(255,0,0,0.5)';
+	hAxis.style.top = '50%';
+
+	this.crosshair.appendChild(vAxis);
+	this.crosshair.appendChild(hAxis);
+	this.activeSector.appendChild(this.crosshair);
+	this.crosshairX = this.activeSector.offsetWidth / 2;
+	this.crosshairY = this.activeSector.offsetHeight / 2;
+	this.updateCrosshair();
+}//»
+initQuadrantLines() {//«
+	if (this.quadrantLines) this.quadrantLines.remove();
+	this.quadrantLines = mkdv();
+	this.quadrantLines.style.position = 'absolute';
+	this.quadrantLines.style.width = '100%';
+	this.quadrantLines.style.height = '100%';
+	this.quadrantLines.style.pointerEvents = 'none';
+
+	const width = this.activeSector.offsetWidth / 3;
+	const height = this.activeSector.offsetHeight / 3;
+
+	const vLine1 = mkdv();
+	vLine1.style.position = 'absolute';
+	vLine1.style.width = '1px';
+	vLine1.style.height = '100%';
+	vLine1.style.backgroundColor = 'rgba(128,128,128,0.3)';
+	vLine1.style.left = `${width}px`;
+
+	const vLine2 = mkdv();
+	vLine2.style.position = 'absolute';
+	vLine2.style.width = '1px';
+	vLine2.style.height = '100%';
+	vLine2.style.backgroundColor = 'rgba(128,128,128,0.3)';
+	vLine2.style.left = `${2 * width}px`;
+
+	const hLine1 = mkdv();
+	hLine1.style.position = 'absolute';
+	hLine1.style.width = '100%';
+	hLine1.style.height = '1px';
+	hLine1.style.backgroundColor = 'rgba(128,128,128,0.3)';
+	hLine1.style.top = `${height}px`;
+
+	const hLine2 = mkdv();
+	hLine2.style.position = 'absolute';
+	hLine2.style.width = '100%';
+	hLine2.style.height = '1px';
+	hLine2.style.backgroundColor = 'rgba(128,128,128,0.3)';
+	hLine2.style.top = `${2 * height}px`;
+
+	this.quadrantLines.appendChild(vLine1);
+	this.quadrantLines.appendChild(vLine2);
+	this.quadrantLines.appendChild(hLine1);
+	this.quadrantLines.appendChild(hLine2);
+	this.activeSector.appendChild(this.quadrantLines);
+}//»
+updateCrosshair() {//«
+	const vAxis = this.crosshair.children[0];
+	const hAxis = this.crosshair.children[1];
+	vAxis.style.left = `${this.crosshairX}px`;
+	hAxis.style.top = `${this.crosshairY}px`;
+}//»
+onKey(key) {//«
+	if (!(key in this.quadrantKeys)) return;
+	const quadrant = this.quadrantKeys[key];
+	const sectorRect = this.activeSector.getBoundingClientRect();
+	const width = sectorRect.width / 3;
+	const height = sectorRect.height / 3;
+	const offsets = {
+		N: { x: width, y: 0 },
+		NE: { x: 2 * width, y: 0 },
+		E: { x: 2 * width, y: height },
+		SE: { x: 2 * width, y: 2 * height },
+		S: { x: width, y: 2 * height },
+		SW: { x: 0, y: 2 * height },
+		W: { x: 0, y: height },
+		NW: { x: 0, y: 0 },
+		M: { x: width, y: height }
+	};
+
+	const newSector = mkdv();
+	newSector.style.position = 'absolute';
+	newSector.style.width = `${width}px`;
+	newSector.style.height = `${height}px`;
+	newSector.style.left = `${offsets[quadrant].x}px`;
+	newSector.style.top = `${offsets[quadrant].y}px`;
+	this.activeSector.appendChild(newSector);
+	this.sectors.set(newSector, this.activeSector);
+
+	for (const q in offsets) {
+		if (q !== quadrant) {
+			const overlay = mkdv();
+			overlay.style.position = 'absolute';
+			overlay.style.width = `${width}px`;
+			overlay.style.height = `${height}px`;
+			overlay.style.left = `${offsets[q].x}px`;
+			overlay.style.top = `${offsets[q].y}px`;
+			overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
+			this.activeSector.appendChild(overlay);
+			this.overlays.set(newSector, (this.overlays.get(newSector) || []).concat(overlay));
+		}
+	}
+
+	this.activeSector = newSector;
+	this.initCrosshair();
+	this.initQuadrantLines();
+}//»
+onUp() {//«
+	const step = this.activeSector.offsetHeight * 0.05;
+	this.crosshairY = Math.max(0, this.crosshairY - step);
+	this.updateCrosshair();
+}//»
+onDown() {//«
+	const step = this.activeSector.offsetHeight * 0.05;
+	this.crosshairY = Math.min(this.activeSector.offsetHeight, this.crosshairY + step);
+	this.updateCrosshair();
+}//»
+onLeft() {//«
+	const step = this.activeSector.offsetWidth * 0.05;
+	this.crosshairX = Math.max(0, this.crosshairX - step);
+	this.updateCrosshair();
+}//»
+onRight() {//«
+	const step = this.activeSector.offsetWidth * 0.05;
+	this.crosshairX = Math.min(this.activeSector.offsetWidth, this.crosshairX + step);
+	this.updateCrosshair();
+}//»
+onEscape() {//«
+	if (this.activeSector === this.baseDiv) return false;
+	const parentSector = this.sectors.get(this.activeSector);
+	(this.overlays.get(this.activeSector) || []).forEach(overlay => overlay.remove());
+	this.overlays.delete(this.activeSector);
+	this.activeSector.remove();
+	this.sectors.delete(this.activeSector);
+	this.activeSector = parentSector;
+	this.initCrosshair();
+	this.initQuadrantLines();
+	return true;
+}//»
+onSelect(isAbsolute) {//«
+	const rect = this.crosshair.getBoundingClientRect();
+	const point = {
+		x: rect.left + this.crosshairX,
+		y: rect.top + this.crosshairY
+	};
+	if (!isAbsolute) {
+		const baseRect = this.baseDiv.getBoundingClientRect();
+		point.x -= baseRect.left;
+		point.y -= baseRect.top;
+	}
+	return point;
+}//»
+
+},//»
 consoleLog,
 getStrPer:val=>{
 	let marr;
@@ -576,8 +772,8 @@ sha384:arg=>{return hashsum("SHA-384",arg);},
 sha512:arg=>{return hashsum("SHA-512",arg);},
 make,
 mk:make,
+mkdv,
 mkbut:s=>{let d=document.createElement('button');if(s)d.innerHTML=s;return d;},
-mkdv:s=>{let d=document.createElement('div');if(s)d.innerHTML=s;return d;},
 mksp:s=>{let d=document.createElement('span');if(s)d.innerHTML=s;return d;},
 mktxt:str=>{if(!str)str="";return document.createTextNode(str);},
 text:str=>{return document.createTextNode(str);},

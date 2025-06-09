@@ -1,3 +1,28 @@
+/*6/9/25: Codifying a standard workflow that works with our vim implementation's "naitivity"
+about lines wrapped onto different lines, but that represent a single "logical line" (with
+no newlines, e.g. real vim's ":set wrap"). Our util api exports linesToParas, which
+transforms the lines array:
+["this is line one hermmm", "", "this is line #3, slermmm", "and", "slarr", "1", "2"]
+
+Into the string:
+`this is line one hermmm
+
+this is line #3, slermmm and slarr 1 2`
+
+
+j_CAS: Automate init_auto_visual_line_mode and do_justify (j_C), so that we recover
+vim's paragraph justification: "gwip"
+
+t_CAS: Send the entire file, using linesToParas into either a new TextEdit window.
+with the text selected, so it can quickly be copied. 
+
+let str = util.linesToParas(get_edit_lines({str: true})).join("\n");
+Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
+
+With this workflow, we can create text in vim to be exported in the system's
+clipboard in order to, e.g. input into other website's textarea's.
+
+*/
 /*6/7/25: FATAL PERFORMANCE BUG (FIXED): WITH LONG LINES, THE RENDERER DOES *NOT* «
 CHOP THE LINES, AND THE FULL LINES ARE IN THE DOM, AND FILES WITH VERY LONG LINES 
 TAKE FOREVER TO RENDER!!!
@@ -740,10 +765,20 @@ const is_vis_mode=()=>{//«
 	return (m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE);
 };//»
 const is_normal_mode = edit_ok => {//«
+	if (this.stat_input_type) return false;
+	let m = this.mode;
+	if (edit_ok) return (m===INSERT_MODE || m === COMMAND_MODE);
+	return m === COMMAND_MODE;
+//	if (edit_ok) return (!(m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE || this.stat_input_type));
+//	return (!(m===INSERT_MODE || m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE || this.stat_input_type));
+};//»
+/*
+const is_normal_mode = edit_ok => {//«
 	let m = this.mode;
 	if (edit_ok) return (!(m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE || this.stat_input_type));
 	return (!(m===INSERT_MODE || m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE || this.stat_input_type));
 };//»
+*/
 const maybe_quit=()=>{//«
 //	if (!edit_fobj || viewOnly || OK_DIRTY_QUIT || !dirty_flag) return quit();
 	if (!edit_fobj || OK_DIRTY_QUIT || !dirty_flag) return quit();
@@ -6008,6 +6043,10 @@ const KEY_DOWN_EDIT_FUNCS={//«
 };//»
 const KEY_DOWN_FUNCS={//«
 //Edit (must apply Action)
+t_CAS:()=>{
+	let str = util.linesToParas(get_edit_lines({str: true})).join("\n");
+	Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
+},
 o_A: create_open_fold,
 c_A: create_closed_fold,
 p_A: try_dopretty,
@@ -6024,11 +6063,11 @@ x_CA:()=>{
 //	if (!cur_background_command) return stat_err("No command (please use :x)");
 	Term.execute_background_command(cur_background_command);
 },
+/*
 w_CAS:()=>{//«
 //get_all_words();
 //cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
 },//»
-/*
 s_CAS:()=>{//«
 	let vimvars = globals.vim;
 	let val = get_edit_str();
@@ -6056,6 +6095,11 @@ v_C: init_visual_block_mode,
 v_: init_visual_marker_mode,
 v_S: init_visual_line_mode,
 v_CAS: init_auto_visual_line_mode,
+j_CAS:()=>{
+if (!is_normal_mode(true)) return;
+init_auto_visual_line_mode();
+do_justify();
+},
 p_CAS: Term.toggle_paste,
 m_CAS: toggle_regex_escape_mode,
 
