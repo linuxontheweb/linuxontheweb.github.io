@@ -1,4 +1,6 @@
-/*New: util.GetPoint
+/*util.GetPoint: New generic keyboard-driven graphical point/pixel selector«
+With the return value (a point: {x,y}), we can do document.elementsFromPoint(x,y)
+and pinpoint the element we want without resorting to needing (wanting) the mouse.
 Usage in app:
 
 const get_point=async()=>{
@@ -16,14 +18,21 @@ Center: s
 Then, from North (going clockwise on the qwerty keyboard):
 w (N), e, d, c, x (S), z, a, q
 
-The enter key
+The enter key fulfills the selectPoint promise with a  {x, y} point, while
+escape fulfills it with null.
 
-*/
-/*Keep it simple: If an app defines onreload, just call *that* instead of doing the
+Also, we could make it an automated window feature, e.g. invoked from 
+a system-level hotkey which simply stores the lastSelectedPoint
+onto the Window object. This is what select_point_from_window() does,
+but we are currently commenting that out @FWIKNGH.
+
+»*/
+/*Keep it simple: If an app defines onreload, just call *that* instead of doing the«
 system default @HGLAURJF. This is for applications that have their own internal 
 development workflows. The point is that we want to keep the r_A hotkey as universal
 as possible (i.e., no r_CA/r_CAS/ORWHATEVER hacks).
-*/
+»*/
+
 //Imports«
 
 const NS = LOTW;
@@ -4195,6 +4204,19 @@ const get_all_windows=()=>{//«
 	return wins;
 };//»
 
+const select_point_from_window=async()=>{//«
+if (!CWIN){
+cwarn("WHAT THE HELLLLL NO CWINNNNN!?!?!?");
+return;
+}
+let rv = await CWIN.selectPoint();
+if (rv) {
+	rv.time = new Date().getTime();
+	CWIN.lastSelectedPoint = rv;
+log(rv);
+}
+};//»
+
 //»
 //Folders«
 
@@ -8066,6 +8088,12 @@ cwarn("There was an unattached icon in ICONS!");
 		case "i_CAS": return toggle_icon_display();
 //		case "t_CAS": return tile_windows();
 		case "l_CA": return toggle_layout_mode();
+		case "SPACE_CAS":
+//if (cwin) {
+//FWIKNGH
+//	select_point_from_window();
+//	return;
+//}
 	}
 //»
 
