@@ -26,6 +26,8 @@ a system-level hotkey which simply stores the lastSelectedPoint
 onto the Window object. This is what select_point_from_window() does,
 but we are currently commenting that out @FWIKNGH.
 
+We should generalize it for the specific colors (grid crosshairs) we want for
+out background.
 »*/
 /*Keep it simple: If an app defines onreload, just call *that* instead of doing the«
 system default @HGLAURJF. This is for applications that have their own internal 
@@ -2222,6 +2224,7 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 	}//»
 	if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
 	if (CWIN.pointSelectMode===true){
+		e.preventDefault();
 		CWIN.handlePointSelect(kstr);
 		return;
 	}
@@ -3480,6 +3483,8 @@ ICONS = OK;
 		return ret;
 	};//»
 async reload(opts={}){//«
+	if (this.pointSelectMode) this.stopPointSelect();
+
 	let {app, appName, main} = this;
 	if (this.killed){
 		poperr("This window has been killed");
@@ -3624,7 +3629,8 @@ div._pos="absolute";
 div._w = main.clientWidth;
 div._h = main.clientHeight;
 div._x=0;
-div._y=0;
+log(main.scrollTop);
+div._y=main.scrollTop;
 div._z=9999999;
 main._add(div);
 this.pointSelectResize=()=>{
@@ -3672,7 +3678,7 @@ break;
 //break;
 }
 }/* » */
-stopPointSelect(if_abort){/* « */
+stopPointSelect(){/* « */
 	this.pointSelectCb(null);
 
 	this.pointSelectMode = false;
@@ -7915,11 +7921,6 @@ or when there is an active context menu.
 			cwin.context_menu.kill();
 			return 
 		}
-		if (!cwin.isMinimized && cobj && cobj.onescape && cobj.onescape()) return;
-		if (cwin.appName==FOLDER_APP && ICONS.length){
-			icon_array_off(12);
-			return;
-		}
 //BSHDKFLG
 		if (cwin.pointSelectMode) {
 			if (cwin.pointSelect.onEscape()) {
@@ -7928,6 +7929,11 @@ cwarn("CAUGHT pointSelect ESCAPE");
 			}
 cwarn("ABORT pointSelect");
 			cwin.stopPointSelect(true);
+			return;
+		}
+		if (!cwin.isMinimized && cobj && cobj.onescape && cobj.onescape()) return;
+		if (cwin.appName==FOLDER_APP && ICONS.length){
+			icon_array_off(12);
 			return;
 		}
 		cwin.off();

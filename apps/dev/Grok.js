@@ -1,11 +1,17 @@
-/*6/8/25: Let's (maybe) separate the response section into the same sections, but
+/*6/9/25: Just made a mechanism (util.GetPoint) that gets invoked by the Win's
+selectPoint method. In order to return a point relative to the main div's top-right
+corner, call it like: 
+rv = await Win.selectPoint({isRelative: true});
+Otherwise it returns the absolute point, to be used by document.element[s]FromPoint().
+*/
+/*6/8/25: Let's (maybe) separate the response section into the same sections, but«
 let's definitely put all code sections into their own expandable divs.
 
 If the curKid is toggled and the _activeTab is *not* the first, then let's
 make escape make it the first, so that enter will toggle *that* (rather than
 any <code>s).
 
-*/
+»*/
 /*Instructions:«
 
 I DIDN'T NEED TO TOGGLE "Show inline", SO I WAS ABLE TO GET EVERYTHING IN
@@ -416,6 +422,10 @@ atBottom(){//«
 	return Math.abs(main.scrollHeight - main.clientHeight - main.scrollTop) <= 1;
 }//»
 	quesIsActive(){return this.curKid.isToggled()&& this.curKid._activeTab===0;}
+	async getPoint(){
+		let rv = await this.Win.selectPoint();
+log(rv);
+	}
 	onescape(){//«
 		if (this.deselect()) return true;
 		if (this.statBar.innerHTML){
@@ -434,6 +444,10 @@ atBottom(){//«
 		return false;
 	}//»
 	onkeydown(e, k){//«
+		if (this.Win.pointSelectMode) {
+			e.preventDefault();
+			return;
+		}
 		if (k==="UP_"){/* « */
 			if (this.curKid.isToggled()) return;
 			e.preventDefault();
@@ -497,16 +511,19 @@ atBottom(){//«
 		else if (k==="l_") this.dumpCurKid({log: true});
 		else if (k==="l_S") this.dumpCenter({log: true});
 		else if (k==="p_S") this.dumpCenter({pop: true});
-		else if (k===",_S")	{
+		else if (k===",_S")	{//«
 			if (this.prevSize < 10) return;
 			this.prevSize-=5;
 			this.setPrevDivs();
-		}
-		else if (k==="._S")	{
+		}//»
+		else if (k==="._S")	{//«
 			this.setPrevDivs();
 			this.prevSize+=5;
 			this.setPrevDivs();
-		}
+		}//»
+else if (k==="SPACE_CAS"){
+this.getPoint();
+}
 	}//»
 	getActiveTab(){return this.curKid._tabOrder[this.curKid._activeTab];}
 
