@@ -2700,13 +2700,18 @@ lines array (otherwise, the message gets printed onto the actor's screen.
 
 	if (!isStr(out)) {
 //cwarn("Here is the non-string object");
-log(out);
 //This is not a bug since it is perfectly "okay" (I think) to pass aribtrary objects
 //*through* a pipeline... but not out the end of it.
+if (out.toString instanceof Function){
+	out = out.toString();
+}
+else {
+log(out);
 		let str = `non-String object found in output stream (see console)`;
 		if (opts.name) str = `${opts.name}: ${str}`;
 		out = `sh: ${str}`;
 		opts = {isWrn: true};
+}
 	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;
