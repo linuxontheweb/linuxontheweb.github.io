@@ -734,7 +734,7 @@ const make_sh_err_com = (name, mess, com_env)=>{//«
 };//»
 
 const get_options = (args, com, opts={}) => {//«
-	const getlong = opt => {
+	const getlong = opt => {//«
 		let re = new RegExp("^" + opt);
 		let numhits = 0;
 		let okkey;
@@ -747,15 +747,16 @@ const get_options = (args, com, opts={}) => {//«
 		if (!numhits) {
 			err.push(`invalid option: '${opt}'`);
 			return null;
-		} else if (numhits == 1) return okkey;
+		} 
+		else if (numhits == 1) return okkey;
 		else {
-			err.push(`option: '${opt}' has multiple hits`);
+			err.push(`option '${opt}' has multiple hits`);
 			return null;
 		}
-	};
+	};//»
 	let err = [];
-	let sopts = opts.SHORT || opts.s;
-	let lopts = opts.LONG || opts.l;
+	let sopts = opts.short || opts.SHORT || opts.s;
+	let lopts = opts.long || opts.LONG || opts.l;
 	let getall = opts.ALL;
 //	let getall = true;
 	let obj = {};
@@ -777,7 +778,8 @@ const get_options = (args, com, opts={}) => {//«
 			args.splice(i, 1);
 			return [obj, err];
 		}
-		else if (marr = args[i].match(/^-([a-zA-Z0-9][a-zA-Z0-9]+)$/)) {
+//Short opts
+		else if (marr = args[i].match(/^-([a-zA-Z0-9][a-zA-Z0-9]+)$/)) {//«
 			let arr = marr[1].split("");
 			for (let j = 0; j < arr.length; j++) {
 				ch = arr[j];
@@ -791,8 +793,8 @@ const get_options = (args, com, opts={}) => {//«
 				else err.push(`option: '${ch}' has an invalid option definition: ${sopts[ch]}`);
 			}
 			args.splice(i, 1);
-		}
-		else if (marr = args[i].match(/^-([a-zA-Z0-9])$/)) {
+		}//»
+		else if (marr = args[i].match(/^-([a-zA-Z0-9])$/)) {//«
 			ch = marr[1];
 			if (getall){
 				if (!args[i + 1]) err.push(`option: '${ch}' requires an arg`);
@@ -802,34 +804,55 @@ const get_options = (args, com, opts={}) => {//«
 			else if (!sopts[ch]) {
 				err.push(`invalid option: '${ch}'`);
 				args.splice(i, 1);
-			} else if (sopts[ch] === 1) {
+			} 
+			else if (sopts[ch] === 1) {
 				obj[ch] = true;
 				args.splice(i, 1);
-			} else if (sopts[ch] === 2) {
-				err.push(`option: '${ch}' is an optional arg`);
+			} 
+			else if (sopts[ch] === 2) {
+//				err.push(`option: '${ch}' is an optional arg`);
 				args.splice(i, 1);
-			} else if (sopts[ch] === 3) {
+				if (args[i]&&!args[i].match(/^-/)){
+					obj[ch] = args[i];
+				}
+				else obj[ch] = true;
+			} 
+			else if (sopts[ch] === 3) {
 				if (!args[i + 1]) err.push(`option: '${ch}' requires an arg`);
 				obj[ch] = args[i + 1];
 				args.splice(i, 2);
-			} else {
+			} 
+			else {
 				err.push(`option: '${ch}' has an invalid option definition: ${sopts[ch]}`);
 				args.splice(i, 1);
 			}
-		} else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=(.+)$/)) {
-			if (getall || (ret = getlong(marr[1]))) {
-				if (getall) ret = marr[1];
+		}//»
+
+//Long opts
+		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=(.+)$/)) {//«
+let lopt = marr[1];
+if (lopts[lopt] === 1){
+err.push(`option '${lopt}' requires no arg`);
+}
+//			if (getall || (ret = getlong(marr[1]))) {
+else {
+			if (getall || (ret = getlong(lopt))) {
+				if (getall) ret = lopt;
 				obj[ret] = marr[2];
 			}
-			args.splice(i, 1);
-		} else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=$/)) {
+}
+args.splice(i, 1);
+		}//»
+		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=$/)) {//«
 			if (getall || (ret = getlong(marr[1]))) {
 				if (getall) ret = marr[1];
 				obj[ret] = args[i + 1];
 				if (args[i + 1]) args.splice(i + 1, 2);
 				else args.splice(i, 1);
-			} else args.splice(i, 1);
-		} else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {
+			} 
+			else args.splice(i, 1);
+		}//»
+		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {//«
 			if (getall || (ret = getlong(marr[1]))) {
 				if (getall) ret = marr[1];
 				if (getall || (lopts[marr[1]] === 1 || lopts[marr[1]] === 2)) obj[ret] = true;
@@ -837,12 +860,13 @@ const get_options = (args, com, opts={}) => {//«
 				else if (lopts[marr[1]]) err.push(`long option: '${marr[1]}' has an invalid option definition: ${lopts[marr[1]]}`);
 				else if (!lopts[marr[1]]) err.push(`invalid long option: '${marr[1]}`);
 				args.splice(i, 1);
-			} else args.splice(i, 1);
-		} 
-		else if (marr = args[i].match(/^(---+[a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {
+			} 
+			else args.splice(i, 1);
+		}//»
+		else if (marr = args[i].match(/^(---+[a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {//«
 			err.push(`invalid option: '${marr[1]}'`);
 			args.splice(i, 1);
-		}
+		}//»
 		else i++;
 	}
 	return [obj, err];
@@ -922,10 +946,7 @@ cwarn(`The option ${opt} already exists!`);
 		sh_opts[opt] = opts[opt];
 	}
 	NS.coms[libname] = {coms, opts};
-
 	return ok_coms.length;
-//	NS.libs[libname] = {coms, opts};
-
 }//»
 const do_imports = async(arr, err_cb) => {//«
 	if (!err_cb) err_cb = ()=>{};
@@ -994,12 +1015,13 @@ const delete_mods=(arr)=>{//«
 		if (scr) {
 			scr._del();
 		}
-else{
-//cwarn(`The module ${m} was not loaded!`);
-continue;
-}
 		delete NS.mods[m];
-//log(`Deleted module: ${m}`);
+let coms = this.allLibs[m];
+for (let com of coms){
+delete globals.shell_commands[com];
+}
+delete this.allLibs[m];
+
 	}
 }//»
 this.util={
@@ -2044,7 +2066,7 @@ run(){
 /*
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
-
+/*Now in Grok.js
 const com_devtest = class extends Com{//«
 init(){
 }
@@ -2073,7 +2095,47 @@ log(resps);
 this.ok();
 }
 }//»
+*/
 
+const com_devtest = class extends Com{//«
+
+static getOpts(){
+//Option values
+//1: no arguments
+//2: optional arguments
+//3: required argument
+	return {
+		"long": {"longa": 1, "longb": 2, "longc": 3},
+		"short": {"a": 1, "b": 2, "c": 3}
+	}
+}
+async init(){
+//Initialiation: option validation or resource loading may go here
+}
+async run(){
+	const{args, opts, term} = this;
+
+// args: e.g. [ "arg1", "arg2", ... , "argn" ]
+// opts: e.g. {a: true, longb: "hello world", c: 42}
+// term: a handle to the terminal object with many members
+
+this.wrn("Warnings are printed to the terminal in yellow");
+this.inf("Info messages are printed in blue");
+this.err("Errors are printed in red");
+this.suc("This is printed in green"); 
+
+this.out("This gets sent to pipes, command substitutions or stdout");
+
+//	The following methods end the command by internally resolving a promise
+//	this.end(123);//Allows for arbitrary error codes to be returned
+
+//	The following are convenience functions which can be called with an optional string to be printed to the terminal
+	this.ok();//This returns a success code and any string arg printed to the terminal in green
+//	this.no();//This returns the standard error code (1) and any string is printed in red
+//	this.nok();//This calls this.ok() or this.no() depending on whether this.numErrors > 0
+
+}
+}//»
 const com_wat2wasm = class extends Com{//«
 
 async init(){//«
@@ -2458,19 +2520,10 @@ const com_echo = class extends Com{//«
 		return {s: {n: 1}};
 	}
 	async run(){
-
-//		this.out(this.args.join(" "));
 		let nl = this.opts.n ? "":"\n";
-//		let str = new String(this.args.join(" ")+"\n");
 		let str = new String(this.args.join(" ")+nl);
-//log(str.length);
 		str.noChomp = true;
 		this.out(str);
-
-//XQMNHI
-//For some reason, this sleep is *required* in order to make this behave correctly:
-// $ echo HELLO | while read LINE; do echo $LINE; done
-//		await sleep(0);
 		this.ok();
 	}
 }//»
@@ -2708,12 +2761,12 @@ const com_stringify = class extends Com{/*«*/
 		}
 	}
 }/*»*/
-const com_clear = class extends Com{/*«*/
+const com_clear = class extends Com{//«
 	run(){
 		this.term.clear();
 		this.ok();
 	}
-}/*»*/
+}//»
 const com_colon = class extends Com{//«
 	run(){
 		this.ok();

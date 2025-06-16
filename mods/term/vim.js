@@ -1,4 +1,9 @@
-/*6/9/25: Codifying a standard workflow that works with our vim implementation's "naitivity"
+//@SRKTLDM: To enable automatic line wrapping
+/*6/12/25
+Check for more places where the "Save As" prompt is removed like @WYIROSKJ, but
+is_saving is *NOT* set back to false.
+*/
+/*6/9/25: Codifying a standard workflow that works with our vim implementation's "naitivity"«
 about lines wrapped onto different lines, but that represent a single "logical line" (with
 no newlines, e.g. real vim's ":set wrap"). Our util api exports linesToParas, which
 transforms the lines array:
@@ -22,7 +27,7 @@ Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
 With this workflow, we can create text in vim to be exported in the system's
 clipboard in order to, e.g. input into other website's textarea's.
 
-*/
+»*/
 /*6/7/25: FATAL PERFORMANCE BUG (FIXED): WITH LONG LINES, THE RENDERER DOES *NOT* «
 CHOP THE LINES, AND THE FULL LINES ARE IN THE DOM, AND FILES WITH VERY LONG LINES 
 TAKE FOREVER TO RENDER!!!
@@ -649,7 +654,7 @@ const try_clipboard_copy=()=>{//«
 	if (!yank_buffer) return;
 	let s = '';
 	for (let ln of yank_buffer) s+= ln.join("")+"\n";
-	Term.clipboard_copy(s);
+	Term.clipboardCopy(s);
 };//»
 const echo_file_path=()=>{//«
 	let nm = edit_fname ? edit_fname : "New File"
@@ -5853,7 +5858,13 @@ const handle_stat_input_keydown=(sym)=>{//«
 			stat_x--;
 			stat_com_arr.splice(stat_x, 1);
 		} 
-		else this.stat_input_type = "";
+		else {
+//WYIROSKJ
+//Needed to add "is_saving = false" so this file could be saved (without 
+//refusing to save and giving the warning: is_saving=true).
+			is_saving = false;
+			this.stat_input_type = "";
+		}
 	}//»
 	else if(sym=="DEL_"){if(stat_com_arr.length)stat_com_arr.splice(stat_x,1);}
 	else if(sym=="a_C"){if(stat_x==0)return;stat_x=0;}
@@ -6044,7 +6055,12 @@ const KEY_DOWN_EDIT_FUNCS={//«
 const KEY_DOWN_FUNCS={//«
 //Edit (must apply Action)
 t_CAS:()=>{
-	let str = util.linesToParas(get_edit_lines({str: true})).join("\n");
+	let arr = get_edit_lines({str: true});
+	let str;
+//	str = arr.join("\n");
+//SRKTLDM
+//Uncomment this to do auto line wrapping (And comment out the above)
+	str = util.linesToParas(arr).join("\n");
 	Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
 },
 o_A: create_open_fold,

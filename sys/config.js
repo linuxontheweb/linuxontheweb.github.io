@@ -227,7 +227,7 @@ const ALWAYS_PREVENT = [
 	"f_C",
 	"p_C",
 	"u_C",
-	"k_C"
+	"k_C",
 ];
 
 //»

@@ -106,11 +106,13 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 //»
 
 //This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
-//let NO_ONRELOAD = true;
+//let USE_ONRELOAD = false;
 
 let RELOAD_TERM_ONRELOAD = false;
+
 //This means that the terminal app's onreload method is set to _onreload (to reload the shell)
-let NO_ONRELOAD = false;
+let USE_ONRELOAD = true;
+//let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
 const util = LOTW.api.util;
@@ -234,8 +236,6 @@ if (dev_mode){
 //»
 
 //Terminal«
-
-//let USE_ONDEVRELOAD = false;
 
 export const app = class {
 
@@ -2626,9 +2626,6 @@ async respInit(addMessage){//«
 
 	let init_prompt = `LOTW shell`;
 	if (!Desk.isFake) init_prompt +=`\x20(${this.winid.replace("_","#")})`
-//	if(dev_mode){
-//		init_prompt+=`\nReload terminal: ${!USE_ONDEVRELOAD}`;
-//	}
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
 	}
@@ -3608,8 +3605,13 @@ if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
 }//»
 async _onreload(){
 
-	await this._reloadShell();
-//	await this.ShellMod.util.deleteMods(["term.vim"]);
+//	await this._reloadShell();
+
+	let mod = "games.poker";
+	if (!this.ShellMod.allLibs[mod]) return;
+	this.doOverlay(`Delete: ${mod}`);
+	await this.ShellMod.util.deleteMods([mod]);
+	await this.ShellMod.util.doImports([mod], cerr);
 
 }
 
@@ -3669,10 +3671,10 @@ async onappinit(appargs={}){//«
 	if (!reInit) {
 		reInit = {};
 	}
-	if (!NO_ONRELOAD) this.onreload = this._onreload;
+//	if (!NO_ONRELOAD) this.onreload = this._onreload;
+	if (USE_ONRELOAD) this.onreload = this._onreload;
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {termBuffer, addMessage, commandStr, histories} = reInit;
-//	if (isBool(useOnDevReload)) USE_ONDEVRELOAD = useOnDevReload;
 	await this.initHistory(termBuffer);
 	await this.respInit(addMessage);
 	this.didInit = true;
@@ -3685,7 +3687,6 @@ async onappinit(appargs={}){//«
 		for (let c of commandStr) this.handleLetterPress(c); 
 		this.handleEnter({noSave: true});
 	};
-//	if (USE_ONDEVRELOAD) this.ondevreload = this._ondevreload;
 }//»
 
 onescape(){//«

@@ -1413,6 +1413,14 @@ let CPR;
 let CWIN;
 let taskbar;
 const body = document.body;
+body.style.cssText=`
+margin:0;
+overflow:hidden;
+overscroll-behavior-x: none;
+background-color: #272727;
+color: #ccc;
+font-family: sans-serif;
+`;
 const desk = mkdv();
 desk.app = Desk;
 
@@ -1456,6 +1464,18 @@ let win_overflow={top:0,bottom:0,left:0,right:0};
 
 //»
 //Style/CSS Values«
+
+const ICON_CSS=`
+color:#ccc;
+height:100px;
+width:100px;
+display:flex;
+flex-direction:column;
+justify-content:space-around;
+align-items:center;
+border:2px solid transparent;
+text-align:center;
+`;
 
 let DEF_NEW_WIN_X = 15;
 let DEF_NEW_WIN_Y = 15;
@@ -4765,16 +4785,20 @@ wrapper.ondblclick = e => {//«
 }//»
 makeDOMElem(){//«
 	let d;
-	if (this.elem) d = this.elem;
+	if (this.elem) {
+		d = this.elem;
+		if (!d.style.cssText) d.style.cssText=ICON_CSS;
+	}
 	else {
 		d = make("div");
 		d.className="icon";
+		d.style.cssText=ICON_CSS;
 	}
 	d._z=ICON_Z;
 	this.iconElem = d;
 	d.iconElem = d;
 	d.icon = this;
-	d.innerHTML=`<span class="iconw"></span><div class="iconl"><div class="iconn"></div></div>`;
+	d.innerHTML=`<span class="iconw" style="text-align:center;min-width:48px;border:1px dotted #aaa;display:inline-block;position:relative;overflow:hidden;"></span><div class="iconl" style="max-height:17px;text-align:center;overflow-wrap:break-word;width:90px;font-size:16px;background-color:#000;padding:1.5px;"><div class="iconn" style="background-color:#000;"></div></div>`;
 
 	let wrapper = d.childNodes[0];
 	this.wrapper = wrapper;
@@ -4881,11 +4905,11 @@ setImg(){//«
 	}
 	this.ext = ext;
 	if (ext_text){
-		ext_div = `<div class="iconext">${ext_text}</div>`;
+		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;">${ext_text}</div>`;
 	}
 	this.extText = ext_text;
 	let ch = getAppIcon(this.linkApp||this.appName,{html:true});
-	wrapper.innerHTML = `${ext_div}<span class="iconi">${ch}</span>`;
+	wrapper.innerHTML = `${ext_div}<span class="iconi" style="min-width:48px;text-align:center;font-size:38px;position:relative;">${ch}</span>`;
 if (this.isLink){
 //	this.addLink(!ref);
 	this.addLink();
