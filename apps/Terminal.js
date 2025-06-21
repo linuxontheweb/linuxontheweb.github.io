@@ -3610,14 +3610,18 @@ if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
 }//»
 async _onreload(){
 
-//	await this._reloadShell();
+//Just reload the shell (if working on a devtest command)
+	await this._reloadShell();
 
+
+/*
+//If you are working on some library
 	let mod = "games.poker";
 	if (!this.ShellMod.allLibs[mod]) return;
 	this.doOverlay(`Delete: ${mod}`);
 	await this.ShellMod.util.deleteMods([mod]);
 	await this.ShellMod.util.doImports([mod], cerr);
-
+*/
 }
 
 /*

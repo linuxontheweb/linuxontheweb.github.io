@@ -2095,8 +2095,6 @@ log(resps);
 this.ok();
 }
 }//»
-*/
-
 const com_devtest = class extends Com{//«
 
 static getOpts(){
@@ -2136,6 +2134,28 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 }
 }//»
+*/
+const com_devtest = class extends Com{
+init(){
+}
+run(){
+const {args}=this;
+const types=['live', 'random', 'foldbot', 'expert'];
+if (args.length < 2 || args.length > 10){
+return this.no("need 2-10 args, each one of: live|random|foldbot|expert");
+}
+
+for (let arg of args){
+	if (!types.includes(arg)){
+		return this.no(`Unknwn type: '${arg}'`);
+	}
+}
+Desk.api.openApp("dev.Poker", {force: true, appArgs: {playerTypes: this.args}});
+
+this.ok();
+}
+}
+
 const com_wat2wasm = class extends Com{//«
 
 async init(){//«

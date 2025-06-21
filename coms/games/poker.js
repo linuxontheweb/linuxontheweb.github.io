@@ -11,36 +11,353 @@ const HITOLOW = (a,b)=>{if (a<b)return 1; if (a>b) return -1;};
 const DIE=s=>{throw new Error(s);};
 const NOCARDS=()=>{throw new Error("THe deck is out of cards");};
 const POKER_RANK_CHS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
-const POKER_RANK_WORDS = [ "Two","Three","Four","Five","Sixe","Seven","Eight","Nine","Ten","Jack","Queen","King","Ace" ];
 
 //this.rankSymbols = 
+//»
 
-const evaluate = (hand, opts={}) => {//«
+/*
+Please rewrite the Javascript code in WebAssembly Text format (WAT). It is up
+to you how/whether anything is actually returned from the function. You
+may simply write the appropriate return variables to memory that's accessible
+to the calling Javascript.
+*/
 
-const {ifScore} = opts;
+const POKER_RANK_WORDS = [ "Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Jack","Queen","King","Ace" ];
 
-//const RANK = POKER_RANK_WORDS;
-
-const STRFL = 9;
+const RANK_STRFL = 9;
 
 //High multi-rank
-const QUAD = 8;
-const FULL = 7;
+const RANK_QUAD = 8;
+const RANK_FULL = 7;
 
 //Multi-suit
-const FLUSH = 6;
+const RANK_FLUSH = 6;
 
 //Sequential
-const STRAIT = 5;
+const RANK_STRAIT = 5;
 
 //Low multi-rank
-const TRIP = 4;
-const TWOPR = 3;
-const PAIR = 2;
-const HIGH = 1;
+const RANK_TRIP = 4;
+const RANK_TWOPR = 3;
+const RANK_PAIR = 2;
+const RANK_HIGH = 1;
 
+/*Parameters to evaluate:
+@hand: array of 5 integers in the range 0-51 (the player's cards)
+@readable: boolean (a humanly readable representation of the hand)
+@score_only: boolean (only return the basic score, and not any tie-breaking cards)
+*/
+const evaluate = (hand, readable, score_only) => {
 
+//Tracks the number of duplicates for each rank
 const dups=[0,0,0,0,0,0,0,0,0,0,0,0,0];
+
+const c1 = hand[0];
+const suit1 = c1%4;//first suit
+//let handlen = hand.length;
+let hand_len = hand.length;
+let r1 = Math.floor(c1/4);//first rank
+dups[r1]=1;
+
+let r2,r3,r4,r5;
+let hi = r1;
+let lo = r1;
+
+let is_pair;
+let is_trips;
+let is_quads;
+let is_2pair;
+let pair_rank1;
+let pair_rank2;
+let trips_rank;
+let quad_rank;
+let c2,c3,c4,c5;
+let is_flush;
+if (hand_len < 5) is_flush = false;
+else is_flush = true;
+
+
+for (let i=1; i < hand_len; i++) {
+	let num = hand[i];
+	if (is_flush&&Math.floor(num%4)!==suit1)is_flush=false;
+	const r = Math.floor(num/4);
+	switch (i){//Unsorted ranks
+		case 1:{r2=r;c2=num;break;}
+		case 2:{r3=r;c3=num;break;}
+		case 3:{r4=r;c4=num;break;}
+		case 4:{r5=r;c5=num;break;}
+	}
+	dups[r]+=1;
+	const ndup = dups[r];
+	if (ndup == 1) {
+		if (r > hi) hi = r;
+		else if (r < lo) lo = r;
+	}
+	else if (ndup == 2) {
+		if (is_pair) {
+			is_2pair = true;
+			pair_rank2 = r;
+		}
+		else{
+			pair_rank1 = r;
+		}
+		is_pair = true;
+	}
+	else if (ndup == 3) {
+		is_trips = true;
+		trips_rank = r;
+	}
+	else if (ndup == 4) {
+		is_quads = true;
+		quad_rank = r;
+	}
+}
+
+const diff = hi-lo;
+let is_straight = !is_pair && hand_len == 5 && diff == 4;
+const is_fullhouse = is_2pair && is_trips;
+let hand_rank;
+let hand_class;
+let str_hand;
+let rem_cards = [];//At most 4 integers depending on the hand
+
+if (is_pair){
+
+	if (is_trips){
+
+		if (is_quads){
+
+			hand_class = RANK_QUAD;
+			hand_rank = 1<<29;
+			hand_rank |= quad_rank << 20;
+			if (!score_only) {
+				if (r1!=quad_rank) rem_cards.push(r1);
+				if (r2!=quad_rank) rem_cards.push(r2);
+				if (r3!=quad_rank) rem_cards.push(r3);
+				if (r4!=quad_rank) rem_cards.push(r4);
+				if (r5!=quad_rank) rem_cards.push(r5);
+				if (readable) str_hand=`Quad ${POKER_RANK_WORDS[quad_rank]}s`;
+			}
+
+		}
+		else if (is_fullhouse){
+
+			hand_class = RANK_FULL;
+			hand_rank = 1<<28;
+			hand_rank |= trips_rank << 20;
+			if (readable) str_hand=`${POKER_RANK_WORDS[trips_rank]}s over`;
+			if (pair_rank1 === trips_rank){
+				hand_rank |= pair_rank2 << 16;
+				if (readable) str_hand+=` ${POKER_RANK_WORDS[pair_rank2]}s`;
+			}
+			else{
+				hand_rank |= pair_rank1 << 16;
+				if (readable) str_hand+=` ${POKER_RANK_WORDS[pair_rank1]}s`;
+			}
+
+		}
+		else{//trips
+
+			hand_class = RANK_TRIP;
+			hand_rank = 1<<25;
+			hand_rank |= trips_rank << 20;
+
+			if (!score_only) {
+				if (r1!=trips_rank) rem_cards.push(r1);
+				if (r2!=trips_rank) rem_cards.push(r2);
+				if (r3!=trips_rank) rem_cards.push(r3);
+				if (r4!=trips_rank) rem_cards.push(r4);
+				if (r5!=trips_rank) rem_cards.push(r5);
+				if (readable) str_hand=`Trip ${POKER_RANK_WORDS[trips_rank]}s`;
+			}
+
+		}
+
+	}
+	else if (is_2pair){
+
+		hand_class = RANK_TWOPR;
+		hand_rank = 1<<24;
+		if (pair_rank1 > pair_rank2){
+			hand_rank |= pair_rank1 << 20;
+			hand_rank |= pair_rank2 << 16;
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank1]}s and ${POKER_RANK_WORDS[pair_rank2]}s`;
+		}
+		else{
+			hand_rank |= pair_rank2 << 20;
+			hand_rank |= pair_rank1 << 16;
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank2]}s and ${POKER_RANK_WORDS[pair_rank1]}s`;
+		}
+		if (!score_only) {
+			if (!(r1==pair_rank1||r1==pair_rank2)) rem_cards.push(r1);
+			if (!(r2==pair_rank1||r2==pair_rank2)) rem_cards.push(r2);
+			if (!(r3==pair_rank1||r3==pair_rank2)) rem_cards.push(r3);
+			if (!(r4==pair_rank1||r4==pair_rank2)) rem_cards.push(r4);
+			if (!(r5==pair_rank1||r5==pair_rank2)) rem_cards.push(r5);
+		}
+
+	}
+	else{//just a pair
+
+		hand_class = RANK_PAIR;
+		hand_rank = 1<<23;
+		hand_rank |= pair_rank1 << 16;
+		if (!score_only) {
+			if (r1!=pair_rank1) rem_cards.push(r1);
+			if (r2!=pair_rank1) rem_cards.push(r2);
+			if (r3!=pair_rank1) rem_cards.push(r3);
+			if (r4!=pair_rank1) rem_cards.push(r4);
+			if (r5!=pair_rank1) rem_cards.push(r5);
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank1]}s`;
+		}
+	}
+
+}
+else if (is_straight){//Straight/Straight-flush
+
+	if (is_flush){
+
+		hand_class = RANK_STRFL;
+		hand_rank = 1<<30;
+		hand_rank |= hi << 16;
+		if (readable) str_hand =`${POKER_RANK_WORDS[hi]} high straight flush`;
+
+	}
+	else{
+
+		hand_class = RANK_STRAIT;
+		hand_rank = 1<<26;
+		hand_rank |= hi << 16;
+		if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high straight`;
+
+	}
+}
+else{//5-high Straight (Straight-Flush) and hi card only
+
+if (hand_len == 5 && diff==12){
+if ((r1==hi&&r2==lo)||(r1==lo&&r2==hi)){
+if (!(r3>3||r4>3||r5>3)) is_straight=true;
+}
+else if ((r1==hi&&r3==lo)||(r1==lo&&r3==hi)){
+if (!(r2>3||r4>3||r5>3)) is_straight=true;
+}
+else if ((r1==hi&&r4==lo)||(r1==lo&&r4==hi)){
+if (!(r3>3||r2>3||r5>3)) is_straight=true;
+}
+else if ((r1==hi&&r5==lo)||(r1==lo&&r5==hi)){
+if (!(r3>3||r4>3||r2>3)) is_straight=true;
+}
+else if ((r2==hi&&r3==lo)||(r2==lo&&r3==hi)){
+if (!(r1>3||r4>3||r5>3)) is_straight=true;
+}
+else if ((r2==hi&&r4==lo)||(r2==lo&&r4==hi)){
+if (!(r3>3||r1>3||r5>3)) is_straight=true;
+}
+else if ((r2==hi&&r5==lo)||(r2==lo&&r5==hi)){
+if (!(r3>3||r4>3||r1>3)) is_straight=true;
+}
+else if ((r3==hi&&r4==lo)||(r3==lo&&r4==hi)){
+if (!(r1>3||r2>3||r5>3)) is_straight=true;
+}
+else if ((r3==hi&&r5==lo)||(r3==lo&&r5==hi)){
+if (!(r1>3||r4>3||r2>3)) is_straight=true;
+}
+else if ((r4==hi&&r5==lo)||(r4==lo&&r5==hi)){
+if (!(r1>3||r2>3||r3>3)) is_straight=true;
+}
+}
+
+	if (is_flush) {
+		if (is_straight) {
+
+			hand_class = RANK_STRFL;
+			hand_rank = 1<<30;
+			hand_rank |= 3<<16;//The 5 is the high card
+			if (readable) str_hand=`Five high straight flush`;
+
+		}
+		else {
+
+			hand_class = RANK_FLUSH;
+			hand_rank = 1<<27;
+			hand_rank |= hi << 16;
+			if (!score_only) {
+				if (r1!=hi) rem_cards.push(r1);
+				if (r2!=hi) rem_cards.push(r2);
+				if (r3!=hi) rem_cards.push(r3);
+				if (r4!=hi) rem_cards.push(r4);
+				if (r5!=hi) rem_cards.push(r5);
+				if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high flush`;
+			}
+
+		}
+	}
+	else if (is_straight){
+
+		hand_class = RANK_STRAIT;
+		hand_rank = 1<<26;
+		hand_rank |= 3<<16;//The 5 is the high card
+		if (readable) str_hand=`Five high straight`;
+
+	}
+	else {
+
+		hand_class = RANK_HIGH;
+		hand_rank = 1<<22;
+		hand_rank |= hi << 16;
+
+		if (!score_only) {
+			if (r1!=hi) rem_cards.push(r1);
+			if (r2!=hi) rem_cards.push(r2);
+			if (r3!=hi) rem_cards.push(r3);
+			if (r4!=hi) rem_cards.push(r4);
+			if (r5!=hi) rem_cards.push(r5);
+			if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high`;
+		}
+
+	}
+
+}
+
+return {
+	left: rem_cards,
+	class: hand_class,
+	score: hand_rank,
+	text: str_hand,
+};
+
+}
+
+/*
+const POKER_RANK_WORDS = [ "Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Jack","Queen","King","Ace" ];
+
+const RANK_STRFL = 9;
+
+//High multi-rank
+const RANK_QUAD = 8;
+const RANK_FULL = 7;
+
+//Multi-suit
+const RANK_FLUSH = 6;
+
+//Sequential
+const RANK_STRAIT = 5;
+
+//Low multi-rank
+const RANK_TRIP = 4;
+const RANK_TWOPR = 3;
+const RANK_PAIR = 2;
+const RANK_HIGH = 1;
+
+//Parameters to evaluate:
+//@hand: array of 5 integers in the range 0-51 (the player's cards)
+//@readable: boolean (a humanly readable representation of the hand)
+//@score_only: boolean (only return the basic score, and not any tie-breaking cards)
+const evaluate = (hand, readable, score_only) => {//«
+
+//Tracks the number of duplicates for each rank
+const dups=[0,0,0,0,0,0,0,0,0,0,0,0,0];
+
 const c1 = hand[0];
 const suit1 = c1%4;//first suit
 let handlen = hand.length;
@@ -64,6 +381,7 @@ let hand_len = hand.length;
 let is_flush;
 if (hand_len < 5) is_flush = false;
 else is_flush = true;
+
 //»
 for (let i=1; i < hand_len; i++) {//«
 	let num = hand[i];
@@ -75,49 +393,7 @@ for (let i=1; i < hand_len; i++) {//«
 		case 3:{r4=r;c4=num;break;}
 		case 4:{r5=r;c5=num;break;}
 	}//»
-/*Uncomment this for inline sorting of the ranks«
-	let t;
-	switch (ncards){
-		case 2:{
-			if (r<r1){r2=r1;r1=r;}
-			else r2=r;
-			break;
-		}
-		case 3:{
-			if (r<r2){
-				r3=r2;r2=r;
-				if (r2<r1){t=r2;r2=r1;r1=t;}
-			}
-			else r3=r;
-			break;
-		}
-		case 4:{
-			if (r<r3){
-				r4=r3;r3=r;
-				if (r3<r2){
-					t=r3;r3=r2;r2=t;
-					if (r2<r1){t=r2;r2=r1;r1=t;}
-				}
-			}
-			else r4=r;
-			break;
-		}
-		case 5:{
-			if (r<r4){
-				r5=r4;r4=r;
-				if (r4<r3){
-					t=r4;r4=r3;r3=t;
-					if (r3<r2){
-						t=r3;r3=r2;r2=t;
-						if (r2<r1){t=r2;r2=r1;r1=t;}
-					}
-				}
-			}
-			else r5=r;
-			break;
-		}
-	}
-»*/
+//OLDRANKSORTINGHERE
 	dups[r]+=1;
 	const ndup = dups[r];
 	if (ndup == 1) {//«
@@ -150,7 +426,7 @@ const is_fullhouse = is_2pair && is_trips;
 let hand_rank;
 let hand_class;
 let str_hand;
-let left = [];
+let rem_cards = [];//At most 4 integers depending on the hand
 
 if (is_pair){//«
 
@@ -158,48 +434,48 @@ if (is_pair){//«
 
 		if (is_quads){//«
 
-			hand_class = QUAD;
+			hand_class = RANK_QUAD;
 			hand_rank = 1<<29;
 			hand_rank |= quad_rank << 20;
-			if (!ifScore) {
-				if (r1!=quad_rank) left.push(r1);
-				if (r2!=quad_rank) left.push(r2);
-				if (r3!=quad_rank) left.push(r3);
-				if (r4!=quad_rank) left.push(r4);
-				if (r5!=quad_rank) left.push(r5);
-				str_hand=`Quad ${POKER_RANK_WORDS[quad_rank]}s`;
+			if (!score_only) {
+				if (r1!=quad_rank) rem_cards.push(r1);
+				if (r2!=quad_rank) rem_cards.push(r2);
+				if (r3!=quad_rank) rem_cards.push(r3);
+				if (r4!=quad_rank) rem_cards.push(r4);
+				if (r5!=quad_rank) rem_cards.push(r5);
+				if (readable) str_hand=`Quad ${POKER_RANK_WORDS[quad_rank]}s`;
 			}
 
 		}//»
 		else if (is_fullhouse){//«
 
-			hand_class = FULL;
+			hand_class = RANK_FULL;
 			hand_rank = 1<<28;
 			hand_rank |= trips_rank << 20;
-			str_hand=`${POKER_RANK_WORDS[trips_rank]}s over`;
+			if (readable) str_hand=`${POKER_RANK_WORDS[trips_rank]}s over`;
 			if (pair_rank1 === trips_rank){
 				hand_rank |= pair_rank2 << 16;
-				str_hand+=` ${POKER_RANK_WORDS[pair_rank2]}s`;
+				if (readable) str_hand+=` ${POKER_RANK_WORDS[pair_rank2]}s`;
 			}
 			else{
 				hand_rank |= pair_rank1 << 16;
-				str_hand+=` ${POKER_RANK_WORDS[pair_rank1]}s`;
+				if (readable) str_hand+=` ${POKER_RANK_WORDS[pair_rank1]}s`;
 			}
 
 		}//»
 		else{//trips«
 
-			hand_class = TRIP;
+			hand_class = RANK_TRIP;
 			hand_rank = 1<<25;
 			hand_rank |= trips_rank << 20;
 
-			if (!ifScore) {
-				if (r1!=trips_rank) left.push(r1);
-				if (r2!=trips_rank) left.push(r2);
-				if (r3!=trips_rank) left.push(r3);
-				if (r4!=trips_rank) left.push(r4);
-				if (r5!=trips_rank) left.push(r5);
-				str_hand=`Trip ${POKER_RANK_WORDS[trips_rank]}s`;
+			if (!score_only) {
+				if (r1!=trips_rank) rem_cards.push(r1);
+				if (r2!=trips_rank) rem_cards.push(r2);
+				if (r3!=trips_rank) rem_cards.push(r3);
+				if (r4!=trips_rank) rem_cards.push(r4);
+				if (r5!=trips_rank) rem_cards.push(r5);
+				if (readable) str_hand=`Trip ${POKER_RANK_WORDS[trips_rank]}s`;
 			}
 
 		}//»
@@ -207,39 +483,39 @@ if (is_pair){//«
 	}//»
 	else if (is_2pair){//«
 
-		hand_class = TWOPR;
+		hand_class = RANK_TWOPR;
 		hand_rank = 1<<24;
 		if (pair_rank1 > pair_rank2){
 			hand_rank |= pair_rank1 << 20;
 			hand_rank |= pair_rank2 << 16;
-			str_hand=`${POKER_RANK_WORDS[pair_rank1]}s and ${POKER_RANK_WORDS[pair_rank2]}s`;
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank1]}s and ${POKER_RANK_WORDS[pair_rank2]}s`;
 		}
 		else{
 			hand_rank |= pair_rank2 << 20;
 			hand_rank |= pair_rank1 << 16;
-			str_hand=`${POKER_RANK_WORDS[pair_rank2]}s and ${POKER_RANK_WORDS[pair_rank1]}s`;
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank2]}s and ${POKER_RANK_WORDS[pair_rank1]}s`;
 		}
-		if (!ifScore) {
-			if (!(r1==pair_rank1||r1==pair_rank2)) left.push(r1);
-			if (!(r2==pair_rank1||r2==pair_rank2)) left.push(r2);
-			if (!(r3==pair_rank1||r3==pair_rank2)) left.push(r3);
-			if (!(r4==pair_rank1||r4==pair_rank2)) left.push(r4);
-			if (!(r5==pair_rank1||r5==pair_rank2)) left.push(r5);
+		if (!score_only) {
+			if (!(r1==pair_rank1||r1==pair_rank2)) rem_cards.push(r1);
+			if (!(r2==pair_rank1||r2==pair_rank2)) rem_cards.push(r2);
+			if (!(r3==pair_rank1||r3==pair_rank2)) rem_cards.push(r3);
+			if (!(r4==pair_rank1||r4==pair_rank2)) rem_cards.push(r4);
+			if (!(r5==pair_rank1||r5==pair_rank2)) rem_cards.push(r5);
 		}
 
 	}//»
 	else{//just a pair//«
 
-		hand_class = PAIR;
+		hand_class = RANK_PAIR;
 		hand_rank = 1<<23;
 		hand_rank |= pair_rank1 << 16;
-		if (!ifScore) {
-			if (r1!=pair_rank1) left.push(r1);
-			if (r2!=pair_rank1) left.push(r2);
-			if (r3!=pair_rank1) left.push(r3);
-			if (r4!=pair_rank1) left.push(r4);
-			if (r5!=pair_rank1) left.push(r5);
-			str_hand=`${POKER_RANK_WORDS[pair_rank1]}s`;
+		if (!score_only) {
+			if (r1!=pair_rank1) rem_cards.push(r1);
+			if (r2!=pair_rank1) rem_cards.push(r2);
+			if (r3!=pair_rank1) rem_cards.push(r3);
+			if (r4!=pair_rank1) rem_cards.push(r4);
+			if (r5!=pair_rank1) rem_cards.push(r5);
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank1]}s`;
 		}
 	}//»
 
@@ -248,19 +524,18 @@ else if (is_straight){//Straight/Straight-flush«
 
 	if (is_flush){
 
-		hand_class = STRFL;
+		hand_class = RANK_STRFL;
 		hand_rank = 1<<30;
 		hand_rank |= hi << 16;
-		str_hand = `${str_hand} flush`;
-		str_hand=`${POKER_RANK_WORDS[hi]} high straight flush`;
+		if (readable) str_hand =`${POKER_RANK_WORDS[hi]} high straight flush`;
 
 	}
 	else{
 
-		hand_class = STRAIT;
+		hand_class = RANK_STRAIT;
 		hand_rank = 1<<26;
 		hand_rank |= hi << 16;
-		str_hand=`${POKER_RANK_WORDS[hi]} high straight`;
+		if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high straight`;
 
 	}
 }//»
@@ -302,49 +577,49 @@ if (!(r1>3||r2>3||r3>3)) is_straight=true;
 	if (is_flush) {//«
 		if (is_straight) {
 
-			hand_class = STRFL;
+			hand_class = RANK_STRFL;
 			hand_rank = 1<<30;
 			hand_rank |= 3<<16;//The 5 is the high card
-			str_hand=`Five high straight flush`;
+			if (readable) str_hand=`Five high straight flush`;
 
 		}
 		else {
 
-			hand_class = FLUSH;
+			hand_class = RANK_FLUSH;
 			hand_rank = 1<<27;
 			hand_rank |= hi << 16;
-			if (!ifScore) {
-				if (r1!=hi) left.push(r1);
-				if (r2!=hi) left.push(r2);
-				if (r3!=hi) left.push(r3);
-				if (r4!=hi) left.push(r4);
-				if (r5!=hi) left.push(r5);
-				str_hand=`${POKER_RANK_WORDS[hi]} high flush`;
+			if (!score_only) {
+				if (r1!=hi) rem_cards.push(r1);
+				if (r2!=hi) rem_cards.push(r2);
+				if (r3!=hi) rem_cards.push(r3);
+				if (r4!=hi) rem_cards.push(r4);
+				if (r5!=hi) rem_cards.push(r5);
+				if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high flush`;
 			}
 
 		}
 	}//»
 	else if (is_straight){//«
 
-		hand_class = STRAIT;
+		hand_class = RANK_STRAIT;
 		hand_rank = 1<<26;
 		hand_rank |= 3<<16;//The 5 is the high card
-		str_hand=`Five high straight`;
+		if (readable) str_hand=`Five high straight`;
 
 	}//»
 	else {//«
 
-		hand_class = HIGH;
+		hand_class = RANK_HIGH;
 		hand_rank = 1<<22;
 		hand_rank |= hi << 16;
 
-		if (!ifScore) {
-			if (r1!=hi) left.push(r1);
-			if (r2!=hi) left.push(r2);
-			if (r3!=hi) left.push(r3);
-			if (r4!=hi) left.push(r4);
-			if (r5!=hi) left.push(r5);
-			str_hand=`${POKER_RANK_WORDS[hi]} high`;
+		if (!score_only) {
+			if (r1!=hi) rem_cards.push(r1);
+			if (r2!=hi) rem_cards.push(r2);
+			if (r3!=hi) rem_cards.push(r3);
+			if (r4!=hi) rem_cards.push(r4);
+			if (r5!=hi) rem_cards.push(r5);
+			if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high`;
 		}
 
 	}//»
@@ -352,15 +627,14 @@ if (!(r1>3||r2>3||r3>3)) is_straight=true;
 }//»
 
 return {
-	left,
+	left: rem_cards,
 	class: hand_class,
 	score: hand_rank,
 	text: str_hand,
 };
 
 }//»
-
-//»
+*/
 
 class Card {//«
 
@@ -628,7 +902,8 @@ this.out("Board:   "+game.table.showUnicodeCards());
 let hands = [];
 for (let player of players) {
 	this.out(`${player.name}: ${player.showUnicodeCards()}`);
-	player.result = evaluate(player.getHoleIndexes().concat(board_arr));
+//	player.result = evaluate(player.getHoleIndexes().concat(board_arr), true);//Only returns the score (and not the "leftover" cards)
+	player.result = evaluate(player.getHoleIndexes().concat(board_arr), true);
 }
 
 //let hole_arr_0 = player0.getHoleIndexes();
@@ -719,6 +994,52 @@ export { coms };
 
 
 /*OLD«
+
+//Uncomment this for inline sorting of the ranks«
+//OLDRANKSORTINGHERE
+	let t;
+	switch (ncards){
+		case 2:{
+			if (r<r1){r2=r1;r1=r;}
+			else r2=r;
+			break;
+		}
+		case 3:{
+			if (r<r2){
+				r3=r2;r2=r;
+				if (r2<r1){t=r2;r2=r1;r1=t;}
+			}
+			else r3=r;
+			break;
+		}
+		case 4:{
+			if (r<r3){
+				r4=r3;r3=r;
+				if (r3<r2){
+					t=r3;r3=r2;r2=t;
+					if (r2<r1){t=r2;r2=r1;r1=t;}
+				}
+			}
+			else r4=r;
+			break;
+		}
+		case 5:{
+			if (r<r4){
+				r5=r4;r4=r;
+				if (r4<r3){
+					t=r4;r4=r3;r3=t;
+					if (r3<r2){
+						t=r3;r3=r2;r2=t;
+						if (r2<r1){t=r2;r2=r1;r1=t;}
+					}
+				}
+			}
+			else r5=r;
+			break;
+		}
+	}
+//»
+
 getIndexFromLiteral(literal) {//«
 const [rankStr, suit] = literal.split('-');
 const rank = parseInt(rankStr);
