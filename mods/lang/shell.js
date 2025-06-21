@@ -2139,10 +2139,17 @@ const com_devtest = class extends Com{
 init(){
 }
 run(){
+this.ok();
+}
+}
+const com_poker = class extends Com{
+init(){
+}
+run(){
 const {args}=this;
 const types=['live', 'random', 'foldbot', 'shovebot', 'expert'];
 if (args.length < 2 || args.length > 10){
-return this.no("need 2-10 args, each one of: live|random|foldbot|expert");
+return this.no("need 2-10 args, each one of: live|random|foldbot|shovebot|expert");
 }
 
 for (let arg of args){
@@ -3143,6 +3150,7 @@ this.defCommands={//«
 
 //continue: com_continue,
 //break: com_break,
+poker: com_poker,
 wat2wasm: com_wat2wasm,
 wget: com_wget,
 continue: com_loopctrl,
