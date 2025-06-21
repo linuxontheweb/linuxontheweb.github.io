@@ -4,15 +4,23 @@ const{mk, log, cwarn, cerr}=LOTW.api.util;
 
 //Globals«
 
+const DECK = [];
+{
 const SUITS = ['♠', '♥', '♦', '♣'];
 const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
-const DECK = [];
-for (let suit of SUITS) for (let rank of RANKS) DECK.push({ rank, suit });
+let i = 0;
+for (let rank of RANKS) {
+	for (let suit of SUITS) {
+		DECK.push({ i, rank, suit });
+		i++;
+	}
+}
+//log(DECK);
+}
 
 //»
 
-
-export const app = class{
+export const app = class {
 
 constructor(Win){//«
 
@@ -22,7 +30,6 @@ this.Main = Win.Main;
 const {id} = Win;
 this.id = id;
 
-this.appBodyId = `${id}_appbody`;
 this.potId = `${id}_pot`;
 this.ctrlId = `${id}_controls`;
 this.statCl = `${id}_status`;
@@ -42,36 +49,20 @@ this.gameState = {//«
 	currentBet: 0,
 	deck: [],
 }//»
-
+this.statBar = this.Win.statusBar;
 this.makeDOM();
 }//»
-
 makeDOM(){//«
 
 const{id, Main} = this;
+
 //CSS«
-//Main._pos="relative";
 Main._bgcol="#1a3c34"; 
 Main._dis="flex";
 Main.style.justifyContent="center";
 Main.style.alignItems="center";
 Main._pad="";
 Main._over="hidden";
-/*«
-#${id}_appbody { 
-	margin: 0; 
-	padding: 0; 
-	background: #1a3c34; 
-	font-family: Arial, sans-serif; 
-	color: #fff; 
-	display: flex; 
-	justify-content: center; 
-	align-items: center; 
-//	height: 100vh; 
-	height: 500px;
-	font-size: 18px; 
-}
-»*/
 const styleElem = mk('style');
 styleElem.innerHTML=`
 #${this.tableId} { 
@@ -89,8 +80,8 @@ styleElem.innerHTML=`
 	position: absolute; 
 	width: 500px; 
 	height: 250px; 
-	border-radius: 50%; 
-	border: 1px solid #000; 
+//	border-radius: 50%; 
+//	border: 1px solid #000; 
 	display: flex; 
 }
 #${this.ctrlId} { 
@@ -197,30 +188,21 @@ styleElem.innerHTML=`
 `;
 //»
 document.head.appendChild(styleElem);
-this.styleElem = styleElem;
 
-//HTML_STR«
-
-//	display: flex; 
-//	justify-content: center; 
-//	align-items: center; 
-//<div id="${this.appBodyId}"></div>
+//HTML«
 Main.innerHTML = `
-<div id="${this.potId}">Pot: $0</div>
+<div id="${this.potId}"></div>
 <div id="${this.ctrlId}" style="display: none;">
-	<div class="${this.statCl}"></div>
-	<div>
-		<button class="${this.butCl}">Fold</button>
-		<button class="${this.butCl}">Call</button>
-		<button class="${this.butCl}">Raise</button>
-		<button class="${this.butCl}">All-In</button>
-	</div>
+<div class="${this.statCl}"></div>
+<div>
+<button class="${this.butCl}">Fold</button>
+<button class="${this.butCl}">Call</button>
+<button class="${this.butCl}">Raise</button>
+<button class="${this.butCl}">All-In</button>
 </div>
-<div id="${this.tableId}">
-	<div id="${this.commCardsId}"></div>
 </div>
-<div id="${this.betRingId}">
-</div>
+<div id="${this.tableId}"><div id="${this.commCardsId}"></div></div>
+<div id="${this.betRingId}"></div>
 `;
 
 this.tableElem = document.getElementById(this.tableId);
@@ -230,12 +212,8 @@ this.potElem = document.getElementById(this.potId);
 this.commCardsElem = document.getElementById(this.commCardsId);
 
 //»
-/*
-<div class="${id}_setup">
-	<label>Players: <select id="${id}_num-players"></select></label>
-	<div id="${id}_player-types"></div>
-</div>
-*/
+
+this.styleElem = styleElem;
 
 }//»
 
@@ -254,8 +232,7 @@ curNum(){//«
 	return this.gameState.currentPlayer+1;
 }//»
 stat(message){//«
-//	document.querySelector('.status')
-//	statusElem.textContent = message;
+	this.statBar.textContent = message;
 	log(message);
 }//»
 updatePlayerDisplay(){//«
@@ -271,7 +248,7 @@ updatePlayerDisplay(){//«
 			else {
 				cardsDiv.innerHTML = player.hand.map(card => `<span class="${id}_card ${card.suit === '♥' || card.suit === '♦' ? 'red' : 'black'}">${card.rank}${card.suit}</span>`).join('');
 			}
-			playerDiv.innerHTML = `Player ${i + 1}<br>$${player.chips}${player.allIn ? ' (All-In)' : ''}<div class="${id}_cards">${cardsDiv.innerHTML}</div>`;
+			playerDiv.innerHTML = `Player ${i + 1}<br>${player.chips}${player.allIn ? ' (All-In)' : ''}<div class="${id}_cards">${cardsDiv.innerHTML}</div>`;
 		}
 	});
 }//»
@@ -285,7 +262,7 @@ updateCommunityCards(){//«
 }//»
 updatePot(){//«
 //	document.querySelector('.pot')
-	this.potElem.textContent = `Pot: $${this.gameState.pot}`;
+	this.potElem.textContent = `Pot: ${this.gameState.pot}`;
 }//»
 
 shuffle(array){//«
@@ -305,90 +282,6 @@ dealHands(){//«
 	}
 }//»
 
-automatedAction(){//«
-	const player = this.gameState.players[this.gameState.currentPlayer];
-	if (!player.inHand || player.allIn) {
-		this.nextPlayer();
-		return;
-	}
-
-	let action;
-	switch (player.strategy) {
-		case 'random':
-			action = ['fold', 'call', 'raise', 'all-in'][Math.floor(Math.random() * 4)];
-			break;
-		case 'foldbot':
-			action = 'fold';
-			break;
-		case 'expert':
-			action = this.expertStrategy(player);
-			break;
-		default:
-			action = 'call';
-	}
-
-	if (action === 'raise') {
-		const raiseAmount = Math.min(this.gameState.currentBet * 2, player.chips + player.bet);
-		if (raiseAmount === player.chips + player.bet) action = 'all-in';
-		if (action === 'all-in') {
-			player.allIn = true;
-			player.bet += player.chips;
-		this.gameState.pot += player.chips;
-			player.chips = 0;
-		this.gameState.currentBet = Math.max(this.gameState.currentBet, player.bet);
-			this.stat(`Player ${player.id + 1} goes all-in with $${player.bet}`);
-		} 
-		else {
-			player.chips -= raiseAmount - player.bet;
-		this.gameState.pot += raiseAmount - player.bet;
-			player.bet = raiseAmount;
-		this.gameState.currentBet = raiseAmount;
-			this.stat(`Player ${player.id + 1} raises to $${raiseAmount}`);
-		}
-	} 
-	else if (action === 'call') {
-		const callAmount = Math.min(this.gameState.currentBet - player.bet, player.chips);
-		if (callAmount === player.chips) {
-			player.allIn = true;
-			player.bet += player.chips;
-		this.gameState.pot += player.chips;
-			player.chips = 0;
-			this.stat(`Player ${player.id + 1} goes all-in to call $${player.bet}`);
-		} 
-		else {
-			player.chips -= callAmount;
-		this.gameState.pot += callAmount;
-			player.bet = this.gameState.currentBet;
-			this.stat(`Player ${player.id + 1} calls $${callAmount}`);
-		}
-	} 
-	else if (action === 'all-in') {
-		player.allIn = true;
-		player.bet += player.chips;
-	this.gameState.pot += player.chips;
-		player.chips = 0;
-	this.gameState.currentBet = Math.max(this.gameState.currentBet, player.bet);
-		this.stat(`Player ${player.id + 1} goes all-in with $${player.bet}`);
-	} 
-	else {
-		player.inHand = false;
-		this.stat(`Player ${player.id + 1} folds`);
-	}
-	this.updatePlayerDisplay();
-	this.updatePot();
-	this.nextPlayer();
-}//»
-expertStrategy(player){//«
-	const handStrength = this.evaluateHand(player.hand, this.gameState.communityCards);
-	if (handStrength > 0.7 && player.chips > 0) return 'raise';
-	if (handStrength > 0.4 && player.chips > 0) return 'call';
-	if (handStrength > 0.6 && player.chips === 0) return 'all-in';
-	return 'fold';
-}//»
-evaluateHand(hand, community){//«
-	const allCards = [...hand, ...community];
-	return Math.random();
-}//»
 playerAction(action){//«
 	const player = this.gameState.players[this.gameState.currentPlayer];
 	if (!player.inHand || player.allIn) {//«
@@ -400,47 +293,47 @@ playerAction(action){//«
 		if (raiseAmount === player.chips + player.bet) {
 			player.allIn = true;
 			player.bet += player.chips;
-			player.total += player.bet;
 			this.gameState.pot += player.chips;
 			player.chips = 0;
 			this.gameState.currentBet = Math.max(this.gameState.currentBet, player.bet);
-			this.stat(`Player ${player.id + 1} goes all-in with $${player.bet}`);
+			this.stat(`Player ${player.id + 1} goes all-in with ${player.bet}`);
 		} 
 		else {
 			player.chips -= raiseAmount - player.bet;
 			this.gameState.pot += raiseAmount - player.bet;
 			player.bet = raiseAmount;
-			player.total += player.bet;
 			this.gameState.currentBet = raiseAmount;
-			this.stat(`Player ${player.id + 1} raises to $${raiseAmount}`);
+			this.stat(`Player ${player.id + 1} raises to ${raiseAmount}`);
 		}
+		player.total += raiseAmount;
 	}//»
 	else if (action === 'call') {//«
 		const callAmount = Math.min(this.gameState.currentBet - player.bet, player.chips);
 		if (callAmount === player.chips) {
 			player.allIn = true;
 			player.bet += player.chips;
-			player.total += player.bet;
 			this.gameState.pot += player.chips;
 			player.chips = 0;
-			this.stat(`Player ${player.id + 1} goes all-in to call $${player.bet}`);
+			this.stat(`Player ${player.id + 1} goes all-in to call ${player.bet}`);
 		} 
 		else {
 			player.chips -= callAmount;
 			this.gameState.pot += callAmount;
 			player.bet += callAmount;
-			player.total += player.bet;
-			this.stat(`Player ${player.id + 1} calls $${callAmount}`);
+//			player.total += player.bet;
+			this.stat(`Player ${player.id + 1} calls ${callAmount}`);
 		}
+		player.total += callAmount;
 	}//»
 	else if (action === 'all-in') {//«
 		player.allIn = true;
 		player.bet += player.chips;
+//cwarn("ALLIN",player.bet);
 		player.total += player.bet;
 		this.gameState.pot += player.chips;
 		player.chips = 0;
 		this.gameState.currentBet = Math.max(this.gameState.currentBet, player.bet);
-		this.stat(`Player ${player.id + 1} goes all-in with $${player.bet}`);
+		this.stat(`Player ${player.id + 1} goes all-in with ${player.bet}`);
 	} //»
 	else {//«
 		player.inHand = false;
@@ -451,6 +344,99 @@ playerAction(action){//«
 	this.updatePot();
 	this.nextPlayer();
 	this.updatePlayerDisplay();
+}//»
+automatedAction(){//«
+	const player = this.gameState.players[this.gameState.currentPlayer];
+	if (!player.inHand || player.allIn) {
+		this.nextPlayer();
+		return;
+	}
+
+	let action;
+	switch (player.strategy) {//«
+		case 'random':
+			action = ['fold', 'call', 'raise', 'all-in'][Math.floor(Math.random() * 4)];
+			break;
+		case 'foldbot':
+			action = 'fold';
+			break;
+		case 'shovebot':
+			action = 'all-in';
+			break;
+		case 'expert':
+			action = this.expertStrategy(player);
+			break;
+		default:
+			action = 'call';
+	}//»
+	this.playerAction(action);
+
+/*«
+	if (action === 'raise') {//«
+		const raiseAmount = Math.min(this.gameState.currentBet * 2, player.chips + player.bet);
+		if (raiseAmount === player.chips + player.bet) action = 'all-in';
+		if (action === 'all-in') {
+			player.allIn = true;
+			player.bet += player.chips;
+			this.gameState.pot += player.chips;
+			player.chips = 0;
+			this.gameState.currentBet = Math.max(this.gameState.currentBet, player.bet);
+			this.stat(`Player ${player.id + 1} goes all-in with ${player.bet}`);
+		} 
+		else {
+			player.chips -= raiseAmount - player.bet;
+			this.gameState.pot += raiseAmount - player.bet;
+			player.bet = raiseAmount;
+			this.gameState.currentBet = raiseAmount;
+			this.stat(`Player ${player.id + 1} raises to ${raiseAmount}`);
+		}
+
+	} //»
+	else if (action === 'call') {//«
+		const callAmount = Math.min(this.gameState.currentBet - player.bet, player.chips);
+		if (callAmount === player.chips) {
+			player.allIn = true;
+			player.bet += player.chips;
+			this.gameState.pot += player.chips;
+			player.chips = 0;
+			this.stat(`Player ${player.id + 1} goes all-in to call ${player.bet}`);
+		} 
+		else {
+			player.chips -= callAmount;
+			this.gameState.pot += callAmount;
+			player.bet = this.gameState.currentBet;
+			this.stat(`Player ${player.id + 1} calls ${callAmount}`);
+		}
+	} //»
+	else if (action === 'all-in') {//«
+		player.allIn = true;
+		player.bet += player.chips;
+		this.gameState.pot += player.chips;
+		player.chips = 0;
+		this.gameState.currentBet = Math.max(this.gameState.currentBet, player.bet);
+		this.stat(`Player ${player.id + 1} goes all-in with ${player.bet}`);
+	} //»
+	else {
+		player.inHand = false;
+		this.stat(`Player ${player.id + 1} folds`);
+	}
+	player.betDiv.innerHTML=`${player.bet}`;
+	this.updatePlayerDisplay();
+	this.updatePot();
+	this.nextPlayer();
+»*/
+
+}//»
+expertStrategy(player){//«
+	const handStrength = this.evaluateHand(player.hand, this.gameState.communityCards);
+	if (handStrength > 0.7 && player.chips > 0) return 'raise';
+	if (handStrength > 0.4 && player.chips > 0) return 'call';
+	if (handStrength > 0.6 && player.chips === 0) return 'all-in';
+	return 'fold';
+}//»
+evaluateHand(hand, community){//«
+	const allCards = [...hand, ...community];
+	return Math.random();
 }//»
 actionKey(k){//«
 	let a;
@@ -465,24 +451,24 @@ actionKey(k){//«
 }//»
 
 nextPlayer(){//«
-
-	let activePlayers = this.gameState.players.filter(p => p.inHand && !p.allIn).length;
-	let playersInHand = this.gameState.players.filter(p => p.inHand).length;
-	let allInCount = this.gameState.players.filter(p => p.allIn && p.inHand).length;
+	const {gameState} = this;
+	let activePlayers = gameState.players.filter(p => p.inHand && !p.allIn).length;
+	let playersInHand = gameState.players.filter(p => p.inHand).length;
+	let allInCount = gameState.players.filter(p => p.allIn && p.inHand).length;
 
 	if (playersInHand <= 1) {
 		this.endHand();
 		return;
 	}
 
-	let betsEqual = this.gameState.players.every(p => !p.inHand || p.allIn || p.bet === this.gameState.currentBet);
+	let betsEqual = gameState.players.every(p => !p.inHand || p.allIn || p.bet === gameState.currentBet);
 	// If one player is all-in and bets are unequal, allow the other to act
 	if (allInCount > 0 && !betsEqual && activePlayers > 0) {
-		this.gameState.currentPlayer = (this.gameState.currentPlayer + 1) % this.gameState.players.length;
-		while (this.gameState.players[this.gameState.currentPlayer].inHand || this.gameState.players[this.gameState.currentPlayer].allIn) {
-			this.gameState.currentPlayer = (this.gameState.currentPlayer + 1) % this.gameState.players.length;
+		gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
+		while (!gameState.players[gameState.currentPlayer].inHand || gameState.players[gameState.currentPlayer].allIn) {
+			gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
 		}
-		this.stat(`Player ${this.gameState.currentPlayer + 1}'s turn`);
+		this.stat(`Player ${gameState.currentPlayer + 1}'s turn`);
 		if (this.curType() !== 'live') {
 			this.automatedAction();
 		} 
@@ -494,7 +480,7 @@ nextPlayer(){//«
 
 	// If bets are equal or all remaining players are all-in, proceed to next phase or end hand
 	if (betsEqual || activePlayers === 0) {
-		if (this.gameState.phase !== 'river') {
+		if (gameState.phase !== 'river') {
 			this.nextPhase();
 		} 
 		else {
@@ -504,19 +490,19 @@ nextPlayer(){//«
 	}
 
 	// Normal case: find next non-all-in, in-hand player
-	this.gameState.currentPlayer = (this.gameState.currentPlayer + 1) % this.gameState.players.length;
-	let startPlayer = this.gameState.currentPlayer;
+	gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
+	let startPlayer = gameState.currentPlayer;
 	let looped = false;
-	while (!this.gameState.players[this.gameState.currentPlayer].inHand || this.gameState.players[this.gameState.currentPlayer].allIn) {
-		this.gameState.currentPlayer = (this.gameState.currentPlayer + 1) % this.gameState.players.length;
-		if (this.gameState.currentPlayer === startPlayer) {
+	while (!gameState.players[gameState.currentPlayer].inHand || gameState.players[gameState.currentPlayer].allIn) {
+		gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
+		if (gameState.currentPlayer === startPlayer) {
 			looped = true;
 			break;
 		}
 	}
 	// If we looped without finding a valid player, bets must be settled
 	if (looped) {
-		if (this.gameState.phase !== 'river') {
+		if (gameState.phase !== 'river') {
 			this.nextPhase();
 		}
 		else {
@@ -525,7 +511,7 @@ nextPlayer(){//«
 		return;
 	}
 
-	this.stat(`Player ${this.gameState.currentPlayer + 1}'s turn`);
+	this.stat(`Player ${gameState.currentPlayer + 1}'s turn`);
 	this.updatePlayerDisplay();
 
 	if (this.curType() !== 'live') {
@@ -536,27 +522,28 @@ nextPlayer(){//«
 	}
 }//»
 nextPhase(){//«
-this.gameState.currentBet = 0;
-this.gameState.players.forEach(p => p.bet = 0);
-	if (this.gameState.phase === 'preflop') {
+	const {gameState} = this;
+	gameState.currentBet = 0;
+	gameState.players.forEach(p => p.bet = 0);
+	if (gameState.phase === 'preflop') {
 		let b1 = this.dealCard();
 		let b2 = this.dealCard();
 		let b3 = this.dealCard();
 		this.stat(`Flop: ${b1.rank}${b1.suit} ${b2.rank}${b2.suit} ${b3.rank}${b3.suit}`);
-	this.gameState.communityCards = [b1, b2, b3];
-	this.gameState.phase = 'flop';
+		gameState.communityCards = [b1, b2, b3];
+		gameState.phase = 'flop';
 	} 
-	else if (this.gameState.phase === 'flop') {
+	else if (gameState.phase === 'flop') {
 		let b4 = this.dealCard();
 		this.stat(`Turn: ${b4.rank}${b4.suit}`);
-	this.gameState.communityCards.push(b4);
-	this.gameState.phase = 'turn';
+		gameState.communityCards.push(b4);
+		gameState.phase = 'turn';
 	} 
-	else if (this.gameState.phase === 'turn') {
+	else if (gameState.phase === 'turn') {
 		let b5 = this.dealCard();
 		this.stat(`River: ${b5.rank}${b5.suit}`);
-	this.gameState.communityCards.push(b5);
-	this.gameState.phase = 'river';
+		gameState.communityCards.push(b5);
+		gameState.phase = 'river';
 	} 
 	else {
 		this.endHand();
@@ -564,18 +551,18 @@ this.gameState.players.forEach(p => p.bet = 0);
 	}
 
 	this.updateCommunityCards();
-this.gameState.currentPlayer = (this.gameState.dealer + 1) % this.gameState.players.length;
-	let startPlayer = this.gameState.currentPlayer;
+	gameState.currentPlayer = (gameState.dealer + 1) % gameState.players.length;
+	let startPlayer = gameState.currentPlayer;
 	let looped = false;
-	while (!this.gameState.players[this.gameState.currentPlayer].inHand || this.gameState.players[this.gameState.currentPlayer].allIn) {
-	this.gameState.currentPlayer = (this.gameState.currentPlayer + 1) % this.gameState.players.length;
-		if (this.gameState.currentPlayer === startPlayer) {
+	while (!gameState.players[gameState.currentPlayer].inHand || gameState.players[gameState.currentPlayer].allIn) {
+		gameState.currentPlayer = (gameState.currentPlayer + 1) % gameState.players.length;
+		if (gameState.currentPlayer === startPlayer) {
 			looped = true;
 			break;
 		}
 	}
-	if (looped && this.gameState.players.filter(p => p.inHand).length > 1) {
-		if (this.gameState.phase !== 'river') {
+	if (looped && gameState.players.filter(p => p.inHand).length > 1) {
+		if (gameState.phase !== 'river') {
 			this.nextPhase();
 		} 
 		else {
@@ -583,7 +570,7 @@ this.gameState.currentPlayer = (this.gameState.dealer + 1) % this.gameState.play
 		}
 		return;
 	}
-	this.stat(`Player ${this.gameState.currentPlayer + 1}'s turn`);
+	this.stat(`Player ${gameState.currentPlayer + 1}'s turn`);
 	this.updatePlayerDisplay();
 	if (this.curType() !== 'live') {
 		this.automatedAction();
@@ -592,13 +579,556 @@ this.gameState.currentPlayer = (this.gameState.dealer + 1) % this.gameState.play
 		this.controlsElem.style.display = 'flex';
 	}
 }//»
+
+evaluate(hand, readable, score_only){//«
+readable = true;
+//Parameters to evaluate:
+//@hand: array of 5 integers in the range 0-51 (the player's cards)
+//@readable: boolean (a humanly readable representation of the hand)
+//@score_only: boolean (only return the basic score, and not any tie-breaking cards)
+
+const POKER_RANK_WORDS = [ "Two","Three","Four","Five","Six","Seven","Eight","Nine","Ten","Jack","Queen","King","Ace" ];
+
+const RANK_STRFL = 9;
+
+//High multi-rank
+const RANK_QUAD = 8;
+const RANK_FULL = 7;
+
+//Multi-suit
+const RANK_FLUSH = 6;
+
+//Sequential
+const RANK_STRAIT = 5;
+
+//Low multi-rank
+const RANK_TRIP = 4;
+const RANK_TWOPR = 3;
+const RANK_PAIR = 2;
+const RANK_HIGH = 1;
+
+
+//Tracks the number of duplicates for each rank
+const dups=[0,0,0,0,0,0,0,0,0,0,0,0,0];
+
+const c1 = hand[0];
+const suit1 = c1%4;//first suit
+let handlen = hand.length;
+let r1 = Math.floor(c1/4);//first rank
+dups[r1]=1;
+
+let r2,r3,r4,r5;//«
+let hi = r1;
+let lo = r1;
+
+let is_pair;
+let is_trips;
+let is_quads;
+let is_2pair;
+let pair_rank1;
+let pair_rank2;
+let trips_rank;
+let quad_rank;
+let c2,c3,c4,c5;
+let hand_len = hand.length;
+let is_flush;
+if (hand_len < 5) is_flush = false;
+else is_flush = true;
+
+//»
+for (let i=1; i < hand_len; i++) {//«
+	let num = hand[i];
+	if (is_flush&&Math.floor(num%4)!==suit1)is_flush=false;
+	const r = Math.floor(num/4);
+	switch (i){//Unsorted ranks«
+		case 1:{r2=r;c2=num;break;}
+		case 2:{r3=r;c3=num;break;}
+		case 3:{r4=r;c4=num;break;}
+		case 4:{r5=r;c5=num;break;}
+	}//»
+//OLDRANKSORTINGHERE
+	dups[r]+=1;
+	const ndup = dups[r];
+	if (ndup == 1) {//«
+		if (r > hi) hi = r;
+		else if (r < lo) lo = r;
+	}
+	else if (ndup == 2) {
+		if (is_pair) {
+			is_2pair = true;
+			pair_rank2 = r;
+		}
+		else{
+			pair_rank1 = r;
+		}
+		is_pair = true;
+	}
+	else if (ndup == 3) {
+		is_trips = true;
+		trips_rank = r;
+	}
+	else if (ndup == 4) {
+		is_quads = true;
+		quad_rank = r;
+	}//»
+}//»
+
+const diff = hi-lo;
+let is_straight = !is_pair && handlen == 5 && diff == 4;
+const is_fullhouse = is_2pair && is_trips;
+let hand_rank;
+let hand_class;
+let str_hand;
+let rem_cards = [];//At most 4 integers depending on the hand
+
+if (is_pair){//«
+
+	if (is_trips){//«
+
+		if (is_quads){//«
+
+			hand_class = RANK_QUAD;
+			hand_rank = 1<<29;
+			hand_rank |= quad_rank << 20;
+			if (!score_only) {
+				if (r1!=quad_rank) rem_cards.push(r1);
+				if (r2!=quad_rank) rem_cards.push(r2);
+				if (r3!=quad_rank) rem_cards.push(r3);
+				if (r4!=quad_rank) rem_cards.push(r4);
+				if (r5!=quad_rank) rem_cards.push(r5);
+				if (readable) str_hand=`Quad ${POKER_RANK_WORDS[quad_rank]}s`;
+			}
+
+		}//»
+		else if (is_fullhouse){//«
+
+			hand_class = RANK_FULL;
+			hand_rank = 1<<28;
+			hand_rank |= trips_rank << 20;
+			if (readable) str_hand=`${POKER_RANK_WORDS[trips_rank]}s over`;
+			if (pair_rank1 === trips_rank){
+				hand_rank |= pair_rank2 << 16;
+				if (readable) str_hand+=` ${POKER_RANK_WORDS[pair_rank2]}s`;
+			}
+			else{
+				hand_rank |= pair_rank1 << 16;
+				if (readable) str_hand+=` ${POKER_RANK_WORDS[pair_rank1]}s`;
+			}
+
+		}//»
+		else{//trips«
+
+			hand_class = RANK_TRIP;
+			hand_rank = 1<<25;
+			hand_rank |= trips_rank << 20;
+
+			if (!score_only) {
+				if (r1!=trips_rank) rem_cards.push(r1);
+				if (r2!=trips_rank) rem_cards.push(r2);
+				if (r3!=trips_rank) rem_cards.push(r3);
+				if (r4!=trips_rank) rem_cards.push(r4);
+				if (r5!=trips_rank) rem_cards.push(r5);
+				if (readable) str_hand=`Trip ${POKER_RANK_WORDS[trips_rank]}s`;
+			}
+
+		}//»
+
+	}//»
+	else if (is_2pair){//«
+
+		hand_class = RANK_TWOPR;
+		hand_rank = 1<<24;
+		if (pair_rank1 > pair_rank2){
+			hand_rank |= pair_rank1 << 20;
+			hand_rank |= pair_rank2 << 16;
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank1]}s and ${POKER_RANK_WORDS[pair_rank2]}s`;
+		}
+		else{
+			hand_rank |= pair_rank2 << 20;
+			hand_rank |= pair_rank1 << 16;
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank2]}s and ${POKER_RANK_WORDS[pair_rank1]}s`;
+		}
+		if (!score_only) {
+			if (!(r1==pair_rank1||r1==pair_rank2)) rem_cards.push(r1);
+			if (!(r2==pair_rank1||r2==pair_rank2)) rem_cards.push(r2);
+			if (!(r3==pair_rank1||r3==pair_rank2)) rem_cards.push(r3);
+			if (!(r4==pair_rank1||r4==pair_rank2)) rem_cards.push(r4);
+			if (!(r5==pair_rank1||r5==pair_rank2)) rem_cards.push(r5);
+		}
+
+	}//»
+	else{//just a pair//«
+
+		hand_class = RANK_PAIR;
+		hand_rank = 1<<23;
+		hand_rank |= pair_rank1 << 16;
+		if (!score_only) {
+			if (r1!=pair_rank1) rem_cards.push(r1);
+			if (r2!=pair_rank1) rem_cards.push(r2);
+			if (r3!=pair_rank1) rem_cards.push(r3);
+			if (r4!=pair_rank1) rem_cards.push(r4);
+			if (r5!=pair_rank1) rem_cards.push(r5);
+			if (readable) str_hand=`${POKER_RANK_WORDS[pair_rank1]}s`;
+		}
+	}//»
+
+}//»
+else if (is_straight){//Straight/Straight-flush«
+
+	if (is_flush){
+
+		hand_class = RANK_STRFL;
+		hand_rank = 1<<30;
+		hand_rank |= hi << 16;
+		if (readable) str_hand =`${POKER_RANK_WORDS[hi]} high straight flush`;
+
+	}
+	else{
+
+		hand_class = RANK_STRAIT;
+		hand_rank = 1<<26;
+		hand_rank |= hi << 16;
+		if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high straight`;
+
+	}
+}//»
+else{//5-high Straight (Straight-Flush) and hi card only«
+
+if (handlen == 5 && diff==12){//«
+if ((r1==hi&&r2==lo)||(r1==lo&&r2==hi)){
+if (!(r3>3||r4>3||r5>3)) is_straight=true;
+}
+else if ((r1==hi&&r3==lo)||(r1==lo&&r3==hi)){
+if (!(r2>3||r4>3||r5>3)) is_straight=true;
+}
+else if ((r1==hi&&r4==lo)||(r1==lo&&r4==hi)){
+if (!(r3>3||r2>3||r5>3)) is_straight=true;
+}
+else if ((r1==hi&&r5==lo)||(r1==lo&&r5==hi)){
+if (!(r3>3||r4>3||r2>3)) is_straight=true;
+}
+else if ((r2==hi&&r3==lo)||(r2==lo&&r3==hi)){
+if (!(r1>3||r4>3||r5>3)) is_straight=true;
+}
+else if ((r2==hi&&r4==lo)||(r2==lo&&r4==hi)){
+if (!(r3>3||r1>3||r5>3)) is_straight=true;
+}
+else if ((r2==hi&&r5==lo)||(r2==lo&&r5==hi)){
+if (!(r3>3||r4>3||r1>3)) is_straight=true;
+}
+else if ((r3==hi&&r4==lo)||(r3==lo&&r4==hi)){
+if (!(r1>3||r2>3||r5>3)) is_straight=true;
+}
+else if ((r3==hi&&r5==lo)||(r3==lo&&r5==hi)){
+if (!(r1>3||r4>3||r2>3)) is_straight=true;
+}
+else if ((r4==hi&&r5==lo)||(r4==lo&&r5==hi)){
+if (!(r1>3||r2>3||r3>3)) is_straight=true;
+}
+}//»
+
+	if (is_flush) {//«
+		if (is_straight) {
+
+			hand_class = RANK_STRFL;
+			hand_rank = 1<<30;
+			hand_rank |= 3<<16;//The 5 is the high card
+			if (readable) str_hand=`Five high straight flush`;
+
+		}
+		else {
+
+			hand_class = RANK_FLUSH;
+			hand_rank = 1<<27;
+			hand_rank |= hi << 16;
+			if (!score_only) {
+				if (r1!=hi) rem_cards.push(r1);
+				if (r2!=hi) rem_cards.push(r2);
+				if (r3!=hi) rem_cards.push(r3);
+				if (r4!=hi) rem_cards.push(r4);
+				if (r5!=hi) rem_cards.push(r5);
+				if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high flush`;
+			}
+
+		}
+	}//»
+	else if (is_straight){//«
+
+		hand_class = RANK_STRAIT;
+		hand_rank = 1<<26;
+		hand_rank |= 3<<16;//The 5 is the high card
+		if (readable) str_hand=`Five high straight`;
+
+	}//»
+	else {//«
+
+		hand_class = RANK_HIGH;
+		hand_rank = 1<<22;
+		hand_rank |= hi << 16;
+
+		if (!score_only) {
+			if (r1!=hi) rem_cards.push(r1);
+			if (r2!=hi) rem_cards.push(r2);
+			if (r3!=hi) rem_cards.push(r3);
+			if (r4!=hi) rem_cards.push(r4);
+			if (r5!=hi) rem_cards.push(r5);
+			if (readable) str_hand=`${POKER_RANK_WORDS[hi]} high`;
+		}
+
+	}//»
+
+}//»
+
+return {
+	left: rem_cards,
+	class: hand_class,
+	score: hand_rank,
+	text: str_hand,
+};
+
+}//»
+evaluateAllRiver(a){//«
+const{evaluate} = this;
+//We always have 7 cards here
+//Using both hole cards
+let h1=evaluate([a[0],a[1],a[4],a[5],a[6]]),//12 --567
+h2=evaluate([a[0],a[1],a[3],a[5],a[6]]),//12 -4-67
+h3=evaluate([a[0],a[1],a[3],a[4],a[6]]),//12 -45-7
+h4=evaluate([a[0],a[1],a[3],a[4],a[5]]),//12 -456-
+h5=evaluate([a[0],a[1],a[2],a[5],a[6]]),//12 3--67
+h6=evaluate([a[0],a[1],a[2],a[4],a[6]]),//12 3-5-7
+h7=evaluate([a[0],a[1],a[2],a[4],a[5]]),//12 3-56-
+h8=evaluate([a[0],a[1],a[2],a[3],a[6]]),//12 34--7
+h9=evaluate([a[0],a[1],a[2],a[3],a[5]]),//12 34-6-
+h10=evaluate([a[0],a[1],a[2],a[3],a[4]]),//12 345--
+
+//Using 1 hole card
+h11=evaluate([a[1],a[3],a[4],a[5],a[6]]),//-2 -4567
+h12=evaluate([a[1],a[2],a[4],a[5],a[6]]),//-2 3-567
+h13=evaluate([a[1],a[2],a[3],a[5],a[6]]),//-2 34-67
+h14=evaluate([a[1],a[2],a[3],a[4],a[6]]),//-2 345-7
+h15=evaluate([a[1],a[2],a[3],a[4],a[5]]),//-2 3456-
+h16=evaluate([a[0],a[3],a[4],a[5],a[6]]),//1- -4567
+h17=evaluate([a[0],a[2],a[4],a[5],a[6]]),//1- 3-567
+h18=evaluate([a[0],a[2],a[3],a[5],a[6]]),//1- 34-67
+h19=evaluate([a[0],a[2],a[3],a[4],a[6]]),//1- 345-7
+h20=evaluate([a[0],a[2],a[3],a[4],a[5]]),//1- 3456-
+
+//Using 0 hole cards
+h21=evaluate([a[2],a[3],a[4],a[5],a[6]]);//-- 34567
+
+let all = [h1,h2,h3,h4,h5,h6,h7,h8,h9,h10,h11,h12,h13,h14,h15,h16,h17,h18,h19,h20,h21];
+all = all.sort((a,b)=>{
+	if (a.score > b.score) return -1;
+	if (a.score < b.score) return 1;
+	return 0;
+});
+
+return all[0];
+
+}//»
+
+showdown(players){//«
+const {gameState} = this;
+const {communityCards} = gameState;
+
+//log(players);
+//log(communityCards);
+for (let p of players){
+	p.numHand = p.hand.map(c => c.i);
+}
+let c = communityCards.map(c => c.i);
+//log(players)
+//log(c);
+//log(comm);
+//return;
+
+//Evaluate the hands«
+
+let total_awarded = 0;
+let active_players=players;
+let num_folded = 0;
+//let c = table_cards;
+
+for (let i=0; i < active_players.length; i++){
+	let player = active_players[i];
+//Folded players are considered "active" because of their chip contribution to
+//the main pot, but they are given a fake hand evaluation that cannot possibly
+//beat anything in a showdown. The hypothetical case in which every player at
+//this point has folded cannot logically exist.
+//	if (!player.result) {
+//No one who pushes all-in before the river will have a result
+	player.result = this.evaluateAllRiver([player.numHand[0], player.numHand[1], c[0],c[1],c[2],c[3],c[4]]);
+//	}
+//	active_players.push(player);
+}
+//log(active_players);
+//»
+//Compare the hands and award the pot(s)
+/*
+{//Give back the difference to whoever has contributed more than anyone to the pot«
+
+	let sorted = active_players
+	.filter(player=>{return !player.folded;})
+	.sort((a,b)=>{
+		if (a.total > b.total) return -1;
+		if (a.total < b.total) return 1;
+		return 0;
+	});
+	let p1 = sorted[0];
+	let p2 = sorted[1];
+	let diff = (p1.total - p2.total);
+	if (diff){
+		p1.total -= diff;
+		p1.chips += diff;
+		pot -= diff;
+	}
+}//»
+*/
+//let pot_num = 1;
+let pot_num = 1;
+while (active_players.length) {
+cwarn("POT NUM: ", pot_num);
+for (let p of active_players){
+log(`Player ${p.id+1}: ${p.result.text} (${p.total})`);
+}
+//pot_iter++;
+//The first iteration of this loop is the main pot, followed by any side pots
+//(side pots result from the players that are forced to go all-in upon calling
+//because they could not cover the bet on the table)
+
+let num_winners=0;
+
+let low_bet = Infinity;//«
+//YTSHJKFSMROS
+let folded_bets = 0;
+let num_folded_players = 0;
+for (let player of active_players) {
+	if (player.folded) {
+		folded_bets+=player.total;
+		num_folded_players++;
+	}
+	else if (player.total < low_bet) low_bet = player.total;
+}
+let cur_total_bet = low_bet;
+let cur_pot = folded_bets + cur_total_bet * (active_players.length - num_folded_players);
+//»
+
+//Set this to zero after reporting on the first showdown
+//This is just a cosmetic variable not internally _used_ for anything
+num_folded = 0;
+/*
+for (let player of active_players){//«
+	if (player.folded) continue;
+if (TEXT_ONLY){
+//	logi(`${player.name}:  >>>  ${STR_DECK[player.hand[0]]}  ${STR_DECK[player.hand[1]]}  <<<  ${player.result.text}`);
+}
+else {
+//	logi(`${player.name}:  >>>  <span class="card">${STR_DECK[player.hand[0]]}</span>  <span class="card">${STR_DECK[player.hand[1]]}</span>  <<<  ${player.result.text}`);
+}
+
+}//»
+*/
+let sorted = active_players.sort((a,b)=>{//«
+	if (a.result.score > b.result.score) return -1;
+	if (a.result.score < b.result.score) return 1;
+	return 0;
+});//»
+let hi = sorted[0].result.score;//«
+let winners = sorted.filter(player=>{
+	return player.result.score == hi;
+});
+let losers = sorted.filter(player=>{
+	return player.result.score < hi;
+});
+
+//»
+
+//Test the kickers
+if (winners.length > 1){//«
+	let hi = 0;
+	for (let winner of winners){
+		let sorted = winner.result.left.sort((a,b)=>{
+			if (a > b) return -1;
+			if (a < b) return 1;
+			return 0;
+		});
+		let s='';
+		for (let num of sorted){
+			if (num < 10) num='0'+num;
+			s+=num;
+		}
+		let val = parseInt(s);
+		if (val > hi) hi = val;
+		winner.kicker_value = val;
+	}
+	if (hi) {
+		let new_winners=[];
+		for (let winner of winners){
+			if (winner.kicker_value == hi) new_winners.push(winner);
+			else losers.push(winner);
+		}
+		winners = new_winners;
+	}
+}//»
+
+//Make the number of chips an integer
+let chips_per_winner = Math.floor(cur_pot / winners.length);
+//Any extra chips should get awarded to the game winner
+
+//extra_chips += cur_pot - (chips_per_winner * winners.length);
+
+for (let winner of winners){//«
+cwarn(`Player ${winner.id+1} has ${winner.result.text}`);
+	winner.chips += chips_per_winner;
+	total_awarded += chips_per_winner;
+}//»
+let net_per_winner = chips_per_winner - cur_total_bet;//«
+if (net_per_winner > 0) {
+	for (let player of winners){
+		num_winners++;
+	}
+}//»
+
+for (let i=0; i < active_players.length; i++){//«
+	let player = active_players[i];
+	player.total-=cur_total_bet;
+	if (player.total < 1){
+		active_players.splice(i, 1);
+		i--;
+	}
+}
+if (active_players.length==1){//«
+//	active_players[0].chips += pot - total_awarded;
+	active_players = [];
+}//»
+
+//*/
+
+pot_num++;
+
+}//»
+//cwarn("WINNERS");
+//log(winners);
+//return winners;
+
+}//»
+
 endHand(){//«
-	const winner = this.gameState.players.find(p => p.inHand) ||this.gameState.players[0];
-	winner.chips +=this.gameState.pot;
-	this.stat(`Player ${winner.id + 1} wins $${this.gameState.pot}`);
-this.gameState.pot = 0;
-this.gameState.communityCards = [];
-this.gameState.players.forEach(p => {
+	const {gameState} = this;
+	let activePlayers = gameState.players.filter(p => p.inHand);
+//.length;
+if (activePlayers.length > 1) {
+cwarn(`END STATE WITH ${activePlayers.length} PLAYERS`);
+this.showdown(activePlayers);
+return;
+}
+//	const winner = gameState.players.find(p => p.inHand) || gameState.players[0];
+//	winner.chips +=gameState.pot;
+//	this.stat(`Player ${winner.id + 1} wins ${gameState.pot}`);
+	gameState.pot = 0;
+	gameState.communityCards = [];
+	gameState.players.forEach(p => {
 		p.hand = [];
 		p.inHand = true;
 		p.bet = 0;
@@ -606,16 +1136,16 @@ this.gameState.players.forEach(p => {
 		p.betDiv.innerHTML="";
 	});
 
-	document.getElementById(`${this.id}_dealer-button-${this.gameState.dealer}`).style.display="";
+	document.getElementById(`${this.id}_dealer-button-${gameState.dealer}`).style.display="";
 
-	this.gameState.dealer = (this.gameState.dealer + 1) % this.gameState.players.length;
-	this.gameState.phase = 'preflop';
-	this.gameState.deck = [...DECK];
-	this.shuffle(this.gameState.deck);
+	gameState.dealer = (gameState.dealer + 1) % gameState.players.length;
+	gameState.phase = 'preflop';
+	gameState.deck = [...DECK];
+	this.shuffle(gameState.deck);
 	this.updateCommunityCards();
 	this.updatePlayerDisplay();
 	this.updatePot();
-	this.gameState.num++;
+	gameState.num++;
 	this.startGame();
 }//»
 
@@ -682,8 +1212,9 @@ initPlayers(){//«
 			allIn: false,
 			betDiv
 		};
+log(`Player ${i+1} is a "${player.type}" type`);
 
-		playerDiv.innerHTML = `Player ${i + 1}<br>$${player.chips}<div class="${id}_cards"></div>`;
+		playerDiv.innerHTML = `Player ${i + 1}<br>${player.chips}<div class="${id}_cards"></div>`;
 		this.gameState.players.push(player);
 
 	}
@@ -748,10 +1279,12 @@ this.styleElem.remove();
 this.reInit = this.appArg
 }//»
 onappinit(arg={}){//«
+
 arg = arg.reInit || arg;
 this.appArg = arg;
 this.playerTypes = arg.playerTypes;
 this.startGame();
+
 }//»
 onkeydown(e, k){//«
 //let k = e.key;

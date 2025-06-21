@@ -2140,7 +2140,7 @@ init(){
 }
 run(){
 const {args}=this;
-const types=['live', 'random', 'foldbot', 'expert'];
+const types=['live', 'random', 'foldbot', 'shovebot', 'expert'];
 if (args.length < 2 || args.length > 10){
 return this.no("need 2-10 args, each one of: live|random|foldbot|expert");
 }
