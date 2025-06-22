@@ -458,6 +458,16 @@ let SYMBOL_WORDS;
 //»
 //Util«
 
+const send_lines_to_gui=(if_wrap)=>{
+	let arr = get_edit_lines({str: true});
+	let str;
+	if (if_wrap) str = util.linesToParas(arr).join("\n");
+	else str = arr.join("\n");
+//SRKTLDM
+//Uncomment this to do auto line wrapping (And comment out the above)
+	Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
+};
+
 const render = (opts={}, which) =>{//«
 	if (no_render) {
 //	if (no_render||undo_redo_all_mode) {
@@ -6054,14 +6064,11 @@ const KEY_DOWN_EDIT_FUNCS={//«
 };//»
 const KEY_DOWN_FUNCS={//«
 //Edit (must apply Action)
+c_CAS:()=>{
+send_lines_to_gui();
+},
 t_CAS:()=>{
-	let arr = get_edit_lines({str: true});
-	let str;
-//	str = arr.join("\n");
-//SRKTLDM
-//Uncomment this to do auto line wrapping (And comment out the above)
-	str = util.linesToParas(arr).join("\n");
-	Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
+send_lines_to_gui(true);
 },
 o_A: create_open_fold,
 c_A: create_closed_fold,

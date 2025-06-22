@@ -2139,6 +2139,65 @@ const com_devtest = class extends Com{
 init(){
 }
 run(){
+
+/*
+Object.getOwnPropertyNames(LOTW.apps["dev.Poker"].prototype)
+getters:
+
+curPlayer
+curType
+curPlayerNum
+
+keep:
+
+constructor
+playerAction
+automatedAction
+nextPlayer
+nextPhase
+newHand
+endHand
+initPlayers
+startGame
+
+*/
+let getters=[
+"curPlayer",
+"curType",
+"curPlayerNum",
+];
+let keep = [
+//"constructor",
+"playerAction",
+"automatedAction",
+"nextPlayer",
+"nextPhase",
+"newHand",
+"endHand",
+"initPlayers",
+"startGame",
+"onappinit",
+];
+let proto = LOTW.apps["dev.Poker"].prototype;
+let names = Object.getOwnPropertyNames(proto);
+let s = "class PokerApp {\n";
+for (let nm of names){
+	if (keep.includes(nm)){
+		s += (proto[nm]).toString().replace(/\/\/[\xab\xbb]/g, "")+"\n";
+	}
+	else{
+		if (getters.includes(nm)){
+			s += `get ${nm}(){}\n`;
+		}
+		else {
+			s += `${nm}(){}\n`;
+		}
+	}
+}
+s+="}";
+
+this.out(s);
+//log(s);
 this.ok();
 }
 }

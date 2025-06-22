@@ -3437,10 +3437,12 @@ handleKey(sym, code, mod, ispress, e){//«
 		case "y_C": 
 			this.insertCutStr();
 			break;
+/*
 		case "c_CAS": 
 			this.clear();
 			this.responseEnd();
 			break;	
+*/
 		case "a_C": 
 			e.preventDefault();
 			this.seekLineStart();
