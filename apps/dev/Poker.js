@@ -365,6 +365,20 @@ nextPhase() {//«
         this.controlsElem.style.display = 'flex';
     }
 }//»
+resetBetStates(){//«
+    this.gameState.currentBet = 0
+    this.gameState.players.forEach(p => {
+		let pot = parseInt(p.potDiv.innerText || "0");
+		pot+=p.bet;
+		p.potDiv.innerText = pot;
+        p.bet = 0
+        p.betDiv.innerHTML = ''
+    })
+    this.gameState.allActed = false
+    this.gameState.lastAggressor = -1
+    this.gameState.actedSinceAggressor = []
+}//»
+/*
 resetBetStates() {//«
     this.gameState.currentBet = 0;
     this.gameState.players.forEach(p => {
@@ -376,6 +390,7 @@ resetBetStates() {//«
     });
     this.gameState.allActed = false; // Reset for new round
 }//»
+*/
 makeDOM(){//«
 
 const{id, Main} = this;
