@@ -1,4 +1,4 @@
-/*CRITICAL BUG:
+/*CRITICAL BUG:«
 THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
 let val = await fname.toText(term);
 _.toText = async function(opts = {}) {
@@ -15,15 +15,15 @@ _.toText = async function(opts = {}) {
 };
 
 
-*/
-/*5/20/25: The trivial idea I have is to support a mode of input (for secret passwords, etc)
+»*/
+/*5/20/25: The trivial idea I have is to support a mode of input (for secret passwords, etc)«
 that either echoes stars or echoes the letter which gets turned into a star upon the next 
 render. Let's do a command.
 
 Before I do anything though I need to figure out how to get back the old behavior of
 refreshing the shell and the terminal at the same time...
 
-*/
+»*/
 //Notes«
 //Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 
@@ -2150,15 +2150,19 @@ curPlayerNum
 
 keep:
 
-constructor
+resetBetStates
+startGame
 playerAction
-automatedAction
 nextPlayer
 nextPhase
+automatedAction
 newHand
 endHand
 initPlayers
-startGame
+initGameState
+resetGameState
+onappinit
+onkeydown
 
 */
 let getters=[
@@ -2177,6 +2181,11 @@ let keep = [
 "initPlayers",
 "startGame",
 "onappinit",
+"initGameState",
+"resetGameState",
+"resetBetStates",
+"onappinit",
+"onkeydown",
 ];
 let proto = LOTW.apps["dev.Poker"].prototype;
 let names = Object.getOwnPropertyNames(proto);
