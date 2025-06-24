@@ -1292,6 +1292,7 @@ resetGameState(){//«
 	const{gameState}=this;
 	gameState.pot = 0;
 	gameState.communityCards = [];
+	gameState.bigBlindActed = false;
 	this.commCardsElem.innerHTML = "";
 	gameState.players.forEach(p => {
 //		p.elem.classList.toggle('current', false);
