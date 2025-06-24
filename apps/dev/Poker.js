@@ -324,6 +324,7 @@ else log(message);
 }//»
 updatePlayerDisplay(){//«
 	const{id}=this;
+//log(this.gameState.currentPlayer);
 	this.gameState.players.forEach((player, i) => {
 		const playerDiv = document.querySelector(`.${id}_player-${i}`);
 		if (playerDiv) {
@@ -335,7 +336,7 @@ updatePlayerDisplay(){//«
 			else {
 				cardsDiv.innerHTML = player.hand.map(card => `<span class="${id}_card ${card.suit === '♥' || card.suit === '♦' ? 'red' : 'black'}">${card.rank}${card.suit}</span>`).join('');
 			}
-			playerDiv.innerHTML = `Player ${i + 1}<br>${player.chips}${player.allIn ? ' (All-In)' : ''}<div class="${id}_cards">${cardsDiv.innerHTML}</div>`;
+//			playerDiv.innerHTML = `Player ${i + 1}<br>${player.chips}${player.allIn ? ' (All-In)' : ''}<div class="${id}_cards">${cardsDiv.innerHTML}</div>`;
 		}
 	});
 }//»
@@ -971,6 +972,7 @@ initGameState() {//«
 		raisesThisRound: 0 // Add raise counter
 	};
 }//»
+
 initPlayerDOM(i){//«
 
 	const{id, radiusX, radiusY, betRadX, betRadY, potRadX, potRadY, tableWid, tableHgt, angleStep}=this;
@@ -1052,11 +1054,10 @@ initPlayers(){//«
 startGame() {//«
 	const { id } = this;
 	this.stat(`Starting game: ${this.gameState.num}`, {warn: true});
-	this.numPlayers = this.playerTypes.length;
 	this.gameState.phase = 'preflop';
 	this.gameState.deck = [...DECK];
 	this.shuffle(this.gameState.deck);
-	this.initPlayers();
+
 	this.dealHands();
 	this.gameState.raisesThisRound = 0; // Initialize raise counter
 
@@ -1293,11 +1294,14 @@ resetGameState(){//«
 	gameState.communityCards = [];
 	this.commCardsElem.innerHTML = "";
 	gameState.players.forEach(p => {
+//		p.elem.classList.toggle('current', false);
+		p.elem.classList.toggle('folded', false);
 		p.hand = [];
 		p.inHand = true;
 		p.allIn = false;
-		p.bet = 0;
+		p.bet = -1;
 		p.total = 0;
+//		p.chips
 		p.betDiv.innerHTML="";
 		p.potDiv.innerHTML="";
 	});
@@ -1307,7 +1311,7 @@ newHand(){//«
 	gameState.num++;
 	document.getElementById(`${this.id}_dealer-button-${gameState.dealer}`).style.display="none";
 	gameState.dealer = (gameState.dealer + 1) % gameState.players.length;
-	document.getElementById(`${this.id}_dealer-button-${gameState.dealer}`).style.display="";
+//	document.getElementById(`${this.id}_dealer-button-${gameState.dealer}`).style.display="";
 	this.resetGameState();
 	this.startGame();
 }//»
@@ -1330,7 +1334,9 @@ onappinit(arg={}){//«
 arg = arg.reInit || arg;
 this.appArg = arg;
 this.playerTypes = arg.playerTypes || ["live", "live"];
+this.numPlayers = this.playerTypes.length;
 this.initGameState();
+this.initPlayers();
 this.startGame();
 
 }//»
