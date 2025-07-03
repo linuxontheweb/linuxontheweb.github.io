@@ -2066,35 +2066,7 @@ run(){
 /*
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */
-/*Now in Grok.js
-const com_devtest = class extends Com{//«
-init(){
-}
-async run(){
-
-let fname = this.args.shift();
-if (!fname) return this.no("No file!");
-let txt = await fname.toText(this.term);
-if (!txt) return this.no("No file text!");
-
-let parser = new DOMParser();
-let doc = parser.parseFromString(txt, "text/html");
-
-//Easy way to pick out all the "conversation content" divs: class="message-bubble"
-let mess_arr = Array.from(doc.getElementsByClassName("message-bubble"));
-let quests=[];
-let resps=[];
-for (let i=0; i < mess_arr.length; i+=2){
-//Alternate between questions and answers
-	quests.push(mess_arr[i].children[1].innerHTML);
-	resps.push(mess_arr[i+1].children[1].innerHTML);
-}
-cwarn("ALL");
-log(quests);
-log(resps);
-this.ok();
-}
-}//»
+/*
 const com_devtest = class extends Com{//«
 
 static getOpts(){
@@ -2134,56 +2106,48 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 }
 }//»
-*/
-const com_devtest = class extends Com{
+const com_devtest = class extends Com{//«
 init(){
 }
 run(){
 
-/*
-Object.getOwnPropertyNames(LOTW.apps["dev.Poker"].prototype)
-getters:
+//Object.getOwnPropertyNames(LOTW.apps["dev.Poker"].prototype)
+//getters:
+//
+//curPlayer
+//curType
+//curPlayerNum
+//
+//keep:
+//
+//resetBetStates
+//startGame
+//playerAction
+//nextPlayer
+//nextPhase
+//automatedAction
+//newHand
+//endHand
+//initPlayers
+//initGameState
+//resetGameState
+//onappinit
+//onkeydown
 
-curPlayer
-curType
-curPlayerNum
-
-keep:
-
-resetBetStates
-startGame
-playerAction
-nextPlayer
-nextPhase
-automatedAction
-newHand
-endHand
-initPlayers
-initGameState
-resetGameState
-onappinit
-onkeydown
-
-*/
 let getters=[
 "curPlayer",
 "curType",
 "curPlayerNum",
 ];
 let keep = [
-//"constructor",
-"playerAction",
-"automatedAction",
 "nextPlayer",
 "nextPhase",
 "newHand",
 "endHand",
+"initGameState",
 "initPlayers",
 "startGame",
-"onappinit",
-"initGameState",
-"resetGameState",
-"resetBetStates",
+"onkill",
 "onappinit",
 "onkeydown",
 ];
@@ -2210,26 +2174,18 @@ this.out(s);
 this.ok();
 }
 }
-const com_poker = class extends Com{
+//»
+*/
+
+const com_devtest = class extends Com{
 init(){
 }
 run(){
-const {args}=this;
-const types=['live', 'random', 'foldbot', 'shovebot', 'expert'];
-if (args.length < 2 || args.length > 10){
-return this.no("need 2-10 args, each one of: live|random|foldbot|shovebot|expert");
+
+this.ok("DEVTEST!");
+}
 }
 
-for (let arg of args){
-	if (!types.includes(arg)){
-		return this.no(`Unknwn type: '${arg}'`);
-	}
-}
-Desk.api.openApp("dev.Poker", {force: true, appArgs: {playerTypes: this.args}});
-
-this.ok();
-}
-}
 
 const com_wat2wasm = class extends Com{//«
 
@@ -3218,7 +3174,7 @@ this.defCommands={//«
 
 //continue: com_continue,
 //break: com_break,
-poker: com_poker,
+//poker: com_poker,
 wat2wasm: com_wat2wasm,
 wget: com_wget,
 continue: com_loopctrl,
