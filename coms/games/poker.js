@@ -136,7 +136,272 @@ const {Com} = LOTW.globals.ShellMod.comClasses;
 const{log,jlog,cwarn,cerr}=LOTW.api.util;
 //»
 
+const generatePokerHands = (startingHand) => {
+	const result = {};
+	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+	const suits = ['s', 'h', 'd', 'c'];
+	const MAX_ITERATIONS = 1250000; // Infinite loop protection limit
+	let iterationCount = 0;
 
+	const isSuited = startingHand.includes('s');
+
+	const getFlushStatuses = (hole, board) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in getFlushStatuses');
+		}
+		const totCards = 2 + board.length;
+		const isTurn = totCards === 6;
+		const isRiver = totCards === 7;
+		const holeRanks = hole.replace(/[so]/g, '').split('');
+		const holeIsPair = holeRanks[0] == holeRanks[1];
+		const boardRanks = board.split('');
+		const boardSuitCount = isTurn ? 4 : 3;
+		const boardHasPairOrMore = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 2);
+		const boardHasTripsOrMore = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 3);
+		const boardHasQuads = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 4);
+		const allRanks = [...holeRanks, ...boardRanks];
+		const distinctRanks = new Set(allRanks).size;
+//		const minDistinctRanks = isRiver ? 5 : 4; // 4 for flop/turn, 5 for river
+		const minDistinctRanks = isRiver ? 5 : isTurn ? 4 : 3; // 4 for flop/turn, 5 for river
+		const statuses = new Set();
+
+		// Deterministic flush status assignment
+		if (!isSuited) {
+			// For unsuited hands (e.g., AA, AKo), include 'a' (flush draw, no connection) and 'b' (no flush draw)
+			if (!boardHasPairOrMore && distinctRanks >= minDistinctRanks) statuses.add('a');
+			statuses.add('b');
+			if (!holeIsPair && distinctRanks >= minDistinctRanks) statuses.add('c');//Only non-pairs get c
+			if (distinctRanks >= minDistinctRanks) statuses.add('d');//Pairs and non-pairs get d
+			return Array.from(statuses);
+		}
+
+		// Always include 'a' (no suited connection, flush draw) if no pair/trips
+		if (!boardHasPairOrMore && distinctRanks >= minDistinctRanks) statuses.add('a');
+		statuses.add('b'); // Always include 'b' (no flush draw)
+		if ((totCards === 5 && !boardHasPairOrMore) || (totCards === 6 && !boardHasTripsOrMore) || (totCards === 7  && !boardHasQuads)) {
+			if (distinctRanks >= minDistinctRanks) statuses.add('e');
+		}
+		return Array.from(statuses);
+	};
+
+	const generateFlops = (hole) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateFlops');
+		}
+
+		const flops = {};
+		const usedRanks = hole.replace(/[so]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			for (let j = i; j < availableRanks.length; j++) {
+				for (let k = j; k < availableRanks.length; k++) {
+					const flopRanks = [availableRanks[i], availableRanks[j], availableRanks[k]];
+					const combinedRanks = [...usedRanks, ...flopRanks];
+					if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+					const sortedFlop = flopRanks.sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+					const flushStatuses = getFlushStatuses(hole, sortedFlop);
+					for (let status of flushStatuses) {
+						const flopKey = hole.replace(/[so]/g, '') + sortedFlop + status;
+						if (flopKey.length === 6) {
+							flops[flopKey] = generateTurns(flopKey);
+						}
+					}
+				}
+			}
+		}
+		return flops;
+	};
+
+	const generateTurns = (flopKey) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateTurns');
+		}
+
+		const baseHole = flopKey.slice(0, 2);
+		const turns = {};
+		const usedRanks = flopKey.replace(/[soa-e]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			const turnCard = availableRanks[i];
+			const board = flopKey.slice(2, 5) + turnCard;
+			const combinedRanks = [...usedRanks, turnCard];
+			if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+			const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+			const flushStatuses = getFlushStatuses(baseHole, sortedBoard);
+			for (let status of flushStatuses) {
+				const turnKey = baseHole + sortedBoard + status;
+				turns[turnKey] = generateRivers(turnKey);
+			}
+		}
+		return turns;
+	};
+
+	const generateRivers = (turnKey) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateRivers');
+		}
+
+		const baseHole = turnKey.slice(0, 2);
+		const rivers = [];
+		const usedRanks = turnKey.replace(/[soa-e]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			const riverCard = availableRanks[i];
+			const board = turnKey.slice(2, 6) + riverCard;
+			const combinedRanks = [...usedRanks, riverCard];
+			if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+			const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+			const flushStatuses = getFlushStatuses(baseHole, sortedBoard);
+			for (let status of flushStatuses) {
+				const riverKey = baseHole + sortedBoard + status;
+				rivers.push(riverKey);
+			}
+		}
+		return rivers;
+	};
+
+	if (startingHand.length >= 2 && ranks.includes(startingHand[0]) && ranks.includes(startingHand[1])) {
+		const sortedHole = ranks.indexOf(startingHand[0]) <= ranks.indexOf(startingHand[1]) ? startingHand : startingHand[1] + startingHand[0];
+		result[sortedHole] = generateFlops(sortedHole);
+	}
+
+	return result;
+};
+/*«
+const generatePokerHands = (startingHand) => {
+	const result = {};
+	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+	const suits = ['s', 'h', 'd', 'c'];
+	const MAX_ITERATIONS = 1250000; // Infinite loop protection limit
+	let iterationCount = 0;
+
+	const isSuited = startingHand.includes('s');
+
+	const getFlushStatuses = (hole, board) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in getFlushStatuses');
+		}
+		const totCards = 2 + board.length;
+		const isTurn = totCards === 6;
+		const holeRanks = hole.replace(/[so]/g, '').split('');
+		const holeIsPair = holeRanks[0] == holeRanks[1];
+		const boardRanks = board.split('');
+		const boardSuitCount = isTurn ? 4 : 3;
+		const boardHasPairOrMore = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 2);
+		const boardHasTripsOrMore = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 3);
+		const boardHasQuads = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 4);
+		const statuses = new Set();
+
+		// Deterministic flush status assignment
+		if (!isSuited) {
+			// For unsuited hands (e.g., AA, AKo), include 'a' (flush draw, no connection) and 'b' (no flush draw)
+			if (!boardHasPairOrMore) statuses.add('a');
+			statuses.add('b');
+			if (!holeIsPair) statuses.add('c');//Only non-pairs get c
+			statuses.add('d');//Pairs and non-pairs get d
+			return Array.from(statuses);
+		}
+
+		// Always include 'a' (no suited connection, flush draw) if no pair/trips
+		if (!boardHasPairOrMore) statuses.add('a');
+		statuses.add('b'); // Always include 'b' (no flush draw)
+		if ((totCards === 5 && !boardHasPairOrMore) || (totCards === 6 && !boardHasTripsOrMore) || (totCards === 7  && !boardHasQuads)) {
+			statuses.add('e');
+		}
+		return Array.from(statuses);
+	};
+
+	const generateFlops = (hole) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateFlops');
+		}
+
+		const flops = {};
+		const usedRanks = hole.replace(/[so]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			for (let j = i; j < availableRanks.length; j++) {
+				for (let k = j; k < availableRanks.length; k++) {
+					const flopRanks = [availableRanks[i], availableRanks[j], availableRanks[k]];
+					const combinedRanks = [...usedRanks, ...flopRanks];
+					if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+					const sortedFlop = flopRanks.sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+					const flushStatuses = getFlushStatuses(hole, sortedFlop);
+					for (let status of flushStatuses) {
+						const flopKey = hole.replace(/[so]/g, '') + sortedFlop + status;
+						if (flopKey.length === 6) {
+							flops[flopKey] = generateTurns(flopKey);
+						}
+					}
+				}
+			}
+		}
+		return flops;
+	};
+
+	const generateTurns = (flopKey) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateTurns');
+		}
+
+		const baseHole = flopKey.slice(0, 2);
+		const turns = {};
+		const usedRanks = flopKey.replace(/[soa-e]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			const turnCard = availableRanks[i];
+			const board = flopKey.slice(2, 5) + turnCard;
+			const combinedRanks = [...usedRanks, turnCard];
+			if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+			const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+			const flushStatuses = getFlushStatuses(baseHole, sortedBoard);
+			for (let status of flushStatuses) {
+				const turnKey = baseHole + sortedBoard + status;
+				turns[turnKey] = generateRivers(turnKey);
+			}
+		}
+		return turns;
+	};
+
+	const generateRivers = (turnKey) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateRivers');
+		}
+
+		const baseHole = turnKey.slice(0, 2);
+		const rivers = [];
+		const usedRanks = turnKey.replace(/[soa-e]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			const riverCard = availableRanks[i];
+			const board = turnKey.slice(2, 6) + riverCard;
+			const combinedRanks = [...usedRanks, riverCard];
+			if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+			const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+			const flushStatuses = getFlushStatuses(baseHole, sortedBoard);
+			for (let status of flushStatuses) {
+				const riverKey = baseHole + sortedBoard + status;
+				rivers.push(riverKey);
+			}
+		}
+		return rivers;
+	};
+
+	if (startingHand.length >= 2 && ranks.includes(startingHand[0]) && ranks.includes(startingHand[1])) {
+		const sortedHole = ranks.indexOf(startingHand[0]) <= ranks.indexOf(startingHand[1]) ? startingHand : startingHand[1] + startingHand[0];
+		result[sortedHole] = generateFlops(sortedHole);
+	}
+
+	return result;
+};
+*//* » */
+/*
 const generatePokerHands = (startingHand) => {//«
 	const result = {};
 	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -259,6 +524,164 @@ const generatePokerHands = (startingHand) => {//«
 
 	return result;
 };//»
+*/
+/*Updated version with betting logic (DON'T ACTUALLY USE THIS VERSION!!!)«
+const generatePokerHands = (startingHand) => {
+	const result = {};
+	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+	const suits = ['s', 'h', 'd', 'c'];
+	const MAX_ITERATIONS = 2000000; // Adjusted for offsuit non-pair complexity
+	let iterationCount = 0;
+
+	const isSuited = startingHand.includes('s');
+	const bettingActions = ['fold', 'call', 'raise']; // Simple betting actions
+
+	const getFlushStatuses = (hole, board) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in getFlushStatuses');
+		}
+
+		const totCards = 2 + board.length;
+		const isTurn = totCards === 6;
+		const isRiver = totCards === 7;
+		const holeRanks = hole.replace(/[so]/g, '').split('');
+		const holeIsPair = holeRanks[0] === holeRanks[1];
+		const boardRanks = board.split('');
+		const boardHasPairOrMore = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 2);
+		const boardHasTripsOrMore = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 3);
+		const boardHasQuads = boardRanks.some(r => boardRanks.filter(br => br === r).length >= 4);
+
+		const statuses = new Set();
+
+		// Unsuited hands (e.g., AA, AKo)
+		if (!isSuited) {
+			if (!boardHasPairOrMore) statuses.add('a');
+			statuses.add('b');
+			if (!holeIsPair) {
+				statuses.add('c');
+				statuses.add('d');
+			}
+			if (holeIsPair) statuses.add('d');
+			return Array.from(statuses);
+		}
+
+		// Suited hands (e.g., AKs, AAs)
+		if (!boardHasPairOrMore) statuses.add('a');
+		statuses.add('b');
+		if ((totCards === 5 && !boardHasPairOrMore) || (totCards === 6 && !boardHasTripsOrMore) || (totCards === 7 && !boardHasQuads)) {
+			statuses.add('e');
+		}
+		if (!holeIsPair) {
+			if (ranks.indexOf(holeRanks[0]) < ranks.indexOf(holeRanks[1])) {
+				statuses.add('c');
+				statuses.add('d');
+			} else {
+				statuses.add('d');
+				statuses.add('c');
+			}
+		}
+		if (holeIsPair) statuses.add('d');
+
+		return Array.from(statuses);
+	};
+
+	const generateFlops = (hole) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateFlops');
+		}
+
+		const flops = {};
+		const usedRanks = hole.replace(/[so]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			for (let j = i; j < availableRanks.length; j++) {
+				for (let k = j; k < availableRanks.length; k++) {
+					const flopRanks = [availableRanks[i], availableRanks[j], availableRanks[k]];
+					const sortedFlop = flopRanks.sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+					const flushStatuses = getFlushStatuses(hole, sortedFlop);
+					for (let status of flushStatuses) {
+						const flopKey = hole.replace(/[so]/g, '') + sortedFlop + status;
+						if (flopKey.length === 6) {
+							const bettingNodes = {};
+							for (let action of bettingActions) {
+								bettingNodes[action] = generateTurns(flopKey);
+							}
+							flops[flopKey] = { chance: sortedFlop, betting: bettingNodes };
+						}
+					}
+				}
+			}
+		}
+		return flops;
+	};
+
+	const generateTurns = (flopKey) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateTurns');
+		}
+
+		const baseHole = flopKey.slice(0, 2);
+		const turns = {};
+		const usedRanks = flopKey.replace(/[soa-e]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			const turnCard = availableRanks[i];
+			const board = flopKey.slice(2, 5) + turnCard;
+			const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+			const flushStatuses = getFlushStatuses(baseHole, sortedBoard);
+			for (let status of flushStatuses) {
+				const turnKey = baseHole + sortedBoard + status;
+				const bettingNodes = {};
+				for (let action of bettingActions) {
+					bettingNodes[action] = generateRivers(turnKey);
+				}
+				turns[turnKey] = { chance: sortedBoard, betting: bettingNodes };
+			}
+		}
+		return turns;
+	};
+
+	const generateRivers = (turnKey) => {
+		if (++iterationCount > MAX_ITERATIONS) {
+			throw new Error('Infinite loop detected in generateRivers');
+		}
+
+		const baseHole = turnKey.slice(0, 2);
+		const rivers = [];
+		const usedRanks = turnKey.replace(/[soa-e]/g, '').split('');
+		const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+		for (let i = 0; i < availableRanks.length; i++) {
+			const riverCard = availableRanks[i];
+			const board = turnKey.slice(2, 6) + riverCard;
+			const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+			const flushStatuses = getFlushStatuses(baseHole, sortedBoard);
+			for (let status of flushStatuses) {
+				const riverKey = baseHole + sortedBoard + status;
+				const bettingNodes = {};
+				for (let action of bettingActions) {
+					bettingNodes[action] = { terminal: true, outcome: action === 'fold' ? 'fold' : 'showdown' };
+				}
+				rivers.push({ chance: riverKey, betting: bettingNodes });
+			}
+		}
+		return rivers;
+	};
+
+	if (startingHand.length >= 2 && ranks.includes(startingHand[0]) && ranks.includes(startingHand[1])) {
+		const sortedHole = ranks.indexOf(startingHand[0]) <= ranks.indexOf(startingHand[1]) ? startingHand : startingHand[1] + startingHand[0];
+		const preflopBetting = {};
+		for (let action of bettingActions) {
+			preflopBetting[action] = generateFlops(sortedHole);
+		}
+		result[sortedHole] = { chance: sortedHole, betting: preflopBetting };
+	}
+
+	return result;
+};
+»*/
 
 
 /*
@@ -344,7 +767,10 @@ const {args} = this;
 try{
 let hand = args[0];
 const pokerHands = generatePokerHands(hand);
-//log(pokerHands);
+log(pokerHands);
+log(pokerHands.AKo.AKAAAb);
+log(pokerHands.AKo.AKAAAc);
+log(pokerHands.AKo.AKAAAd);
 //let
 /*
 a) The hole has no suited connections with a board that has a flush draw.
@@ -353,14 +779,15 @@ c) A suit-connected hole+board such that the lowest ranked suit connects with th
 d) A suit-connected hole+board such that the highest ranked suit connects with the board's suits. This option will be used in the case the hole cards are the same rank (a pair).
 e) A suit-connected hole+board, such that both hole cards connect with the board's suits.
 */
-log(pokerHands);
+//log(pokerHands.AA.AAAAKd);
+/*
 let hand_no_suit = hand.replace(/[so]$/, "");
 for (let c of ["a", "b", "c", "d", "e"]){
 
 log(c, pokerHands[hand][`${hand_no_suit}432${c}`]);
-
 }
-
+*/
+//log(pokerHands[hand]["22222b"]);
 //log("", pokerHands[hand][hand+"432b"]);
 //log("", pokerHands[hand][hand+"432c"]);
 //log("", pokerHands[hand][hand+"432d"]);
