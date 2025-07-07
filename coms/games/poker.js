@@ -137,6 +137,454 @@ const{log,jlog,cwarn,cerr}=LOTW.api.util;
 //»
 
 const generatePokerHands = (startingHand) => {//«
+    // Constants for ranks, suits, and iteration limit
+    const result = {};
+    const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+    const suits = ['s', 'h', 'd', 'c'];
+    const MAX_ITERATIONS = 5000000;
+    let iterationCount = 0;
+
+    // Validate starting hand (e.g., "AA", "AKs", "AKo")
+    if (!startingHand || startingHand.length < 2 || startingHand.length > 3 ||
+        !ranks.includes(startingHand[0]) || !ranks.includes(startingHand[1])) {
+        throw new Error('Invalid starting hand format');
+    }
+    const isPair = startingHand[0] === startingHand[1];
+    if (isPair && startingHand.length !== 2) {
+        throw new Error('Pairs must have exactly 2 characters');
+    }
+    if (!isPair && startingHand.length !== 3) {
+        throw new Error('Non-pairs must have exactly 3 characters');
+    }
+    if (!isPair && !['s', 'o'].includes(startingHand[2])) {
+        throw new Error('Non-pairs must end with s or o');
+    }
+
+    // Extract base hole cards and suitedness
+    const isSuited = startingHand.includes('s');
+    const baseHole = startingHand.slice(0, 2);
+    const sortedHole = ranks.indexOf(baseHole[0]) <= ranks.indexOf(baseHole[1]) ? baseHole : baseHole[1] + baseHole[0];
+
+    // Helper: Count distinct ranks in the board
+    const getDistinctBoardRanks = (board) => {
+        return new Set(board.split('')).size;
+    };
+
+    // Helper: Get max possible suit-connecting cards
+    // - For suited hands: 2 hole cards + distinct board ranks
+    // - For unsuited: 1 hole card + distinct board ranks
+    const getMaxSuits = (board) => {
+        const distinctBoardRanks = getDistinctBoardRanks(board);
+        return isSuited ? distinctBoardRanks + 2 : distinctBoardRanks + 1;
+    };
+
+    // Helper: Validate if a suit count is possible for the round
+    const isValidSuitCount = (round, suitCount) => {
+        if (round === 'flop') return suitCount === 3;
+        if (round === 'turn') return suitCount >= 4;
+        if (round === 'river') return suitCount >= 4; // 4 for draw, 5+ for flush
+        return false;
+    };
+
+    // Helper: Check for nut flush blocker
+    // Simulate suit assignment to check if a hole card is the highest non-board card of a suit
+    const hasNutFlushBlocker = (board, holeSuits, boardSuits) => {
+        const suitCounts = {};
+        boardSuits.forEach(suit => {
+            suitCounts[suit] = (suitCounts[suit] || 0) + 1;
+        });
+        const maxSuitCount = Math.max(...Object.values(suitCounts), 0);
+        if (maxSuitCount < 2) return false; // Need at least 2 cards of a suit for blocker relevance
+        const primarySuit = Object.keys(suitCounts).reduce((a, b) => suitCounts[a] > suitCounts[b] ? a : b, null);
+        const boardRanksInSuit = boardSuits.map((suit, idx) => suit === primarySuit ? ranks.indexOf(board[idx]) : -1).filter(r => r >= 0);
+        const maxBoardRank = Math.max(...boardRanksInSuit, -1);
+        const holeRanks = baseHole.split('').map(r => ranks.indexOf(r));
+        return holeSuits.some((suit, idx) => suit === primarySuit && holeRanks[idx] < maxBoardRank);
+    };
+
+    // Helper: Assign valid flush statuses based on constraints
+    const assignStatuses = (round, board, maxSuits, prevStatus = '') => {
+        const statuses = new Set();
+        const prevSuitCount = prevStatus.match(/\d$/) ? parseInt(prevStatus.match(/\d$/)[0]) : 0;
+
+        // Simulate board suits to check flush potential
+        const boardSuits = Array(board.length).fill('').map((_, i) => suits[i % suits.length]);
+        const suitCounts = {};
+        boardSuits.forEach(suit => {
+            suitCounts[suit] = (suitCounts[suit] || 0) + 1;
+        });
+        const maxSuitCount = Math.max(...Object.values(suitCounts), 0);
+        const suitsWithTwo = Object.values(suitCounts).filter(count => count === 2).length;
+
+        // Handle 'a' (board-driven flush draw)
+        const totalDistinctRanks = new Set([...baseHole.split(''), ...board.split('')]).size;
+        const minDistinctRanks = round === 'river' ? 5 : round === 'turn' ? 4 : 3;
+        if (totalDistinctRanks >= minDistinctRanks && isValidSuitCount(round, maxSuitCount)) {
+            statuses.add('a');
+        }
+
+        // Handle 'b' categories (no player flush draw)
+        if (round === 'flop') {
+            if (maxSuitCount <= 1) { // Rainbow board
+                const primarySuit = Object.keys(suitCounts).length ? Object.keys(suitCounts)[0] : null;
+                const holeSuits = isSuited ? [startingHand[2] === 's' ? 's' : 'h', startingHand[2] === 's' ? 's' : 'h'] : ['s', 'h'];
+                if (primarySuit && hasNutFlushBlocker(board, holeSuits, boardSuits)) {
+                    statuses.add('B1');
+                } else {
+                    statuses.add('b1');
+                }
+            }
+        } else if (round === 'turn') {
+            if (maxSuitCount <= 1) {
+                statuses.add('b0');
+            } else if (maxSuitCount === 2 && suitsWithTwo === 1) {
+                const primarySuit = Object.keys(suitCounts).reduce((a, b) => suitCounts[a] > suitCounts[b] ? a : b, null);
+                const holeSuits = isSuited ? [startingHand[2] === 's' ? 's' : 'h', startingHand[2] === 's' ? 's' : 'h'] : ['s', 'h'];
+                if (hasNutFlushBlocker(board, holeSuits, boardSuits)) {
+                    statuses.add('B2');
+                } else {
+                    statuses.add('b2');
+                }
+            } else if (maxSuitCount === 2 && suitsWithTwo >= 2) {
+                const primarySuit = Object.keys(suitCounts).reduce((a, b) => suitCounts[a] > suitCounts[b] ? a : b, null);
+                const holeSuits = isSuited ? [startingHand[2] === 's' ? 's' : 'h', startingHand[2] === 's' ? 's' : 'h'] : ['s', 'h'];
+                if (hasNutFlushBlocker(board, holeSuits, boardSuits)) {
+                    statuses.add('B22');
+                } else {
+                    statuses.add('b22');
+                }
+            }
+        } else if (round === 'river') {
+            if (maxSuitCount <= 2) { // No flush possible for any player
+                statuses.add('b0');
+            }
+        }
+
+        // Handle unsuited hands (c: lower rank connects, d: higher rank or pair)
+        if (!isSuited) {
+            if (!isPair && totalDistinctRanks >= minDistinctRanks) {
+                if (round === 'flop' && (!prevStatus || prevStatus === 'c3') && isValidSuitCount(round, 3)) {
+                    if (maxSuits >= 3) statuses.add('c3');
+                } else if ((round === 'turn' || round === 'river') && (!prevStatus || prevStatus === 'c3') && isValidSuitCount(round, 4)) {
+                    if (maxSuits >= 4) statuses.add('c4');
+                    if (round === 'river' && maxSuits >= 5) statuses.add('c5');
+                }
+            }
+            if (totalDistinctRanks >= minDistinctRanks) {
+                if (round === 'flop' && (!prevStatus || prevStatus === 'd3') && isValidSuitCount(round, 3)) {
+                    if (maxSuits >= 3) statuses.add('d3');
+                } else if ((round === 'turn' || round === 'river') && (!prevStatus || prevStatus === 'd3') && isValidSuitCount(round, 4)) {
+                    if (maxSuits >= 4) statuses.add('d4');
+                    if (round === 'river' && maxSuits >= 5) statuses.add('d5');
+                }
+            }
+            return Array.from(statuses);
+        }
+
+        // Handle suited hands (e: both hole cards connect)
+        if (totalDistinctRanks >= minDistinctRanks) {
+            if (round === 'flop' && (!prevStatus || prevStatus === 'e3') && isValidSuitCount(round, 3)) {
+                if (maxSuits >= 3) statuses.add('e3');
+            } else if (round === 'turn' && prevStatus === 'e3' && isValidSuitCount(round, 4)) {
+                if (maxSuits >= 4) statuses.add('e4');
+                if (maxSuits >= 5) statuses.add('e5');
+                if (maxSuits >= 6) statuses.add('e6');
+            } else if (round === 'river' && prevStatus.startsWith('e')) {
+                if (prevSuitCount === 3 && maxSuits >= 4) statuses.add('e4');
+                if ((prevSuitCount === 3 || prevSuitCount === 4) && maxSuits >= 5) statuses.add('e5');
+                if ((prevSuitCount === 3 || prevSuitCount === 4 || prevSuitCount === 5) && maxSuits >= 6) statuses.add('e6');
+                if ((prevSuitCount === 3 || prevSuitCount === 4 || prevSuitCount === 5 || prevSuitCount === 6) && maxSuits >= 7) statuses.add('e7');
+            }
+        }
+        return Array.from(statuses);
+    };
+
+    // Generate all possible flops
+    const generateFlops = () => {
+        if (++iterationCount > MAX_ITERATIONS) {
+            throw new Error('Infinite loop detected in generateFlops');
+        }
+
+        const flops = {};
+        const usedRanks = baseHole.split('');
+        const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+
+        for (let i = 0; i < availableRanks.length; i++) {
+            for (let j = i; j < availableRanks.length; j++) {
+                for (let k = j; k < availableRanks.length; k++) {
+                    const flopRanks = [availableRanks[i], availableRanks[j], availableRanks[k]];
+                    const combinedRanks = [...usedRanks, ...flopRanks];
+                    if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+                    const sortedFlop = flopRanks.sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+                    const maxSuits = getMaxSuits(sortedFlop);
+                    const flushStatuses = assignStatuses('flop', sortedFlop, maxSuits);
+                    for (let status of flushStatuses) {
+                        const flopKey = baseHole + sortedFlop + status;
+                        if (flopKey.length === 6 || flopKey.length === 7) {
+                            flops[flopKey] = generateTurns(flopKey);
+                        }
+                    }
+                }
+            }
+        }
+        return flops;
+    };
+
+    // Generate all possible turns for a given flop
+    const generateTurns = (flopKey) => {
+        if (++iterationCount > MAX_ITERATIONS) {
+            throw new Error('Infinite loop detected in generateTurns');
+        }
+
+        const turns = {};
+        const usedRanks = flopKey.replace(/[soa-e0-7]/g, '').split('');
+        const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+        const prevStatus = flopKey.match(/[a-e][0-7]?$/)[0];
+
+        for (let i = 0; i < availableRanks.length; i++) {
+            const turnCard = availableRanks[i];
+            const board = flopKey.slice(2, 5) + turnCard;
+            const combinedRanks = [...usedRanks, turnCard];
+            if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+            const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+            const maxSuits = getMaxSuits(sortedBoard);
+            const flushStatuses = assignStatuses('turn', sortedBoard, maxSuits, prevStatus);
+            for (let status of flushStatuses) {
+                const turnKey = baseHole + sortedBoard + status;
+                turns[turnKey] = generateRivers(turnKey);
+            }
+        }
+        return turns;
+    };
+
+    // Generate all possible rivers for a given turn
+    const generateRivers = (turnKey) => {
+        if (++iterationCount > MAX_ITERATIONS) {
+            throw new Error('Infinite loop detected in generateRivers');
+        }
+
+        const rivers = [];
+        const usedRanks = turnKey.replace(/[soa-e0-7]/g, '').split('');
+        const availableRanks = ranks.filter(r => usedRanks.filter(u => u === r).length < 4);
+        const prevStatus = turnKey.match(/[a-e][0-7]?$/)[0];
+
+        for (let i = 0; i < availableRanks.length; i++) {
+            const riverCard = availableRanks[i];
+            const board = turnKey.slice(2, 6) + riverCard;
+            const combinedRanks = [...usedRanks, riverCard];
+            if (combinedRanks.some(r => combinedRanks.filter(cr => cr === r).length > 4)) continue;
+            const sortedBoard = board.split('').sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b)).join('');
+            const maxSuits = getMaxSuits(sortedBoard);
+            const flushStatuses = assignStatuses('river', sortedBoard, maxSuits, prevStatus);
+            for (let status of flushStatuses) {
+                const riverKey = baseHole + sortedBoard + status;
+                rivers.push(riverKey);
+            }
+        }
+        return rivers;
+    };
+
+    // Generate the tree for the sorted starting hand
+//  result[sortedHole] = generateFlops();
+    result[startingHand] = generateFlops();
+    return result;
+};//»
+
+function getSuitAbstractedHand(cards) {
+    // Validate input: 5 (flop), 6 (turn), or 7 (river) cards
+    if (!cards || ![5, 6, 7].includes(cards.length)) {
+        throw new Error('Input must be 5, 6, or 7 cards (hole + board)');
+    }
+
+    // Constants for ranks and suits
+    const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+    const suits = ['s', 'h', 'd', 'c'];
+
+    // Split into hole and board cards
+    const holeCards = cards.slice(0, 2); // First two cards are hole cards
+    const boardCards = cards.slice(2).sort((a, b) => ranks.indexOf(a[0]) - ranks.indexOf(b[0])); // Sort board by rank
+    const roundName = cards.length === 5 ? 'flop' : cards.length === 6 ? 'turn' : 'river';
+
+    // Validate cards
+    for (let card of cards) {
+        if (!ranks.includes(card[0]) || !suits.includes(card[1])) {
+            throw new Error(`Invalid card: ${card}`);
+        }
+    }
+
+    // Extract hand notation
+    const isSuited = holeCards[0][1] === holeCards[1][1];
+    const handRanks = holeCards.map(card => ranks.indexOf(card[0])).sort((a, b) => a - b); // Sort by index (high to low)
+    const handNotation = ranks[handRanks[0]] + ranks[handRanks[1]] + (isSuited ? 's' : 'o');
+
+    // Get board notation (distinct ranks, sorted high to low)
+    const boardRanks = boardCards.map(card => card[0]);
+    const distinctBoardRanks = [...new Set(boardRanks)].sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b));
+    const boardNotation = distinctBoardRanks.join('');
+
+    // Count suits on the board
+    const suitCounts = {};
+    const boardSuits = boardCards.map(card => card[1]);
+    boardSuits.forEach(suit => {
+        suitCounts[suit] = (suitCounts[suit] || 0) + 1;
+    });
+    const maxSuitCount = Math.max(...Object.values(suitCounts), 0);
+    const suitsWithTwo = Object.values(suitCounts).filter(count => count === 2).length;
+
+    // Helper: Check if flush is possible for any player
+    const isFlushPossible = (round, suitCount) => {
+        if (round === 'flop') return suitCount >= 3;
+        if (round === 'turn') return suitCount >= 3;
+        if (round === 'river') return suitCount >= 4;
+        return false;
+    };
+
+    // Helper: Check for nut flush blocker
+    const hasNutFlushBlocker = (holeCards, boardCards, targetSuit) => {
+        const boardRanksInSuit = boardCards.filter(card => card[1] === targetSuit).map(card => ranks.indexOf(card[0]));
+        const maxBoardRank = boardRanksInSuit.length ? Math.min(...boardRanksInSuit) : Infinity; // Lower index = higher rank
+        const holeRanksInSuit = holeCards.filter(card => card[1] === targetSuit).map(card => ranks.indexOf(card[0]));
+        return holeRanksInSuit.includes(0); // Only Ace (index 0) is nut flush blocker
+    };
+
+    // Determine status
+    let status = '';
+    if (isFlushPossible(roundName, maxSuitCount)) {
+        // Board has flush potential (3+ cards on flop/turn, 4+ on river)
+        const primarySuit = Object.keys(suitCounts).reduce((a, b) => suitCounts[a] > suitCounts[b] ? a : b, null);
+        const holeSuits = holeCards.map(card => card[1]);
+
+        if (isSuited && holeSuits[0] === primarySuit) {
+            // Suited hand connects to primary suit
+            const count = suitCounts[primarySuit] + 2;
+            if ((roundName === 'flop' && count >= 3) || (roundName === 'turn' && count >= 4) || (roundName === 'river' && count >= 5)) {
+                status = `e${count}`;
+            }
+        } else if (!isSuited && holeSuits.includes(primarySuit)) {
+            // One hole card connects to primary suit
+            const idx = holeSuits.indexOf(primarySuit);
+            const count = suitCounts[primarySuit] + 1;
+            if ((roundName === 'flop' && count >= 3) || (roundName === 'turn' && count >= 4) || (roundName === 'river' && count >= 5)) {
+                if (idx === 0 && handRanks[0] < handRanks[1]) { // Higher rank = lower index
+                    status = `d${count}`;
+                } else {
+                    status = `c${count}`;
+                }
+            }
+        } else {
+            // No hole cards connect to primary suit
+            status = 'a';
+        }
+    } else {
+        // No flush possible for player, check opponent flush potential
+        if (roundName === 'flop') {
+            if (maxSuitCount <= 1) { // Rainbow board
+                const primarySuit = Object.keys(suitCounts)[0] || null;
+                if (primarySuit && hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                    status = 'B1';
+                } else {
+                    status = 'b1';
+                }
+            }
+        } else if (roundName === 'turn') {
+            if (maxSuitCount <= 1) {
+                status = 'b0';
+            } else if (maxSuitCount === 2 && suitsWithTwo === 1) {
+                const primarySuit = Object.keys(suitCounts).reduce((a, b) => suitCounts[a] > suitCounts[b] ? a : b, null);
+                if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                    status = 'B2';
+                } else {
+                    status = 'b2';
+                }
+            } else if (maxSuitCount === 2 && suitsWithTwo >= 2) {
+                const primarySuit = Object.keys(suitCounts).find(suit => suitCounts[suit] === 2);
+                if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                    status = 'B22';
+                } else {
+                    status = 'b22';
+                }
+            }
+        } else if (roundName === 'river') {
+            status = 'b0'; // No flush possible with max 2 cards of a suit
+        }
+    }
+
+    // Return suit-abstracted hand representation
+    return `${handNotation}${boardNotation}${status}`;
+}
+
+// Generate and output the structure
+//const pokerHands = generatePokerHands();
+//console.log(JSON.stringify(pokerHands, null, 2));
+
+//Commands«
+const com_poker = class extends Com{
+	run(){
+const {args} = this;
+try{
+let rep = getSuitAbstractedHand(args);
+this.out(rep);
+//log(rep);
+//let hand = args[0];
+//const pokerHands = generatePokerHands(hand);
+//log(pokerHands);
+//log(pokerHands.AKo.AKAAKb1);
+/*
+log(pokerHands.AKo.AKAAAb);
+log(pokerHands.AKo.AKAAAc);
+log(pokerHands.AKo.AKAAAd);
+*/
+//let
+/*
+a) The hole has no suited connections with a board that has a flush draw.
+b) The hole has no suited connections with a board that has no flush draw.
+c) A suit-connected hole+board such that the lowest ranked suit connects with the board's suits.
+d) A suit-connected hole+board such that the highest ranked suit connects with the board's suits. This option will be used in the case the hole cards are the same rank (a pair).
+e) A suit-connected hole+board, such that both hole cards connect with the board's suits.
+*/
+//log(pokerHands.AA.AAAAKd);
+/*
+let hand_no_suit = hand.replace(/[so]$/, "");
+for (let c of ["a", "b", "c3", "d3", "e3"]){
+
+log(c, pokerHands[hand][`${hand_no_suit}432${c}`]);
+}
+*/
+//log(pokerHands[hand]["22222b"]);
+//log("", pokerHands[hand][hand+"432b"]);
+//log("", pokerHands[hand][hand+"432c"]);
+//log("", pokerHands[hand][hand+"432d"]);
+//log("", pokerHands[hand][hand+"432e"]);
+//log(pokerHands[hand].AA432b);
+//log(pokerHands[hand].AA432d);
+//this.out(JSON.stringify(pokerHands));
+
+this.ok();
+}
+catch(e){
+	this.no(e.message);
+}
+	}
+}
+//»
+
+const coms = {//«
+	poker: com_poker,
+}//»
+
+export {coms};
+
+
+
+
+
+
+
+
+
+/*OLD«
+
+const generatePokerHands = (startingHand) => {//«
 
 	// Constants for ranks, suits, and iteration limit«
 	const result = {};
@@ -165,12 +613,12 @@ const generatePokerHands = (startingHand) => {//«
 	const isSuited = startingHand.includes('s');
 	const baseHole = startingHand.slice(0, 2);
 	const sortedHole = ranks.indexOf(baseHole[0]) <= ranks.indexOf(baseHole[1]) ? baseHole : baseHole[1] + baseHole[0];
-/* » */
+//»
 	// Helper: Count distinct ranks in the board«
 	const getDistinctBoardRanks = (board) => {
 		return new Set(board.split('')).size;
 	};
-/* » */
+//»
 	// Helper: Get max possible suit-connecting cards«
 	// - For suited hands: 2 hole cards + distinct board ranks
 	// - For unsuited: 1 hole card + distinct board ranks
@@ -178,7 +626,7 @@ const generatePokerHands = (startingHand) => {//«
 		const distinctBoardRanks = getDistinctBoardRanks(board);
 		return isSuited ? distinctBoardRanks + 2 : distinctBoardRanks + 1;
 	};
-/* » */
+//»
 	// Helper: Validate if a suit count is possible for the round«
 	const isValidSuitCount = (round, suitCount) => {
 		if (round === 'flop') return suitCount === 3;
@@ -186,7 +634,7 @@ const generatePokerHands = (startingHand) => {//«
 		if (round === 'river') return suitCount >= 4; // 4 for draw, 5+ for flush
 		return false;
 	};
-/* » */
+//»
 	// Helper: Assign valid flush statuses based on constraints«
 	const assignStatuses = (round, board, maxSuits, prevStatus = '') => {
 		const statuses = new Set();
@@ -236,7 +684,7 @@ const generatePokerHands = (startingHand) => {//«
 			}
 		}
 		return Array.from(statuses);
-	};/* » */
+	};//»
 
 	// Generate all possible flops«
 	const generateFlops = () => {
@@ -267,7 +715,7 @@ const generatePokerHands = (startingHand) => {//«
 			}
 		}
 		return flops;
-	};/* » */
+	};//»
 	// Generate all possible turns for a given flop«
 	const generateTurns = (flopKey) => {
 		if (++iterationCount > MAX_ITERATIONS) {
@@ -293,7 +741,7 @@ const generatePokerHands = (startingHand) => {//«
 			}
 		}
 		return turns;
-	};/* » */
+	};//»
 	// Generate all possible rivers for a given turn«
 	const generateRivers = (turnKey) => {
 		if (++iterationCount > MAX_ITERATIONS) {
@@ -319,15 +767,13 @@ const generatePokerHands = (startingHand) => {//«
 			}
 		}
 		return rivers;
-	};/* » */
+	};//»
 
 	// Generate the tree for the sorted starting hand
 	result[sortedHole] = generateFlops();
 	return result;
 };//»
-
-/*
-const generatePokerHands = (startingHand) => {
+const generatePokerHands = (startingHand) => {//«
 	const result = {};
 	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 	const suits = ['s', 'h', 'd', 'c'];
@@ -459,10 +905,8 @@ const generatePokerHands = (startingHand) => {
 	}
 
 	return result;
-};
-*/
-/*«
-const generatePokerHands = (startingHand) => {
+};//»
+const generatePokerHands = (startingHand) => {//«
 	const result = {};
 	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 	const suits = ['s', 'h', 'd', 'c'];
@@ -590,9 +1034,7 @@ const generatePokerHands = (startingHand) => {
 	}
 
 	return result;
-};
-*//* » */
-/*
+};//»
 const generatePokerHands = (startingHand) => {//«
 	const result = {};
 	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
@@ -715,9 +1157,7 @@ const generatePokerHands = (startingHand) => {//«
 
 	return result;
 };//»
-*/
-/*Updated version with betting logic (DON'T ACTUALLY USE THIS VERSION!!!)«
-const generatePokerHands = (startingHand) => {
+const generatePokerHands = (startingHand) => {//«
 	const result = {};
 	const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
 	const suits = ['s', 'h', 'd', 'c'];
@@ -871,11 +1311,7 @@ const generatePokerHands = (startingHand) => {
 	}
 
 	return result;
-};
-»*/
-
-
-/*
+};//»
 const generatePokerHands=(startingHand)=>{//«
 
 	const result = {};
@@ -945,74 +1381,6 @@ const generatePokerHands=(startingHand)=>{//«
 
 	return result;
 }//»
-*/
-
-// Generate and output the structure
-//const pokerHands = generatePokerHands();
-//console.log(JSON.stringify(pokerHands, null, 2));
-
-//Commands«
-const com_poker = class extends Com{
-	run(){
-const {args} = this;
-try{
-let hand = args[0];
-const pokerHands = generatePokerHands(hand);
-log(pokerHands);
-/*
-log(pokerHands.AKo.AKAAAb);
-log(pokerHands.AKo.AKAAAc);
-log(pokerHands.AKo.AKAAAd);
-*/
-//let
-/*
-a) The hole has no suited connections with a board that has a flush draw.
-b) The hole has no suited connections with a board that has no flush draw.
-c) A suit-connected hole+board such that the lowest ranked suit connects with the board's suits.
-d) A suit-connected hole+board such that the highest ranked suit connects with the board's suits. This option will be used in the case the hole cards are the same rank (a pair).
-e) A suit-connected hole+board, such that both hole cards connect with the board's suits.
-*/
-//log(pokerHands.AA.AAAAKd);
-///*
-let hand_no_suit = hand.replace(/[so]$/, "");
-for (let c of ["a", "b", "c3", "d3", "e3"]){
-
-log(c, pokerHands[hand][`${hand_no_suit}432${c}`]);
-}
-//*/
-//log(pokerHands[hand]["22222b"]);
-//log("", pokerHands[hand][hand+"432b"]);
-//log("", pokerHands[hand][hand+"432c"]);
-//log("", pokerHands[hand][hand+"432d"]);
-//log("", pokerHands[hand][hand+"432e"]);
-//log(pokerHands[hand].AA432b);
-//log(pokerHands[hand].AA432d);
-//this.out(JSON.stringify(pokerHands));
-
-this.ok();
-}
-catch(e){
-	this.no(e.message);
-}
-	}
-}
-//»
-
-const coms = {//«
-	poker: com_poker,
-}//»
-
-export {coms};
-
-
-
-
-
-
-
-
-
-/*OLD«
 
 function generateAbstractRepresentationsForVariant(holeVariant, round, primaryThreshold, secondaryThreshold) {//«
 // Generates unique suit-abstracted representations for a specific hole card variant and round
