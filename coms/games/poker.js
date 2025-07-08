@@ -389,7 +389,6 @@ const generatePokerHands = (startingHand) => {//«
     result[startingHand] = generateFlops();
     return result;
 };//»
-
 function getSuitAbstractedHand(cards) {
     // Validate input: 5 (flop), 6 (turn), or 7 (river) cards
     if (!cards || ![5, 6, 7].includes(cards.length)) {
@@ -415,7 +414,367 @@ function getSuitAbstractedHand(cards) {
     // Extract hand notation
     const isSuited = holeCards[0][1] === holeCards[1][1];
     const handRanks = holeCards.map(card => ranks.indexOf(card[0])).sort((a, b) => a - b); // Sort by index (high to low)
-    const handNotation = ranks[handRanks[0]] + ranks[handRanks[1]] + (isSuited ? 's' : 'o');
+    const handNotation = ranks[handRanks[0]] + ranks[handRanks[1]]; // No suit indicator
+
+    // Get board notation (distinct ranks, sorted high to low)
+    const boardRanks = boardCards.map(card => card[0]);
+    const distinctBoardRanks = [...new Set(boardRanks)].sort((a, b) => ranks.indexOf(a) - ranks.indexOf(b));
+    const boardNotation = distinctBoardRanks.join('');
+
+    // Count suits on the board
+    const suitCounts = {};
+    const boardSuits = boardCards.map(card => card[1]);
+    boardSuits.forEach(suit => {
+        suitCounts[suit] = (suitCounts[suit] || 0) + 1;
+    });
+    const maxSuitCount = Math.max(...Object.values(suitCounts), 0);
+    const suitsWithTwo = Object.values(suitCounts).filter(count => count === 2).length;
+
+    // Helper: Check for nut flush blocker
+    const hasNutFlushBlocker = (holeCards, boardCards, targetSuit) => {
+        const boardRanksInSuit = boardCards.filter(card => card[1] === targetSuit).map(card => ranks.indexOf(card[0]));
+        const maxBoardRank = boardRanksInSuit.length ? Math.min(...boardRanksInSuit) : Infinity; // Lower index = higher rank
+        const holeRanksInSuit = holeCards.filter(card => card[1] === targetSuit).map(card => ranks.indexOf(card[0]));
+        return holeRanksInSuit.includes(0); // Only Ace (index 0) is nut flush blocker
+    };
+
+    // Determine primary suit
+    const holeSuits = holeCards.map(card => card[1]);
+    let primarySuit = null;
+    if (maxSuitCount >= 2) {
+        primarySuit = Object.keys(suitCounts).reduce((a, b) => suitCounts[a] > suitCounts[b] ? a : b, null);
+    } else if (maxSuitCount === 1) {
+        // For rainbow flop, prioritize suit matching hole cards
+        const matchingSuit = boardSuits.find(suit => holeSuits.includes(suit));
+        primarySuit = matchingSuit || Object.keys(suitCounts)[0] || null;
+    }
+
+    // Determine status
+    let status = '';
+    if (roundName === 'flop') {
+        if (maxSuitCount >= 3) {
+            // Board has 3 cards of one suit
+            if (isSuited && primarySuit && holeSuits[0] === primarySuit) {
+                status = `e${suitCounts[primarySuit] + 2}`;
+            } else if (!isSuited && primarySuit && holeSuits.includes(primarySuit)) {
+                const idx = holeSuits.indexOf(primarySuit);
+                const count = suitCounts[primarySuit] + 1;
+                if (count >= 3) { // Require 3+ for flush draw
+                    if (idx === 0 && handRanks[0] < handRanks[1]) { // Higher rank = lower index
+                        status = `d${count}`;
+                    } else {
+                        status = `c${count}`;
+                    }
+                } else {
+                    status = 'a';
+                }
+            } else {
+                status = 'a';
+            }
+        } else if (maxSuitCount === 2 && primarySuit) {
+            // Board has 2 cards of one suit
+            if (isSuited && holeSuits[0] === primarySuit) {
+                status = `e${suitCounts[primarySuit] + 2}`; // e4
+            } else if (!isSuited && holeSuits.includes(primarySuit)) {
+                const idx = holeSuits.indexOf(primarySuit);
+                const count = suitCounts[primarySuit] + 1;
+                if (count >= 3) { // Require 3+ for flush draw
+                    if (idx === 0 && handRanks[0] < handRanks[1]) {
+                        status = `d${count}`;
+                    } else {
+                        status = `c${count}`;
+                    }
+                } else {
+                    if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                        status = 'B2';
+                    } else {
+                        status = 'b2';
+                    }
+                }
+            } else {
+                if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                    status = 'B2';
+                } else {
+                    status = 'b2';
+                }
+            }
+        } else if (maxSuitCount === 1 && primarySuit) {
+            // Rainbow board with one matching suit
+            if (isSuited && holeSuits[0] === primarySuit) {
+                const count = suitCounts[primarySuit] + 2;
+                if (count >= 3) { // Require 3+ for flush draw
+                    status = `e${count}`;
+                } else {
+                    if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                        status = 'B1';
+                    } else {
+                        status = 'b1';
+                    }
+                }
+            } else if (!isSuited && holeSuits.includes(primarySuit)) {
+                const idx = holeSuits.indexOf(primarySuit);
+                const count = suitCounts[primarySuit] + 1;
+                if (count >= 3) { // Require 3+ for flush draw
+                    if (idx === 0 && handRanks[0] < handRanks[1]) {
+                        status = `d${count}`;
+                    } else {
+                        status = `c${count}`;
+                    }
+                } else {
+                    if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                        status = 'B1';
+                    } else {
+                        status = 'b1';
+                    }
+                }
+            } else {
+                if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                    status = 'B1';
+                } else {
+                    status = 'b1';
+                }
+            }
+        } else {
+            // No suits on board or no matching suits
+            status = 'b1';
+        }
+    } else if (roundName === 'turn') {
+        if (maxSuitCount >= 3) {
+            // Board has 3+ cards of one suit
+            if (isSuited && primarySuit && holeSuits[0] === primarySuit) {
+                const count = suitCounts[primarySuit] + 2;
+                if (count >= 3) { // Require 3+ for flush draw
+                    status = `e${count}`;
+                } else {
+                    status = 'a';
+                }
+            } else if (!isSuited && primarySuit && holeSuits.includes(primarySuit)) {
+                const idx = holeSuits.indexOf(primarySuit);
+                const count = suitCounts[primarySuit] + 1;
+                if (count >= 3) { // Require 3+ for flush draw
+                    if (idx === 0 && handRanks[0] < handRanks[1]) {
+                        status = `d${count}`;
+                    } else {
+                        status = `c${count}`;
+                    }
+                } else {
+                    status = 'a';
+                }
+            } else {
+                status = 'a';
+            }
+        } else if (maxSuitCount === 2) {
+            if (suitsWithTwo === 1) {
+                // Single suit with 2 cards
+                if (isSuited && primarySuit && holeSuits[0] === primarySuit) {
+                    const count = suitCounts[primarySuit] + 2;
+                    if (count >= 3) { // Require 3+ for flush draw
+                        status = `e${count}`;
+                    } else {
+                        if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                            status = 'B2';
+                        } else {
+                            status = 'b2';
+                        }
+                    }
+                } else if (!isSuited && primarySuit && holeSuits.includes(primarySuit)) {
+                    const idx = holeSuits.indexOf(primarySuit);
+                    const count = suitCounts[primarySuit] + 1;
+                    if (count >= 3) { // Require 3+ for flush draw
+                        if (idx === 0 && handRanks[0] < handRanks[1]) {
+                            status = `d${count}`;
+                        } else {
+                            status = `c${count}`;
+                        }
+                    } else {
+                        if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                            status = 'B2';
+                        } else {
+                            status = 'b2';
+                        }
+                    }
+                } else {
+                    if (hasNutFlushBlocker(holeCards, boardCards, primarySuit)) {
+                        status = 'B2';
+                    } else {
+                        status = 'b2';
+                    }
+                }
+            } else if (suitsWithTwo >= 2) {
+                // Two suits with 2 cards each
+                const twoSuit = Object.keys(suitCounts).find(suit => suitCounts[suit] === 2);
+                if (isSuited && twoSuit && holeSuits[0] === twoSuit) {
+                    const count = suitCounts[twoSuit] + 2;
+                    if (count >= 3) { // Require 3+ for flush draw
+                        status = `e${count}`;
+                    } else {
+                        if (hasNutFlushBlocker(holeCards, boardCards, twoSuit)) {
+                            status = 'B22';
+                        } else {
+                            status = 'b22';
+                        }
+                    }
+                } else if (!isSuited && twoSuit && holeSuits.includes(twoSuit)) {
+                    const idx = holeSuits.indexOf(twoSuit);
+                    const count = suitCounts[twoSuit] + 1;
+                    if (count >= 3) { // Require 3+ for flush draw
+                        if (idx === 0 && handRanks[0] < handRanks[1]) {
+                            status = `d${count}`;
+                        } else {
+                            status = `c${count}`;
+                        }
+                    } else {
+                        if (hasNutFlushBlocker(holeCards, boardCards, twoSuit)) {
+                            status = 'B22';
+                        } else {
+                            status = 'b22';
+                        }
+                    }
+                } else {
+                    if (hasNutFlushBlocker(holeCards, boardCards, twoSuit)) {
+                        status = 'B22';
+                    } else {
+                        status = 'b22';
+                    }
+                }
+            }
+        } else {
+            // No flush possible
+            status = 'b0';
+        }
+    } else if (roundName === 'river') {
+        if (maxSuitCount >= 4) {
+            // Board has 4+ cards of one suit
+            if (isSuited && primarySuit && holeSuits[0] === primarySuit) {
+                const count = suitCounts[primarySuit] + 2;
+                if (count >= 5) { // Require 5+ for flush
+                    status = `e${count}`;
+                } else {
+                    status = 'a';
+                }
+            } else if (!isSuited && primarySuit && holeSuits.includes(primarySuit)) {
+                const idx = holeSuits.indexOf(primarySuit);
+                const count = suitCounts[primarySuit] + 1;
+                if (count >= 5) { // Require 5+ for flush
+                    if (idx === 0 && handRanks[0] < handRanks[1]) {
+                        status = `d${count}`;
+                    } else {
+                        status = `c${count}`;
+                    }
+                } else {
+                    status = 'a';
+                }
+            } else {
+                status = 'a';
+            }
+        } else {
+            // No flush possible
+            status = 'b0';
+        }
+    }
+
+    // Return suit-abstracted hand representation
+    return `${handNotation}${boardNotation}${status}`;
+}
+
+// Generate and output the structure
+//const pokerHands = generatePokerHands();
+//console.log(JSON.stringify(pokerHands, null, 2));
+
+//Commands«
+const com_poker = class extends Com{
+	run(){
+const {args} = this;
+try{
+let rep = getSuitAbstractedHand(args);
+this.out(rep);
+//log(rep);
+//let hand = args[0];
+//const pokerHands = generatePokerHands(hand);
+//log(pokerHands);
+//log(pokerHands.AKo.AKAAKb1);
+/*
+log(pokerHands.AKo.AKAAAb);
+log(pokerHands.AKo.AKAAAc);
+log(pokerHands.AKo.AKAAAd);
+*/
+//let
+/*
+a) The hole has no suited connections with a board that has a flush draw.
+b) The hole has no suited connections with a board that has no flush draw.
+c) A suit-connected hole+board such that the lowest ranked suit connects with the board's suits.
+d) A suit-connected hole+board such that the highest ranked suit connects with the board's suits. This option will be used in the case the hole cards are the same rank (a pair).
+e) A suit-connected hole+board, such that both hole cards connect with the board's suits.
+*/
+//log(pokerHands.AA.AAAAKd);
+/*
+let hand_no_suit = hand.replace(/[so]$/, "");
+for (let c of ["a", "b", "c3", "d3", "e3"]){
+
+log(c, pokerHands[hand][`${hand_no_suit}432${c}`]);
+}
+*/
+//log(pokerHands[hand]["22222b"]);
+//log("", pokerHands[hand][hand+"432b"]);
+//log("", pokerHands[hand][hand+"432c"]);
+//log("", pokerHands[hand][hand+"432d"]);
+//log("", pokerHands[hand][hand+"432e"]);
+//log(pokerHands[hand].AA432b);
+//log(pokerHands[hand].AA432d);
+//this.out(JSON.stringify(pokerHands));
+
+this.ok();
+}
+catch(e){
+	this.no(e.message);
+}
+	}
+}
+//»
+
+const coms = {//«
+	poker: com_poker,
+}//»
+
+export {coms};
+
+
+
+
+
+
+
+
+
+/*OLD«
+
+const getSuitAbstractedHand=(cards)=>{//«
+    // Validate input: 5 (flop), 6 (turn), or 7 (river) cards
+    if (!cards || ![5, 6, 7].includes(cards.length)) {
+        throw new Error('Input must be 5, 6, or 7 cards (hole + board)');
+    }
+
+    // Constants for ranks and suits
+    const ranks = ['A', 'K', 'Q', 'J', 'T', '9', '8', '7', '6', '5', '4', '3', '2'];
+    const suits = ['s', 'h', 'd', 'c'];
+
+    // Split into hole and board cards
+    const holeCards = cards.slice(0, 2); // First two cards are hole cards
+    const boardCards = cards.slice(2).sort((a, b) => ranks.indexOf(a[0]) - ranks.indexOf(b[0])); // Sort board by rank
+    const roundName = cards.length === 5 ? 'flop' : cards.length === 6 ? 'turn' : 'river';
+
+    // Validate cards
+    for (let card of cards) {
+        if (!ranks.includes(card[0]) || !suits.includes(card[1])) {
+            throw new Error(`Invalid card: ${card}`);
+        }
+    }
+
+    // Extract hand notation
+    const isSuited = holeCards[0][1] === holeCards[1][1];
+    const handRanks = holeCards.map(card => ranks.indexOf(card[0])).sort((a, b) => a - b); // Sort by index (high to low)
+//  const handNotation = ranks[handRanks[0]] + ranks[handRanks[1]] + (isSuited ? 's' : 'o');
+  	const handNotation = ranks[handRanks[0]] + ranks[handRanks[1]];
 
     // Get board notation (distinct ranks, sorted high to low)
     const boardRanks = boardCards.map(card => card[0]);
@@ -511,78 +870,7 @@ function getSuitAbstractedHand(cards) {
 
     // Return suit-abstracted hand representation
     return `${handNotation}${boardNotation}${status}`;
-}
-
-// Generate and output the structure
-//const pokerHands = generatePokerHands();
-//console.log(JSON.stringify(pokerHands, null, 2));
-
-//Commands«
-const com_poker = class extends Com{
-	run(){
-const {args} = this;
-try{
-let rep = getSuitAbstractedHand(args);
-this.out(rep);
-//log(rep);
-//let hand = args[0];
-//const pokerHands = generatePokerHands(hand);
-//log(pokerHands);
-//log(pokerHands.AKo.AKAAKb1);
-/*
-log(pokerHands.AKo.AKAAAb);
-log(pokerHands.AKo.AKAAAc);
-log(pokerHands.AKo.AKAAAd);
-*/
-//let
-/*
-a) The hole has no suited connections with a board that has a flush draw.
-b) The hole has no suited connections with a board that has no flush draw.
-c) A suit-connected hole+board such that the lowest ranked suit connects with the board's suits.
-d) A suit-connected hole+board such that the highest ranked suit connects with the board's suits. This option will be used in the case the hole cards are the same rank (a pair).
-e) A suit-connected hole+board, such that both hole cards connect with the board's suits.
-*/
-//log(pokerHands.AA.AAAAKd);
-/*
-let hand_no_suit = hand.replace(/[so]$/, "");
-for (let c of ["a", "b", "c3", "d3", "e3"]){
-
-log(c, pokerHands[hand][`${hand_no_suit}432${c}`]);
-}
-*/
-//log(pokerHands[hand]["22222b"]);
-//log("", pokerHands[hand][hand+"432b"]);
-//log("", pokerHands[hand][hand+"432c"]);
-//log("", pokerHands[hand][hand+"432d"]);
-//log("", pokerHands[hand][hand+"432e"]);
-//log(pokerHands[hand].AA432b);
-//log(pokerHands[hand].AA432d);
-//this.out(JSON.stringify(pokerHands));
-
-this.ok();
-}
-catch(e){
-	this.no(e.message);
-}
-	}
-}
-//»
-
-const coms = {//«
-	poker: com_poker,
 }//»
-
-export {coms};
-
-
-
-
-
-
-
-
-
-/*OLD«
 
 const generatePokerHands = (startingHand) => {//«
 
