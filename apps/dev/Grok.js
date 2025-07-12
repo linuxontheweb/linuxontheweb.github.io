@@ -1,9 +1,12 @@
-/*6/9/25: Just made a mechanism (util.GetPoint) that gets invoked by the Win's
+
+/*7/12/25: Let's do a Ctrl+C to copy the current section to the clipboard.
+*/
+/*6/9/25: Just made a mechanism (util.GetPoint) that gets invoked by the Win's«
 selectPoint method. In order to return a point relative to the main div's top-right
 corner, call it like: 
 rv = await Win.selectPoint({isRelative: true});
 Otherwise it returns the absolute point, to be used by document.element[s]FromPoint().
-*/
+»*/
 /*6/8/25: Let's (maybe) separate the response section into the same sections, but«
 let's definitely put all code sections into their own expandable divs.
 
@@ -45,7 +48,7 @@ const LOG_MESS_NUM = null;
 const BOX_CODE_MAX_H = "250px";
 const ACT_BG_COL = "#070710";
 
-const{log,cwarn,cerr, make,mkdv,mk,mksp, toStr}=LOTW.api.util;
+const{log,cwarn,cerr, make,mkdv,mk,mksp, toStr, clipCopy}=LOTW.api.util;
 
 export const app = class {
 
@@ -81,7 +84,8 @@ log(dv);
 		}
 		this.curKid = main.children[0];
 		this.curKid.on();
-//log(main);
+		this.Win.mkOverlay();
+		this.doOverlay=(str)=>{this.Win.doOverlay(str);};
 	}//»
 	makeSection(num_str, quest, resp){//«
 /*
@@ -207,7 +211,7 @@ and "py-1", and make each of these tabbable.
 	stat(s){//«
 		this.statBar.innerHTML=s;
 	}//»
-decFs(){/* « */
+decFs(){//«
 	let{curKid}=this;
 	if (!curKid.isToggled()) return;
 	let act = this.getActiveTab();
@@ -219,8 +223,8 @@ decFs(){/* « */
 	sz = parseInt(sz) - 5;
 	if (sz < 10) return;
 	act._fs=`${sz}%`;
-}/* » */
-incFs(){/* « */
+}//»
+incFs(){//«
 	let{curKid}=this;
 	if (!curKid.isToggled()) return;
 	let act = this.getActiveTab();
@@ -231,13 +235,13 @@ incFs(){/* « */
 	}
 	sz = parseInt(sz) + 5;
 	act._fs=`${sz}%`;
-}/* » */
-eqFs(){/* « */
+}//»
+eqFs(){//«
 	let{curKid}=this;
 	if (!curKid.isToggled()) return;
 	let act = this.getActiveTab();
 	act._fs=`100%`;
-}/* » */
+}//»
 removeButtons(elem){//«
 	let buts = Array.from(elem.getElementsByTagName("button"));
 	for (let but of buts) {
@@ -262,7 +266,7 @@ setExpCodes(k, tab_order, tab_iter){//«
 			cd.scrollIntoView();
 			cd._isOn = true;
 			cdo._tcol="#fff";
-		};/* » */
+		};//»
 		cd.off=()=>{//«
 			if (cdo._dis === "none") cd.toggle(true);
 			cd._bor = "1px dotted #777";
@@ -284,7 +288,7 @@ setExpCodes(k, tab_order, tab_iter){//«
 //				cd._overy="";
 			}
 			if (!no_scroll) cd.scrollIntoView();
-		};/* » */
+		};//»
 		cd.style.maxHeight = "75px";
 		cd._overy = "hidden";
 		cd.innerHTML = code.outerHTML;
@@ -333,6 +337,11 @@ dumpCenter(opts={}){//«
 dumpText(txt, opts={}){//«
 	if (opts.log) log(txt);
 	else if (opts.pop) LOTW.globals.popup.pophuge(txt);
+	else if (opts.copy) {
+		clipCopy(txt);
+		this.doOverlay(`Copied: ${txt.length} bytes`);
+	}
+
 }//»
 	setCurKid(kid){//«
 		this.curKid.off();
@@ -422,10 +431,11 @@ atBottom(){//«
 	return Math.abs(main.scrollHeight - main.clientHeight - main.scrollTop) <= 1;
 }//»
 	quesIsActive(){return this.curKid.isToggled()&& this.curKid._activeTab===0;}
-	async getPoint(){
+	getActiveTab(){return this.curKid._tabOrder[this.curKid._activeTab];}
+	async getPoint(){//«
 		let rv = await this.Win.selectPoint();
 log(rv);
-	}
+	}//»
 	onescape(){//«
 		if (this.deselect()) return true;
 		if (this.statBar.innerHTML){
@@ -448,7 +458,7 @@ log(rv);
 			e.preventDefault();
 			return;
 		}
-		if (k==="UP_"){/* « */
+		if (k==="UP_"){//«
 			if (this.curKid.isToggled()) return;
 			e.preventDefault();
 			let prev = this.curKid.previousSibling;
@@ -457,8 +467,8 @@ log(rv);
 			prev.on();
 			prev.scrollIntoViewIfNeeded();
 			this.curKid = prev;
-		}/* » */
-		else if (k==="DOWN_"){/* « */
+		}//»
+		else if (k==="DOWN_"){//«
 			if (this.curKid.isToggled()) return;
 			e.preventDefault();
 			let next = this.curKid.nextSibling;
@@ -467,41 +477,41 @@ log(rv);
 			next.on();
 			next.scrollIntoViewIfNeeded();
 			this.curKid = next;
-		}/* » */
-		else if (k==="ENTER_"){/* « */
+		}//»
+		else if (k==="ENTER_"){//«
 			if (this.curKid.isToggled() && this.getActiveTab()._isCode){
 				this.getActiveTab().toggle();
 			}
 			else if (!this.curKid.isToggled() || this.quesIsActive()){
 				this.curKid.toggle();
 			}
-		}/* » */
-		else if (k==="PGUP_"){/* « */
+		}//»
+		else if (k==="PGUP_"){//«
 			if (this.curKid.isToggled()) return;
 			e.preventDefault();
 			if (this.main.scrollTop==0){
 				this.setCurKid(this.main.firstChild);
 			}
 			else this.main.scrollTop -= this.main.clientHeight;
-		}/* » */
-		else if (k==="PGDOWN_"){/* « */
+		}//»
+		else if (k==="PGDOWN_"){//«
 			if (this.curKid.isToggled()) return;
 			e.preventDefault();
 			if (this.atBottom()) this.setCurKid(this.main.lastChild);
 			else this.main.scrollTop += this.main.clientHeight;
-		}/* » */
-		else if (k==="HOME_"){/* « */
+		}//»
+		else if (k==="HOME_"){//«
 			e.preventDefault();
 			if (this.curKid.isToggled()) return;
 			this.main.scrollTop = 0;
 			this.setCurKid(this.main.firstChild);
-		}/* » */
-		else if (k==="END_"){/* « */
+		}//»
+		else if (k==="END_"){//«
 			e.preventDefault();
 			if (this.curKid.isToggled()) return;
 			this.main.scrollTop = this.main.scrollHeight;
 			this.setCurKid(this.main.lastChild);
-		}/* » */
+		}//»
 		else if (k==="TAB_") this.doTab(e);
 		else if (k==="TAB_S") this.doTab(e, true);
 		else if (k==="-_") this.decFs();
@@ -521,11 +531,13 @@ log(rv);
 			this.prevSize+=5;
 			this.setPrevDivs();
 		}//»
-else if (k==="SPACE_CAS"){
-this.getPoint();
+		else if (k==="SPACE_CAS"){
+			this.getPoint();
+		}
+else if (k==="c_"){
+	this.dumpCurKid({copy: true});
 }
 	}//»
-	getActiveTab(){return this.curKid._tabOrder[this.curKid._activeTab];}
 
 }
 

@@ -139,7 +139,8 @@ const {//«
 	linesToParas,
 	isBool,
 	isEOF,
-	sleep
+	sleep,
+	mkOverlay
 } = util;//»
 const {//«
 	KC,
@@ -353,7 +354,7 @@ this.fw="500";
 this.curBG="#00f";
 this.curFG="#fff";
 this.curBGBlurred = "#444";
-this.overlayOp="0.66";
+//this.overlayOp="0.66";
 this.tCol = "#e3e3e3";
 this.highlightActorBg = false;
 this.actorHighlightColor="#101010";
@@ -480,10 +481,7 @@ areadiv.appendChild(textarea);
 
 //let overlay;«
 
-let fakediv = make('div');
-fakediv.innerHTML = `<div style="opacity: ${this.overlayOp};border-radius: 15px; font-size: xx-large; padding: 0.2em 0.5em; position: absolute; -webkit-user-select: none; transition: opacity 180ms ease-in; color: rgb(16, 16, 16); background-color: rgb(240, 240, 240); font-family: monospace;"></div>`;
-let overlay = fakediv.childNodes[0];
-overlay.id = "overlay_"+this.winid;
+//const overlay = mkOverlay({id: this.winid});
 
 //»
 
@@ -543,9 +541,13 @@ this.areadiv = areadiv;
 this.tabdiv = tabdiv;
 this.bgdiv = bgdiv;
 this.wrapdiv = wrapdiv;
-this.overlay = overlay;
+//this.overlay = overlay;
 this.statdiv = statdiv;
 
+this.Win.mkOverlay();
+this.doOverlay = (str) => {
+	this.Win.doOverlay(str);
+};
 //textarea.onpaste = this.onPaste;
 textarea.onpaste=(e)=>{
 	this.onPaste(e);
@@ -964,23 +966,6 @@ doClipboardPaste(){//«
 	if (!this.textarea) return;
 	this.textarea.value = "";
 	document.execCommand("paste")
-}
-//»
-doOverlay(strarg){//«
-	let str;
-	if (strarg) {
-		str = strarg;
-		if (str.length > this.maxOverlayLength) str = str.slice(0,this.maxOverlayLength)+"...";
-	}
-	else str = this.w+"x"+this.h;
-	this.overlay.innerText = str;
-	if (this.overlayTimer) clearTimeout(this.overlayTimer);
-	else this.main.appendChild(this.overlay);
-	util.center(this.overlay, this.main);
-	this.overlayTimer = setTimeout(()=>{
-		this.overlayTimer = null;
-		this.overlay._del();
-	}, 1500);
 }
 //»
 setNewFs(val){//«
@@ -1648,7 +1633,7 @@ resize(opts={}) {//«
 	if (ins_str){
 		this.handleLineStr(ins_str);
 	}
-	if (!(oldw==this.w&&oldh==this.h)) this.doOverlay();
+	if (!(oldw==this.w&&oldh==this.h)) this.doOverlay(this.w+"x"+this.h);
 	this.lineHeight = wrapdiv.clientHeight/this.h;
 	this.setBgRows();
 	this.scrollIntoView();

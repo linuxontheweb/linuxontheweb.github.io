@@ -419,6 +419,14 @@ getLog(){return this.#data;}
 
 };//»
 const isFin = Number.isFinite;
+const mkOverlay=(opts={})=>{//«
+	let op = opts.op || 0.66;
+	let fakediv = make('div');
+	fakediv.innerHTML = `<div style="opacity: ${op};border-radius: 15px; font-size: xx-large; padding: 0.2em 0.5em; position: absolute; -webkit-user-select: none; transition: opacity 180ms ease-in; color: rgb(16, 16, 16); background-color: rgb(240, 240, 240); font-family: monospace;"></div>`;
+	let overlay = fakediv.childNodes[0];
+	if (opts.id) overlay.id = "overlay_"+opts.id;
+	return overlay;
+};//»
 
 export const util = (()=>{//«
 
@@ -613,6 +621,7 @@ onSelect(isAbsolute) {//«
 }//»
 
 },//»
+mkOverlay,
 consoleLog,
 getStrPer:val=>{
 	let marr;
@@ -708,7 +717,12 @@ extToApp: (arg) => {
 	if (!ext) return;
 	return EXT_TO_APP_MAP[ext.toLowerCase()];
 },
-clipCopy:s=>{copyarea.value=s;copyarea.select();document.execCommand("copy");},
+clipCopy:s=>{
+	navigator.clipboard.writeText(s)
+//	copyarea.value=s;
+//	copyarea.select();
+//	document.execCommand("copy");
+},
 setEnv:(k,v)=>{ENV[k]=v;},
 getEnv:k=>{return ENV[k];},
 delEnv:k=>{return ENV[k];},
