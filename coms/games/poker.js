@@ -1,4 +1,4 @@
-/*7/11/25: Getting back into an LOTW workflow with poker logic
+/*7/11/25: Getting back into an LOTW workflow with poker logic«
 
 How in the HELL can you backwards traverse without all chance nodes being actual
 nodes?
@@ -163,7 +163,7 @@ main();
 
 //»
 
-*/
+» */
 
 /*7/5/25: Now: to resume "just programming"!«
 
@@ -304,6 +304,194 @@ const {Com} = LOTW.globals.ShellMod.comClasses;
 const{log,jlog,cwarn,cerr}=LOTW.api.util;
 //»
 
+
+//KuhnTrainer.java
+//import java.util.Arrays;
+//import java.util.Random;
+//import java.util.TreeMap;
+
+//Kuhn Poker definitions
+//const ITERATIONS = 1000000;
+
+const KuhnTrainer = () => {
+
+//const ITERATIONS = 1000;
+const nodeMap = {};
+
+const PASS = 0, BET = 1, NUM_ACTIONS = 2;
+//public static final Random random = new Random();
+
+class Node {//«
+
+	constructor(){//«
+
+//	String infoSet;
+//	double[] regretSum = new double[NUM_ACTIONS],
+//	strategy = new double[NUM_ACTIONS],
+//	strategySum = new double[NUM_ACTIONS];
+
+//		this.strategy = new Array(NUM_ACTIONS);
+
+//		this.regretSum = new Array(NUM_ACTIONS);
+		this.regretSum = [0, 0];
+
+//		this.strategySum = new Array(NUM_ACTIONS);
+		this.strategySum = [0, 0];
+	}//»
+
+	getStrategy(realizationWeight) {//«
+//	private double[] getStrategy(double realizationWeight) {//
+	//Get current information set mixed strategy through regret-matching
+		const { regretSum, strategySum } = this;
+//		let strategy = new Array(NUM_ACTIONS);
+		let strategy = [];
+
+		let normalizingSum = 0;
+		for (let a = 0; a < NUM_ACTIONS; a++) {
+			strategy[a] = regretSum[a] > 0 ? regretSum[a] : 0;
+			normalizingSum += strategy[a];
+		}
+		for (let a = 0; a < NUM_ACTIONS; a++) {
+			if (normalizingSum > 0) {
+				strategy[a] /= normalizingSum;
+			}
+			else {
+				strategy[a] = 1.0 / NUM_ACTIONS;
+			}
+			strategySum[a] += realizationWeight * strategy[a];
+		}
+		return strategy;
+	}//»
+
+	 getAverageStrategy() {//«
+//	public double[] getAverageStrategy() {//
+	//Get average information set mixed strategy across all training iterations 
+		const { strategySum } = this;
+//		double[] avgStrategy = new double[NUM_ACTIONS];
+//		let avgStrategy = new Array(NUM_ACTIONS);
+		let avgStrategy = [];
+		let normalizingSum = 0;
+		for (let a = 0; a < NUM_ACTIONS; a++) {
+			normalizingSum += strategySum[a];
+		}
+		for (let a = 0; a < NUM_ACTIONS; a++) {
+			if (normalizingSum > 0) avgStrategy[a] = strategySum[a] / normalizingSum;
+			else avgStrategy[a] = 1.0 / NUM_ACTIONS;
+		}
+		return avgStrategy;
+	}//»
+
+	toString() {//«
+//	public String toString() {//
+	//Get information set string representation
+//		return String.format("%4s: %s", infoSet, Arrays.toString(getAverageStrategy()));
+		let s = this.infoSet;
+		let avg_strat = this.getAverageStrategy();
+//		for (let i=0; i < NUM_ACTIONS; i++){
+//			s+= ` ${avg_strat[i]}`;
+//		}
+		for (let strat of avg_strat){
+			s+= ` ${strat.toFixed(4)}`;
+		}
+		return s;
+	}//»
+
+}//»
+
+//public TreeMap<String, Node> nodeMap = new TreeMap<String, Node>();
+//const nodeMap = new Map;
+
+const cfr = (cards, history, p0, p1) => {//«
+//private double cfr(int[] cards, String history, double p0, double p1) {//
+//Counterfactual regret minimization iteration
+
+	let plays = history.length;
+	let player = plays % 2;
+	let opponent = 1 - player;
+	//Return payoff for terminal states
+	if (plays > 1) {
+//		let terminalPass = history.charAt(plays - 1) == ’p’;
+		let terminalPass = history[plays - 1] == "p";
+//		let doubleBet = history.substring(plays - 2, plays).equals("bb");
+		let doubleBet = history.slice(plays - 2, plays) == "bb";
+		let isPlayerCardHigher = cards[player] > cards[opponent];
+		if (terminalPass) {
+			if (history == "pp") {
+				return isPlayerCardHigher ? 1 : -1;
+			}
+			else {
+				return 1;
+			}
+		}
+		else if (doubleBet) {
+			return isPlayerCardHigher ? 2 : -2;
+		}
+	}
+	let infoSet = cards[player] + history;
+	//Get information set node or create it if nonexistant
+
+//	let node = nodeMap.get(infoSet);
+	let node = nodeMap[infoSet];
+//	if (node == null) {
+	if (!node) {
+		node = new Node();
+		node.infoSet = infoSet;
+//		nodeMap.put(infoSet, node);
+		nodeMap[infoSet] = node;
+	}
+	//For each action, recursively call cfr with additional history and probability
+
+//	double[] strategy = node.getStrategy(player == 0 ? p0 : p1);
+	let strategy = node.getStrategy(player == 0 ? p0 : p1);
+
+//	double[] util = new double[NUM_ACTIONS];
+//	let util = new Array(NUM_ACTIONS);
+	let util = [];
+	let nodeUtil = 0;
+	for (let a = 0; a < NUM_ACTIONS; a++) {
+		let nextHistory = history + (a == 0 ? "p" : "b");
+		util[a] = player == 0 ?
+			-cfr(cards, nextHistory, p0 * strategy[a], p1) :
+			-cfr(cards, nextHistory, p0, p1 * strategy[a]);
+		nodeUtil += strategy[a] * util[a];
+	}
+	//For each action, compute and accumulate counterfactual regret
+	for (let a = 0; a < NUM_ACTIONS; a++) {
+		let regret = util[a] - nodeUtil;
+		node.regretSum[a] += (player == 0 ? p1 : p0) * regret;
+	}
+	return nodeUtil;
+}//»
+const train=(iterations)=>{//«
+//Train Kuhn poker
+if (!(Number.isFinite(iterations) && iterations > 0)) {
+cerr("Invalid iterations");
+return;
+}
+//	int[] cards = {1, 2, 3};
+	let cards = [1, 2, 3];
+	let util = 0;
+	for (let i = 0; i < iterations; i++) {
+		//Shuffle cards
+		for (let c1 = cards.length - 1; c1 > 0; c1--) {
+			let c2 = Math.floor(Math.random() * (c1 + 1))
+			let tmp = cards[c1];
+			cards[c1] = cards[c2];
+			cards[c2] = tmp;
+		}
+		util += cfr(cards, "", 1, 1);
+	}
+	console.log("Average game value: " + util / iterations);
+	for (let key in nodeMap) {
+//	for (let n of nodeMap.values()) {
+//	for (Node n : nodeMap.values()) {
+		console.log(nodeMap[key].toString());
+	}
+
+}//»
+return train
+
+};
 
 const generatePokerHands = (startingHand) => {//«
     // Constants for ranks and iteration limit
@@ -1383,6 +1571,39 @@ const getSuitAbstractedHand=(cards)=>{//«
 
 //Commands«
 //const com_
+const com_train = class extends Com{
+
+run(){
+const {args} = this;
+if (!args[0]) return this.no("Usage: train <iterations>");
+const train = KuhnTrainer();
+train(parseInt(args[0]));
+//log(train);
+this.ok();
+}
+
+}
+
+const com_poker = class extends Com{
+init(){
+}
+run(){
+const {args}=this;
+const types=['live', 'random', 'foldbot', 'shovebot', 'expert'];
+if (args.length < 2 || args.length > 10){
+return this.no("need 2-10 args, each one of: live|random|foldbot|shovebot|expert");
+}
+
+for (let arg of args){
+    if (!types.includes(arg)){
+        return this.no(`Unknwn type: '${arg}'`);
+    }
+}
+LOTW.Desk.api.openApp("dev.Poker", {force: true, appArgs: {playerTypes: this.args}});
+
+this.ok();
+}
+}
 const com_genhands = class extends Com{//«
 	run(){
 const {args} = this;
@@ -1447,6 +1668,8 @@ const com_hand2abs = class extends Com{//«
 //»
 
 const coms = {//«
+	train: com_train,
+	poker: com_poker,
 	hand2abs: com_hand2abs,
 	genhands: com_genhands
 }//»

@@ -519,6 +519,7 @@ log(rv);
 		else if (k==="=_") this.eqFs();
 		else if (k==="p_") this.dumpCurKid({pop: true});
 		else if (k==="l_") this.dumpCurKid({log: true});
+		else if (k==="c_C") this.dumpCurKid({copy: true});
 		else if (k==="l_S") this.dumpCenter({log: true});
 		else if (k==="p_S") this.dumpCenter({pop: true});
 		else if (k===",_S")	{//«
@@ -531,12 +532,8 @@ log(rv);
 			this.prevSize+=5;
 			this.setPrevDivs();
 		}//»
-		else if (k==="SPACE_CAS"){
-			this.getPoint();
-		}
-else if (k==="c_"){
-	this.dumpCurKid({copy: true});
-}
+		else if (k==="SPACE_CAS") this.getPoint();
+		
 	}//»
 
 }

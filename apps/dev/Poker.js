@@ -42,10 +42,10 @@ let SILENT = false;
 //Globals«
 
 const DECK = [];
-//const SUITS = ['♠', '♥', '♦', '♣'];
-const SUITS = ['♠', '♥'];
-//const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
-const RANKS = ['T', 'J', 'Q', 'K', 'A'];
+const SUITS = ['♠', '♥', '♦', '♣'];
+//const SUITS = ['♠', '♥'];
+const RANKS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+//const RANKS = ['T', 'J', 'Q', 'K', 'A'];
 {
 let i = 0;
 for (let rank of RANKS) {
@@ -59,18 +59,18 @@ for (let rank of RANKS) {
 
 const NUM_CARDS = DECK.length;
 
-/*
+///*
 const NUM_HOLE_CARDS = 2;
 const NUM_BETTING_ROUNDS = 4;
 const NUM_FLOP_CARDS = 3;
 const NUM_FINAL_CARDS = 7;
-*/
-
+//*/
+/*
 const NUM_HOLE_CARDS = 1;
 const NUM_BETTING_ROUNDS = 2;
 const NUM_FLOP_CARDS = 1;
 const NUM_FINAL_CARDS = 2;
-
+*/
 const TABLE_WID = 800;
 const TABLE_HGT = 400;
 
@@ -472,7 +472,7 @@ dealHands(){//«
 		}
 	}
 }//»
-eval2(c1, c2){
+eval2(c1, c2){//«
 	let score, text;
 	let r1 = RANKS.indexOf(c1.rank);
 	let r2 = RANKS.indexOf(c2.rank);
@@ -495,7 +495,7 @@ eval2(c1, c2){
 		score = 10 * hi + lo;
 	}
 	return { score, text };
-}
+}//»
 eval5(hand, readable, score_only){//«
 readable = true;
 //Parameters to evaluate:
