@@ -1,4 +1,4 @@
-/*URKSPLK: In order to reload the terminal AND the shell with the same Alt+r keypress,
+/*URKSPLK: In order to reload the terminal AND the shell with the same Alt+r keypress,«
 we have to call Win.reload({appOnly: true}), otherwise there'd be an infinite loop.
 
 The interesting part of passwordMode is @DYWUEORK, where there is a tineout in the toString
@@ -7,7 +7,7 @@ and then a "*" after it. This mimics the way that cellfonez typically handle pas
 inputs. Also of relevance is the bit @WZZKUDJK that takes the valueOf() of each individual
 character, which is necessary for password mode chars to return the "real" string rather
 than, e.g. "********".
-*/
+» */
 /*5/6/25: Just put the shell into mods/lang/shell.js.«
 Now need to figure out how to deal with the onreload situation:
 1) In normal REPL mode, we might want to reload the terminal app (this file) or the shell
@@ -107,6 +107,11 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 
 //This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
 //let USE_ONRELOAD = false;
+
+const RELOAD_LIBS=[
+//"games.poker",
+"games.cfr"
+];
 
 let RELOAD_TERM_ONRELOAD = false;
 
@@ -3595,47 +3600,23 @@ if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
 //log(this.Win);
 
 }//»
-async _reloadLibs(arr){
+async _reloadLibs(arr){//«
 	for (let mod of arr){
 		if (!this.ShellMod.allLibs[mod]) continue;
 		this.doOverlay(`Delete: ${mod}`);
 		await this.ShellMod.util.deleteMods([mod]);
 		await this.ShellMod.util.doImports([mod], cerr);
 	}
-}
-async _onreload(){
+}//»
+async _onreload(){//«
 
 //Just reload the shell (if working on a devtest command)
 //	await this._reloadShell();
 
-	await this._reloadLibs(["games.poker"]);
-}
+//	await this._reloadLibs(["games.poker"]);
+	await this._reloadLibs(RELOAD_LIBS);
 
-/*
-async _ondevreload(){//«
-
-	this.doOverlay("ondevreload: start");
-
-//EIOFJKL
-	let use_str;
-	if (this.curShell){
-		use_str = this.curShell.commandStr;
-		this.curShell.cancel();
-		this.responseEnd();
-	}
-//	await load_new_shell();
-	this.ShellMod.util.deleteMods(DEL_MODS);
-	if (use_str){
-		this.handleLineStr(use_str);
-		this.handleEnter();
-	}
-//	this.ShellMod.util.deleteComs(DEL_COMS);
-//	await this.ShellMod.util.doImports(ADD_COMS, cerr);
-	this.doOverlay("ondevreload: done");
-
-}
-//»
-*/
+}//»
 
 onkill(if_dev_reload){//«
 	if (this.curEditNode) this.curEditNode.unlockFile();
