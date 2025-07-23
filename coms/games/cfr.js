@@ -331,7 +331,195 @@ stop() {
 	return (this.#tend - this.#tstart) / 1000;
   }
 };//»
+function Util(){//«
 
+//#include "bluff.h"
+
+const to_string = (i) => {//«
+//string to_string(int i) {
+  ostringstream oss;
+  oss << i;
+  return oss.str();
+}//»
+const to_string = (i) {//«
+//std::string to_string(unsigned long long i) {
+  ostringstream oss;
+  oss << i;
+  return oss.str();
+}//»
+const to_string = (i) => {//«
+//std::string to_string(double i) {
+  ostringstream oss;
+  oss << i;
+  return oss.str();
+}//»
+const to_ull = (str) => {//«
+//unsigned long long to_ull(string str) {
+  stringstream stmT;
+  unsigned long long iR;
+
+  stmT << str;
+  stmT >> iR;
+
+  return iR;
+}//»
+const to_int = (str) => {//«
+//int to_int(string str) {
+  stringstream stmT;
+  int iR;
+
+  stmT << str;
+  stmT >> iR;
+
+  return iR;
+}//»
+const to_double = (str) => {//«
+//double to_double(string str) {
+  stringstream stmT;
+  double iR;
+
+  stmT << str;
+  stmT >> iR;
+
+  return iR;
+}//»
+const getSortedKeys = (m, kl) => {//«
+//void getSortedKeys(map<int,bool> & m, list<int> & kl) {
+  map<int,bool>::iterator iter;
+  for (iter = m.begin(); iter != m.end(); iter++)
+  {
+    kl.push_back(iter->first);
+  }
+
+  kl.sort();
+}//»
+const replace = (str, from, to) => {//«
+//bool replace(std::string& str, const std::string& from, const std::string& to) {
+    size_t start_pos = str.find(from);
+    if(start_pos == std::string::npos)
+        return false;
+    str.replace(start_pos, from.length(), to);
+    return true;
+}//»
+const split = (tokens, line, delimiter) => {//«
+//void split(vector<string> & tokens, const string line, char delimiter) {
+  // if there is none, then return just the string itself
+  //  (already works like this)
+  //if (line.find(delimiter) == string::npos)
+  //{
+  //  tokens.push_back(line);
+  //  return;
+  //}
+
+  string::size_type index = 0;
+
+  while (index < line.length())
+  {
+    string::size_type new_index = line.find(delimiter, index);
+
+    if (new_index == string::npos)
+    {
+      tokens.push_back(line.substr(index));
+      break;
+    }
+    else
+    {
+      tokens.push_back(line.substr(index, new_index - index));
+      index = new_index+1;
+    }
+  }
+
+  // special case with token as the last character
+  if (index == line.length())
+    tokens.push_back("");
+}//»
+const pow2 = (i) => {//«
+//unsigned long long pow2(int i) {
+  unsigned long long answer = 1;
+  return (answer << i);
+}//»
+const bubsort = (array, size) => {//«
+//void bubsort(int * array, int size) {
+  bool swapped_flag;
+
+  do
+  {
+    swapped_flag = false;
+    int i;
+
+    for (i = 0; i < (size-1); i++)
+    {
+      if (array[i] > array[i+1])  // sort increasing
+      {
+        int tmp = array[i];
+        array[i] = array[i+1];
+        array[i+1] = tmp;
+
+        swapped_flag = true;
+      }
+    }
+  }
+  while (swapped_flag);
+}//»
+const infosetkey_to_string = (infosetkey) => {//«
+//string infosetkey_to_string(unsigned long long infosetkey) {
+  int player = (infosetkey & 1) + 1;
+  infosetkey >>= 1;
+
+  string str = "P" + to_string(player);
+
+  int roll = infosetkey & (pow2(iscWidth) - 1); // for iscWidth = 3, 2**3 - 1 = 8-1 = 7
+  infosetkey >>= iscWidth;
+
+  str += (" " + to_string(roll));
+
+  for (int i = 1; i < BLUFFBID; i++) {
+    int bit = (infosetkey >> (BLUFFBID-i)) & 1;
+    if (bit == 1)
+    {
+      int dice, face;
+      convertbid(dice, face, i);
+      str += (" " + to_string(dice) + "-" + to_string(face));
+    }
+  }
+
+  return str;
+}//»
+const getCurDateTime = () => {//«
+//string getCurDateTime() {
+  char str[200] = { 0 };
+
+  time_t tval = time(NULL);
+  struct tm * tmptr = localtime(&tval);
+  strftime(str, 200, "%Y-%m-%d %H:%M:%S", tmptr);
+
+  string cppstr = str;
+  return cppstr;
+}//»
+const seedCurMicroSec = () => {//«
+//void seedCurMicroSec() {
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+
+  #if defined(_WIN32) || defined(_WIN64)
+  srand(tv.tv_usec);
+  #else
+  srand48(tv.tv_usec);
+  #endif
+}//»
+const unifRand01 = () => {//«
+//double unifRand01() {
+  #if defined(_WIN32) || defined(_WIN64)
+  // adding the 1 here just seems outright wrong, but if I don't add it then this sometimes returns 1
+  // and the code breaks. I spent some time searching for a better answer and could not one without 
+  // a dependency to boost.
+  return (static_cast<double>(rand()) / (RAND_MAX+1));
+  #else
+  return drand48();
+  #endif
+}//»
+
+}//»
 function InfosetStore_NS() {//«
 
 //infosetstore
@@ -1772,7 +1960,7 @@ loadMetaData(filename) {//«
 }//»
 
 }//»
-function BR_NS(){// Best Responses«
+function BR_NS(){// Best Response «
 
 //Globals«
 
@@ -2137,7 +2325,7 @@ map<unsigned long long,int> iapairs;
 
 int iscWidth = 3;
 
-string binrep(unsigned long long num) {/* « */
+string binrep(unsigned long long num) {//«
   string s = "";
   for (int i = 0; i < 64; i++) 
   {
@@ -2148,14 +2336,14 @@ string binrep(unsigned long long num) {/* « */
   }
 
   return s;
-}/* » */
-unsigned long long pow2(int i) {/* « */
+}//»
+unsigned long long pow2(int i) {//«
   unsigned long long answer = 1;
   return (answer << i); 
-}/* » */
+}//»
 
 // Traverse the entire tree, counting the number of (information set, action pairs)
-void bcount(int cbid, int player, int depth) {/* « */
+void bcount(int cbid, int player, int depth) {//«
   if (cbid >= (BIDS+1))
   {
     totalLeaves++;
@@ -2177,8 +2365,8 @@ void bcount(int cbid, int player, int depth) {/* « */
 
     bcount(b, 3-player, depth+1);
   }
-}/* » */
-void countnoabs() {/* « */
+}//»
+void countnoabs() {//«
   bcount(0, 1, 0); 
 
   cout << "for public tree:" << endl;
@@ -2209,8 +2397,8 @@ void countnoabs() {/* « */
 
   unsigned long long ttlbytes = ((td*8) + (ttlinfosets*4*2)*8); 
   cout << "total bytes = " << ttlbytes << " ( = " << (ttlbytes / (1024.0*1024.0*1024.0)) << " GB)" << endl;
-}/* » */
-bool nextbid(int * bidseq, int maxBid) {/* « */
+}//»
+bool nextbid(int * bidseq, int maxBid) {//«
   for (int i = RECALL-1; i >= 0; i--)
   {
     int roffset = (RECALL-1)-i; 
@@ -2229,11 +2417,11 @@ bool nextbid(int * bidseq, int maxBid) {/* « */
   }
 
   return false;
-}/* » */
+}//»
 
 // This is for imperfect recall abstractions. Not used by this code base, 
 // but I left it in case your game has abstraction, maybe this will be helpful
-void countabs2() {/* « */
+void countabs2() {//«
   int bidseq[RECALL] = { 0 }; 
   bool ret = true;
   bool first = true;
@@ -2362,8 +2550,8 @@ void countabs2() {/* « */
 
   cout << "Note: Sizes assume for infoset store: 2 doubles per infoset + 2 doubles per iapair, " << endl;
   cout << "                   for index: indexsize = 4*#infosets, and 2 doubles per index size . " << endl;
-}/* » */
-int main() {/* « */
+}//»
+int main() {//«
   // iscWidth is the number of bits needed by the chance outcome
   // in our case, six possibilties, 3 bits
   iscWidth = 3;
@@ -2372,7 +2560,7 @@ int main() {/* « */
   //countabs2();
 
   return 0;
-}/* » */
+}//»
 
 }//»
 function CFR_NS(){//«
@@ -2594,7 +2782,7 @@ const main=(argc, argv)=>{//«
 }//»
 
 }//»
-function PCS_NS(){//«
+function PCS_NS(){// Public Chance Sampling«
 
 //Headers«
 
@@ -2997,6 +3185,97 @@ const main = (argc, argv) => {//«
 }//»
 
 }//»
+function Sampling(){//«
+
+//#include "bluff.h"
+
+const sampleChanceEvent = (player, outcome, prob) => {//«
+//void sampleChanceEvent(int player, int & outcome, double & prob) {
+  int co = (player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));
+
+  double roll = unifRand01();
+  double sum = 0.0;
+
+  for (int i = 0; i < co; i++)
+  {
+    double pr = getChanceProb(player, i+1);
+
+    if (roll >= sum && roll < sum+pr) {
+      outcome = (i+1);
+      prob = pr;
+      return;
+    }
+
+    sum += pr;
+  }
+
+  cout << "roll = " << roll << endl;
+  assert(false);
+}//»
+const sampleMoveAvg = (is, actionshere, index, prob) => {//«
+//void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob){
+  double den = 0;
+
+  for (int i = 0; i < actionshere; i++)
+    den += is.totalMoveProbs[i];
+
+  double roll = unifRand01();
+  double sum = 0.0;
+
+  for (int i = 0; i < actionshere; i++)
+  {
+    double iprob = (den > 0.0 ? (is.totalMoveProbs[i] / den) : (1.0 / actionshere));
+    CHKPROB(prob);
+
+    if (roll >= sum && roll < sum+iprob) {
+      index = i;
+      prob = iprob;
+      return;
+    }
+
+    sum += iprob;
+  }
+
+  assert(false);
+
+}//»
+const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) => {//«
+//int sampleAction(Infoset & is, int actionshere, double & sampleprob, double epsilon, bool firstTimeUniform) {
+
+  // **Only do this when enabled by firstTimeUniform:
+  //      if this infoset has never been updated: choose entirely randomly
+  //      reason: there is no regret yet, hence no strategy.
+  //
+  double eps = 0.0;
+  if (firstTimeUniform)
+    eps = (is.lastUpdate == 0 ? 1.0 : epsilon);
+  else
+    eps = epsilon;
+
+  // build the distribution to sample from
+  double dist[actionshere];
+  for (int a = 0; a < actionshere; a++)
+    dist[a] = eps*(1.0 / actionshere) + (1.0-eps)*is.curMoveProbs[a];
+
+  double roll = unifRand01();
+  double sum = 0.0;
+  for (int a = 0; a < actionshere; a++)
+  {
+    if (roll >= sum && roll < sum+dist[a])
+    {
+      sampleprob = dist[a];
+      return a;
+    }
+
+    sum += dist[a];
+  }
+
+  assert(false);
+  return -1;
+}//»
+
+}//»
+
 //»
 
 //Commands«
