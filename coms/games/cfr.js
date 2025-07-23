@@ -3,7 +3,6 @@
 
 //»
 
-
 //Imports«
 
 //const{globals, Desk}=LOTW;
@@ -204,7 +203,7 @@ return train
 
 //»
 
-/*Bluff Dice: C++«
+/*Bluff Dice: C++
 
 //defs.h «
 #define FSICFR         0
@@ -283,1841 +282,7 @@ return train
 #endif
 //»
 
-//bluff.h //«
-
-#ifndef __BLUFF_H__
-#define __BLUFF_H__
-
-#include <sys/timeb.h>
-
-#include <cmath>
-#include <string>
-#include <limits>
-#include <map>
-#include <set>
-#include <list>
-#include <vector>
-#include <iostream>
-
-#include "infosetstore.h"
-
-#define P1DICE   1
-#define P2DICE   1
-#define DIEFACES 6
-
-// The number assigned to the "calling bluff action".
-// Also an upper bound for |A(I)|, equal to 13 in Bluff(1,1)
-#define BLUFFBID (((P1DICE+P2DICE)*DIEFACES)+1)
-
-#include "defs.h"
-
-struct GameState
-{
-  int p1roll;           // the outcome of p1's roll
-  int p2roll;           // the outcome of p2's roll
-  int curbid;           // current bid (between 1 and 13)
-  int prevbid;          // prev bid from last turn
-  int callingPlayer;    // the player calling bluff (1 or 2)
-
-  GameState()
-  {
-    p1roll = p2roll = curbid = prevbid = 0;
-    callingPlayer = 0;
-  }
-};
-
-struct Infoset
-{
-  double cfr[BLUFFBID];
-  double totalMoveProbs[BLUFFBID];
-  double curMoveProbs[BLUFFBID];
-
-  int actionshere;
-  unsigned long long lastUpdate;
-};
-
-// game-specific function defs (implemented in bluff.cpp)
-bool terminal(GameState & gs);
-double payoff(GameState & gs, int player);
-double payoff(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int player);
-int whowon(GameState & gs);
-int whowon(GameState & gs, int & delta);
-int whowon(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int & delta);
-void init();
-double getChanceProb(int player, int outcome);
-void convertbid(int & dice, int & face, int bid);
-int countMatchingDice(const GameState & gs, int player, int face);
-void getRoll(int * roll, int chanceOutcome, int player);  // currently array must be size 3 (may contain 0s)
-int numChanceOutcomes(int player);
-
-// util function defs (implemented in util.cpp)
-std::string to_string(double i);
-std::string to_string(unsigned long long i);
-std::string to_string(int i);
-int to_int(std::string str);
-unsigned long long to_ull(std::string str);
-double to_double(std::string str);
-void getSortedKeys(std::map<int,bool> & m, std::list<int> & kl);
-void split(std::vector<std::string> & tokens, const std::string line, char delimiter);
-unsigned long long pow2(int i);
-void bubsort(int * array, int size);
-std::string infosetkey_to_string(unsigned long long infosetkey);
-bool replace(std::string& str, const std::string& from, const std::string& to);
-std::string getCurDateTime();
-void seedCurMicroSec();
-double unifRand01();
-
-// solver-specific function defs
-void newInfoset(Infoset & is, int actionshere);
-unsigned long long getInfosetKey(GameState & gs, int player, unsigned long long bidseq);
-void getInfoset(GameState & gs, int player, unsigned long long bidseq, Infoset & is, unsigned long long & infosetkey, int actionshere);
-void initInfosets();
-void initSeqStore();
-void allocSeqStore();
-double computeBestResponses(bool avgFix);
-double computeBestResponses(bool avgFix, double & p1value, double & p2value);
-void report(std::string filename, double totaltime, double bound, double conv);
-void dumpInfosets(std::string prefix);
-void dumpSeqStore(std::string prefix);
-void dumpMetaData(std::string prefix, double totaltime);
-void loadMetaData(std::string file);
-double getBoundMultiplier(std::string algorithm);
-double evaluate();
-unsigned long long absConvertKey(unsigned long long fullkey);
-void setBRTwoFiles();
-void estimateValue();
-void loadUCTValues(Infoset & is, int actions);
-void saveUCTValues(Infoset & is, int actions);
-void UCTBR(int fixed_player);
-void fsiBR(int fixed_player);
-double absComputeBestResponses(bool abs, bool avgFix, double & p1value, double & p2value);
-double absComputeBestResponses(bool abs, bool avgFix);
-
-// sampling (impl in sampling.cpp)
-void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob);
-void sampleChanceEvent(int player, int & outcome, double & prob);
-void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob);
-int sampleAction(Infoset & is, int actionshere, double & sampleprob, double epsilon, bool firstTimeUniform);
-
-// global variables
-class InfosetStore;
-extern InfosetStore iss;                 // the strategies are stored in here (for both players)
-extern int iscWidth;                     // number of bits for chance outcome
-extern unsigned long long iter;          // the current iteration
-extern std::string filepref;             // prefix path for saving files
-extern double cpWidth;                   // used for timing/stats
-extern double nextCheckpoint;            // used for timing/stats
-extern unsigned long long ntNextReport;  // used for timing/stats
-extern unsigned long long ntMultiplier;  // used for timing/stats
-extern unsigned long long nodesTouched;  // used for timing/stats
-
-class StopWatch
-{
-  timeb tstart, tend;
-public:
-  StopWatch() { ftime(&tstart); }
-  void reset() { ftime(&tstart); }
-  double stop()
-  {
-    ftime(&tend);
-    return ((tend.time*1000 + tend.millitm)
-            - (tstart.time*1000 + tstart.millitm) ) / 1000.0;
-  }
-};
-
-#endif
-//»
-//bluff.cpp «
-// * Info about this game from a run of bluffcounter.cpp:
-// *
-// * storing 2 doubles per iapair + 2 doubles per infoset
-// * want size of index to be at least double # infosets (then 2 doubles per index size)
-// *
-// * for 1,1:
-// *   p1 infosets 12288, p2 infosets 12288, total: 24576
-// *   infoset actions pairs, p1 p2 total = 24570 24570 49140
-
-
-#include <iostream>
-#include <string>
-#include <cstring>
-#include <map>
-#include <cassert>
-#include <cstdlib>
-#include <ctime>
-#include <set>
-
-#include "bluff.h"
-#include "infosetstore.h"
-#include "sys/time.h"
-
-#define LOC(b,r,c)  b[r*3 + c]
-
-using namespace std;
-
-// global variables
-InfosetStore iss;
-string filepref = "scratch/";
-unsigned long long iter;
-int iscWidth = 0;
-double cpWidth = 10.0;
-double nextCheckpoint = cpWidth;
-unsigned long long nodesTouched = 0;
-unsigned long long ntNextReport = 1000000;  // nodes touched base timing
-unsigned long long ntMultiplier = 2;  // nodes touched base timing
-
-// key is roll, value is # of time it shows up. Used only when determining chance outcomes
-map<int,int> outcomes;
-
-// probability of this chance move. indexed as 0-5 or 0-20
-// note: CO/co stand for "chance outcome"
-static int numChanceOutcomes1 = 0;
-static int numChanceOutcomes2 = 0;
-static double * chanceProbs1 = NULL;
-static double * chanceProbs2 = NULL;
-static int * chanceOutcomes1 = NULL;
-static int * chanceOutcomes2 = NULL;
-static int * bids = NULL;
-
-static StopWatch stopwatch;
-
-double getChanceProb(int player, int outcome)
-{
-  // outcome >= 1, so must subtract 1 from it
-  int co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-  assert(outcome-1 >= 0 && outcome-1 < co);
-  double * cp = (player == 1 ? chanceProbs1 : chanceProbs2);
-  return cp[outcome-1];
-}
-
-int numChanceOutcomes(int player)
-{
-  return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-}
-
-void unrankco(int i, int * roll, int player)
-{
-  int num = 0;
-  int * chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
-  num = chanceOutcomes[i];
-
-  assert(num > 0);
-
-  int numDice = (player == 1 ? P1DICE : P2DICE);
-
-  for (int j = numDice-1; j >= 0; j--)
-  {
-    roll[j] = num % 10;
-    num /= 10;
-  }
-}
-
-
-void initBids()
-{
-  bids = new int[BLUFFBID-1];
-  int nextWildDice = 1;
-  int idx = 0;
-  for (int dice = 1; dice <= P1DICE + P2DICE; dice++)
-  {
-    for (int face = 1; face <= DIEFACES-1; face++)
-    {
-      bids[idx] = dice*10 + face;
-      idx++;
-    }
-
-    if (dice % 2 == 1) {
-      bids[idx] = nextWildDice*10 + DIEFACES;
-      idx++;
-      nextWildDice++;
-    }
-  }
-
-  for(; nextWildDice <= (P1DICE+P2DICE); nextWildDice++) {
-    bids[idx] = nextWildDice*10 + DIEFACES;
-    idx++;
-  }
-
-  assert(idx == BLUFFBID-1);
-
-}
-
-unsigned long long getInfosetKey(GameState & gs, int player, unsigned long long bidseq)
-{
-  unsigned long long infosetkey = bidseq;
-  infosetkey <<= iscWidth;
-  if (player == 1)
-  {
-    infosetkey |= gs.p1roll;
-    infosetkey <<= 1;
-  }
-  else if (player == 2)
-  {
-    infosetkey |= gs.p2roll;
-    infosetkey <<= 1;
-    infosetkey |= 1;
-  }
-
-  return infosetkey;
-}
-
-void getInfoset(GameState & gs, int player, unsigned long long bidseq, Infoset & is, unsigned long long & infosetkey, int actionshere)
-{
-  infosetkey = getInfosetKey(gs, player, bidseq);
-  bool ret = iss.get(infosetkey, is, actionshere, 0);
-  assert(ret);
-}
-
-int ceiling_log2(int val)
-{
-  int exp = 1, num = 2;
-  do {
-    if (num > val) { return exp; }
-    num *= 2;
-    exp++;
-  }
-  while (true);
-}
-
-int intpow(int x, int y)
-{
-  if (y == 0) return 1;
-  return x * intpow(x, y-1);
-}
-
-void nextRoll(int * roll, int size)
-{
-  for (int i = size-1; i >= 0; i--)
-  {
-    // Try to increment if by 1.
-    if (roll[i] < DIEFACES) {
-      // if possible, do it and then set everything to the right back to 1
-      roll[i]++;
-      for (int j = i+1; j < size; j++)
-        roll[j] = 1;
-
-      return;
-    }
-  }
-}
-
-int getRollBase10(int * roll, int size)
-{
-  int multiplier = 1;
-  int val = 0;
-  for (int i = size-1; i >= 0; i--)
-  {
-    val += roll[i]*multiplier;
-    multiplier *= 10;
-  }
-
-  return val;
-}
-
-void determineChanceOutcomes(int player)
-{
-  int dice = (player == 1 ? P1DICE : P2DICE);
-  int rolls[dice];
-  for (int r = 0; r < dice; r++) rolls[r] = 1;
-  outcomes.clear();
-
-  int permutations = intpow(DIEFACES, dice);
-  int p;
-
-  for (p = 0; p < permutations; p++) {
-
-    // first, make a copy
-    int rollcopy[dice];
-    memcpy(rollcopy, rolls, dice*sizeof(int));
-
-    // now sort
-    bubsort(rollcopy, dice);
-
-    // now convert to an integer in base 10
-    int key = getRollBase10(rollcopy, dice);
-
-    // now increment the counter for this key in the map
-    outcomes[key] += 1;
-
-    // next roll
-    nextRoll(rolls, dice);
-  }
-
-  assert(p == permutations);
-
-  int & numChanceOutcomes = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-  double* & chanceProbs = (player == 1 ? chanceProbs1 : chanceProbs2);
-  int* & chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
-
-  // now, transfer the map keys to the array
-  numChanceOutcomes = outcomes.size();
-  chanceProbs = new double[numChanceOutcomes];
-  chanceOutcomes = new int[numChanceOutcomes];
-
-  map<int,int>::iterator iter;
-  int idx = 0;
-  for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
-    chanceOutcomes[idx] = iter->first;
-    idx++;
-  }
-
-  bubsort(chanceOutcomes, numChanceOutcomes);
-
-  for (int c = 0; c < numChanceOutcomes; c++) {
-    int key = chanceOutcomes[c];
-    chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
-    //cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
-  }
-}
-
-void init()
-{
-  assert(bids == NULL);
-
-  cout << "Initializing Bluff globals..." << endl;
-
-  seedCurMicroSec();
-
-  determineChanceOutcomes(1);
-  determineChanceOutcomes(2);
-
-  // iscWidth if the number of bits needed to encode the chance outcome in the integer
-  int maxChanceOutcomes = (numChanceOutcomes1 > numChanceOutcomes2 ? numChanceOutcomes1 : numChanceOutcomes2);
-  iscWidth = ceiling_log2(maxChanceOutcomes);
-
-  initBids();
-
-  cout << "Globals are: " << numChanceOutcomes1 << " " << numChanceOutcomes2 << " " << iscWidth << endl;
-}
-
-
-void newInfoset(Infoset & is, int actions)
-{
-  is.actionshere = actions;
-  is.lastUpdate = 0;
-
-  for (int i = 0; i < actions; i++)
-  {
-    is.cfr[i] = 0.0;
-    is.totalMoveProbs[i] = 0.0;
-    is.curMoveProbs[i] = 1.0 / actions;
-  }
-}
-
-bool terminal(GameState & gs)
-{
-  return (gs.curbid == BLUFFBID);
-}
-
-// a bid is from 1 to 12, for example
-void convertbid(int & dice, int & face, int bid)
-{
-  if (P1DICE == 1 && P2DICE == 1)
-  {
-    dice = (bid - 1) / DIEFACES + 1;
-    face = bid % DIEFACES;
-    if (face == 0) face = DIEFACES;
-
-    assert(dice >= 1 && dice <= 2);
-    assert(face >= 1 && face <= DIEFACES);
-  }
-  else
-  {
-    // stored in an array.
-    int size = (P1DICE+P2DICE)*DIEFACES;
-    assert((bid-1) >= 0 && (bid-1) < size);
-
-    dice = bids[bid-1] / 10;
-    face = bids[bid-1] % 10;
-  }
-}
-
-void getRoll(int * roll, int chanceOutcome, int player)
-{
-  unrankco(chanceOutcome-1, roll, player);
-}
-
-int countMatchingDice(const GameState & gs, int player, int face)
-{
-  int roll[3] = {0,0,0};
-  int matchingDice = 0;
-  int dice = (player == 1 ? P1DICE : P2DICE);
-
-  if (dice == 1)
-  {
-    if (player == 1)
-      roll[1] = gs.p1roll;
-    else if (player == 2)
-      roll[1] = gs.p2roll;
-  }
-  else if (dice == 2)
-  {
-    if (player == 1)
-      unrankco(gs.p1roll-1, roll, 1);
-    else if (player == 2)
-      unrankco(gs.p2roll-1, roll, 2);
-  }
-
-  for (int i = 0; i < 3; i++)
-    if (roll[i] == face || roll[i] == DIEFACES)
-      matchingDice++;
-
-  return matchingDice;
-}
-
-int whowon(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int & delta)
-{
-  int dice = 0, face = 0;
-  convertbid(dice, face, bid);
-
-  assert(bidder != callingPlayer);
-
-  // get the dice
-
-  int p1rollArr[P1DICE];
-  int p2rollArr[P2DICE];
-
-  unrankco(p1roll-1, p1rollArr, 1);
-  unrankco(p2roll-1, p2rollArr, 2);
-
-  // now check the number of matches
-
-  int matching = 0;
-
-  for (int i = 0; i < P1DICE; i++)
-    if (p1rollArr[i] == face || p1rollArr[i] == DIEFACES)
-      matching++;
-
-  for (int j = 0; j < P2DICE; j++)
-    if (p2rollArr[j] == face || p2rollArr[j] == DIEFACES)
-      matching++;
-
-  delta = matching - dice;
-  if (delta < 0) delta *= -1;
-
-  if (matching >= dice)
-  {
-    return bidder;
-  }
-  else
-  {
-    return callingPlayer;
-  }
-}
-
-int whowon(GameState & gs, int & delta)
-{
-  int bidder = 3 - gs.callingPlayer;
-  return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
-}
-
-int whowon(GameState & gs)
-{
-  int bidder = 3 - gs.callingPlayer;
-  int delta = 0;
-  return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
-}
-
-double payoff(int winner, int player, int delta)
-{
-  // first thing: if it's an exact match, calling player loses 1 die
-  // may as well set delta to 1 in this case
-  if (delta == 0) delta = 1;
-
-  double p1payoff = 0.0;
-
-  if
-    (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
-  else
-  {
-    assert(false);
-  }
-
-  return (player == 1 ? p1payoff : -p1payoff);
-}
-
-// In these functions "delta" represents the number of dice the bid is off by (not relevant for (1,1))
-// Returns payoff for Liar's Dice (delta always equal to 1)
-double payoff(int winner, int player)
-{
-  return payoff(winner, player, 1);
-}
-
-// this is the function called by all the algorithms.
-// Now set to use the delta
-double payoff(GameState & gs, int player)
-{
-  int delta = 0;
-  int winner = whowon(gs, delta);
-  return payoff(winner, player, delta);
-}
-
-double payoff(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int player)
-{
-  int delta = 0;
-  int winner = whowon(bid, bidder, callingPlayer, p1roll, p2roll, delta);
-  return payoff(winner, player);
-}
-
-void report(string filename, double totaltime, double bound, double conv)
-{
-  filename = filepref + filename;
-  cout << "Reporting to " + filename + " ... " << endl;
-  ofstream outf(filename.c_str(), ios::app);
-  outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
-  outf.close();
-}
-
-void dumpInfosets(string prefix)
-{
-  string filename = filepref + prefix + "." + to_string(iter) + ".dat";
-  cout << "Dumping infosets to " + filename + " ... " << endl;
-  iss.dumpToDisk(filename);
-}
-
-// not even sure what I used this "meta data" for, if I ever used it....
-void dumpMetaData(string prefix, double totaltime)
-{
-  string filename = filepref + prefix + "." + to_string(iter) + ".dat";
-  cout << "Dumping metadeta to " + filename + " ... " << endl;
-
-  ofstream outf(filename.c_str(), ios::binary);
-  if (!outf.is_open()) {
-    cerr << "Could not open meta data file for writing." << endl;
-    return;
-  }
-
-  outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
-  outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
-  outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
-  outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
-  outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
-
-  outf.close();
-}
-
-void loadMetaData(std::string filename)
-{
-  ifstream inf(filename.c_str(), ios::binary);
-  if (!inf.is_open()) {
-    cerr << "Could not open meta data file." << endl;
-    return;
-  }
-
-  double totaltime = 0;
-
-  inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
-  inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
-  inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
-  inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
-  inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
-
-  inf.close();
-}
-
-// Does a recursive tree walk setting up the information sets, creating the initial strategies
-void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq)
-{
-  if (terminal(gs))
-    return;
-
-  // check for chance nodes
-  if (gs.p1roll == 0)
-  {
-    for (int i = 1; i <= numChanceOutcomes1; i++)
-    {
-      GameState ngs = gs;
-      ngs.p1roll = i;
-
-      initInfosets(ngs, player, depth+1, bidseq);
-    }
-
-    return;
-  }
-  else if (gs.p2roll == 0)
-  {
-    for (int i = 1; i <= numChanceOutcomes2; i++)
-    {
-      GameState ngs = gs;
-      ngs.p2roll = i;
-
-      initInfosets(ngs, player, depth+1, bidseq);
-    }
-
-    return;
-  }
-
-  int maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);
-  int actionshere = maxBid - gs.curbid;
-
-  assert(actionshere > 0);
-  Infoset is;
-  newInfoset(is, actionshere);
-
-  for (int i = gs.curbid+1; i <= maxBid; i++)
-  {
-    if (depth == 2 && i == (gs.curbid+1)) {
-      cout << "InitTrees. iss stats = " << iss.getStats() << endl;
-    }
-
-    GameState ngs = gs;
-    ngs.prevbid = gs.curbid;
-    ngs.curbid = i;
-    ngs.callingPlayer = player;
-    unsigned long long newbidseq = bidseq;
-    newbidseq |= (1ULL << (BLUFFBID-i));
-
-    initInfosets(ngs, (3-player), depth+1, newbidseq);
-  }
-
-  unsigned infosetkey = 0;
-  infosetkey = bidseq;
-  infosetkey <<= iscWidth;
-  if (player == 1)
-  {
-    infosetkey |= gs.p1roll;
-    infosetkey <<= 1;
-    iss.put(infosetkey, is, actionshere, 0);
-  }
-  else if (player == 2)
-  {
-    infosetkey |= gs.p2roll;
-    infosetkey <<= 1;
-    infosetkey |= 1;
-    iss.put(infosetkey, is, actionshere, 0);
-  }
-}
-
-void initInfosets()
-{
-  unsigned long long bidseq = 0;
-
-  GameState gs;
-
-  cout << "Initialize info set store..." << endl;
-  // # doubles in total, size of index (must be at least # infosets)
-  // 2 doubles per iapair + 2 per infoset =
-  if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6)
-    iss.init(147432, 100000);
-  else
-  {
-    cerr << "initInfosets not defined for this PXDICE + DIEFACES" << endl;
-  }
-
-  assert(iss.getSize() > 0);
-
-  cout << "Initializing info sets..." << endl;
-  stopwatch.reset();
-  initInfosets(gs, 1, 0, bidseq);
-
-  cout << "time taken = " << stopwatch.stop() << " seconds." << endl;
-  iss.stopAdding();
-
-  cout << "Final iss stats: " << iss.getStats() << endl;
-  stopwatch.reset();
-
-  string filename = filepref + "iss.initial.dat";
-
-  cout << "Dumping information sets to " << filename << endl;
-  iss.dumpToDisk(filename);
-}
-//»
-//infosetstore.h //«
-// * A memory-efficent hash table for storing information sets. 
-#ifndef __INFOSETSTORE_H__
-#define __INFOSETSTORE_H__
-
-#include <string>
-#include <fstream>
-
-#include "bluff.h"
-
-struct Infoset; 
-
-class InfosetStore
-{
-  // stores the position of each infoset in the large table
-  // unlike in bluffpt, this is a hash table that uses linear probing
-  unsigned long long * indexKeys; 
-  unsigned long long * indexVals; 
-  unsigned long long indexSize;
- 
-  // returns the position into the large table or indexSize if not found
-  // hashIndex is set to the index of the hash table where this key would go
-  unsigned long long getPosFromIndex(unsigned long long infoset_key, unsigned long long & hashIndex); 
-
-  // use this one if you don't care about the hashIndex
-  unsigned long long getPosFromIndex(unsigned long long infoset_key);
-
-  // To avoid large contiguous portions of memory, store as rows of bitsets
-  double ** tablerows;
-
-  // total items to be stored
-  // size in bytes of each
-  // # bytes per row
-  // # rows
-  unsigned long long size; 
-  unsigned long long rowsize;
-  unsigned long long rows;
-
-  // last row is the leftover (smaller)
-  unsigned long long lastRowSize;
-
-  // are we added infosets to this store? when doing so, we update the infoset counter
-  // and add info to the index. when not doing so, we assume the index will get us our
-  // position and simply replace what's there
-  bool addingInfosets;
-  unsigned long long nextInfosetPos;
-  unsigned long long added;
-
-  bool get_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-  void put_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-
-  void next(unsigned long long & row, unsigned long long & col, unsigned long long & pos, unsigned long long & curRowSize); 
-
-public:
-
-  InfosetStore()
-  {
-    tablerows = NULL;
-  }
-
-  void destroy()
-  {
-    if (tablerows != NULL)
-    {
-      delete [] indexKeys; 
-      delete [] indexVals;
-
-      for (unsigned int i = 0; i < rows; i++) 
-        delete [] tablerows[i];
-    
-      delete [] tablerows;
-    }
-
-    tablerows = NULL;
-  }
-
-  ~InfosetStore()
-  {
-    destroy(); 
-  }
-  
-  unsigned long long getSize() { return size; }
-
-  // First param: total # of doubles needed. 
-  //   Should be the total # of (infoset,action) pairs times 2 (2 doubles each)
-  // Second param: size of index. 
-  //   Should be the max number taken by an infoset key represented as an integer + 1
-  void init(unsigned long long _size, unsigned long long _indexsize);
-  std::string getStats();
-
-  void stopAdding() { addingInfosets = false; } 
-  unsigned long long getNextPos() { return nextInfosetPos; }
-  unsigned long long getAdded() { return added; }
-
-  bool get(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-  void put(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-
-  void writeBytes(std::ofstream & out, void * addr, unsigned int num);  
-  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
-
-  void dumpToDisk(std::string filename);
-  bool readFromDisk(std::string filename);
-
-  bool contains(unsigned long long infoset_key);
-
-  void printValues(); 
-  void computeBound(double & sum_RTimm1, double & sum_RTimm2); 
-
-  // used to save memory when evaluation strategies from 2 diff strat files
-  void importValues(int player, std::string filename);
-
-  void clear(); 
-  void copy(InfosetStore & dest);
-};
-
-#endif
-//»
-//infosetstore.cpp //«
-
-#include <iostream>
-#include <cassert>
-#include <cstring>
-#include <cstdlib>
-
-#include "infosetstore.h"
-
-#define ROWS 100
-
-using namespace std;
-
-static unsigned long long totalLookups = 0; 
-static unsigned long long totalMisses = 0; 
-
-// First param: total # of doubles needed. 
-//   Should be the total # of (infoset,action) pairs times 2 (2 doubles each)
-// Second param: size of index. 
-//   Should be the max number taken by an infoset key represented as an integer + 1
-void InfosetStore::init(unsigned long long _size, unsigned long long _indexsize)
-{
-  cout << "IS: init" << endl; 
-
-  size = _size;
-  indexSize = _indexsize; 
-
-  rowsize = size / (ROWS-1); 
-  lastRowSize = size - rowsize*(ROWS-1);
-  rows = ROWS;
-
-  int i = 0; 
-  while (lastRowSize > rowsize) // will sometimes happen when _size is small 
-  { 
-    i++;
-    rows = ROWS-i;
-    rowsize = size / (rows-1); 
-    lastRowSize = size - rowsize*(rows-1);
-  }
-
-  assert(i >= 0 && i <= 99); 
-
-  cout << "IS: stats " << getStats() << endl;
-  cout << "IS: allocating memory.. " << endl;
-
-  // allocate the index
-  indexKeys = new unsigned long long [indexSize];
-  indexVals = new unsigned long long [indexSize];
-  for (unsigned long long i = 0; i < indexSize; i++) 
-    indexKeys[i] = indexVals[i] = size;   // used to indicate that no entry is present
-
-  // allocate the rows 
-  tablerows = new double* [rows];
-  assert(tablerows != NULL);
-  for (unsigned long long i = 0; i < rows; i++) 
-  {
-    if (i != (rows-1))
-    {
-      tablerows[i] = new double[rowsize];
-      assert(tablerows[i] != NULL);
-      for (unsigned long long j = 0; j < rowsize; j++)
-        tablerows[i][j] = 0.0;
-    }
-    else 
-    {
-      tablerows[i] = new double[lastRowSize];
-      assert(tablerows[i] != NULL);
-      for (unsigned int j = 0; j < lastRowSize; j++)
-        tablerows[i][j] = 0.0;
-    }
-  }
-
-  // set to adding information sets
-  addingInfosets = true;
-  nextInfosetPos = 0;
-  added = 0;
-  
-  cout << "IS: init done. " << endl;
-}
-
-string InfosetStore::getStats() 
-{
-  string str; 
-  str += (to_string(size) + " "); 
-  str += (to_string(rowsize) + " "); 
-  str += (to_string(rows) + " "); 
-  str += (to_string(lastRowSize) + " "); 
-  str += (to_string(added) + " "); 
-  str += (to_string(nextInfosetPos) + " "); 
-  str += (to_string(totalLookups) + " "); 
-  str += (to_string(totalMisses) + " "); 
-
-  double avglookups =   static_cast<double>(totalLookups + totalMisses) 
-                      / static_cast<double>(totalLookups); 
-
-  double percent_full = static_cast<double>(nextInfosetPos) /  static_cast<double>(size) * 100.0;  
-
-  str += (to_string(avglookups) + " ");
-  str += (to_string(percent_full) + "\% full"); 
-  return str;
-}
-
-void InfosetStore::next(unsigned long long & row, unsigned long long & col, unsigned long long & pos, unsigned long long & curRowSize)
-{
-  pos++;
-  col++; 
-  
-  if (col >= curRowSize) {
-    col = 0; 
-    row++;
-    curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-  }
-}
-
-bool InfosetStore::get(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove)
-{
-  return get_priv(infoset_key, infoset, moves, firstmove);
-}
-
-void InfosetStore::put(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove)
-{
-  put_priv(infoset_key, infoset, moves, firstmove);
-}
-
-
-bool InfosetStore::contains(unsigned long long infoset_key)
-{
-  assert(infoset_key < indexSize); 
-  unsigned long long pos = getPosFromIndex(infoset_key); 
-  return (pos >= size ? false : true);
-}
-  
-unsigned long long InfosetStore::getPosFromIndex(unsigned long long infoset_key)
-{
-  unsigned long long hi = 0;
-  return getPosFromIndex(infoset_key, hi); 
-}
-  
-unsigned long long InfosetStore::getPosFromIndex(unsigned long long infoset_key, unsigned long long & hashIndex)
-{
-  unsigned long long start = infoset_key % indexSize; 
-  unsigned long long misses = 0; 
-
-  for (unsigned long long i = start; misses < indexSize; misses++)
-  {
-    if (indexKeys[i] == infoset_key && indexVals[i] < size) 
-    {
-      // cache hit 
-      totalLookups++; 
-      totalMisses += misses;
-      hashIndex = i; 
-      return indexVals[i]; 
-    }
-    else if (indexVals[i] >= size) // index keys can be >= size since they're arbitrary, but not values!
-    {
-      totalLookups++; 
-      totalMisses += misses;
-      hashIndex = i;
-      return size; 
-    }
-
-    i = i+1; 
-    if (i >= indexSize)
-      i = 0; 
-  }
-
-  // should be large enough to hold everything
-  assert(false); 
-  return 0;
-}
-
-bool InfosetStore::get_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove)
-{
-  unsigned long long row, col, pos, curRowSize;
-
-  pos = getPosFromIndex(infoset_key);  // uses a hash table
-  if (pos >= size) return false;
-
-  row = pos / rowsize;
-  col = pos % rowsize;
-  curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-
-  // get the number of moves
-  assert(row < rows); assert(col < curRowSize); assert(pos < size); 
-  unsigned long long x; 
-  double y = tablerows[row][col];
-  assert(sizeof(x) == sizeof(double));
-  memcpy(&x, &y, sizeof(x)); 
-  infoset.actionshere = static_cast<int>(x); 
-  assert(infoset.actionshere > 0);
-  next(row, col, pos, curRowSize);
-  
-  // get the lastupdate
-  assert(row < rows); assert(col < curRowSize);  assert(pos < size); 
-  y = tablerows[row][col];
-  assert(sizeof(x) == sizeof(double));
-  memcpy(&x, &y, sizeof(x)); 
-  infoset.lastUpdate = x; 
-  next(row, col, pos, curRowSize);
-
-  for (int i = 0, m = firstmove; i < moves; i++,m++) 
-  {
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
-    infoset.cfr[m] = tablerows[row][col];
-
-    next(row, col, pos, curRowSize);
-
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
-    infoset.totalMoveProbs[m] = tablerows[row][col];
-
-    next(row, col, pos, curRowSize); 
-  }
-
-  // now do the usual regret matching to get the curMoveProbs
-
-  double totPosReg = 0.0;
-  bool all_negative = true;
-
-  for (int i = 0, m = firstmove; i < moves; i++, m++) 
-  {
-    int movenum = m;
-    double cfr = infoset.cfr[movenum];
-    CHKDBL(cfr);
-
-    if (cfr > 0.0)
-    {
-      totPosReg = totPosReg + cfr;
-      all_negative = false;
-    }
-  }
-
-  double probSum = 0.0;
-
-  for (int i = 0, m = firstmove; i < moves; i++, m++) 
-  {
-    int movenum = m;
-
-    if (!all_negative)
-    {
-      if (infoset.cfr[movenum] <= 0.0)
-      {
-        infoset.curMoveProbs[movenum] = 0.0;
-      }
-      else
-      {
-        assert(totPosReg >= 0.0);
-        if (totPosReg > 0.0)  // regret-matching
-          infoset.curMoveProbs[movenum] = infoset.cfr[movenum] / totPosReg;
-
-      }
-    }
-    else
-    {
-      infoset.curMoveProbs[movenum] = 1.0/moves;
-    }
-
-    CHKPROB(infoset.curMoveProbs[movenum]);
-    probSum += infoset.curMoveProbs[movenum];
-  }
-
-  return true;
-}
-
-void InfosetStore::put_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove)
-{
-  unsigned long long row, col, pos, curRowSize;
-
-  assert(moves > 0);
-  bool newinfoset = false; 
-
-  unsigned long long hashIndex = 0;
-  unsigned long long thepos = getPosFromIndex(infoset_key, hashIndex);  
-  if (addingInfosets && thepos >= size)
-  {
-    newinfoset = true; 
-
-    // new infoset to be added at the end
-    assert(nextInfosetPos < size); 
-
-    // only add it if it's a new info set
-    pos = nextInfosetPos;
-    row = nextInfosetPos / rowsize;
-    col = nextInfosetPos % rowsize;
-    curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-    
-    //index[infoset_key] = pos;
-    assert(pos < size); 
-    indexKeys[hashIndex] = infoset_key;
-    indexVals[hashIndex] = pos;
-
-    //cout << "Adding infosetkey: " << infoset_key << endl; 
-  }
-  else 
-  {
-    // we've seen this one before, load it
-    newinfoset = false; 
-
-    //pos = index[infoset_key];
-    //pos = indexVals[hashIndex]; 
-    assert(thepos < size); 
-    pos = thepos; 
-    row = pos / rowsize;
-    col = pos % rowsize;
-    curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-  }
-  
-  // store the number of moves at this infoset
-  assert(row < rows);
-  assert(col < curRowSize); 
-  assert(pos < size); 
-  unsigned long long x = moves;
-  double y; 
-  assert(sizeof(x) == sizeof(double));
-  memcpy(&y, &x, sizeof(x));
-  tablerows[row][col] = y; 
-  next(row, col, pos, curRowSize);
-
-  // store the last update iter of this infoset
-  assert(row < rows);
-  assert(col < curRowSize); 
-  assert(pos < size); 
-  x = infoset.lastUpdate;
-  assert(sizeof(x) == sizeof(double));
-  memcpy(&y, &x, sizeof(x));
-  tablerows[row][col] = y; 
-  next(row, col, pos, curRowSize);
-
-  // moves are from 1 to moves, so write them in order. 
-  // first, regret, then avg. strat
-  for (int i = 0, m = firstmove; i < moves; i++, m++) 
-  { 
-    //cout << "pos = " << pos << ", row = " << row << endl;
-    if (row >= rows) {
-      cout << "iss stats: " << iss.getStats() << endl;
-    }
-
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
-    CHKDBL(infoset.cfr[m]); 
-    tablerows[row][col] = infoset.cfr[m];
-
-    next(row, col, pos, curRowSize);
-
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
-    tablerows[row][col] = infoset.totalMoveProbs[m];
-
-    next(row, col, pos, curRowSize); 
-    
-  }
-
-  if (newinfoset && addingInfosets)
-  {
-    nextInfosetPos = pos;
-    added++;
-  }
-}
-  
-void InfosetStore::printValues()
-{
-  for (unsigned int i = 0; i < indexSize; i++) 
-  {
-    if (indexVals[i] < size) 
-    {
-      // this is a valid position
-      unsigned long long row, col, pos, curRowSize;
-      pos = indexVals[i];
-      row = pos / rowsize;
-      col = pos % rowsize;
-      curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-
-      cout << "infosetkey = " << indexKeys[i]; 
-      cout << ", infosetkey_str = " << infosetkey_to_string(indexKeys[i]);
-
-      // read # actions
-      unsigned long long actionshere = 0;
-      assert(sizeof(actionshere) == sizeof(double)); 
-      memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
-      next(row, col, pos, curRowSize);
-      
-      // read the integer
-      unsigned long long lastUpdate = 0;
-      double x = tablerows[row][col];
-      memcpy(&lastUpdate, &x, sizeof(actionshere)); 
-      next(row, col, pos, curRowSize);
-
-      cout << ", actions = " << actionshere << ", lastUpdate = " << lastUpdate << endl;
-
-      for (unsigned long long a = 0; a < actionshere; a++) 
-      {
-        // cfr
-        assert(row < rows);
-        assert(col < curRowSize); 
-        cout << "  cfr[" << a << "]=" << tablerows[row][col]; 
-      
-        next(row, col, pos, curRowSize);
-        // total move probs
-        cout << "  tmp[" << a << "]=" << tablerows[row][col]; 
-        cout << endl;
-
-        next(row, col, pos, curRowSize);
-        // next cfr
-      }
-
-      cout << endl;
-    }
-  }
-}
-
-void InfosetStore::clear()
-{
-  for (unsigned int i = 0; i < indexSize; i++) 
-  {
-    if (indexVals[i] < size) 
-    {
-      // this is a valid position
-      unsigned long long row, col, pos, curRowSize;
-      pos = indexVals[i];
-      row = pos / rowsize;
-      col = pos % rowsize;
-      curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-
-      // read # actions
-      unsigned long long actionshere = 0;
-      assert(sizeof(actionshere) == sizeof(double)); 
-      memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
-      next(row, col, pos, curRowSize);
-      
-      // read the integer
-      unsigned long long lastUpdate = 0;
-      double x = tablerows[row][col];
-      memcpy(&lastUpdate, &x, sizeof(actionshere)); 
-      tablerows[row][col] = 0.0;
-      next(row, col, pos, curRowSize);
-
-      for (unsigned long long a = 0; a < actionshere; a++) 
-      {
-        // cfr
-        assert(row < rows);
-        assert(col < curRowSize); 
-
-        tablerows[row][col] = 0.0;
-      
-        next(row, col, pos, curRowSize);
-        // total move probs
-        
-        tablerows[row][col] = 0.0;
-
-        next(row, col, pos, curRowSize);
-        // next cfr
-      }
-    }
-  }
-}
-
-void InfosetStore::computeBound(double & sum_RTimm1, double & sum_RTimm2)
-{
-  for (unsigned int i = 0; i < indexSize; i++) 
-  {
-    if (indexVals[i] < size) 
-    {
-      // which player is it?
-      unsigned long long key = indexKeys[i]; 
-      double & b = (key % 2 == 0 ? sum_RTimm1 : sum_RTimm2); 
-
-      // this is a valid position
-      unsigned long long row, col, pos, curRowSize;
-      pos = indexVals[i];
-      row = pos / rowsize;
-      col = pos % rowsize;
-      curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
-
-      // read # actions
-      unsigned long long actionshere = 0;
-      assert(sizeof(actionshere) == sizeof(double)); 
-      memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
-      next(row, col, pos, curRowSize);
-      
-      // read the integer
-      unsigned long long lastUpdate = 0;
-      double x = tablerows[row][col];
-      memcpy(&lastUpdate, &x, sizeof(actionshere)); 
-      next(row, col, pos, curRowSize);
-
-      double max = NEGINF;
-      for (unsigned long long a = 0; a < actionshere; a++) 
-      {
-        // cfr
-        assert(row < rows);
-        assert(col < curRowSize); 
-
-        double cfr = tablerows[row][col]; 
-        CHKDBL(cfr);
-        if (cfr > max)
-          max = cfr; 
-      
-        next(row, col, pos, curRowSize);
-        // total move probs
-        next(row, col, pos, curRowSize);
-        // next cfr
-      }
-
-      assert(max > NEGINF);
-
-      double delta = max; 
-      delta = MAX(0.0, delta); 
-
-      b += delta; 
-    }
-  }
-
-  sum_RTimm1 /= static_cast<double>(iter); 
-  sum_RTimm2 /= static_cast<double>(iter); 
-}
-
-
-
-void InfosetStore::writeBytes(std::ofstream & out, void * addr, unsigned int num)
-{
-  out.write(reinterpret_cast<const char *>(addr), num); 
-}
-
-void InfosetStore::readBytes(std::ifstream & in, void * addr, unsigned int num)  
-{
-  in.read(reinterpret_cast<char *>(addr), num); 
-}
-
-void InfosetStore::dumpToDisk(std::string filename) 
-{
-  ofstream out(filename.c_str(), ios::out | ios::binary); 
-  assert(out.is_open()); 
-
-  assert(sizeof(unsigned long long) == 8); 
-  assert(sizeof(double) == 8);
-
-  // some integers
-  writeBytes(out, &indexSize, 8);
-  writeBytes(out, &size, 8);
-  writeBytes(out, &rowsize, 8);
-  writeBytes(out, &rows, 8);
-  writeBytes(out, &lastRowSize, 8);
-
-  // the index
-  for (unsigned long long i = 0; i < indexSize; i++)
-  {
-    writeBytes(out, indexKeys + i, 8); 
-    writeBytes(out, indexVals + i, 8); 
-  }
-
-  // the table
-  unsigned long long pos = 0, row = 0, col = 0, curRowSize = rowsize; 
-  while (pos < size) 
-  {
-    writeBytes(out, tablerows[row] + col, 8);  
-    next(row, col, pos, curRowSize); 
-  }
-
-  out.close();
-}
-
-void InfosetStore::copy(InfosetStore & dest)
-{
-  dest.destroy();
-
-  dest.indexSize = indexSize;
-  dest.size = size;
-  dest.rowsize = rowsize;
-  dest.rows = rows;
-  dest.lastRowSize = lastRowSize;
-
-  dest.indexKeys = new unsigned long long [indexSize];
-  dest.indexVals = new unsigned long long [indexSize];
-  for (unsigned long long i = 0; i < indexSize; i++)
-  {
-    dest.indexKeys[i] = indexKeys[i];
-    dest.indexVals[i] = indexVals[i];
-  }
-
-  dest.tablerows = new double* [rows];
-  assert(dest.tablerows != NULL);
-  for (unsigned long long i = 0; i < rows; i++) 
-  {
-    if (i != (rows-1))
-    {
-      dest.tablerows[i] = new double[rowsize];
-      assert(dest.tablerows[i] != NULL);
-    }
-    else 
-    {
-      dest.tablerows[i] = new double[lastRowSize];
-      assert(dest.tablerows[i] != NULL);
-    }
-  }
-
-  unsigned long long pos = 0, row = 0, col = 0, curRowSize = rowsize; 
-  while (pos < size) 
-  {
-    dest.tablerows[row][col] = tablerows[row][col];
-    next(row, col, pos, curRowSize); 
-  }
-}
-
-
-bool InfosetStore::readFromDisk(std::string filename)
-{
-  addingInfosets = false; 
-  nextInfosetPos = 0; 
-  added = 0; 
-
-  ifstream in(filename.c_str(), ios::in | ios::binary); 
-  //assert(in.is_open());  
-  if (!in.is_open())
-    return false; 
-
-  // some integers
-  readBytes(in, &indexSize, 8);        
-  readBytes(in, &size, 8);        
-  readBytes(in, &rowsize, 8);        
-  readBytes(in, &rows, 8);        
-  readBytes(in, &lastRowSize, 8);        
- 
-  // the index
-  indexKeys = new unsigned long long [indexSize]; 
-  indexVals = new unsigned long long [indexSize]; 
-  for (unsigned long long i = 0; i < indexSize; i++)
-  {
-    readBytes(in, indexKeys + i, 8); 
-    readBytes(in, indexVals + i, 8); 
-  }
-
-  // table rows (allocation)
-  tablerows = new double* [rows];
-  assert(tablerows != NULL);
-  for (unsigned long long i = 0; i < rows; i++) 
-  {
-    if (i != (rows-1))
-    {
-      tablerows[i] = new double[rowsize];
-      assert(tablerows[i] != NULL);
-      for (unsigned long long j = 0; j < rowsize; j++)
-        tablerows[i][j] = 0.0;
-    }
-    else 
-    {
-      tablerows[i] = new double[lastRowSize];
-      assert(tablerows[i] != NULL);
-      for (unsigned int j = 0; j < lastRowSize; j++)
-        tablerows[i][j] = 0.0;
-    }
-  }
-
-  // tablerows (read from disk)
-  unsigned long long pos = 0, row = 0, col = 0, curRowSize = rowsize; 
-  while (pos < size) 
-  {
-    readBytes(in, tablerows[row] + col, 8);  
-    next(row, col, pos, curRowSize); 
-  }
-
-  in.close();
-
-  return true;
-}
-
-// replace one of the players strategies with one loaded from a 
-// different file
-void InfosetStore::importValues(int player, string filename)
-{
-  ifstream in(filename.c_str(), ios::in | ios::binary);
-
-  unsigned long long oIndexSize = 0, osize = 0, orowsize = 0, orows = 0, olastRowSize = 0;
-  
-  readBytes(in, &oIndexSize, 8);        
-  readBytes(in, &osize, 8);        
-  readBytes(in, &orowsize, 8);        
-  readBytes(in, &orows, 8);        
-  readBytes(in, &olastRowSize, 8);        
-
-  assert(oIndexSize == indexSize);
-  assert(osize == size);
-  assert(orowsize == rowsize);
-  assert(orows == rows);
-  assert(olastRowSize == lastRowSize);
-
-  unsigned long long maskresult = player - 1; 
-
-  for (unsigned int i = 0; i < oIndexSize; i++)
-  {
-    Infoset is;
-
-    // next index element
-    streampos sp = (5 + i*2); sp = sp*8;
-    in.seekg(sp);
-
-    unsigned long long key = 0, val = 0;
-    readBytes(in, &key, 8);
-    readBytes(in, &val, 8);
-
-    if ((key & 1ULL) == maskresult && val < size)
-    {
-      streampos fp = 5;
-      fp += oIndexSize*2;
-      fp += val;
-      fp = fp*8;
-
-      in.seekg(fp);
-
-      unsigned long long actionshere = 0;
-      unsigned long long lastUpdate = 0;
-      
-      readBytes(in, &actionshere, 8);
-      readBytes(in, &lastUpdate, 8);
-
-      is.actionshere = static_cast<int>(actionshere);
-      is.lastUpdate = lastUpdate;
-
-      assert(actionshere <= BLUFFBID);
-
-      for (unsigned long long a = 0; a < actionshere; a++)
-      {
-        double * cfrptr = is.cfr;
-        double * tmpptr = is.totalMoveProbs;
-        readBytes(in, cfrptr + a, 8);
-        readBytes(in, tmpptr + a, 8);
-      }
-
-      put(key, is, static_cast<int>(actionshere), 0); 
-    }
-  }
-}
-
-//»
-
-//cfr.cpp //«
-
-#include <cassert>
-#include <iostream>
-#include <cstdlib>
-
-#include "bluff.h"
-
-using namespace std; 
-
-static unsigned long long nextReport = 1;
-static unsigned long long reportMult = 2;
-
-// This is Vanilla CFR. See my thesis, Algorithm 1 (Section 2.2.2)
-double cfr(GameState & gs, int player, int depth, unsigned long long bidseq, 
-           double reach1, double reach2, double chanceReach, int phase, int updatePlayer)
-{
-  // at terminal node?
-  if (terminal(gs))
-  {
-    return payoff(gs, updatePlayer);
-  }
-
-  nodesTouched++;
-
-  // Chances nodes at the top of the tree. If p1roll and p2roll not set, we're at a chance node
-  if (gs.p1roll == 0) 
-  {
-    double EV = 0.0; 
-
-    for (int i = 1; i <= numChanceOutcomes(1); i++) 
-    {
-      GameState ngs = gs; 
-      ngs.p1roll = i; 
-      double newChanceReach = getChanceProb(1,i)*chanceReach;
-
-      EV += getChanceProb(1,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
-    }
-
-    return EV;
-  }
-  else if (gs.p2roll == 0)
-  {
-    double EV = 0.0; 
-
-    for (int i = 1; i <= numChanceOutcomes(2); i++)
-    {
-      GameState ngs = gs; 
-      ngs.p2roll = i; 
-      double newChanceReach = getChanceProb(2,i)*chanceReach;
-
-      EV += getChanceProb(2,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
-    }
-
-    return EV;
-  }
-
-  // Check for cuts. This is the pruning optimization described in Section 2.2.2 of my thesis. 
-  if (phase == 1 && (   (player == 1 && updatePlayer == 1 && reach2 <= 0.0)
-                     || (player == 2 && updatePlayer == 2 && reach1 <= 0.0)))
-  {
-    phase = 2; 
-  }
-
-  if (phase == 2 && (   (player == 1 && updatePlayer == 1 && reach1 <= 0.0)
-                     || (player == 2 && updatePlayer == 2 && reach2 <= 0.0)))
-  {
-    return 0.0;
-  }
-
-  // declare the variables 
-  Infoset is;
-  unsigned long long infosetkey = 0;
-  double stratEV = 0.0;
-  int action = -1;
-
-  int maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);
-  int actionshere = maxBid - gs.curbid; 
-
-  assert(actionshere > 0);
-  double moveEVs[actionshere]; 
-  for (int i = 0; i < actionshere; i++) 
-    moveEVs[i] = 0.0;
-
-  // get the info set (also set is.curMoveProbs using regret matching)
-  getInfoset(gs, player, bidseq, is, infosetkey, actionshere); 
-
-  // iterate over the actions
-  for (int i = gs.curbid+1; i <= maxBid; i++) 
-  {
-    // there is a valid action here
-    action++;
-    assert(action < actionshere);
-
-    unsigned long long newbidseq = bidseq;
-    double moveProb = is.curMoveProbs[action]; 
-    double newreach1 = (player == 1 ? moveProb*reach1 : reach1); 
-    double newreach2 = (player == 2 ? moveProb*reach2 : reach2); 
-
-    GameState ngs = gs; 
-    ngs.prevbid = gs.curbid;
-    ngs.curbid = i; 
-    ngs.callingPlayer = player;
-    newbidseq |= (1ULL << (BLUFFBID-i)); 
-    
-    double payoff = cfr(ngs, 3-player, depth+1, newbidseq, newreach1, newreach2, chanceReach, phase, updatePlayer); 
-   
-    moveEVs[action] = payoff; 
-    stratEV += moveProb*payoff; 
-  }
-
-  // post-traversals: update the infoset
-  double myreach = (player == 1 ? reach1 : reach2); 
-  double oppreach = (player == 1 ? reach2 : reach1); 
-
-  if (phase == 1 && player == updatePlayer) // regrets
-  {
-    for (int a = 0; a < actionshere; a++)
-    {
-      // Multiplying by chanceReach here is important in games that have non-uniform chance outcome 
-      // distributions. In Bluff(1,1) it is actually not needed, but in general it is needed (e.g. 
-      // in Bluff(2,1)). 
-      is.cfr[a] += (chanceReach*oppreach)*(moveEVs[a] - stratEV); 
-    }
-  }
-
-  if (phase >= 1 && player == updatePlayer) // av. strat
-  {
-    for (int a = 0; a < actionshere; a++)
-    {
-      is.totalMoveProbs[a] += myreach*is.curMoveProbs[a]; 
-    }
-  }
-
-  // save the infoset back to the store if needed
-  if (player == updatePlayer) {
-    iss.put(infosetkey, is, actionshere, 0); 
-  }
-
-  return stratEV;
-}
-
-int main(int argc, char ** argv)
-{
-  unsigned long long maxIters = 0; 
-  init();
-
-  if (argc < 2)
-  {
-    initInfosets();
-    exit(-1);
-  }
-  else 
-  { 
-    string filename = argv[1];
-    cout << "Reading the infosets from " << filename << "..." << endl;
-    iss.readFromDisk(filename);
-
-    if (argc >= 3)
-      maxIters = to_ull(argv[2]);
-  }  
-  
-  // get the iteration
-  string filename = argv[1];
-  vector<string> parts; 
-  split(parts, filename, '.'); 
-  if (parts.size() != 3 || parts[1] == "initial")
-    iter = 1; 
-  else
-    iter = to_ull(parts[1]); 
-  cout << "Set iteration to " << iter << endl;
-  iter = MAX(1,iter);
-
-  unsigned long long bidseq = 0; 
-    
-  StopWatch stopwatch;
-  double totaltime = 0; 
-
-  cout << "Starting CFR iterations" << endl;
-
-  for (; true; iter++)
-  {
-    GameState gs1; 
-    bidseq = 0; 
-    double ev1 = cfr(gs1, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 1);
-    
-    GameState gs2; 
-    bidseq = 0; 
-    double ev2 = cfr(gs2, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 2);
-
-    if (iter % 10 == 0)
-    { 
-      cout << "."; cout.flush(); 
-      totaltime += stopwatch.stop();
-      stopwatch.reset();
-    }
-
-    if (iter == 1 || nodesTouched >= ntNextReport)
-    {
-      cout << endl;
-
-      cout << "total time: " << totaltime << " seconds." << endl; 
-      cout << "Done iteration " << iter << endl;
-
-      cout << "ev1 = " << ev1 << ", ev2 = " << ev2 << endl;
-
-      // This bound is the right-hand side of Theorem 3 from the original CFR paper.
-      // \sum_{I \in \II_i} R_{i,imm}^{T,+}(I)
-
-      cout << "Computing bounds... "; cout.flush(); 
-      double b1 = 0.0, b2 = 0.0;
-      iss.computeBound(b1, b2); 
-      cout << " b1 = " << b1 << ", b2 = " << b2 << ", bound = " << (2.0*MAX(b1,b2)) << endl;
-
-      double conv = 0.0;
-      double p1value = 0.0;
-      double p2value = 0.0;
-      conv = computeBestResponses(false, p1value, p2value);
-
-      report("cfr.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
-      //dumpInfosets("iss");
-
-      cout << endl;
-
-      nextCheckpoint += cpWidth;
-      nextReport *= reportMult;
-      ntNextReport *= ntMultiplier;
-
-      stopwatch.reset(); 
-    }
-
-    if (iter == maxIters) break;
-  }
-}
-//»
-
-»*/
-
-//Bluff Dice: JS«
-
+*/
 
 class GameState {//«
 
@@ -2166,7 +331,7 @@ stop() {
   }
 };//»
 
-function _InfosetStore() {//«
+function InfosetStore_NS() {//«
 
 //infosetstore
 //#define ROWS 100
@@ -2180,9 +345,8 @@ let totalLookups = 0;
 //static unsigned long long totalMisses = 0; 
 let totalMisses = 0; 
 
-
-//class InfosetStore {
 return class {
+//class InfosetStore {
 
 //Private vars«
 // stores the position of each infoset in the large table
@@ -2231,17 +395,17 @@ return class {
   let row, col, pos, curRowSize;
 
 //pos = getPosFromIndex(infoset_key);  // uses a hash table
-  pos = getPosFromIndex1(infoset_key);  // uses a hash table
+  pos = this.getPosFromIndex1(infoset_key);  // uses a hash table
   if (pos >= size) return false;
 
-  row = pos / rowsize;
-  col = pos % rowsize;
-  curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
+  row = pos / this.#rowsize;
+  col = pos % this.#rowsize;
+  curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
 
   // get the number of moves
-  assert(row < rows); assert(col < curRowSize); assert(pos < size); 
+  assert(row < this.#rows); assert(col < curRowSize); assert(pos < this.#size); 
   let x;//unsigned long long x; 
-  let y = tablerows[row][col];//double y = tablerows[row][col];
+  let y = this.#tablerows[row][col];//double y = tablerows[row][col];
   assert(sizeof(x) == sizeof(double));
   memcpy(&x, &y, sizeof(x)); 
   infoset.actionshere = static_cast<int>(x); 
@@ -2249,7 +413,7 @@ return class {
   this.#next(row, col, pos, curRowSize);
   
   // get the lastupdate
-  assert(row < rows); assert(col < curRowSize);  assert(pos < size); 
+  assert(row < this.#rows); assert(col < this.#curRowSize);  assert(pos < this.#size); 
   y = this.#tablerows[row][col];
   assert(sizeof(x) == sizeof(double));
   memcpy(&x, &y, sizeof(x)); 
@@ -2258,17 +422,17 @@ return class {
 
   for (let i = 0, m = firstmove; i < moves; i++,m++) {
 //  for (int i = 0, m = firstmove; i < moves; i++,m++) {
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
-    infoset.cfr[m] = tablerows[row][col];
+    assert(row < this.#rows);
+    assert(col < this.#curRowSize); 
+    assert(pos < this.#size); 
+    infoset.cfr[m] = this.#tablerows[row][col];
 
     this.#next(row, col, pos, curRowSize);
 
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
-    infoset.totalMoveProbs[m] = tablerows[row][col];
+    assert(row < this.#rows);
+    assert(col < this.#curRowSize); 
+    assert(pos < this.#size); 
+    infoset.totalMoveProbs[m] = this.#tablerows[row][col];
 
     this.#next(row, col, pos, curRowSize); 
   }
@@ -2325,21 +489,21 @@ return class {
 
 //unsigned long long thepos = getPosFromIndex(infoset_key, hashIndex);  
 //unsigned long long thepos = getPosFromIndex2(infoset_key, hashIndex);  
-  let thepos = getPosFromIndex2(infoset_key, hashIndex);  
-  if (addingInfosets && thepos >= size) {
+  let thepos = this.getPosFromIndex2(infoset_key, hashIndex);  
+  if (this.#addingInfosets && thepos >= this.#size) {
     newinfoset = true; 
 
     // new infoset to be added at the end
-    assert(nextInfosetPos < size); 
+    assert(this.#nextInfosetPos < this.#size); 
 
     // only add it if it's a new info set
-    pos = nextInfosetPos;
-    row = nextInfosetPos / rowsize;
-    col = nextInfosetPos % rowsize;
-    curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
+    pos = this.#nextInfosetPos;
+    row = this.#nextInfosetPos / this.#rowsize;
+    col = this.#nextInfosetPos % this.#rowsize;
+    curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
     
     //index[infoset_key] = pos;
-    assert(pos < size); 
+    assert(pos < this.#size); 
     this.#indexKeys[hashIndex] = infoset_key;
     this.#indexVals[hashIndex] = pos;
 
@@ -2351,17 +515,17 @@ return class {
 
     //pos = index[infoset_key];
     //pos = indexVals[hashIndex]; 
-    assert(thepos < size); 
+    assert(thepos < this.#size); 
     pos = thepos; 
-    row = pos / rowsize;
-    col = pos % rowsize;
-    curRowSize = (row < (rows-1) ? rowsize : lastRowSize);
+    row = pos / this.#rowsize;
+    col = pos % this.#rowsize;
+    curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
   }
   
   // store the number of moves at this infoset
-  assert(row < rows);
-  assert(col < curRowSize); 
-  assert(pos < size); 
+  assert(row < this.#rows);
+  assert(col < this.#curRowSize); 
+  assert(pos < this.#size); 
   let x = moves;//unsigned long long x = moves;
   let y;//double y; 
   assert(sizeof(x) == sizeof(double));
@@ -2370,9 +534,9 @@ return class {
   this.#next(row, col, pos, curRowSize);
 
   // store the last update iter of this infoset
-  assert(row < rows);
-  assert(col < curRowSize); 
-  assert(pos < size); 
+  assert(row < this.#rows);
+  assert(col < this.#curRowSize); 
+  assert(pos < this.#size); 
   x = infoset.lastUpdate;
   assert(sizeof(x) == sizeof(double));
   memcpy(&y, &x, sizeof(x));
@@ -2384,21 +548,21 @@ return class {
   for (let i = 0, m = firstmove; i < moves; i++, m++) { 
 //for (int i = 0, m = firstmove; i < moves; i++, m++) { 
     //log("pos = " << pos << ", row = " << row);
-    if (row >= rows) {
+    if (row >= this.#rows) {
       log("iss stats: " << iss.getStats());
     }
 
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
+    assert(row < this.#rows);
+    assert(col < this.#curRowSize); 
+    assert(pos < this.#size); 
     CHKDBL(infoset.cfr[m]); 
     this.#tablerows[row][col] = infoset.cfr[m];
 
     this.#next(row, col, pos, curRowSize);
 
-    assert(row < rows);
-    assert(col < curRowSize); 
-    assert(pos < size); 
+    assert(row < this.#rows);
+    assert(col < this.#curRowSize); 
+    assert(pos < this.#size); 
     this.#tablerows[row][col] = infoset.totalMoveProbs[m];
 
     this.#next(row, col, pos, curRowSize); 
@@ -2426,7 +590,7 @@ return class {
 
 constructor(){//«
 //  InfosetStore(){
-	this.tablerows = null;
+	this.#tablerows = null;
 }//»
 destroy() {//«
 //void destroy() {
@@ -2624,12 +788,8 @@ writeBytes(out, addr, num){//«
 //  void writeBytes(std::ofstream & out, void * addr, unsigned int num);  
   out.write(reinterpret_cast<const char *>(addr), num); 
 }//»
-readBytes(in, addr,  num) {//«
-//  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
-  in.read(reinterpret_cast<char *>(addr), num); 
-}//»
 dumpToDisk(filename) {//«
-//  void dumpToDisk(std::string filename);
+//void dumpToDisk(std::string filename);
   ofstream out(filename.c_str(), ios::out | ios::binary); 
   assert(out.is_open()); 
 
@@ -2659,6 +819,10 @@ dumpToDisk(filename) {//«
   }
 
   out.close();
+}//»
+readBytes(in, addr,  num) {//«
+//  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
+  in.read(reinterpret_cast<char *>(addr), num); 
 }//»
 readFromDisk(filename) {//«
 //bool readFromDisk(std::string filename);
@@ -3015,11 +1179,10 @@ copy(dest){//«
 
 };
 
+const InfosetStore = InfosetStore_NS);
+
 }//»
-
-const InfosetStore = _InfosetStore();
-
-function Bluff(){//«
+function Bluff_NS(){//«
 
 //Var«
 const P1DICE = 1;
@@ -3081,6 +1244,157 @@ let bid = null;
 const stopwatch= new StopWatch();
 //»
 
+// Does a recursive tree walk setting up the information sets, creating the initial strategies
+initInfosets(gs, player, depth, bidseq) {//«
+//void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq) {
+  if (terminal(gs))
+    return;
+
+  // check for chance nodes
+  if (gs.p1roll == 0) {
+//  for (int i = 1; i <= numChanceOutcomes1; i++) {
+    for (let i = 1; i <= numChanceOutcomes1; i++) {
+      GameState ngs = gs;
+//		let ngs = gs;
+ 		ngs.p1roll = i;
+		initInfosets(ngs, player, depth+1, bidseq);
+    }
+
+    return;
+  }
+  else if (gs.p2roll == 0) {
+//  for (int i = 1; i <= numChanceOutcomes2; i++) {
+    for (let i = 1; i <= numChanceOutcomes2; i++) {
+      GameState ngs = gs;
+//    let ngs = gs;
+      ngs.p2roll = i;
+
+      initInfosets(ngs, player, depth+1, bidseq);
+    }
+
+    return;
+  }
+
+  let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+  let actionshere = maxBid - gs.curbid;//Was: int
+
+  assert(actionshere > 0);
+  Infoset is;
+  newInfoset(is, actionshere);
+
+  for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+    if (depth == 2 && i == (gs.curbid+1)) {
+      log("InitTrees. iss stats = " , iss.getStats());
+    }
+
+    GameState ngs = gs;
+    ngs.prevbid = gs.curbid;
+    ngs.curbid = i;
+    ngs.callingPlayer = player;
+//  unsigned long long newbidseq = bidseq;
+    let newbidseq = bidseq;
+    newbidseq |= (1ULL << (BLUFFBID-i));
+
+    initInfosets(ngs, (3-player), depth+1, newbidseq);
+  }
+
+//unsigned infosetkey = 0;
+  let infosetkey = 0;
+  infosetkey = bidseq;
+  infosetkey <<= iscWidth;
+  if (player == 1) {
+    infosetkey |= gs.p1roll;
+    infosetkey <<= 1;
+    iss.put(infosetkey, is, actionshere, 0);
+  }
+  else if (player == 2) {
+    infosetkey |= gs.p2roll;
+    infosetkey <<= 1;
+    infosetkey |= 1;
+    iss.put(infosetkey, is, actionshere, 0);
+  }
+}//»
+initInfosets() {//«
+//void initInfosets() {
+//unsigned long long bidseq = 0;
+  let bidseq = 0;
+  GameState gs;
+  log("Initialize info set store...");
+  // # doubles in total, size of index (must be at least # infosets)
+  // 2 doubles per iapair + 2 per infoset =
+  if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6)
+    iss.init(147432, 100000);
+  else {
+    cerr("initInfosets not defined for this PXDICE + DIEFACES");
+  }
+
+  assert(iss.getSize() > 0);
+
+  log("Initializing info sets...");
+  stopwatch.reset();
+  this.initInfosets(gs, 1, 0, bidseq);
+
+  log("time taken = " , stopwatch.stop() , " seconds.");
+  iss.stopAdding();
+
+  log("Final iss stats: " , iss.getStats());
+  stopwatch.reset();
+
+//string filename = filepref + "iss.initial.dat";
+  let filename = filepref + "iss.initial.dat";
+
+  log("Dumping information sets to " , filename);
+  iss.dumpToDisk(filename);
+}//»
+initBids(){//«
+//void initBids(){
+//bids = new int[BLUFFBID-1];
+  bids = new Array(BLUFFBID-1);
+  let nextWildDice = 1;//Was: int
+  let idx = 0;//Was: int
+//for (int dice = 1; dice <= P1DICE + P2DICE; dice++) {
+  for (let dice = 1; dice <= P1DICE + P2DICE; dice++) {
+//  for (int face = 1; face <= DIEFACES-1; face++)
+    for (let face = 1; face <= DIEFACES-1; face++) {
+      bids[idx] = dice*10 + face;
+      idx++;
+    }
+
+    if (dice % 2 == 1) {
+      bids[idx] = nextWildDice*10 + DIEFACES;
+      idx++;
+      nextWildDice++;
+    }
+  }
+
+  for(; nextWildDice <= (P1DICE+P2DICE); nextWildDice++) {
+    bids[idx] = nextWildDice*10 + DIEFACES;
+    idx++;
+  }
+
+  assert(idx == BLUFFBID-1);
+
+}//»
+init(){//«
+//void init(){
+  assert(bids == NULL);
+
+  log("Initializing Bluff globals...");
+
+  seedCurMicroSec();
+
+  determineChanceOutcomes(1);
+  determineChanceOutcomes(2);
+
+  // iscWidth if the number of bits needed to encode the chance outcome in the integer
+  let maxChanceOutcomes = (numChanceOutcomes1 > numChanceOutcomes2 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
+  iscWidth = ceiling_log2(maxChanceOutcomes);
+
+  initBids();
+
+  log("Globals are: " , numChanceOutcomes1 , " " , numChanceOutcomes2 , " " , iscWidth);
+}//»
+
 getChanceProb(player, outcome){//«
 //double getChanceProb(int player, int outcome){
   // outcome >= 1, so must subtract 1 from it
@@ -3111,35 +1425,6 @@ unrankco(i, roll, layer){//«
     roll[j] = num % 10;
     num /= 10;
   }
-}//»
-initBids(){//«
-//void initBids(){
-//bids = new int[BLUFFBID-1];
-  bids = new Array(BLUFFBID-1);
-  let nextWildDice = 1;//Was: int
-  let idx = 0;//Was: int
-//for (int dice = 1; dice <= P1DICE + P2DICE; dice++) {
-  for (let dice = 1; dice <= P1DICE + P2DICE; dice++) {
-//  for (int face = 1; face <= DIEFACES-1; face++)
-    for (let face = 1; face <= DIEFACES-1; face++) {
-      bids[idx] = dice*10 + face;
-      idx++;
-    }
-
-    if (dice % 2 == 1) {
-      bids[idx] = nextWildDice*10 + DIEFACES;
-      idx++;
-      nextWildDice++;
-    }
-  }
-
-  for(; nextWildDice <= (P1DICE+P2DICE); nextWildDice++) {
-    bids[idx] = nextWildDice*10 + DIEFACES;
-    idx++;
-  }
-
-  assert(idx == BLUFFBID-1);
-
 }//»
 getInfosetKey(gs, player, bidseq){//«
 //unsigned long long getInfosetKey(GameState & gs, int player, unsigned long long bidseq){
@@ -3268,25 +1553,6 @@ determineChanceOutcomes(player){//«
     chanceProbs[c] = outcomes[key]) / permutations;
     //cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
   }
-}//»
-init(){//«
-//void init(){
-  assert(bids == NULL);
-
-  log("Initializing Bluff globals...");
-
-  seedCurMicroSec();
-
-  determineChanceOutcomes(1);
-  determineChanceOutcomes(2);
-
-  // iscWidth if the number of bits needed to encode the chance outcome in the integer
-  let maxChanceOutcomes = (numChanceOutcomes1 > numChanceOutcomes2 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
-  iscWidth = ceiling_log2(maxChanceOutcomes);
-
-  initBids();
-
-  log("Globals are: " , numChanceOutcomes1 , " " , numChanceOutcomes2 , " " , iscWidth);
 }//»
 newInfoset(is, actions){//«
 //void newInfoset(Infoset & is, int actions){
@@ -3504,112 +1770,829 @@ loadMetaData(filename) {//«
   inf.close();
 }//»
 
-// Does a recursive tree walk setting up the information sets, creating the initial strategies
-initInfosets(gs, player, depth, bidseq) {//«
-//void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq) {
-  if (terminal(gs))
-    return;
-
-  // check for chance nodes
-  if (gs.p1roll == 0) {
-//  for (int i = 1; i <= numChanceOutcomes1; i++) {
-    for (let i = 1; i <= numChanceOutcomes1; i++) {
-      GameState ngs = gs;
-//		let ngs = gs;
- 		ngs.p1roll = i;
-		initInfosets(ngs, player, depth+1, bidseq);
-    }
-
-    return;
-  }
-  else if (gs.p2roll == 0) {
-//  for (int i = 1; i <= numChanceOutcomes2; i++) {
-    for (let i = 1; i <= numChanceOutcomes2; i++) {
-      GameState ngs = gs;
-//    let ngs = gs;
-      ngs.p2roll = i;
-
-      initInfosets(ngs, player, depth+1, bidseq);
-    }
-
-    return;
-  }
-
-  let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
-  let actionshere = maxBid - gs.curbid;//Was: int
-
-  assert(actionshere > 0);
-  Infoset is;
-  newInfoset(is, actionshere);
-
-  for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
-    if (depth == 2 && i == (gs.curbid+1)) {
-      log("InitTrees. iss stats = " , iss.getStats());
-    }
-
-    GameState ngs = gs;
-    ngs.prevbid = gs.curbid;
-    ngs.curbid = i;
-    ngs.callingPlayer = player;
-//  unsigned long long newbidseq = bidseq;
-    let newbidseq = bidseq;
-    newbidseq |= (1ULL << (BLUFFBID-i));
-
-    initInfosets(ngs, (3-player), depth+1, newbidseq);
-  }
-
-//unsigned infosetkey = 0;
-  let infosetkey = 0;
-  infosetkey = bidseq;
-  infosetkey <<= iscWidth;
-  if (player == 1) {
-    infosetkey |= gs.p1roll;
-    infosetkey <<= 1;
-    iss.put(infosetkey, is, actionshere, 0);
-  }
-  else if (player == 2) {
-    infosetkey |= gs.p2roll;
-    infosetkey <<= 1;
-    infosetkey |= 1;
-    iss.put(infosetkey, is, actionshere, 0);
-  }
 }//»
-initInfosets() {//«
-//void initInfosets() {
-//unsigned long long bidseq = 0;
-  let bidseq = 0;
-  GameState gs;
-  log("Initialize info set store...");
-  // # doubles in total, size of index (must be at least # infosets)
-  // 2 doubles per iapair + 2 per infoset =
-  if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6)
-    iss.init(147432, 100000);
-  else {
-    cerr("initInfosets not defined for this PXDICE + DIEFACES");
-  }
+function BR_NS(){//«
 
-  assert(iss.getSize() > 0);
+//Globals«
 
-  log("Initializing info sets...");
-  stopwatch.reset();
-  initInfosets(gs, 1, 0, bidseq);
-
-  log("time taken = " , stopwatch.stop() , " seconds.");
-  iss.stopAdding();
-
-  log("Final iss stats: " , iss.getStats());
-  stopwatch.reset();
-
-//string filename = filepref + "iss.initial.dat";
-  let filename = filepref + "iss.initial.dat";
-
-  log("Dumping information sets to " , filename);
-  iss.dumpToDisk(filename);
-}//»
-
-}//»
+//static bool mccfrAvgFix = false;
+let mccfrAvgFix = false;
+static vector<unsigned long long> oppChanceOutcomes; // all roll outcomes
 
 //»
+
+const getInfoset=(infosetkey, is, bidseq, player, actionshere, chanceOutcome)=>{//«
+//void getInfoset(unsigned long long & infosetkey, Infoset & is, unsigned long long bidseq, int player,  
+//                int actionshere, int chanceOutcome) {
+// only called at opponent (fixed player) nodes in computeActionDist
+// get the information set for update player where the chance outcome is replaced by the specified one
+  infosetkey = bidseq << iscWidth; 
+  infosetkey |= chanceOutcome; 
+  infosetkey <<= 1; 
+  if (player == 2) infosetkey |= 1; 
+
+  bool ret = false; 
+
+  ret = iss.get(infosetkey, is, actionshere, 0); 
+
+  if (!ret) cerr << "infoset get failed, infosetkey = " << infosetkey << endl;
+  assert(ret);  
+}//»
+const getMoveProb = (is, action, actionshere) => { //«
+//double getMoveProb(Infoset & is, int action, int actionshere) {
+  double den = 0.0; 
+  
+  for (int a = 0; a < actionshere; a++)
+    if (is.totalMoveProbs[a] > 0.0)
+      den += is.totalMoveProbs[a];
+
+  if (den > 0.0) 
+    return (is.totalMoveProbs[action] / den); 
+  else
+    return (1.0 / actionshere);
+}//»
+const fixAvStrat=(infosetkey, is, actionshere, myreach) => {//«
+//void fixAvStrat(unsigned long long infosetkey, Infoset & is, int actionshere, double myreach) {
+// This implements the average strategy patch needed by optimisitc averaging, from section 4.4 of my thesis.
+// This function should never be called by this code base because optimistic averaging is not included here.
+  if (iter > is.lastUpdate)
+  {
+    for (int a = 0; a < actionshere; a++) 
+    {
+      double inc =   (iter - is.lastUpdate)
+                   * myreach
+                   * is.curMoveProbs[a];
+
+      is.totalMoveProbs[a] += inc; 
+    }
+
+    iss.put(infosetkey, is, actionshere, 0); 
+  }
+}//»
+
+const computeActionDist=(bidseq, player, fixed_player, oppActionDist, action, newOppReach, actionshere)=>{//«
+//void computeActionDist(unsigned long long bidseq, int player, int fixed_player, 
+//                       NormalizerMap & oppActionDist, int action, FVector<double> & newOppReach, 
+//                       int actionshere){
+// Compute the weight for this action over all chance outcomes
+// Used for determining probability of action
+// Done only at fixed_player nodes
+  double weight = 0.0; 
+
+  // for all possible chance outcomes
+  for (unsigned int i = 0; i < oppChanceOutcomes.size(); i++) 
+  {
+    unsigned int CO = (fixed_player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));
+    assert(oppChanceOutcomes.size() == CO);
+
+    int chanceOutcome = oppChanceOutcomes[i]; 
+  
+    // get the information set that corresponds to it
+    Infoset is;
+    unsigned long long infosetkey = 0; 
+    getInfoset(infosetkey, is, bidseq, player, actionshere, chanceOutcome); 
+
+    // apply out-of-date mccfr patch if needed. note: we know it's always the fixed player here
+    if (mccfrAvgFix)
+      fixAvStrat(infosetkey, is, actionshere, newOppReach[i]); 
+   
+    double oppProb = getMoveProb(is, action, actionshere); 
+    CHKPROB(oppProb); 
+    newOppReach[i] = newOppReach[i] * oppProb; 
+
+    weight += getChanceProb(fixed_player, chanceOutcome)*newOppReach[i]; 
+  }
+
+  CHKDBL(weight);
+  oppActionDist.add(action, weight); 
+}//»
+const getPayoff = (gs, fixed_player, oppChanceOutcome) => {//«
+//double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
+// return the payoff of this game state if the opponent's chance outcome is replaced by specified 
+  int updatePlayer = 3-fixed_player; 
+  int & oppRoll = (updatePlayer == 1 ? gs.p2roll : gs.p1roll); 
+  oppRoll = oppChanceOutcome;
+
+  return payoff(gs, updatePlayer); 
+}//»
+const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//«
+//double expectimaxbr(GameState gs, unsigned long long bidseq, int player, int fixed_player, int depth, FVector<double> & oppReach) {
+  assert(fixed_player == 1 || fixed_player == 2); 
+
+  int updatePlayer = 3-fixed_player;
+
+  // opponent never players here, don't choose this!
+  if (player == updatePlayer && oppReach.allEqualTo(0.0))
+    return NEGINF;
+  
+  if (terminal(gs))
+  {
+    if (oppReach.allEqualTo(0.0))
+      return NEGINF;
+
+    NormalizerVector oppDist; 
+  
+    for (unsigned int i = 0; i < oppChanceOutcomes.size(); i++) 
+      oppDist.push_back(getChanceProb(fixed_player, oppChanceOutcomes[i])*oppReach[i]); 
+
+    oppDist.normalize(); 
+
+    double expPayoff = 0.0; 
+
+    for (unsigned int i = 0; i < oppChanceOutcomes.size(); i++) 
+    {
+      double payoff = getPayoff(gs, fixed_player, oppChanceOutcomes[i]); 
+
+      CHKPROB(oppDist[i]); 
+      CHKDBL(payoff); 
+
+      expPayoff += (oppDist[i] * payoff); 
+    }
+
+    return expPayoff; 
+  }
+  
+  // check for chance node
+  if (gs.p1roll == 0) 
+  {
+    // on fixed player chance nodes, just use any die roll
+    if (fixed_player == 1) 
+    {
+      GameState ngs = gs; 
+      ngs.p1roll = 1;  // assign a dummy outcome, never used
+
+      FVector<double> newOppReach = oppReach; 
+      return expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
+    }
+    else
+    {
+      double EV = 0.0; 
+
+      for (int i = 1; i <= numChanceOutcomes(1); i++) 
+      {
+        GameState ngs = gs; 
+        ngs.p1roll = i; 
+
+        FVector<double> newOppReach = oppReach; 
+        EV += getChanceProb(1,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
+      }
+
+      return EV;
+    }
+  }
+  else if (gs.p2roll == 0)
+  {
+    // on fixed player chance nodes, just use any die roll
+    if (fixed_player == 2)
+    {
+      GameState ngs = gs; 
+      ngs.p2roll = 1; // assign a dummy outcome, never used
+
+      FVector<double> newOppReach = oppReach; 
+      return expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
+    }
+    else
+    {
+      double EV = 0.0; 
+
+      for (int i = 1; i <= numChanceOutcomes(2); i++)
+      {
+        GameState ngs = gs; 
+        ngs.p2roll = i; 
+        
+        FVector<double> newOppReach = oppReach; 
+        EV += getChanceProb(2,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
+      }
+
+      return EV;
+    }
+  }
+
+  // declare variables and get # actions available
+  double EV = 0.0; 
+  
+  int maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);
+  int actionshere = maxBid - gs.curbid; 
+  assert(actionshere > 0);
+
+  // iterate over the moves 
+  double maxEV = NEGINF;
+  double childEVs[actionshere];
+  int action = -1;
+  NormalizerMap oppActionDist;
+
+  for (int i = gs.curbid+1; i <= maxBid; i++) 
+  {
+    action++;    
+
+    double childEV = 0;
+    FVector<double> newOppReach = oppReach;
+      
+    if (player == fixed_player) 
+      computeActionDist(bidseq, player, fixed_player, oppActionDist, action, newOppReach, actionshere); 
+
+    // state transition + recursion
+    GameState ngs = gs; 
+    ngs.prevbid = gs.curbid;
+    ngs.curbid = i; 
+    ngs.callingPlayer = player;
+    unsigned long long newbidseq = bidseq; 
+    newbidseq |= (1ULL << (BLUFFBID-i)); 
+
+    childEV = expectimaxbr(ngs, newbidseq, 3-player, fixed_player, depth+1, newOppReach);
+    
+    // post recurse
+    if (player == updatePlayer) 
+    {
+      // check if higher than current max
+      if (childEV >= maxEV)
+      {
+        maxEV = childEV;
+      }
+    }
+    else if (player == fixed_player)
+    {
+      assert(action >= 0 && action < actionshere);
+      childEVs[action] = childEV; 
+    }
+  }
+
+  // post move iteration
+  if (player == updatePlayer)
+  {
+    EV = maxEV;
+  }
+  else if (player == fixed_player)
+  {
+    assert(static_cast<int>(oppActionDist.size()) == actionshere);
+    oppActionDist.normalize(); 
+    
+    for (int i = 0; i < actionshere; i++) 
+    {
+      CHKPROB(oppActionDist[i]); 
+      CHKDBL(childEVs[i]); 
+
+      EV += (oppActionDist[i] * childEVs[i]); 
+    }
+    
+  }
+
+  assert(updatePlayer != fixed_player); 
+  assert(updatePlayer + fixed_player == 3); 
+
+  return EV; 
+}//»
+const computeBestResponses = (avgFix) => {//«
+//double computeBestResponses(bool avgFix){
+  double p1value = 0.0;
+  double p2value = 0.0;
+  return computeBestResponses(avgFix, p1value, p2value);
+}//»
+const computeBestResponses = (avgFix, p1value, p2value) => {//«
+//double computeBestResponses(bool avgFix, double & p1value, double & p2value){
+  mccfrAvgFix = avgFix;
+
+  cout << "Computing ISS bounds... "; cout.flush(); 
+  double b1 = 0.0, b2 = 0.0;
+  iss.computeBound(b1, b2); 
+  cout << " b1 = " << b1 << ", b2 = " << b2 << ", bound = " << (2.0*MAX(b1,b2)) << endl;
+  
+  // fill chance outcomes for player 1
+  oppChanceOutcomes.clear();
+  for (int i = 1; i <= numChanceOutcomes(1); i++)
+  {
+    oppChanceOutcomes.push_back(i); 
+  }
+
+  cout << "Running best response, fp = 1 ... "; cout.flush(); 
+
+  StopWatch sw; 
+
+  GameState gs1; unsigned long long bidseq = 0; 
+  FVector<double> reach1(numChanceOutcomes(1), 1.0); 
+  p2value = expectimaxbr(gs1, bidseq, 1, 1, 0, reach1);
+
+  cout << "time taken: " << sw.stop() << " seconds." << endl; 
+  cout.precision(15);
+  cout << "p2value = " << p2value << endl; 
+
+  // fill chance outcomes for player 2
+  oppChanceOutcomes.clear();
+  for (int i = 1; i <= numChanceOutcomes(2); i++)
+  {
+    oppChanceOutcomes.push_back(i); 
+  }
+
+  cout << "Running best response, fp = 2 ... "; cout.flush(); 
+
+  sw.reset(); 
+
+  GameState gs2; bidseq = 0;
+  FVector<double> reach2(numChanceOutcomes(2), 1.0); 
+  p1value = expectimaxbr(gs2, bidseq, 1, 2, 0, reach2);
+ 
+  cout << "time taken: " << sw.stop() << " seconds." << endl; 
+  cout.precision(15);
+  cout << "p1value = " << p1value << endl; 
+
+  double conv = p1value + p2value; 
+
+  cout.precision(15);
+  cout << "iter = " << iter << " nodes = " << nodesTouched << " conv = " << conv << endl; 
+
+  return conv;
+}//»
+
+}//»
+function BluffCounter_NS(){//«
+/*
+- bluffcounter.cpp is used to count the number of information sets and
+  (infoset,action) pairs. These numbers are needed to create the strategies
+  files. You won't need to use it at all if you just run Bluff(1,1) but if you
+  want to implement a different game, then you can use this file as a place to
+  start to create strategies files for your game.
+*/
+// How many dice per player?
+const P1D = 1;
+const P2D = 1;
+const DICE = (P1D+P2D);
+const BIDS = (DICE*6);
+
+// Number of last moves you're allowed to recall for imperfect recall
+// Used only for imperfect recall abstractions, not used by this code base
+const RECALL = 7;
+
+// Number of chance event outcomes at chance nodes.
+const P1CO = 6;
+const P2CO = 6;
+
+let p1totalTurns = 0;
+let p2totalTurns = 0;
+let p1totalActions = 0;
+let p2totalActions = 0;
+let totalLeaves = 0;
+
+map<unsigned long long,int> iapairs;
+
+int iscWidth = 3;
+
+string binrep(unsigned long long num) {/* « */
+  string s = "";
+  for (int i = 0; i < 64; i++) 
+  {
+    unsigned long long bit = 1; 
+    bit <<= i;
+    unsigned long long n = num & bit; 
+    s = (n > 0 ? "1" : "0") + s; 
+  }
+
+  return s;
+}/* » */
+unsigned long long pow2(int i) {/* « */
+  unsigned long long answer = 1;
+  return (answer << i); 
+}/* » */
+
+// Traverse the entire tree, counting the number of (information set, action pairs)
+void bcount(int cbid, int player, int depth) {/* « */
+  if (cbid >= (BIDS+1))
+  {
+    totalLeaves++;
+    return;
+  }
+
+  int numbids = (cbid == 0 ? BIDS : BIDS+1);
+  
+  int actions = numbids - (cbid+1) + 1;
+  unsigned long & totalTurns = (player == 1 ? p1totalTurns : p2totalTurns); 
+  unsigned long & totalActions = (player == 1 ? p1totalActions : p2totalActions); 
+  totalTurns++; 
+  totalActions += actions; 
+
+  for (int b = cbid+1; b <= numbids; b++)
+  {
+    if (depth == 0)
+      cout << "Depth 0, b = " << b << endl;
+
+    bcount(b, 3-player, depth+1);
+  }
+}/* » */
+void countnoabs() {/* « */
+  bcount(0, 1, 0); 
+
+  cout << "for public tree:" << endl;
+  cout << "  p1totalTurns = " << p1totalTurns << endl;
+  cout << "  p2totalTurns = " << p2totalTurns << endl;
+  cout << "  totalLeaves = " << totalLeaves << endl;
+  unsigned long long totalseqs = (p1totalTurns + p2totalTurns);
+  cout << "total sequences = " << totalseqs << endl;
+  cout << "p1 info sets = " << (p1totalTurns*P1CO) << endl;
+  cout << "p2 info sets = " << (p2totalTurns*P2CO) << endl;
+  unsigned long long ttlinfosets = (p1totalTurns*P1CO) + (p2totalTurns*P2CO);
+  cout << "total info sets = " << ttlinfosets << endl;
+  cout << "p1totalActions = " << p1totalActions << endl;
+  cout << "p2totalActions = " << p2totalActions << endl;
+
+
+  unsigned long iapairs1 = (p1totalActions*P1CO);
+  unsigned long iapairs2 = (p1totalActions*P2CO);
+  unsigned long totaliap = (iapairs1+iapairs2);
+  cout << "infoset actions pairs, p1 p2 total = " 
+       << iapairs1 << " " << iapairs2 << " " << totaliap << endl;
+
+  unsigned long td = (totaliap*2 + ttlinfosets*2);
+  cout << "total doubles needed = " << td
+       << ", bytes needed = " << (td*8) << endl;
+
+  cout << "cache size ~ " << (ttlinfosets*4) << " entries =~ " << (ttlinfosets*4*2)*8 << " bytes" << endl;
+
+  unsigned long long ttlbytes = ((td*8) + (ttlinfosets*4*2)*8); 
+  cout << "total bytes = " << ttlbytes << " ( = " << (ttlbytes / (1024.0*1024.0*1024.0)) << " GB)" << endl;
+}/* » */
+bool nextbid(int * bidseq, int maxBid) {/* « */
+  for (int i = RECALL-1; i >= 0; i--)
+  {
+    int roffset = (RECALL-1)-i; 
+
+    if (bidseq[i] < (maxBid-roffset))
+    {
+      bidseq[i]++;
+      
+      for (int j = i+1; j < RECALL; j++)
+      {
+        bidseq[j] = bidseq[j-1]+1;
+      }
+
+      return true;
+    }
+  }
+
+  return false;
+}/* » */
+
+// This is for imperfect recall abstractions. Not used by this code base, 
+// but I left it in case your game has abstraction, maybe this will be helpful
+void countabs2() {/* « */
+  int bidseq[RECALL] = { 0 }; 
+  bool ret = true;
+  bool first = true;
+  int maxBid = 6*DICE;
+  int bluffBid = maxBid+1;
+
+  while(ret)
+  {
+    int numzeroes = 0;
+    for (int i = 0; i < RECALL; i++) 
+      if (bidseq[i] == 0)
+        numzeroes++; 
+
+    int curbid = bidseq[RECALL-1];
+    int actions = bluffBid-curbid;
+    if (first) actions--;
+
+    assert(actions >= 0 && actions <= maxBid);
+    
+    int player = 0;
+    if (numzeroes > 0) 
+    {
+      if (RECALL % 2 == 0)
+      {
+        if (numzeroes % 2 == 0) 
+          player = 1;
+        else
+          player = 2; 
+      }
+      else
+      {
+        if (numzeroes % 2 == 1) 
+          player = 1;
+        else
+          player = 2; 
+      }
+    }
+    else if (bidseq[0] == 1)
+    {
+      if (RECALL % 2 == 0)
+        player = 1; 
+      else
+        player = 2;
+    }
+   
+    // player = 0 means both players can share this bid sequence
+    if (player == 1 || player == 0)
+    {
+      p1totalTurns++;
+      p1totalActions += actions;
+    }
+
+    if (player == 2 || player == 0)
+    {
+      p2totalTurns++;
+      p2totalActions += actions;
+    }
+
+    ret = nextbid(bidseq, maxBid); 
+    first = false;
+  }
+
+  cout << "recall = " << RECALL << endl;
+  cout << "p1totalTurns = " << p1totalTurns << endl;
+  cout << "p2totalTurns = " << p2totalTurns << endl;
+  cout << "p1totalActions = " << p1totalActions << endl;
+  cout << "p2totalActions = " << p2totalActions << endl;
+  
+  unsigned long iapairs1 = (p1totalActions*P1CO);
+  unsigned long iapairs2 = (p1totalActions*P2CO);
+  unsigned long totaliap = (iapairs1+iapairs2);
+
+  cout << "ia pairs p1 p2 total = " 
+       << iapairs1 << " " << iapairs2 << " " << totaliap << endl;
+  
+  unsigned long long infosets1 = (p1totalTurns*P1CO);
+  unsigned long long infosets2 = (p2totalTurns*P2CO);
+  unsigned long long totalInfosets = infosets1 + infosets2; 
+  
+  unsigned long long btotalindex = totalInfosets*16*4; 
+  unsigned long long tdoubles = (totaliap*2 + totalInfosets*2);
+  unsigned long long btotalis = tdoubles*8;
+
+  cout << "infosets p1 p2 total = "
+       << infosets1 << " " << infosets2 << " " << totalInfosets << endl;
+
+
+  cout << "total doubles for infoset store (2 per infoset + 2 per iapair) = " << tdoubles << endl;
+
+  cout << endl;
+
+  unsigned long long vfsi_iss = (totaliap*2 + totalInfosets*4);
+  cout << "total doubles for Vanilla FSI using infoset store (4 per infoset + 2 per iapair) = " 
+       << vfsi_iss;
+
+  vfsi_iss += (4*2*totalInfosets); // index
+  
+  cout << " ( = " << (vfsi_iss*8) / (1024.0*1024.0*1024.0) << " GB)" << endl;
+  
+  unsigned long long totalseqs = (p1totalTurns + p2totalTurns);
+  cout << "total sequences, 4 * total seq = " << totalseqs << ", " << (4*totalseqs) << endl;
+  unsigned long long fsidoubles = (totalseqs + totaliap*2 + infosets1*3*P2CO + infosets2*3*P1CO);
+  cout << "total doubles for FSIPCS with using SS (1 per sequence + 2 per iapair" << endl
+       << "                  + 3*P1CO per p2 infoset and 3*P2CO per p1 infoset, for fsi) = " 
+       << fsidoubles << endl;
+  
+  fsidoubles += (4*2*totalseqs); // index
+
+  cout << "FSIPCS using SS gigabytes estimate: " << (fsidoubles*8)/(1024.0*1024.0*1024.0) << endl;
+  
+  // one actionshere per sequence   
+  // then 2 per infoset action pair
+  // and 3 per infoset (reach1, reach2, value)
+  
+  unsigned long long vfsi_ss = (totalseqs + totaliap*2 + totalInfosets*3); 
+  cout << "total doubles for vanilla FSI using SS: " << vfsi_ss; 
+  vfsi_ss += (4*2*totalseqs); // index
+  cout << " ( = " << (vfsi_ss*8)/(1024.0*1024.0*1024.0) << " GB with index)" << endl;
+
+  cout << endl;
+
+  cout << "totals: iapairs, doubles, 4*infosets: " 
+       << totaliap << " " << tdoubles << " " << (4*totalInfosets) << endl;
+
+  cout << "bytes is index total = " << btotalis << " " << btotalindex << " " << (btotalis+btotalindex) << endl;
+
+  cout << "Note: Sizes assume for infoset store: 2 doubles per infoset + 2 doubles per iapair, " << endl;
+  cout << "                   for index: indexsize = 4*#infosets, and 2 doubles per index size . " << endl;
+}/* » */
+int main() {/* « */
+  // iscWidth is the number of bits needed by the chance outcome
+  // in our case, six possibilties, 3 bits
+  iscWidth = 3;
+
+  countnoabs();
+  //countabs2();
+
+  return 0;
+}/* » */
+
+}//»
+function CFR_NS(){//«
+
+//static unsigned long long nextReport = 1;
+let nextReport = 1;
+//static unsigned long long reportMult = 2;
+let reportMult = 2;
+
+const cfr=(gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, updatePlayer) => {//«
+// This is Vanilla CFR. See my thesis, Algorithm 1 (Section 2.2.2)
+//double cfr(GameState & gs, int player, int depth, unsigned long long bidseq, 
+//           double reach1, double reach2, double chanceReach, int phase, int updatePlayer) {
+  // at terminal node?
+  if (terminal(gs)) {
+    return payoff(gs, updatePlayer);
+  }
+  nodesTouched++;//NS: Bluff
+
+  // Chances nodes at the top of the tree. If p1roll and p2roll not set, we're at a chance node
+  if (gs.p1roll == 0) {
+    let EV = 0.0;//Was: double 
+
+    for (let i = 1; i <= numChanceOutcomes(1); i++) {//Was: int
+      GameState ngs = gs; 
+      ngs.p1roll = i; 
+      let newChanceReach = getChanceProb(1,i)*chanceReach;//Was: double
+
+      EV += getChanceProb(1,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
+    }
+
+    return EV;
+  }
+  else if (gs.p2roll == 0) {
+    let EV = 0.0; //Was: double
+
+    for (let i = 1; i <= numChanceOutcomes(2); i++) {//Was: int
+      GameState ngs = gs; 
+      ngs.p2roll = i; 
+      let newChanceReach = getChanceProb(2,i)*chanceReach;//Was: double
+
+      EV += getChanceProb(2,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
+    }
+
+    return EV;
+  }
+
+  // Check for cuts. This is the pruning optimization described in Section 2.2.2 of my thesis. 
+  if (phase == 1 && (   (player == 1 && updatePlayer == 1 && reach2 <= 0.0)
+                     || (player == 2 && updatePlayer == 2 && reach1 <= 0.0))) {
+    phase = 2; 
+  }
+
+  if (phase == 2 && (   (player == 1 && updatePlayer == 1 && reach1 <= 0.0)
+                     || (player == 2 && updatePlayer == 2 && reach2 <= 0.0))) {
+    return 0.0;
+  }
+
+  // declare the variables 
+  Infoset is;
+  let infosetkey = 0;//Was: ull
+  let stratEV = 0.0;//Was: double
+  let action = -1;//Was: int
+
+  let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+  let actionshere = maxBid - gs.curbid; //Was: int
+
+  assert(actionshere > 0);
+//double moveEVs[actionshere]; 
+  let moveEVs = new Array(actionshere);
+  for (let i = 0; i < actionshere; i++) //Was: int
+    moveEVs[i] = 0.0;
+
+  // get the info set (also set is.curMoveProbs using regret matching)
+  getInfoset(gs, player, bidseq, is, infosetkey, actionshere); 
+
+  // iterate over the actions
+  for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+    // there is a valid action here
+    action++;
+    assert(action < actionshere);
+
+    let newbidseq = bidseq;//Was: ull
+    let moveProb = is.curMoveProbs[action]; //Was: double
+    let newreach1 = (player == 1 ? moveProb*reach1 : reach1); //Was: double
+    let newreach2 = (player == 2 ? moveProb*reach2 : reach2); //Was: double
+
+    GameState ngs = gs; 
+    ngs.prevbid = gs.curbid;
+    ngs.curbid = i; 
+    ngs.callingPlayer = player;
+    newbidseq |= (1ULL << (BLUFFBID-i)); 
+    
+    let payoff = cfr(ngs, 3-player, depth+1, newbidseq, newreach1, newreach2, chanceReach, phase, updatePlayer); //Was: double
+   
+    moveEVs[action] = payoff; 
+    stratEV += moveProb*payoff; 
+  }
+
+  // post-traversals: update the infoset
+  let myreach = (player == 1 ? reach1 : reach2); //Was: double
+  let oppreach = (player == 1 ? reach2 : reach1); //Was: double
+
+  if (phase == 1 && player == updatePlayer) {// regrets
+    for (let a = 0; a < actionshere; a++) {//Was: int
+      // Multiplying by chanceReach here is important in games that have non-uniform chance outcome 
+      // distributions. In Bluff(1,1) it is actually not needed, but in general it is needed (e.g. 
+      // in Bluff(2,1)). 
+      is.cfr[a] += (chanceReach*oppreach)*(moveEVs[a] - stratEV); 
+    }
+  }
+
+  if (phase >= 1 && player == updatePlayer) {// av. strat
+    for (let a = 0; a < actionshere; a++) {//Was: int
+      is.totalMoveProbs[a] += myreach*is.curMoveProbs[a]; 
+    }
+  }
+
+  // save the infoset back to the store if needed
+  if (player == updatePlayer) {
+    iss.put(infosetkey, is, actionshere, 0); 
+  }
+
+  return stratEV;
+}//»
+const main=(argc, argv)=>{//«
+//int main(int argc, char ** argv) {
+//unsigned long long maxIters = 0; 
+  let maxIters = 0; 
+//bluff.init
+  init();
+
+  if (argc < 2) {
+    initInfosets();
+    exit(-1);
+  }
+  else { 
+//    string filename = argv[1];
+    let filename = argv[1];
+    log("Reading the infosets from " , filename , "...");
+    iss.readFromDisk(filename);
+
+    if (argc >= 3)
+      maxIters = to_ull(argv[2]);
+  }  
+  
+  // get the iteration
+//  string filename = argv[1];
+  let filename = argv[1];
+  vector<string> parts; 
+  split(parts, filename, '.'); 
+  if (parts.size() != 3 || parts[1] == "initial")
+    iter = 1; 
+  else
+    iter = to_ull(parts[1]); 
+  log("Set iteration to " , iter);
+  iter = MAX(1,iter);
+
+//unsigned long long bidseq = 0; 
+  let bidseq = 0; 
+    
+  StopWatch stopwatch;
+//double totaltime = 0; 
+  let totaltime = 0; 
+
+  log("Starting CFR iterations");
+
+  for (; true; iter++) {
+    GameState gs1; 
+    bidseq = 0; 
+    let ev1 = cfr(gs1, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 1);//Was: double
+    
+    GameState gs2; 
+    bidseq = 0; 
+    let ev2 = cfr(gs2, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 2);//Was: double
+
+    if (iter % 10 == 0) { 
+      cout << "."; cout.flush(); 
+      totaltime += stopwatch.stop();
+      stopwatch.reset();
+    }
+
+    if (iter == 1 || nodesTouched >= ntNextReport) {
+//      cout << endl;
+
+      log("total time: " , totaltime , " seconds."); 
+      log("Done iteration " , iter);
+
+      log("ev1 = " , ev1 , ", ev2 = " , ev2);
+
+      // This bound is the right-hand side of Theorem 3 from the original CFR paper.
+      // \sum_{I \in \II_i} R_{i,imm}^{T,+}(I)
+
+      log("Computing bounds... ");
+//	  cout.flush(); //???
+      let b1 = 0.0, b2 = 0.0;//Was: double
+      iss.computeBound(b1, b2); 
+      log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
+
+      let conv = 0.0;//Was: double
+      let p1value = 0.0;//Was: double
+      let p2value = 0.0;//Was: double
+      conv = computeBestResponses(false, p1value, p2value);
+
+      report("cfr.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
+      //dumpInfosets("iss");
+
+//    cout << endl;
+
+      nextCheckpoint += cpWidth;
+      nextReport *= reportMult;
+      ntNextReport *= ntMultiplier;
+
+      stopwatch.reset(); 
+    }
+
+    if (iter == maxIters) break;
+  }
+}//»
+
+}//»
 
 //Commands«
 
