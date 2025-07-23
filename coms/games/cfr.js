@@ -331,24 +331,15 @@ stop() {
 	return (this.#tend - this.#tstart) / 1000;
   }
 };//»
+
 function Util(){//«
 
 //#include "bluff.h"
 
 const to_string = (i) => {//«
 //string to_string(int i) {
-  ostringstream oss;
-  oss << i;
-  return oss.str();
-}//»
-const to_string = (i) {//«
-//std::string to_string(unsigned long long i) {
-  ostringstream oss;
-  oss << i;
-  return oss.str();
-}//»
-const to_string = (i) => {//«
 //std::string to_string(double i) {
+//std::string to_string(unsigned long long i) {
   ostringstream oss;
   oss << i;
   return oss.str();
@@ -1433,189 +1424,166 @@ let bid = null;
 const stopwatch= new StopWatch();
 //»
 
-// Does a recursive tree walk setting up the information sets, creating the initial strategies
-initInfosets(gs, player, depth, bidseq) {//«
+const initInfosets = (gs, player, depth, bidseq) => {//«
 //void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq) {
-  if (terminal(gs))
-    return;
+// Does a recursive tree walk setting up the information sets, creating the initial strategies
 
-  // check for chance nodes
-  if (gs.p1roll == 0) {
-//  for (int i = 1; i <= numChanceOutcomes1; i++) {
-    for (let i = 1; i <= numChanceOutcomes1; i++) {
-      GameState ngs = gs;
-//		let ngs = gs;
- 		ngs.p1roll = i;
-		initInfosets(ngs, player, depth+1, bidseq);
-    }
+	if (terminal(gs)) return;
 
-    return;
-  }
-  else if (gs.p2roll == 0) {
-//  for (int i = 1; i <= numChanceOutcomes2; i++) {
-    for (let i = 1; i <= numChanceOutcomes2; i++) {
-      GameState ngs = gs;
-//    let ngs = gs;
-      ngs.p2roll = i;
+	// check for chance nodes
+	if (gs.p1roll == 0) {
+		for (let i = 1; i <= numChanceOutcomes1; i++) {//Was: int
+			GameState ngs = gs;
+			//let ngs = gs;
+			ngs.p1roll = i;
+			initInfosets(ngs, player, depth+1, bidseq);
+		}
+		return;
+	}
+	else if (gs.p2roll == 0) {
+		for (let i = 1; i <= numChanceOutcomes2; i++) {//Was: int
+			GameState ngs = gs;
+			//let ngs = gs;
+			ngs.p2roll = i;
 
-      initInfosets(ngs, player, depth+1, bidseq);
-    }
+			initInfosets(ngs, player, depth+1, bidseq);
+		}
+		return;
+	}
 
-    return;
-  }
+	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+	let actionshere = maxBid - gs.curbid;//Was: int
 
-  let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
-  let actionshere = maxBid - gs.curbid;//Was: int
+	assert(actionshere > 0);
+	Infoset is;
+	newInfoset(is, actionshere);
 
-  assert(actionshere > 0);
-  Infoset is;
-  newInfoset(is, actionshere);
+	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+		if (depth == 2 && i == (gs.curbid+1)) {
+			log("InitTrees. iss stats = " , iss.getStats());
+		}
 
-  for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
-    if (depth == 2 && i == (gs.curbid+1)) {
-      log("InitTrees. iss stats = " , iss.getStats());
-    }
+		GameState ngs = gs;
+		ngs.prevbid = gs.curbid;
+		ngs.curbid = i;
+		ngs.callingPlayer = player;
+		let newbidseq = bidseq;//Was: ull
+		newbidseq |= (1ULL << (BLUFFBID-i));
 
-    GameState ngs = gs;
-    ngs.prevbid = gs.curbid;
-    ngs.curbid = i;
-    ngs.callingPlayer = player;
-//  unsigned long long newbidseq = bidseq;
-    let newbidseq = bidseq;
-    newbidseq |= (1ULL << (BLUFFBID-i));
+		initInfosets(ngs, (3-player), depth+1, newbidseq);
+	}
 
-    initInfosets(ngs, (3-player), depth+1, newbidseq);
-  }
-
-//unsigned infosetkey = 0;
-  let infosetkey = 0;
-  infosetkey = bidseq;
-  infosetkey <<= iscWidth;
-  if (player == 1) {
-    infosetkey |= gs.p1roll;
-    infosetkey <<= 1;
-    iss.put(infosetkey, is, actionshere, 0);
-  }
-  else if (player == 2) {
-    infosetkey |= gs.p2roll;
-    infosetkey <<= 1;
-    infosetkey |= 1;
-    iss.put(infosetkey, is, actionshere, 0);
-  }
+	//unsigned infosetkey = 0;
+	let infosetkey = 0;
+	infosetkey = bidseq;
+	infosetkey <<= iscWidth;
+	if (player == 1) {
+		infosetkey |= gs.p1roll;
+		infosetkey <<= 1;
+		iss.put(infosetkey, is, actionshere, 0);
+	}
+	else if (player == 2) {
+		infosetkey |= gs.p2roll;
+		infosetkey <<= 1;
+		infosetkey |= 1;
+		iss.put(infosetkey, is, actionshere, 0);
+	}
 }//»
-initInfosets() {//«
+const initInfosets = () => {//«
 //void initInfosets() {
-//unsigned long long bidseq = 0;
-  let bidseq = 0;
-  GameState gs;
-  log("Initialize info set store...");
-  // # doubles in total, size of index (must be at least # infosets)
-  // 2 doubles per iapair + 2 per infoset =
-  if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6)
-    iss.init(147432, 100000);
-  else {
-    cerr("initInfosets not defined for this PXDICE + DIEFACES");
-  }
+	let bidseq = 0;//Was: ull
+	GameState gs;
+	log("Initialize info set store...");
+	// # doubles in total, size of index (must be at least # infosets)
+	// 2 doubles per iapair + 2 per infoset =
+//  iss = InfosetStore
+	if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6) iss.init(147432, 100000);
+	else {
+		cerr("initInfosets not defined for this PXDICE + DIEFACES");
+	}
 
-  assert(iss.getSize() > 0);
+	assert(iss.getSize() > 0);
 
-  log("Initializing info sets...");
-  stopwatch.reset();
-  this.initInfosets(gs, 1, 0, bidseq);
+	log("Initializing info sets...");
+	stopwatch.reset();
+	this.initInfosets(gs, 1, 0, bidseq);
 
-  log("time taken = " , stopwatch.stop() , " seconds.");
-  iss.stopAdding();
+	log("time taken = " , stopwatch.stop() , " seconds.");
+	iss.stopAdding();
 
-  log("Final iss stats: " , iss.getStats());
-  stopwatch.reset();
+	log("Final iss stats: " , iss.getStats());
+	stopwatch.reset();
 
-//string filename = filepref + "iss.initial.dat";
-  let filename = filepref + "iss.initial.dat";
+	let filename = filepref + "iss.initial.dat";//Was: string
 
-  log("Dumping information sets to " , filename);
-  iss.dumpToDisk(filename);
+	log("Dumping information sets to " , filename);
+	iss.dumpToDisk(filename);
 }//»
-initBids(){//«
+const initBids = () =>{//«
 //void initBids(){
 //bids = new int[BLUFFBID-1];
-  bids = new Array(BLUFFBID-1);
-  let nextWildDice = 1;//Was: int
-  let idx = 0;//Was: int
-//for (int dice = 1; dice <= P1DICE + P2DICE; dice++) {
-  for (let dice = 1; dice <= P1DICE + P2DICE; dice++) {
-//  for (int face = 1; face <= DIEFACES-1; face++)
-    for (let face = 1; face <= DIEFACES-1; face++) {
-      bids[idx] = dice*10 + face;
-      idx++;
-    }
-
-    if (dice % 2 == 1) {
-      bids[idx] = nextWildDice*10 + DIEFACES;
-      idx++;
-      nextWildDice++;
-    }
-  }
-
-  for(; nextWildDice <= (P1DICE+P2DICE); nextWildDice++) {
-    bids[idx] = nextWildDice*10 + DIEFACES;
-    idx++;
-  }
-
-  assert(idx == BLUFFBID-1);
+	bids = new Array(BLUFFBID-1);
+	let nextWildDice = 1;//Was: int
+	let idx = 0;//Was: int
+	for (let dice = 1; dice <= P1DICE + P2DICE; dice++) {//Was: int
+		for (let face = 1; face <= DIEFACES-1; face++) {//Was: int
+			bids[idx] = dice*10 + face;
+			idx++;
+		}
+		if (dice % 2 == 1) {
+			bids[idx] = nextWildDice*10 + DIEFACES;
+			idx++;
+			nextWildDice++;
+		}
+	}
+	for(; nextWildDice <= (P1DICE+P2DICE); nextWildDice++) {
+		bids[idx] = nextWildDice*10 + DIEFACES;
+		idx++;
+	}
+	assert(idx == BLUFFBID-1);
 
 }//»
-init(){//«
+const init = () =>{//WMNH«
 //void init(){
-  assert(bids == NULL);
-
-  log("Initializing Bluff globals...");
-
-  seedCurMicroSec();
-
-  determineChanceOutcomes(1);
-  determineChanceOutcomes(2);
-
-  // iscWidth if the number of bits needed to encode the chance outcome in the integer
-  let maxChanceOutcomes = (numChanceOutcomes1 > numChanceOutcomes2 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
-  iscWidth = ceiling_log2(maxChanceOutcomes);
-
-  initBids();
-
-  log("Globals are: " , numChanceOutcomes1 , " " , numChanceOutcomes2 , " " , iscWidth);
+	assert(bids == NULL);
+	log("Initializing Bluff globals...");
+	seedCurMicroSec();
+	determineChanceOutcomes(1);
+	determineChanceOutcomes(2);
+	// iscWidth if the number of bits needed to encode the chance outcome in the integer
+	let maxChanceOutcomes = (numChanceOutcomes1 > numChanceOutcomes2 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
+	iscWidth = ceiling_log2(maxChanceOutcomes);
+	initBids();
+	log("Globals are: " , numChanceOutcomes1 , " " , numChanceOutcomes2 , " " , iscWidth);
 }//»
 
-getChanceProb(player, outcome){//«
+const getChanceProb = (player, outcome) =>{//«
 //double getChanceProb(int player, int outcome){
-  // outcome >= 1, so must subtract 1 from it
-  let co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
-  assert(outcome-1 >= 0 && outcome-1 < co);
-  double * cp = (player == 1 ? chanceProbs1 : chanceProbs2);
-  return cp[outcome-1];
+// outcome >= 1, so must subtract 1 from it
+	let co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
+	assert(outcome-1 >= 0 && outcome-1 < co);
+	let cp = (player == 1 ? chanceProbs1 : chanceProbs2);//Was: double *
+	return cp[outcome-1];
 }//»
-numChanceOutcomes(player){//«
+const numChanceOutcomes = (player) =>{//«
 //int numChanceOutcomes(int player){
-  return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
+	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
 }//»
-unrankco(i, roll, layer){//«
+const unrankco = (i, roll, layer) =>{//«
 //void unrankco(int i, int * roll, int player){
-//int num = 0;
-  let num = 0;
-//int * chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
-  let chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
-  num = chanceOutcomes[i];
+	let num = 0;//Was: int
+	let chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);//Was: int *
+	num = chanceOutcomes[i];
+	assert(num > 0);
 
-  assert(num > 0);
+	let numDice = (player == 1 ? P1DICE : P2DICE);//Was: int
 
-//int numDice = (player == 1 ? P1DICE : P2DICE);
-  let numDice = (player == 1 ? P1DICE : P2DICE);
-
-//for (int j = numDice-1; j >= 0; j--) {
-  for (let j = numDice-1; j >= 0; j--) {
-    roll[j] = num % 10;
-    num /= 10;
-  }
+	for (let j = numDice-1; j >= 0; j--) {//Was: int
+		roll[j] = num % 10;
+		num /= 10;
+	}
 }//»
-getInfosetKey(gs, player, bidseq){//«
+const getInfosetKey = (gs, player, bidseq) =>{//«
 //unsigned long long getInfosetKey(GameState & gs, int player, unsigned long long bidseq){
 //  unsigned long long infosetkey = bidseq;
 	let infosetkey = bidseq;
@@ -1632,44 +1600,41 @@ getInfosetKey(gs, player, bidseq){//«
 
 	return infosetkey;
 }//»
-getInfoset(gs, player, bidseq, is, infosetkey, actionshere){//«
+const getInfoset = (gs, player, bidseq, is, infosetkey, actionshere) => {//«
 //void getInfoset(GameState & gs, int player, unsigned long long bidseq, Infoset & is, unsigned long long & infosetkey, int actionshere){
-  infosetkey = getInfosetKey(gs, player, bidseq);
-// bool ret = iss.get(infosetkey, is, actionshere, 0);
-  let ret = iss.get(infosetkey, is, actionshere, 0);
-  assert(ret);
+	infosetkey = getInfosetKey(gs, player, bidseq);
+	let ret = iss.get(infosetkey, is, actionshere, 0);//Was: bool
+	assert(ret);
 }//»
-ceiling_log2(val){//«
+const ceiling_log2 = (val) => {//«
 //int ceiling_log2(int val){
-  let exp = 1, num = 2;//Was: int
-  do {
-    if (num > val) return exp; 
-    num *= 2;
-    exp++;
-  }
-  while (true);
+	let exp = 1, num = 2;//Was: int
+	do {
+		if (num > val) return exp; 
+		num *= 2;
+		exp++;
+	}
+	while (true);
 }//»
-intpow(x, y){//«
+const intpow = (x, y) => {//«
 //int intpow(int x, int y){
-  if (y == 0) return 1;
-  return x * intpow(x, y-1);
+	if (y == 0) return 1;
+	return x * intpow(x, y-1);
 }//»
-nextRoll(roll, size){//«
+const nextRoll = (roll, size) => {//«
 //void nextRoll(int * roll, int size){
 //for (int i = size-1; i >= 0; i--) {
-  for (let i = size-1; i >= 0; i--) {
-    // Try to increment if by 1.
-    if (roll[i] < DIEFACES) {
-      // if possible, do it and then set everything to the right back to 1
-      roll[i]++;
-//    for (int j = i+1; j < size; j++)
-      for (let j = i+1; j < size; j++)
-        roll[j] = 1;
-      return;
-    }
-  }
+	for (let i = size-1; i >= 0; i--) {
+		// Try to increment if by 1.
+		if (roll[i] < DIEFACES) {
+			// if possible, do it and then set everything to the right back to 1
+			roll[i]++;
+			for (let j = i+1; j < size; j++) roll[j] = 1;
+			return;
+		}
+	}
 }//»
-getRollBase10(roll, ize) {//«
+const getRollBase10 = (roll, ize) => {//«
 //int getRollBase10(int * roll, int size) {
 //int multiplier = 1;
 	let multiplier = 1;
@@ -1682,281 +1647,266 @@ getRollBase10(roll, ize) {//«
 	}
 	return val;
 }//»
-determineChanceOutcomes(player){//«
+const determineChanceOutcomes = (player) => {//«
 //void determineChanceOutcomes(int player){
 	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
-//  let rolls[dice];//Was: int
+	//  let rolls[dice];//Was: int
 	let rolls = new Array(dice);
-//for (int r = 0; r < dice; r++) rolls[r] = 1;
+	//for (int r = 0; r < dice; r++) rolls[r] = 1;
 	for (let r = 0; r < dice; r++) rolls[r] = 1;
 	outcomes.clear();
 
 	let permutations = intpow(DIEFACES, dice);//Was: int
 	let p;//Was: int
 
-  for (p = 0; p < permutations; p++) {
+	for (p = 0; p < permutations; p++) {
+		// first, make a copy
+		//  int rollcopy[dice];
+		let rollcopy = new Array(dice);
+		//  let rollcopy[dice];
+		memcpy(rollcopy, rolls, dice*sizeof(int));
+		// now sort
+		bubsort(rollcopy, dice);
+		// now convert to an integer in base 10
+		let key = getRollBase10(rollcopy, dice);//Was: int
+		// now increment the counter for this key in the map
+		outcomes[key] += 1;
+		// next roll
+		nextRoll(rolls, dice);
+	}
 
-    // first, make a copy
-//  int rollcopy[dice];
-	let rollcopy = new Array(dice);
-//  let rollcopy[dice];
-    memcpy(rollcopy, rolls, dice*sizeof(int));
-    // now sort
-    bubsort(rollcopy, dice);
-    // now convert to an integer in base 10
-    let key = getRollBase10(rollcopy, dice);//Was: int
-    // now increment the counter for this key in the map
-    outcomes[key] += 1;
-    // next roll
-    nextRoll(rolls, dice);
-  }
+	assert(p == permutations);
 
-  assert(p == permutations);
+	int & numChanceOutcomes = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
+	double* & chanceProbs = (player == 1 ? chanceProbs1 : chanceProbs2);
+	int* & chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
 
-  int & numChanceOutcomes = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-  double* & chanceProbs = (player == 1 ? chanceProbs1 : chanceProbs2);
-  int* & chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
+	// now, transfer the map keys to the array
+	numChanceOutcomes = outcomes.size();
+	chanceProbs = new double[numChanceOutcomes];
+	chanceOutcomes = new int[numChanceOutcomes];
 
-  // now, transfer the map keys to the array
-  numChanceOutcomes = outcomes.size();
-  chanceProbs = new double[numChanceOutcomes];
-  chanceOutcomes = new int[numChanceOutcomes];
+	let idx = 0;//Was: int
+	map<int,int>::iterator iter;
+	//outcomes:
+	//Was: map<int,int> outcomes;
+	//Now: const outcomes = {};
+	for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
+		chanceOutcomes[idx] = iter->first;
+		idx++;
+	}
 
-  let idx = 0;//Was: int
-  map<int,int>::iterator iter;
-//outcomes:
-//Was: map<int,int> outcomes;
-//Now: const outcomes = {};
-  for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
-    chanceOutcomes[idx] = iter->first;
-    idx++;
-  }
+	bubsort(chanceOutcomes, numChanceOutcomes);
 
-  bubsort(chanceOutcomes, numChanceOutcomes);
-
-//for (int c = 0; c < numChanceOutcomes; c++) {
-  for (let c = 0; c < numChanceOutcomes; c++) {
-//  int key = chanceOutcomes[c];
-    let key = chanceOutcomes[c];
-//  chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
-    chanceProbs[c] = outcomes[key]) / permutations;
-    //cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
-  }
+	for (let c = 0; c < numChanceOutcomes; c++) {//Was: int
+		//int key = chanceOutcomes[c];
+		let key = chanceOutcomes[c];
+		//  chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
+		chanceProbs[c] = outcomes[key] / permutations;
+		//cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
+	}
 }//»
-newInfoset(is, actions){//«
+const newInfoset = (is, actions) => {//«
 //void newInfoset(Infoset & is, int actions){
-  is.actionshere = actions;
-  is.lastUpdate = 0;
+	is.actionshere = actions;
+	is.lastUpdate = 0;
 
-  for (let i = 0; i < actions; i++) {//Was: int
-    is.cfr[i] = 0.0;
-    is.totalMoveProbs[i] = 0.0;
-    is.curMoveProbs[i] = 1.0 / actions;
-  }
+	for (let i = 0; i < actions; i++) {//Was: int
+		is.cfr[i] = 0.0;
+		is.totalMoveProbs[i] = 0.0;
+		is.curMoveProbs[i] = 1.0 / actions;
+	}
 }//»
-terminal(gs){//«
+const terminal = (gs) => {//YWRK«
 //bool terminal(GameState & gs){
-  return (gs.curbid == BLUFFBID);
+	return (gs.curbid == BLUFFBID);
 }//»
 // a bid is from 1 to 12, for example
-convertbid(dice, face, bid) {//«
+const convertbid = (dice, face, bid) =>  {//«
 //void convertbid(int & dice, int & face, int bid) {
-  if (P1DICE == 1 && P2DICE == 1) {
-    dice = (bid - 1) / DIEFACES + 1;
-    face = bid % DIEFACES;
-    if (face == 0) face = DIEFACES;
+	if (P1DICE == 1 && P2DICE == 1) {
+		dice = (bid - 1) / DIEFACES + 1;
+		face = bid % DIEFACES;
+		if (face == 0) face = DIEFACES;
+		assert(dice >= 1 && dice <= 2);
+		assert(face >= 1 && face <= DIEFACES);
+	}
+	else {
+		// stored in an array.
+		//int size = (P1DICE+P2DICE)*DIEFACES;
+		let size = (P1DICE+P2DICE)*DIEFACES;
+		assert((bid-1) >= 0 && (bid-1) < size);
 
-    assert(dice >= 1 && dice <= 2);
-    assert(face >= 1 && face <= DIEFACES);
-  }
-  else {
-    // stored in an array.
-//  int size = (P1DICE+P2DICE)*DIEFACES;
-    let size = (P1DICE+P2DICE)*DIEFACES;
-    assert((bid-1) >= 0 && (bid-1) < size);
-
-    dice = bids[bid-1] / 10;
-    face = bids[bid-1] % 10;
-  }
+		dice = bids[bid-1] / 10;
+		face = bids[bid-1] % 10;
+	}
 }//»
-getRoll(roll, chanceOutcome, player){//«
+const getRoll = (roll, chanceOutcome, player) => {//«
 //void getRoll(int * roll, int chanceOutcome, int player){
-  unrankco(chanceOutcome-1, roll, player);
+	unrankco(chanceOutcome-1, roll, player);
 }//»
-countMatchingDice(gs, player, face){//«
+const countMatchingDice = (gs, player, face) => {//«
 //int countMatchingDice(const GameState & gs, int player, int face){
 
 //int roll[3] = {0,0,0};
-  let roll  = [0,0,0];
+	let roll  = [0,0,0];
 
-  let matchingDice = 0;//Was: int
-  let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
+	let matchingDice = 0;//Was: int
+	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
 
-  if (dice == 1) {
-    if (player == 1)
-      roll[1] = gs.p1roll;
-    else if (player == 2)
-      roll[1] = gs.p2roll;
-  }
-  else if (dice == 2) {
-    if (player == 1)
-      unrankco(gs.p1roll-1, roll, 1);
-    else if (player == 2)
-      unrankco(gs.p2roll-1, roll, 2);
-  }
+	if (dice == 1) {
+		if (player == 1) roll[1] = gs.p1roll;
+		else if (player == 2) roll[1] = gs.p2roll;
+	}
+	else if (dice == 2) {
+		if (player == 1) unrankco(gs.p1roll-1, roll, 1);
+		else if (player == 2) unrankco(gs.p2roll-1, roll, 2);
+	}
 
-  for (let i = 0; i < 3; i++)
-    if (roll[i] == face || roll[i] == DIEFACES)
-      matchingDice++;
+	for (let i = 0; i < 3; i++) {
+		if (roll[i] == face || roll[i] == DIEFACES) matchingDice++;
+	}
 
-  return matchingDice;
+	return matchingDice;
 }//»
-whowon6(bid, bidder, callingPlayer, p1roll, p2roll, delta){//«
+const whowon6 = (bid, bidder, callingPlayer, p1roll, p2roll, delta) => {//«
 //int whowon(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int & delta){
-  let dice = 0, face = 0;//Was: int
-  convertbid(dice, face, bid);
+	let dice = 0, face = 0;//Was: int
+	convertbid(dice, face, bid);
+	assert(bidder != callingPlayer);
 
-  assert(bidder != callingPlayer);
+	// get the dice
+	//int p1rollArr[P1DICE];
+	let p1rollArr = new Array(P1DICE);
+	//int p2rollArr[P2DICE];
+	let p2rollArr = new Array(P2DICE);
+	unrankco(p1roll-1, p1rollArr, 1);
+	unrankco(p2roll-1, p2rollArr, 2);
+	// now check the number of matches
+	let matching = 0;//Was: int
 
-  // get the dice
+	for (let i = 0; i < P1DICE; i++) {//Was: int
+		if (p1rollArr[i] == face || p1rollArr[i] == DIEFACES) matching++;
+	}
 
-//int p1rollArr[P1DICE];
-  let p1rollArr = new Array(P1DICE);
+	for (let j = 0; j < P2DICE; j++) {//Was: int
+		if (p2rollArr[j] == face || p2rollArr[j] == DIEFACES) matching++;
+	}
 
-//int p2rollArr[P2DICE];
-  let p2rollArr = new Array(P2DICE);
+	delta = matching - dice;
+	if (delta < 0) delta *= -1;
 
-  unrankco(p1roll-1, p1rollArr, 1);
-  unrankco(p2roll-1, p2rollArr, 2);
-
-  // now check the number of matches
-
-  let matching = 0;//Was: int
-
-  for (let i = 0; i < P1DICE; i++)//Was: int
-    if (p1rollArr[i] == face || p1rollArr[i] == DIEFACES)
-      matching++;
-
-  for (let j = 0; j < P2DICE; j++)//Was: int
-    if (p2rollArr[j] == face || p2rollArr[j] == DIEFACES)
-      matching++;
-
-  delta = matching - dice;
-  if (delta < 0) delta *= -1;
-
-  if (matching >= dice) {
-    return bidder;
-  }
-  else {
-    return callingPlayer;
-  }
+	if (matching >= dice) {
+		return bidder;
+	}
+	else {
+		return callingPlayer;
+	}
 }//»
-whowon2(gs, delta){//«
+const whowon2 = (gs, delta) => {//«
 //int whowon(GameState & gs, int & delta){
-  let bidder = 3 - gs.callingPlayer;//Was: int
-  return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
+	let bidder = 3 - gs.callingPlayer;//Was: int
+	return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
 }//»
-whowon1(gs){//«
+const whowon1 = (gs) => {//«
 //int whowon(GameState & gs){
-  let bidder = 3 - gs.callingPlayer;//Was: int
-  let delta = 0;//Was: int
-  return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
+	let bidder = 3 - gs.callingPlayer;//Was: int
+	let delta = 0;//Was: int
+	return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
 }//»
-payoff(winner, player, delta){//«
+const payoff = (winner, player, delta) => {//«
 //double payoff(int winner, int player, int delta)
-  // first thing: if it's an exact match, calling player loses 1 die
-  // may as well set delta to 1 in this case
-  if (delta == 0) delta = 1;
+// first thing: if it's an exact match, calling player loses 1 die
+// may as well set delta to 1 in this case
+	if (delta == 0) delta = 1;
 
-//  double p1payoff = 0.0;
-  let p1payoff = 0.0;
+	//  double p1payoff = 0.0;
+	let p1payoff = 0.0;
 
-  if
-    (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
-  else
-  {
-    assert(false);
-  }
+	if (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
+	else {
+		assert(false);
+	}
 
-  return (player == 1 ? p1payoff : -p1payoff);
+	return (player == 1 ? p1payoff : -p1payoff);
 }//»
 
 // In these functions "delta" represents the number of dice the bid is off by (not relevant for (1,1))
 // Returns payoff for Liar's Dice (delta always equal to 1)
-payoff_wp(winner, player){//«
+const payoff_wp = (winner, player) => {//«
 //double payoff(int winner, int player){
-  return payoff(winner, player, 1);
+	return payoff(winner, player, 1);
 }//»
 
 // this is the function called by all the algorithms.
 // Now set to use the delta
-payoff_gp(gs, player) {//«
+const payoff_gp = (gs, player) => {//«
 //double payoff(GameState & gs, int player) {
-  let delta = 0;//Was: int
-  let winner = whowon(gs, delta);//Was: int
-  return payoff(winner, player, delta);
+	let delta = 0;//Was: int
+	let winner = whowon(gs, delta);//Was: int
+	return payoff(winner, player, delta);
 }//»
-payoff6(bid, bidder, callingPlayer, p1roll, p2roll, player) {//«
+const payoff6 = (bid, bidder, callingPlayer, p1roll, p2roll, player) => {//«
 //double payoff(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int player) {
-  let delta = 0;//Was: int
-  let winner = whowon(bid, bidder, callingPlayer, p1roll, p2roll, delta);//Was: int
-  return payoff(winner, player);
+	let delta = 0;//Was: int
+	let winner = whowon(bid, bidder, callingPlayer, p1roll, p2roll, delta);//Was: int
+	return payoff(winner, player);
 }//»
-report(filename, totaltime, bound, conv){//«
+const report = (filename, totaltime, bound, conv) => {//«
 //void report(string filename, double totaltime, double bound, double conv){
-  filename = filepref + filename;
-  log("Reporting to " + filename + " ... ");
-  ofstream outf(filename.c_str(), ios::app);
-  outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
-  outf.close();
+	filename = filepref + filename;
+	log("Reporting to " + filename + " ... ");
+	ofstream outf(filename.c_str(), ios::app);
+	outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
+	outf.close();
 }//»
-dumpInfosets(prefix){//«
+const dumpInfosets = (prefix) => {//«
 //void dumpInfosets(string prefix){
 //  string filename = filepref + prefix + "." + to_string(iter) + ".dat";
-  let filename = filepref + prefix + "." + to_string(iter) + ".dat";
-  log("Dumping infosets to " + filename + " ... ");
-  iss.dumpToDisk(filename);
+	let filename = filepref + prefix + "." + to_string(iter) + ".dat";
+	log("Dumping infosets to " + filename + " ... ");
+	iss.dumpToDisk(filename);
 }//»
 
 // not even sure what I used this "meta data" for, if I ever used it....
-dumpMetaData(prefix, totaltime) {//«
+const dumpMetaData = (prefix, totaltime) =>  {//«
 //void dumpMetaData(string prefix, double totaltime) {
 //  string filename = filepref + prefix + "." + to_string(iter) + ".dat";
-  let filename = filepref + prefix + "." + to_string(iter) + ".dat";
-  log("Dumping metadeta to " + filename + " ... ");
+	let filename = filepref + prefix + "." + to_string(iter) + ".dat";
+	log("Dumping metadeta to " + filename + " ... ");
 
-  ofstream outf(filename.c_str(), ios::binary);
-  if (!outf.is_open()) {
-    cerr("Could not open meta data file for writing.");
-    return;
-  }
+	ofstream outf(filename.c_str(), ios::binary);
+	if (!outf.is_open()) {
+		cerr("Could not open meta data file for writing.");
+		return;
+	}
 
-  outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
-  outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
-  outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
-  outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
-  outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
+	outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
+	outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
+	outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
+	outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
+	outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
 
-  outf.close();
+	outf.close();
 }//»
-loadMetaData(filename) {//«
+const loadMetaData = (filename) => {//«
 //void loadMetaData(std::string filename) {
-  ifstream inf(filename.c_str(), ios::binary);
-  if (!inf.is_open()) {
-    cerr("Could not open meta data file.");
-    return;
-  }
+	ifstream inf(filename.c_str(), ios::binary);
+	if (!inf.is_open()) {
+		cerr("Could not open meta data file.");
+		return;
+	}
 
-//double totaltime = 0;
-  let totaltime = 0;
+	//double totaltime = 0;
+	let totaltime = 0;
 
-  inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
-  inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
-  inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
-  inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
-  inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
+	inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
+	inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
+	inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
+	inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
+	inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
 
-  inf.close();
+	inf.close();
 }//»
 
 }//»
@@ -2563,222 +2513,77 @@ int main() {//«
 }//»
 
 }//»
-function CFR_NS(){//«
+function Sampling(){//«
 
-//static unsigned long long nextReport = 1;
-let nextReport = 1;
-//static unsigned long long reportMult = 2;
-let reportMult = 2;
+//#include "bluff.h"
 
-const cfr=(gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, updatePlayer) => {//«
-// This is Vanilla CFR. See my thesis, Algorithm 1 (Section 2.2.2)
-//double cfr(GameState & gs, int player, int depth, unsigned long long bidseq, 
-//           double reach1, double reach2, double chanceReach, int phase, int updatePlayer) {
-  // at terminal node?
-  if (terminal(gs)) {
-    return payoff(gs, updatePlayer);
-  }
-  nodesTouched++;//NS: Bluff
+const sampleChanceEvent = (player, outcome, prob) => {//«
+//void sampleChanceEvent(int player, int & outcome, double & prob) {
+	let co = (player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));//Was: int
 
-  // Chances nodes at the top of the tree. If p1roll and p2roll not set, we're at a chance node
-  if (gs.p1roll == 0) {
-    let EV = 0.0;//Was: double 
+	let roll = unifRand01();//Was: double
+	let sum = 0.0;//Was: double
+	for (let i = 0; i < co; i++) {//Was: int
+		let pr = getChanceProb(player, i+1);//Was: double
 
-    for (let i = 1; i <= numChanceOutcomes(1); i++) {//Was: int
-      GameState ngs = gs; 
-      ngs.p1roll = i; 
-      let newChanceReach = getChanceProb(1,i)*chanceReach;//Was: double
-
-      EV += getChanceProb(1,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
-    }
-
-    return EV;
-  }
-  else if (gs.p2roll == 0) {
-    let EV = 0.0; //Was: double
-
-    for (let i = 1; i <= numChanceOutcomes(2); i++) {//Was: int
-      GameState ngs = gs; 
-      ngs.p2roll = i; 
-      let newChanceReach = getChanceProb(2,i)*chanceReach;//Was: double
-
-      EV += getChanceProb(2,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
-    }
-
-    return EV;
-  }
-
-  // Check for cuts. This is the pruning optimization described in Section 2.2.2 of my thesis. 
-  if (phase == 1 && (   (player == 1 && updatePlayer == 1 && reach2 <= 0.0)
-                     || (player == 2 && updatePlayer == 2 && reach1 <= 0.0))) {
-    phase = 2; 
-  }
-
-  if (phase == 2 && (   (player == 1 && updatePlayer == 1 && reach1 <= 0.0)
-                     || (player == 2 && updatePlayer == 2 && reach2 <= 0.0))) {
-    return 0.0;
-  }
-
-  // declare the variables 
-  Infoset is;
-  let infosetkey = 0;//Was: ull
-  let stratEV = 0.0;//Was: double
-  let action = -1;//Was: int
-
-  let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
-  let actionshere = maxBid - gs.curbid; //Was: int
-
-  assert(actionshere > 0);
-//double moveEVs[actionshere]; 
-  let moveEVs = new Array(actionshere);
-  for (let i = 0; i < actionshere; i++) //Was: int
-    moveEVs[i] = 0.0;
-
-  // get the info set (also set is.curMoveProbs using regret matching)
-  getInfoset(gs, player, bidseq, is, infosetkey, actionshere); 
-
-  // iterate over the actions
-  for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
-    // there is a valid action here
-    action++;
-    assert(action < actionshere);
-
-    let newbidseq = bidseq;//Was: ull
-    let moveProb = is.curMoveProbs[action]; //Was: double
-    let newreach1 = (player == 1 ? moveProb*reach1 : reach1); //Was: double
-    let newreach2 = (player == 2 ? moveProb*reach2 : reach2); //Was: double
-
-    GameState ngs = gs; 
-    ngs.prevbid = gs.curbid;
-    ngs.curbid = i; 
-    ngs.callingPlayer = player;
-    newbidseq |= (1ULL << (BLUFFBID-i)); 
-    
-    let payoff = cfr(ngs, 3-player, depth+1, newbidseq, newreach1, newreach2, chanceReach, phase, updatePlayer); //Was: double
-   
-    moveEVs[action] = payoff; 
-    stratEV += moveProb*payoff; 
-  }
-
-  // post-traversals: update the infoset
-  let myreach = (player == 1 ? reach1 : reach2); //Was: double
-  let oppreach = (player == 1 ? reach2 : reach1); //Was: double
-
-  if (phase == 1 && player == updatePlayer) {// regrets
-    for (let a = 0; a < actionshere; a++) {//Was: int
-      // Multiplying by chanceReach here is important in games that have non-uniform chance outcome 
-      // distributions. In Bluff(1,1) it is actually not needed, but in general it is needed (e.g. 
-      // in Bluff(2,1)). 
-      is.cfr[a] += (chanceReach*oppreach)*(moveEVs[a] - stratEV); 
-    }
-  }
-
-  if (phase >= 1 && player == updatePlayer) {// av. strat
-    for (let a = 0; a < actionshere; a++) {//Was: int
-      is.totalMoveProbs[a] += myreach*is.curMoveProbs[a]; 
-    }
-  }
-
-  // save the infoset back to the store if needed
-  if (player == updatePlayer) {
-    iss.put(infosetkey, is, actionshere, 0); 
-  }
-
-  return stratEV;
+		if (roll >= sum && roll < sum+pr) {
+			outcome = (i+1);
+			prob = pr;
+			return;
+		}
+		sum += pr;
+	}
+	log("roll = " , roll);
+	assert(false);
 }//»
-const main=(argc, argv)=>{//«
-//int main(int argc, char ** argv) {
-//unsigned long long maxIters = 0; 
-  let maxIters = 0; 
-//bluff.init
-  init();
+const sampleMoveAvg = (is, actionshere, index, prob) => {//«
+//void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob){
+	let den = 0;//Was: double
+	for (let i = 0; i < actionshere; i++) {//Was: int
+		den += is.totalMoveProbs[i];
+	}
+	let roll = unifRand01();//Was: double
+	let sum = 0.0;//Was: int
+	for (let i = 0; i < actionshere; i++) {//Was:uint
+		let iprob = (den > 0.0 ? (is.totalMoveProbs[i] / den) : (1.0 / actionshere));//Was: double
+		CHKPROB(prob);
+		if (roll >= sum && roll < sum+iprob) {
+			index = i;
+			prob = iprob;
+			return;
+		}
+		sum += iprob;
+	}
+	assert(false);
+}//»
+const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) => {//«
+//int sampleAction(Infoset & is, int actionshere, double & sampleprob, double epsilon, bool firstTimeUniform) {
 
-  if (argc < 2) {
-    initInfosets();
-    exit(-1);
-  }
-  else { 
-//    string filename = argv[1];
-    let filename = argv[1];
-    log("Reading the infosets from " , filename , "...");
-    iss.readFromDisk(filename);
+// **Only do this when enabled by firstTimeUniform:
+// if this infoset has never been updated: choose entirely randomly
+// reason: there is no regret yet, hence no strategy.
+	let eps = 0.0;//Was: double
+	if (firstTimeUniform) eps = (is.lastUpdate == 0 ? 1.0 : epsilon);
+	else eps = epsilon;
 
-    if (argc >= 3)
-      maxIters = to_ull(argv[2]);
-  }  
-  
-  // get the iteration
-//  string filename = argv[1];
-  let filename = argv[1];
-  vector<string> parts; 
-  split(parts, filename, '.'); 
-  if (parts.size() != 3 || parts[1] == "initial")
-    iter = 1; 
-  else
-    iter = to_ull(parts[1]); 
-  log("Set iteration to " , iter);
-  iter = MAX(1,iter);
+	// build the distribution to sample from
+	//  double dist[actionshere];
+	let dist = new Array(actionshere);
+	for (let a = 0; a < actionshere; a++) {//Was: int
+		dist[a] = eps*(1.0 / actionshere) + (1.0-eps)*is.curMoveProbs[a];
+	}
+	let roll = unifRand01();//Was: double
+	let sum = 0.0;//Was: double
+	for (let a = 0; a < actionshere; a++) {//Was: int
+		if (roll >= sum && roll < sum+dist[a]) {
+			sampleprob = dist[a];
+			return a;
+		}
+		sum += dist[a];
+	}
 
-//unsigned long long bidseq = 0; 
-  let bidseq = 0; 
-    
-  StopWatch stopwatch;
-//double totaltime = 0; 
-  let totaltime = 0; 
-
-  log("Starting CFR iterations");
-
-  for (; true; iter++) {
-    GameState gs1; 
-    bidseq = 0; 
-    let ev1 = cfr(gs1, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 1);//Was: double
-    
-    GameState gs2; 
-    bidseq = 0; 
-    let ev2 = cfr(gs2, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 2);//Was: double
-
-    if (iter % 10 == 0) { 
-      cout << "."; cout.flush(); 
-      totaltime += stopwatch.stop();
-      stopwatch.reset();
-    }
-
-    if (iter == 1 || nodesTouched >= ntNextReport) {
-//      cout << endl;
-
-      log("total time: " , totaltime , " seconds."); 
-      log("Done iteration " , iter);
-
-      log("ev1 = " , ev1 , ", ev2 = " , ev2);
-
-      // This bound is the right-hand side of Theorem 3 from the original CFR paper.
-      // \sum_{I \in \II_i} R_{i,imm}^{T,+}(I)
-
-      log("Computing bounds... ");
-//	  cout.flush(); //???
-      let b1 = 0.0, b2 = 0.0;//Was: double
-      iss.computeBound(b1, b2); 
-      log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
-
-      let conv = 0.0;//Was: double
-      let p1value = 0.0;//Was: double
-      let p2value = 0.0;//Was: double
-      conv = computeBestResponses(false, p1value, p2value);
-
-      report("cfr.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
-      //dumpInfosets("iss");
-
-//    cout << endl;
-
-      nextCheckpoint += cpWidth;
-      nextReport *= reportMult;
-      ntNextReport *= ntMultiplier;
-
-      stopwatch.reset(); 
-    }
-
-    if (iter == maxIters) break;
-  }
+	assert(false);
+	return -1;
 }//»
 
 }//»
@@ -2790,6 +2595,97 @@ function PCS_NS(){// Public Chance Sampling«
 //#include "svector.h"
 
 //»
+
+//template <unsigned int SIZE>
+class SVector {//«
+//static vector
+// Provides all the functionality of FVector but uses static 
+// SIZEs to avoid dynamic memory allocations.
+// Also: assumes doubles since we don't use it for anything else.
+// double elements[SIZE];
+#elements;
+//public:  
+SVector() { //«
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = 0.0;
+	}
+}//»
+SVector(ival) {//«
+//ival: double
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = ival;
+	}
+}//»
+get_const(n) {//double«
+//n: int
+	return elements[n]; 
+}//»
+getSize() { return SIZE; }
+allEqualTo(elem) {//bool«
+//elem: double
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		if (elements[i] != elem) return false; 
+	}
+	return true;
+}//»
+to_string() {//std::string«
+	let str = "[";//Was: string
+	for (let i = 0; i < SIZE; i++) { //Was: uint
+		std::ostringstream oss; 
+		oss << elements[i]; 
+		str = str + oss.str(); 
+		if (i < (SIZE-1)) str = str + " "; 
+	}
+	str = str + "]";
+	return str; 
+}//»
+assertprob() { //«
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		assert(elements[i] >= 0.0 && elements[i] <= 1.0); 
+	}
+}//»
+reset(val) {//«
+//val: double
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = val;
+	}
+}//»
+
+double& operator[](int n) { return elements[n]; }
+SVector<SIZE> & operator= (const SVector<SIZE> & other) {//«
+	assert(SIZE == other.getSize());
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = other.elements[i]; 
+	}
+	return (*this);
+}//»
+SVector<SIZE> & operator+=(SVector<SIZE> & right) {//«
+	assert(SIZE == right.getSize()); 
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] += right[i]; 
+	}
+	return (*this);
+}//»
+SVector<SIZE> & operator*=(SVector<SIZE> & right) {//«
+// non-standard element by element multiply
+	assert(SIZE == right.getSize()); 
+
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] *= right[i]; 
+	}
+	return (*this);
+}//»
+SVector<SIZE> & operator*=(double factor) {//«
+	for (let i = 0; i < SIZE; i++) {
+		elements[i] *= factor;  
+	}
+	return (*this);
+}//»
+
+};//»
+
+//std::ostream &operator<<(std::ostream &o,  const SVector<SIZE> &v);
+
 //Globals«
 
 typedef SVector<P1CO> covector1;
@@ -2880,398 +2776,479 @@ const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 }//»
 const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, result1, result2) => {//«
 //void pcs(gamestate & gs, int player, int depth, unsigned long long bidseq, 
-//         int updateplayer, covector1 & reach1, covector2 & reach2, 
-//         int phase, covector1 & result1, covector2 & result2){
-  reach1.assertprob();
-  reach2.assertprob();
-  
-  // check if we're at a terminal node
-  
-  if (terminal(gs))
-  {
-    handleLeaf(gs, updatePlayer, reach1, reach2, result1, result2);
-    return;
-  }
-  
-  nodesTouched++;
+// int updateplayer, covector1 & reach1, covector2 & reach2, 
+// int phase, covector1 & result1, covector2 & result2){
+	reach1.assertprob();
+	reach2.assertprob();
 
-  // chance nodes (just bogus entries)
-  // note: for expected values to make sense, should iterate over each move.
+	// check if we're at a terminal node
 
-  if (gs.p1roll == 0) 
-  {
-    GameState ngs = gs; 
-    ngs.p1roll = 1;       
-    pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
-    return;
-  }
-  else if (gs.p2roll == 0) 
-  {
-    GameState ngs = gs; 
-    ngs.p2roll = 1;       
-    pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
-    return;
-  }
+	if (terminal(gs)) {
+		handleLeaf(gs, updatePlayer, reach1, reach2, result1, result2);
+		return;
+	}
 
-  // cuts?
-  if (phase == 1)
-  {
-    if (iter > 1 && updatePlayer == 1 && player == 1 && reach2.allEqualTo(0.0))
-    {
-      phase = 2;
-    }
-    else if (iter > 1 && updatePlayer == 2 && player == 2 && reach1.allEqualTo(0.0))
-    {
-      phase = 2; 
-    }
-  }
+	nodesTouched++;
 
-  if (phase == 2)
-  {
-    if (iter > 1 && updatePlayer == 1 && player == 1 && reach1.allEqualTo(0.0))
-    {
-      result1.reset(0.0);
-      result2.reset(0.0);
-      return;
-    }
-    if (iter > 1 && updatePlayer == 2 && player == 2 && reach2.allEqualTo(0.0))
-    {
-      result1.reset(0.0);
-      result2.reset(0.0);
-      return;
-    }
-  }
-  
-  // declare the variables
-  int co = (player == 1 ? P1CO : P2CO);
+	// chance nodes (just bogus entries)
+	// note: for expected values to make sense, should iterate over each move.
 
-  int action = -1;
-  int maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);
-  int actionshere = maxBid - gs.curbid; 
-  assert(actionshere > 0);
+	if (gs.p1roll == 0) {
+		GameState ngs = gs; 
+		ngs.p1roll = 1;       
+		pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
+		return;
+	}
+	else if (gs.p2roll == 0) {
+		GameState ngs = gs; 
+		ngs.p2roll = 1;       
+		pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
+		return;
+	}
 
-  // get the infosets here (one per outcome)
+	// cuts?
+	if (phase == 1) {
+		if (iter > 1 && updatePlayer == 1 && player == 1 && reach2.allEqualTo(0.0)) {
+			phase = 2;
+		}
+		else if (iter > 1 && updatePlayer == 2 && player == 2 && reach1.allEqualTo(0.0)) {
+			phase = 2; 
+		}
+	}
 
-  unsigned long long infosetkeys[co];
-  Infoset is[co];  
- 
-  // only one of these is used
-  covector1 moveEVs1[actionshere];
-  covector2 moveEVs2[actionshere];
+	if (phase == 2) {
+		if (iter > 1 && updatePlayer == 1 && player == 1 && reach1.allEqualTo(0.0)) {
+			result1.reset(0.0);
+			result2.reset(0.0);
+			return;
+		}
+		if (iter > 1 && updatePlayer == 2 && player == 2 && reach2.allEqualTo(0.0)) {
+			result1.reset(0.0);
+			result2.reset(0.0);
+			return;
+		}
+	}
 
-  for (int i = 0; i < co; i++)
-  {
-    int outcome = i+1;
+	// declare the variables
+	int co = (player == 1 ? P1CO : P2CO);
 
-    infosetkeys[i] = bidseq; 
-    infosetkeys[i] <<= iscWidth; 
-    if (player == 1)
-    {
-      infosetkeys[i] |= outcome; 
-      infosetkeys[i] <<= 1; 
-      // get the info set (also set is.curMoveProbs using regret matching)
-      bool ret = iss.get(infosetkeys[i], is[i], actionshere, 0); 
-      assert(ret);
-    }
-    else if (player == 2)
-    {
-      infosetkeys[i] |= outcome; 
-      infosetkeys[i] <<= 1; 
-      infosetkeys[i] |= 1; 
-      // get the info set (also set is.curMoveProbs using regret matching)
-      bool ret = iss.get(infosetkeys[i], is[i], actionshere, 0); 
-      assert(ret);
-    }
-  }
+	int action = -1;
+	int maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);
+	int actionshere = maxBid - gs.curbid; 
+	assert(actionshere > 0);
 
-  // iterate over the actions
+	// get the infosets here (one per outcome)
 
-  for (int i = gs.curbid+1; i <= maxBid; i++) 
-  {
-    action++;
-    assert(action < actionshere);
+	infosetkeys[co];//Was: ull
+	Infoset is[co];  
 
-    // only one of these is used
-    covector1 moveProbs1;
-    covector2 moveProbs2;
+	// only one of these is used
+	covector1 moveEVs1[actionshere];
+	covector2 moveEVs2[actionshere];
 
-    for (int o = 0; o < co; o++) 
-    {
-      if (player == 1)
-        moveProbs1[o] = is[o].curMoveProbs[action];
-      else if (player == 2)
-        moveProbs2[o] = is[o].curMoveProbs[action]; 
-    }
+	for (int i = 0; i < co; i++) {
+		int outcome = i+1;
+		infosetkeys[i] = bidseq; 
+		infosetkeys[i] <<= iscWidth; 
+		if (player == 1) {
+			infosetkeys[i] |= outcome; 
+			infosetkeys[i] <<= 1; 
+			// get the info set (also set is.curMoveProbs using regret matching)
+			bool ret = iss.get(infosetkeys[i], is[i], actionshere, 0); 
+			assert(ret);
+		}
+		else if (player == 2) {
+			infosetkeys[i] |= outcome; 
+			infosetkeys[i] <<= 1; 
+			infosetkeys[i] |= 1; 
+			// get the info set (also set is.curMoveProbs using regret matching)
+			bool ret = iss.get(infosetkeys[i], is[i], actionshere, 0); 
+			assert(ret);
+		}
+	}
 
-    covector1 EV1; 
-    covector2 EV2; 
-    covector1 newReach1 = reach1; 
-    covector2 newReach2 = reach2; 
-    if (player == 1) newReach1 *= moveProbs1; 
-    if (player == 2) newReach2 *= moveProbs2;
+	// iterate over the actions
 
-    GameState ngs = gs; 
-    ngs.prevbid = gs.curbid;
-    ngs.curbid = i; 
-    ngs.callingPlayer = player;
-    unsigned long long newbidseq = bidseq;
-    newbidseq |= (1ULL << (BLUFFBID-i)); 
+	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+		action++;
+		assert(action < actionshere);
+		// only one of these is used
+		covector1 moveProbs1;
+		covector2 moveProbs2;
+		for (let o = 0; o < co; o++) {//Was: int
+			if (player == 1) moveProbs1[o] = is[o].curMoveProbs[action];
+			else if (player == 2) moveProbs2[o] = is[o].curMoveProbs[action]; 
+		}
+		covector1 EV1; 
+		covector2 EV2; 
+		covector1 newReach1 = reach1; 
+		covector2 newReach2 = reach2; 
+		if (player == 1) newReach1 *= moveProbs1; 
+		if (player == 2) newReach2 *= moveProbs2;
+		GameState ngs = gs; 
+		ngs.prevbid = gs.curbid;
+		ngs.curbid = i; 
+		ngs.callingPlayer = player;
+		newbidseq = bidseq;//Was: ull
+		newbidseq |= (1ULL << (BLUFFBID-i)); 
 
-    pcs(ngs, 3-player, depth+1, newbidseq, updatePlayer, newReach1, newReach2, phase, EV1, EV2); 
+		pcs(ngs, 3-player, depth+1, newbidseq, updatePlayer, newReach1, newReach2, phase, EV1, EV2); 
 
-    if (player == updatePlayer)
-    {
-      if (player == 1)
-      {
-        moveEVs1[action] = EV1;
-        EV1 *= moveProbs1;
-        result1 += EV1;
-      }
-      else if (player == 2)
-      {
-        moveEVs2[action] = EV2;
-        EV2 *= moveProbs2;
-        result2 += EV2;
-      }
-    }
-    else 
-    {
-      if (updatePlayer == 1)    
-        result1 += EV1;
-      else if (updatePlayer == 2)    
-        result2 += EV2;
-    }
-  }
+		if (player == updatePlayer) {
+			if (player == 1) {
+				moveEVs1[action] = EV1;
+				EV1 *= moveProbs1;
+				result1 += EV1;
+			}
+			else if (player == 2) {
+				moveEVs2[action] = EV2;
+				EV2 *= moveProbs2;
+				result2 += EV2;
+			}
+		}
+		else {
+			if (updatePlayer == 1) result1 += EV1;
+			else if (updatePlayer == 2) result2 += EV2;
+		}
+	}
 
-  // now the real stuff, cfr updates
+	// now the real stuff, cfr updates
 
-  if (player == updatePlayer && phase == 1)
-  {
-    // regrets will be changed, so make sure to indicate it to prob updater
-    for (int o = 0; o < co; o++)
-      is[o].lastUpdate = iter;
+	if (player == updatePlayer && phase == 1) {
+		// regrets will be changed, so make sure to indicate it to prob updater
+		for (let o = 0; o < co; o++) is[o].lastUpdate = iter;//Was: int
 
-    for (int o = 0; o < co; o++)
-    {
-      for (int a = 0; a < actionshere; a++)
-      {
-        double moveEV = (player == 1 ? moveEVs1[a][o] : moveEVs2[a][o]);
-        double resulto = (player == 1 ? result1[o] : result2[o]); 
+		for (let o = 0; o < co; o++) {//Was: int
+			for (let a = 0; a < actionshere; a++) {//Was: int
+				let moveEV = (player == 1 ? moveEVs1[a][o] : moveEVs2[a][o]);//Was: double
+				let resulto = (player == 1 ? result1[o] : result2[o]); //Was: double
+				is[o].cfr[a] += (moveEV - resulto); 
+			}
+		}
+	}
 
-        is[o].cfr[a] += (moveEV - resulto); 
-      }
-    }
-  }
+	if (player == updatePlayer && phase <= 2) {
+		for (let o = 0; o < co; o++) {//Was: int
+			for (let a = 0; a < actionshere; a++) {//Was: int
+				let my_prob = (player == 1 ? reach1[o] : reach2[o]);//Was: double
+				// update total probs
+				is[o].totalMoveProbs[a] += my_prob*is[o].curMoveProbs[a];
+			}
+		}
+	}
 
-  if (player == updatePlayer && phase <= 2)
-  {
-    for (int o = 0; o < co; o++)
-    {
-      for (int a = 0; a < actionshere; a++)
-      {
-        double my_prob = (player == 1 ? reach1[o] : reach2[o]);
-
-        // update total probs
-        is[o].totalMoveProbs[a] += my_prob*is[o].curMoveProbs[a];
-      }
-    }
-  }
-
-  if (player == updatePlayer) 
-  {
-    for (int o = 0; o < co; o++) 
-    {
-      iss.put(infosetkeys[o], is[o], actionshere, 0); 
-    }
-  }
+	if (player == updatePlayer) {
+	for (let o = 0; o < co; o++) {//Was: int
+	iss.put(infosetkeys[o], is[o], actionshere, 0); 
+	}
+	}
 
 
 
 
+}//»
+
+const main = (argc, argv) => {//«
+	let maxNodesTouched = 0; //Was: ull
+	let maxIters = 0; //Was: ull
+	init();
+
+	if (argc < 2) {
+		initInfosets();
+		exit(-1);
+	}
+	else { 
+		let filename = argv[1];//Was: string
+		log("Reading the infosets from " , filename , "...");
+		iss.readFromDisk(filename);
+
+		if (argc >= 3) maxIters = to_ull(argv[2]);
+	}  
+
+	// get the iteration
+	let filename = argv[1];//Was: string
+	vector<string> parts; 
+	split(parts, filename, '.'); 
+	if (parts.size() != 3 || parts[1] == "initial") iter = 1; 
+	else iter = to_ull(parts[1]); 
+	log("Set iteration to " , iter);
+	iter = MAX(1,iter);
+
+	unsigned long long bidseq = 0; 
+
+	StopWatch stopwatch;
+	double totaltime = 0; 
+
+	log("Starting PCS iterations");
+
+	for (; true; iter++) {
+		covector1 reach1(1.0); 
+		covector2 reach2(1.0); 
+		covector1 result1; 
+		covector2 result2;
+
+		GameState gs1; 
+		bidseq = 0; 
+		pcs(gs1, 1, 0, bidseq, 1, reach1, reach2, 1, result1, result2);
+
+		GameState gs2; 
+		bidseq = 0; 
+		reach1.reset(1.0);
+		reach2.reset(1.0);
+		pcs(gs2, 1, 0, bidseq, 2, reach1, reach2, 1, result1, result2);
+
+		if (iter % 10 == 0) { 
+			log("."); 
+			totaltime += stopwatch.stop();
+			stopwatch.reset();
+		}
+
+		// it's a bit unfair to compare to other algorithms using nodes touched for PCS since 
+		// significantly more work done per node touched, which is why we compared by time 
+
+		if ((maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) ||
+			(maxNodesTouched == 0 && nodesTouched >= ntNextReport)) {
+
+			log("total time: " , totaltime , " seconds."); 
+			log("Done iteration " , iter);
+
+			log("Computing bounds... "); 
+			//cout.flush(); 
+			let b1 = 0.0, b2 = 0.0;//Was: double
+			iss.computeBound(b1, b2); 
+			log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
+
+			ntNextReport *= ntMultiplier; // need this here, before dumping metadata
+
+			let conv = computeBestResponses(false);//Was: double
+			report("pcs.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
+			//dumpInfosets("iss");
+
+			stopwatch.reset(); 
+
+			if (maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) break;
+		}
+
+		if (iter == maxIters) break;
+	}
+}//»
+
+}//»
+function CFR_NS(){//«
+
+//static unsigned long long nextReport = 1;
+let nextReport = 1;
+//static unsigned long long reportMult = 2;
+let reportMult = 2;
+
+//GS = GameState
+const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, updatePlayer) => {//«
+//		   GS &  int	 int	ull		dbl		dbl		dbl			 int	int 		-> double
+// This is Vanilla CFR. See my thesis, Algorithm 1 (Section 2.2.2)
+//double cfr(GameState & gs, int player, int depth, unsigned long long bidseq, double reach1, double reach2, double chanceReach, int phase, int updatePlayer) {
+
+//GameState gs (struct):«
+//  int p1roll;           // the outcome of p1's roll
+//  int p2roll;           // the outcome of p2's roll
+//  int curbid;           // current bid (between 1 and 13)
+//  int prevbid;          // prev bid from last turn
+//  int callingPlayer;    // the player calling bluff (1 or 2)
+//»
+
+  // at terminal node?
+//YWRK return (gs.curbid == BLUFFBID);
+	if (terminal(gs)) {
+		return payoff(gs, updatePlayer);
+	}
+	nodesTouched++;//NS: Bluff
+
+	// Chances nodes at the top of the tree. If p1roll and p2roll not set, we're at a chance node
+	if (gs.p1roll == 0) {//«
+		let EV = 0.0;//Was: double 
+		for (let i = 1; i <= numChanceOutcomes(1); i++) {//Was: int
+			GameState ngs = gs; 
+			ngs.p1roll = i; 
+			let newChanceReach = getChanceProb(1,i)*chanceReach;//Was: double
+			EV += getChanceProb(1,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
+		}
+		return EV;
+	}//»
+	else if (gs.p2roll == 0) {//«
+		let EV = 0.0; //Was: double
+		for (let i = 1; i <= numChanceOutcomes(2); i++) {//Was: int
+			GameState ngs = gs; 
+			ngs.p2roll = i; 
+			let newChanceReach = getChanceProb(2,i)*chanceReach;//Was: double
+			EV += getChanceProb(2,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
+		}
+		return EV;
+	}//»
+
+	// Check for cuts. This is the pruning optimization described in Section 2.2.2 of my thesis. 
+	if (phase == 1 && (   (player == 1 && updatePlayer == 1 && reach2 <= 0.0) ||//«
+		 (player == 2 && updatePlayer == 2 && reach1 <= 0.0))) {
+		phase = 2; 
+	}//»
+	if (phase == 2 && (   (player == 1 && updatePlayer == 1 && reach1 <= 0.0) ||//«
+		 (player == 2 && updatePlayer == 2 && reach2 <= 0.0))) {
+		return 0.0;
+	}//»
+
+	// declare the variables 
+	Infoset is;
+	let infosetkey = 0;//Was: ull
+	let stratEV = 0.0;//Was: double
+	let action = -1;//Was: int
+
+	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+	let actionshere = maxBid - gs.curbid; //Was: int
+
+	assert(actionshere > 0);
+	//double moveEVs[actionshere]; 
+	let moveEVs = new Array(actionshere);
+//Was: int
+	for (let i = 0; i < actionshere; i++) moveEVs[i] = 0.0;
+
+	// get the info set (also set is.curMoveProbs using regret matching)
+	getInfoset(gs, player, bidseq, is, infosetkey, actionshere); 
+
+	// iterate over the actions
+	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int«
+		// there is a valid action here
+		action++;
+		assert(action < actionshere);
+
+		let newbidseq = bidseq;//Was: ull
+		let moveProb = is.curMoveProbs[action]; //Was: double
+		let newreach1 = (player == 1 ? moveProb*reach1 : reach1); //Was: double
+		let newreach2 = (player == 2 ? moveProb*reach2 : reach2); //Was: double
+
+		GameState ngs = gs; 
+		ngs.prevbid = gs.curbid;
+		ngs.curbid = i; 
+		ngs.callingPlayer = player;
+		newbidseq |= (1ULL << (BLUFFBID-i)); 
+
+		let payoff = cfr(ngs, 3-player, depth+1, newbidseq, newreach1, newreach2, chanceReach, phase, updatePlayer); //Was: double
+
+		moveEVs[action] = payoff; 
+		stratEV += moveProb*payoff; 
+	}//»
+
+	// post-traversals: update the infoset
+	let myreach = (player == 1 ? reach1 : reach2); //Was: double
+	let oppreach = (player == 1 ? reach2 : reach1); //Was: double
+
+	if (phase == 1 && player == updatePlayer) {// regrets«
+		for (let a = 0; a < actionshere; a++) {//Was: int
+		// Multiplying by chanceReach here is important in games that have non-uniform chance outcome 
+		// distributions. In Bluff(1,1) it is actually not needed, but in general it is needed (e.g. 
+		// in Bluff(2,1)). 
+			is.cfr[a] += (chanceReach*oppreach)*(moveEVs[a] - stratEV); 
+		}
+	}//»
+
+	if (phase >= 1 && player == updatePlayer) {// av. strat«
+		for (let a = 0; a < actionshere; a++) {//Was: int
+			is.totalMoveProbs[a] += myreach*is.curMoveProbs[a]; 
+		}
+	}//»
+
+	// save the infoset back to the store if needed
+	if (player == updatePlayer) {//«
+		iss.put(infosetkey, is, actionshere, 0); 
+	}//»
+
+	return stratEV;
 }//»
 const main = (argc, argv) => {//«
-  let maxNodesTouched = 0; //Was: ull
-  let maxIters = 0; //Was: ull
-  init();
+//int main(int argc, char ** argv) {
+//unsigned long long maxIters = 0; 
+	let maxIters = 0; 
+	init();//WMNH
 
-  if (argc < 2)
-  {
-    initInfosets();
-    exit(-1);
-  }
-  else 
-  { 
-    string filename = argv[1];
-    cout << "Reading the infosets from " << filename << "..." << endl;
-    iss.readFromDisk(filename);
+	if (argc < 2) {
+		initInfosets();
+		exit(-1);
+	}
+	else { 
+		let filename = argv[1];//Was: string
+		log("Reading the infosets from " , filename , "...");
+		iss.readFromDisk(filename);
 
-    if (argc >= 3)
-      maxIters = to_ull(argv[2]);
-  }  
-  
-  // get the iteration
-  string filename = argv[1];
-  vector<string> parts; 
-  split(parts, filename, '.'); 
-  if (parts.size() != 3 || parts[1] == "initial")
-    iter = 1; 
-  else
-    iter = to_ull(parts[1]); 
-  cout << "Set iteration to " << iter << endl;
-  iter = MAX(1,iter);
+		if (argc >= 3)
+		maxIters = to_ull(argv[2]);
+	}  
 
-  unsigned long long bidseq = 0; 
-    
-  StopWatch stopwatch;
-  double totaltime = 0; 
+	// get the iteration
+	// string filename = argv[1];
+	let filename = argv[1];
+	vector<string> parts; 
+	split(parts, filename, '.'); 
+	if (parts.size() != 3 || parts[1] == "initial") iter = 1; 
+	else iter = to_ull(parts[1]); 
+	log("Set iteration to " , iter);
+	iter = MAX(1,iter);
 
-  cout << "Starting PCS iterations" << endl;
+	//unsigned long long bidseq = 0; 
+	let bidseq = 0; 
 
-  for (; true; iter++)
-  {
-    covector1 reach1(1.0); 
-    covector2 reach2(1.0); 
-    covector1 result1; 
-    covector2 result2;
+	StopWatch stopwatch;
+	//double totaltime = 0; 
+	let totaltime = 0; 
 
-    GameState gs1; 
-    bidseq = 0; 
-    pcs(gs1, 1, 0, bidseq, 1, reach1, reach2, 1, result1, result2);
-    
-    GameState gs2; 
-    bidseq = 0; 
-    reach1.reset(1.0);
-    reach2.reset(1.0);
-    pcs(gs2, 1, 0, bidseq, 2, reach1, reach2, 1, result1, result2);
+	log("Starting CFR iterations");
 
-    if (iter % 10 == 0)
-    { 
-      cout << "."; cout.flush(); 
-      totaltime += stopwatch.stop();
-      stopwatch.reset();
-    }
+	for (; true; iter++) {//«
+		GameState gs1; 
+		bidseq = 0; 
+		let ev1 = cfr(gs1, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 1);//Was: double
 
-    // it's a bit unfair to compare to other algorithms using nodes touched for PCS since 
-    // significantly more work done per node touched, which is why we compared by time 
+		GameState gs2; 
+		bidseq = 0; 
+		let ev2 = cfr(gs2, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 2);//Was: double
 
-    if (   (maxNodesTouched > 0 && nodesTouched >= maxNodesTouched)
-        || (maxNodesTouched == 0 && nodesTouched >= ntNextReport))
-    {
-      cout << endl;
+		if (iter % 10 == 0) {//«
+			cout << "."; cout.flush(); 
+			totaltime += stopwatch.stop();
+			stopwatch.reset();
+		}//»
+		if (iter == 1 || nodesTouched >= ntNextReport) {//«
+			//cout << endl;
 
-      cout << "total time: " << totaltime << " seconds." << endl; 
-      cout << "Done iteration " << iter << endl;
+			log("total time: " , totaltime , " seconds."); 
+			log("Done iteration " , iter);
 
-      cout << "Computing bounds... "; cout.flush(); 
-      double b1 = 0.0, b2 = 0.0;
-      iss.computeBound(b1, b2); 
-      cout << " b1 = " << b1 << ", b2 = " << b2 << ", bound = " << (2.0*MAX(b1,b2)) << endl;
-      
-      ntNextReport *= ntMultiplier; // need this here, before dumping metadata
+			log("ev1 = " , ev1 , ", ev2 = " , ev2);
 
-      double conv = computeBestResponses(false);
-      report("pcs.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
-      //dumpInfosets("iss");
-      cout << endl;
-     
-      stopwatch.reset(); 
-    
-      if (maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) 
-        break;
-    }
+			// This bound is the right-hand side of Theorem 3 from the original CFR paper.
+			// \sum_{I \in \II_i} R_{i,imm}^{T,+}(I)
 
-    if (iter == maxIters) break;
-  }
-}//»
+			log("Computing bounds... ");
+			//	  cout.flush(); //???
+			let b1 = 0.0, b2 = 0.0;//Was: double
+			iss.computeBound(b1, b2); 
+			log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
 
-}//»
-function Sampling(){//«
+			let conv = 0.0;//Was: double
+			let p1value = 0.0;//Was: double
+			let p2value = 0.0;//Was: double
+			conv = computeBestResponses(false, p1value, p2value);
 
-//#include "bluff.h"
+			report("cfr.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
+		//dumpInfosets("iss");
 
-const sampleChanceEvent = (player, outcome, prob) => {//«
-//void sampleChanceEvent(int player, int & outcome, double & prob) {
-  int co = (player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));
+		//  cout << endl;
 
-  double roll = unifRand01();
-  double sum = 0.0;
+			nextCheckpoint += cpWidth;
+			nextReport *= reportMult;
+			ntNextReport *= ntMultiplier;
 
-  for (int i = 0; i < co; i++)
-  {
-    double pr = getChanceProb(player, i+1);
+			stopwatch.reset(); 
+		}//»
 
-    if (roll >= sum && roll < sum+pr) {
-      outcome = (i+1);
-      prob = pr;
-      return;
-    }
-
-    sum += pr;
-  }
-
-  cout << "roll = " << roll << endl;
-  assert(false);
-}//»
-const sampleMoveAvg = (is, actionshere, index, prob) => {//«
-//void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob){
-  double den = 0;
-
-  for (int i = 0; i < actionshere; i++)
-    den += is.totalMoveProbs[i];
-
-  double roll = unifRand01();
-  double sum = 0.0;
-
-  for (int i = 0; i < actionshere; i++)
-  {
-    double iprob = (den > 0.0 ? (is.totalMoveProbs[i] / den) : (1.0 / actionshere));
-    CHKPROB(prob);
-
-    if (roll >= sum && roll < sum+iprob) {
-      index = i;
-      prob = iprob;
-      return;
-    }
-
-    sum += iprob;
-  }
-
-  assert(false);
-
-}//»
-const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) => {//«
-//int sampleAction(Infoset & is, int actionshere, double & sampleprob, double epsilon, bool firstTimeUniform) {
-
-  // **Only do this when enabled by firstTimeUniform:
-  //      if this infoset has never been updated: choose entirely randomly
-  //      reason: there is no regret yet, hence no strategy.
-  //
-  double eps = 0.0;
-  if (firstTimeUniform)
-    eps = (is.lastUpdate == 0 ? 1.0 : epsilon);
-  else
-    eps = epsilon;
-
-  // build the distribution to sample from
-  double dist[actionshere];
-  for (int a = 0; a < actionshere; a++)
-    dist[a] = eps*(1.0 / actionshere) + (1.0-eps)*is.curMoveProbs[a];
-
-  double roll = unifRand01();
-  double sum = 0.0;
-  for (int a = 0; a < actionshere; a++)
-  {
-    if (roll >= sum && roll < sum+dist[a])
-    {
-      sampleprob = dist[a];
-      return a;
-    }
-
-    sum += dist[a];
-  }
-
-  assert(false);
-  return -1;
+		if (iter == maxIters) break;
+	}//»
 }//»
 
 }//»
