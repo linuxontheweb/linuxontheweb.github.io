@@ -1,10 +1,95 @@
-/* Example weird C++ idiom @WMNGHKHF
-This is just a fancy way to assign to onf of two struct fields: gs.p2roll or gs.p1roll
+/*7/24/25: Just relax and ponder over InfosetStore_NS.«
+
+Below, IS.<whatever> means InfosetStore.<whatever>, and will appear in the codebase as 
+iss.<whatever>.
+
+IS.#addingInfosets is only checked for in IS.#put_priv. It is only set to true
+in @EYURK in IS.init(). It is set to false by IS.readFromDisk() and  IS.stopAdding(), 
+which is called only in Bluff_NS.initInfosets().
+
+The "main funcs" are in CFR_NS and PCS_NS, which are the CLI interfaces into the library calls,
+
+Both main functions:
+
+if (argc < 2) {
+	initInfosets();//Calls InfosetStore.dumpToDisk
+	exit(-1);
+}
+
+
+Bluff_NS.dumpInfosets() is the only other place where InfosetStore.dumpToDisk()
+is called, but this is only called in currently commented out places in the
+various main funcs (e.g. @WSUROK). I assume that these should be incommented in
+"live" installations of the codebase. Otherwise, there doesn't seem to be
+anywhere else that actual data (determined by the game algorithm) is written to
+disk. Just before these commented out are calls to "report", which looks like:
+
+outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
+
+So this just looks like a basic logging system to see how long the algorithm takes,
+rather than doing everything that is needed to get everything working.
+
+* * *
+
+readBytes is called only by readFromDisk, which is called only by the main funcs
+(it is also called from importValues, but importValues isn't itself called anywhere, 
+so it is commented out.)
+
+So any infoset that is read during the runtime algorithm is read from memory.
+
+* * *
+
+Common idiom:
+
+Infoset is
+//...stuff
+getInfoset(gs, player, bidseq, is, infosetkey, actionshere); 
+//...stuff
+
+
+void getInfoset(GameState & gs, int player, unsigned long long bidseq, Infoset & is, unsigned long long & infosetkey, int actionshere){
+	infosetkey = getInfosetKey(gs, player, bidseq);
+	bool ret = iss.get(infosetkey, is, actionshere, 0);
+	assert(ret);
+}
+
+
+Infoset {
+
+#get_priv(){
+//Fields that are updated in the infoset
+//...
+	infoset.actionshere = static_cast<int>(x); 
+//...
+	infoset.lastUpdate = x; 
+//...
+		infoset.cfr[m] = this.#tablerows[row][col];
+
+//...
+		infoset.totalMoveProbs[m] = this.#tablerows[row][col];
+//...
+				infoset.curMoveProbs[movenum] = 0.0;
+//...
+}
+//...
+public:
+get(infoset_key, infoset, moves, firstmove){
+//bool get(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
+	return this.#get_priv(infoset_key, infoset, moves, firstmove);
+}
+//...
+}
+
+»*/
+/*7/23/25 Example weird C++ idiom @WMNGHKHF«
+This is just a fancy way to assign to one of two struct fields: gs.p2roll or gs.p1roll
 double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
+	int updatePlayer = 3-fixed_player;
 	int & oppRoll = (updatePlayer == 1 ? gs.p2roll : gs.p1roll); 
 	oppRoll = oppChanceOutcome;
+	return payoff(gs, updatePlayer); 
 }
-*/
+»*/
 //« 7/21/25: This file exists to implement Marc Lanctot (UAlberta, Maastricht, etc) 
 // and company's stuff on the open internets.
 //»
@@ -340,7 +425,7 @@ stop() {
 
 };//»
 
-function Util(){//«
+function Util_NS(){//«
 
 //#include "bluff.h"
 
@@ -517,7 +602,6 @@ const ROWS = 100
 
 //st: static
 let totalLookups = 0;//Was:st ull
-
 let totalMisses = 0;//Was:st ull
 
 return class {
@@ -527,41 +611,31 @@ return class {
 // stores the position of each infoset in the large table
 // unlike in bluffpt, this is a hash table that uses linear probing
 
-//unsigned long long * indexKeys; 
-#indexKeys;
-//unsigned long long * indexVals; 
-#indexVals;
-//unsigned long long indexSize;
-#indexSize;
+#indexKeys;//Was: ull *
+#indexVals;//Was: ull *
+#indexSize;//Was: ull
 
 // To avoid large contiguous portions of memory, store as rows of bitsets
-// double ** tablerows;
-#tablerows;
+#tablerows;//Was: dbl **
 
 // total items to be stored
 // size in bytes of each
 // # bytes per row
 // # rows
-// unsigned long long size; 
-#size;
-// unsigned long long rowsize;
-#rowsize;
-// unsigned long long rows;
-#rows;
+#size;//Was: ull
+#rowsize;//Was: ull
+#rows;//Was: ull
 
 // last row is the leftover (smaller)
-// unsigned long long lastRowSize;
-#lastRowSize;
+#lastRowSize;//Was: ull
 
 // are we added infosets to this store? when doing so, we update the infoset counter
 // and add info to the index. when not doing so, we assume the index will get us our
 // position and simply replace what's there
-//bool addingInfosets;
-#addingInfosets;
-//unsigned long long nextInfosetPos;
-#nextInfosetPos;
-//unsigned long long added;
-#added;
+#addingInfosets;//Was: bool
+#nextInfosetPos;//Was: ull
+#added;//Was: ull
+
 //»
 
 #get_priv(infoset_key, infoset, moves, firstmove) {//«
@@ -579,7 +653,7 @@ return class {
 
 	// get the number of moves
 	assert(row < this.#rows); assert(col < curRowSize); assert(pos < this.#size); 
-	let x;//unsigned long long x; 
+	let x;//Was: ull
 	let y = this.#tablerows[row][col];//double y = tablerows[row][col];
 	assert(sizeof(x) == sizeof(double));
 	memcpy(&x, &y, sizeof(x)); 
@@ -645,13 +719,10 @@ return class {
 //void put_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
 	let row, col, pos, curRowSize;// unsigned long long row, col, pos, curRowSize;
 	assert(moves > 0);
-	let newinfoset = false; //bool newinfoset = false; 
+	let newinfoset = false;//Was: bool
+	let hashIndex = 0;//Was: ull
 
-	let hashIndex = 0; //unsigned long long hashIndex = 0;
-
-	//unsigned long long thepos = getPosFromIndex(infoset_key, hashIndex);  
-	//unsigned long long thepos = getPosFromIndex2(infoset_key, hashIndex);  
-	let thepos = this.getPosFromIndex2(infoset_key, hashIndex);  
+	let thepos = this.getPosFromIndex2(infoset_key, hashIndex);//Was: ull, getPosFromIndex(a,b)
 	if (this.#addingInfosets && thepos >= this.#size) {
 		newinfoset = true; 
 		// new infoset to be added at the end
@@ -748,25 +819,6 @@ constructor(){//«
 //  InfosetStore(){
 	this.#tablerows = null;
 }//»
-destroy() {//«
-//void destroy() {
-	if (tablerows != NULL) {
-		delete [] indexKeys; 
-		delete [] indexVals;
-
-		for (let i = 0; i < this.#rows; i++) {//Was: uint
-			delete [] tablerows[i];
-		}
-		delete [] tablerows;
-	}
-
-	tablerows = NULL;
-}//»
-/*«~InfosetStore()
-~InfosetStore() {
-	destroy(); 
-}
-»*/
 init(_size, _indexsize) {//«
 
 // First param: total # of doubles needed. 
@@ -801,12 +853,11 @@ init(_size, _indexsize) {//«
 	this.#indexKeys = new Array(this.#indexSize);//Was: ull[]
 	this.#indexVals = new Array(this.#indexSize);//Was: ull[]
 	for (let i = 0; i < this.#indexSize; i++) { //Was: ull
-		this.#indexKeys[i] = this.#indexVals[i] = size;   // used to indicate that no entry is present
+		this.#indexKeys[i] = this.#indexVals[i] = size;// used to indicate that no entry is present
 	}
 	// allocate the rows 
 	// To avoid large contiguous portions of memory, store as rows of bitsets
 	// double ** tablerows;
-	//  this.#tablerows = new double* [this.#rows];
 	this.#tablerows = new Array(this.#rows);
 	assert(tablerows != NULL);
 	for (let i = 0; i < this.#rows; i++) {//Was: ull
@@ -827,244 +878,33 @@ init(_size, _indexsize) {//«
 	}
 
 	// set to adding information sets
-	this.#addingInfosets = true;
+	this.#addingInfosets = true;//EYURK
 	this.#nextInfosetPos = 0;
 	this.#added = 0;
 
 	log("IS: init done. ");
 }//»
-getSize() { //«
-//  unsigned long long getSize() { return size; }
-	return this.#size; 
-}//»
-  // returns the position into the large table or indexSize if not found
-  // hashIndex is set to the index of the hash table where this key would go
-getPosFromIndex1(infoset_key) {//«
-// use this one if you don't care about the hashIndex
-// unsigned long long getPosFromIndex(unsigned long long infoset_key);
-	let hi = 0;//Was: ull
-	return this.getPosFromIndex2(infoset_key, hi); 
-}//»
-getPosFromIndex2(infoset_key, hashIndex) {//«
-//unsigned long long getPosFromIndex(unsigned long long infoset_key, unsigned long long & hashIndex); 
-	let start = infoset_key % this.#indexSize; //Was: ull
-	let misses = 0; //Was: ull
-	for (let i = start; misses < this.#indexSize; misses++) {//Was: ull
-		if (this.#indexKeys[i] == infoset_key && this.#indexVals[i] < size)  {
-			// cache hit 
-			totalLookups++; 
-			totalMisses += misses;
-			hashIndex = i; 
-			return this.#indexVals[i]; 
+
+destroy() {//«
+//void destroy() {
+	if (tablerows != NULL) {
+		delete [] indexKeys; 
+		delete [] indexVals;
+
+		for (let i = 0; i < this.#rows; i++) {//Was: uint
+			delete [] tablerows[i];
 		}
-		else if (indexVals[i] >= size){// index keys can be >= size since they're arbitrary, but not values!
-			totalLookups++; 
-			totalMisses += misses;
-			hashIndex = i;
-			return size; 
-		}
-		i = i+1; 
-		if (i >= this.#indexSize) i = 0; 
+		delete [] tablerows;
 	}
 
-	// should be large enough to hold everything
-	assert(false); 
-	return 0;
+	tablerows = NULL;
 }//»
-getStats(){//«
-//  std::string getStats();
-//  string str; 
-/*
-  str += (to_string(size) + " "); 
-  str += (to_string(rowsize) + " "); 
-  str += (to_string(rows) + " "); 
-  str += (to_string(lastRowSize) + " "); 
-  str += (to_string(added) + " "); 
-  str += (to_string(nextInfosetPos) + " "); 
-  str += (to_string(totalLookups) + " "); 
-  str += (to_string(totalMisses) + " "); 
-*/
-	let str="";
-	str += (this.#size + " "); 
-	str += (this.#rowsize + " "); 
-	str += (this.#rows + " "); 
-	str += (this.#lastRowSize + " "); 
-	str += (this.#added + " "); 
-	str += (this.#nextInfosetPos + " "); 
-	str += (totalLookups + " "); 
-	str += (totalMisses + " "); 
+/*«~InfosetStore()
+~InfosetStore() {
+	destroy(); 
+}
+»*/
 
-	let avglookups = (totalLookups + totalMisses) / (totalLookups); //Was: dbl
-
-	let percent_full = (this.#nextInfosetPos) /  (this.#size) * 100.0;  //Was: dbl
-
-	str += (avglookups + " ");
-	str += (percent_full + "% full"); 
-	return str;
-
-}//»
-stopAdding() { //«
-	this.#addingInfosets = false;
-} //»
-getNextPos() { //«
-//unsigned long long getNextPos() { 
-	return this.#nextInfosetPos; 
-}//»
-getAdded() { //«
-//unsigned long long getAdded() { 
-	return this.#added; 
-}//»
-get(infoset_key, infoset, moves, firstmove){//«
-//bool get(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-	return this.#get_priv(infoset_key, infoset, moves, firstmove);
-}//»
-put(infoset_key, infoset, moves, firstmove) {//«
-//void put(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-	this.#put_priv(infoset_key, infoset, moves, firstmove);
-}//»
-writeBytes(out, addr, num){//«
-//  void writeBytes(std::ofstream & out, void * addr, unsigned int num);  
-	out.write(reinterpret_cast<const char *>(addr), num); 
-}//»
-dumpToDisk(filename) {//«
-//void dumpToDisk(std::string filename);
-	ofstream out(filename.c_str(), ios::out | ios::binary); 
-	assert(out.is_open()); 
-
-	assert(sizeof(unsigned long long) == 8); 
-	assert(sizeof(double) == 8);
-
-	// some integers
-	this.writeBytes(out, &indexSize, 8);
-	this.writeBytes(out, &size, 8);
-	this.writeBytes(out, &rowsize, 8);
-	this.writeBytes(out, &rows, 8);
-	this.writeBytes(out, &lastRowSize, 8);
-
-	// the index
-	for (let i = 0; i < this.#indexSize; i++) {//Was: ull
-		this.writeBytes(out, indexKeys + i, 8); 
-		this.writeBytes(out, indexVals + i, 8); 
-	}
-
-	//the table
-	//unsigned long long pos = 0, row = 0, col = 0, curRowSize = rowsize; 
-	let pos = 0, row = 0, col = 0, curRowSize = rowsize; 
-	while (pos < size) {
-		this.writeBytes(out, this.tablerows[row] + col, 8);  
-		this.#next(row, col, pos, curRowSize); 
-	}
-
-	out.close();
-}//»
-readBytes(in, addr,  num) {//«
-//  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
-	in.read(reinterpret_cast<char *>(addr), num); 
-}//»
-readFromDisk(filename) {//«
-//bool readFromDisk(std::string filename);
-	this.#addingInfosets = false; 
-	this.#nextInfosetPos = 0; 
-	this.#added = 0; 
-
-	ifstream in(filename.c_str(), ios::in | ios::binary); 
-	//assert(in.is_open());  
-	if (!in.is_open()) return false; 
-
-	// some integers
-	this.readBytes(in, &indexSize, 8);        
-	this.readBytes(in, &size, 8);        
-	this.readBytes(in, &rowsize, 8);        
-	this.readBytes(in, &rows, 8);        
-	this.readBytes(in, &lastRowSize, 8);        
-
-	// the index
-	this.#indexKeys = new Array(indexSize);//Was: ull[]
-	this.#indexVals = new Array(indexSize);//Was: ull[]
-	for (let i = 0; i < indexSize; i++) {//Was: ull
-		this.readBytes(in, indexKeys + i, 8); 
-		this.readBytes(in, indexVals + i, 8); 
-	}
-
-	// table rows (allocation)
-	this.#tablerows = new Array(this.#rows);//Was: dbl* []
-	assert(tablerows != NULL);
-	for (let i = 0; i < this.#rows; i++) {//Was: ull
-		if (i != (this.#rows-1)) {
-			this.#tablerows[i] = new Array(this.#rowsize);//Was: dbl[]
-			assert(tablerows[i] != NULL);
-			for (let j = 0; j < this.#rowsize; j++) {//Was: ull
-				this.#tablerows[i][j] = 0.0;
-			}
-		}
-		else {
-			this.#tablerows[i] = new Array(this.#lastRowSize);//Was: dbl[]
-			assert(tablerows[i] != NULL);
-			for (let j = 0; j < this.#lastRowSize; j++){//Was: uint
-				this.#tablerows[i][j] = 0.0;
-			}
-		}
-	}
-
-	// tablerows (read from disk)
-	let pos = 0, row = 0, col = 0, curRowSize = rowsize; //Was: ull
-	while (pos < size) {
-		this.readBytes(in, this.#tablerows[row] + col, 8);  
-		this.#next(row, col, pos, curRowSize); 
-	}
-
-	in.close();
-
-	return true;
-}//»
-contains(infoset_key) {//«
-//bool contains(unsigned long long infoset_key);
-	assert(infoset_key < indexSize); 
-	let pos = this.getPosFromIndex1(infoset_key); //Was: ull
-	return (pos >= size ? false : true);
-}//»
-printValues(){//«
-//void printValues(); 
-	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
-		if (this.#indexVals[i] < this.#size) {
-			// this is a valid position
-			let row, col, pos, curRowSize;//Was: ull
-			pos = this.#indexVals[i];
-			row = pos / this.#rowsize;
-			col = pos % this.#rowsize;
-			curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
-
-			log("infosetkey = " , this.#indexKeys[i]); 
-			log(", infosetkey_str = " , infosetkey_to_string(this.#indexKeys[i]));
-
-			// read # actions
-			let actionshere = 0;//Was: ull
-			assert(sizeof(actionshere) == sizeof(double)); 
-			memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
-			this.#next(row, col, pos, curRowSize);
-
-			// read the integer
-			let lastUpdate = 0;//Was: ull
-			let x = this.#tablerows[row][col];//Was: dbl
-			memcpy(&lastUpdate, &x, sizeof(actionshere)); 
-			this.#next(row, col, pos, curRowSize);
-			log(", actions = " , actionshere , ", lastUpdate = " , lastUpdate);
-			for (let a = 0; a < actionshere; a++){//Was: ull
-				// cfr
-				assert(row < rows);
-				assert(col < curRowSize); 
-				log("  cfr[" , a , "]=" , tablerows[row][col]); 
-				this.#next(row, col, pos, curRowSize);
-				// total move probs
-				log("  tmp[" , a , "]=" , tablerows[row][col]); 
-				// cout << endl;
-				this.#next(row, col, pos, curRowSize);
-				// next cfr
-			}
-			//      cout << endl;
-		}
-	}
-}//»
 computeBound(sum_RTimm1, sum_RTimm2){//«
 //  void computeBound(double & sum_RTimm1, double & sum_RTimm2); 
 	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
@@ -1120,69 +960,17 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 //	sum_RTimm2 /= static_cast<double>(iter); 
 	sum_RTimm2 /= iter;
 }//»
-importValues(player, filename) {//«
-  // used to save memory when evaluation strategies from 2 diff strat files
-//  void importValues(int player, std::string filename);
-	ifstream in(filename.c_str(), ios::in | ios::binary);
 
-	let oIndexSize = 0, osize = 0, orowsize = 0, orows = 0, olastRowSize = 0;//Was: ull
-
-	this.readBytes(in, &oIndexSize, 8);        
-	this.readBytes(in, &osize, 8);        
-	this.readBytes(in, &orowsize, 8);        
-	this.readBytes(in, &orows, 8);        
-	this.readBytes(in, &olastRowSize, 8);        
-
-	assert(oIndexSize == this.#indexSize);
-	assert(osize == this.#size);
-	assert(orowsize == this.#rowsize);
-	assert(orows == this.#rows);
-	assert(olastRowSize == this.#lastRowSize);
-
-	let maskresult = player - 1;//Was: ull
-
-	for (let i = 0; i < oIndexSize; i++) {//Was: uint
-		Infoset is;
-
-		// next index element
-		streampos sp = (5 + i*2); sp = sp*8;
-		in.seekg(sp);
-
-		let key = 0, val = 0;//Was: ull
-		this.readBytes(in, &key, 8);
-		this.readBytes(in, &val, 8);
-
-		if ((key & 1ULL) == maskresult && val < size) {
-			streampos fp = 5;
-			fp += oIndexSize*2;
-			fp += val;
-			fp = fp*8;
-
-			in.seekg(fp);
-
-			let actionshere = 0;//Was: ull
-			let lastUpdate = 0;//Was: ull
-
-			this.readBytes(in, &actionshere, 8);
-			this.readBytes(in, &lastUpdate, 8);
-
-			is.actionshere = actionshere;//static_cast<int>(actionshere);
-			is.lastUpdate = lastUpdate;
-
-			assert(actionshere <= BLUFFBID);
-
-			for (let a = 0; a < actionshere; a++) {//Was: ull
-				double * cfrptr = is.cfr;
-				double * tmpptr = is.totalMoveProbs;
-				this.readBytes(in, cfrptr + a, 8);
-				this.readBytes(in, tmpptr + a, 8);
-			}
-
-			//put(key, is, static_cast<int>(actionshere), 0); 
-			this.put(key, is, actionshere, 0); 
-		}
-	}
+stopAdding() {//«
+	this.#addingInfosets = false;
 }//»
+contains(infoset_key) {//«
+//bool contains(unsigned long long infoset_key);
+	assert(infoset_key < indexSize); 
+	let pos = this.getPosFromIndex1(infoset_key); //Was: ull
+	return (pos >= size ? false : true);
+}//»
+
 clear() {//«
 //void clear(); 
 
@@ -1259,6 +1047,302 @@ copy(dest){//«
 	}
 }//»
 
+put(infoset_key, infoset, moves, firstmove) {//«
+//void put(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
+	this.#put_priv(infoset_key, infoset, moves, firstmove);
+}//»
+writeBytes(out, addr, num){//«
+//  void writeBytes(std::ofstream & out, void * addr, unsigned int num);  
+	out.write(reinterpret_cast<const char *>(addr), num); 
+}//»
+dumpToDisk(filename) {//«
+//void dumpToDisk(std::string filename);
+	ofstream out(filename.c_str(), ios::out | ios::binary); 
+	assert(out.is_open()); 
+
+	assert(sizeof(unsigned long long) == 8); 
+	assert(sizeof(double) == 8);
+
+	// some integers
+	this.writeBytes(out, &indexSize, 8);
+	this.writeBytes(out, &size, 8);
+	this.writeBytes(out, &rowsize, 8);
+	this.writeBytes(out, &rows, 8);
+	this.writeBytes(out, &lastRowSize, 8);
+
+	// the index
+	for (let i = 0; i < this.#indexSize; i++) {//Was: ull
+		this.writeBytes(out, indexKeys + i, 8); 
+		this.writeBytes(out, indexVals + i, 8); 
+	}
+
+	//the table
+	//unsigned long long pos = 0, row = 0, col = 0, curRowSize = rowsize; 
+	let pos = 0, row = 0, col = 0, curRowSize = rowsize; 
+	while (pos < size) {
+		this.writeBytes(out, this.tablerows[row] + col, 8);  
+		this.#next(row, col, pos, curRowSize); 
+	}
+
+	out.close();
+}//»
+
+printValues(){//«
+//void printValues(); 
+	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
+		if (this.#indexVals[i] < this.#size) {
+			// this is a valid position
+			let row, col, pos, curRowSize;//Was: ull
+			pos = this.#indexVals[i];
+			row = pos / this.#rowsize;
+			col = pos % this.#rowsize;
+			curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
+
+			log("infosetkey = " , this.#indexKeys[i]); 
+			log(", infosetkey_str = " , infosetkey_to_string(this.#indexKeys[i]));
+
+			// read # actions
+			let actionshere = 0;//Was: ull
+			assert(sizeof(actionshere) == sizeof(double)); 
+			memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
+			this.#next(row, col, pos, curRowSize);
+
+			// read the integer
+			let lastUpdate = 0;//Was: ull
+			let x = this.#tablerows[row][col];//Was: dbl
+			memcpy(&lastUpdate, &x, sizeof(actionshere)); 
+			this.#next(row, col, pos, curRowSize);
+			log(", actions = " , actionshere , ", lastUpdate = " , lastUpdate);
+			for (let a = 0; a < actionshere; a++){//Was: ull
+				// cfr
+				assert(row < rows);
+				assert(col < curRowSize); 
+				log("  cfr[" , a , "]=" , tablerows[row][col]); 
+				this.#next(row, col, pos, curRowSize);
+				// total move probs
+				log("  tmp[" , a , "]=" , tablerows[row][col]); 
+				// cout << endl;
+				this.#next(row, col, pos, curRowSize);
+				// next cfr
+			}
+			//      cout << endl;
+		}
+	}
+}//»
+
+getSize() { //«
+//  unsigned long long getSize() { return size; }
+	return this.#size; 
+}//»
+  // returns the position into the large table or indexSize if not found
+  // hashIndex is set to the index of the hash table where this key would go
+getPosFromIndex1(infoset_key) {//«
+// use this one if you don't care about the hashIndex
+// unsigned long long getPosFromIndex(unsigned long long infoset_key);
+	let hi = 0;//Was: ull
+	return this.getPosFromIndex2(infoset_key, hi); 
+}//»
+getPosFromIndex2(infoset_key, hashIndex) {//«
+//unsigned long long getPosFromIndex(unsigned long long infoset_key, unsigned long long & hashIndex); 
+	let start = infoset_key % this.#indexSize; //Was: ull
+	let misses = 0; //Was: ull
+	for (let i = start; misses < this.#indexSize; misses++) {//Was: ull
+		if (this.#indexKeys[i] == infoset_key && this.#indexVals[i] < size)  {
+			// cache hit 
+			totalLookups++; 
+			totalMisses += misses;
+			hashIndex = i; 
+			return this.#indexVals[i]; 
+		}
+		else if (indexVals[i] >= size){// index keys can be >= size since they're arbitrary, but not values!
+			totalLookups++; 
+			totalMisses += misses;
+			hashIndex = i;
+			return size; 
+		}
+		i = i+1; 
+		if (i >= this.#indexSize) i = 0; 
+	}
+
+	// should be large enough to hold everything
+	assert(false); 
+	return 0;
+}//»
+getStats(){//«
+//  std::string getStats();
+//  string str; 
+/*
+  str += (to_string(size) + " "); 
+  str += (to_string(rowsize) + " "); 
+  str += (to_string(rows) + " "); 
+  str += (to_string(lastRowSize) + " "); 
+  str += (to_string(added) + " "); 
+  str += (to_string(nextInfosetPos) + " "); 
+  str += (to_string(totalLookups) + " "); 
+  str += (to_string(totalMisses) + " "); 
+*/
+	let str="";
+	str += (this.#size + " "); 
+	str += (this.#rowsize + " "); 
+	str += (this.#rows + " "); 
+	str += (this.#lastRowSize + " "); 
+	str += (this.#added + " "); 
+	str += (this.#nextInfosetPos + " "); 
+	str += (totalLookups + " "); 
+	str += (totalMisses + " "); 
+
+	let avglookups = (totalLookups + totalMisses) / (totalLookups); //Was: dbl
+
+	let percent_full = (this.#nextInfosetPos) /  (this.#size) * 100.0;  //Was: dbl
+
+	str += (avglookups + " ");
+	str += (percent_full + "% full"); 
+	return str;
+
+}//»
+getNextPos() { //«
+//unsigned long long getNextPos() { 
+	return this.#nextInfosetPos; 
+}//»
+getAdded() { //«
+//unsigned long long getAdded() { 
+	return this.#added; 
+}//»
+get(infoset_key, infoset, moves, firstmove){//«
+//bool get(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
+	return this.#get_priv(infoset_key, infoset, moves, firstmove);
+}//»
+
+readBytes(in, addr,  num) {//«
+//  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
+	in.read(reinterpret_cast<char *>(addr), num); 
+}//»
+
+readFromDisk(filename) {//«
+//bool readFromDisk(std::string filename);
+	this.#addingInfosets = false; 
+	this.#nextInfosetPos = 0; 
+	this.#added = 0; 
+
+	ifstream in(filename.c_str(), ios::in | ios::binary); 
+	//assert(in.is_open());  
+	if (!in.is_open()) return false; 
+
+	// some integers
+	this.readBytes(in, &indexSize, 8);        
+	this.readBytes(in, &size, 8);        
+	this.readBytes(in, &rowsize, 8);        
+	this.readBytes(in, &rows, 8);        
+	this.readBytes(in, &lastRowSize, 8);        
+
+	// the index
+	this.#indexKeys = new Array(indexSize);//Was: ull[]
+	this.#indexVals = new Array(indexSize);//Was: ull[]
+	for (let i = 0; i < indexSize; i++) {//Was: ull
+		this.readBytes(in, indexKeys + i, 8); 
+		this.readBytes(in, indexVals + i, 8); 
+	}
+
+	// table rows (allocation)
+	this.#tablerows = new Array(this.#rows);//Was: dbl* []
+	assert(tablerows != NULL);
+	for (let i = 0; i < this.#rows; i++) {//Was: ull
+		if (i != (this.#rows-1)) {
+			this.#tablerows[i] = new Array(this.#rowsize);//Was: dbl[]
+			assert(tablerows[i] != NULL);
+			for (let j = 0; j < this.#rowsize; j++) {//Was: ull
+				this.#tablerows[i][j] = 0.0;
+			}
+		}
+		else {
+			this.#tablerows[i] = new Array(this.#lastRowSize);//Was: dbl[]
+			assert(tablerows[i] != NULL);
+			for (let j = 0; j < this.#lastRowSize; j++){//Was: uint
+				this.#tablerows[i][j] = 0.0;
+			}
+		}
+	}
+
+	// tablerows (read from disk)
+	let pos = 0, row = 0, col = 0, curRowSize = rowsize; //Was: ull
+	while (pos < size) {
+		this.readBytes(in, this.#tablerows[row] + col, 8);  
+		this.#next(row, col, pos, curRowSize); 
+	}
+
+	in.close();
+
+	return true;
+}//»
+
+/*Not called anywhere in bluff codebase
+importValues(player, filename) {//«
+// used to save memory when evaluation strategies from 2 diff strat files
+//  void importValues(int player, std::string filename);
+
+	ifstream in(filename.c_str(), ios::in | ios::binary);
+
+	let oIndexSize = 0, osize = 0, orowsize = 0, orows = 0, olastRowSize = 0;//Was: ull
+
+	this.readBytes(in, &oIndexSize, 8);        
+	this.readBytes(in, &osize, 8);        
+	this.readBytes(in, &orowsize, 8);        
+	this.readBytes(in, &orows, 8);        
+	this.readBytes(in, &olastRowSize, 8);        
+
+	assert(oIndexSize == this.#indexSize);
+	assert(osize == this.#size);
+	assert(orowsize == this.#rowsize);
+	assert(orows == this.#rows);
+	assert(olastRowSize == this.#lastRowSize);
+
+	let maskresult = player - 1;//Was: ull
+
+	for (let i = 0; i < oIndexSize; i++) {//Was: uint
+		Infoset is;
+
+		// next index element
+		streampos sp = (5 + i*2); sp = sp*8;
+		in.seekg(sp);
+
+		let key = 0, val = 0;//Was: ull
+		this.readBytes(in, &key, 8);
+		this.readBytes(in, &val, 8);
+
+		if ((key & 1ULL) == maskresult && val < size) {
+			streampos fp = 5;
+			fp += oIndexSize*2;
+			fp += val;
+			fp = fp*8;
+
+			in.seekg(fp);
+
+			let actionshere = 0;//Was: ull
+			let lastUpdate = 0;//Was: ull
+
+			this.readBytes(in, &actionshere, 8);
+			this.readBytes(in, &lastUpdate, 8);
+
+			is.actionshere = actionshere;//static_cast<int>(actionshere);
+			is.lastUpdate = lastUpdate;
+
+			assert(actionshere <= BLUFFBID);
+
+			for (let a = 0; a < actionshere; a++) {//Was: ull
+				double * cfrptr = is.cfr;
+				double * tmpptr = is.totalMoveProbs;
+				this.readBytes(in, cfrptr + a, 8);
+				this.readBytes(in, tmpptr + a, 8);
+			}
+
+			//put(key, is, static_cast<int>(actionshere), 0); 
+			this.put(key, is, actionshere, 0); 
+		}
+	}
+
+}//»
+*/
+
 };
 
 }
@@ -1328,6 +1412,346 @@ let bid = null;
 const stopwatch = new StopWatch();
 //»
 
+const ceiling_log2 = (val) => {//«
+//int ceiling_log2(int val){
+	let exp = 1, num = 2;//Was: int
+	do {
+		if (num > val) return exp; 
+		num *= 2;
+		exp++;
+	}
+	while (true);
+}//»
+const intpow = (x, y) => {//«
+//int intpow(int x, int y){
+	if (y == 0) return 1;
+	return x * intpow(x, y-1);
+}//»
+
+const terminal = (gs) => {//YWRK«
+//bool terminal(GameState & gs){
+	return (gs.curbid == BLUFFBID);
+}//»
+
+const getChanceProb = (player, outcome) => {//«
+//double getChanceProb(int player, int outcome){
+// outcome >= 1, so must subtract 1 from it
+	let co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
+	assert(outcome-1 >= 0 && outcome-1 < co);
+	let cp = (player == 1 ? chanceProbs1 : chanceProbs2);//Was: double *
+	return cp[outcome-1];
+}//»
+const numChanceOutcomes = (player) => {//«
+//int numChanceOutcomes(int player){
+	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
+}//»
+const nextRoll = (roll, size) => {//«
+//void nextRoll(int * roll, int size){
+	for (let i = size-1; i >= 0; i--) {//Was: int
+		// Try to increment if by 1.
+		if (roll[i] < DIEFACES) {
+			// if possible, do it and then set everything to the right back to 1
+			roll[i]++;
+			for (let j = i+1; j < size; j++) roll[j] = 1;//Was: int
+			return;
+		}
+	}
+}//»
+const getRollBase10 = (roll, ize) => {//«
+//int getRollBase10(int * roll, int size) {
+	let multiplier = 1;//Was: int
+	let val = 0;//Was: int
+	for (let i = size-1; i >= 0; i--) {//Was: int
+		val += roll[i]*multiplier;
+		multiplier *= 10;
+	}
+	return val;
+}//»
+const convertbid = (dice, face, bid) => {//«
+//void convertbid(int & dice, int & face, int bid) {
+// a bid is from 1 to 12, for example
+	if (P1DICE == 1 && P2DICE == 1) {
+		dice = (bid - 1) / DIEFACES + 1;
+		face = bid % DIEFACES;
+		if (face == 0) face = DIEFACES;
+		assert(dice >= 1 && dice <= 2);
+		assert(face >= 1 && face <= DIEFACES);
+	}
+	else {
+		// stored in an array.
+		let size = (P1DICE+P2DICE)*DIEFACES;//Was: int
+		assert((bid-1) >= 0 && (bid-1) < size);
+
+		dice = bids[bid-1] / 10;
+		face = bids[bid-1] % 10;
+	}
+}//»
+const unrankco = (i, roll, layer) => {//«
+//void unrankco(int i, int * roll, int player){
+	let num = 0;//Was: int
+	let chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);//Was: int *
+	num = chanceOutcomes[i];
+	assert(num > 0);
+
+	let numDice = (player == 1 ? P1DICE : P2DICE);//Was: int
+
+	for (let j = numDice-1; j >= 0; j--) {//Was: int
+		roll[j] = num % 10;
+		num /= 10;
+	}
+}//»
+const getRoll = (roll, chanceOutcome, player) => {//«
+//void getRoll(int * roll, int chanceOutcome, int player){
+	unrankco(chanceOutcome-1, roll, player);
+}//»
+const countMatchingDice = (gs, player, face) => {//«
+//int countMatchingDice(const GameState & gs, int player, int face){
+
+//int roll[3] = {0,0,0};
+	let roll  = [0,0,0];
+
+	let matchingDice = 0;//Was: int
+	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
+
+	if (dice == 1) {
+		if (player == 1) roll[1] = gs.p1roll;
+		else if (player == 2) roll[1] = gs.p2roll;
+	}
+	else if (dice == 2) {
+		if (player == 1) unrankco(gs.p1roll-1, roll, 1);
+		else if (player == 2) unrankco(gs.p2roll-1, roll, 2);
+	}
+
+	for (let i = 0; i < 3; i++) {
+		if (roll[i] == face || roll[i] == DIEFACES) matchingDice++;
+	}
+
+	return matchingDice;
+}//»
+const whowon6 = (bid, bidder, callingPlayer, p1roll, p2roll, delta) => {//«
+//int whowon(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int & delta){
+	let dice = 0, face = 0;//Was: int
+	convertbid(dice, face, bid);
+	assert(bidder != callingPlayer);
+
+	// get the dice
+	let p1rollArr = new Array(P1DICE);//Was: int[]
+	let p2rollArr = new Array(P2DICE);//Was: int[]
+	unrankco(p1roll-1, p1rollArr, 1);
+	unrankco(p2roll-1, p2rollArr, 2);
+	// now check the number of matches
+	let matching = 0;//Was: int
+
+	for (let i = 0; i < P1DICE; i++) {//Was: int
+		if (p1rollArr[i] == face || p1rollArr[i] == DIEFACES) matching++;
+	}
+
+	for (let j = 0; j < P2DICE; j++) {//Was: int
+		if (p2rollArr[j] == face || p2rollArr[j] == DIEFACES) matching++;
+	}
+
+	delta = matching - dice;
+	if (delta < 0) delta *= -1;
+
+	if (matching >= dice) {
+		return bidder;
+	}
+	else {
+		return callingPlayer;
+	}
+}//»
+const whowon2 = (gs, delta) => {//«
+//int whowon(GameState & gs, int & delta){
+	let bidder = 3 - gs.callingPlayer;//Was: int
+	return whowon6(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
+}//»
+const whowon1 = (gs) => {//«
+//int whowon(GameState & gs){
+	let bidder = 3 - gs.callingPlayer;//Was: int
+	let delta = 0;//Was: int
+	return whowon6(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
+}//»
+const payoff = (winner, player, delta) => {//«
+//double payoff(int winner, int player, int delta)
+// first thing: if it's an exact match, calling player loses 1 die
+// may as well set delta to 1 in this case
+	if (delta == 0) delta = 1;
+
+	//  double p1payoff = 0.0;
+	let p1payoff = 0.0;
+
+	if (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
+	else {
+		assert(false);
+	}
+
+	return (player == 1 ? p1payoff : -p1payoff);
+}//»
+// In these functions "delta" represents the number of dice the bid is off by (not relevant for (1,1))
+// Returns payoff for Liar's Dice (delta always equal to 1)
+const payoff_wp = (winner, player) => {//«
+//double payoff(int winner, int player){
+	return payoff(winner, player, 1);
+}//»
+const payoff_gp = (gs, player) => {//«
+//double payoff(GameState & gs, int player) {
+// this is the function called by all the algorithms.
+// Now set to use the delta
+	let delta = 0;//Was: int
+	let winner = whowon2(gs, delta);//Was: int, whowon
+	return payoff(winner, player, delta);
+}//»
+const payoff6 = (bid, bidder, callingPlayer, p1roll, p2roll, player) => {//«
+//double payoff(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int player) {
+	let delta = 0;//Was: int
+	let winner = whowon6(bid, bidder, callingPlayer, p1roll, p2roll, delta);//Was: int, whowon
+	return payoff(winner, player);
+}//»
+const report = (filename, totaltime, bound, conv) => {//«
+//void report(string filename, double totaltime, double bound, double conv){
+	filename = filepref + filename;
+	log("Reporting to " + filename + " ... ");
+	ofstream outf(filename.c_str(), ios::app);
+	outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
+	outf.close();
+}//»
+
+const determineChanceOutcomes = (player) => {//«
+//void determineChanceOutcomes(int player){
+	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
+	let rolls = new Array(dice);//Was: int[]
+	for (let r = 0; r < dice; r++) rolls[r] = 1;//Was: int
+	outcomes.clear();
+
+	let permutations = intpow(DIEFACES, dice);//Was: int
+	let p;//Was: int
+
+	for (p = 0; p < permutations; p++) {
+		// first, make a copy
+		let rollcopy = new Array(dice);//Was: int[]
+		memcpy(rollcopy, rolls, dice*sizeof(int));
+		// now sort
+		bubsort(rollcopy, dice);
+		// now convert to an integer in base 10
+		let key = getRollBase10(rollcopy, dice);//Was: int
+		// now increment the counter for this key in the map
+		outcomes[key] += 1;
+		// next roll
+		nextRoll(rolls, dice);
+	}
+
+	assert(p == permutations);
+
+	int & numChanceOutcomes = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
+	double* & chanceProbs = (player == 1 ? chanceProbs1 : chanceProbs2);
+	int* & chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
+
+	// now, transfer the map keys to the array
+	numChanceOutcomes = outcomes.size();
+	chanceProbs = new double[numChanceOutcomes];
+	chanceOutcomes = new int[numChanceOutcomes];
+
+	let idx = 0;//Was: int
+	map<int,int>::iterator iter;
+	//outcomes:
+	//Was: map<int,int> outcomes;
+	//Now: const outcomes = {};
+	for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
+		chanceOutcomes[idx] = iter->first;
+		idx++;
+	}
+
+	bubsort(chanceOutcomes, numChanceOutcomes);
+
+	for (let c = 0; c < numChanceOutcomes; c++) {//Was: int
+		//int key = chanceOutcomes[c];
+		let key = chanceOutcomes[c];
+		//  chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
+		chanceProbs[c] = outcomes[key] / permutations;
+		//cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
+	}
+}//»
+
+const dumpInfosets = (prefix) => {//«
+//void dumpInfosets(string prefix){
+	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
+	log("Dumping infosets to " + filename + " ... ");
+	iss.dumpToDisk(filename);
+}//»
+
+// not even sure what I used this "meta data" for, if I ever used it....
+const dumpMetaData = (prefix, totaltime) =>  {//«
+//void dumpMetaData(string prefix, double totaltime) {
+	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
+	log("Dumping metadeta to " + filename + " ... ");
+
+	ofstream outf(filename.c_str(), ios::binary);
+	if (!outf.is_open()) {
+		cerr("Could not open meta data file for writing.");
+		return;
+	}
+
+	outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
+	outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
+	outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
+	outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
+	outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
+
+	outf.close();
+}//»
+const loadMetaData = (filename) => {//«
+//void loadMetaData(std::string filename) {
+	ifstream inf(filename.c_str(), ios::binary);
+	if (!inf.is_open()) {
+		cerr("Could not open meta data file.");
+		return;
+	}
+
+	let totaltime = 0;//Was: dbl
+
+	inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
+	inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
+	inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
+	inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
+	inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
+
+	inf.close();
+}//»
+
+const getInfosetKey = (gs, player, bidseq) => {//«
+//unsigned long long getInfosetKey(GameState & gs, int player, unsigned long long bidseq){
+	let infosetkey = bidseq;//Was: ull
+	infosetkey <<= iscWidth;
+	if (player == 1) {
+		infosetkey |= gs.p1roll;
+		infosetkey <<= 1;
+	}
+	else if (player == 2) {
+		infosetkey |= gs.p2roll;
+		infosetkey <<= 1;
+		infosetkey |= 1;
+	}
+
+	return infosetkey;
+}//»
+const getInfoset = (gs, player, bidseq, is, infosetkey, actionshere) => {//«
+//void getInfoset(GameState & gs, int player, unsigned long long bidseq, Infoset & is, unsigned long long & infosetkey, int actionshere){
+	infosetkey = getInfosetKey(gs, player, bidseq);
+	let ret = iss.get(infosetkey, is, actionshere, 0);//Was: bool
+	assert(ret);
+}//»
+
+const newInfoset = (is, actions) => {//«
+//void newInfoset(Infoset & is, int actions){
+	is.actionshere = actions;
+	is.lastUpdate = 0;
+
+	for (let i = 0; i < actions; i++) {//Was: int
+		is.cfr[i] = 0.0;
+		is.totalMoveProbs[i] = 0.0;
+		is.curMoveProbs[i] = 1.0 / actions;
+	}
+}//»
 const initInfosets = (gs, player, depth, bidseq) => {//«
 //void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq) {
 // Does a recursive tree walk setting up the information sets, creating the initial strategies
@@ -1458,344 +1882,6 @@ const init = () => {//WMNH«
 	log("Globals are: " , numChanceOutcomes1 , " " , numChanceOutcomes2 , " " , iscWidth);
 }//»
 
-const getChanceProb = (player, outcome) => {//«
-//double getChanceProb(int player, int outcome){
-// outcome >= 1, so must subtract 1 from it
-	let co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
-	assert(outcome-1 >= 0 && outcome-1 < co);
-	let cp = (player == 1 ? chanceProbs1 : chanceProbs2);//Was: double *
-	return cp[outcome-1];
-}//»
-const numChanceOutcomes = (player) => {//«
-//int numChanceOutcomes(int player){
-	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-}//»
-const unrankco = (i, roll, layer) => {//«
-//void unrankco(int i, int * roll, int player){
-	let num = 0;//Was: int
-	let chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);//Was: int *
-	num = chanceOutcomes[i];
-	assert(num > 0);
-
-	let numDice = (player == 1 ? P1DICE : P2DICE);//Was: int
-
-	for (let j = numDice-1; j >= 0; j--) {//Was: int
-		roll[j] = num % 10;
-		num /= 10;
-	}
-}//»
-const getInfosetKey = (gs, player, bidseq) => {//«
-//unsigned long long getInfosetKey(GameState & gs, int player, unsigned long long bidseq){
-	let infosetkey = bidseq;//Was: ull
-	infosetkey <<= iscWidth;
-	if (player == 1) {
-		infosetkey |= gs.p1roll;
-		infosetkey <<= 1;
-	}
-	else if (player == 2) {
-		infosetkey |= gs.p2roll;
-		infosetkey <<= 1;
-		infosetkey |= 1;
-	}
-
-	return infosetkey;
-}//»
-const getInfoset = (gs, player, bidseq, is, infosetkey, actionshere) => {//«
-//void getInfoset(GameState & gs, int player, unsigned long long bidseq, Infoset & is, unsigned long long & infosetkey, int actionshere){
-	infosetkey = getInfosetKey(gs, player, bidseq);
-	let ret = iss.get(infosetkey, is, actionshere, 0);//Was: bool
-	assert(ret);
-}//»
-const ceiling_log2 = (val) => {//«
-//int ceiling_log2(int val){
-	let exp = 1, num = 2;//Was: int
-	do {
-		if (num > val) return exp; 
-		num *= 2;
-		exp++;
-	}
-	while (true);
-}//»
-const intpow = (x, y) => {//«
-//int intpow(int x, int y){
-	if (y == 0) return 1;
-	return x * intpow(x, y-1);
-}//»
-const nextRoll = (roll, size) => {//«
-//void nextRoll(int * roll, int size){
-	for (let i = size-1; i >= 0; i--) {//Was: int
-		// Try to increment if by 1.
-		if (roll[i] < DIEFACES) {
-			// if possible, do it and then set everything to the right back to 1
-			roll[i]++;
-			for (let j = i+1; j < size; j++) roll[j] = 1;
-			return;
-		}
-	}
-}//»
-const getRollBase10 = (roll, ize) => {//«
-//int getRollBase10(int * roll, int size) {
-	let multiplier = 1;//Was: int
-	//int val = 0;
-	let val = 0;
-	//for (int i = size-1; i >= 0; i--) {
-	for (let i = size-1; i >= 0; i--) {
-		val += roll[i]*multiplier;
-		multiplier *= 10;
-	}
-	return val;
-}//»
-const determineChanceOutcomes = (player) => {//«
-//void determineChanceOutcomes(int player){
-	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
-	let rolls = new Array(dice);//Was: int[]
-	for (let r = 0; r < dice; r++) rolls[r] = 1;//Was: int
-	outcomes.clear();
-
-	let permutations = intpow(DIEFACES, dice);//Was: int
-	let p;//Was: int
-
-	for (p = 0; p < permutations; p++) {
-		// first, make a copy
-		let rollcopy = new Array(dice);//Was: int[]
-		memcpy(rollcopy, rolls, dice*sizeof(int));
-		// now sort
-		bubsort(rollcopy, dice);
-		// now convert to an integer in base 10
-		let key = getRollBase10(rollcopy, dice);//Was: int
-		// now increment the counter for this key in the map
-		outcomes[key] += 1;
-		// next roll
-		nextRoll(rolls, dice);
-	}
-
-	assert(p == permutations);
-
-	int & numChanceOutcomes = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-	double* & chanceProbs = (player == 1 ? chanceProbs1 : chanceProbs2);
-	int* & chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);
-
-	// now, transfer the map keys to the array
-	numChanceOutcomes = outcomes.size();
-	chanceProbs = new double[numChanceOutcomes];
-	chanceOutcomes = new int[numChanceOutcomes];
-
-	let idx = 0;//Was: int
-	map<int,int>::iterator iter;
-	//outcomes:
-	//Was: map<int,int> outcomes;
-	//Now: const outcomes = {};
-	for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
-		chanceOutcomes[idx] = iter->first;
-		idx++;
-	}
-
-	bubsort(chanceOutcomes, numChanceOutcomes);
-
-	for (let c = 0; c < numChanceOutcomes; c++) {//Was: int
-		//int key = chanceOutcomes[c];
-		let key = chanceOutcomes[c];
-		//  chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
-		chanceProbs[c] = outcomes[key] / permutations;
-		//cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
-	}
-}//»
-const newInfoset = (is, actions) => {//«
-//void newInfoset(Infoset & is, int actions){
-	is.actionshere = actions;
-	is.lastUpdate = 0;
-
-	for (let i = 0; i < actions; i++) {//Was: int
-		is.cfr[i] = 0.0;
-		is.totalMoveProbs[i] = 0.0;
-		is.curMoveProbs[i] = 1.0 / actions;
-	}
-}//»
-const terminal = (gs) => {//YWRK«
-//bool terminal(GameState & gs){
-	return (gs.curbid == BLUFFBID);
-}//»
-const convertbid = (dice, face, bid) => {//«
-// a bid is from 1 to 12, for example
-//void convertbid(int & dice, int & face, int bid) {
-	if (P1DICE == 1 && P2DICE == 1) {
-		dice = (bid - 1) / DIEFACES + 1;
-		face = bid % DIEFACES;
-		if (face == 0) face = DIEFACES;
-		assert(dice >= 1 && dice <= 2);
-		assert(face >= 1 && face <= DIEFACES);
-	}
-	else {
-		// stored in an array.
-		let size = (P1DICE+P2DICE)*DIEFACES;//Was: int
-		assert((bid-1) >= 0 && (bid-1) < size);
-
-		dice = bids[bid-1] / 10;
-		face = bids[bid-1] % 10;
-	}
-}//»
-const getRoll = (roll, chanceOutcome, player) => {//«
-//void getRoll(int * roll, int chanceOutcome, int player){
-	unrankco(chanceOutcome-1, roll, player);
-}//»
-const countMatchingDice = (gs, player, face) => {//«
-//int countMatchingDice(const GameState & gs, int player, int face){
-
-//int roll[3] = {0,0,0};
-	let roll  = [0,0,0];
-
-	let matchingDice = 0;//Was: int
-	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
-
-	if (dice == 1) {
-		if (player == 1) roll[1] = gs.p1roll;
-		else if (player == 2) roll[1] = gs.p2roll;
-	}
-	else if (dice == 2) {
-		if (player == 1) unrankco(gs.p1roll-1, roll, 1);
-		else if (player == 2) unrankco(gs.p2roll-1, roll, 2);
-	}
-
-	for (let i = 0; i < 3; i++) {
-		if (roll[i] == face || roll[i] == DIEFACES) matchingDice++;
-	}
-
-	return matchingDice;
-}//»
-const whowon6 = (bid, bidder, callingPlayer, p1roll, p2roll, delta) => {//«
-//int whowon(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int & delta){
-	let dice = 0, face = 0;//Was: int
-	convertbid(dice, face, bid);
-	assert(bidder != callingPlayer);
-
-	// get the dice
-	let p1rollArr = new Array(P1DICE);//Was: int[]
-	let p2rollArr = new Array(P2DICE);//Was: int[]
-	unrankco(p1roll-1, p1rollArr, 1);
-	unrankco(p2roll-1, p2rollArr, 2);
-	// now check the number of matches
-	let matching = 0;//Was: int
-
-	for (let i = 0; i < P1DICE; i++) {//Was: int
-		if (p1rollArr[i] == face || p1rollArr[i] == DIEFACES) matching++;
-	}
-
-	for (let j = 0; j < P2DICE; j++) {//Was: int
-		if (p2rollArr[j] == face || p2rollArr[j] == DIEFACES) matching++;
-	}
-
-	delta = matching - dice;
-	if (delta < 0) delta *= -1;
-
-	if (matching >= dice) {
-		return bidder;
-	}
-	else {
-		return callingPlayer;
-	}
-}//»
-const whowon2 = (gs, delta) => {//«
-//int whowon(GameState & gs, int & delta){
-	let bidder = 3 - gs.callingPlayer;//Was: int
-	return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
-}//»
-const whowon1 = (gs) => {//«
-//int whowon(GameState & gs){
-	let bidder = 3 - gs.callingPlayer;//Was: int
-	let delta = 0;//Was: int
-	return whowon(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
-}//»
-const payoff = (winner, player, delta) => {//«
-//double payoff(int winner, int player, int delta)
-// first thing: if it's an exact match, calling player loses 1 die
-// may as well set delta to 1 in this case
-	if (delta == 0) delta = 1;
-
-	//  double p1payoff = 0.0;
-	let p1payoff = 0.0;
-
-	if (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
-	else {
-		assert(false);
-	}
-
-	return (player == 1 ? p1payoff : -p1payoff);
-}//»
-
-// In these functions "delta" represents the number of dice the bid is off by (not relevant for (1,1))
-// Returns payoff for Liar's Dice (delta always equal to 1)
-const payoff_wp = (winner, player) => {//«
-//double payoff(int winner, int player){
-	return payoff(winner, player, 1);
-}//»
-
-// this is the function called by all the algorithms.
-// Now set to use the delta
-const payoff_gp = (gs, player) => {//«
-//double payoff(GameState & gs, int player) {
-	let delta = 0;//Was: int
-	let winner = whowon(gs, delta);//Was: int
-	return payoff(winner, player, delta);
-}//»
-const payoff6 = (bid, bidder, callingPlayer, p1roll, p2roll, player) => {//«
-//double payoff(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int player) {
-	let delta = 0;//Was: int
-	let winner = whowon(bid, bidder, callingPlayer, p1roll, p2roll, delta);//Was: int
-	return payoff(winner, player);
-}//»
-const report = (filename, totaltime, bound, conv) => {//«
-//void report(string filename, double totaltime, double bound, double conv){
-	filename = filepref + filename;
-	log("Reporting to " + filename + " ... ");
-	ofstream outf(filename.c_str(), ios::app);
-	outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
-	outf.close();
-}//»
-const dumpInfosets = (prefix) => {//«
-//void dumpInfosets(string prefix){
-	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
-	log("Dumping infosets to " + filename + " ... ");
-	iss.dumpToDisk(filename);
-}//»
-
-// not even sure what I used this "meta data" for, if I ever used it....
-const dumpMetaData = (prefix, totaltime) =>  {//«
-//void dumpMetaData(string prefix, double totaltime) {
-	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
-	log("Dumping metadeta to " + filename + " ... ");
-
-	ofstream outf(filename.c_str(), ios::binary);
-	if (!outf.is_open()) {
-		cerr("Could not open meta data file for writing.");
-		return;
-	}
-
-	outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
-	outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
-	outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
-	outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
-	outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
-
-	outf.close();
-}//»
-const loadMetaData = (filename) => {//«
-//void loadMetaData(std::string filename) {
-	ifstream inf(filename.c_str(), ios::binary);
-	if (!inf.is_open()) {
-		cerr("Could not open meta data file.");
-		return;
-	}
-
-	let totaltime = 0;//Was: dbl
-
-	inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
-	inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
-	inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
-	inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
-	inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
-
-	inf.close();
-}//»
 
 }//»
 function BR_NS(){// Best Response «
@@ -1817,7 +1903,7 @@ const getInfoset=(infosetkey, is, bidseq, player, actionshere, chanceOutcome)=>{
 	infosetkey <<= 1; 
 	if (player == 2) infosetkey |= 1; 
 
-	bool ret = false; 
+	let ret = false; //Was: bool
 
 	ret = iss.get(infosetkey, is, actionshere, 0); 
 
@@ -2739,7 +2825,6 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 	}
 
 }//»
-
 const main = (argc, argv) => {//«
 	let maxNodesTouched = 0; //Was: ull
 	let maxIters = 0; //Was: ull
@@ -2766,10 +2851,10 @@ const main = (argc, argv) => {//«
 	log("Set iteration to " , iter);
 	iter = MAX(1,iter);
 
-	unsigned long long bidseq = 0; 
+	let bidseq = 0; //Was: ull
 
 	StopWatch stopwatch;
-	double totaltime = 0; 
+	let totaltime = 0; //Was: dbl
 
 	log("Starting PCS iterations");
 
@@ -2798,6 +2883,8 @@ const main = (argc, argv) => {//«
 		// it's a bit unfair to compare to other algorithms using nodes touched for PCS since 
 		// significantly more work done per node touched, which is why we compared by time 
 
+//let ntNextReport = 1000000;
+//let ntMultiplier = 2;
 		if ((maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) ||
 			(maxNodesTouched == 0 && nodesTouched >= ntNextReport)) {
 
@@ -2814,7 +2901,7 @@ const main = (argc, argv) => {//«
 
 			let conv = computeBestResponses(false);//Was: double
 			report("pcs.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
-			//dumpInfosets("iss");
+			//dumpInfosets("iss");//WSUROK
 
 			stopwatch.reset(); 
 
@@ -2831,11 +2918,10 @@ function CFR_NS(){//«
 let nextReport = 1;//Was: static ull
 let reportMult = 2;//Was: static ull
 
-//GS = GameState
 const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, updatePlayer) => {//«
-//		   GS &  int	 int	ull		dbl		dbl		dbl			 int	int 		-> double
+//double cfr(GameState & gs, int player, int depth, unsigned long long bidseq, 
+// double reach1, double reach2, double chanceReach, int phase, int updatePlayer) {
 // This is Vanilla CFR. See my thesis, Algorithm 1 (Section 2.2.2)
-//double cfr(GameState & gs, int player, int depth, unsigned long long bidseq, double reach1, double reach2, double chanceReach, int phase, int updatePlayer) {
 
 //GameState gs (struct):«
 //  int p1roll;           // the outcome of p1's roll
@@ -2945,9 +3031,9 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 	}//»
 
 	// save the infoset back to the store if needed
-	if (player == updatePlayer) {//«
+	if (player == updatePlayer) {
 		iss.put(infosetkey, is, actionshere, 0); 
-	}//»
+	}
 
 	return stratEV;
 }//»
