@@ -3,19 +3,26 @@
 Below, IS.<whatever> means InfosetStore.<whatever>, and will appear in the codebase as 
 iss.<whatever>.
 
+* * *
+
 IS.#addingInfosets is only checked for in IS.#put_priv. It is only set to true
 in @EYURK in IS.init(). It is set to false by IS.readFromDisk() and  IS.stopAdding(), 
 which is called only in Bluff_NS.initInfosets().
+
+* * *
 
 The "main funcs" are in CFR_NS and PCS_NS, which are the CLI interfaces into the library calls,
 
 Both main functions:
 
 if (argc < 2) {
-	initInfosets();//Calls InfosetStore.dumpToDisk
+	initInfosets();//Calls IS.dumpToDisk()
 	exit(-1);
 }
 
+There is also technically a "main func" in BluffCounter_NS, but that is just a simple
+utility to help with the creation of other types of bluff games (e.g. more dice, and 
+using imperfect recall).
 
 Bluff_NS.dumpInfosets() is the only other place where InfosetStore.dumpToDisk()
 is called, but this is only called in currently commented out places in the
@@ -26,8 +33,9 @@ disk. Just before these commented out are calls to "report", which looks like:
 
 outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
 
-So this just looks like a basic logging system to see how long the algorithm takes,
-rather than doing everything that is needed to get everything working.
+So this just looks like a basic logging system to see how long the algorithm
+takes, rather than doing everything that is needed to get everything working,
+like writing files with meaningful stragety data in them.
 
 * * *
 
@@ -358,6 +366,7 @@ return train
 // for probing
 #define ISKMAX 10
 #define ACTMAX 10 
+
 #if 0
 #if (P1DICE + P2DICE) == 2 
 #define ISKMAX 131072   // 2^17 (12 for actions, 3 for die, 1 for player + 1)
@@ -372,17 +381,26 @@ return train
 #error "P1DICE + P2DICE not defined for probing"
 #endif
 #endif
+
 //»
 
 */
 
+const NEGINF = -100000000.0;
+
+const P1DICE = 1;
+const P2DICE = 1;
+const DIEFACES = 6;
+
+const BLUFFBID = (((P1DICE+P2DICE)*DIEFACES)+1);
+
 class GameState {//«
 
-//  int p1roll;           // the outcome of p1's roll
-//  int p2roll;           // the outcome of p2's roll
-//  int curbid;           // current bid (between 1 and 13)
-//  int prevbid;          // prev bid from last turn
-//  int callingPlayer;    // the player calling bluff (1 or 2)
+//int p1roll;           // the outcome of p1's roll
+//int p2roll;           // the outcome of p2's roll
+//int curbid;           // current bid (between 1 and 13)
+//int prevbid;          // prev bid from last turn
+//int callingPlayer;    // the player calling bluff (1 or 2)
 
 constructor () {
 //  GameState() {
@@ -595,7 +613,7 @@ const unifRand01 = () => {//«
 
 }//»
 function InfosetStore_NS() {//«
-
+//Globals«
 //infosetstore
 //#define ROWS 100
 const ROWS = 100
@@ -603,7 +621,7 @@ const ROWS = 100
 //st: static
 let totalLookups = 0;//Was:st ull
 let totalMisses = 0;//Was:st ull
-
+//»
 return class {
 //class InfosetStore {
 
@@ -814,7 +832,6 @@ return class {
 }//»
 
 //public:
-
 constructor(){//«
 //  InfosetStore(){
 	this.#tablerows = null;
@@ -1352,12 +1369,6 @@ const InfosetStore = InfosetStore_NS);
 function Bluff_NS(){//«
 
 //Var«
-const P1DICE = 1;
-const P2DICE = 1;
-const DIEFACES = 6;
-
-//#define BLUFFBID (((P1DICE+P2DICE)*DIEFACES)+1)
-const BLUFFBID = (((P1DICE+P2DICE)*DIEFACES)+1);
 
 //#define LOC(b,r,c)  b[r*3 + c]
 
@@ -1412,6 +1423,15 @@ let bid = null;
 const stopwatch = new StopWatch();
 //»
 
+const report = (filename, totaltime, bound, conv) => {//«
+//void report(string filename, double totaltime, double bound, double conv){
+	filename = filepref + filename;
+	log("Reporting to " + filename + " ... ");
+	ofstream outf(filename.c_str(), ios::app);
+	outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
+	outf.close();
+}//»
+
 const ceiling_log2 = (val) => {//«
 //int ceiling_log2(int val){
 	let exp = 1, num = 2;//Was: int
@@ -1427,10 +1447,18 @@ const intpow = (x, y) => {//«
 	if (y == 0) return 1;
 	return x * intpow(x, y-1);
 }//»
-
 const terminal = (gs) => {//YWRK«
 //bool terminal(GameState & gs){
 	return (gs.curbid == BLUFFBID);
+}//»
+
+const numChanceOutcomes = (player) => {//«
+//int numChanceOutcomes(int player){
+	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
+}//»
+const getRoll = (roll, chanceOutcome, player) => {//«
+//void getRoll(int * roll, int chanceOutcome, int player){
+	unrankco(chanceOutcome-1, roll, player);
 }//»
 
 const getChanceProb = (player, outcome) => {//«
@@ -1440,10 +1468,6 @@ const getChanceProb = (player, outcome) => {//«
 	assert(outcome-1 >= 0 && outcome-1 < co);
 	let cp = (player == 1 ? chanceProbs1 : chanceProbs2);//Was: double *
 	return cp[outcome-1];
-}//»
-const numChanceOutcomes = (player) => {//«
-//int numChanceOutcomes(int player){
-	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
 }//»
 const nextRoll = (roll, size) => {//«
 //void nextRoll(int * roll, int size){
@@ -1457,7 +1481,7 @@ const nextRoll = (roll, size) => {//«
 		}
 	}
 }//»
-const getRollBase10 = (roll, ize) => {//«
+const getRollBase10 = (roll, size) => {//«
 //int getRollBase10(int * roll, int size) {
 	let multiplier = 1;//Was: int
 	let val = 0;//Was: int
@@ -1486,8 +1510,9 @@ const convertbid = (dice, face, bid) => {//«
 		face = bids[bid-1] % 10;
 	}
 }//»
-const unrankco = (i, roll, layer) => {//«
+const unrankco = (i, roll, player) => {//«
 //void unrankco(int i, int * roll, int player){
+//Unrank Chance Outcomes?
 	let num = 0;//Was: int
 	let chanceOutcomes = (player == 1 ? chanceOutcomes1 : chanceOutcomes2);//Was: int *
 	num = chanceOutcomes[i];
@@ -1500,15 +1525,10 @@ const unrankco = (i, roll, layer) => {//«
 		num /= 10;
 	}
 }//»
-const getRoll = (roll, chanceOutcome, player) => {//«
-//void getRoll(int * roll, int chanceOutcome, int player){
-	unrankco(chanceOutcome-1, roll, player);
-}//»
 const countMatchingDice = (gs, player, face) => {//«
 //int countMatchingDice(const GameState & gs, int player, int face){
 
-//int roll[3] = {0,0,0};
-	let roll  = [0,0,0];
+	let roll  = [0,0,0];//Was: int roll[3] = {0,0,0};
 
 	let matchingDice = 0;//Was: int
 	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
@@ -1571,14 +1591,17 @@ const whowon1 = (gs) => {//«
 	let delta = 0;//Was: int
 	return whowon6(gs.prevbid, bidder, gs.callingPlayer, gs.p1roll, gs.p2roll, delta);
 }//»
+
+// In these functions "delta" represents the number of dice the bid is off by 
+// (not relevant for (1,1))
+// Returns payoff for Liar's Dice (delta always equal to 1)
 const payoff = (winner, player, delta) => {//«
 //double payoff(int winner, int player, int delta)
 // first thing: if it's an exact match, calling player loses 1 die
 // may as well set delta to 1 in this case
 	if (delta == 0) delta = 1;
 
-	//  double p1payoff = 0.0;
-	let p1payoff = 0.0;
+	let p1payoff = 0.0;//Was: dbl
 
 	if (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
 	else {
@@ -1586,12 +1609,6 @@ const payoff = (winner, player, delta) => {//«
 	}
 
 	return (player == 1 ? p1payoff : -p1payoff);
-}//»
-// In these functions "delta" represents the number of dice the bid is off by (not relevant for (1,1))
-// Returns payoff for Liar's Dice (delta always equal to 1)
-const payoff_wp = (winner, player) => {//«
-//double payoff(int winner, int player){
-	return payoff(winner, player, 1);
 }//»
 const payoff_gp = (gs, player) => {//«
 //double payoff(GameState & gs, int player) {
@@ -1607,13 +1624,9 @@ const payoff6 = (bid, bidder, callingPlayer, p1roll, p2roll, player) => {//«
 	let winner = whowon6(bid, bidder, callingPlayer, p1roll, p2roll, delta);//Was: int, whowon
 	return payoff(winner, player);
 }//»
-const report = (filename, totaltime, bound, conv) => {//«
-//void report(string filename, double totaltime, double bound, double conv){
-	filename = filepref + filename;
-	log("Reporting to " + filename + " ... ");
-	ofstream outf(filename.c_str(), ios::app);
-	outf << iter << " " << totaltime << " " << bound << " " << conv << " " << nodesTouched << endl;
-	outf.close();
+const payoff_wp = (winner, player) => {//«
+//double payoff(int winner, int player){
+	return payoff(winner, player, 1);
 }//»
 
 const determineChanceOutcomes = (player) => {//«
@@ -1677,45 +1690,6 @@ const dumpInfosets = (prefix) => {//«
 	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
 	log("Dumping infosets to " + filename + " ... ");
 	iss.dumpToDisk(filename);
-}//»
-
-// not even sure what I used this "meta data" for, if I ever used it....
-const dumpMetaData = (prefix, totaltime) =>  {//«
-//void dumpMetaData(string prefix, double totaltime) {
-	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
-	log("Dumping metadeta to " + filename + " ... ");
-
-	ofstream outf(filename.c_str(), ios::binary);
-	if (!outf.is_open()) {
-		cerr("Could not open meta data file for writing.");
-		return;
-	}
-
-	outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
-	outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
-	outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
-	outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
-	outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
-
-	outf.close();
-}//»
-const loadMetaData = (filename) => {//«
-//void loadMetaData(std::string filename) {
-	ifstream inf(filename.c_str(), ios::binary);
-	if (!inf.is_open()) {
-		cerr("Could not open meta data file.");
-		return;
-	}
-
-	let totaltime = 0;//Was: dbl
-
-	inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
-	inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
-	inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
-	inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
-	inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
-
-	inf.close();
 }//»
 
 const getInfosetKey = (gs, player, bidseq) => {//«
@@ -1883,13 +1857,291 @@ const init = () => {//WMNH«
 }//»
 
 
-}//»
-function BR_NS(){// Best Response «
+/*
+// not even sure what I used this "meta data" for, if I ever used it....
+const dumpMetaData = (prefix, totaltime) =>  {//«
+//void dumpMetaData(string prefix, double totaltime) {
+	let filename = filepref + prefix + "." + to_string(iter) + ".dat";//Was: string
+	log("Dumping metadeta to " + filename + " ... ");
 
+	ofstream outf(filename.c_str(), ios::binary);
+	if (!outf.is_open()) {
+		cerr("Could not open meta data file for writing.");
+		return;
+	}
+
+	outf.write(reinterpret_cast<const char *>(&iter), sizeof(iter));
+	outf.write(reinterpret_cast<const char *>(&nodesTouched), sizeof(nodesTouched));
+	outf.write(reinterpret_cast<const char *>(&ntNextReport), sizeof(ntNextReport));
+	outf.write(reinterpret_cast<const char *>(&ntMultiplier), sizeof(ntMultiplier));
+	outf.write(reinterpret_cast<const char *>(&totaltime), sizeof(totaltime));
+
+	outf.close();
+}//»
+const loadMetaData = (filename) => {//«
+//void loadMetaData(std::string filename) {
+	ifstream inf(filename.c_str(), ios::binary);
+	if (!inf.is_open()) {
+		cerr("Could not open meta data file.");
+		return;
+	}
+
+	let totaltime = 0;//Was: dbl
+
+	inf.read(reinterpret_cast<char *>(&iter), sizeof(iter));
+	inf.read(reinterpret_cast<char *>(&nodesTouched), sizeof(nodesTouched));
+	inf.read(reinterpret_cast<char *>(&ntNextReport), sizeof(ntNextReport));
+	inf.read(reinterpret_cast<char *>(&ntMultiplier), sizeof(ntMultiplier));
+	inf.read(reinterpret_cast<char *>(&totaltime), sizeof(totaltime));
+
+	inf.close();
+}//»
+*/
+
+}//»
+function BR_NS(){// Best Response«
+
+//In normalizer.h:
+class NormalizerVector {//«
+
+#normalized;//Was: bool
+#total; //Was: dbl
+//std::vector<double> values; 
+#values;
+public:
+
+constructor() {//«
+	this.#normalized = false;
+	this.#total = 0.0; 
+	this.#values = [];
+}//»
+push_back(val) {//«
+//void push_back(double val) {
+	assert(val >= 0.0);
+	this.#total += val; 
+	this.#values.push(val);//Was: push_back
+}//»
+normalize() {//«
+//  void normalize() {
+	assert(this.#total > 0.0); 
+
+//if (total <= 0) {
+//  for (unsigned int i = 0; i < values.size(); i++)
+//    values[i] = (1.0 / values.size()); 
+//  normalized = true;
+//  return;
+//}
+	assert(!this.#normalized); 
+	for (let i = 0; i < this.#values.size(); i++) {//Was: uint
+		this.#values[i] = (this.#values[i] / this.#total); 
+	}
+	this.#normalized = true; 
+}//»
+size() { //«
+//  unsigned size() const { 
+//	return values.size(); 
+	return this.#values.length;
+}//»
+double & operator[](int n) { return values[n]; }
+to_string() {//«
+	let str = "";
+	for (let i = 0; i < this.#values.length; i++) {//Was: uint, values.size()
+		str += this.#values[i]) + " ";
+	}
+	return str; 
+}//»
+
+};//»
+class NormalizerMap {//«
+ 
+#normalized;//Was: bool
+#total; //Was: dbl
+//std::map<int,double> values; 
+#values;
+//public:
+
+constructor() {//«
+	this.#normalized = false;
+	this.#total = 0.0; 
+	this.#values = {};
+}//»
+add(key, value) {//«
+//void add(int key, double value) {
+	assert(value >= 0.0);
+	this.#total += value;
+	this.#values[key] = value;
+}//»
+normalize() {//«
+	assert(this.#total > 0.0); 
+
+//if (total <= 0) {
+//  std::map<int,double>::iterator iter; 
+//  for (iter = values.begin(); iter != values.end(); iter++)
+//    iter->second = (1.0 / values.size());
+//  normalized = true;
+//  return;
+//}
+
+	assert(!this.#normalized); 
+
+	std::map<int,double>::iterator iter; 
+	for (iter = values.begin(); iter != values.end(); iter++) {
+		iter->second = (iter->second / total); 
+	}
+
+	this.#normalized = true; 
+}//»
+double & operator[](int n) { return values[n]; }
+unsigned size() const { return values.size(); }
+to_string() {//«
+	let str = "";//Was: string
+
+	std::map<int,double>::iterator iter; 
+
+	for (iter = values.begin(); iter != values.end(); iter++) {
+		str += (::to_string(iter->first) + " -> " + ::to_string(iter->second) + " ");
+	}
+
+	return str; 
+}//»
+
+};//»
+
+//« In fvector.h:
+// A mutable vector
+
+//template <class T>
+class FVector {//«
+//std::vector<T> elements;
+#elements;
+#size;//Was: int
+public:  
+
+constructor(){//«
+/*
+//Only called as: FVector<double>
+//Only called with arguments twice (in computeBestResponses3):
+//FVector<double> reach1(numChanceOutcomes(1), 1.0); 
+//FVector<double> reach2(numChanceOutcomes(2), 1.0); 
+
+  FVector() 
+    : size(0) 
+  { 
+this.#elements = [];
+  }
+
+  FVector(int _size, T val = 0) { 
+    size = _size; 
+    elements.resize(0);
+    elements.resize(size, val); 
+  }
+*/
+}//»
+
+T& operator[](int n) {//«
+	return this.#elements[n];
+}//»
+T get_const(int n) const {//«
+	return this.#elements[n]; 
+}//»
+
+getSize() { //«
+//int getSize() const { 
+	return this.#size; 
+}//»
+allEqualTo(T elem) {//«
+//  bool allEqualTo(T elem) {
+	for (let i = 0; i < size; i++) {//Was: int
+		if (elements[i] != elem) return false; 
+	}
+	return true;
+}//»
+FVector<T> & operator+=(FVector<T> & right) {//«
+	assert(size == right.size); 
+
+	for (let i = 0; i < size; i++) {//Was: int
+		elements[i] += right[i]; 
+	}
+
+	return (*this);
+}//»
+FVector<T> & operator*=(FVector<T> & right) {//«
+// non-standard element by element multiply
+
+	assert(size == right.size); 
+
+	for (let i = 0; i < size; i++) {//Was: int
+		elements[i] *= right[i]; 
+	}
+	return (*this);
+
+}//»
+FVector<T> & operator*=(std::vector<T> & right) {//«
+  // non-standard element by element multiply
+
+assert(size == right.size()); 
+
+for (let i = 0; i < size; i++) {//Was: int
+	elements[i] *= right[i]; 
+}
+
+return (*this);
+}//»
+FVector<T> & operator*=(T factor) {//«
+	for (int i = 0; i < size; i++) {
+	  elements[i] *= factor;  
+	}
+
+	return (*this);
+}//»
+to_string() { //«
+//  std::string to_string() { 
+let str = "["; //Was: string
+
+for (let i = 0; i < size; i++) { //Was: int
+  std::ostringstream oss; 
+  oss << elements[i]; 
+  str = str + oss.str(); 
+  if (i < (size-1))
+	str = str + " "; 
+}
+str = str + "]";
+return str; 
+}//»
+assertprob() { //«
+//  void assertprob() { 
+	for (let i = 0; i < size; i++) {//Was: int
+		assert(elements[i] >= 0 && elements[i] <= 1); 
+	}
+}//»
+FVector<T> & operator= (const FVector<T> & other) {//«
+	size = other.size; 
+	elements = other.elements; 
+	return (*this);
+}//»
+  FVector<T> & operator= (const std::vector<T> & other) {//«
+    size = other.size(); 
+    elements = other; 
+    return (*this);
+  }//»
+reset(T val) {//«
+//void reset(T val) {
+	for (let i = 0; i < size; i++) {//Was: int
+		elements[i] = val;
+	}
+}//»
+
+};//»
+
+//std::ostream &operator<<(std::ostream &o,  const FVector<double> &v);
+
+
+//»
 //Globals«
 
 let mccfrAvgFix = false;//Was: static bool
-static vector<unsigned long long> oppChanceOutcomes; // all roll outcomes
+//static vector<unsigned long long> oppChanceOutcomes;//all roll outcomes
+let oppChanceOutcomes = [];
 
 //»
 
@@ -1897,13 +2149,14 @@ const getInfoset=(infosetkey, is, bidseq, player, actionshere, chanceOutcome)=>{
 //void getInfoset(unsigned long long & infosetkey, Infoset & is, unsigned long long bidseq, int player,  
 // int actionshere, int chanceOutcome) {
 // only called at opponent (fixed player) nodes in computeActionDist
-// get the information set for update player where the chance outcome is replaced by the specified one
+// get the information set for update player where the chance outcome is replaced 
+// by the specified one
 	infosetkey = bidseq << iscWidth; 
 	infosetkey |= chanceOutcome; 
 	infosetkey <<= 1; 
 	if (player == 2) infosetkey |= 1; 
 
-	let ret = false; //Was: bool
+	let ret = false;//Was: bool
 
 	ret = iss.get(infosetkey, is, actionshere, 0); 
 
@@ -1943,16 +2196,16 @@ const computeActionDist=(bidseq, player, fixed_player, oppActionDist, action, ne
 // Used for determining probability of action
 // Done only at fixed_player nodes
 	let weight = 0.0; //Was: dbl
-
+//co
 	// for all possible chance outcomes
 	for (let i = 0; i < oppChanceOutcomes.size(); i++) {//Was: uint
-		let CO = (fixed_player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));//Was: uint
-		assert(oppChanceOutcomes.size() == CO);
+		let co = (fixed_player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));//Was: uint, CO
+		assert(oppChanceOutcomes.size() == co);
 		let chanceOutcome = oppChanceOutcomes[i]; //Was: int
 
 		// get the information set that corresponds to it
 		Infoset is;
-		let infosetkey = 0; //Was: ull
+		let infosetkey = 0;//Was: ull
 		getInfoset(infosetkey, is, bidseq, player, actionshere, chanceOutcome); 
 
 		// apply out-of-date mccfr patch if needed. note: we know it's always the fixed player here
@@ -1962,7 +2215,6 @@ const computeActionDist=(bidseq, player, fixed_player, oppActionDist, action, ne
 		newOppReach[i] = newOppReach[i] * oppProb; 
 		weight += getChanceProb(fixed_player, chanceOutcome)*newOppReach[i]; 
 	}
-
 	CHKDBL(weight);
 	oppActionDist.add(action, weight); 
 }//»
@@ -1979,13 +2231,10 @@ const getPayoff = (gs, fixed_player, oppChanceOutcome) => {//«
 const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//«
 //double expectimaxbr(GameState gs, unsigned long long bidseq, int player, int fixed_player, int depth, FVector<double> & oppReach) {
 	assert(fixed_player == 1 || fixed_player == 2); 
-
 	let updatePlayer = 3-fixed_player;//Was: int
-
 	// opponent never players here, don't choose this!
 	if (player == updatePlayer && oppReach.allEqualTo(0.0)) return NEGINF;
-
-	if (terminal(gs)) {
+	if (terminal(gs)) {//«
 		if (oppReach.allEqualTo(0.0)) return NEGINF;
 
 		NormalizerVector oppDist; 
@@ -2005,10 +2254,10 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 		}
 
 		return expPayoff; 
-	}
+	}//»
 
 	// check for chance node
-	if (gs.p1roll == 0) {
+	if (gs.p1roll == 0) {//«
 		// on fixed player chance nodes, just use any die roll
 		if (fixed_player == 1) {
 			GameState ngs = gs; 
@@ -2018,37 +2267,37 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 			return expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
 		}
 		else {
-			let EV = 0.0; //Was: dbl
+			let ev = 0.0; //Was: dbl
 			for (let i = 1; i <= numChanceOutcomes(1); i++) {//Was: int
 				GameState ngs = gs; 
 				ngs.p1roll = i; 
 				FVector<double> newOppReach = oppReach; 
-				EV += getChanceProb(1,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
+				ev += getChanceProb(1,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
 			}
-			return EV;
+			return ev;
 		}
-	}
-	else if (gs.p2roll == 0) {
+	}//»
+	else if (gs.p2roll == 0) {//«
 		// on fixed player chance nodes, just use any die roll
 		if (fixed_player == 2) {
 			GameState ngs = gs; 
-			ngs.p2roll = 1; // assign a dummy outcome, never used
+			ngs.p2roll = 1;// assign a dummy outcome, never used
 			FVector<double> newOppReach = oppReach; 
 			return expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
 		}
 		else {
-			let EV = 0.0; //Was: dbl
+			let ev = 0.0; //Was: dbl
 			for (let i = 1; i <= numChanceOutcomes(2); i++) {//Was: int
 				GameState ngs = gs; 
 				ngs.p2roll = i; 
 				FVector<double> newOppReach = oppReach; 
-				EV += getChanceProb(2,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
+				ev += getChanceProb(2,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
 			}
-			return EV;
+			return ev;
 		}
-	}
+	}//»
 
-	// declare variables and get # actions available
+	// declare variables and get # actions available«
 	let EV = 0.0; //Was: dbl
 
 	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
@@ -2060,8 +2309,8 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	let childEVs = new Array(actionshere);//Was: dbl[]
 	let action = -1;//Was: int
 	NormalizerMap oppActionDist;
-
-	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+//»
+	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int«
 		action++;    
 
 		let childEV = 0;//Was: dbl
@@ -2091,9 +2340,9 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 			assert(action >= 0 && action < actionshere);
 			childEVs[action] = childEV; 
 		}
-	}
+	}//»
 
-	// post move iteration
+	// post move iteration«
 	if (player == updatePlayer) {
 		EV = maxEV;
 	}
@@ -2108,16 +2357,17 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	}
 	assert(updatePlayer != fixed_player); 
 	assert(updatePlayer + fixed_player == 3); 
+//»
 
 	return EV; 
 }//»
-const computeBestResponses = (avgFix) => {//«
+const computeBestResponses1 = (avgFix) => {//«
 //double computeBestResponses(bool avgFix){
 	let p1value = 0.0;//Was: dbl
 	let p2value = 0.0;//Was: dbl
-	return computeBestResponses(avgFix, p1value, p2value);
+	return computeBestResponses3(avgFix, p1value, p2value);
 }//»
-const computeBestResponses = (avgFix, p1value, p2value) => {//«
+const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 //double computeBestResponses(bool avgFix, double & p1value, double & p2value){
 	mccfrAvgFix = avgFix;
 
@@ -2158,7 +2408,8 @@ const computeBestResponses = (avgFix, p1value, p2value) => {//«
 
 	sw.reset(); 
 
-	GameState gs2; bidseq = 0;
+	GameState gs2;
+	bidseq = 0;
 	FVector<double> reach2(numChanceOutcomes(2), 1.0); 
 	p1value = expectimaxbr(gs2, bidseq, 1, 2, 0, reach2);
 
@@ -2183,7 +2434,11 @@ function BluffCounter_NS(){//«
   want to implement a different game, then you can use this file as a place to
   start to create strategies files for your game.
 */
-// How many dice per player?
+
+//Globals«
+
+//All of these const's were #define's«
+// How many dice per player? 
 const P1D = 1;
 const P2D = 1;
 const DICE = (P1D+P2D);
@@ -2196,6 +2451,8 @@ const RECALL = 7;
 // Number of chance event outcomes at chance nodes.
 const P1CO = 6;
 const P2CO = 6;
+//»
+
 
 let p1totalTurns = 0;
 let p2totalTurns = 0;
@@ -2204,8 +2461,9 @@ let p2totalActions = 0;
 let totalLeaves = 0;
 
 map<unsigned long long,int> iapairs;
-
 let iscWidth = 3;//Was: int
+
+//»
 
 const binrep = (num) => {//«
 //string binrep(unsigned long long num) {
@@ -2245,6 +2503,21 @@ const bcount = (cbid, player, depth) => {//«
 		bcount(b, 3-player, depth+1);
 	}
 }//»
+const nextbid = (bidseq, maxBid) => {//«
+//bool nextbid(int * bidseq, int maxBid) {
+	for (let i = RECALL-1; i >= 0; i--) {//Was: int
+		let roffset = (RECALL-1)-i; //Was: int
+		if (bidseq[i] < (maxBid-roffset)) {
+			bidseq[i]++;
+			for (let j = i+1; j < RECALL; j++) {//Was: int
+				bidseq[j] = bidseq[j-1]+1;
+			}
+			return true;
+		}
+	}
+	return false;
+}//»
+
 const countnoabs = () => {//«
 //void countnoabs() {
 	bcount(0, 1, 0); 
@@ -2262,7 +2535,6 @@ const countnoabs = () => {//«
 	log("p1totalActions = " , p1totalActions);
 	log("p2totalActions = " , p2totalActions);
 
-
 	let iapairs1 = (p1totalActions*P1CO);//Was: ul
 	let iapairs2 = (p1totalActions*P2CO);//Was: ul
 	let totaliap = (iapairs1+iapairs2);//Was: ul
@@ -2276,27 +2548,12 @@ const countnoabs = () => {//«
 	let ttlbytes = ((td*8) + (ttlinfosets*4*2)*8); //Was: ull
 	log("total bytes = " , ttlbytes , " ( = " , (ttlbytes / (1024.0*1024.0*1024.0)) , " GB)");
 }//»
-const nextbid = (bidseq, maxBid) => {//«
-//bool nextbid(int * bidseq, int maxBid) {
-	for (let i = RECALL-1; i >= 0; i--) {//Was: int
-		let roffset = (RECALL-1)-i; //Was: int
-		if (bidseq[i] < (maxBid-roffset)) {
-			bidseq[i]++;
-			for (let j = i+1; j < RECALL; j++) {//Was: int
-				bidseq[j] = bidseq[j-1]+1;
-			}
-			return true;
-		}
-	}
-	return false;
-}//»
-
-// This is for imperfect recall abstractions. Not used by this code base, 
-// but I left it in case your game has abstraction, maybe this will be helpful
 const countabs2 = () => {//«
 //void countabs2() {
-//int bidseq[RECALL] = { 0 }; 
-	let bidseq = new Array(RECALL);; 
+// This is for imperfect recall abstractions. Not used by this code base, 
+// but I left it in case your game has abstraction, maybe this will be helpful
+
+	let bidseq = new Array(RECALL); //int bidseq[RECALL] = { 0 }; 
 	let ret = true;//Was: bool
 	let first = true;//Was: bool
 	let maxBid = 6*DICE;//Was: int
@@ -2401,87 +2658,12 @@ const countabs2 = () => {//«
 	log("                   for index: indexsize = 4*#infosets, and 2 doubles per index size . ");
 }//»
 const main = () => {//«
-//int main() {
   // iscWidth is the number of bits needed by the chance outcome
   // in our case, six possibilties, 3 bits
 	iscWidth = 3;
 	countnoabs();
 	//countabs2();
 	return 0;
-}//»
-
-}//»
-function Sampling(){//«
-
-//#include "bluff.h"
-
-const sampleChanceEvent = (player, outcome, prob) => {//«
-//void sampleChanceEvent(int player, int & outcome, double & prob) {
-	let co = (player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));//Was: int
-
-	let roll = unifRand01();//Was: double
-	let sum = 0.0;//Was: double
-	for (let i = 0; i < co; i++) {//Was: int
-		let pr = getChanceProb(player, i+1);//Was: double
-
-		if (roll >= sum && roll < sum+pr) {
-			outcome = (i+1);
-			prob = pr;
-			return;
-		}
-		sum += pr;
-	}
-	log("roll = " , roll);
-	assert(false);
-}//»
-const sampleMoveAvg = (is, actionshere, index, prob) => {//«
-//void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob){
-	let den = 0;//Was: double
-	for (let i = 0; i < actionshere; i++) {//Was: int
-		den += is.totalMoveProbs[i];
-	}
-	let roll = unifRand01();//Was: double
-	let sum = 0.0;//Was: int
-	for (let i = 0; i < actionshere; i++) {//Was:uint
-		let iprob = (den > 0.0 ? (is.totalMoveProbs[i] / den) : (1.0 / actionshere));//Was: double
-		CHKPROB(prob);
-		if (roll >= sum && roll < sum+iprob) {
-			index = i;
-			prob = iprob;
-			return;
-		}
-		sum += iprob;
-	}
-	assert(false);
-}//»
-const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) => {//«
-//int sampleAction(Infoset & is, int actionshere, double & sampleprob, double epsilon, bool firstTimeUniform) {
-
-// **Only do this when enabled by firstTimeUniform:
-// if this infoset has never been updated: choose entirely randomly
-// reason: there is no regret yet, hence no strategy.
-	let eps = 0.0;//Was: double
-	if (firstTimeUniform) eps = (is.lastUpdate == 0 ? 1.0 : epsilon);
-	else eps = epsilon;
-
-	// build the distribution to sample from
-	//  double dist[actionshere];
-	let dist = new Array(actionshere);
-	for (let a = 0; a < actionshere; a++) {//Was: int
-		dist[a] = eps*(1.0 / actionshere) + (1.0-eps)*is.curMoveProbs[a];
-	}
-	let roll = unifRand01();//Was: double
-	let sum = 0.0;//Was: double
-	for (let a = 0; a < actionshere; a++) {//Was: int
-		if (roll >= sum && roll < sum+dist[a]) {
-			sampleprob = dist[a];
-			return a;
-		}
-		sum += dist[a];
-	}
-
-	assert(false);
-	return -1;
 }//»
 
 }//»
@@ -2899,7 +3081,7 @@ const main = (argc, argv) => {//«
 
 			ntNextReport *= ntMultiplier; // need this here, before dumping metadata
 
-			let conv = computeBestResponses(false);//Was: double
+			let conv = computeBestResponses1(false);//Was: double
 			report("pcs.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
 			//dumpInfosets("iss");//WSUROK
 
@@ -3112,10 +3294,10 @@ const main = (argc, argv) => {//«
 			let conv = 0.0;//Was: double
 			let p1value = 0.0;//Was: double
 			let p2value = 0.0;//Was: double
-			conv = computeBestResponses(false, p1value, p2value);
+			conv = computeBestResponses3(false, p1value, p2value);
 
 			report("cfr.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
-		//dumpInfosets("iss");
+			//dumpInfosets("iss");
 
 		//  cout << endl;
 
@@ -3131,6 +3313,84 @@ const main = (argc, argv) => {//«
 }//»
 
 }//»
+
+/*Only used by cfros.cpp, cfres.cpp and purecfr.cpp
+function Sampling(){//«
+
+//#include "bluff.h"
+
+const sampleChanceEvent = (player, outcome, prob) => {//«
+//void sampleChanceEvent(int player, int & outcome, double & prob) {
+	let co = (player == 1 ? numChanceOutcomes(1) : numChanceOutcomes(2));//Was: int
+
+	let roll = unifRand01();//Was: double
+	let sum = 0.0;//Was: double
+	for (let i = 0; i < co; i++) {//Was: int
+		let pr = getChanceProb(player, i+1);//Was: double
+
+		if (roll >= sum && roll < sum+pr) {
+			outcome = (i+1);
+			prob = pr;
+			return;
+		}
+		sum += pr;
+	}
+	log("roll = " , roll);
+	assert(false);
+}//»
+const sampleMoveAvg = (is, actionshere, index, prob) => {//«
+//void sampleMoveAvg(Infoset & is, int actionshere, int & index, double & prob){
+	let den = 0;//Was: double
+	for (let i = 0; i < actionshere; i++) {//Was: int
+		den += is.totalMoveProbs[i];
+	}
+	let roll = unifRand01();//Was: double
+	let sum = 0.0;//Was: int
+	for (let i = 0; i < actionshere; i++) {//Was:uint
+		let iprob = (den > 0.0 ? (is.totalMoveProbs[i] / den) : (1.0 / actionshere));//Was: double
+		CHKPROB(prob);
+		if (roll >= sum && roll < sum+iprob) {
+			index = i;
+			prob = iprob;
+			return;
+		}
+		sum += iprob;
+	}
+	assert(false);
+}//»
+const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) => {//«
+//int sampleAction(Infoset & is, int actionshere, double & sampleprob, double epsilon, bool firstTimeUniform) {
+
+// **Only do this when enabled by firstTimeUniform:
+// if this infoset has never been updated: choose entirely randomly
+// reason: there is no regret yet, hence no strategy.
+	let eps = 0.0;//Was: double
+	if (firstTimeUniform) eps = (is.lastUpdate == 0 ? 1.0 : epsilon);
+	else eps = epsilon;
+
+	// build the distribution to sample from
+	//  double dist[actionshere];
+	let dist = new Array(actionshere);
+	for (let a = 0; a < actionshere; a++) {//Was: int
+		dist[a] = eps*(1.0 / actionshere) + (1.0-eps)*is.curMoveProbs[a];
+	}
+	let roll = unifRand01();//Was: double
+	let sum = 0.0;//Was: double
+	for (let a = 0; a < actionshere; a++) {//Was: int
+		if (roll >= sum && roll < sum+dist[a]) {
+			sampleprob = dist[a];
+			return a;
+		}
+		sum += dist[a];
+	}
+
+	assert(false);
+	return -1;
+}//»
+
+}//»
+*/
+
 
 //»
 
