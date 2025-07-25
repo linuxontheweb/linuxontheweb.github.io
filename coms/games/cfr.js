@@ -1,3 +1,5 @@
+/*7/25/25
+*/
 /*7/24/25: Just relax and ponder over InfosetStore_NS.«
 
 Below, IS.<whatever> means InfosetStore.<whatever>, and will appear in the codebase as 
@@ -1074,6 +1076,45 @@ writeBytes(out, addr, num){//«
 }//»
 dumpToDisk(filename) {//«
 //void dumpToDisk(std::string filename);
+
+/*OPFS sync writing«
+
+You're correct, and I appreciate the clarification. The
+`FileSystemFileHandle.createSyncAccessHandle()` method does provide synchronous
+file operations in dedicated Web Workers via the `FileSystemSyncAccessHandle`
+interface, specifically for files in the Origin Private File System (OPFS). Its
+`write()` method allows synchronous writes, similar to C++'s output stream
+`write`, and successive calls append data sequentially without needing `seek`.
+
+Example in a Web Worker:
+onmessage = async (e) => {
+  const root = await navigator.storage.getDirectory();
+  const fileHandle = await root.getFileHandle('file.txt', { create: true });
+  const accessHandle = await fileHandle.createSyncAccessHandle();
+  const encoder = new TextEncoder();
+  accessHandle.write(encoder.encode('first')); // Synchronous write
+  accessHandle.write(encoder.encode('second')); // Appends sequentially
+  accessHandle.flush(); // Persist changes
+  accessHandle.close(); // Release lock
+};
+
+**Key Points**:
+
+- `createSyncAccessHandle()` is only available in dedicated Web Workers, not
+  the main thread, and is designed for high-performance use cases (e.g., WebAssembly).
+
+- It supports synchronous `write()` and `read()` operations, with no need for
+  `seek` for sequential writes.
+
+- Browser support is strong in modern browsers (e.g., Chrome 102+, Safari
+  15.4+, Edge) for OPFS files, but it’s limited to the OPFS
+context.
+
+This is the closest JavaScript equivalent to C++'s synchronous stream writing
+in a worker context. Thanks for pointing it out!
+
+»*/
+
 	ofstream out(filename.c_str(), ios::out | ios::binary); 
 	assert(out.is_open()); 
 
@@ -1411,13 +1452,18 @@ const outcomes = {};
 // probability of this chance move. indexed as 0-5 or 0-20
 // note: CO/co stand for "chance outcome"
 
+//static int
 let numChanceOutcomes1 = 0;
 let numChanceOutcomes2 = 0;
+
+//static double *
 let chanceProbs1 = null;
 let chanceProbs2 = null;
+
+//static int *
 let chanceOutcomes1 = null;
 let chanceOutcomes2 = null;
-let bid = null;
+let bids = null;
 //static StopWatch stopwatch;
 //Should probably use a start method because the constructor starts it here
 const stopwatch = new StopWatch();
@@ -1661,14 +1707,61 @@ const determineChanceOutcomes = (player) => {//«
 
 	// now, transfer the map keys to the array
 	numChanceOutcomes = outcomes.size();
-	chanceProbs = new double[numChanceOutcomes];
-	chanceOutcomes = new int[numChanceOutcomes];
 
-	let idx = 0;//Was: int
-	map<int,int>::iterator iter;
+	chanceProbs = new Array(numChanceOutcomes);//was dbl[]
+	chanceOutcomes = new Array(numChanceOutcomes);//was int[]
+
+/*I am trying to translate a C++ codebase into Javascript. I'd like to get a good«
+grasp of the following C++ idiom:
+
+map<int, int> my_map;
+
+//add entries to my_map here
+
+int my_array[num_elements];
+
+map<int,int>::iterator iter;
+int idx = 0;
+for (iter = my_map.begin(); iter != my_map.end(); iter++) {
+	my_array[idx] = iter->first;
+	idx++;
+}
+
+The parts about `my_map.begin()` and `my_map.end()` are self-evident, but I
+don't understand what `iter->first` is supposed to be about.
+
+
+
+In C++, `iter->first` accesses the key of the current key-value pair in the
+`map<int, int>` during iteration. A `std::map` stores pairs, where `first` is
+the key (here, an `int`) and `second` is the value (also an `int`). The
+iterator `iter` points to a pair, so `iter->first` retrieves the key, and
+`iter->second` would retrieve the value.
+
+In JavaScript, a `Map` works similarly. To replicate this:
+
+let myMap = new Map();
+
+// Add entries to myMap here
+
+let myArray = new Array(numElements);
+let idx = 0;
+for (let [key, value] of myMap) {
+    myArray[idx] = key; // Equivalent to iter->first
+    idx++;
+}
+
+Here, `for...of` iterates over the `Map`, destructuring each entry into `key`
+and `value`. Using `key` is equivalent to `iter->first`.
+
+»*/
+
 	//outcomes:
 	//Was: map<int,int> outcomes;
 	//Now: const outcomes = {};
+
+	let idx = 0;//Was: int
+	map<int,int>::iterator iter;
 	for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
 		chanceOutcomes[idx] = iter->first;
 		idx++;
@@ -1846,7 +1939,10 @@ const init = () => {//WMNH«
 //void init(){
 	assert(bids == NULL);
 	log("Initializing Bluff globals...");
-	seedCurMicroSec();
+
+//	Don't need this: we are using Math.random()
+//	seedCurMicroSec();
+
 	determineChanceOutcomes(1);
 	determineChanceOutcomes(2);
 	// iscWidth if the number of bits needed to encode the chance outcome in the integer
@@ -3223,7 +3319,7 @@ const main = (argc, argv) => {//«
 //int main(int argc, char ** argv) {
 //unsigned long long maxIters = 0; 
 	let maxIters = 0; 
-	init();//WMNH
+	init();//WMNH in NS:Bluff
 
 	if (argc < 2) {
 		initInfosets();
