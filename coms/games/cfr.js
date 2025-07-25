@@ -104,6 +104,44 @@ double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
 // and company's stuff on the open internets.
 //»
 
+//WHNHGT
+/*OPFS sync ops«
+
+The `FileSystemFileHandle.createSyncAccessHandle()` method provides synchronous
+file operations in dedicated Web Workers via the `FileSystemSyncAccessHandle`
+interface, specifically for files in the Origin Private File System (OPFS). Its
+`write()` method allows synchronous writes, similar to C++'s output stream
+`write`, and successive calls append data sequentially without needing `seek`.
+
+Example in a Web Worker:
+onmessage = async (e) => {
+  const root = await navigator.storage.getDirectory();
+  const fileHandle = await root.getFileHandle('file.txt', { create: true });
+  const accessHandle = await fileHandle.createSyncAccessHandle();
+  const encoder = new TextEncoder();
+  accessHandle.write(encoder.encode('first')); // Synchronous write
+  accessHandle.write(encoder.encode('second')); // Appends sequentially
+  accessHandle.flush(); // Persist changes
+  accessHandle.close(); // Release lock
+};
+
+**Key Points**:
+
+- `createSyncAccessHandle()` is only available in dedicated Web Workers, not
+  the main thread, and is designed for high-performance use cases (e.g., WebAssembly).
+
+- It supports synchronous `write()` and `read()` operations, with no need for
+  `seek` for sequential writes.
+
+- Browser support is strong in modern browsers (e.g., Chrome 102+, Safari
+  15.4+, Edge) for OPFS files, but it’s limited to the OPFS
+context.
+
+This is the closest JavaScript equivalent to C++'s synchronous stream writing
+in a worker context. Thanks for pointing it out!
+
+»*/
+
 //Imports«
 //const{globals, Desk}=LOTW;
 const {Com} = LOTW.globals.ShellMod.comClasses;
@@ -445,6 +483,329 @@ stop() {
 
 };//»
 
+//normalizer.h:
+class NormalizerVector {//«
+
+#normalized;//Was: bool
+#total; //Was: dbl
+//std::vector<double> values; 
+#values;
+public:
+
+constructor() {//«
+	this.#normalized = false;
+	this.#total = 0.0; 
+	this.#values = [];
+}//»
+push_back(val) {//«
+//void push_back(double val) {
+	assert(val >= 0.0);
+	this.#total += val; 
+	this.#values.push(val);//Was: push_back
+}//»
+normalize() {//«
+//  void normalize() {
+	assert(this.#total > 0.0); 
+
+//if (total <= 0) {
+//  for (unsigned int i = 0; i < values.size(); i++)
+//    values[i] = (1.0 / values.size()); 
+//  normalized = true;
+//  return;
+//}
+	assert(!this.#normalized); 
+	for (let i = 0; i < this.#values.size(); i++) {//Was: uint
+		this.#values[i] = (this.#values[i] / this.#total); 
+	}
+	this.#normalized = true; 
+}//»
+size() { //«
+//  unsigned size() const { 
+//	return values.size(); 
+	return this.#values.length;
+}//»
+double & operator[](int n) { return values[n]; }
+to_string() {//«
+	let str = "";
+	for (let i = 0; i < this.#values.length; i++) {//Was: uint, values.size()
+		str += this.#values[i]) + " ";
+	}
+	return str; 
+}//»
+
+};//»
+class NormalizerMap {//«
+ 
+#normalized;//Was: bool
+#total; //Was: dbl
+//std::map<int,double> values; 
+#values;
+//public:
+
+constructor() {//«
+	this.#normalized = false;
+	this.#total = 0.0; 
+	this.#values = {};
+}//»
+add(key, value) {//«
+//void add(int key, double value) {
+	assert(value >= 0.0);
+	this.#total += value;
+	this.#values[key] = value;
+}//»
+normalize() {//«
+	assert(this.#total > 0.0); 
+
+//if (total <= 0) {
+//  std::map<int,double>::iterator iter; 
+//  for (iter = values.begin(); iter != values.end(); iter++)
+//    iter->second = (1.0 / values.size());
+//  normalized = true;
+//  return;
+//}
+
+	assert(!this.#normalized); 
+
+	std::map<int,double>::iterator iter; 
+	for (iter = values.begin(); iter != values.end(); iter++) {
+		iter->second = (iter->second / total); 
+	}
+
+	this.#normalized = true; 
+}//»
+double & operator[](int n) { return values[n]; }
+unsigned size() const { return values.size(); }
+to_string() {//«
+	let str = "";//Was: string
+
+	std::map<int,double>::iterator iter; 
+
+	for (iter = values.begin(); iter != values.end(); iter++) {
+		str += (::to_string(iter->first) + " -> " + ::to_string(iter->second) + " ");
+	}
+
+	return str; 
+}//»
+
+};//»
+
+//fvector.h:
+//template <class T>
+class FVector {//«
+// A mutable vector
+//std::vector<T> elements;
+#elements;
+#size;//Was: int
+public:  
+
+constructor(){//«
+/*
+//Only called as: FVector<double>
+//Only called with arguments twice (in computeBestResponses3):
+//FVector<double> reach1(numChanceOutcomes(1), 1.0); 
+//FVector<double> reach2(numChanceOutcomes(2), 1.0); 
+
+  FVector() 
+    : size(0) 
+  { 
+this.#elements = [];
+  }
+
+  FVector(int _size, T val = 0) { 
+    size = _size; 
+    elements.resize(0);
+    elements.resize(size, val); 
+  }
+*/
+}//»
+
+T& operator[](int n) {//«
+	return this.#elements[n];
+}//»
+T get_const(int n) const {//«
+	return this.#elements[n]; 
+}//»
+
+getSize() { //«
+//int getSize() const { 
+	return this.#size; 
+}//»
+allEqualTo(T elem) {//«
+//  bool allEqualTo(T elem) {
+	for (let i = 0; i < size; i++) {//Was: int
+		if (elements[i] != elem) return false; 
+	}
+	return true;
+}//»
+FVector<T> & operator+=(FVector<T> & right) {//«
+	assert(size == right.size); 
+
+	for (let i = 0; i < size; i++) {//Was: int
+		elements[i] += right[i]; 
+	}
+
+	return (*this);
+}//»
+FVector<T> & operator*=(FVector<T> & right) {//«
+// non-standard element by element multiply
+
+	assert(size == right.size); 
+
+	for (let i = 0; i < size; i++) {//Was: int
+		elements[i] *= right[i]; 
+	}
+	return (*this);
+
+}//»
+FVector<T> & operator*=(std::vector<T> & right) {//«
+  // non-standard element by element multiply
+
+assert(size == right.size()); 
+
+for (let i = 0; i < size; i++) {//Was: int
+	elements[i] *= right[i]; 
+}
+
+return (*this);
+}//»
+FVector<T> & operator*=(T factor) {//«
+	for (int i = 0; i < size; i++) {
+	  elements[i] *= factor;  
+	}
+
+	return (*this);
+}//»
+to_string() { //«
+//  std::string to_string() { 
+let str = "["; //Was: string
+
+for (let i = 0; i < size; i++) { //Was: int
+  std::ostringstream oss; 
+  oss << elements[i]; 
+  str = str + oss.str(); 
+  if (i < (size-1))
+	str = str + " "; 
+}
+str = str + "]";
+return str; 
+}//»
+assertprob() { //«
+//  void assertprob() { 
+	for (let i = 0; i < size; i++) {//Was: int
+		assert(elements[i] >= 0 && elements[i] <= 1); 
+	}
+}//»
+FVector<T> & operator= (const FVector<T> & other) {//«
+	size = other.size; 
+	elements = other.elements; 
+	return (*this);
+}//»
+FVector<T> & operator= (const std::vector<T> & other) {//«
+	size = other.size(); 
+	elements = other; 
+	return (*this);
+}//»
+reset(T val) {//«
+//void reset(T val) {
+	for (let i = 0; i < size; i++) {//Was: int
+		elements[i] = val;
+	}
+}//»
+
+};
+//std::ostream &operator<<(std::ostream &o,  const FVector<double> &v);
+//»
+
+//svector.h:
+class SVector {//«
+//static vector
+// Provides all the functionality of FVector but uses static 
+// SIZEs to avoid dynamic memory allocations.
+// Also: assumes doubles since we don't use it for anything else.
+// double elements[SIZE];
+#elements;
+//public:  
+SVector() { //«
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = 0.0;
+	}
+}//»
+SVector(ival) {//«
+//ival: double
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = ival;
+	}
+}//»
+get_const(n) {//double«
+//n: int
+	return elements[n]; 
+}//»
+getSize() { return SIZE; }
+allEqualTo(elem) {//bool«
+//elem: double
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		if (elements[i] != elem) return false; 
+	}
+	return true;
+}//»
+to_string() {//std::string«
+	let str = "[";//Was: string
+	for (let i = 0; i < SIZE; i++) { //Was: uint
+		std::ostringstream oss; 
+		oss << elements[i]; 
+		str = str + oss.str(); 
+		if (i < (SIZE-1)) str = str + " "; 
+	}
+	str = str + "]";
+	return str; 
+}//»
+assertprob() { //«
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		assert(elements[i] >= 0.0 && elements[i] <= 1.0); 
+	}
+}//»
+reset(val) {//«
+//val: double
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = val;
+	}
+}//»
+
+double& operator[](int n) { return elements[n]; }
+SVector<SIZE> & operator= (const SVector<SIZE> & other) {//«
+	assert(SIZE == other.getSize());
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] = other.elements[i]; 
+	}
+	return (*this);
+}//»
+SVector<SIZE> & operator+=(SVector<SIZE> & right) {//«
+	assert(SIZE == right.getSize()); 
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] += right[i]; 
+	}
+	return (*this);
+}//»
+SVector<SIZE> & operator*=(SVector<SIZE> & right) {//«
+// non-standard element by element multiply
+	assert(SIZE == right.getSize()); 
+
+	for (let i = 0; i < SIZE; i++) {//Was: uint
+		elements[i] *= right[i]; 
+	}
+	return (*this);
+}//»
+SVector<SIZE> & operator*=(double factor) {//«
+	for (let i = 0; i < SIZE; i++) {
+		elements[i] *= factor;  
+	}
+	return (*this);
+}//»
+
+};
+//std::ostream &operator<<(std::ostream &o,  const SVector<SIZE> &v);
+//»
+
 function Util_NS(){//«
 
 //#include "bluff.h"
@@ -538,6 +899,13 @@ const pow2 = (i) => {//«
 }//»
 const bubsort = (array, size) => {//«
 //void bubsort(int * array, int size) {
+
+// a.sort((a,b)=>{if (a>b) return 1; if (b>a) return -1; return 0;})
+
+// ...or...
+// const LO2HI = (a,b)=>{if (a>b) return 1; if (b>a) return -1; return 0;};
+// a.sort(LO2HI)
+
 	let swapped_flag;//Was: bool
 	do {
 		swapped_flag = false;
@@ -1077,43 +1445,7 @@ writeBytes(out, addr, num){//«
 dumpToDisk(filename) {//«
 //void dumpToDisk(std::string filename);
 
-/*OPFS sync writing«
-
-You're correct, and I appreciate the clarification. The
-`FileSystemFileHandle.createSyncAccessHandle()` method does provide synchronous
-file operations in dedicated Web Workers via the `FileSystemSyncAccessHandle`
-interface, specifically for files in the Origin Private File System (OPFS). Its
-`write()` method allows synchronous writes, similar to C++'s output stream
-`write`, and successive calls append data sequentially without needing `seek`.
-
-Example in a Web Worker:
-onmessage = async (e) => {
-  const root = await navigator.storage.getDirectory();
-  const fileHandle = await root.getFileHandle('file.txt', { create: true });
-  const accessHandle = await fileHandle.createSyncAccessHandle();
-  const encoder = new TextEncoder();
-  accessHandle.write(encoder.encode('first')); // Synchronous write
-  accessHandle.write(encoder.encode('second')); // Appends sequentially
-  accessHandle.flush(); // Persist changes
-  accessHandle.close(); // Release lock
-};
-
-**Key Points**:
-
-- `createSyncAccessHandle()` is only available in dedicated Web Workers, not
-  the main thread, and is designed for high-performance use cases (e.g., WebAssembly).
-
-- It supports synchronous `write()` and `read()` operations, with no need for
-  `seek` for sequential writes.
-
-- Browser support is strong in modern browsers (e.g., Chrome 102+, Safari
-  15.4+, Edge) for OPFS files, but it’s limited to the OPFS
-context.
-
-This is the closest JavaScript equivalent to C++'s synchronous stream writing
-in a worker context. Thanks for pointing it out!
-
-»*/
+//See OPFS sync ops notes @WHNHGT
 
 	ofstream out(filename.c_str(), ios::out | ios::binary); 
 	assert(out.is_open()); 
@@ -1130,8 +1462,11 @@ in a worker context. Thanks for pointing it out!
 
 	// the index
 	for (let i = 0; i < this.#indexSize; i++) {//Was: ull
-		this.writeBytes(out, indexKeys + i, 8); 
-		this.writeBytes(out, indexVals + i, 8); 
+//		this.writeBytes(out, indexKeys + i, 8); 
+		this.writeBytes(out, this.#indexKeys[i], 8); 
+
+//		this.writeBytes(out, indexVals + i, 8); 
+		this.writeBytes(out, this.#indexVals[i], 8); 
 	}
 
 	//the table
@@ -1273,14 +1608,22 @@ get(infoset_key, infoset, moves, firstmove){//«
 
 readBytes(in, addr,  num) {//«
 //  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
+
+//Need to pass in an array and offset value
+//readBytes(in, arr, off, num)
+
 	in.read(reinterpret_cast<char *>(addr), num); 
 }//»
 
 readFromDisk(filename) {//«
 //bool readFromDisk(std::string filename);
+
+
 	this.#addingInfosets = false; 
 	this.#nextInfosetPos = 0; 
 	this.#added = 0; 
+
+//See OPFS sync ops notes @WHNHGT
 
 	ifstream in(filename.c_str(), ios::in | ios::binary); 
 	//assert(in.is_open());  
@@ -1294,11 +1637,14 @@ readFromDisk(filename) {//«
 	this.readBytes(in, &lastRowSize, 8);        
 
 	// the index
-	this.#indexKeys = new Array(indexSize);//Was: ull[]
-	this.#indexVals = new Array(indexSize);//Was: ull[]
-	for (let i = 0; i < indexSize; i++) {//Was: ull
-		this.readBytes(in, indexKeys + i, 8); 
-		this.readBytes(in, indexVals + i, 8); 
+	this.#indexKeys = new Array(this.#indexSize);//Was: ull[]
+	this.#indexVals = new Array(this.#indexSize);//Was: ull[]
+	for (let i = 0; i < this.#indexSize; i++) {//Was: ull
+//		this.readBytes(in, indexKeys + i, 8); 
+		this.readBytes(in, this.#indexKeys[i], 8); 
+
+//		this.readBytes(in, indexVals + i, 8); 
+		this.readBytes(in, this.#indexVals[i], 8); 
 	}
 
 	// table rows (allocation)
@@ -1677,26 +2023,26 @@ const payoff_wp = (winner, player) => {//«
 
 const determineChanceOutcomes = (player) => {//«
 //void determineChanceOutcomes(int player){
-	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
-	let rolls = new Array(dice);//Was: int[]
-	for (let r = 0; r < dice; r++) rolls[r] = 1;//Was: int
+	let num_dice = (player == 1 ? P1DICE : P2DICE);//Was: int
+	let rolls = new Array(num_dice);//Was: int[]
+	for (let r = 0; r < num_dice; r++) rolls[r] = 1;//Was: int
 	outcomes.clear();
 
-	let permutations = intpow(DIEFACES, dice);//Was: int
+	let permutations = intpow(DIEFACES, num_dice);//Was: int
 	let p;//Was: int
 
 	for (p = 0; p < permutations; p++) {
 		// first, make a copy
-		let rollcopy = new Array(dice);//Was: int[]
-		memcpy(rollcopy, rolls, dice*sizeof(int));
+		let rollcopy = new Array(num_dice);//Was: int[]
+		memcpy(rollcopy, rolls, num_dice*sizeof(int));
 		// now sort
-		bubsort(rollcopy, dice);
+		bubsort(rollcopy, num_dice);
 		// now convert to an integer in base 10
-		let key = getRollBase10(rollcopy, dice);//Was: int
+		let key = getRollBase10(rollcopy, num_dice);//Was: int
 		// now increment the counter for this key in the map
 		outcomes[key] += 1;
 		// next roll
-		nextRoll(rolls, dice);
+		nextRoll(rolls, num_dice);
 	}
 
 	assert(p == permutations);
@@ -1731,7 +2077,6 @@ The parts about `my_map.begin()` and `my_map.end()` are self-evident, but I
 don't understand what `iter->first` is supposed to be about.
 
 
-
 In C++, `iter->first` accesses the key of the current key-value pair in the
 `map<int, int>` during iteration. A `std::map` stores pairs, where `first` is
 the key (here, an `int`) and `second` is the value (also an `int`). The
@@ -1762,8 +2107,25 @@ and `value`. Using `key` is equivalent to `iter->first`.
 
 	let idx = 0;//Was: int
 	map<int,int>::iterator iter;
+
+// let myMap = new Map;
+// //set values
+// for (let [key, value] of myMap) {
+//    myArray[idx] = key; // Equivalent to iter->first
+//    idx++;
+// }
+// ...or
+
+// let myMap = {};
+// //set values
+// for (let key in myMap) {
+//    myArray[idx] = key; // Equivalent to iter->first
+//    idx++;
+// }
+
+
 	for (iter = outcomes.begin(); iter != outcomes.end(); iter++) {
-		chanceOutcomes[idx] = iter->first;
+		chanceOutcomes[idx] = iter->first;//iter->first is the item key (iter->second is the item value)
 		idx++;
 	}
 
@@ -1997,242 +2359,6 @@ const loadMetaData = (filename) => {//«
 }//»
 function BR_NS(){// Best Response«
 
-//In normalizer.h:
-class NormalizerVector {//«
-
-#normalized;//Was: bool
-#total; //Was: dbl
-//std::vector<double> values; 
-#values;
-public:
-
-constructor() {//«
-	this.#normalized = false;
-	this.#total = 0.0; 
-	this.#values = [];
-}//»
-push_back(val) {//«
-//void push_back(double val) {
-	assert(val >= 0.0);
-	this.#total += val; 
-	this.#values.push(val);//Was: push_back
-}//»
-normalize() {//«
-//  void normalize() {
-	assert(this.#total > 0.0); 
-
-//if (total <= 0) {
-//  for (unsigned int i = 0; i < values.size(); i++)
-//    values[i] = (1.0 / values.size()); 
-//  normalized = true;
-//  return;
-//}
-	assert(!this.#normalized); 
-	for (let i = 0; i < this.#values.size(); i++) {//Was: uint
-		this.#values[i] = (this.#values[i] / this.#total); 
-	}
-	this.#normalized = true; 
-}//»
-size() { //«
-//  unsigned size() const { 
-//	return values.size(); 
-	return this.#values.length;
-}//»
-double & operator[](int n) { return values[n]; }
-to_string() {//«
-	let str = "";
-	for (let i = 0; i < this.#values.length; i++) {//Was: uint, values.size()
-		str += this.#values[i]) + " ";
-	}
-	return str; 
-}//»
-
-};//»
-class NormalizerMap {//«
- 
-#normalized;//Was: bool
-#total; //Was: dbl
-//std::map<int,double> values; 
-#values;
-//public:
-
-constructor() {//«
-	this.#normalized = false;
-	this.#total = 0.0; 
-	this.#values = {};
-}//»
-add(key, value) {//«
-//void add(int key, double value) {
-	assert(value >= 0.0);
-	this.#total += value;
-	this.#values[key] = value;
-}//»
-normalize() {//«
-	assert(this.#total > 0.0); 
-
-//if (total <= 0) {
-//  std::map<int,double>::iterator iter; 
-//  for (iter = values.begin(); iter != values.end(); iter++)
-//    iter->second = (1.0 / values.size());
-//  normalized = true;
-//  return;
-//}
-
-	assert(!this.#normalized); 
-
-	std::map<int,double>::iterator iter; 
-	for (iter = values.begin(); iter != values.end(); iter++) {
-		iter->second = (iter->second / total); 
-	}
-
-	this.#normalized = true; 
-}//»
-double & operator[](int n) { return values[n]; }
-unsigned size() const { return values.size(); }
-to_string() {//«
-	let str = "";//Was: string
-
-	std::map<int,double>::iterator iter; 
-
-	for (iter = values.begin(); iter != values.end(); iter++) {
-		str += (::to_string(iter->first) + " -> " + ::to_string(iter->second) + " ");
-	}
-
-	return str; 
-}//»
-
-};//»
-
-//« In fvector.h:
-// A mutable vector
-
-//template <class T>
-class FVector {//«
-//std::vector<T> elements;
-#elements;
-#size;//Was: int
-public:  
-
-constructor(){//«
-/*
-//Only called as: FVector<double>
-//Only called with arguments twice (in computeBestResponses3):
-//FVector<double> reach1(numChanceOutcomes(1), 1.0); 
-//FVector<double> reach2(numChanceOutcomes(2), 1.0); 
-
-  FVector() 
-    : size(0) 
-  { 
-this.#elements = [];
-  }
-
-  FVector(int _size, T val = 0) { 
-    size = _size; 
-    elements.resize(0);
-    elements.resize(size, val); 
-  }
-*/
-}//»
-
-T& operator[](int n) {//«
-	return this.#elements[n];
-}//»
-T get_const(int n) const {//«
-	return this.#elements[n]; 
-}//»
-
-getSize() { //«
-//int getSize() const { 
-	return this.#size; 
-}//»
-allEqualTo(T elem) {//«
-//  bool allEqualTo(T elem) {
-	for (let i = 0; i < size; i++) {//Was: int
-		if (elements[i] != elem) return false; 
-	}
-	return true;
-}//»
-FVector<T> & operator+=(FVector<T> & right) {//«
-	assert(size == right.size); 
-
-	for (let i = 0; i < size; i++) {//Was: int
-		elements[i] += right[i]; 
-	}
-
-	return (*this);
-}//»
-FVector<T> & operator*=(FVector<T> & right) {//«
-// non-standard element by element multiply
-
-	assert(size == right.size); 
-
-	for (let i = 0; i < size; i++) {//Was: int
-		elements[i] *= right[i]; 
-	}
-	return (*this);
-
-}//»
-FVector<T> & operator*=(std::vector<T> & right) {//«
-  // non-standard element by element multiply
-
-assert(size == right.size()); 
-
-for (let i = 0; i < size; i++) {//Was: int
-	elements[i] *= right[i]; 
-}
-
-return (*this);
-}//»
-FVector<T> & operator*=(T factor) {//«
-	for (int i = 0; i < size; i++) {
-	  elements[i] *= factor;  
-	}
-
-	return (*this);
-}//»
-to_string() { //«
-//  std::string to_string() { 
-let str = "["; //Was: string
-
-for (let i = 0; i < size; i++) { //Was: int
-  std::ostringstream oss; 
-  oss << elements[i]; 
-  str = str + oss.str(); 
-  if (i < (size-1))
-	str = str + " "; 
-}
-str = str + "]";
-return str; 
-}//»
-assertprob() { //«
-//  void assertprob() { 
-	for (let i = 0; i < size; i++) {//Was: int
-		assert(elements[i] >= 0 && elements[i] <= 1); 
-	}
-}//»
-FVector<T> & operator= (const FVector<T> & other) {//«
-	size = other.size; 
-	elements = other.elements; 
-	return (*this);
-}//»
-  FVector<T> & operator= (const std::vector<T> & other) {//«
-    size = other.size(); 
-    elements = other; 
-    return (*this);
-  }//»
-reset(T val) {//«
-//void reset(T val) {
-	for (let i = 0; i < size; i++) {//Was: int
-		elements[i] = val;
-	}
-}//»
-
-};//»
-
-//std::ostream &operator<<(std::ostream &o,  const FVector<double> &v);
-
-
-//»
 //Globals«
 
 let mccfrAvgFix = false;//Was: static bool
@@ -2325,7 +2451,8 @@ const getPayoff = (gs, fixed_player, oppChanceOutcome) => {//«
 	return payoff(gs, updatePlayer); 
 }//»
 const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//«
-//double expectimaxbr(GameState gs, unsigned long long bidseq, int player, int fixed_player, int depth, FVector<double> & oppReach) {
+//double expectimaxbr(GameState gs, unsigned long long bidseq, int player, 
+//int fixed_player, int depth, FVector<double> & oppReach) {
 	assert(fixed_player == 1 || fixed_player == 2); 
 	let updatePlayer = 3-fixed_player;//Was: int
 	// opponent never players here, don't choose this!
@@ -2513,7 +2640,7 @@ const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 	cout.precision(15);
 	log("p1value = " , p1value); 
 
-	let conv = p1value + p2value; //Was: dbl
+	let conv = p1value + p2value;//Was: dbl
 
 	cout.precision(15);
 	log("iter = " , iter , " nodes = " , nodesTouched , " conv = " , conv); 
@@ -2773,94 +2900,6 @@ function PCS_NS(){// Public Chance Sampling«
 //»
 
 //template <unsigned int SIZE>
-class SVector {//«
-//static vector
-// Provides all the functionality of FVector but uses static 
-// SIZEs to avoid dynamic memory allocations.
-// Also: assumes doubles since we don't use it for anything else.
-// double elements[SIZE];
-#elements;
-//public:  
-SVector() { //«
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = 0.0;
-	}
-}//»
-SVector(ival) {//«
-//ival: double
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = ival;
-	}
-}//»
-get_const(n) {//double«
-//n: int
-	return elements[n]; 
-}//»
-getSize() { return SIZE; }
-allEqualTo(elem) {//bool«
-//elem: double
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		if (elements[i] != elem) return false; 
-	}
-	return true;
-}//»
-to_string() {//std::string«
-	let str = "[";//Was: string
-	for (let i = 0; i < SIZE; i++) { //Was: uint
-		std::ostringstream oss; 
-		oss << elements[i]; 
-		str = str + oss.str(); 
-		if (i < (SIZE-1)) str = str + " "; 
-	}
-	str = str + "]";
-	return str; 
-}//»
-assertprob() { //«
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		assert(elements[i] >= 0.0 && elements[i] <= 1.0); 
-	}
-}//»
-reset(val) {//«
-//val: double
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = val;
-	}
-}//»
-
-double& operator[](int n) { return elements[n]; }
-SVector<SIZE> & operator= (const SVector<SIZE> & other) {//«
-	assert(SIZE == other.getSize());
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = other.elements[i]; 
-	}
-	return (*this);
-}//»
-SVector<SIZE> & operator+=(SVector<SIZE> & right) {//«
-	assert(SIZE == right.getSize()); 
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] += right[i]; 
-	}
-	return (*this);
-}//»
-SVector<SIZE> & operator*=(SVector<SIZE> & right) {//«
-// non-standard element by element multiply
-	assert(SIZE == right.getSize()); 
-
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] *= right[i]; 
-	}
-	return (*this);
-}//»
-SVector<SIZE> & operator*=(double factor) {//«
-	for (let i = 0; i < SIZE; i++) {
-		elements[i] *= factor;  
-	}
-	return (*this);
-}//»
-
-};//»
-
-//std::ostream &operator<<(std::ostream &o,  const SVector<SIZE> &v);
 
 //Globals«
 
