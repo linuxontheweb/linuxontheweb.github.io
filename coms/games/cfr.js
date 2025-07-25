@@ -592,7 +592,7 @@ to_string() {//«
 //fvector.h:
 //template <class T>
 class FVector {//«
-// A mutable vector
+// A mutable (dynamic) vector
 //std::vector<T> elements;
 #elements;
 #size;//Was: int
@@ -619,9 +619,6 @@ this.#elements = [];
 */
 }//»
 
-T& operator[](int n) {//«
-	return this.#elements[n];
-}//»
 T get_const(int n) const {//«
 	return this.#elements[n]; 
 }//»
@@ -630,18 +627,28 @@ getSize() { //«
 //int getSize() const { 
 	return this.#size; 
 }//»
+reset(T val) {//«
+//void reset(T val) {
+	for (let i = 0; i < this.#size; i++) {//Was: int
+		this.#elements[i] = val;
+	}
+}//»
 allEqualTo(T elem) {//«
 //  bool allEqualTo(T elem) {
-	for (let i = 0; i < size; i++) {//Was: int
-		if (elements[i] != elem) return false; 
+	for (let i = 0; i < this.#size; i++) {//Was: int
+		if (this.#elements[i] != elem) return false; 
 	}
 	return true;
 }//»
-FVector<T> & operator+=(FVector<T> & right) {//«
-	assert(size == right.size); 
 
-	for (let i = 0; i < size; i++) {//Was: int
-		elements[i] += right[i]; 
+T& operator[](int n) {//«
+	return this.#elements[n];
+}//»
+FVector<T> & operator+=(FVector<T> & right) {//«
+	assert(this.#size == right.size); 
+
+	for (let i = 0; i < this.#size; i++) {//Was: int
+		this.#elements[i] += right[i]; 
 	}
 
 	return (*this);
@@ -649,10 +656,10 @@ FVector<T> & operator+=(FVector<T> & right) {//«
 FVector<T> & operator*=(FVector<T> & right) {//«
 // non-standard element by element multiply
 
-	assert(size == right.size); 
+	assert(this.#size == right.size); 
 
-	for (let i = 0; i < size; i++) {//Was: int
-		elements[i] *= right[i]; 
+	for (let i = 0; i < this.#size; i++) {//Was: int
+		this.#elements[i] *= right[i]; 
 	}
 	return (*this);
 
@@ -660,17 +667,17 @@ FVector<T> & operator*=(FVector<T> & right) {//«
 FVector<T> & operator*=(std::vector<T> & right) {//«
   // non-standard element by element multiply
 
-assert(size == right.size()); 
+assert(this.#size == right.size()); 
 
-for (let i = 0; i < size; i++) {//Was: int
-	elements[i] *= right[i]; 
+for (let i = 0; i < this.#size; i++) {//Was: int
+	this.#elements[i] *= right[i]; 
 }
 
 return (*this);
 }//»
 FVector<T> & operator*=(T factor) {//«
-	for (int i = 0; i < size; i++) {
-	  elements[i] *= factor;  
+	for (let i = 0; i < this.#size; i++) {//Was: int
+	  this.#elements[i] *= factor;  
 	}
 
 	return (*this);
@@ -679,11 +686,11 @@ to_string() { //«
 //  std::string to_string() { 
 let str = "["; //Was: string
 
-for (let i = 0; i < size; i++) { //Was: int
+for (let i = 0; i < this.#size; i++) { //Was: int
   std::ostringstream oss; 
-  oss << elements[i]; 
+  oss << this.#elements[i]; 
   str = str + oss.str(); 
-  if (i < (size-1))
+  if (i < (this.#size-1))
 	str = str + " "; 
 }
 str = str + "]";
@@ -691,25 +698,19 @@ return str;
 }//»
 assertprob() { //«
 //  void assertprob() { 
-	for (let i = 0; i < size; i++) {//Was: int
-		assert(elements[i] >= 0 && elements[i] <= 1); 
+	for (let i = 0; i < this.#size; i++) {//Was: int
+		assert(this.#elements[i] >= 0 && this.#elements[i] <= 1); 
 	}
 }//»
 FVector<T> & operator= (const FVector<T> & other) {//«
-	size = other.size; 
-	elements = other.elements; 
+	this.#size = other.size; 
+	this.#elements = other.elements; 
 	return (*this);
 }//»
 FVector<T> & operator= (const std::vector<T> & other) {//«
-	size = other.size(); 
-	elements = other; 
+	this.#size = other.size(); 
+	this.#elements = other; 
 	return (*this);
-}//»
-reset(T val) {//«
-//void reset(T val) {
-	for (let i = 0; i < size; i++) {//Was: int
-		elements[i] = val;
-	}
 }//»
 
 };
@@ -717,8 +718,9 @@ reset(T val) {//«
 //»
 
 //svector.h:
+//template <unsigned int SIZE>
 class SVector {//«
-//static vector
+// SVector: static vector
 // Provides all the functionality of FVector but uses static 
 // SIZEs to avoid dynamic memory allocations.
 // Also: assumes doubles since we don't use it for anything else.
@@ -727,24 +729,24 @@ class SVector {//«
 //public:  
 SVector() { //«
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = 0.0;
+		this.#elements[i] = 0.0;
 	}
 }//»
 SVector(ival) {//«
 //ival: double
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = ival;
+		this.#elements[i] = ival;
 	}
 }//»
 get_const(n) {//double«
 //n: int
-	return elements[n]; 
+	return this.#elements[n]; 
 }//»
 getSize() { return SIZE; }
 allEqualTo(elem) {//bool«
 //elem: double
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		if (elements[i] != elem) return false; 
+		if (this.#elements[i] != elem) return false; 
 	}
 	return true;
 }//»
@@ -752,7 +754,7 @@ to_string() {//std::string«
 	let str = "[";//Was: string
 	for (let i = 0; i < SIZE; i++) { //Was: uint
 		std::ostringstream oss; 
-		oss << elements[i]; 
+		oss << this.#elements[i]; 
 		str = str + oss.str(); 
 		if (i < (SIZE-1)) str = str + " "; 
 	}
@@ -761,28 +763,28 @@ to_string() {//std::string«
 }//»
 assertprob() { //«
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		assert(elements[i] >= 0.0 && elements[i] <= 1.0); 
+		assert(this.#elements[i] >= 0.0 && this.#elements[i] <= 1.0); 
 	}
 }//»
 reset(val) {//«
 //val: double
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = val;
+		this.#elements[i] = val;
 	}
 }//»
 
-double& operator[](int n) { return elements[n]; }
+double& operator[](int n) { return this.#elements[n]; }
 SVector<SIZE> & operator= (const SVector<SIZE> & other) {//«
 	assert(SIZE == other.getSize());
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] = other.elements[i]; 
+		this.#elements[i] = other.elements[i]; 
 	}
 	return (*this);
 }//»
 SVector<SIZE> & operator+=(SVector<SIZE> & right) {//«
 	assert(SIZE == right.getSize()); 
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] += right[i]; 
+		this.#elements[i] += right[i]; 
 	}
 	return (*this);
 }//»
@@ -791,13 +793,13 @@ SVector<SIZE> & operator*=(SVector<SIZE> & right) {//«
 	assert(SIZE == right.getSize()); 
 
 	for (let i = 0; i < SIZE; i++) {//Was: uint
-		elements[i] *= right[i]; 
+		this.#elements[i] *= right[i]; 
 	}
 	return (*this);
 }//»
 SVector<SIZE> & operator*=(double factor) {//«
 	for (let i = 0; i < SIZE; i++) {
-		elements[i] *= factor;  
+		this.#elements[i] *= factor;  
 	}
 	return (*this);
 }//»
@@ -2676,7 +2678,6 @@ const P1CO = 6;
 const P2CO = 6;
 //»
 
-
 let p1totalTurns = 0;
 let p2totalTurns = 0;
 let p1totalActions = 0;
@@ -2898,8 +2899,6 @@ function PCS_NS(){// Public Chance Sampling«
 //#include "svector.h"
 
 //»
-
-//template <unsigned int SIZE>
 
 //Globals«
 
@@ -3525,7 +3524,6 @@ const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) =>
 
 }//»
 */
-
 
 //»
 
