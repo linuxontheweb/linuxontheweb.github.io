@@ -1,5 +1,24 @@
-/*7/25/25
-*/
+/*7/26/26: I am trying to understand why the random function is never called.«
+It *is* called in sampling.cpp, which contains functions (e.g. sampleChanceEvent) 
+that are called from cfros.cpp, cfres.cpp and purecfr.cpp. Both cfr algorithms we are 
+using here (vanilla and public chance) either do not sample anything (cfr,cpp, vanilla) 
+or only sample public chances (pcs.cpp, public chance sampling, but bluff does not have 
+any public state). In here, we always just iterate (deterministically) through all possible 
+dice rolls for both players.
+
+@DOKUNX is where sampling *would* happen for poker PCS (public chance sampling).
+
+covector stands for: Chance Outcomes Vector
+
+»*/
+/*7/25/25: Possible bugs: Check for situations like @QHGRYT, where the 'let' keyword « 
+was left off from a statement that originally looked like: 
+unsigned long long newbidseq = bidseq;
+
+...and was changed to:
+newbidseq = bidseq;
+
+»*/
 /*7/24/25: Just relax and ponder over InfosetStore_NS.«
 
 Below, IS.<whatever> means InfosetStore.<whatever>, and will appear in the codebase as 
@@ -343,9 +362,7 @@ return train
 
 //Bluff Dice«
 
-/*C++
-
-//defs.h «
+/*defs.h «
 #define FSICFR         0
 #define FSIPCS         0
 
@@ -422,18 +439,20 @@ return train
 #endif
 #endif
 
-//»
+»*/
 
-*/
+//Var«
 
+//Numbers«
 const NEGINF = -100000000.0;
 
 const P1DICE = 1;
 const P2DICE = 1;
 const DIEFACES = 6;
-
 const BLUFFBID = (((P1DICE+P2DICE)*DIEFACES)+1);
+//»
 
+//Game state
 class GameState {//«
 
 //int p1roll;           // the outcome of p1's roll
@@ -483,8 +502,8 @@ stop() {
 
 };//»
 
-//normalizer.h:
-class NormalizerVector {//«
+//Data
+class NormalizerVector {//normalizer.h«
 
 #normalized;//Was: bool
 #total; //Was: dbl
@@ -534,7 +553,7 @@ to_string() {//«
 }//»
 
 };//»
-class NormalizerMap {//«
+class NormalizerMap {//normalizer.h«
  
 #normalized;//Was: bool
 #total; //Was: dbl
@@ -568,7 +587,7 @@ normalize() {//«
 
 	std::map<int,double>::iterator iter; 
 	for (iter = values.begin(); iter != values.end(); iter++) {
-		iter->second = (iter->second / total); 
+		iter->second = (iter->second / total);//iter->second is the value of the current map entry
 	}
 
 	this.#normalized = true; 
@@ -577,21 +596,16 @@ double & operator[](int n) { return values[n]; }
 unsigned size() const { return values.size(); }
 to_string() {//«
 	let str = "";//Was: string
-
 	std::map<int,double>::iterator iter; 
-
 	for (iter = values.begin(); iter != values.end(); iter++) {
 		str += (::to_string(iter->first) + " -> " + ::to_string(iter->second) + " ");
 	}
-
 	return str; 
 }//»
 
 };//»
-
-//fvector.h:
 //template <class T>
-class FVector {//«
+class FVector {//fvector.h«
 // A mutable (dynamic) vector
 //std::vector<T> elements;
 #elements;
@@ -716,10 +730,8 @@ FVector<T> & operator= (const std::vector<T> & other) {//«
 };
 //std::ostream &operator<<(std::ostream &o,  const FVector<double> &v);
 //»
-
-//svector.h:
 //template <unsigned int SIZE>
-class SVector {//«
+class SVector {//svector.h«
 // SVector: static vector
 // Provides all the functionality of FVector but uses static 
 // SIZEs to avoid dynamic memory allocations.
@@ -806,6 +818,8 @@ SVector<SIZE> & operator*=(double factor) {//«
 
 };
 //std::ostream &operator<<(std::ostream &o,  const SVector<SIZE> &v);
+//»
+
 //»
 
 function Util_NS(){//«
@@ -1297,51 +1311,52 @@ destroy() {//«
 computeBound(sum_RTimm1, sum_RTimm2){//«
 //  void computeBound(double & sum_RTimm1, double & sum_RTimm2); 
 	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
-		if (indexVals[i] < size){
-			// which player is it?
-			let key = indexKeys[i]; //Was: ull
-			double & b = (key % 2 == 0 ? sum_RTimm1 : sum_RTimm2); 
+//		if (indexVals[i] < size){
+		if (this.#indexVals[i] >= size) continue;
+		// which player is it?
+		let key = this.#indexKeys[i]; //Was: ull
+		double & b = (key % 2 == 0 ? sum_RTimm1 : sum_RTimm2); 
 
-			// this is a valid position
-			let row, col, pos, curRowSize;//Was: ull
-			pos = this.#indexVals[i];
-			row = pos / this.#rowsize;
-			col = pos % this.#rowsize;
-			curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
+		// this is a valid position
+		let row, col, pos, curRowSize;//Was: ull
+		pos = this.#indexVals[i];
+		row = pos / this.#rowsize;
+		col = pos % this.#rowsize;
+		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
 
-			// read # actions
-			let actionshere = 0;//Was: ull
-			assert(sizeof(actionshere) == sizeof(double)); 
-			memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
+		// read # actions
+		let actionshere = 0;//Was: ull
+		assert(sizeof(actionshere) == sizeof(double)); 
+		memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
+		this.#next(row, col, pos, curRowSize);
+
+		// read the integer
+		let lastUpdate = 0;//Was: ull
+		let x = this.#tablerows[row][col];//Was: dbl
+		memcpy(&lastUpdate, &x, sizeof(actionshere)); 
+		this.#next(row, col, pos, curRowSize);
+
+		let max = NEGINF;//Was: dbl
+		for (let a = 0; a < actionshere; a++) {//Was: ull
+			// cfr
+			assert(row < this.#rows);
+			assert(col < curRowSize); 
+
+			let cfr = this.#tablerows[row][col]; //Was: dbl
+			CHKDBL(cfr);
+			if (cfr > max) max = cfr; 
+
 			this.#next(row, col, pos, curRowSize);
-
-			// read the integer
-			let lastUpdate = 0;//Was: ull
-			let x = this.#tablerows[row][col];//Was: dbl
-			memcpy(&lastUpdate, &x, sizeof(actionshere)); 
+			// total move probs
 			this.#next(row, col, pos, curRowSize);
-
-			let max = NEGINF;//Was: dbl
-			for (let a = 0; a < actionshere; a++) {//Was: ull
-				// cfr
-				assert(row < rows);
-				assert(col < curRowSize); 
-
-				let cfr = this.#tablerows[row][col]; //Was: dbl
-				CHKDBL(cfr);
-				if (cfr > max) max = cfr; 
-
-				this.#next(row, col, pos, curRowSize);
-				// total move probs
-				this.#next(row, col, pos, curRowSize);
-				// next cfr
-			}
-			assert(max > NEGINF);
-			let delta = max; //Was: dbl
-			//delta = MAX(0.0, delta); 
-			delta = Math.max(0.0, delta); 
-			b += delta; 
+			// next cfr
 		}
+		assert(max > NEGINF);
+		let delta = max; //Was: dbl
+		//delta = MAX(0.0, delta); 
+		delta = Math.max(0.0, delta); 
+		b += delta; 
+//		}
 	}
 
 //	sum_RTimm1 /= static_cast<double>(iter); 
@@ -1846,45 +1861,6 @@ const terminal = (gs) => {//YWRK«
 	return (gs.curbid == BLUFFBID);
 }//»
 
-const numChanceOutcomes = (player) => {//«
-//int numChanceOutcomes(int player){
-	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
-}//»
-const getRoll = (roll, chanceOutcome, player) => {//«
-//void getRoll(int * roll, int chanceOutcome, int player){
-	unrankco(chanceOutcome-1, roll, player);
-}//»
-
-const getChanceProb = (player, outcome) => {//«
-//double getChanceProb(int player, int outcome){
-// outcome >= 1, so must subtract 1 from it
-	let co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
-	assert(outcome-1 >= 0 && outcome-1 < co);
-	let cp = (player == 1 ? chanceProbs1 : chanceProbs2);//Was: double *
-	return cp[outcome-1];
-}//»
-const nextRoll = (roll, size) => {//«
-//void nextRoll(int * roll, int size){
-	for (let i = size-1; i >= 0; i--) {//Was: int
-		// Try to increment if by 1.
-		if (roll[i] < DIEFACES) {
-			// if possible, do it and then set everything to the right back to 1
-			roll[i]++;
-			for (let j = i+1; j < size; j++) roll[j] = 1;//Was: int
-			return;
-		}
-	}
-}//»
-const getRollBase10 = (roll, size) => {//«
-//int getRollBase10(int * roll, int size) {
-	let multiplier = 1;//Was: int
-	let val = 0;//Was: int
-	for (let i = size-1; i >= 0; i--) {//Was: int
-		val += roll[i]*multiplier;
-		multiplier *= 10;
-	}
-	return val;
-}//»
 const convertbid = (dice, face, bid) => {//«
 //void convertbid(int & dice, int & face, int bid) {
 // a bid is from 1 to 12, for example
@@ -1918,6 +1894,44 @@ const unrankco = (i, roll, player) => {//«
 		roll[j] = num % 10;
 		num /= 10;
 	}
+}//»
+const getRoll = (roll, chanceOutcome, player) => {//«
+//void getRoll(int * roll, int chanceOutcome, int player){
+	unrankco(chanceOutcome-1, roll, player);
+}//»
+const nextRoll = (roll, size) => {//«
+//void nextRoll(int * roll, int size){
+	for (let i = size-1; i >= 0; i--) {//Was: int
+		// Try to increment if by 1.
+		if (roll[i] < DIEFACES) {
+			// if possible, do it and then set everything to the right back to 1
+			roll[i]++;
+			for (let j = i+1; j < size; j++) roll[j] = 1;//Was: int
+			return;
+		}
+	}
+}//»
+const numChanceOutcomes = (player) => {//«
+//int numChanceOutcomes(int player){
+	return (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);
+}//»
+const getChanceProb = (player, outcome) => {//«
+//double getChanceProb(int player, int outcome){
+// outcome >= 1, so must subtract 1 from it
+	let co = (player == 1 ? numChanceOutcomes1 : numChanceOutcomes2);//Was: int
+	assert(outcome-1 >= 0 && outcome-1 < co);
+	let cp = (player == 1 ? chanceProbs1 : chanceProbs2);//Was: double *
+	return cp[outcome-1];
+}//»
+const getRollBase10 = (roll, size) => {//«
+//int getRollBase10(int * roll, int size) {
+	let multiplier = 1;//Was: int
+	let val = 0;//Was: int
+	for (let i = size-1; i >= 0; i--) {//Was: int
+		val += roll[i]*multiplier;
+		multiplier *= 10;
+	}
+	return val;
 }//»
 const countMatchingDice = (gs, player, face) => {//«
 //int countMatchingDice(const GameState & gs, int player, int face){
@@ -2004,7 +2018,7 @@ const payoff = (winner, player, delta) => {//«
 
 	return (player == 1 ? p1payoff : -p1payoff);
 }//»
-const payoff_gp = (gs, player) => {//«
+const payoff = (gs, player) => {//«
 //double payoff(GameState & gs, int player) {
 // this is the function called by all the algorithms.
 // Now set to use the delta
@@ -2012,13 +2026,13 @@ const payoff_gp = (gs, player) => {//«
 	let winner = whowon2(gs, delta);//Was: int, whowon
 	return payoff(winner, player, delta);
 }//»
-const payoff6 = (bid, bidder, callingPlayer, p1roll, p2roll, player) => {//«
+const payoff = (bid, bidder, callingPlayer, p1roll, p2roll, player) => {//«
 //double payoff(int bid, int bidder, int callingPlayer, int p1roll, int p2roll, int player) {
 	let delta = 0;//Was: int
 	let winner = whowon6(bid, bidder, callingPlayer, p1roll, p2roll, delta);//Was: int, whowon
 	return payoff(winner, player);
 }//»
-const payoff_wp = (winner, player) => {//«
+const payoff = (winner, player) => {//«
 //double payoff(int winner, int player){
 	return payoff(winner, player, 1);
 }//»
@@ -2136,7 +2150,7 @@ and `value`. Using `key` is equivalent to `iter->first`.
 	for (let c = 0; c < numChanceOutcomes; c++) {//Was: int
 		//int key = chanceOutcomes[c];
 		let key = chanceOutcomes[c];
-		//  chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
+		//chanceProbs[c] = static_cast<double>(outcomes[key]) / static_cast<double>(permutations);
 		chanceProbs[c] = outcomes[key] / permutations;
 		//cout << "player " << player << " roll " << key << " prob " << chanceProbs[c] << endl;
 	}
@@ -2186,11 +2200,9 @@ const newInfoset = (is, actions) => {//«
 const initInfosets = (gs, player, depth, bidseq) => {//«
 //void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq) {
 // Does a recursive tree walk setting up the information sets, creating the initial strategies
-
 	if (terminal(gs)) return;
-
 	// check for chance nodes
-	if (gs.p1roll == 0) {
+	if (gs.p1roll == 0) {//«
 		for (let i = 1; i <= numChanceOutcomes1; i++) {//Was: int
 			GameState ngs = gs;
 			//let ngs = gs;
@@ -2208,34 +2220,28 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 			initInfosets(ngs, player, depth+1, bidseq);
 		}
 		return;
-	}
-
+	}//»
 	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
 	let actionshere = maxBid - gs.curbid;//Was: int
-
 	assert(actionshere > 0);
 	Infoset is;
 	newInfoset(is, actionshere);
-
-	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int«
 		if (depth == 2 && i == (gs.curbid+1)) {
 			log("InitTrees. iss stats = " , iss.getStats());
 		}
-
 		GameState ngs = gs;
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i;
 		ngs.callingPlayer = player;
 		let newbidseq = bidseq;//Was: ull
 		newbidseq |= (1ULL << (BLUFFBID-i));
-
 		initInfosets(ngs, (3-player), depth+1, newbidseq);
-	}
-
+	}//»
 	let infosetkey = 0;//Was: unsigned
 	infosetkey = bidseq;
 	infosetkey <<= iscWidth;
-	if (player == 1) {
+	if (player == 1) {//«
 		infosetkey |= gs.p1roll;
 		infosetkey <<= 1;
 		iss.put(infosetkey, is, actionshere, 0);
@@ -2245,7 +2251,7 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 		infosetkey <<= 1;
 		infosetkey |= 1;
 		iss.put(infosetkey, is, actionshere, 0);
-	}
+	}//»
 }//»
 const initInfosets = () => {//«
 //void initInfosets() {
@@ -2314,8 +2320,8 @@ const init = () => {//WMNH«
 	iscWidth = ceiling_log2(maxChanceOutcomes);
 	initBids();
 	log("Globals are: " , numChanceOutcomes1 , " " , numChanceOutcomes2 , " " , iscWidth);
-}//»
 
+}//»
 
 /*
 // not even sure what I used this "meta data" for, if I ever used it....
@@ -2651,6 +2657,7 @@ const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 }//»
 
 }//»
+
 function BluffCounter_NS(){//«
 /*
 - bluffcounter.cpp is used to count the number of information sets and
@@ -2689,18 +2696,6 @@ let iscWidth = 3;//Was: int
 
 //»
 
-const binrep = (num) => {//«
-//string binrep(unsigned long long num) {
-  let s = "";//Was: string
-  for (let i = 0; i < 64; i++) {//Was: int
-    let bit = 1; //Was: ull
-    bit <<= i;
-    let n = num & bit; //Was: ull
-    s = (n > 0 ? "1" : "0") + s; 
-  }
-
-  return s;
-}//»
 const pow2 = (i) => {//«
 //unsigned long long pow2(int i) {
 	let answer = 1;//Was: ull
@@ -2727,21 +2722,6 @@ const bcount = (cbid, player, depth) => {//«
 		bcount(b, 3-player, depth+1);
 	}
 }//»
-const nextbid = (bidseq, maxBid) => {//«
-//bool nextbid(int * bidseq, int maxBid) {
-	for (let i = RECALL-1; i >= 0; i--) {//Was: int
-		let roffset = (RECALL-1)-i; //Was: int
-		if (bidseq[i] < (maxBid-roffset)) {
-			bidseq[i]++;
-			for (let j = i+1; j < RECALL; j++) {//Was: int
-				bidseq[j] = bidseq[j-1]+1;
-			}
-			return true;
-		}
-	}
-	return false;
-}//»
-
 const countnoabs = () => {//«
 //void countnoabs() {
 	bcount(0, 1, 0); 
@@ -2771,6 +2751,31 @@ const countnoabs = () => {//«
 
 	let ttlbytes = ((td*8) + (ttlinfosets*4*2)*8); //Was: ull
 	log("total bytes = " , ttlbytes , " ( = " , (ttlbytes / (1024.0*1024.0*1024.0)) , " GB)");
+}//»
+
+const main = () => {//«
+  // iscWidth is the number of bits needed by the chance outcome
+  // in our case, six possibilties, 3 bits
+	iscWidth = 3;
+	countnoabs();
+	//countabs2();
+	return 0;
+}//»
+
+/*Not (currently) used
+const nextbid = (bidseq, maxBid) => {//«
+//bool nextbid(int * bidseq, int maxBid) {
+	for (let i = RECALL-1; i >= 0; i--) {//Was: int
+		let roffset = (RECALL-1)-i; //Was: int
+		if (bidseq[i] < (maxBid-roffset)) {
+			bidseq[i]++;
+			for (let j = i+1; j < RECALL; j++) {//Was: int
+				bidseq[j] = bidseq[j-1]+1;
+			}
+			return true;
+		}
+	}
+	return false;
 }//»
 const countabs2 = () => {//«
 //void countabs2() {
@@ -2881,15 +2886,19 @@ const countabs2 = () => {//«
 	log("Note: Sizes assume for infoset store: 2 doubles per infoset + 2 doubles per iapair, ");
 	log("                   for index: indexsize = 4*#infosets, and 2 doubles per index size . ");
 }//»
-const main = () => {//«
-  // iscWidth is the number of bits needed by the chance outcome
-  // in our case, six possibilties, 3 bits
-	iscWidth = 3;
-	countnoabs();
-	//countabs2();
-	return 0;
-}//»
+const binrep = (num) => {//«
+//string binrep(unsigned long long num) {
+  let s = "";//Was: string
+  for (let i = 0; i < 64; i++) {//Was: int
+    let bit = 1; //Was: ull
+    bit <<= i;
+    let n = num & bit; //Was: ull
+    s = (n > 0 ? "1" : "0") + s; 
+  }
 
+  return s;
+}//»
+*/
 }//»
 function PCS_NS(){// Public Chance Sampling«
 
@@ -2910,7 +2919,7 @@ typedef SVector<P2CO> covector2;
 const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 //void handleLeaf(GameState & gs, int updatePlayer, covector1 & reach1, covector2 & reach2, 
 //                covector1 & result1, covector2 & result2) {
-	let upco = (updatePlayer == 1 ? P1CO : P2CO); //Was: int
+	let upco = (updatePlayer == 1 ? P1CO : P2CO); //Was: int«
 	let opco = (updatePlayer == 1 ? P2CO : P1CO);//Was: int
 
 	assert(upco > 0); 
@@ -2922,28 +2931,31 @@ const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 	let bidder = 3 - gs.callingPlayer;//Was: int
 
 	let oppNonzero = 0;//Was: int
-	for (let j = 0; j < opco; j++) {//Was: int
+//»
+	for (let j = 0; j < opco; j++) {//Was: int«
 		if (updatePlayer == 1 && reach2[j] > 0) oppNonzero++;
 		else if (updatePlayer == 2 && reach1[j] > 0) oppNonzero++;
-	}
+	}//»
 
-	// Here we apply the "n^2 -> n" trick described in the paper. 
+	// Here we apply the "n^2 -> n" trick described in the paper. «
 	// So, now we collapse the vector of opponent's reach probabilities from an
 	// element per chance outcome to an element per situation that effects the payoff.
 	// In Bluff specifically: the only thing that matters is the number of dice the
 	// opponent has that match the face of the final bid. So we group the reach 
 	// probabilities over opponent chance outcome for each matching number of dice
-	// For a better explanation, see the paper. 
+	// For a better explanation, see the paper. »
 
-	let quantity, face;//Was: int
+	let quantity, face;//Was: int«
 	convertbid(quantity, face, gs.prevbid);
 	let oppDice = (updatePlayer == 1 ? P2DICE : P1DICE);//Was: int
 	//  double opp_probs[oppDice+1];
 	let opp_probs = new Array (oppDice+1);
-	for (let i = 0; i < oppDice+1; i++) {//Was: int
+//»
+
+	for (let i = 0; i < oppDice+1; i++) {//Was: int«
 		opp_probs[i] = 0.0;
-	}
-	for (let o = 0; o < opco; o++) {//Was: int
+	}//»
+	for (let o = 0; o < opco; o++) {//Was: int«
 		if (opponent == 1) gs.p1roll = o+1;
 		else if (opponent == 2) gs.p2roll = o+1;
 
@@ -2951,12 +2963,12 @@ const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 
 		if (updatePlayer == 1) opp_probs[d] += getChanceProb(opponent, o+1)*reach2[o]; 
 		else if (updatePlayer == 2) opp_probs[d] += getChanceProb(opponent, o+1)*reach1[o]; 
-	}
+	}//»
 
 	// Now, we need to construct a vector that contains a payoff per chance outcome 
 	// of the updatePlayer
 
-	for (let o = 0; o < upco; o++) {//Was: int
+	for (let o = 0; o < upco; o++) {//Was: int«
 		// iterate over the update player's outcomes. 
 		let val = 0.0; //Was: dbl
 		if (updatePlayer == 1) gs.p1roll = o+1;
@@ -2969,51 +2981,65 @@ const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 		}
 		if (updatePlayer == 1) result1[o] = val; 
 		else if (updatePlayer == 2) result2[o] = val;
-	}
+	}//»
+
 }//»
+
 const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, result1, result2) => {//«
 //void pcs(gamestate & gs, int player, int depth, unsigned long long bidseq, 
-// int updateplayer, covector1 & reach1, covector2 & reach2, 
-// int phase, covector1 & result1, covector2 & result2){
+// 							int updateplayer, covector1 & reach1, covector2 & reach2, 
+// 							int phase, covector1 & result1, covector2 & result2){
 	reach1.assertprob();
 	reach2.assertprob();
-
-	// check if we're at a terminal node
-
-	if (terminal(gs)) {
+	if (terminal(gs)) {//«
 		handleLeaf(gs, updatePlayer, reach1, reach2, result1, result2);
 		return;
-	}
-
+	}//»
 	nodesTouched++;
 
-	// chance nodes (just bogus entries)
-	// note: for expected values to make sense, should iterate over each move.
+	// chance events
 
-	if (gs.p1roll == 0) {
+	// private chance nodes (just bogus entries)
+	// note: for expected values to make sense, should iterate over each move.
+//0 is the initial value for the player (before the game begins). In poker, it is the same 
+//as indicating the number of private cards a player has
+	if (gs.p1roll == 0) {//«
 		GameState ngs = gs; 
 		ngs.p1roll = 1;       
 		pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
 		return;
-	}
-	else if (gs.p2roll == 0) {
+	}//»
+	else if (gs.p2roll == 0) {//«
 		GameState ngs = gs; 
 		ngs.p2roll = 1;       
 		pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
 		return;
-	}
+	}//»
+/*
+//gs.initRound = true at the beginning of play and after all bets have been equalized
+else if (gs.initRound && gs.curRound > 1){
+
+//deal cards 
+
+}
+*/
+
+/*DOKUNX: If this is the time to deal poker board cards (flop, turn, river),«
+then we sample them here (i.e do not iterate over all possible combinations),
+and add them to the game state (and the infoset keys). Since the pcs stands for
+*public* chance sampling, this is the only place where sampling may occur.
+»*/
 
 	// cuts?
-	if (phase == 1) {
+	if (phase == 1) {//«
 		if (iter > 1 && updatePlayer == 1 && player == 1 && reach2.allEqualTo(0.0)) {
 			phase = 2;
 		}
 		else if (iter > 1 && updatePlayer == 2 && player == 2 && reach1.allEqualTo(0.0)) {
 			phase = 2; 
 		}
-	}
-
-	if (phase == 2) {
+	}//»
+	if (phase == 2) {//«
 		if (iter > 1 && updatePlayer == 1 && player == 1 && reach1.allEqualTo(0.0)) {
 			result1.reset(0.0);
 			result2.reset(0.0);
@@ -3024,11 +3050,21 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 			result2.reset(0.0);
 			return;
 		}
-	}
+	}//»
 
-	// declare the variables
+//Player actions
+
+	// declare the variables«
+
+//	P<n>CO = number of chance event outcomes, per player, at chance nodes: 
+//	#dice	#outcomes
+//  1		6
+//	2		21 //6x(11|22|33|44|55|66) + 5x(1[2-6]) 4x(2[3-6]) 3x(3[4-6]) 2x(4[56]) 1x(56)
+//	3		56
+//	4		126
+//	5		252
+
 	let co = (player == 1 ? P1CO : P2CO);//Was: int
-
 	let action = -1;//Was: int
 	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
 	let actionshere = maxBid - gs.curbid; //Was: int
@@ -3037,13 +3073,23 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 	// get the infosets here (one per outcome)
 
 	let infosetkeys = new Array(co);//Was: ull[]
-	Infoset is[co];  
+
+//Array of infosets.
+//	Infoset is[co];  
+	let is = [];
+	for (let i=0; i < co; i++) is[i] = new Infoset();
+
+
+//	typedef SVector<P1CO> covector1;
+//	typedef SVector<P2CO> covector2;
+
 
 	// only one of these is used
 	covector1 moveEVs1[actionshere];
 	covector2 moveEVs2[actionshere];
 
-	for (let i = 0; i < co; i++) {//Was: int
+//»
+	for (let i = 0; i < co; i++) {//Was: int«
 		let outcome = i+1;//Was: int
 		infosetkeys[i] = bidseq; 
 		infosetkeys[i] <<= iscWidth; 
@@ -3062,11 +3108,9 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 			let ret = iss.get(infosetkeys[i], is[i], actionshere, 0);//Was: bool
 			assert(ret);
 		}
-	}
-
+	}//»
 	// iterate over the actions
-
-	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int
+	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int«
 		action++;
 		assert(action < actionshere);
 		// only one of these is used
@@ -3076,45 +3120,47 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 			if (player == 1) moveProbs1[o] = is[o].curMoveProbs[action];
 			else if (player == 2) moveProbs2[o] = is[o].curMoveProbs[action]; 
 		}
-		covector1 EV1; 
-		covector2 EV2; 
+		covector1 ev1; 
+		covector2 ev2; 
 		covector1 newReach1 = reach1; 
 		covector2 newReach2 = reach2; 
+//Element-wise multiplication of SVectors
 		if (player == 1) newReach1 *= moveProbs1; 
 		if (player == 2) newReach2 *= moveProbs2;
 		GameState ngs = gs; 
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i; 
 		ngs.callingPlayer = player;
-		newbidseq = bidseq;//Was: ull
-		newbidseq |= (1ULL << (BLUFFBID-i)); 
+//QHGRYT
+//		newbidseq = bidseq;					<--- It was like this (error: not defined)
+		let newbidseq = bidseq;//Was: ull
+//		newbidseq |= (1ULL << (BLUFFBID-i)); 
+		newbidseq |= (1 << (BLUFFBID-i)); 
 
-		pcs(ngs, 3-player, depth+1, newbidseq, updatePlayer, newReach1, newReach2, phase, EV1, EV2); 
+//3-player means alternate players in a 2-player game
+		pcs(ngs, 3-player, depth+1, newbidseq, updatePlayer, newReach1, newReach2, phase, ev1, ev2); 
 
 		if (player == updatePlayer) {
 			if (player == 1) {
-				moveEVs1[action] = EV1;
-				EV1 *= moveProbs1;
-				result1 += EV1;
+				moveEVs1[action] = ev1;
+				ev1 *= moveProbs1;
+				result1 += ev1;
 			}
 			else if (player == 2) {
-				moveEVs2[action] = EV2;
-				EV2 *= moveProbs2;
-				result2 += EV2;
+				moveEVs2[action] = ev2;
+				ev2 *= moveProbs2;
+				result2 += ev2;
 			}
 		}
 		else {
-			if (updatePlayer == 1) result1 += EV1;
-			else if (updatePlayer == 2) result2 += EV2;
+			if (updatePlayer == 1) result1 += ev1;
+			else if (updatePlayer == 2) result2 += ev2;
 		}
-	}
-
+	}//»
 	// now the real stuff, cfr updates
-
-	if (player == updatePlayer && phase == 1) {
+	if (player == updatePlayer && phase == 1) {//«
 		// regrets will be changed, so make sure to indicate it to prob updater
 		for (let o = 0; o < co; o++) is[o].lastUpdate = iter;//Was: int
-
 		for (let o = 0; o < co; o++) {//Was: int
 			for (let a = 0; a < actionshere; a++) {//Was: int
 				let moveEV = (player == 1 ? moveEVs1[a][o] : moveEVs2[a][o]);//Was: double
@@ -3122,9 +3168,8 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 				is[o].cfr[a] += (moveEV - resulto); 
 			}
 		}
-	}
-
-	if (player == updatePlayer && phase <= 2) {
+	}//»
+	if (player == updatePlayer && phase <= 2) {//«
 		for (let o = 0; o < co; o++) {//Was: int
 			for (let a = 0; a < actionshere; a++) {//Was: int
 				let my_prob = (player == 1 ? reach1[o] : reach2[o]);//Was: double
@@ -3132,13 +3177,12 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 				is[o].totalMoveProbs[a] += my_prob*is[o].curMoveProbs[a];
 			}
 		}
-	}
-
-	if (player == updatePlayer) {
+	}//»
+	if (player == updatePlayer) {//«
 		for (let o = 0; o < co; o++) {//Was: int
 			iss.put(infosetkeys[o], is[o], actionshere, 0); 
 		}
-	}
+	}//»
 
 }//»
 const main = (argc, argv) => {//«
@@ -3180,11 +3224,13 @@ const main = (argc, argv) => {//«
 		covector1 result1; 
 		covector2 result2;
 
-		GameState gs1; 
+//		GameState gs1; 
+		let gs1 = new GameState();
 		bidseq = 0; 
 		pcs(gs1, 1, 0, bidseq, 1, reach1, reach2, 1, result1, result2);
 
-		GameState gs2; 
+//		GameState gs2; 
+		let gs2 = new GameState();
 		bidseq = 0; 
 		reach1.reset(1.0);
 		reach2.reset(1.0);
@@ -3333,9 +3379,9 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 
 	if (phase == 1 && player == updatePlayer) {// regrets«
 		for (let a = 0; a < actionshere; a++) {//Was: int
-		// Multiplying by chanceReach here is important in games that have non-uniform chance outcome 
-		// distributions. In Bluff(1,1) it is actually not needed, but in general it is needed (e.g. 
-		// in Bluff(2,1)). 
+// Multiplying by chanceReach here is important in games that have non-uniform chance outcome 
+// distributions. In Bluff(1,1) it is actually not needed, but in general it is needed (e.g. 
+// in Bluff(2,1)). 
 			is.cfr[a] += (chanceReach*oppreach)*(moveEVs[a] - stratEV); 
 		}
 	}//»

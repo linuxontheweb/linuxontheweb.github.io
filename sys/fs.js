@@ -1525,9 +1525,9 @@ cwarn("Format not given, defaulting to 'arraybuffer'");
 };//»
 
 const get_blob_dir=async ()=>{//«
-let opfs = await navigator.storage.getDirectory();
-let blobDir = await opfs.getDirectoryHandle('blobs', {create: true});
-return blobDir;
+	let opfs = await navigator.storage.getDirectory();
+	let blobDir = await opfs.getDirectoryHandle('blobs', {create: true});
+	return blobDir;
 };//»
 const get_blob_entry = async(name)=>{//«
 	if (!BLOB_DIR) BLOB_DIR = await get_blob_dir();
