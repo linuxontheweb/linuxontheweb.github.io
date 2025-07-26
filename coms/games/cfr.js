@@ -122,7 +122,9 @@ double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
 //« 7/21/25: This file exists to implement Marc Lanctot (UAlberta, Maastricht, etc) 
 // and company's stuff on the open internets.
 //»
-
+/*Legend
+ull: unsigned long long
+*/
 //WHNHGT
 /*OPFS sync ops«
 
@@ -1033,7 +1035,7 @@ return class {
 // last row is the leftover (smaller)
 #lastRowSize;//Was: ull
 
-// are we added infosets to this store? when doing so, we update the infoset counter
+// are we adding infosets to this store? when doing so, we update the infoset counter
 // and add info to the index. when not doing so, we assume the index will get us our
 // position and simply replace what's there
 #addingInfosets;//Was: bool
@@ -1043,13 +1045,13 @@ return class {
 //»
 
 #get_priv(infoset_key, infoset, moves, firstmove) {//«
-//bool get_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-//unsigned long long row, col, pos, curRowSize;
+//bool get_priv(ull infoset_key, Infoset & infoset, int moves, int firstmove); 
+//ull row, col, pos, curRowSize;
 	let row, col, pos, curRowSize;
 
 	//pos = getPosFromIndex(infoset_key);  // uses a hash table
 	pos = this.getPosFromIndex1(infoset_key);  // uses a hash table
-	if (pos >= size) return false;
+	if (pos >= this.#size) return false;
 
 	row = pos / this.#rowsize;
 	col = pos % this.#rowsize;
@@ -1070,7 +1072,7 @@ return class {
 	y = this.#tablerows[row][col];
 	assert(sizeof(x) == sizeof(double));
 	memcpy(&x, &y, sizeof(x)); 
-	infoset.lastUpdate = x; 
+	infoset.lastUpdate = x;//This is just an "iter" of cfr (not a timestamp, etc)
 	this.#next(row, col, pos, curRowSize);
 
 	for (let i = 0, m = firstmove; i < moves; i++,m++) {//Was: int
@@ -1120,8 +1122,8 @@ return class {
 	return true;
 }//»
 #put_priv(infoset_key, infoset, moves, firstmove) {//«
-//void put_priv(unsigned long long infoset_key, Infoset & infoset, int moves, int firstmove); 
-	let row, col, pos, curRowSize;// unsigned long long row, col, pos, curRowSize;
+//void put_priv(ull infoset_key, Infoset & infoset, int moves, int firstmove); 
+	let row, col, pos, curRowSize;//Was: ull
 	assert(moves > 0);
 	let newinfoset = false;//Was: bool
 	let hashIndex = 0;//Was: ull
@@ -1161,7 +1163,11 @@ return class {
 	let x = moves;//Was: ull
 	let y;//Was: dbl
 	assert(sizeof(x) == sizeof(double));
+// dest src
 	memcpy(&y, &x, sizeof(x));
+//tablerows is defined @QMFPOL. 
+//Originally: tablerows = new double* [rows];
+//I guess the values have to be doubles because of all the floating point math that cfr does
 	this.#tablerows[row][col] = y; 
 	this.#next(row, col, pos, curRowSize);
 
@@ -1182,31 +1188,25 @@ return class {
 		if (row >= this.#rows) {
 			log("iss stats: " << iss.getStats());
 		}
-
 		assert(row < this.#rows);
 		assert(col < this.#curRowSize); 
 		assert(pos < this.#size); 
 		CHKDBL(infoset.cfr[m]); 
 		this.#tablerows[row][col] = infoset.cfr[m];
-
 		this.#next(row, col, pos, curRowSize);
-
 		assert(row < this.#rows);
 		assert(col < this.#curRowSize); 
 		assert(pos < this.#size); 
 		this.#tablerows[row][col] = infoset.totalMoveProbs[m];
-
 		this.#next(row, col, pos, curRowSize); 
-
 	}
-
 	if (newinfoset && this.#addingInfosets) {
 		this.#nextInfosetPos = pos;
 		this.#added++;
 	}
 }//»
 #next(row, col, pos, curRowSize) {//«
-//void next(unsigned long long & row, unsigned long long & col, unsigned long long & pos, unsigned long long & curRowSize); 
+//void next(ull & row, ull & col, ull & pos, ull & curRowSize); 
 	pos++;
 	col++; 
 
@@ -1224,10 +1224,13 @@ constructor(){//«
 }//»
 init(_size, _indexsize) {//«
 
-// First param: total # of doubles needed. 
-//   Should be the total # of (infoset,action) pairs times 2 (2 doubles each)
+//Called from initInfosets like:
+//	if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6) iss.init(147432, 100000);
+
+//First param: total # of doubles needed. 
+// Should be the total # of (infoset,action) pairs times 2 (2 doubles each)
 // Second param: size of index. 
-//   Should be the max number taken by an infoset key represented as an integer + 1
+// Should be the max number taken by an infoset key represented as an integer + 1
 
 //void init(unsigned long long _size, unsigned long long _indexsize);
 	log("IS: init"); 
@@ -1235,16 +1238,16 @@ init(_size, _indexsize) {//«
 	this.#size = _size;
 	this.#indexSize = _indexsize; 
 
-	this.#rowsize = size / (ROWS-1); 
-	this.#lastRowSize = size - rowsize*(ROWS-1);
+	this.#rowsize = this.#size / (ROWS-1);//#define ROWS 100
+	this.#lastRowSize = this.#size - rowsize*(ROWS-1);
 	this.#rows = ROWS;
 
 	let i = 0; //Was: int
 	while (this.#lastRowSize > this.#rowsize) {// will sometimes happen when _size is small 
 		i++;
 		this.#rows = ROWS-i;
-		this.#rowsize = size / (rows-1); 
-		this.#lastRowSize = size - rowsize*(rows-1);
+		this.#rowsize = this.#size / (this.#rows-1); 
+		this.#lastRowSize = this.#size - rowsize*(this.#rows-1);
 	}
 
 	assert(i >= 0 && i <= 99); 
@@ -1256,12 +1259,11 @@ init(_size, _indexsize) {//«
 	this.#indexKeys = new Array(this.#indexSize);//Was: ull[]
 	this.#indexVals = new Array(this.#indexSize);//Was: ull[]
 	for (let i = 0; i < this.#indexSize; i++) { //Was: ull
-		this.#indexKeys[i] = this.#indexVals[i] = size;// used to indicate that no entry is present
+		this.#indexKeys[i] = this.#indexVals[i] = this.#size;// used to indicate that no entry is present
 	}
 	// allocate the rows 
 	// To avoid large contiguous portions of memory, store as rows of bitsets
-	// double ** tablerows;
-	this.#tablerows = new Array(this.#rows);
+	this.#tablerows = new Array(this.#rows);//tablerows = new double* [rows];
 	assert(tablerows != NULL);
 	for (let i = 0; i < this.#rows; i++) {//Was: ull
 		if (i != (this.#rows-1)) {
@@ -1309,13 +1311,16 @@ destroy() {//«
 »*/
 
 computeBound(sum_RTimm1, sum_RTimm2){//«
+//Computing Theorem 3 in "Regret Minimization in Games with Incomplete Information"
 //  void computeBound(double & sum_RTimm1, double & sum_RTimm2); 
+//R == Regret, T == all iterations (t) up to the present?
 	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
 //		if (indexVals[i] < size){
-		if (this.#indexVals[i] >= size) continue;
+//		if (this.#indexVals[i] >= this.#size) continue;
+		if (this.#indexVals[i] == this.#size) continue; // Nothing to see here!
 		// which player is it?
-		let key = this.#indexKeys[i]; //Was: ull
-		double & b = (key % 2 == 0 ? sum_RTimm1 : sum_RTimm2); 
+//even => sum_RTimm1 && odd => sum_RTimm2
+//		double & b = (key % 2 == 0 ? sum_RTimm1 : sum_RTimm2); 
 
 		// this is a valid position
 		let row, col, pos, curRowSize;//Was: ull
@@ -1330,7 +1335,7 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 		memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
 		this.#next(row, col, pos, curRowSize);
 
-		// read the integer
+		// read the integer (which iter)
 		let lastUpdate = 0;//Was: ull
 		let x = this.#tablerows[row][col];//Was: dbl
 		memcpy(&lastUpdate, &x, sizeof(actionshere)); 
@@ -1352,10 +1357,17 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 			// next cfr
 		}
 		assert(max > NEGINF);
-		let delta = max; //Was: dbl
+//		let delta = max; //Was: dbl
 		//delta = MAX(0.0, delta); 
-		delta = Math.max(0.0, delta); 
-		b += delta; 
+//		delta = Math.max(0.0, delta); 
+//		b += delta; 
+//		b += Math.max(0, max);
+
+		let delta = Math.max(0, max);
+		let key = this.#indexKeys[i]; //Was: ull
+		if ((key % 2) == 0) sum_RTimm1 += delta;
+		else sum_RTimm2 += delta;
+
 //		}
 	}
 
@@ -1363,6 +1375,7 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 	sum_RTimm1 /= iter; 
 //	sum_RTimm2 /= static_cast<double>(iter); 
 	sum_RTimm2 /= iter;
+	return [sum_RTimm1, sum_RTimm2];
 }//»
 
 stopAdding() {//«
@@ -1370,16 +1383,16 @@ stopAdding() {//«
 }//»
 contains(infoset_key) {//«
 //bool contains(unsigned long long infoset_key);
-	assert(infoset_key < indexSize); 
+	assert(infoset_key < this.#indexSize); 
 	let pos = this.getPosFromIndex1(infoset_key); //Was: ull
-	return (pos >= size ? false : true);
+	return (pos >= this.#size ? false : true);
 }//»
 
 clear() {//«
 //void clear(); 
 
-	for (let i = 0; i < indexSize; i++) {//Was: uint
-		if (this.#indexVals[i] < size) {
+	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
+		if (this.#indexVals[i] < this.#size) {
 		// this is a valid position
 			let row, col, pos, curRowSize;//Was: ull
 			pos = this.#indexVals[i];
@@ -1402,7 +1415,7 @@ clear() {//«
 
 			for (let a = 0; a < actionshere; a++) {//Was: ull
 				// cfr
-				assert(row < rows);
+				assert(row < this.#rows);
 				assert(col < curRowSize); 
 				this.#tablerows[row][col] = 0.0;
 				this.#next(row, col, pos, curRowSize);
@@ -1489,7 +1502,7 @@ dumpToDisk(filename) {//«
 	//the table
 	//unsigned long long pos = 0, row = 0, col = 0, curRowSize = rowsize; 
 	let pos = 0, row = 0, col = 0, curRowSize = rowsize; 
-	while (pos < size) {
+	while (pos < this.#size) {
 		this.writeBytes(out, this.tablerows[row] + col, 8);  
 		this.#next(row, col, pos, curRowSize); 
 	}
@@ -1500,43 +1513,44 @@ dumpToDisk(filename) {//«
 printValues(){//«
 //void printValues(); 
 	for (let i = 0; i < this.#indexSize; i++) {//Was: uint
-		if (this.#indexVals[i] < this.#size) {
-			// this is a valid position
-			let row, col, pos, curRowSize;//Was: ull
-			pos = this.#indexVals[i];
-			row = pos / this.#rowsize;
-			col = pos % this.#rowsize;
-			curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
+		if (this.#indexVals[i] == this.#size) continue;
+//		if (this.#indexVals[i] < this.#size) {
+		// this is a valid position
+		let row, col, pos, curRowSize;//Was: ull
+		pos = this.#indexVals[i];
+		row = pos / this.#rowsize;
+		col = pos % this.#rowsize;
+		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
 
-			log("infosetkey = " , this.#indexKeys[i]); 
-			log(", infosetkey_str = " , infosetkey_to_string(this.#indexKeys[i]));
+		log("infosetkey = " , this.#indexKeys[i]); 
+		log(", infosetkey_str = " , infosetkey_to_string(this.#indexKeys[i]));
 
-			// read # actions
-			let actionshere = 0;//Was: ull
-			assert(sizeof(actionshere) == sizeof(double)); 
-			memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
+		// read # actions
+		let actionshere = 0;//Was: ull
+		assert(sizeof(actionshere) == sizeof(double)); 
+		memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
+		this.#next(row, col, pos, curRowSize);
+
+		// read the integer
+		let lastUpdate = 0;//Was: ull
+		let x = this.#tablerows[row][col];//Was: dbl
+		memcpy(&lastUpdate, &x, sizeof(actionshere)); 
+		this.#next(row, col, pos, curRowSize);
+		log(", actions = " , actionshere , ", lastUpdate = " , lastUpdate);
+		for (let a = 0; a < actionshere; a++){//Was: ull
+			// cfr
+			assert(row < this.#rows);
+			assert(col < curRowSize); 
+			log("  cfr[" , a , "]=" , tablerows[row][col]); 
 			this.#next(row, col, pos, curRowSize);
-
-			// read the integer
-			let lastUpdate = 0;//Was: ull
-			let x = this.#tablerows[row][col];//Was: dbl
-			memcpy(&lastUpdate, &x, sizeof(actionshere)); 
+			// total move probs
+			log("  totMoveProbs[" , a , "]=" , tablerows[row][col]); 
+			// cout << endl;
 			this.#next(row, col, pos, curRowSize);
-			log(", actions = " , actionshere , ", lastUpdate = " , lastUpdate);
-			for (let a = 0; a < actionshere; a++){//Was: ull
-				// cfr
-				assert(row < rows);
-				assert(col < curRowSize); 
-				log("  cfr[" , a , "]=" , tablerows[row][col]); 
-				this.#next(row, col, pos, curRowSize);
-				// total move probs
-				log("  tmp[" , a , "]=" , tablerows[row][col]); 
-				// cout << endl;
-				this.#next(row, col, pos, curRowSize);
-				// next cfr
-			}
-			//      cout << endl;
+			// next cfr
 		}
+		//      cout << endl;
+//		}
 	}
 }//»
 
@@ -1557,18 +1571,18 @@ getPosFromIndex2(infoset_key, hashIndex) {//«
 	let start = infoset_key % this.#indexSize; //Was: ull
 	let misses = 0; //Was: ull
 	for (let i = start; misses < this.#indexSize; misses++) {//Was: ull
-		if (this.#indexKeys[i] == infoset_key && this.#indexVals[i] < size)  {
+		if (this.#indexKeys[i] == infoset_key && this.#indexVals[i] < this.#size)  {
 			// cache hit 
 			totalLookups++; 
 			totalMisses += misses;
 			hashIndex = i; 
 			return this.#indexVals[i]; 
 		}
-		else if (indexVals[i] >= size){// index keys can be >= size since they're arbitrary, but not values!
+		else if (indexVals[i] >= this.#size){// index keys can be >= size since they're arbitrary, but not values!
 			totalLookups++; 
 			totalMisses += misses;
 			hashIndex = i;
-			return size; 
+			return this.#size; 
 		}
 		i = i+1; 
 		if (i >= this.#indexSize) i = 0; 
@@ -1624,7 +1638,7 @@ get(infoset_key, infoset, moves, firstmove){//«
 }//»
 
 readBytes(in, addr,  num) {//«
-//  void readBytes(std::ifstream & in, void * addr, unsigned int num); 
+//void readBytes(std::ifstream & in, void * addr, unsigned int num); 
 
 //Need to pass in an array and offset value
 //readBytes(in, arr, off, num)
@@ -1634,7 +1648,6 @@ readBytes(in, addr,  num) {//«
 
 readFromDisk(filename) {//«
 //bool readFromDisk(std::string filename);
-
 
 	this.#addingInfosets = false; 
 	this.#nextInfosetPos = 0; 
@@ -1665,6 +1678,7 @@ readFromDisk(filename) {//«
 	}
 
 	// table rows (allocation)
+//QMFPOL
 	this.#tablerows = new Array(this.#rows);//Was: dbl* []
 	assert(tablerows != NULL);
 	for (let i = 0; i < this.#rows; i++) {//Was: ull
@@ -1686,8 +1700,10 @@ readFromDisk(filename) {//«
 
 	// tablerows (read from disk)
 	let pos = 0, row = 0, col = 0, curRowSize = rowsize; //Was: ull
-	while (pos < size) {
+	while (pos < this.#size) {
 		this.readBytes(in, this.#tablerows[row] + col, 8);  
+//This increments the col, and if it is >= curRowSize, sets it to 0 and increments the row
+//So it is just a bunch of rows, one after the other
 		this.#next(row, col, pos, curRowSize); 
 	}
 
@@ -2604,9 +2620,15 @@ const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 
 	log("Computing ISS bounds... "); 
 	//cout.flush(); 
-	let b1 = 0.0, b2 = 0.0;//Was: dbl
-	iss.computeBound(b1, b2); 
-	log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
+//	let b1 = 0.0, b2 = 0.0;//Was: dbl
+//Now we are returning [b1, b2]
+//	iss.computeBound(b1, b2); 
+/*If we are running the pcs algorithm, we are already doing this exact same thing
+@WIGUPM. So we should either comment out this one or that one
+*/
+	let [b1, b2] = iss.computeBound(0, 0);
+//	log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
+	log(` b1 = ${b1}, b2 = ${b2}, bound = ${(2.0*Math.max(b1,b2))}`);
 
 	// fill chance outcomes for player 1
 	oppChanceOutcomes.clear();
@@ -2658,256 +2680,10 @@ const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 
 }//»
 
-function BluffCounter_NS(){//«
-/*
-- bluffcounter.cpp is used to count the number of information sets and
-  (infoset,action) pairs. These numbers are needed to create the strategies
-  files. You won't need to use it at all if you just run Bluff(1,1) but if you
-  want to implement a different game, then you can use this file as a place to
-  start to create strategies files for your game.
-*/
-
-//Globals«
-
-//All of these const's were #define's«
-// How many dice per player? 
-const P1D = 1;
-const P2D = 1;
-const DICE = (P1D+P2D);
-const BIDS = (DICE*6);
-
-// Number of last moves you're allowed to recall for imperfect recall
-// Used only for imperfect recall abstractions, not used by this code base
-const RECALL = 7;
-
-// Number of chance event outcomes at chance nodes.
-const P1CO = 6;
-const P2CO = 6;
-//»
-
-let p1totalTurns = 0;
-let p2totalTurns = 0;
-let p1totalActions = 0;
-let p2totalActions = 0;
-let totalLeaves = 0;
-
-map<unsigned long long,int> iapairs;
-let iscWidth = 3;//Was: int
-
-//»
-
-const pow2 = (i) => {//«
-//unsigned long long pow2(int i) {
-	let answer = 1;//Was: ull
-	return (answer << i); 
-}//»
-
-// Traverse the entire tree, counting the number of (information set, action pairs)
-const bcount = (cbid, player, depth) => {//«
-//void bcount(int cbid, int player, int depth) {
-	if (cbid >= (BIDS+1)) {
-		totalLeaves++;
-		return;
-	}
-
-	let numbids = (cbid == 0 ? BIDS : BIDS+1);//Was: int
-	let actions = numbids - (cbid+1) + 1;//Was: int
-	unsigned long & totalTurns = (player == 1 ? p1totalTurns : p2totalTurns); 
-	unsigned long & totalActions = (player == 1 ? p1totalActions : p2totalActions); 
-	totalTurns++; 
-	totalActions += actions; 
-
-	for (let b = cbid+1; b <= numbids; b++) {//Was: int
-		if (depth == 0) log("Depth 0, b = " , b);
-		bcount(b, 3-player, depth+1);
-	}
-}//»
-const countnoabs = () => {//«
-//void countnoabs() {
-	bcount(0, 1, 0); 
-
-	log("for public tree:");
-	log("  p1totalTurns = " , p1totalTurns);
-	log("  p2totalTurns = " , p2totalTurns);
-	log("  totalLeaves = " , totalLeaves);
-	let totalseqs = (p1totalTurns + p2totalTurns);//Was: ull
-	log("total sequences = " , totalseqs);
-	log("p1 info sets = " , (p1totalTurns*P1CO));
-	log("p2 info sets = " , (p2totalTurns*P2CO));
-	let ttlinfosets = (p1totalTurns*P1CO) + (p2totalTurns*P2CO);//Was: ull
-	log("total info sets = " , ttlinfosets);
-	log("p1totalActions = " , p1totalActions);
-	log("p2totalActions = " , p2totalActions);
-
-	let iapairs1 = (p1totalActions*P1CO);//Was: ul
-	let iapairs2 = (p1totalActions*P2CO);//Was: ul
-	let totaliap = (iapairs1+iapairs2);//Was: ul
-	log("infoset actions pairs, p1 p2 total = " , iapairs1 , " " , iapairs2 , " " , totaliap);
-
-	let td = (totaliap*2 + ttlinfosets*2);//Was: ul
-	log("total doubles needed = " , td , ", bytes needed = " , (td*8));
-
-	log("cache size ~ " , (ttlinfosets*4) , " entries =~ " , (ttlinfosets*4*2)*8 , " bytes");
-
-	let ttlbytes = ((td*8) + (ttlinfosets*4*2)*8); //Was: ull
-	log("total bytes = " , ttlbytes , " ( = " , (ttlbytes / (1024.0*1024.0*1024.0)) , " GB)");
-}//»
-
-const main = () => {//«
-  // iscWidth is the number of bits needed by the chance outcome
-  // in our case, six possibilties, 3 bits
-	iscWidth = 3;
-	countnoabs();
-	//countabs2();
-	return 0;
-}//»
-
-/*Not (currently) used
-const nextbid = (bidseq, maxBid) => {//«
-//bool nextbid(int * bidseq, int maxBid) {
-	for (let i = RECALL-1; i >= 0; i--) {//Was: int
-		let roffset = (RECALL-1)-i; //Was: int
-		if (bidseq[i] < (maxBid-roffset)) {
-			bidseq[i]++;
-			for (let j = i+1; j < RECALL; j++) {//Was: int
-				bidseq[j] = bidseq[j-1]+1;
-			}
-			return true;
-		}
-	}
-	return false;
-}//»
-const countabs2 = () => {//«
-//void countabs2() {
-// This is for imperfect recall abstractions. Not used by this code base, 
-// but I left it in case your game has abstraction, maybe this will be helpful
-
-	let bidseq = new Array(RECALL); //int bidseq[RECALL] = { 0 }; 
-	let ret = true;//Was: bool
-	let first = true;//Was: bool
-	let maxBid = 6*DICE;//Was: int
-	let bluffBid = maxBid+1;//Was: int
-
-	while(ret) {
-		let numzeroes = 0;//Was: int
-		for (let i = 0; i < RECALL; i++) {//Was: int
-			if (bidseq[i] == 0) numzeroes++; 
-		}
-		let curbid = bidseq[RECALL-1];//Was: int
-		let actions = bluffBid-curbid;//Was: int
-		if (first) actions--;
-
-		assert(actions >= 0 && actions <= maxBid);
-
-		let player = 0;//Was: int
-		if (numzeroes > 0) {
-			if (RECALL % 2 == 0) {
-				if (numzeroes % 2 == 0) player = 1;
-				else player = 2; 
-			}
-			else {
-				if (numzeroes % 2 == 1) player = 1;
-				else player = 2; 
-			}
-		}
-		else if (bidseq[0] == 1) {
-			if (RECALL % 2 == 0) player = 1; 
-			else player = 2;
-		}
-
-		// player = 0 means both players can share this bid sequence
-		if (player == 1 || player == 0) {
-			p1totalTurns++;
-			p1totalActions += actions;
-		}
-		if (player == 2 || player == 0) {
-			p2totalTurns++;
-			p2totalActions += actions;
-		}
-
-		ret = nextbid(bidseq, maxBid); 
-		first = false;
-	}
-
-	log("recall = " , RECALL);
-	log("p1totalTurns = " , p1totalTurns);
-	log("p2totalTurns = " , p2totalTurns);
-	log("p1totalActions = " , p1totalActions);
-	log("p2totalActions = " , p2totalActions);
-
-	let iapairs1 = (p1totalActions*P1CO);//Was: ulong
-	let iapairs2 = (p1totalActions*P2CO);//Was: ulong
-	let totaliap = (iapairs1+iapairs2);//Was: ulong
-
-	log("ia pairs p1 p2 total = " , iapairs1 , " " , iapairs2 , " " , totaliap);
-
-	let infosets1 = (p1totalTurns*P1CO);//Was: ull
-	let infosets2 = (p2totalTurns*P2CO);//Was: ull
-	let totalInfosets = infosets1 + infosets2; //Was: ull
-
-	let btotalindex = totalInfosets*16*4; //Was: ull
-	let tdoubles = (totaliap*2 + totalInfosets*2);//Was: ull
-	let btotalis = tdoubles*8;//Was: ull
-
-	log("infosets p1 p2 total = " , infosets1 , " " , infosets2 , " " , totalInfosets);
-	log("total doubles for infoset store (2 per infoset + 2 per iapair) = " , tdoubles);
-
-	//  cout << endl;
-
-	let vfsi_iss = (totaliap*2 + totalInfosets*4);//Was: ull
-	log("total doubles for Vanilla FSI using infoset store (4 per infoset + 2 per iapair) = "  , vfsi_iss);
-
-	vfsi_iss += (4*2*totalInfosets); // index
-
-	log(" ( = " , (vfsi_iss*8) / (1024.0*1024.0*1024.0) , " GB)");
-
-	let totalseqs = (p1totalTurns + p2totalTurns);//Was: ull
-	log("total sequences, 4 * total seq = " , totalseqs , ", " , (4*totalseqs));
-	let fsidoubles = (totalseqs + totaliap*2 + infosets1*3*P2CO + infosets2*3*P1CO);//Was: ull
-	log("total doubles for FSIPCS with using SS (1 per sequence + 2 per iapair\n" , "                  + 3*P1CO per p2 infoset and 3*P2CO per p1 infoset, for fsi) = " , fsidoubles);
-
-	fsidoubles += (4*2*totalseqs); // index
-
-	log("FSIPCS using SS gigabytes estimate: " , (fsidoubles*8)/(1024.0*1024.0*1024.0));
-
-	// one actionshere per sequence   
-	// then 2 per infoset action pair
-	// and 3 per infoset (reach1, reach2, value)
-
-	let vfsi_ss = (totalseqs + totaliap*2 + totalInfosets*3); //Was: ull
-	log("total doubles for vanilla FSI using SS: " , vfsi_ss); 
-	vfsi_ss += (4*2*totalseqs); // index
-	log(" ( = " , (vfsi_ss*8)/(1024.0*1024.0*1024.0) , " GB with index)");
-
-	//  cout << endl;
-
-	log("totals: iapairs, doubles, 4*infosets: " , totaliap , " " , tdoubles , " " , (4*totalInfosets));
-	log("bytes is index total = " , btotalis , " " , btotalindex , " " , (btotalis+btotalindex));
-	log("Note: Sizes assume for infoset store: 2 doubles per infoset + 2 doubles per iapair, ");
-	log("                   for index: indexsize = 4*#infosets, and 2 doubles per index size . ");
-}//»
-const binrep = (num) => {//«
-//string binrep(unsigned long long num) {
-  let s = "";//Was: string
-  for (let i = 0; i < 64; i++) {//Was: int
-    let bit = 1; //Was: ull
-    bit <<= i;
-    let n = num & bit; //Was: ull
-    s = (n > 0 ? "1" : "0") + s; 
-  }
-
-  return s;
-}//»
-*/
-}//»
 function PCS_NS(){// Public Chance Sampling«
-
-//Headers«
 
 //#include "bluff.h"
 //#include "svector.h"
-
-//»
 
 //Globals«
 
@@ -3109,6 +2885,7 @@ and add them to the game state (and the infoset keys). Since the pcs stands for
 			assert(ret);
 		}
 	}//»
+
 	// iterate over the actions
 	for (let i = gs.curbid+1; i <= maxBid; i++) {//Was: int«
 		action++;
@@ -3157,6 +2934,7 @@ and add them to the game state (and the infoset keys). Since the pcs stands for
 			else if (updatePlayer == 2) result2 += ev2;
 		}
 	}//»
+
 	// now the real stuff, cfr updates
 	if (player == updatePlayer && phase == 1) {//«
 		// regrets will be changed, so make sure to indicate it to prob updater
@@ -3185,31 +2963,34 @@ and add them to the game state (and the infoset keys). Since the pcs stands for
 	}//»
 
 }//»
+
 const main = (argc, argv) => {//«
 	let maxNodesTouched = 0; //Was: ull
 	let maxIters = 0; //Was: ull
 	init();
-
 	if (argc < 2) {
 		initInfosets();
 		exit(-1);
 	}
-	else { 
-		let filename = argv[1];//Was: string
-		log("Reading the infosets from " , filename , "...");
-		iss.readFromDisk(filename);
 
-		if (argc >= 3) maxIters = to_ull(argv[2]);
-	}  
+	let filename = argv[1];//Was: string
+	log("Reading the infosets from " , filename , "...");
+	iss.readFromDisk(filename);
+	if (argc >= 3) maxIters = to_ull(argv[2]);
 
 	// get the iteration
-	let filename = argv[1];//Was: string
-	vector<string> parts; 
-	split(parts, filename, '.'); 
+//	vector<string> parts; 
+//	let parts = []
+//	split(parts, filename, '.'); 
+	let parts = filename.split(".");
 	if (parts.size() != 3 || parts[1] == "initial") iter = 1; 
-	else iter = to_ull(parts[1]); 
+	else {
+//Get the iter from the name of the file
+//		iter = to_ull(parts[1]); 
+		iter =	parseInt(parts[1]); //'iter' is declared in Bluff_NS
+	}
+	iter = Math.max(1,iter);
 	log("Set iteration to " , iter);
-	iter = MAX(1,iter);
 
 	let bidseq = 0; //Was: ull
 
@@ -3227,6 +3008,7 @@ const main = (argc, argv) => {//«
 //		GameState gs1; 
 		let gs1 = new GameState();
 		bidseq = 0; 
+//const pcs(gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, result1, result2) => 
 		pcs(gs1, 1, 0, bidseq, 1, reach1, reach2, 1, result1, result2);
 
 //		GameState gs2; 
@@ -3255,9 +3037,13 @@ const main = (argc, argv) => {//«
 
 			log("Computing bounds... "); 
 			//cout.flush(); 
-			let b1 = 0.0, b2 = 0.0;//Was: double
-			iss.computeBound(b1, b2); 
-			log(" b1 = " , b1 , ", b2 = " , b2 , ", bound = " , (2.0*MAX(b1,b2)));
+//			let b1 = 0.0, b2 = 0.0;//Was: double
+//			iss.computeBound(b1, b2); 
+
+//WIGUPM
+//This is also called from computeBestResponses3, which is called from computeBestResponses1 !?!
+//			let [b1, b2] = iss.computeBound(0, 0);
+//			log(` b1 = ${b1}, b2 = ${b2}, bound = ${(2.0*Math.max(b1,b2))}`);
 
 			ntNextReport *= ntMultiplier; // need this here, before dumping metadata
 
@@ -3474,6 +3260,7 @@ const main = (argc, argv) => {//«
 			let conv = 0.0;//Was: double
 			let p1value = 0.0;//Was: double
 			let p2value = 0.0;//Was: double
+//This is defined in br.cpp and it calls expectimaxbr, which calls computeActionDist
 			conv = computeBestResponses3(false, p1value, p2value);
 
 			report("cfr.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
@@ -3494,7 +3281,250 @@ const main = (argc, argv) => {//«
 
 }//»
 
-/*Only used by cfros.cpp, cfres.cpp and purecfr.cpp
+
+
+/*Currently unused
+
+function BluffCounter_NS(){//«
+//- bluffcounter.cpp is used to count the number of information sets and
+//  (infoset,action) pairs. These numbers are needed to create the strategies
+//  files. You won't need to use it at all if you just run Bluff(1,1) but if you
+//  want to implement a different game, then you can use this file as a place to
+//  start to create strategies files for your game.
+
+//Globals«
+
+//All of these const's were #define's«
+// How many dice per player? 
+const P1D = 1;
+const P2D = 1;
+const DICE = (P1D+P2D);
+const BIDS = (DICE*6);
+
+// Number of last moves you're allowed to recall for imperfect recall
+// Used only for imperfect recall abstractions, not used by this code base
+const RECALL = 7;
+
+// Number of chance event outcomes at chance nodes.
+const P1CO = 6;
+const P2CO = 6;
+//»
+
+let p1totalTurns = 0;
+let p2totalTurns = 0;
+let p1totalActions = 0;
+let p2totalActions = 0;
+let totalLeaves = 0;
+
+map<unsigned long long,int> iapairs;
+let iscWidth = 3;//Was: int
+
+//»
+
+const pow2 = (i) => {//«
+//unsigned long long pow2(int i) {
+	let answer = 1;//Was: ull
+	return (answer << i); 
+}//»
+
+// Traverse the entire tree, counting the number of (information set, action pairs)
+const bcount = (cbid, player, depth) => {//«
+//void bcount(int cbid, int player, int depth) {
+	if (cbid >= (BIDS+1)) {
+		totalLeaves++;
+		return;
+	}
+
+	let numbids = (cbid == 0 ? BIDS : BIDS+1);//Was: int
+	let actions = numbids - (cbid+1) + 1;//Was: int
+	unsigned long & totalTurns = (player == 1 ? p1totalTurns : p2totalTurns); 
+	unsigned long & totalActions = (player == 1 ? p1totalActions : p2totalActions); 
+	totalTurns++; 
+	totalActions += actions; 
+
+	for (let b = cbid+1; b <= numbids; b++) {//Was: int
+		if (depth == 0) log("Depth 0, b = " , b);
+		bcount(b, 3-player, depth+1);
+	}
+}//»
+const countnoabs = () => {//«
+//void countnoabs() {
+	bcount(0, 1, 0); 
+
+	log("for public tree:");
+	log("  p1totalTurns = " , p1totalTurns);
+	log("  p2totalTurns = " , p2totalTurns);
+	log("  totalLeaves = " , totalLeaves);
+	let totalseqs = (p1totalTurns + p2totalTurns);//Was: ull
+	log("total sequences = " , totalseqs);
+	log("p1 info sets = " , (p1totalTurns*P1CO));
+	log("p2 info sets = " , (p2totalTurns*P2CO));
+	let ttlinfosets = (p1totalTurns*P1CO) + (p2totalTurns*P2CO);//Was: ull
+	log("total info sets = " , ttlinfosets);
+	log("p1totalActions = " , p1totalActions);
+	log("p2totalActions = " , p2totalActions);
+
+	let iapairs1 = (p1totalActions*P1CO);//Was: ul
+	let iapairs2 = (p1totalActions*P2CO);//Was: ul
+	let totaliap = (iapairs1+iapairs2);//Was: ul
+	log("infoset actions pairs, p1 p2 total = " , iapairs1 , " " , iapairs2 , " " , totaliap);
+
+	let td = (totaliap*2 + ttlinfosets*2);//Was: ul
+	log("total doubles needed = " , td , ", bytes needed = " , (td*8));
+
+	log("cache size ~ " , (ttlinfosets*4) , " entries =~ " , (ttlinfosets*4*2)*8 , " bytes");
+
+	let ttlbytes = ((td*8) + (ttlinfosets*4*2)*8); //Was: ull
+	log("total bytes = " , ttlbytes , " ( = " , (ttlbytes / (1024.0*1024.0*1024.0)) , " GB)");
+}//»
+const nextbid = (bidseq, maxBid) => {//«
+//bool nextbid(int * bidseq, int maxBid) {
+	for (let i = RECALL-1; i >= 0; i--) {//Was: int
+		let roffset = (RECALL-1)-i; //Was: int
+		if (bidseq[i] < (maxBid-roffset)) {
+			bidseq[i]++;
+			for (let j = i+1; j < RECALL; j++) {//Was: int
+				bidseq[j] = bidseq[j-1]+1;
+			}
+			return true;
+		}
+	}
+	return false;
+}//»
+const countabs2 = () => {//«
+//void countabs2() {
+// This is for imperfect recall abstractions. Not used by this code base, 
+// but I left it in case your game has abstraction, maybe this will be helpful
+
+	let bidseq = new Array(RECALL); //int bidseq[RECALL] = { 0 }; 
+	let ret = true;//Was: bool
+	let first = true;//Was: bool
+	let maxBid = 6*DICE;//Was: int
+	let bluffBid = maxBid+1;//Was: int
+
+	while(ret) {
+		let numzeroes = 0;//Was: int
+		for (let i = 0; i < RECALL; i++) {//Was: int
+			if (bidseq[i] == 0) numzeroes++; 
+		}
+		let curbid = bidseq[RECALL-1];//Was: int
+		let actions = bluffBid-curbid;//Was: int
+		if (first) actions--;
+
+		assert(actions >= 0 && actions <= maxBid);
+
+		let player = 0;//Was: int
+		if (numzeroes > 0) {
+			if (RECALL % 2 == 0) {
+				if (numzeroes % 2 == 0) player = 1;
+				else player = 2; 
+			}
+			else {
+				if (numzeroes % 2 == 1) player = 1;
+				else player = 2; 
+			}
+		}
+		else if (bidseq[0] == 1) {
+			if (RECALL % 2 == 0) player = 1; 
+			else player = 2;
+		}
+
+		// player = 0 means both players can share this bid sequence
+		if (player == 1 || player == 0) {
+			p1totalTurns++;
+			p1totalActions += actions;
+		}
+		if (player == 2 || player == 0) {
+			p2totalTurns++;
+			p2totalActions += actions;
+		}
+
+		ret = nextbid(bidseq, maxBid); 
+		first = false;
+	}
+
+	log("recall = " , RECALL);
+	log("p1totalTurns = " , p1totalTurns);
+	log("p2totalTurns = " , p2totalTurns);
+	log("p1totalActions = " , p1totalActions);
+	log("p2totalActions = " , p2totalActions);
+
+	let iapairs1 = (p1totalActions*P1CO);//Was: ulong
+	let iapairs2 = (p1totalActions*P2CO);//Was: ulong
+	let totaliap = (iapairs1+iapairs2);//Was: ulong
+
+	log("ia pairs p1 p2 total = " , iapairs1 , " " , iapairs2 , " " , totaliap);
+
+	let infosets1 = (p1totalTurns*P1CO);//Was: ull
+	let infosets2 = (p2totalTurns*P2CO);//Was: ull
+	let totalInfosets = infosets1 + infosets2; //Was: ull
+
+	let btotalindex = totalInfosets*16*4; //Was: ull
+	let tdoubles = (totaliap*2 + totalInfosets*2);//Was: ull
+	let btotalis = tdoubles*8;//Was: ull
+
+	log("infosets p1 p2 total = " , infosets1 , " " , infosets2 , " " , totalInfosets);
+	log("total doubles for infoset store (2 per infoset + 2 per iapair) = " , tdoubles);
+
+	//  cout << endl;
+
+	let vfsi_iss = (totaliap*2 + totalInfosets*4);//Was: ull
+	log("total doubles for Vanilla FSI using infoset store (4 per infoset + 2 per iapair) = "  , vfsi_iss);
+
+	vfsi_iss += (4*2*totalInfosets); // index
+
+	log(" ( = " , (vfsi_iss*8) / (1024.0*1024.0*1024.0) , " GB)");
+
+	let totalseqs = (p1totalTurns + p2totalTurns);//Was: ull
+	log("total sequences, 4 * total seq = " , totalseqs , ", " , (4*totalseqs));
+	let fsidoubles = (totalseqs + totaliap*2 + infosets1*3*P2CO + infosets2*3*P1CO);//Was: ull
+	log("total doubles for FSIPCS with using SS (1 per sequence + 2 per iapair\n" , "                  + 3*P1CO per p2 infoset and 3*P2CO per p1 infoset, for fsi) = " , fsidoubles);
+
+	fsidoubles += (4*2*totalseqs); // index
+
+	log("FSIPCS using SS gigabytes estimate: " , (fsidoubles*8)/(1024.0*1024.0*1024.0));
+
+	// one actionshere per sequence   
+	// then 2 per infoset action pair
+	// and 3 per infoset (reach1, reach2, value)
+
+	let vfsi_ss = (totalseqs + totaliap*2 + totalInfosets*3); //Was: ull
+	log("total doubles for vanilla FSI using SS: " , vfsi_ss); 
+	vfsi_ss += (4*2*totalseqs); // index
+	log(" ( = " , (vfsi_ss*8)/(1024.0*1024.0*1024.0) , " GB with index)");
+
+	//  cout << endl;
+
+	log("totals: iapairs, doubles, 4*infosets: " , totaliap , " " , tdoubles , " " , (4*totalInfosets));
+	log("bytes is index total = " , btotalis , " " , btotalindex , " " , (btotalis+btotalindex));
+	log("Note: Sizes assume for infoset store: 2 doubles per infoset + 2 doubles per iapair, ");
+	log("                   for index: indexsize = 4*#infosets, and 2 doubles per index size . ");
+}//»
+const binrep = (num) => {//«
+//string binrep(unsigned long long num) {
+  let s = "";//Was: string
+  for (let i = 0; i < 64; i++) {//Was: int
+    let bit = 1; //Was: ull
+    bit <<= i;
+    let n = num & bit; //Was: ull
+    s = (n > 0 ? "1" : "0") + s; 
+  }
+
+  return s;
+}//»
+
+const main = () => {//«
+  // iscWidth is the number of bits needed by the chance outcome
+  // in our case, six possibilties, 3 bits
+	iscWidth = 3;
+	countnoabs();
+	//countabs2();
+	return 0;
+}//»
+
+}//»
+
+//Only used by cfros.cpp, cfres.cpp and purecfr.cpp
 function Sampling(){//«
 
 //#include "bluff.h"
@@ -3569,6 +3599,7 @@ const sampleAction = (is, actionshere, sampleprob, epsilon, firstTimeUniform) =>
 }//»
 
 }//»
+
 */
 
 //»
