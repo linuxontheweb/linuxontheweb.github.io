@@ -480,10 +480,19 @@ class GameState {//«
 //int prevbid;          // prev bid from last turn
 //int callingPlayer;    // the player calling bluff (1 or 2)
 
-constructor () {
+constructor (arg) {
 //  GameState() {
-	this.p1roll = this.p2roll = this.curbid = this.prevbid = 0;
-	this.callingPlayer = 0;
+	if (arg instanceof GameState){
+		this.p1roll = arg.p1roll;
+		this.p2roll = arg.p2roll;
+		this.curbid = arg.curbid;
+		this.prevbid = arg.prevbid;
+		this.callingPlayer = arg.callingPlayer;
+	}
+	else {
+		this.p1roll = this.p2roll = this.curbid = this.prevbid = 0;
+		this.callingPlayer = 0;
+	}
 }
 
 };//»
@@ -2266,7 +2275,8 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 	// check for chance nodes
 	if (gs.p1roll == 0) {//«
 		for (let i = 1; i <= numChanceOutcomes1; i++) {//Was: int
-			GameState ngs = gs;
+//			GameState ngs = gs;
+			let ngs = new GameState(gs);
 			//let ngs = gs;
 			ngs.p1roll = i;
 			initInfosets(ngs, player, depth+1, bidseq);
@@ -2275,7 +2285,8 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 	}
 	else if (gs.p2roll == 0) {
 		for (let i = 1; i <= numChanceOutcomes2; i++) {//Was: int
-			GameState ngs = gs;
+//			GameState ngs = gs;
+			let ngs = new GameState(gs);
 			//let ngs = gs;
 			ngs.p2roll = i;
 
@@ -2292,7 +2303,8 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 		if (depth == 2 && i == (gs.curbid+1)) {
 			log("InitTrees. iss stats = " , gIss.getStats());
 		}
-		GameState ngs = gs;
+		let ngs = new GameState(gs);
+//		GameState ngs = gs;
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i;
 		ngs.callingPlayer = player;
@@ -2319,7 +2331,8 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 const initInfosets = () => {//«
 //void initInfosets() {
 	let bidseq = 0;//Was: ull
-	GameState gs;
+//	GameState gs;
+	let gs = new GameState();
 	log("Initialize info set store...");
 	// # doubles in total, size of index (must be at least # infosets)
 	// 2 doubles per iapair + 2 per infoset =
@@ -2563,7 +2576,8 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	if (gs.p1roll == 0) {//«
 		// on fixed player chance nodes, just use any die roll
 		if (fixed_player == 1) {
-			GameState ngs = gs; 
+			let ngs = new GameState(gs);
+//			GameState ngs = gs; 
 			ngs.p1roll = 1;  // assign a dummy outcome, never used
 
 			FVector<double> newOppReach = oppReach; 
@@ -2572,7 +2586,8 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 		else {
 			let ev = 0.0; //Was: dbl
 			for (let i = 1; i <= numChanceOutcomes(1); i++) {//Was: int
-				GameState ngs = gs; 
+				let ngs = new GameState(gs);
+//				GameState ngs = gs; 
 				ngs.p1roll = i; 
 				FVector<double> newOppReach = oppReach; 
 				ev += getChanceProb(1,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
@@ -2583,7 +2598,8 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	else if (gs.p2roll == 0) {//«
 		// on fixed player chance nodes, just use any die roll
 		if (fixed_player == 2) {
-			GameState ngs = gs; 
+			let ngs = new GameState(gs);
+//			GameState ngs = gs; 
 			ngs.p2roll = 1;// assign a dummy outcome, never used
 			FVector<double> newOppReach = oppReach; 
 			return expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
@@ -2591,7 +2607,8 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 		else {
 			let ev = 0.0; //Was: dbl
 			for (let i = 1; i <= numChanceOutcomes(2); i++) {//Was: int
-				GameState ngs = gs; 
+				let ngs = new GameState(gs);
+//				GameState ngs = gs; 
 				ngs.p2roll = i; 
 				FVector<double> newOppReach = oppReach; 
 				ev += getChanceProb(2,i) * expectimaxbr(ngs, bidseq, player, fixed_player, depth+1, newOppReach);
@@ -2623,7 +2640,8 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 			computeActionDist(bidseq, player, fixed_player, oppActionDist, action, newOppReach, actionshere); 
 		}
 		// state transition + recursion
-		GameState ngs = gs; 
+		let ngs = new GameState(gs);
+//		GameState ngs = gs; 
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i; 
 		ngs.callingPlayer = player;
@@ -2700,7 +2718,8 @@ const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 
 	StopWatch sw; 
 
-	GameState gs1; 
+//	GameState gs1; 
+	let gs1 = new GameState();
 	let bidseq = 0; //Was: ull
 	FVector<double> reach1(numChanceOutcomes(1), 1.0); 
 	p2value = expectimaxbr(gs1, bidseq, 1, 1, 0, reach1);
@@ -2722,7 +2741,8 @@ const computeBestResponses3 = (avgFix, p1value, p2value) => {//«
 
 	sw.reset(); 
 
-	GameState gs2;
+	let gs2 = new GameState();
+//	GameState gs2;
 	bidseq = 0;
 	FVector<double> reach2(numChanceOutcomes(2), 1.0); 
 	p1value = expectimaxbr(gs2, bidseq, 1, 2, 0, reach2);
@@ -2770,7 +2790,8 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 	if (gs.p1roll == 0) {//«
 		let EV = 0.0;//Was: double 
 		for (let i = 1; i <= numChanceOutcomes(1); i++) {//Was: int
-			GameState ngs = gs; 
+			let ngs = new GameState(gs);
+//			GameState ngs = gs; 
 			ngs.p1roll = i; 
 			let newChanceReach = getChanceProb(1,i)*chanceReach;//Was: double
 			EV += getChanceProb(1,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
@@ -2780,7 +2801,8 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 	else if (gs.p2roll == 0) {//«
 		let EV = 0.0; //Was: double
 		for (let i = 1; i <= numChanceOutcomes(2); i++) {//Was: int
-			GameState ngs = gs; 
+			let ngs = new GameState(gs);
+//			GameState ngs = gs; 
 			ngs.p2roll = i; 
 			let newChanceReach = getChanceProb(2,i)*chanceReach;//Was: double
 			EV += getChanceProb(2,i)*cfr(ngs, player, depth+1, bidseq, reach1, reach2, newChanceReach, phase, updatePlayer); 
@@ -2827,7 +2849,8 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 		let newreach1 = (player == 1 ? moveProb*reach1 : reach1); //Was: double
 		let newreach2 = (player == 2 ? moveProb*reach2 : reach2); //Was: double
 
-		GameState ngs = gs; 
+//		GameState ngs = gs; 
+		let ngs = new GameState(gs);
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i; 
 		ngs.callingPlayer = player;
@@ -2904,11 +2927,13 @@ const main = (argc, argv) => {//«
 	log("Starting CFR iterations");
 
 	for (; true; gIter++) {//«
-		GameState gs1; 
+//		GameState gs1; 
+		let gs1 = new GameState();
 		bidseq = 0; 
 		let ev1 = cfr(gs1, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 1);//Was: double
 
-		GameState gs2; 
+//		GameState gs2; 
+		let gs2 = new GameState();
 		bidseq = 0; 
 		let ev2 = cfr(gs2, 1, 0, bidseq, 1.0, 1.0, 1.0, 1, 2);//Was: double
 
@@ -3044,7 +3069,7 @@ const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 }//»
 
 const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, result1, result2) => {//«
-//void pcs(gamestate & gs, int player, int depth, unsigned long long bidseq, 
+//void pcs(GameState & gs, int player, int depth, unsigned long long bidseq, 
 // 							int updateplayer, covector1 & reach1, covector2 & reach2, 
 // 							int phase, covector1 & result1, covector2 & result2){
 	reach1.assertprob();
@@ -3066,13 +3091,16 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 //0 is the initial value for the player (before the game begins). In poker, it is the same 
 //as indicating the number of private cards a player has, so this is like dealing hole cards.
 	if (gs.p1roll == 0) {//«
-		GameState ngs = gs; 
+		let ngs = new GameState(gs);
+//		GameState ngs = gs;//Copy gs into ngs
 		ngs.p1roll = 1;       
+//I don't know why these can't be called with 'gs'
 		pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
 		return;
 	}//»
 	else if (gs.p2roll == 0) {//«
-		GameState ngs = gs; 
+		let ngs = new GameState(gs);
+//		GameState ngs = gs; 
 		ngs.p2roll = 1;       
 		pcs(ngs, player, depth+1, bidseq, updatePlayer, reach1, reach2, phase, result1, result2);
 		return;
@@ -3090,14 +3118,23 @@ else if (gs.initRound && gs.curRound > 1){
 
 }»*/
 
+/*
+Before the players need to decide how to act, we can figure out if it even matters
+for them to act, game theoretically speaking.
+*/
 	// cuts?
 	if (phase == 1) {//«
+//I'm trying to understand *exactly* what a "phase" is supposed to be in the context
+//of this game. It seems to always start at 1 and only get set to anything else right below.
+//There is nothing like: phase++, etc.
+
 		if (gIter > 1 && updatePlayer == 1 && player == 1 && reach2.allEqualTo(0.0)) {
 			phase = 2;
 		}
 		else if (gIter > 1 && updatePlayer == 2 && player == 2 && reach1.allEqualTo(0.0)) {
 			phase = 2; 
 		}
+
 	}//»
 	if (phase == 2) {//«
 		if (gIter > 1 && updatePlayer == 1 && player == 1 && reach1.allEqualTo(0.0)) {
@@ -3136,27 +3173,25 @@ else if (gs.initRound && gs.curRound > 1){
 
 //Array of infosets.
 //	Infoset is[co];  
-	let is = [];
+	let is = new Array(co);
 	for (let i=0; i < co; i++) is[i] = new Infoset();
-
-
 //	typedef SVector<P1CO> covector1;
 //	typedef SVector<P2CO> covector2;
-
-
 	// only one of these is used
-	covector1 moveEVs1[actionshere];
-	covector2 moveEVs2[actionshere];
-
+//	covector1 moveEVs1[actionshere];
+//	covector2 moveEVs2[actionshere];
+	let moveEVs1 = new Array(actionshere);
+	let moveEVs2 = new Array(actionshere);
 //»
 
 	for (let i = 0; i < co; i++) {//Was: int«
-		let outcome = i+1;//Was: int
-		infosetkeys[i] = bidseq; 
-		infosetkeys[i] <<= gIscWidth; 
-		infosetkeys[i] |= outcome; 
-		infosetkeys[i] <<= 1; 
-		if (player == 2) infosetkeys[i] |= 1; 
+//		let outcome = i+1;//Was: int
+		let key = bidseq; 
+		key <<= gIscWidth; 
+//		key |= outcome; 
+		key |= i+1;
+		key <<= 1; 
+		if (player == 2) key |= 1; 
 /*«
 		if (player == 1) {
 //			infosetkeys[i] |= outcome; 
@@ -3175,8 +3210,9 @@ else if (gs.initRound && gs.curRound > 1){
 		}
 »*/
 		// get the info set (also set is.curMoveProbs using regret matching)
-		let ret = gIss.get(infosetkeys[i], is[i], actionshere, 0);//Was: bool
+		let ret = gIss.get(key, is[i], actionshere, 0);//Was: bool
 		assert(ret);
+		infosetkeys[i] = key;
 	}//»
 
 	// iterate over the actions
@@ -3198,7 +3234,8 @@ else if (gs.initRound && gs.curRound > 1){
 //Element-wise multiplication of SVectors
 		if (player == 1) newReach1 *= moveProbs1; 
 		if (player == 2) newReach2 *= moveProbs2;
-		GameState ngs = gs; 
+//		GameState ngs = gs; 
+		let ngs = new GameState(gs);
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i; 
 		ngs.callingPlayer = player;
@@ -3206,6 +3243,11 @@ else if (gs.initRound && gs.curRound > 1){
 //		newbidseq = bidseq;					<--- It was like this (error: not defined)
 		let newbidseq = bidseq;//Was: ull
 //		newbidseq |= (1ULL << (BLUFFBID-i)); 
+
+// 0 |= 1 << 13 - ((gs.curbid + 1)..maxBid)
+//maxBid >= i >= 1 
+//1 <= i <= maxBid
+//maxBid is either 12 or 13, depending if gs.curbid==0
 		newbidseq |= (1 << (BLUFFBID-i)); 
 
 //3-player means alternate players in a 2-player game
@@ -3336,31 +3378,23 @@ const main = (argc, argv) => {//«
 		if (gNodesTouched >= gNtNextReport) {//«
 //		if ((maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) ||
 //			(maxNodesTouched == 0 && nodesTouched >= ntNextReport)) {
-
 			log("total time: " , totaltime , " seconds."); 
 			log("Done iteration " , gIter);
-
 			log("Computing bounds... "); 
-			//cout.flush(); 
+//			cout.flush(); 
 //			let b1 = 0.0, b2 = 0.0;//Was: double
 //			gIss.computeBound(b1, b2); 
-
 //WIGUPM
 //This is also called from computeBestResponses3, which is called from computeBestResponses1 !?!
 //			let [b1, b2] = gIss.computeBound(0, 0);
 //			log(` b1 = ${b1}, b2 = ${b2}, bound = ${(2.0*Math.max(b1,b2))}`);
-
 			gNtNextReport *= gNtMultiplier; // need this here, before dumping metadata
-
 			let conv = computeBestResponses1(false);//Was: double
 			report("pcs.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
 			//dumpInfosets("iss");//WSUROK
-
 			stopwatch.reset(); 
-
 //			if (maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) break;
 		}//»
-
 		if (gIter == maxIters) break;
 	}
 }//»
