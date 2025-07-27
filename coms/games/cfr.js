@@ -592,13 +592,14 @@ class NormalizerMap {//normalizer.h«
 constructor() {//«
 	this.#normalized = false;
 	this.#total = 0.0; 
-	this.#values = {};
+	this.#values = new Map;
 }//»
 add(key, value) {//«
 //void add(int key, double value) {
 	assert(value >= 0.0);
 	this.#total += value;
-	this.#values[key] = value;
+//	this.#values[key] = value;
+	this.#values.set(key, value);
 }//»
 normalize() {//«
 	assert(this.#total > 0.0); 
@@ -612,12 +613,15 @@ normalize() {//«
 //}
 
 	assert(!this.#normalized); 
-
+	for (let [k, v] of this.#values){
+		this.#values[k] = v / total;
+	}
+/*
 	std::map<int,double>::iterator iter; 
 	for (iter = values.begin(); iter != values.end(); iter++) {
 		iter->second = (iter->second / total);//iter->second is the value of the current map entry
 	}
-
+*/
 	this.#normalized = true; 
 }//»
 double & operator[](int n) { return values[n]; }
@@ -2516,11 +2520,13 @@ const computeActionDist=(bidseq, player, fixed_player, oppActionDist, action, ne
 		let chanceOutcome = oppChanceOutcomes[i]; //Was: int
 
 		// get the information set that corresponds to it
-		Infoset is;
+//		Infoset is;
+		let is = new Infoset();
 		let infosetkey = 0;//Was: ull
 		getInfoset(infosetkey, is, bidseq, player, actionshere, chanceOutcome); 
 
 		// apply out-of-date mccfr patch if needed. note: we know it's always the fixed player here
+//This is never set to true
 		if (mccfrAvgFix) fixAvStrat(infosetkey, is, actionshere, newOppReach[i]); 
 		let oppProb = getMoveProb(is, action, actionshere); //Was: dbl
 		CHKPROB(oppProb); 
@@ -2678,6 +2684,7 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	}
 	assert(updatePlayer != fixed_player); 
 	assert(updatePlayer + fixed_player == 3); 
+
 //»
 
 	return ev; 
