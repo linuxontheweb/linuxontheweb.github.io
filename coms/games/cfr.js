@@ -1,10 +1,11 @@
-/*@TDLYMX Nothing is actually getting updated because in the C++, the arguments
-are being passed in by reference.
-*/
 /*Notes«
 ull: unsigned long long
+7/28/25: @TDLYMX Nothing was actually getting updated by IS.#next because «
+in the C++, the arguments are being passed in by reference. So I just changed 
+it to return an array and all the invocations to:
+	[row, col, curRowSize] = this.#next(row, col, curRowSize); »
 7/27/25: I can't see where the maxNodesTouched variable @YXBJKU is ever updated from its initialized value of 0.
-7/26/26: I am trying to understand why the random function is never called.«
+7/26/25: I am trying to understand why the random function is never called.«
 It *is* called in sampling.cpp, which contains functions (e.g. sampleChanceEvent) 
 that are called from cfros.cpp, cfres.cpp and purecfr.cpp. Both cfr algorithms we are 
 using here (vanilla and public chance) either do not sample anything (cfr,cpp, vanilla) 
@@ -127,9 +128,8 @@ double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
 // and company's stuff on the open internets.
 //»
 
-»*/
 //WHNHGT
-/*OPFS sync ops«
+//OPFS sync ops«
 
 The `FileSystemFileHandle.createSyncAccessHandle()` method provides synchronous
 file operations in dedicated Web Workers via the `FileSystemSyncAccessHandle`
@@ -163,6 +163,8 @@ context.
 
 This is the closest JavaScript equivalent to C++'s synchronous stream writing
 in a worker context. Thanks for pointing it out!
+
+//»
 
 »*/
 
@@ -1002,6 +1004,16 @@ class InfosetStore {//«
 
 //»
 //TDLYMX
+#next(row, col, curRowSize) {//«
+//void next(ull & row, ull & col, ull & pos, ull & curRowSize); 
+	col++; 
+	if (col >= curRowSize) {
+		col = 0; 
+		row++;
+		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
+	}
+	return [row, col, curRowSize];
+}
 /*
 #next(row, col, pos, curRowSize) {//«
 //void next(ull & row, ull & col, ull & pos, ull & curRowSize); 
@@ -1015,31 +1027,24 @@ class InfosetStore {//«
 	return [row, col, pos, curRowSize];
 }//»
 */
-#next(row, col, curRowSize) {//«
-//void next(ull & row, ull & col, ull & pos, ull & curRowSize); 
-	col++; 
-	if (col >= curRowSize) {
-		col = 0; 
-		row++;
-		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
-	}
-	return [row, col, curRowSize];
-}//»
+//»
 #get_priv(infoset_key, infoset, moves, firstmove) {//«
 //bool get_priv(ull infoset_key, Infoset & infoset, int moves, int firstmove); 
 //ull row, col, pos, curRowSize;
-	let row, col, pos, curRowSize;
+//	let row, col, pos, curRowSize;
+	let row, col, curRowSize;
 
 	//pos = getPosFromIndex(infoset_key);  // uses a hash table
-	pos = this.getPosFromIndex1(infoset_key);  // uses a hash table
+	let pos = this.getPosFromIndex1(infoset_key);  // uses a hash table
 	if (pos >= this.#size) return false;
 
 	row = pos / this.#rowsize;
 	col = pos % this.#rowsize;
 	curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
-
 	// get the number of moves
-	assert(row < this.#rows); assert(col < curRowSize); assert(pos < this.#size); 
+	assert(row < this.#rows);
+	assert(col < curRowSize);
+	assert(pos < this.#size); 
 /*«
 	let x;//Was: ull
 	let y = this.#tablerows[row][col];//double y = tablerows[row][col];
@@ -1051,17 +1056,10 @@ class InfosetStore {//«
 //	infoset.actionshere = this.#tablerows[row][col];
 	pos++;
 	[row, col, curRowSize] = this.#next(row, col, curRowSize);//Nothing is happening
-/*
-	pos++;
-	col++; 
-	if (col >= curRowSize) {
-		col = 0; 
-		row++;
-		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
-	}
-*/
 	// get the lastupdate
-	assert(row < this.#rows); assert(col < curRowSize);  assert(pos < this.#size); 
+	assert(row < this.#rows);
+	assert(col < curRowSize);
+	assert(pos < this.#size); 
 /*«
 	y = this.#tablerows[row][col];
 	assert(sizeof(x) == sizeof(double));
@@ -1069,8 +1067,6 @@ class InfosetStore {//«
 	infoset.lastUpdate = x;//This is just an "iter" of cfr (not a timestamp, etc)
 »*/
 	infoset.lastUpdate = this.#tablerows[row][col];
-
-//	this.#next(row, col, pos, curRowSize);
 	pos++;
 	[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
@@ -1127,9 +1123,9 @@ class InfosetStore {//«
 	let row, col, pos, curRowSize;//Was: ull
 	assert(moves > 0);
 	let newinfoset = false;//Was: bool
-	let hashIndex = 0;//Was: ull
-
-	let thepos = this.getPosFromIndex2(infoset_key, hashIndex);//Was: ull, getPosFromIndex(a,b)
+//	let hashIndex = 0;//Was: ull
+//	let thepos = this.getPosFromIndex2(infoset_key, hashIndex);//Was: ull, getPosFromIndex(a,b)
+	let [thepos, hashIndex] = this.getPosFromIndex2(infoset_key, 0);
 	if (this.#addingInfosets && thepos >= this.#size) {//«
 		newinfoset = true; 
 		// new infoset to be added at the end
@@ -1155,7 +1151,7 @@ class InfosetStore {//«
 		row = pos / this.#rowsize;
 		col = pos % this.#rowsize;
 		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
-	}/* » */
+	}//»
 
 	// store the number of moves at this infoset
 	assert(row < this.#rows);
@@ -1285,27 +1281,6 @@ init(_size, _indexsize) {//«
 
 	log("IS: init done. ");
 }//»
-/*
-destroy() {//«
-//void destroy() {
-	if (tablerows != NULL) {
-		delete [] indexKeys; 
-		delete [] indexVals;
-
-		for (let i = 0; i < this.#rows; i++) {//Was: uint
-			delete [] tablerows[i];
-		}
-		delete [] tablerows;
-	}
-
-	tablerows = NULL;
-}//»
-*/
-/*«~InfosetStore()
-~InfosetStore() {
-	destroy(); 
-}
-»*/
 
 computeBound(sum_RTimm1, sum_RTimm2){//«
 //Computing Theorem 3 in "Regret Minimization in Games with Incomplete Information"
@@ -1463,7 +1438,7 @@ copy(dest){//«
 			assert(dest.tablerows[i] != NULL);
 		}
 		else {
-			dest.tablerows[i] = new Array(lastRowSize);//Was: dbl[]
+			dest.tablerows[i] = new Array(this.#lastRowSize);//Was: dbl[]
 			assert(dest.tablerows[i] != NULL);
 		}
 	}
@@ -1582,8 +1557,9 @@ getSize() { //«
 getPosFromIndex1(infoset_key) {//«
 // use this one if you don't care about the hashIndex
 // unsigned long long getPosFromIndex(unsigned long long infoset_key);
-	let hi = 0;//Was: ull
-	return this.getPosFromIndex2(infoset_key, hi); 
+//	let hi = 0;//Was: ull
+	let [pos, hi] = this.getPosFromIndex2(infoset_key, 0); 
+	return pos;
 }//»
 getPosFromIndex2(infoset_key, hashIndex) {//«
 //unsigned long long getPosFromIndex(unsigned long long infoset_key, unsigned long long & hashIndex); 
@@ -1595,13 +1571,13 @@ getPosFromIndex2(infoset_key, hashIndex) {//«
 			gTotalLookups++; 
 			gTotalMisses += misses;
 			hashIndex = i; 
-			return this.#indexVals[i]; 
+			return [this.#indexVals[i], hashIndex]; 
 		}
 		else if (indexVals[i] >= this.#size){// index keys can be >= size since they're arbitrary, but not values!
 			gTotalLookups++; 
 			gTotalMisses += misses;
 			hashIndex = i;
-			return this.#size; 
+			return [this.#size, hashIndex]; 
 		}
 		i = i+1; 
 		if (i >= this.#indexSize) i = 0; 
@@ -1655,7 +1631,6 @@ readBytes(inarg, addr,  num) {//«
 //	in.read(reinterpret_cast<char *>(addr), num); 
 DIE("IMPLEMENT readBytes");
 }//»
-
 readFromDisk(filename) {//«
 //bool readFromDisk(std::string filename);
 
@@ -1724,7 +1699,25 @@ readFromDisk(filename) {//«
 	return true;
 }//»
 
-/*Not called anywhere in bluff codebase
+/*Unused«
+
+destroy() {//«
+//void destroy() {
+	if (tablerows != NULL) {
+		delete [] indexKeys; 
+		delete [] indexVals;
+
+		for (let i = 0; i < this.#rows; i++) {//Was: uint
+			delete [] tablerows[i];
+		}
+		delete [] tablerows;
+	}
+
+	tablerows = NULL;
+}//»
+~InfosetStore() { destroy(); }
+
+Not called anywhere in bluff codebase
 importValues(player, filename) {//«
 // used to save memory when evaluation strategies from 2 diff strat files
 //  void importValues(int player, std::string filename);
@@ -1791,7 +1784,8 @@ importValues(player, filename) {//«
 	}
 
 }//»
-*/
+
+»*/
 
 };//»
 const gIss = new InfosetStore();
