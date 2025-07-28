@@ -1,7 +1,7 @@
-/*7/26/25: I can't see where the maxNodesTouched variable @YXBJKU is ever updated from
-its initialized value of 0.
-*/
-/*7/26/26: I am trying to understand why the random function is never called.«
+/*Notes«
+ull: unsigned long long
+7/27/25: I can't see where the maxNodesTouched variable @YXBJKU is ever updated from its initialized value of 0.
+7/26/26: I am trying to understand why the random function is never called.«
 It *is* called in sampling.cpp, which contains functions (e.g. sampleChanceEvent) 
 that are called from cfros.cpp, cfres.cpp and purecfr.cpp. Both cfr algorithms we are 
 using here (vanilla and public chance) either do not sample anything (cfr,cpp, vanilla) 
@@ -12,17 +12,15 @@ dice rolls for both players.
 @DOKUNX is where sampling *would* happen for poker PCS (public chance sampling).
 
 covector stands for: Chance Outcomes Vector
-
-»*/
-/*7/25/25: Possible bugs: Check for situations like @QHGRYT, where the 'let' keyword « 
+»
+7/25/25: Possible bugs: Check for situations like @QHGRYT, where the 'let' keyword « 
 was left off from a statement that originally looked like: 
 unsigned long long newbidseq = bidseq;
 
 ...and was changed to:
 newbidseq = bidseq;
-
-»*/
-/*7/24/25: Just relax and ponder over InfosetStore_NS.«
+»
+7/24/25: Just relax and ponder over InfosetStore_NS.«
 
 Below, IS.<whatever> means InfosetStore.<whatever>, and will appear in the codebase as 
 gIss.<whatever>.
@@ -112,8 +110,8 @@ get(infoset_key, infoset, moves, firstmove){
 //...
 }
 
-»*/
-/*7/23/25 Example weird C++ idiom @WMNGHKHF«
+»
+7/23/25 Example weird C++ idiom @WMNGHKHF«
 This is just a fancy way to assign to one of two struct fields: gs.p2roll or gs.p1roll
 double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
 	int updatePlayer = 3-fixed_player;
@@ -121,13 +119,12 @@ double getPayoff(GameState gs, int fixed_player, int oppChanceOutcome){
 	oppRoll = oppChanceOutcome;
 	return payoff(gs, updatePlayer); 
 }
-»*/
+»
 //« 7/21/25: This file exists to implement Marc Lanctot (UAlberta, Maastricht, etc) 
 // and company's stuff on the open internets.
 //»
-/*Legend
-ull: unsigned long long
-*/
+
+»*/
 //WHNHGT
 /*OPFS sync ops«
 
@@ -367,90 +364,30 @@ return train
 
 //Bluff Dice«
 
-/*defs.h «
-#define FSICFR         0
-#define FSIPCS         0
-
-#define ABS(x) ((x) >= 0 ? (x) : (-(x)))
-#define CHKDBL(x)    { int c = fpclassify(x); if (!(c == FP_NORMAL || c == FP_ZERO)) cout << "x = " << x << endl; assert(c == FP_NORMAL || c == FP_ZERO); }
-#define CHKPROB(x)   CHKDBL((x)); assert((x) >= 0.0 && (x) <= 1.0)
-#define CHKPROBNZ(x) CHKDBL((x)); assert((x) > 0.0 && (x) <= 1.0)
-#define ABS(x)       ((x) >= 0 ? (x) : (-(x)))
-#define MAX(x,y)     ((x) > (y) ? (x) : (y))
-#define ASSERTEQZERO(x)    assert((ABS((x))) < 0.00000000000001)
-
-//static const size_t SIZE_MAX = std::numeric_limits<std::size_t>::max();
-
-#define NEGINF   -100000000.0
-#define POSINF   -100000000.0
-
-// note: no support for diefaces other than 6 for P1DICE != 1 or P2DICE != 1
-
-#define VAL11 (-0.0271317829457364)
-#define VAL21 (0.6189107786524395)
-#define VAL12 (-0.5882679528387005)
-#define VAL22 (0.01265214009195285)
-#define VAL31 (0.8645693929896585)
-#define VAL13 (-0.8497395132282245)
-#define VAL32 (0.0)
-
-// these need to be defined for PCS
-#if P1DICE == 1
-#define P1CO 6
-#elif P1DICE == 2
-#define P1CO 21
-#elif P1DICE == 3
-#define P1CO 56
-#elif P1DICE == 4
-#define P1CO 126
-#elif P1DICE == 5
-#define P1CO 252
-#endif
-
-#if P2DICE == 1
-#define P2CO 6
-#elif P2DICE == 2
-#define P2CO 21
-#elif P2DICE == 3
-#define P2CO 56
-#elif P2DICE == 4
-#define P2CO 126
-#elif P2DICE == 5
-#define P2CO 252
-#endif
-
-#if P1CO > P2CO
-#define MAXCO P1CO
-#else
-#define MAXCO P2CO
-#endif
-
-// for probing
-#define ISKMAX 10
-#define ACTMAX 10 
-
-#if 0
-#if (P1DICE + P2DICE) == 2 
-#define ISKMAX 131072   // 2^17 (12 for actions, 3 for die, 1 for player + 1)
-#define ACTMAX 13 
-#elif (P1DICE + P2DICE) == 3
-#define ISKMAX 33554432 // 2^25 (18 for actions, 5 for die, 1 for player + 1)
-#define ACTMAX 19 
-#elif (P1DICE + P2DICE) == 4
-#define ISKMAX 10 // 2^25 (18 for actions, 5 for die, 1 for player + 1)
-#define ACTMAX 10 
-#else
-#error "P1DICE + P2DICE not defined for probing"
-#endif
-#endif
-
-»*/
-
 //Var«
 
-//Declared in bluff.h«
+const DIE = str =>{ throw new Error(str)};
 
-const gIss = new InfosetStore();
+//Numbers/Strings«
+
+//infosetstore.cpp
+const gIsROWS = 100
+
+//st: static
+let gTotalLookups = 0;//Was:st ull
+let gTotalMisses = 0;//Was:st ull
+
+//defs.h
+const gNEGINF = -100000000.0;
+
+const gP1DICE = 1;
+const gP2DICE = 1;
+const gDIEFACES = 6;
+const gBLUFFBID = (((gP1DICE+gP2DICE)*gDIEFACES)+1);
+
+
+//bluff.h
+
 const gFilepref = "scratch/";
 let gIter;//ITER
 let gIscWidth = 0;
@@ -460,15 +397,6 @@ let gNodesTouched = 0;
 let gNtNextReport = 1000000;
 let gNtMultiplier = 2;
 
-//»
-
-//Numbers«
-const NEGINF = -100000000.0;
-
-const P1DICE = 1;
-const P2DICE = 1;
-const DIEFACES = 6;
-const BLUFFBID = (((P1DICE+P2DICE)*DIEFACES)+1);
 //»
 
 //Game state
@@ -499,9 +427,9 @@ constructor (arg) {
 class Infoset {//«
 //struct Infoset {
 /*
-  double cfr[BLUFFBID];
-  double totalMoveProbs[BLUFFBID];
-  double curMoveProbs[BLUFFBID];
+  double cfr[gBLUFFBID];
+  double totalMoveProbs[gBLUFFBID];
+  double curMoveProbs[gBLUFFBID];
 
   int actionshere;
   unsigned long long lastUpdate;
@@ -636,6 +564,7 @@ to_string() {//«
 }//»
 
 };//»
+
 //template <class T>
 class FVector {//fvector.h«
 // A mutable (dynamic) vector
@@ -665,7 +594,7 @@ this.#elements = [];
 */
 }//»
 
-T get_const(int n) const {//«
+T getElem(int n) const {//«
 	return this.#elements[n]; 
 }//»
 
@@ -762,61 +691,92 @@ FVector<T> & operator= (const std::vector<T> & other) {//«
 };
 //std::ostream &operator<<(std::ostream &o,  const FVector<double> &v);
 //»
+
 //template <unsigned int SIZE>
 class SVector {//svector.h«
 // SVector: static vector
 // Provides all the functionality of FVector but uses static 
 // SIZEs to avoid dynamic memory allocations.
 // Also: assumes doubles since we don't use it for anything else.
-// double elements[SIZE];
+// double elements[this.#size];
 #elements;
+#size;
 //public:  
-SVector() { //«
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		this.#elements[i] = 0.0;
+constructor(sz, arg) {//«
+	if (!(Number.isFinite(sz) && sz > 0)) DIE(`Invalid 'size' argument given to SVector`);
+	this.#size = sz;
+	this.#elements = new Array(sz);
+	if (arg instanceof SVector){
+		for (let i = 0; i < sz; i++) this.#elements[i] = arg.getElem(i);
+		return;
+	}
+	let val = arg || 0;
+	for (let i = 0; i < sz; i++) {//Was: uint
+		this.#elements[i] = val;
 	}
 }//»
-SVector(ival) {//«
-//ival: double
-	for (let i = 0; i < SIZE; i++) {//Was: uint
-		this.#elements[i] = ival;
-	}
-}//»
-get_const(n) {//double«
+getElem(n) {//double«
 //n: int
 	return this.#elements[n]; 
 }//»
-getSize() { return SIZE; }
+getSize() { return this.#size; }
 allEqualTo(elem) {//bool«
 //elem: double
-	for (let i = 0; i < SIZE; i++) {//Was: uint
+	for (let i = 0; i < this.#size; i++) {//Was: uint
 		if (this.#elements[i] != elem) return false; 
 	}
 	return true;
 }//»
 to_string() {//std::string«
 	let str = "[";//Was: string
-	for (let i = 0; i < SIZE; i++) { //Was: uint
-		std::ostringstream oss; 
-		oss << this.#elements[i]; 
-		str = str + oss.str(); 
-		if (i < (SIZE-1)) str = str + " "; 
+	for (let i = 0; i < this.#size; i++) { //Was: uint
+//		std::ostringstream oss; 
+//		oss << this.#elements[i]; 
+//		str = str + oss.str(); 
+		str = str + this.#elements[i];;
+//		if (i < (this.#size-1)) str = str + " "; 
+		if (i < (this.#size-1)) str = `${str} `; 
 	}
 	str = str + "]";
 	return str; 
 }//»
 assertprob() { //«
-	for (let i = 0; i < SIZE; i++) {//Was: uint
+	for (let i = 0; i < this.#size; i++) {//Was: uint
 		assert(this.#elements[i] >= 0.0 && this.#elements[i] <= 1.0); 
 	}
 }//»
 reset(val) {//«
 //val: double
-	for (let i = 0; i < SIZE; i++) {//Was: uint
+	for (let i = 0; i < this.#size; i++) {//Was: uint
 		this.#elements[i] = val;
 	}
 }//»
 
+multBy(arg){//«
+	if (arg instanceof SVector){
+		if (this.#size != arg.getSize()) DIE("Invalid arg dimension to SVector.multBy");
+		for (let i=0; i < this.#size; i++){
+			this.#elements[i]*=arg.getElem(i);
+		}
+	}
+	else if (Number.isFinite(arg) && arg > 0) {
+		for (let i=0; i < this.#size; i++){
+			this.#elements[i]*=arg;
+		}
+	}
+	else DIE("Invalid arg to SVector.multBy");
+}//»
+addBy(arg){//«
+	if (arg instanceof SVector){
+		if (this.#size != arg.getSize()) DIE("Invalid arg dimension to SVector.addBy");
+		for (let i=0; i < this.#size; i++){
+			this.#elements[i]+=arg.getElem(i);
+		}
+	}
+	else DIE("Invalid arg to SVector.addBy");
+}//»
+
+/*Operators: [],+=,*=,«
 double& operator[](int n) { return this.#elements[n]; }
 SVector<SIZE> & operator= (const SVector<SIZE> & other) {//«
 	assert(SIZE == other.getSize());
@@ -847,16 +807,24 @@ SVector<SIZE> & operator*=(double factor) {//«
 	}
 	return (*this);
 }//»
+»*/
 
 };
 //std::ostream &operator<<(std::ostream &o,  const SVector<SIZE> &v);
 //»
 
+//typedef SVector<P1CO> covector1;
+//typedef SVector<P2CO> covector2;
 
-typedef SVector<P1CO> covector1;
-typedef SVector<P2CO> covector2;
+//const covector1 = SVector;
+//const covector2 = SVector;
+
+const covector1 = (arg)=>{return new SVector(P1CO, arg);};
+const covector2 = (arg)=>{return new SVector(P2CO, arg);};
 
 //»
+
+const gIss = new InfosetStore();
 
 function Util_NS(){//«
 
@@ -984,8 +952,8 @@ const infosetkey_to_string = (infosetkey) => {//«
 
 	str += (" " + to_string(roll));
 
-	for (let i = 1; i < BLUFFBID; i++) {//Was: int
-		let bit = (infosetkey >> (BLUFFBID-i)) & 1;//Was: int
+	for (let i = 1; i < gBLUFFBID; i++) {//Was: int
+		let bit = (infosetkey >> (gBLUFFBID-i)) & 1;//Was: int
 		if (bit == 1) {
 			let dice, face;//Was: int
 			convertbid(dice, face, i);
@@ -1038,11 +1006,6 @@ function InfosetStore_NS() {//«
 //Globals«
 //infosetstore
 //#define ROWS 100
-const ROWS = 100
-
-//st: static
-let totalLookups = 0;//Was:st ull
-let totalMisses = 0;//Was:st ull
 //»
 return class {
 //class InfosetStore {
@@ -1259,7 +1222,7 @@ constructor(){//«
 init(_size, _indexsize) {//«
 
 //Called from initInfosets like:
-//	if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6) gIss.init(147432, 100000);
+//	if (gP1DICE == 1 && gP2DICE == 1 && gDIEFACES == 6) gIss.init(147432, 100000);
 
 //First param: total # of doubles needed. 
 // Should be the total # of (infoset,action) pairs times 2 (2 doubles each)
@@ -1272,14 +1235,14 @@ init(_size, _indexsize) {//«
 	this.#size = _size;
 	this.#indexSize = _indexsize; 
 
-	this.#rowsize = this.#size / (ROWS-1);//#define ROWS 100
-	this.#lastRowSize = this.#size - rowsize*(ROWS-1);
-	this.#rows = ROWS;
+	this.#rowsize = this.#size / (gIsROWS-1);//#define ROWS 100
+	this.#lastRowSize = this.#size - rowsize*(gIsROWS-1);
+	this.#rows = gIsROWS;
 
 	let i = 0; //Was: int
 	while (this.#lastRowSize > this.#rowsize) {// will sometimes happen when _size is small 
 		i++;
-		this.#rows = ROWS-i;
+		this.#rows = gIsROWS-i;
 		this.#rowsize = this.#size / (this.#rows-1); 
 		this.#lastRowSize = this.#size - rowsize*(this.#rows-1);
 	}
@@ -1375,7 +1338,7 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 		memcpy(&lastUpdate, &x, sizeof(actionshere)); 
 		this.#next(row, col, pos, curRowSize);
 
-		let max = NEGINF;//Was: dbl
+		let max = gNEGINF;//Was: dbl
 		for (let a = 0; a < actionshere; a++) {//Was: ull
 			// cfr
 			assert(row < this.#rows);
@@ -1390,7 +1353,7 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 			this.#next(row, col, pos, curRowSize);
 			// next cfr
 		}
-		assert(max > NEGINF);
+		assert(max > gNEGINF);
 //		let delta = max; //Was: dbl
 		//delta = MAX(0.0, delta); 
 //		delta = Math.max(0.0, delta); 
@@ -1608,14 +1571,14 @@ getPosFromIndex2(infoset_key, hashIndex) {//«
 	for (let i = start; misses < this.#indexSize; misses++) {//Was: ull
 		if (this.#indexKeys[i] == infoset_key && this.#indexVals[i] < this.#size)  {
 			// cache hit 
-			totalLookups++; 
-			totalMisses += misses;
+			gTotalLookups++; 
+			gTotalMisses += misses;
 			hashIndex = i; 
 			return this.#indexVals[i]; 
 		}
 		else if (indexVals[i] >= this.#size){// index keys can be >= size since they're arbitrary, but not values!
-			totalLookups++; 
-			totalMisses += misses;
+			gTotalLookups++; 
+			gTotalMisses += misses;
 			hashIndex = i;
 			return this.#size; 
 		}
@@ -1637,8 +1600,8 @@ getStats(){//«
   str += (to_string(lastRowSize) + " "); 
   str += (to_string(added) + " "); 
   str += (to_string(nextInfosetPos) + " "); 
-  str += (to_string(totalLookups) + " "); 
-  str += (to_string(totalMisses) + " "); 
+  str += (to_string(gTotalLookups) + " "); 
+  str += (to_string(gTotalMisses) + " "); 
 */
 	let str="";
 	str += (this.#size + " "); 
@@ -1647,10 +1610,10 @@ getStats(){//«
 	str += (this.#lastRowSize + " "); 
 	str += (this.#added + " "); 
 	str += (this.#nextInfosetPos + " "); 
-	str += (totalLookups + " "); 
-	str += (totalMisses + " "); 
+	str += (gTotalLookups + " "); 
+	str += (gTotalMisses + " "); 
 
-	let avglookups = (totalLookups + totalMisses) / (totalLookups); //Was: dbl
+	let avglookups = (gTotalLookups + gTotalMisses) / (gTotalLookups); //Was: dbl
 
 	let percent_full = (this.#nextInfosetPos) /  (this.#size) * 100.0;  //Was: dbl
 
@@ -1798,7 +1761,7 @@ importValues(player, filename) {//«
 			is.actionshere = actionshere;//static_cast<int>(actionshere);
 			is.lastUpdate = lastUpdate;
 
-			assert(actionshere <= BLUFFBID);
+			assert(actionshere <= gBLUFFBID);
 
 			for (let a = 0; a < actionshere; a++) {//Was: ull
 				double * cfrptr = is.cfr;
@@ -1900,22 +1863,22 @@ const intpow = (x, y) => {//«
 }//»
 const terminal = (gs) => {//YWRK«
 //bool terminal(GameState & gs){
-	return (gs.curbid == BLUFFBID);
+	return (gs.curbid == gBLUFFBID);
 }//»
 
 const convertbid = (dice, face, bid) => {//«
 //void convertbid(int & dice, int & face, int bid) {
 // a bid is from 1 to 12, for example
-	if (P1DICE == 1 && P2DICE == 1) {
-		dice = (bid - 1) / DIEFACES + 1;
-		face = bid % DIEFACES;
-		if (face == 0) face = DIEFACES;
+	if (gP1DICE == 1 && gP2DICE == 1) {
+		dice = (bid - 1) / gDIEFACES + 1;
+		face = bid % gDIEFACES;
+		if (face == 0) face = gDIEFACES;
 		assert(dice >= 1 && dice <= 2);
-		assert(face >= 1 && face <= DIEFACES);
+		assert(face >= 1 && face <= gDIEFACES);
 	}
 	else {
 		// stored in an array.
-		let size = (P1DICE+P2DICE)*DIEFACES;//Was: int
+		let size = (gP1DICE+gP2DICE)*gDIEFACES;//Was: int
 		assert((bid-1) >= 0 && (bid-1) < size);
 
 		dice = bids[bid-1] / 10;
@@ -1934,7 +1897,7 @@ const unrankco = (i, roll, player) => {//«
 	num = chanceOutcomes[i];
 	assert(num > 0);
 
-	let numDice = (player == 1 ? P1DICE : P2DICE);//Was: int
+	let numDice = (player == 1 ? gP1DICE : gP2DICE);//Was: int
 
 //for (let j = 0; j >= 0; j--) 
 //This does the logical opposite of getRollBase10, which stores a "roll" into a single
@@ -1949,18 +1912,18 @@ const nextRoll = (roll, size) => {//«
 //void nextRoll(int * roll, int size){
 /*
 This starts from the back of the array (where the largest values are stored),
-and iterates towards the front. Upon finding the first value less than DIEFACES (6),
+and iterates towards the front. Upon finding the first value less than gDIEFACES (6),
 increase it. This logic is needed for the general case of n dice (but not
 so much for when n = 1)
 */
 	for (let i = size-1; i >= 0; i--) {//Was: int
 		// Try to increment if by 1.
-		if (roll[i] < DIEFACES) {
+		if (roll[i] < gDIEFACES) {
 			// if possible, do it and then set everything to the right back to 1
 			roll[i]++;
 //!!! I'M NOT SURE WHY EVERY VALUE FROM i+1 -> size IS RESET TO 1 !!!
 //THAT SEEMS QUITE WRONG! THIS ONlY MAKES SENSE IF (IN LATER FUNCTIONS CALLS)
-//IT IS ASSUMED THAT EVERYTHING PAST A DIEFACES ENTRY (6) IS ALSO DIEFACES (6)
+//IT IS ASSUMED THAT EVERYTHING PAST A gDIEFACES ENTRY (6) IS ALSO gDIEFACES (6)
 			for (let j = i+1; j < size; j++) roll[j] = 1;//Was: int
 			return;
 		}
@@ -1984,7 +1947,7 @@ const countMatchingDice = (gs, player, face) => {//«
 	let roll  = [0,0,0];//Was: int roll[3] = {0,0,0};
 
 	let matchingDice = 0;//Was: int
-	let dice = (player == 1 ? P1DICE : P2DICE);//Was: int
+	let dice = (player == 1 ? gP1DICE : gP2DICE);//Was: int
 
 	if (dice == 1) {
 		if (player == 1) roll[1] = gs.p1roll;
@@ -1998,8 +1961,8 @@ const countMatchingDice = (gs, player, face) => {//«
 	}
 */
 	for (let i = 0; i < 3; i++) {
-//DIEFACES => 6, which is the wildcard
-		if (roll[i] == face || roll[i] == DIEFACES) matchingDice++;
+//gDIEFACES => 6, which is the wildcard
+		if (roll[i] == face || roll[i] == gDIEFACES) matchingDice++;
 	}
 
 	return matchingDice;
@@ -2013,19 +1976,19 @@ const whowon6 = (bid, bidder, callingPlayer, p1roll, p2roll, delta) => {//«
 //	if (player == 1) roll[1] = gs.p1roll;
 //	else if (player == 2) roll[1] = gs.p2roll;
 	// get the dice
-	let p1rollArr = new Array(P1DICE);//Was: int[]
-	let p2rollArr = new Array(P2DICE);//Was: int[]
+	let p1rollArr = new Array(gP1DICE);//Was: int[]
+	let p2rollArr = new Array(gP2DICE);//Was: int[]
 	unrankco(p1roll-1, p1rollArr, 1);
 	unrankco(p2roll-1, p2rollArr, 2);
 	// now check the number of matches
 	let matching = 0;//Was: int
 //For i=0; i < 1; i++
-	for (let i = 0; i < P1DICE; i++) {//Was: int
-		if (p1rollArr[i] == face || p1rollArr[i] == DIEFACES) matching++;
+	for (let i = 0; i < gP1DICE; i++) {//Was: int
+		if (p1rollArr[i] == face || p1rollArr[i] == gDIEFACES) matching++;
 	}
 
-	for (let j = 0; j < P2DICE; j++) {//Was: int
-		if (p2rollArr[j] == face || p2rollArr[j] == DIEFACES) matching++;
+	for (let j = 0; j < gP2DICE; j++) {//Was: int
+		if (p2rollArr[j] == face || p2rollArr[j] == gDIEFACES) matching++;
 	}
 
 	delta = matching - dice;
@@ -2061,7 +2024,7 @@ const payoff = (winner, player, delta) => {//«
 
 	let p1payoff = 0.0;//Was: dbl
 
-	if (P1DICE == 1 && P2DICE == 1) return (winner == player ? 1.0 : -1.0);
+	if (gP1DICE == 1 && gP2DICE == 1) return (winner == player ? 1.0 : -1.0);
 	else {
 		assert(false);
 	}
@@ -2099,13 +2062,13 @@ const getRollBase10 = (roll, size) => {//«
 }//»
 const determineChanceOutcomes = (player) => {//«
 //void determineChanceOutcomes(int player){
-	let num_dice = (player == 1 ? P1DICE : P2DICE);//Was: int
+	let num_dice = (player == 1 ? gP1DICE : gP2DICE);//Was: int
 	let rolls = new Array(num_dice);//Was: int[]
 //Initialize everything to all 1's
 	for (let r = 0; r < num_dice; r++) rolls[r] = 1;//Was: int
 	outcomes.clear();
 
-	let permutations = intpow(DIEFACES, num_dice);//Was: int
+	let permutations = intpow(gDIEFACES, num_dice);//Was: int
 	let p;//Was: int
 
 /*
@@ -2298,7 +2261,7 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 		}
 		return;
 	}//»
-	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+	let maxBid = (gs.curbid == 0 ? gBLUFFBID-1 : gBLUFFBID);//Was: int
 	let actionshere = maxBid - gs.curbid;//Was: int
 	assert(actionshere > 0);
 	Infoset is;
@@ -2313,7 +2276,7 @@ const initInfosets = (gs, player, depth, bidseq) => {//«
 		ngs.curbid = i;
 		ngs.callingPlayer = player;
 		let newbidseq = bidseq;//Was: ull
-		newbidseq |= (1ULL << (BLUFFBID-i));
+		newbidseq |= (1ULL << (gBLUFFBID-i));
 		initInfosets(ngs, (3-player), depth+1, newbidseq);
 	}//»
 	let infosetkey = 0;//Was: unsigned
@@ -2341,9 +2304,9 @@ const initInfosets = () => {//«
 	// # doubles in total, size of index (must be at least # infosets)
 	// 2 doubles per iapair + 2 per infoset =
 //  gIss = InfosetStore
-	if (P1DICE == 1 && P2DICE == 1 && DIEFACES == 6) gIss.init(147432, 100000);
+	if (gP1DICE == 1 && gP2DICE == 1 && gDIEFACES == 6) gIss.init(147432, 100000);
 	else {
-		cerr("initInfosets not defined for this PXDICE + DIEFACES");
+		cerr("initInfosets not defined for this PXDICE + gDIEFACES");
 	}
 
 	assert(gIss.getSize() > 0);
@@ -2365,25 +2328,25 @@ const initInfosets = () => {//«
 }//»
 const initBids = () => {//«
 //void initBids(){
-	bids = new Array(BLUFFBID-1);//Was: int[]
+	bids = new Array(gBLUFFBID-1);//Was: int[]
 	let nextWildDice = 1;//Was: int
 	let idx = 0;//Was: int
-	for (let dice = 1; dice <= P1DICE + P2DICE; dice++) {//Was: int
-		for (let face = 1; face <= DIEFACES-1; face++) {//Was: int
+	for (let dice = 1; dice <= gP1DICE + gP2DICE; dice++) {//Was: int
+		for (let face = 1; face <= gDIEFACES-1; face++) {//Was: int
 			bids[idx] = dice*10 + face;
 			idx++;
 		}
 		if (dice % 2 == 1) {
-			bids[idx] = nextWildDice*10 + DIEFACES;
+			bids[idx] = nextWildDice*10 + gDIEFACES;
 			idx++;
 			nextWildDice++;
 		}
 	}
-	for(; nextWildDice <= (P1DICE+P2DICE); nextWildDice++) {
-		bids[idx] = nextWildDice*10 + DIEFACES;
+	for(; nextWildDice <= (gP1DICE+gP2DICE); nextWildDice++) {
+		bids[idx] = nextWildDice*10 + gDIEFACES;
 		idx++;
 	}
-	assert(idx == BLUFFBID-1);
+	assert(idx == gBLUFFBID-1);
 }//»
 const init = () => {//WMNH«
 //void init(){
@@ -2554,9 +2517,9 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	assert(fixed_player == 1 || fixed_player == 2); 
 	let updatePlayer = 3-fixed_player;//Was: int
 	// opponent never players here, don't choose this!
-	if (player == updatePlayer && oppReach.allEqualTo(0.0)) return NEGINF;
+	if (player == updatePlayer && oppReach.allEqualTo(0.0)) return gNEGINF;
 	if (terminal(gs)) {//«
-		if (oppReach.allEqualTo(0.0)) return NEGINF;
+		if (oppReach.allEqualTo(0.0)) return gNEGINF;
 
 		NormalizerVector oppDist; 
 
@@ -2626,12 +2589,12 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 	// declare variables and get # actions available«
 	let ev = 0.0; //Was: dbl
 
-	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+	let maxBid = (gs.curbid == 0 ? gBLUFFBID-1 : gBLUFFBID);//Was: int
 	let actionshere = maxBid - gs.curbid; //Was: int
 	assert(actionshere > 0);
 
 	// iterate over the moves 
-	let maxEV = NEGINF;//Was: dbl
+	let maxEV = gNEGINF;//Was: dbl
 	let childEVs = new Array(actionshere);//Was: dbl[]
 	let action = -1;//Was: int
 	NormalizerMap oppActionDist;
@@ -2652,7 +2615,7 @@ const expectimaxbr = (gs, bidseq, player, fixed_player, depth, oppReach) => {//�
 		ngs.curbid = i; 
 		ngs.callingPlayer = player;
 		let newbidseq = bidseq;//Was: ull
-		newbidseq |= (1ULL << (BLUFFBID-i)); 
+		newbidseq |= (1ULL << (gBLUFFBID-i)); 
 
 		childEV = expectimaxbr(ngs, newbidseq, 3-player, fixed_player, depth+1, newOppReach);
 
@@ -2787,7 +2750,7 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 //»
 
   // at terminal node?
-//YWRK return (gs.curbid == BLUFFBID);
+//YWRK return (gs.curbid == gBLUFFBID);
 	if (terminal(gs)) {
 		return payoff(gs, updatePlayer);
 	}
@@ -2833,7 +2796,7 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 	let stratEV = 0.0;//Was: double
 	let action = -1;//Was: int
 
-	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+	let maxBid = (gs.curbid == 0 ? gBLUFFBID-1 : gBLUFFBID);//Was: int
 	let actionshere = maxBid - gs.curbid; //Was: int
 
 	assert(actionshere > 0);
@@ -2861,7 +2824,7 @@ const cfr = (gs, player, depth, bidseq, reach1, reach2, chanceReach, phase, upda
 		ngs.prevbid = gs.curbid;
 		ngs.curbid = i; 
 		ngs.callingPlayer = player;
-		newbidseq |= (1ULL << (BLUFFBID-i)); 
+		newbidseq |= (1ULL << (gBLUFFBID-i)); 
 
 		let payoff = cfr(ngs, 3-player, depth+1, newbidseq, newreach1, newreach2, chanceReach, phase, updatePlayer); //Was: double
 
@@ -3043,7 +3006,7 @@ const handleLeaf = (gs, updatePlayer, reach1, reach2, result1, result2) => {//«
 
 	let quantity, face;//Was: int«
 	convertbid(quantity, face, gs.prevbid);
-	let oppDice = (updatePlayer == 1 ? P2DICE : P1DICE);//Was: int
+	let oppDice = (updatePlayer == 1 ? gP2DICE : gP1DICE);//Was: int
 	//  double opp_probs[oppDice+1];
 	let opp_probs = new Array (oppDice+1);
 //»
@@ -3082,8 +3045,8 @@ const pcs = (gs, player, depth, bidseq, updateplayer, reach1, reach2, phase, res
 	reach1.assertprob();
 	reach2.assertprob();
 
-//gs.curbid == BLUFFBID;
-//BLUFFBID: (((P1DICE+P2DICE)*DIEFACES)+1) => 13 for Bluff(1,2)
+//gs.curbid == gBLUFFBID;
+//gBLUFFBID: (((gP1DICE+gP2DICE)*gDIEFACES)+1) => 13 for Bluff(1,2)
 	if (terminal(gs)) {//«
 //Terminal nodes (leafs) don't count as nodes, for accounting purposes (gNodesTouched)
 		handleLeaf(gs, updatePlayer, reach1, reach2, result1, result2);
@@ -3170,7 +3133,7 @@ for them to act, game theoretically speaking.
 
 	let co = (player == 1 ? P1CO : P2CO);//Was: int
 	let action = -1;//Was: int
-	let maxBid = (gs.curbid == 0 ? BLUFFBID-1 : BLUFFBID);//Was: int
+	let maxBid = (gs.curbid == 0 ? gBLUFFBID-1 : gBLUFFBID);//Was: int
 	let actionshere = maxBid - gs.curbid; //Was: int
 	assert(actionshere > 0);
 
@@ -3182,13 +3145,13 @@ for them to act, game theoretically speaking.
 //	Infoset is[co];  
 	let is = new Array(co);
 	for (let i=0; i < co; i++) is[i] = new Infoset();
-//	typedef SVector<P1CO> covector1;
-//	typedef SVector<P2CO> covector2;
 	// only one of these is used
 //	covector1 moveEVs1[actionshere];
 //	covector2 moveEVs2[actionshere];
 	let moveEVs1 = new Array(actionshere);
+	for (let i=0; i < actionshere; i++) moveEVs1[i] = covector1();
 	let moveEVs2 = new Array(actionshere);
+	for (let i=0; i < actionshere; i++) moveEVs2[i] = covector2();
 //»
 
 	for (let i = 0; i < co; i++) {//Was: int«
@@ -3227,17 +3190,23 @@ for them to act, game theoretically speaking.
 		action++;//Initialized to -1 above
 		assert(action < actionshere);
 		// only one of these is used
-		covector1 moveProbs1;
-		covector2 moveProbs2;
+		let moveProbs1 = covector1();
+//		covector1 moveProbs1;
+		let moveProbs2 = covector2();
+//		covector2 moveProbs2;
 		for (let o = 0; o < co; o++) {//Was: int
 			if (player == 1) moveProbs1[o] = is[o].curMoveProbs[action];
 //			else if (player == 2) moveProbs2[o] = is[o].curMoveProbs[action]; 
 			else moveProbs2[o] = is[o].curMoveProbs[action]; 
 		}
-		covector1 ev1; 
-		covector2 ev2; 
-		covector1 newReach1 = reach1; 
-		covector2 newReach2 = reach2; 
+		let ev1 = covector1();
+//		covector1 ev1; 
+		let ev2 = covector2();
+//		covector2 ev2; 
+		let newReach1 = covector1(reach1);
+//		covector1 newReach1 = reach1; 
+		let newReach2 = covector1(reach2);
+//		covector2 newReach2 = reach2; 
 //Element-wise multiplication of SVectors
 		if (player == 1) newReach1 *= moveProbs1; 
 		if (player == 2) newReach2 *= moveProbs2;
@@ -3249,13 +3218,13 @@ for them to act, game theoretically speaking.
 //QHGRYT
 //		newbidseq = bidseq;					<--- It was like this (error: not defined)
 		let newbidseq = bidseq;//Was: ull
-//		newbidseq |= (1ULL << (BLUFFBID-i)); 
+//		newbidseq |= (1ULL << (gBLUFFBID-i)); 
 
 // 0 |= 1 << 13 - ((gs.curbid + 1)..maxBid)
 //maxBid >= i >= 1 
 //1 <= i <= maxBid
 //maxBid is either 12 or 13, depending if gs.curbid==0
-		newbidseq |= (1 << (BLUFFBID-i)); 
+		newbidseq |= (1 << (gBLUFFBID-i)); 
 
 //3-player means alternate players in a 2-player game
 		pcs(ngs, 3-player, depth+1, newbidseq, updatePlayer, newReach1, newReach2, phase, ev1, ev2); 
