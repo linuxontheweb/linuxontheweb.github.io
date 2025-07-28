@@ -1,3 +1,6 @@
+/*@TDLYMX Nothing is actually getting updated because in the C++, the arguments
+are being passed in by reference.
+*/
 /*Notes«
 ull: unsigned long long
 7/27/25: I can't see where the maxNodesTouched variable @YXBJKU is ever updated from its initialized value of 0.
@@ -172,6 +175,11 @@ const{log,jlog,cwarn,cerr,isArr}=LOTW.api.util;
 //Util«
 
 const DIE = str =>{ throw new Error(str)};
+const assert = cond => { if (!cond) throw new Error("assert failed"); };
+
+//#define CHKPROB(x)   CHKDBL((x)); assert((x) >= 0.0 && (x) <= 1.0)
+const CHKPROB = x => { assert(Number.isFinite(x) && x >= 0 && x <= 1); };
+const CHKDBL = x => { assert(Number.isFinite(x)); };
 
 //»
 
@@ -959,6 +967,8 @@ const covector1 = (arg)=>{return new SVector(P1CO, arg);};
 const covector2 = (arg)=>{return new SVector(P2CO, arg);};
 //»
 
+//»
+
 class InfosetStore {//«
 
 //Private vars«
@@ -991,17 +1001,29 @@ class InfosetStore {//«
 #added;//Was: ull
 
 //»
-
+//TDLYMX
+/*
 #next(row, col, pos, curRowSize) {//«
 //void next(ull & row, ull & col, ull & pos, ull & curRowSize); 
 	pos++;
 	col++; 
-
 	if (col >= curRowSize) {
 		col = 0; 
 		row++;
 		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
 	}
+	return [row, col, pos, curRowSize];
+}//»
+*/
+#next(row, col, curRowSize) {//«
+//void next(ull & row, ull & col, ull & pos, ull & curRowSize); 
+	col++; 
+	if (col >= curRowSize) {
+		col = 0; 
+		row++;
+		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
+	}
+	return [row, col, curRowSize];
 }//»
 #get_priv(infoset_key, infoset, moves, firstmove) {//«
 //bool get_priv(ull infoset_key, Infoset & infoset, int moves, int firstmove); 
@@ -1018,41 +1040,53 @@ class InfosetStore {//«
 
 	// get the number of moves
 	assert(row < this.#rows); assert(col < curRowSize); assert(pos < this.#size); 
-/*
+/*«
 	let x;//Was: ull
 	let y = this.#tablerows[row][col];//double y = tablerows[row][col];
 	assert(sizeof(x) == sizeof(double));
 	memcpy(&x, &y, sizeof(x)); 
 	infoset.actionshere = static_cast<int>(x); 
 	assert(infoset.actionshere > 0);
+»*/
+//	infoset.actionshere = this.#tablerows[row][col];
+	pos++;
+	[row, col, curRowSize] = this.#next(row, col, curRowSize);//Nothing is happening
+/*
+	pos++;
+	col++; 
+	if (col >= curRowSize) {
+		col = 0; 
+		row++;
+		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
+	}
 */
-	infoset.actionshere = this.#tablerows[row][col];
-
-	this.#next(row, col, pos, curRowSize);
-
 	// get the lastupdate
 	assert(row < this.#rows); assert(col < curRowSize);  assert(pos < this.#size); 
-/*
+/*«
 	y = this.#tablerows[row][col];
 	assert(sizeof(x) == sizeof(double));
 	memcpy(&x, &y, sizeof(x)); 
 	infoset.lastUpdate = x;//This is just an "iter" of cfr (not a timestamp, etc)
-*/
+»*/
 	infoset.lastUpdate = this.#tablerows[row][col];
 
-	this.#next(row, col, pos, curRowSize);
+//	this.#next(row, col, pos, curRowSize);
+	pos++;
+	[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 	for (let i = 0, m = firstmove; i < moves; i++,m++) {//Was: int
 		assert(row < this.#rows);
 		assert(col < curRowSize); 
 		assert(pos < this.#size); 
 		infoset.cfr[m] = this.#tablerows[row][col];
-		this.#next(row, col, pos, curRowSize);
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize);
 		assert(row < this.#rows);
 		assert(col < curRowSize); 
 		assert(pos < this.#size); 
 		infoset.totalMoveProbs[m] = this.#tablerows[row][col];
-		this.#next(row, col, pos, curRowSize); 
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize); 
 	}
 	// now do the usual regret matching to get the curMoveProbs
 	let totPosReg = 0.0;////Was: dbl
@@ -1096,7 +1130,7 @@ class InfosetStore {//«
 	let hashIndex = 0;//Was: ull
 
 	let thepos = this.getPosFromIndex2(infoset_key, hashIndex);//Was: ull, getPosFromIndex(a,b)
-	if (this.#addingInfosets && thepos >= this.#size) {
+	if (this.#addingInfosets && thepos >= this.#size) {//«
 		newinfoset = true; 
 		// new infoset to be added at the end
 		assert(this.#nextInfosetPos < this.#size); 
@@ -1121,7 +1155,7 @@ class InfosetStore {//«
 		row = pos / this.#rowsize;
 		col = pos % this.#rowsize;
 		curRowSize = (row < (this.#rows-1) ? this.#rowsize : this.#lastRowSize);
-	}
+	}/* » */
 
 	// store the number of moves at this infoset
 	assert(row < this.#rows);
@@ -1137,7 +1171,8 @@ class InfosetStore {//«
 //I guess the values have to be doubles because of all the floating point math that cfr does
 //	this.#tablerows[row][col] = y; 
 	this.#tablerows[row][col] = moves;
-	this.#next(row, col, pos, curRowSize);
+	pos++;
+	[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 	// store the last update iter of this infoset
 	assert(row < this.#rows);
@@ -1148,26 +1183,29 @@ class InfosetStore {//«
 //	memcpy(&y, &x, sizeof(x));
 //	this.#tablerows[row][col] = y; 
 	this.#tablerows[row][col] = infoset.lastUpdate;
-	this.#next(row, col, pos, curRowSize);
+	pos++;
+	[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 	// moves are from 1 to moves, so write them in order. 
 	// first, regret, then avg. strat
 	for (let i = 0, m = firstmove; i < moves; i++, m++) { //Was: int
 		//log("pos = " << pos << ", row = " << row);
 		if (row >= this.#rows) {
-			log("gIss stats: " << gIss.getStats());
+			log("gIss stats: ", gIss.getStats());
 		}
 		assert(row < this.#rows);
 		assert(col < curRowSize); 
 		assert(pos < this.#size); 
-		CHKDBL(infoset.cfr[m]); 
+//		CHKDBL(infoset.cfr[m]); 
 		this.#tablerows[row][col] = infoset.cfr[m];
-		this.#next(row, col, pos, curRowSize);
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize);
 		assert(row < this.#rows);
 		assert(col < curRowSize); 
 		assert(pos < this.#size); 
 		this.#tablerows[row][col] = infoset.totalMoveProbs[m];
-		this.#next(row, col, pos, curRowSize); 
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize); 
 	}
 	if (newinfoset && this.#addingInfosets) {
 		this.#nextInfosetPos = pos;
@@ -1210,7 +1248,7 @@ init(_size, _indexsize) {//«
 
 	assert(i >= 0 && i <= 99); 
 
-	log("IS: stats " << getStats());
+	log("IS: stats ", getStats());
 	log("IS: allocating memory.. ");
 
 	// allocate the index
@@ -1293,7 +1331,8 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 //		assert(sizeof(actionshere) == sizeof(double)); 
 //		memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
 		let actionshere = this.#tablerows[row][col];
-		this.#next(row, col, pos, curRowSize);
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 		// read the integer (which iter)
 //		let lastUpdate = 0;//Was: ull
@@ -1301,7 +1340,8 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 //		memcpy(&lastUpdate, &x, sizeof(actionshere)); 
 
 		let lastUpdate = this.#tablerows[row][col];
-		this.#next(row, col, pos, curRowSize);
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 		let max = gNEGINF;//Was: dbl
 		for (let a = 0; a < actionshere; a++) {//Was: ull
@@ -1312,10 +1352,11 @@ computeBound(sum_RTimm1, sum_RTimm2){//«
 			let cfr = this.#tablerows[row][col]; //Was: dbl
 			CHKDBL(cfr);
 			if (cfr > max) max = cfr; 
-
-			this.#next(row, col, pos, curRowSize);
+			pos++;
+			[row, col, curRowSize] = this.#next(row, col, curRowSize);
 			// total move probs
-			this.#next(row, col, pos, curRowSize);
+			pos++;
+			[row, col, curRowSize] = this.#next(row, col, curRowSize);
 			// next cfr
 		}
 		assert(max > gNEGINF);
@@ -1369,7 +1410,8 @@ clear() {//«
 //			memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
 
 			let actionshere = this.#tablerows[row][col];
-			this.#next(row, col, pos, curRowSize);
+			pos++;
+			[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 			// read the integer
 //			let lastUpdate = 0;//Was: ull
@@ -1377,17 +1419,20 @@ clear() {//«
 //			memcpy(&lastUpdate, &x, sizeof(actionshere)); 
 			let lastUpdate = this.#tablerows[row][col];
 			this.#tablerows[row][col] = 0.0;
-			this.#next(row, col, pos, curRowSize);
+			pos++;
+			[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 			for (let a = 0; a < actionshere; a++) {//Was: ull
 				// cfr
 				assert(row < this.#rows);
 				assert(col < curRowSize); 
 				this.#tablerows[row][col] = 0.0;
-				this.#next(row, col, pos, curRowSize);
+				pos++;
+				[row, col, curRowSize] = this.#next(row, col, curRowSize);
 				// total move probs
 				this.#tablerows[row][col] = 0.0;
-				this.#next(row, col, pos, curRowSize);
+				pos++;
+				[row, col, curRowSize] = this.#next(row, col, curRowSize);
 				// next cfr
 			}
 		}
@@ -1426,7 +1471,7 @@ copy(dest){//«
 	let pos = 0, row = 0, col = 0, curRowSize = rowsize;//Was: ull
 	while (pos < this.#size) {
 		dest.tablerows[row][col] = this.#tablerows[row][col];
-		next(row, col, pos, curRowSize); 
+		[row, col, curRowSize] = this.#next(row, col, curRowSize); 
 	}
 }//»
 
@@ -1471,7 +1516,8 @@ dumpToDisk(filename) {//«
 	let pos = 0, row = 0, col = 0, curRowSize = rowsize; 
 	while (pos < this.#size) {
 		this.writeBytes(out, this.tablerows[row] + col, 8);  
-		this.#next(row, col, pos, curRowSize); 
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize); 
 	}
 
 	out.close();
@@ -1497,25 +1543,29 @@ printValues(){//«
 //		assert(sizeof(actionshere) == sizeof(double)); 
 //		memcpy(&actionshere, &tablerows[row][col], sizeof(actionshere)); 
 		let actionshere = tablerows[row][col];
-		this.#next(row, col, pos, curRowSize);
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize);
 
 		// read the integer
 //		let lastUpdate = 0;//Was: ull
 //		let x = this.#tablerows[row][col];//Was: dbl
 //		memcpy(&lastUpdate, &x, sizeof(actionshere)); 
 		let lastUpdate = tablerows[row][col];
-		this.#next(row, col, pos, curRowSize);
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize);
 		log(", actions = " , actionshere , ", lastUpdate = " , lastUpdate);
 		for (let a = 0; a < actionshere; a++){//Was: ull
 			// cfr
 			assert(row < this.#rows);
 			assert(col < curRowSize); 
 			log("  cfr[" , a , "]=" , tablerows[row][col]); 
-			this.#next(row, col, pos, curRowSize);
+			pos++;
+			[row, col, curRowSize] = this.#next(row, col, curRowSize);
 			// total move probs
 			log("  totMoveProbs[" , a , "]=" , tablerows[row][col]); 
 			// cout << endl;
-			this.#next(row, col, pos, curRowSize);
+			pos++;
+			[row, col, curRowSize] = this.#next(row, col, curRowSize);
 			// next cfr
 		}
 		//      cout << endl;
@@ -1665,7 +1715,8 @@ readFromDisk(filename) {//«
 		this.readBytes(infile, this.#tablerows[row] + col, 8);  
 //This increments the col, and if it is >= curRowSize, sets it to 0 and increments the row
 //So it is just a bunch of rows, one after the other
-		this.#next(row, col, pos, curRowSize); 
+		pos++;
+		[row, col, curRowSize] = this.#next(row, col, curRowSize); 
 	}
 
 	infile.close();
@@ -1745,8 +1796,6 @@ importValues(player, filename) {//«
 };//»
 const gIss = new InfosetStore();
 const gStopwatch = new StopWatch();
-
-//»
 
 //bluff.cpp«
 
@@ -2168,16 +2217,15 @@ const getInfosetGs = (gs, player, bidseq, is, infosetkey, actionshere) => {//«
 
 const initInfosets4 = (gs, player, depth, bidseq) => {//«
 //void initInfosets(GameState & gs, int player, int depth, unsigned long long bidseq) {
-// Does a recursive tree walk setting up the information sets, creating the initial strategies
+//Does a recursive tree walk setting up the information sets, creating the initial strategies
 	if (terminal(gs)) return;
-	// check for chance nodes
+// check for chance nodes
 	if (gs.p1roll == 0) {//«
 		for (let i = 1; i <= gNumChanceOutcomes1; i++) {//Was: int
 //			GameState ngs = gs;
 			let ngs = new GameState(gs);
-			//let ngs = gs;
 			ngs.p1roll = i;
-			initInfosets(ngs, player, depth+1, bidseq);
+			initInfosets4(ngs, player, depth+1, bidseq);
 		}
 		return;
 	}
@@ -2185,10 +2233,8 @@ const initInfosets4 = (gs, player, depth, bidseq) => {//«
 		for (let i = 1; i <= gNumChanceOutcomes2; i++) {//Was: int
 //			GameState ngs = gs;
 			let ngs = new GameState(gs);
-			//let ngs = gs;
 			ngs.p2roll = i;
-
-			initInfosets(ngs, player, depth+1, bidseq);
+			initInfosets4(ngs, player, depth+1, bidseq);
 		}
 		return;
 	}//»
@@ -2210,7 +2256,7 @@ const initInfosets4 = (gs, player, depth, bidseq) => {//«
 		let newbidseq = bidseq;//Was: ull
 //		newbidseq |= (1ULL << (gBLUFFBID-i));
 		newbidseq |= (1 << (gBLUFFBID-i));
-		initInfosets(ngs, (3-player), depth+1, newbidseq);
+		initInfosets4(ngs, (3-player), depth+1, newbidseq);
 	}//»
 	let infosetkey = 0;//Was: unsigned
 	infosetkey = bidseq;
@@ -2218,15 +2264,13 @@ const initInfosets4 = (gs, player, depth, bidseq) => {//«
 	if (player == 1) {//«
 		infosetkey |= gs.p1roll;
 		infosetkey <<= 1;
-//		infosetkey |= 0; The even/oddenss of the last bit indicates the player # (see @VLAIOP)
-		gIss.put(infosetkey, is, actionshere, 0);
 	}
 	else if (player == 2) {
 		infosetkey |= gs.p2roll;
 		infosetkey <<= 1;
-		infosetkey |= 1;//The last bit indicates the player # (see @VLAIOP)
-		gIss.put(infosetkey, is, actionshere, 0);
+		infosetkey |= 1;//The oddness of the last bit indicates the player 2 (see @VLAIOP)
 	}//»
+	gIss.put(infosetkey, is, actionshere, 0);
 }//»
 const initInfosets = () => {//«
 //void initInfosets() {
@@ -2258,6 +2302,7 @@ const initInfosets = () => {//«
 
 	log("Dumping information sets to " , filename);
 	gIss.dumpToDisk(filename);
+
 }//»
 const initBids = () => {//«
 //void initBids(){
@@ -2834,14 +2879,10 @@ const cfr_main = (argc, argv) => {//«
 	gIter = MAX(1,gIter);
 
 	let bidseq = 0;//Was: ull
-
-//	StopWatch gStopwatch;
-	let gStopwatch = new StopWatch();
-	//double totaltime = 0; 
-	let totaltime = 0; 
+	let stopwatch = new StopWatch();
+	let totaltime = 0;//Was: dbl
 
 	log("Starting CFR iterations");
-
 	for (; true; gIter++) {//«
 //		GameState gs1; 
 		let gs1 = new GameState();
@@ -2858,8 +2899,8 @@ const cfr_main = (argc, argv) => {//«
 //No newlines here!
 //cout << "."; 
 //cout.flush(); 
-			totaltime += gStopwatch.stop();
-			gStopwatch.reset();
+			totaltime += stopwatch.stop();
+			stopwatch.reset();
 		}//»
 		if (gIter == 1 || gNodesTouched >= gNtNextReport) {//«
 			//cout << endl;
@@ -2892,11 +2933,12 @@ const cfr_main = (argc, argv) => {//«
 			gNextCheckpoint += gCpWidth;
 			gNtNextReport *= gNtMultiplier;
 
-			gStopwatch.reset(); 
+			stopwatch.reset(); 
 		}//»
 
 		if (gIter == maxIters) break;
 	}//»
+
 }//»
 
 //pcs.cpp
@@ -3251,7 +3293,7 @@ const pcs_main = (argc, argv) => {//«
 	let bidseq = 0; //Was: ull
 
 //	StopWatch gStopwatch;
-	let gStopwatch = new StopWatch();
+	let stopwatch = new StopWatch();
 	let totaltime = 0; //Was: dbl
 
 	log("Starting PCS iterations");
@@ -3281,8 +3323,8 @@ const pcs_main = (argc, argv) => {//«
 
 		if (gIter % 10 == 0) { 
 			log("."); 
-			totaltime += gStopwatch.stop();
-			gStopwatch.reset();
+			totaltime += stopwatch.stop();
+			stopwatch.reset();
 		}
 
 		// it's a bit unfair to compare to other algorithms using nodes touched for PCS since 
@@ -3307,7 +3349,7 @@ const pcs_main = (argc, argv) => {//«
 			let conv = computeBestResponses1(false);//Was: double
 			report("pcs.bluff11.report.txt", totaltime, (2.0*MAX(b1,b2)), conv);
 			//dumpInfosets("iss");//WSUROK
-			gStopwatch.reset(); 
+			stopwatch.reset(); 
 //			if (maxNodesTouched > 0 && nodesTouched >= maxNodesTouched) break;
 		}//»
 		if (gIter == maxIters) break;
