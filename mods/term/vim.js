@@ -1,8 +1,16 @@
 //@SRKTLDM: To enable automatic line wrapping
-/*6/12/25
+/*7/29/25: !!! WHY I'M BACK HERE NOW !!!
+I've been getting deeper into game theory and applications (esp to poker), and I've
+recently spent a week translating a moderate C++ codebase into JS (bluff dice on Marc 
+Lanctot's website). That was being done inside standard Linux vim. Now I am starting 
+to work on a bigger C++ codebase (https://github.com/ericgjackson/slumbot2019), and,
+having gotten tired of doing the same repetitions over and over, I tried to get into
+vim's macro recording.
+*/
+/*6/12/25«
 Check for more places where the "Save As" prompt is removed like @WYIROSKJ, but
 is_saving is *NOT* set back to false.
-*/
+»*/
 /*6/9/25: Codifying a standard workflow that works with our vim implementation's "naitivity"«
 about lines wrapped onto different lines, but that represent a single "logical line" (with
 no newlines, e.g. real vim's ":set wrap"). Our util api exports linesToParas, which
