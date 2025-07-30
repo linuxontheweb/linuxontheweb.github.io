@@ -1,12 +1,25 @@
 //@SRKTLDM: To enable automatic line wrapping
-/*7/29/25: !!! WHY I'M BACK HERE NOW !!!
+/*7/30/25: Time to do macros: read them from a config file.«
+
+I want to enable automated repeated macros (over a line, a visual section
+or the whole file) that have the following structure:
+
+1) Seek to a part of the selection (via /whatever)
+2) Wait for confirmation (y/n/q)
+3) Run the macro
+4) Goto 1
+
+»*/
+/*7/29/25: !!! WHY I'M BACK HERE NOW !!!«
 I've been getting deeper into game theory and applications (esp to poker), and I've
 recently spent a week translating a moderate C++ codebase into JS (bluff dice on Marc 
 Lanctot's website). That was being done inside standard Linux vim. Now I am starting 
 to work on a bigger C++ codebase (https://github.com/ericgjackson/slumbot2019), and,
 having gotten tired of doing the same repetitions over and over, I tried to get into
 vim's macro recording.
-*/
+»*/
+//Historical development notes (and old code) are kept in doc/dev/VIM
+//«Notes
 /*6/12/25«
 Check for more places where the "Save As" prompt is removed like @WYIROSKJ, but
 is_saving is *NOT* set back to false.
@@ -63,8 +76,6 @@ alt_screen_escape_handler. THIS IS VERY VERY IMPORTANT QUALITY CONTROL
 TYPE STUFF HERE!!!
 
 »*/
-//Historical development notes (and old code) are kept in doc/dev/VIM
-//«Notes
 /*12/29/24: Just did some internal tab detection logic to decide whether it would«
 be safe to determine the "graphical" x position by way of multiplying the number
 of leading tabs by tab size and then adding the rest of the remaining characters.
