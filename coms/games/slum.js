@@ -15,6 +15,8 @@ const{log,jlog,cwarn,cerr}=LOTW.api.util;
 /*
 io:h class Reader, class Writer
 */
+
+//Var«
 //Everything in files.h/files.cpp reduces to these 3 strings!
 //These are just directories for writing files
 const OldCFRBase = ".";
@@ -25,6 +27,10 @@ const StaticBase = ".";
 const NUMSUITS = 4;
 //#define Rank(card)           (card / Game::NumSuits())
 //#define Suit(card)           (card % Game::NumSuits())
+//»
+
+//Util«
+
 Factorial(n) {//«
 //static int Factorial(int n) {
   if (n == 0) return 1;
@@ -32,165 +38,285 @@ Factorial(n) {//«
   return n * Factorial(n - 1);
 }//»
 
+//»
+
 //io«
 
-/*«
-#ifndef _IO_H_
-#define _IO_H_
-
-#include <memory>
-#include <string>
-#include <vector>
-
-class Reader {//«
-public:
-  Reader(void) {}
-  Reader(const char *filename);
-  // This constructor for use by NewReaderMaybe().  Doesn't call stat().
-  Reader(const char *filename, long long int file_size);
-  virtual ~Reader(void);
-  bool AtEnd(void) const;
-  void SeekTo(long long int offset);
-  bool ReadInt(int *i);
-  int ReadIntOrDie(void);
-  bool ReadUnsignedInt(unsigned int *i);
-  unsigned int ReadUnsignedIntOrDie(void);
-  bool ReadLong(long long int *l);
-  long long int ReadLongOrDie(void);
-  bool ReadUnsignedLong(unsigned long long int *u);
-  unsigned long long int ReadUnsignedLongOrDie(void);
-  bool ReadShort(short *s);
-  short ReadShortOrDie(void);
-  bool ReadChar(char *c);
-  char ReadCharOrDie(void);
-  bool ReadUnsignedChar(unsigned char *u);
-  unsigned char ReadUnsignedCharOrDie(void);
-  bool ReadUnsignedShort(unsigned short *u);
-  unsigned short ReadUnsignedShortOrDie(void);
-  bool ReadDouble(double *d);
-  double ReadDoubleOrDie(void);
-  bool ReadFloat(float *f);
-  float ReadFloatOrDie(void);
-  bool ReadReal(float *f);
-  bool ReadReal(double *d);
-  void ReadOrDie(unsigned char *c);
-  void ReadOrDie(unsigned short *s);
-  void ReadOrDie(unsigned int *u);
-  void ReadOrDie(int *i);
-  void ReadOrDie(double *d);
-  bool GetLine(std::string *s);
-  bool ReadCString(std::string *s);
-  std::string ReadCStringOrDie(void);
-  // Doesn't do the expected thing for CompressedReader
-  long long int BytePos(void) const {return byte_pos_;}
-  long long int FileSize(void) const {return file_size_;}
-  void ReadNBytesOrDie(unsigned int num_bytes, unsigned char *buf);
-  void ReadEverythingLeft(unsigned char *data);
-  int FD(void) const {return fd_;}
-  const std::string &Filename(void) const {return filename_;}
-
- protected:
-  void OpenFile(const char *filename);
-  virtual bool Refresh(void);
-
-  static const int kBufSize = 65536;
-
-  int fd_;
-  std::unique_ptr<unsigned char []> buf_;
-  unsigned char *end_read_;
-  unsigned char *buf_ptr_;
-  int buf_size_;
-  long long int file_size_;
-  long long int remaining_;
-  unsigned char overflow_[100];
-  int overflow_size_;
-  // Doesn't do the expected thing for CompressedReader
-  long long int byte_pos_;
-  std::string filename_;
-};//»
-Reader *NewReaderMaybe(const char *filename);
-class Writer {//«
- public:
-  Writer(const char *filename);
-  Writer(const char *filename, bool modify);
-  Writer(const char *filename, int buf_size);
-  Writer(const char *filename, bool modify, int buf_size);
-  virtual ~Writer(void);
-
-  void WriteInt(int i);
-  void WriteUnsignedInt(unsigned int u);
-  void WriteLong(long long int l);
-  void WriteUnsignedLong(unsigned long long int l);
-  void WriteShort(short s);
-  void WriteChar(char c);
-  void WriteUnsignedChar(unsigned char c);
-  void WriteUnsignedShort(unsigned short s);
-  void WriteFloat(float f);
-  void WriteDouble(double d);
-  void WriteReal(float f);
-  void WriteReal(double d);
-  void Write(unsigned char c);
-  void Write(unsigned short s);
-  void Write(int i);
-  void Write(unsigned int u);
-  void Write(double d);
-  void WriteCString(const char *s);
-  void WriteNBytes(unsigned char *bytes, unsigned int num_bytes);
-  void WriteBytes(unsigned char *bytes, int num_bytes);
-  void WriteText(const char *s);
-  void SeekTo(long long int offset);
-  long long int Tell(void);
-  const std::string &Filename(void) const {return filename_;}
-  int fd(void) const {return fd_;}
-  virtual void Flush(void);
-  int BufPos(void);
-
- protected:
-  static const int kBufSize = 1048576;
-
-  void Init(const char *filename, bool modify, int buf_size);
-
-  int fd_;
-  std::unique_ptr<unsigned char []> buf_;
-  unsigned char *buf_ptr_;
-  unsigned char *end_buf_;
-  int buf_size_;
-  std::string filename_;
-};//»
-class ReadWriter {//«
-public:
-  ReadWriter(const char *filename);
-  ~ReadWriter(void);
-  void SeekTo(long long int offset);
-  int ReadIntOrDie(void);
-  void WriteInt(int i);
-private:
-  int fd_;
-  std::string filename_;
-};//»
-
-bool FileExists(const char *filename);
-long long int FileSize(const char *filename);
-bool IsADirectory(const char *path);
-void GetDirectoryListing(const char *dir, std::vector<std::string> *listing);
-void RecursivelyDeleteDirectory(const char *dir);
-void Mkdir(const char *dir);
-void UnlinkFile(const char *filename);
-void RemoveFile(const char *filename);
-void MoveFile(const char *old_location, const char *new_location);
-void CopyFile(const char *old_location, const char *new_location);
-
-#endif
-»*/
-
+//Includes«
+//#include <memory>
+//#include <string>
+//#include <vector>
 //#include <dirent.h>
 //#include <errno.h>
 //#include <fcntl.h>
 //#include <sys/stat.h>
 //#include <stdlib.h>
 //#include <unistd.h>
+//»
 
+class Writer {//«
+constructor(filename, buf_size_or_modify) {/* « */
+	if (isNull(buf_size_or_modify)) this.Init(filename, false, kBufSize);
+	else if (isBool(buf_size_or_modify)) this.Init(filename, buf_size_or_modify, kBufSize);
+	else if (isNum(buf_size_or_modify)) this.Init(filename, false, buf_size_or_modify);
+}/* » */
+destroy() {//«
+  Flush();
+  close(fd_);
+}//»
+/*
+Writer::~Writer(void) {//«
+  Flush();
+  close(fd_);
+}//»
+*/
+Init(filename, modify, buf_size) {//«
+//void Writer::Init(const char *filename, bool modify, int buf_size) {
+  filename_ = filename;
+  if (modify) {
+    fd_ = open(filename, O_WRONLY, 0666);
+    if (fd_ < 0 && errno == ENOENT) {
+      // If file doesn't exist, open it with creat()
+      fd_ = creat(filename, 0666);
+    }
+  }
+  else {
+    // creat() is supposedly equivalent to passing
+    // O_WRONLY|O_CREAT|O_TRUNC to open().
+    fd_ = creat(filename, 0666);
+  }
+  if (fd_ < 0) {
+    // Is this how errors are indicated?
+    fprintf(stderr, "Couldn't open %s for writing (errno %i)\n", filename,
+	    errno);
+    exit(-1);
+  }
 
+  buf_size_ = buf_size;
+  buf_.reset(new unsigned char[buf_size_]);
+  end_buf_ = buf_.get() + buf_size_;
+  buf_ptr_ = buf_.get();
+}//»
+Flush() {//«
+//void Writer::Flush(void) {
+// Generally write() writes everything in one call.  Haven't seen any cases
+// that justify the loop I do below.  Could take it out.
+  if (buf_ptr_ > buf_.get()) {
+    int left_to_write = (int)(buf_ptr_ - buf_.get());
+    while (left_to_write > 0) {
+      int written = write(fd_, buf_.get(), left_to_write);
+      if (written < 0) {
+	fprintf(stderr,
+		"Error in flush: tried to write %i, return of %i; errno %i; "
+		"fd %i\n", left_to_write, written, errno, fd_);
+	exit(-1);
+      } else if (written == 0) {
+	// Stall for a bit to avoid busy loop
+	sleep(1);
+      }
+      left_to_write -= written;
+    }
+  }
+  buf_ptr_ = buf_.get();
+}//»
+SeekTo(offset) {//«
+//void Writer::SeekTo(long long int offset) {
+// Only makes sense to call if we created the Writer with modify=true
+  Flush();
+  long long int ret = lseek(fd_, offset, SEEK_SET);
+  if (ret == -1) {
+    fprintf(stderr, "lseek failed, offset %lli, ret %lli, errno %i, fd %i\n",
+	    offset, ret, errno, fd_);
+    fprintf(stderr, "File: %s\n", filename_.c_str());
+    exit(-1);
+  }
+}//»
+Tell() {//«
+//long long int Writer::Tell(void) {
+  Flush();
+  return lseek(fd_, 0LL, SEEK_CUR);
+}//»
+WriteInt(i) {//«
+//void Writer::WriteInt(int i) {
+  if (buf_ptr_ + sizeof(int) > end_buf_) {
+    Flush();
+  }
+  // Couldn't we have an alignment issue if we write a char and then an int,
+  // for example?
+  // *(int *)buf_ptr_ = i;
+  memcpy(buf_ptr_, (void *)&i, sizeof(int));
+  buf_ptr_ += sizeof(int);
+}//»
+WriteUnsignedInt(u) {//«
+//void Writer::WriteUnsignedInt(unsigned int u) {
+  if (buf_ptr_ + sizeof(unsigned int) > end_buf_) {
+    Flush();
+  }
+  *(unsigned int *)buf_ptr_ = u;
+  buf_ptr_ += sizeof(unsigned int);
+}//»
+WriteLong(l) {//«
+//void Writer::WriteLong(long long int l) {
+  if (buf_ptr_ + sizeof(long long int) > end_buf_) {
+    Flush();
+  }
+  *(long long int *)buf_ptr_ = l;
+  buf_ptr_ += sizeof(long long int);
+}//»
+WriteUnsignedLong(u) {//«
+//WriteUnsignedLong(unsigned long long int u) {
+  if (buf_ptr_ + sizeof(unsigned long long int) > end_buf_) {
+    Flush();
+  }
+  *(unsigned long long int *)buf_ptr_ = u;
+  buf_ptr_ += sizeof(unsigned long long int);
+}//»
+WriteShort(s) {//«
+//WriteShort(short s) {
+  if (buf_ptr_ + sizeof(short) > end_buf_) {
+    Flush();
+  }
+  *(short *)buf_ptr_ = s;
+  buf_ptr_ += sizeof(short);
+}//»
+WriteChar(c) {//«
+//WriteChar(char c) {
+  if (buf_ptr_ + sizeof(char) > end_buf_) {
+    Flush();
+  }
+  *(char *)buf_ptr_ = c;
+  buf_ptr_ += sizeof(char);
+}//»
+WriteUnsignedChar(unsigned char c) {//«
+//WriteUnsignedChar(unsigned char c) {
+  if (buf_ptr_ + sizeof(unsigned char) > end_buf_) {
+    Flush();
+  }
+  *(unsigned char *)buf_ptr_ = c;
+  buf_ptr_ += sizeof(unsigned char);
+}//»
+WriteUnsignedShort(unsigned short s) {//«
+//WriteUnsignedShort(unsigned short s) {
+  if (buf_ptr_ + sizeof(unsigned short) > end_buf_) {
+    Flush();
+  }
+  *(unsigned short *)buf_ptr_ = s;
+  buf_ptr_ += sizeof(unsigned short);
+}//»
+WriteFloat(float f) {//«
+//WriteFloat(float f) {
+  if (buf_ptr_ + sizeof(float) > end_buf_) {
+    Flush();
+  }
+  *(float *)buf_ptr_ = f;
+  buf_ptr_ += sizeof(float);
+}//»
+WriteDouble(double d) {//«
+//WriteDouble(double d) {
+  if (buf_ptr_ + sizeof(double) > end_buf_) {
+    Flush();
+  }
+  *(double *)buf_ptr_ = d;
+  buf_ptr_ += sizeof(double);
+}//»
+WriteReal(float f) {//«
+//WriteReal(float f) {
+// Identical to WriteFloat()
+  if (buf_ptr_ + sizeof(float) > end_buf_) {
+    Flush();
+  }
+  *(float *)buf_ptr_ = f;
+  buf_ptr_ += sizeof(float);
+}//»
+WriteReal(double d) {//«
+//WriteReal(double d) {
+// Identical to WriteDouble()
+  if (buf_ptr_ + sizeof(double) > end_buf_) {
+    Flush();
+  }
+  *(double *)buf_ptr_ = d;
+  buf_ptr_ += sizeof(double);
+}//»
+Write(unsigned char c) {//«
+//Write(unsigned char c) {
+  WriteUnsignedChar(c);
+}//»
+Write(unsigned short s) {//«
+//Write(unsigned short s) {
+  WriteUnsignedShort(s);
+}//»
+Write(int i) {//«
+//Write(int i) {
+  WriteInt(i);
+}//»
+Write(unsigned int u) {//«
+//Write(unsigned int u) {
+  WriteUnsignedInt(u);
+}//»
+Write(double d) {//«
+//Write(double d) {
+  WriteDouble(d);
+}//»
+WriteCString(const char *s) {//«
+//WriteCString(const char *s) {
+  int len = strlen(s);
+  if (buf_ptr_ + len + 1 > end_buf_) {
+    Flush();
+  }
+  memcpy(buf_ptr_, s, len);
+  buf_ptr_[len] = 0;
+  buf_ptr_ += len + 1;
+}//»
+WriteNBytes(unsigned char *bytes, unsigned int num_bytes) {//«
+//WriteNBytes(unsigned char *bytes, unsigned int num_bytes) {
+// Does not write num_bytes into file
+  if ((int)num_bytes > buf_size_) {
+    Flush();
+    while ((int)num_bytes > buf_size_) {
+      buf_size_ *= 2;
+      buf_.reset(new unsigned char[buf_size_]);
+      buf_ptr_ = buf_.get();
+      end_buf_ = buf_.get() + buf_size_;
+    }
+  }
+  if (buf_ptr_ + num_bytes > end_buf_) {
+    Flush();
+  }
+  memcpy(buf_ptr_, bytes, num_bytes);
+  buf_ptr_ += num_bytes;
+}//»
+WriteBytes(unsigned char *bytes, int num_bytes) {//«
+//WriteBytes(unsigned char *bytes, int num_bytes) {
+  WriteInt(num_bytes);
+  if (num_bytes > buf_size_) {
+    Flush();
+    while (num_bytes > buf_size_) {
+      buf_size_ *= 2;
+      buf_.reset(new unsigned char[buf_size_]);
+      buf_ptr_ = buf_.get();
+      end_buf_ = buf_.get() + buf_size_;
+    }
+  }
+  if (buf_ptr_ + num_bytes > end_buf_) {
+    Flush();
+  }
+  memcpy(buf_ptr_, bytes, num_bytes);
+  buf_ptr_ += num_bytes;
+}//»
+WriteText(const char *s) {//«
+//WriteText(const char *s) {
+  int len = strlen(s);
+  if (buf_ptr_ + len + 1 > end_buf_) {
+    Flush();
+  }
+  memcpy(buf_ptr_, s, len);
+  buf_ptr_ += len;
+}//»
+BufPos(void) {//«
+//int Writer::BufPos(void) {
+  return (int)(buf_ptr_ - buf_.get());
+}//»
+}//»
 class Reader {//«
 constructor(filename, file_size){
 if (isNull(file_size)){//«
@@ -724,268 +850,6 @@ ReadFloatOrDie() {//«
   return f;
 }//»
 }//»
-class Writer {//«
-constructor(filename, buf_size_or_modify) {/* « */
-	if (isNull(buf_size_or_modify)) this.Init(filename, false, kBufSize);
-	else if (isBool(buf_size_or_modify)) this.Init(filename, buf_size_or_modify, kBufSize);
-	else if (isNum(buf_size_or_modify)) this.Init(filename, false, buf_size_or_modify);
-}/* » */
-destroy() {//«
-  Flush();
-  close(fd_);
-}//»
-/*
-Writer::~Writer(void) {//«
-  Flush();
-  close(fd_);
-}//»
-*/
-Init(filename, modify, buf_size) {//«
-//void Writer::Init(const char *filename, bool modify, int buf_size) {
-  filename_ = filename;
-  if (modify) {
-    fd_ = open(filename, O_WRONLY, 0666);
-    if (fd_ < 0 && errno == ENOENT) {
-      // If file doesn't exist, open it with creat()
-      fd_ = creat(filename, 0666);
-    }
-  } else {
-    // creat() is supposedly equivalent to passing
-    // O_WRONLY|O_CREAT|O_TRUNC to open().
-    fd_ = creat(filename, 0666);
-  }
-  if (fd_ < 0) {
-    // Is this how errors are indicated?
-    fprintf(stderr, "Couldn't open %s for writing (errno %i)\n", filename,
-	    errno);
-    exit(-1);
-  }
-
-  buf_size_ = buf_size;
-  buf_.reset(new unsigned char[buf_size_]);
-  end_buf_ = buf_.get() + buf_size_;
-  buf_ptr_ = buf_.get();
-}//»
-Flush() {//«
-//void Writer::Flush(void) {
-// Generally write() writes everything in one call.  Haven't seen any cases
-// that justify the loop I do below.  Could take it out.
-  if (buf_ptr_ > buf_.get()) {
-    int left_to_write = (int)(buf_ptr_ - buf_.get());
-    while (left_to_write > 0) {
-      int written = write(fd_, buf_.get(), left_to_write);
-      if (written < 0) {
-	fprintf(stderr,
-		"Error in flush: tried to write %i, return of %i; errno %i; "
-		"fd %i\n", left_to_write, written, errno, fd_);
-	exit(-1);
-      } else if (written == 0) {
-	// Stall for a bit to avoid busy loop
-	sleep(1);
-      }
-      left_to_write -= written;
-    }
-  }
-  buf_ptr_ = buf_.get();
-}//»
-SeekTo(offset) {//«
-//void Writer::SeekTo(long long int offset) {
-// Only makes sense to call if we created the Writer with modify=true
-  Flush();
-  long long int ret = lseek(fd_, offset, SEEK_SET);
-  if (ret == -1) {
-    fprintf(stderr, "lseek failed, offset %lli, ret %lli, errno %i, fd %i\n",
-	    offset, ret, errno, fd_);
-    fprintf(stderr, "File: %s\n", filename_.c_str());
-    exit(-1);
-  }
-}//»
-Tell() {//«
-//long long int Writer::Tell(void) {
-  Flush();
-  return lseek(fd_, 0LL, SEEK_CUR);
-}//»
-WriteInt(i) {//«
-//void Writer::WriteInt(int i) {
-  if (buf_ptr_ + sizeof(int) > end_buf_) {
-    Flush();
-  }
-  // Couldn't we have an alignment issue if we write a char and then an int,
-  // for example?
-  // *(int *)buf_ptr_ = i;
-  memcpy(buf_ptr_, (void *)&i, sizeof(int));
-  buf_ptr_ += sizeof(int);
-}//»
-WriteUnsignedInt(u) {//«
-//void Writer::WriteUnsignedInt(unsigned int u) {
-  if (buf_ptr_ + sizeof(unsigned int) > end_buf_) {
-    Flush();
-  }
-  *(unsigned int *)buf_ptr_ = u;
-  buf_ptr_ += sizeof(unsigned int);
-}//»
-WriteLong(l) {//«
-//void Writer::WriteLong(long long int l) {
-  if (buf_ptr_ + sizeof(long long int) > end_buf_) {
-    Flush();
-  }
-  *(long long int *)buf_ptr_ = l;
-  buf_ptr_ += sizeof(long long int);
-}//»
-WriteUnsignedLong(u) {//«
-//WriteUnsignedLong(unsigned long long int u) {
-  if (buf_ptr_ + sizeof(unsigned long long int) > end_buf_) {
-    Flush();
-  }
-  *(unsigned long long int *)buf_ptr_ = u;
-  buf_ptr_ += sizeof(unsigned long long int);
-}//»
-WriteShort(s) {//«
-//WriteShort(short s) {
-  if (buf_ptr_ + sizeof(short) > end_buf_) {
-    Flush();
-  }
-  *(short *)buf_ptr_ = s;
-  buf_ptr_ += sizeof(short);
-}//»
-WriteChar(c) {//«
-//WriteChar(char c) {
-  if (buf_ptr_ + sizeof(char) > end_buf_) {
-    Flush();
-  }
-  *(char *)buf_ptr_ = c;
-  buf_ptr_ += sizeof(char);
-}//»
-WriteUnsignedChar(unsigned char c) {//«
-//WriteUnsignedChar(unsigned char c) {
-  if (buf_ptr_ + sizeof(unsigned char) > end_buf_) {
-    Flush();
-  }
-  *(unsigned char *)buf_ptr_ = c;
-  buf_ptr_ += sizeof(unsigned char);
-}//»
-WriteUnsignedShort(unsigned short s) {//«
-//WriteUnsignedShort(unsigned short s) {
-  if (buf_ptr_ + sizeof(unsigned short) > end_buf_) {
-    Flush();
-  }
-  *(unsigned short *)buf_ptr_ = s;
-  buf_ptr_ += sizeof(unsigned short);
-}//»
-WriteFloat(float f) {//«
-//WriteFloat(float f) {
-  if (buf_ptr_ + sizeof(float) > end_buf_) {
-    Flush();
-  }
-  *(float *)buf_ptr_ = f;
-  buf_ptr_ += sizeof(float);
-}//»
-WriteDouble(double d) {//«
-//WriteDouble(double d) {
-  if (buf_ptr_ + sizeof(double) > end_buf_) {
-    Flush();
-  }
-  *(double *)buf_ptr_ = d;
-  buf_ptr_ += sizeof(double);
-}//»
-WriteReal(float f) {//«
-//WriteReal(float f) {
-// Identical to WriteFloat()
-  if (buf_ptr_ + sizeof(float) > end_buf_) {
-    Flush();
-  }
-  *(float *)buf_ptr_ = f;
-  buf_ptr_ += sizeof(float);
-}//»
-WriteReal(double d) {//«
-//WriteReal(double d) {
-// Identical to WriteDouble()
-  if (buf_ptr_ + sizeof(double) > end_buf_) {
-    Flush();
-  }
-  *(double *)buf_ptr_ = d;
-  buf_ptr_ += sizeof(double);
-}//»
-Write(unsigned char c) {//«
-//Write(unsigned char c) {
-  WriteUnsignedChar(c);
-}//»
-Write(unsigned short s) {//«
-//Write(unsigned short s) {
-  WriteUnsignedShort(s);
-}//»
-Write(int i) {//«
-//Write(int i) {
-  WriteInt(i);
-}//»
-Write(unsigned int u) {//«
-//Write(unsigned int u) {
-  WriteUnsignedInt(u);
-}//»
-Write(double d) {//«
-//Write(double d) {
-  WriteDouble(d);
-}//»
-WriteCString(const char *s) {//«
-//WriteCString(const char *s) {
-  int len = strlen(s);
-  if (buf_ptr_ + len + 1 > end_buf_) {
-    Flush();
-  }
-  memcpy(buf_ptr_, s, len);
-  buf_ptr_[len] = 0;
-  buf_ptr_ += len + 1;
-}//»
-WriteNBytes(unsigned char *bytes, unsigned int num_bytes) {//«
-//WriteNBytes(unsigned char *bytes, unsigned int num_bytes) {
-// Does not write num_bytes into file
-  if ((int)num_bytes > buf_size_) {
-    Flush();
-    while ((int)num_bytes > buf_size_) {
-      buf_size_ *= 2;
-      buf_.reset(new unsigned char[buf_size_]);
-      buf_ptr_ = buf_.get();
-      end_buf_ = buf_.get() + buf_size_;
-    }
-  }
-  if (buf_ptr_ + num_bytes > end_buf_) {
-    Flush();
-  }
-  memcpy(buf_ptr_, bytes, num_bytes);
-  buf_ptr_ += num_bytes;
-}//»
-WriteBytes(unsigned char *bytes, int num_bytes) {//«
-//WriteBytes(unsigned char *bytes, int num_bytes) {
-  WriteInt(num_bytes);
-  if (num_bytes > buf_size_) {
-    Flush();
-    while (num_bytes > buf_size_) {
-      buf_size_ *= 2;
-      buf_.reset(new unsigned char[buf_size_]);
-      buf_ptr_ = buf_.get();
-      end_buf_ = buf_.get() + buf_size_;
-    }
-  }
-  if (buf_ptr_ + num_bytes > end_buf_) {
-    Flush();
-  }
-  memcpy(buf_ptr_, bytes, num_bytes);
-  buf_ptr_ += num_bytes;
-}//»
-WriteText(const char *s) {//«
-//WriteText(const char *s) {
-  int len = strlen(s);
-  if (buf_ptr_ + len + 1 > end_buf_) {
-    Flush();
-  }
-  memcpy(buf_ptr_, s, len);
-  buf_ptr_ += len;
-}//»
-BufPos(void) {//«
-//int Writer::BufPos(void) {
-  return (int)(buf_ptr_ - buf_.get());
-}//»
-}//»
 class ReadWriter {//«
 constructor() {//«
 //ReadWriter::ReadWriter(const char *filename) {
@@ -1046,7 +910,8 @@ const FileExists = (filename) => {//«
       fprintf(stderr, "errno 24 may indicate too many open files\n");
     }
     exit(-1);
-  } else {
+  }
+  else {
     close(fd);
     return true;
   }
@@ -1207,7 +1072,7 @@ const CopyFile = (old_location, new_location) => {//«
 
 //»
 
-//Params/CreateGameParams«
+//Params«
 
 //#include "io.h"
 //#include "params.h"
@@ -1429,6 +1294,7 @@ private:
 
 //»
 
+//Game«
 class Game{//«
 
 #game_name_;
@@ -1615,6 +1481,7 @@ BoardPermutations(street) {//«
 }//»
 
 }//»
+//»
 
 //Cards«
 
@@ -2426,10 +2293,10 @@ Evaluate(cards, num_cards) {//«
 //»
 const DealOneCard = () => {//«
 //const DealOneCard = (void) => {
-	let max_card = Game.MaxCard();
+	let max_card = Game.MaxCard();//51
 	let c1;
 //	int *tree = new int[max_card + 1];
-	let tree = new Array(max_card + 1);
+	let tree = new Array(max_card + 1);// 51 + 1
 	for (c1 = 0; c1 <= max_card; ++c1) {
 //WIJGLM
 		tree[c1] = Math.floor(c1 / NUMSUITS);
@@ -2475,6 +2342,28 @@ const DealTwoCards = (he) => {//«
 	}
 }//»
 const DealThreeCards = (he) => {//«
+/*
+void HandValueTree::ReadThree(void) {//«
+	int max_card = Game::MaxCard();
+	char fname[500];
+	sprintf(fname, "%s/hand_value_tree.%s.%i.%i.3", Files::StaticBase(), Game::GameName().c_str(), Game::NumRanks(), Game::NumSuits());
+	Reader reader(fname);
+	int num_cards = max_card + 1;
+	tree3_ = new int **[num_cards];//This is private to HandValueTree
+	for (int i = 0; i < num_cards; ++i) tree3_[i] = NULL;
+	for (int i1 = 2; i1 < num_cards; ++i1) {
+		int **tree1 = new int *[i1];
+		tree3_[i1] = tree1;
+		for (int i2 = 1; i2 < i1; ++i2) {
+			int *tree2 = new int[i2];
+			tree1[i2] = tree2;
+			for (int i3 = 0; i3 < i2; ++i3) {
+				tree2[i3] = reader.ReadIntOrDie();
+			}
+		}
+	}
+}//»
+*/
 	let max_card = Game.MaxCard();
 	//  Card cards[3];
 	let cards = new Array(3);

@@ -477,7 +477,7 @@ let SYMBOL_WORDS;
 //»
 //Util«
 
-const send_lines_to_gui=(if_wrap)=>{
+const send_lines_to_gui=(if_wrap)=>{//«
 	let arr = get_edit_lines({str: true});
 	let str;
 	if (if_wrap) str = util.linesToParas(arr).join("\n");
@@ -485,7 +485,7 @@ const send_lines_to_gui=(if_wrap)=>{
 //SRKTLDM
 //Uncomment this to do auto line wrapping (And comment out the above)
 	Desk.api.openTextEditor({appArgs: {text: str, selected: true}});
-};
+};//»
 
 const render = (opts={}, which) =>{//«
 	if (no_render) {
@@ -667,6 +667,9 @@ const reset_display=()=>{//«
 	stat_warn("Display reset");
 //	render({},107);
 };//»
+const scr_h = ()=>{
+	return Term.h - num_stat_lines;
+};
 const at_screen_bottom = () => {return y === Term.h - num_stat_lines - 1;};
 const at_file_end = ()=>{return y+scroll_num === lines.length - 1;};
 const timestr=(stamp)=>{//«
@@ -947,22 +950,26 @@ const reinit_folds=()=>{//«
 	Term.setLines(lines, line_colors);
 };//»
 
-const await_fold_command=()=>{//«
+const await_z_command=()=>{//«
 	stat_cb=c=>{
 		stat_cb=null;
 		if (c=="o"||c=="O"){
 			if (!curfold()) return;//if (!curln(true)._fold) return;
 			toggle_cur_fold({noInnerFolds: c=="O"});
 		}
-		else if (c=="m"){
-			reinit_folds();
-		}
-		else if (c=="a"){
-			open_all_folds();
-		}
+		else if (c=="m") reinit_folds();
+		else if (c=="a") open_all_folds();
+		else if (c=="z") valign_cursor(Math.floor((h-num_stat_lines)/2)-1);
+		else if (c=="b"){
+			valign_cursor(scr_h());
+		}		
+		else if (c=="t"){
+			valign_cursor(0);
+		}		
+
 		render({},40);
 	};
-	stat("fold");
+	stat("z");
 }//»
 const await_mark_command=()=>{//«
 	stat_cb=c=>{
@@ -2686,23 +2693,6 @@ const adjust_cursor=()=>{//«
 	if (usex > ln.length) x = ln.length;
 	else x = usex;
 }//»
-const home=()=>{//«
-	if (warn_if_fold_visual()) return;
-	y = scroll_num = 0;
-	adjust_cursor();
-	set_sel_end();
-	set_ry();
-	render({},55);
-}//»
-const end=()=>{//«
-	if (warn_if_fold_visual()) return;
-	scroll_num = lines.length-1;
-	y=0;
-	adjust_cursor();
-	set_sel_end();
-	set_ry();
-	render({},56);
-}//»
 const seek_prev_word=()=>{//«
 	let addi=0;
 	for (let i=0;;i--) {
@@ -2825,8 +2815,7 @@ const right = ()=>{//«
 	render({},54);
 
 }//»
-const vcenter_cursor=()=>{//«
-	let toy = Math.floor((h-num_stat_lines)/2)-1;
+const valign_cursor=(toy)=>{//«
 	if (y+scroll_num<toy) {
 		y += scroll_num;
 		scroll_num = 0;
@@ -2834,12 +2823,34 @@ const vcenter_cursor=()=>{//«
 		return;
 	}
 	let diff = y - toy;
+	let scr_pos = realy(scroll_num + y);
 	if (diff<0) scroll_up(-diff);
+//	else scroll_down(diff, {moveCur: true});
 	else scroll_down(diff);
-	y-=diff;
+	scroll_to(scr_pos);
+//	y-=diff;
 	set_ry();
 	render();
 };//»
+
+const home=()=>{//«
+	if (warn_if_fold_visual()) return;
+	y = scroll_num = 0;
+	adjust_cursor();
+	set_sel_end();
+	set_ry();
+	render({},55);
+}//»
+const end=()=>{//«
+	if (warn_if_fold_visual()) return;
+	scroll_num = lines.length-1;
+	y=0;
+	adjust_cursor();
+	set_sel_end();
+	set_ry();
+	render({},56);
+}//»
+
 const pgup=()=>{//«
 	if (warn_if_fold_visual()) return;
 	if (scroll_num == 0) {
@@ -2904,9 +2915,47 @@ const scroll_up = (n, opts={} )=>{//«
 	if (!noRender) render();
 	return true;
 };//»
+
+const scroll_down = (n, opts={}) => {//«
+	let {moveCur}=opts;
+/*«
+	if (scroll_num + n >= lines.length) {
+		if (scroll_num + y < lines.length-1) {
+			y = lines.length-1-scroll_num;
+			adjust_cursor();
+			set_sel_end();
+			set_ry();
+			render({},59);
+		}
+		return;
+	}
+	scroll_num += n;
+	if (scroll_num + h - num_stat_lines > lines.length) {
+		scroll_num = lines.length - h + num_stat_lines;
+		if (scroll_num < 0) scroll_num = 0;
+	}
+»*/
+//log(n);
+	scroll_num += n;
+	if (moveCur) {
+		y-=n;
+		if (y < 0) y=0;
+	}
+//	while (!lines[y+scroll_num]) scroll_num--;
+	while (!lines[scroll_num]) scroll_num--;
+	while (!lines[y+scroll_num] && y > 0) y--;
+/*
+*/
+	adjust_cursor();
+	set_sel_end();
+	set_ry();
+	render({},60);
+};//»
+
+/*
 const scroll_down = (n, opts={}) => {//«
 //THROW("SHOULD NOT CALL SCROLL_DOWN!!!");
-
+log(`SCRD: ${n}`);
 	let {moveCur}=opts;
 	if (scroll_num + n >= lines.length) {
 		if (scroll_num + y < lines.length-1) {
@@ -2932,11 +2981,13 @@ const scroll_down = (n, opts={}) => {//«
 	set_ry();
 	render({},60);
 };//»
+*/
 
 const pgdn=()=>{//«
 //log("Not doing page down");
 	if (warn_if_fold_visual()) return;
-	scroll_down(h - num_stat_lines);
+//	scroll_down(h - num_stat_lines);
+	scroll_down(scr_h());
 }//»
 const up_one_line=(if_seek_end)=>{//«
 	let _y = cy();
@@ -3133,6 +3184,13 @@ THROW(`No line found: in lines[${i+_cy}] (i=${i}, cy=${_cy})`);
 		}
 	}
 };//»
+const cur_to=(yarg)=>{//«
+	y=yarg;
+
+	while (!lines[y+scroll_num]) y--;
+	if (y < 0) y = 0;
+	render();
+};//»
 
 //»
 //Search/Replace«
@@ -3157,15 +3215,28 @@ const resume_search=(if_rev)=>{//«
 	}
 };//»
 
-const try_word_match=(ln, word, if_exact, xoff)=>{//«
+const try_word_match=(ln, word, if_exact, xoff, reverse)=>{//«
+//cwarn(reverse);
 	let lnstr;
 	if (isStr(ln)) lnstr = ln;
 	else lnstr = ln.join("");
+if (reverse) {
+	lnstr = lnstr.slice(0, xoff-1).split("").reverse().join("");
+	word = word.split("").reverse().join("");
+}
+else {
 	lnstr = lnstr.slice(xoff);
+}
 	if (!lnstr) return;
 	if (escape_regex_metachars) word = escape_metachars(word);
-	if (if_exact) return (new RegExp("\\b"+word+"\\b")).exec(lnstr);
-	return (new RegExp(word)).exec(lnstr);
+	let rv; 
+	if (if_exact) rv = (new RegExp("\\b"+word+"\\b")).exec(lnstr);
+	else rv = (new RegExp(word)).exec(lnstr);
+	if (!rv) return null;
+	if (reverse){
+		return {index: xoff - rv.index - word.length - 1};
+	}
+	return {index: xoff + rv.index};
 };//»
 const find_word_in_fold_lines=(lns, wrd, if_exact, xoff, if_rev, stack, iter)=>{//«
 	let start_i;
@@ -3182,15 +3253,17 @@ const find_word_in_fold_lines=(lns, wrd, if_exact, xoff, if_rev, stack, iter)=>{
 	let itr = 0;
 	for (let i=start_i; itr < to; i+=inc, itr++){
 		let ln = lns[i];
+		if (if_rev) xoff = ln.length+1;
+		else xoff = 0;
 		if (ln._fold) {
-			let rv = find_word_in_fold_lines(ln._fold, wrd, if_exact, 0, if_rev, stack, iter);
+			let rv = find_word_in_fold_lines(ln._fold, wrd, if_exact, xoff, if_rev, stack, iter);
 			if (rv) {
 				iter.i+=i;
 				stack.push(ln._fold);
 				return rv;
 			}
 		}
-		let rv = try_word_match(ln, wrd, if_exact, 0);
+		let rv = try_word_match(ln, wrd, if_exact, xoff, if_rev);
 		if (rv) {
 			iter.i+=i;
 			return rv;
@@ -3210,6 +3283,7 @@ const find_word = (word, opts={})=>{//«
 		}
 	}
 	cur_search = {word, exact, reverse, noAdv, endY};
+	let hold_scroll = scroll_num;
 	y = y+scroll_num;
 	if (!noAdv) x++;
 	scroll_num = 0;
@@ -3228,23 +3302,24 @@ throw new Error("INFLOOP WUT WUT HARHARHAR");
 		if (ln._fold){//«
 			let stack = [ln._fold];
 			let iter={i:0};
-			let rv = find_word_in_fold_lines(ln._fold, word, exact, is_first?x:0, reverse, stack, iter);
+//			let rv = find_word_in_fold_lines(ln._fold, word, exact, is_first?x:0, reverse, stack, iter);
+			let rv = find_word_in_fold_lines(ln._fold, word, exact, x, reverse, stack, iter);
 			if (rv){
 				got_match = true;
 				for (let f of stack) open_fold(f);
-				if (is_first) x+=rv.index;
-				else x=rv.index;
+				x = rv.index;
 				y+=iter.i;
+				set_ry();
 				break;
 			}
 			is_first = false;
 		}//»
 		else {//«
-			let rv = try_word_match(ln, word, exact, is_first?x:0);
+//WMJYUI
+			let rv = try_word_match(ln, word, exact, x, reverse);
 			if (rv){
 				got_match = true;
-				if (is_first) x+=rv.index;
-				else x=rv.index;
+				x = rv.index;
 				break;
 			}
 			is_first = false;
@@ -3255,6 +3330,7 @@ throw new Error("INFLOOP WUT WUT HARHARHAR");
 				y=lines.length-1;
 				did_wrap = true;
 			}
+			x = curarr().length+1;
 		}
 		else {
 			y++;
@@ -3262,6 +3338,7 @@ throw new Error("INFLOOP WUT WUT HARHARHAR");
 				y=0;
 				did_wrap = true;
 			}
+			x = 0;
 		}
 		set_ry();
 		if (ry===start_ry){
@@ -3271,8 +3348,13 @@ throw new Error("INFLOOP WUT WUT HARHARHAR");
 			break;
 		}
 	}//»
-	scroll_num = y;
-	y=0;
+//	let goto_line = ry;
+//log(ry);
+	scroll_num = hold_scroll;
+//	y = 0;
+	scroll_to(ry);
+//	scroll_num = y;
+//	y=0;
 	set_line_lens();
 	let mess;
 	if (exact) mess=`<${word}>`
@@ -5632,6 +5714,7 @@ const replace_char = (ch, opts={})=>{//«
 	let gotch = del_ch({time});
 	if (at_line_end) x++;
 	if (opts.toUpper && gotch && gotch.toUpperCase) ch = gotch.toUpperCase();
+	if (ch==="\n") return enter({time});
 	print_ch(ch,{time});
 	if (opts.fromHandler) {
 		x++;
@@ -5645,10 +5728,19 @@ const replace_one_char = () => {//«
 	if (!ln[x]) return;
 	stat_cb=c=>{
 		stat_cb=null;
-		if (c && c.length == 1) replace_char(c);
+
+		if (c) {
+			if (c.length == 1) replace_char(c);
+else if (c==="SPACE_") replace_char(" ");
+else if (c==="TAB_") replace_char("\t");
+else if (c==="ENTER_"){
+replace_char("\n");
+}
+//let arr = curarr();
+		}
 		render();
 	};
-	stat(".");
+	stat("r");
 };//»
 
 const tab = (opts={}) => {//«
@@ -5847,8 +5939,12 @@ const handle_press=(ch)=>{//«
 	if (stat_cb) return stat_cb(ch);
 
 	if (this.stat_input_type) handle_stat_char(ch);
-	else if (mode===INSERT_MODE) print_ch(ch,{fromHandler: true});
-	else if (mode===REPLACE_MODE) replace_char(ch, {fromHandler: true});
+	else if (mode===INSERT_MODE) {
+		print_ch(ch,{fromHandler: true});
+	}
+	else if (mode===REPLACE_MODE) {
+		replace_char(ch, {fromHandler: true});
+	}
 	else if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) handle_symbol_ch(ch);
 	else if (mode===FILE_MODE) handle_file_ch(ch);
 	else if (mode===VIS_LINE_MODE||mode===VIS_MARK_MODE||mode===VIS_BLOCK_MODE) handle_visual_key(ch);
@@ -5947,12 +6043,19 @@ const handle_visual_key=ch=>{//«
 		if (ch=="|"){
 			init_stat_input(ch);
 		}
-		if (ch=="*"||ch=="&"){
+		else if (ch=="*"||ch=="#"){
 			if (seltop!==selbot) return;
 			let str = curarr().slice(selleft, selright+1);
 			if (!str.length) return;
 			this.mode=COMMAND_MODE;
-			find_word(str.join(""), {exact: false, reverse: ch==="&"});
+			find_word(str.join(""), {exact: false, reverse: ch==="#"});
+		}
+		else if (ch=="w"){
+			seek_next_word();
+
+		}
+		else if (ch=="b"){
+			seek_prev_word();
 		}
 	}//»
 	else if (m===VIS_BLOCK_MODE) {
@@ -5963,10 +6066,35 @@ const handle_visual_key=ch=>{//«
 
 };//»
 
+//XXXXXXXXXXXX
 const KEY_CHAR_FUNCS={//«
 
 //	X: do_null_del,
 //Edit (Action needed)
+	h: left,
+	l: right,
+	j: down,
+	k: up,
+	H:()=>{cur_to(0)},
+	M:()=>{
+		let scrh = scr_h();
+		let boty = lines.length - scroll_num;
+		let usey = boty < scrh? boty : scrh;
+		cur_to(Math.floor(usey/2));
+	},
+	L:()=>{
+		let scrh = scr_h() - 1;
+		let boty = lines.length - scroll_num;
+		let usey = boty < scrh? boty : scrh;
+		cur_to(usey);
+//		cur_to(Term.h-1-num_stat_lines);
+	},
+
+	w: seek_next_word,
+	b: seek_prev_word,
+
+//e: seek end word
+
 	x: handle_ch_del,
 	O: ()=>{newline("O")},
 	o: ()=>{newline("o")},
@@ -5982,9 +6110,9 @@ const KEY_CHAR_FUNCS={//«
 
 //Undo/Redo
 	u: undo,
-	r: redo,
-	U:()=>{undo({single: true})},
-	R:()=>{redo({single: true})},
+//	r: redo,
+//	U:()=>{undo({single: true})},
+//	R:()=>{redo({single: true})},
 
 //Modes
 
@@ -5996,24 +6124,24 @@ const KEY_CHAR_FUNCS={//«
 	s:()=>{init_symbol_mode({adv: true})},
 	S: init_symbol_mode,
 	X: init_cut_buffer_mode,
-	l: init_line_wrap_mode,
-	e:()=>{
-		init_symbol_mode({ref: true});
-	},
-	E:()=>{
-		init_symbol_mode({ref: true, before: true});
-	},
+//	L: init_line_wrap_mode,
+//	e:()=>{
+//		init_symbol_mode({ref: true});
+//	},
+//	E:()=>{
+//		init_symbol_mode({ref: true, before: true});
+//	},
 
-	".": replace_one_char,
-	">":()=>{
+	"r": replace_one_char,
+	"R":()=>{
 		this.mode = REPLACE_MODE;
 		render();
 	},
 	y: ()=>{delete_mode(true)},
 	d: delete_mode,
-	h: insert_hex_ch,
+//	H: insert_hex_ch,
 	c: insert_comment,
-	z: await_fold_command,
+	z: await_z_command,
 
 	"/": ()=>{ init_stat_input("/") },
 	"?": ()=>{ init_stat_input("?") },
@@ -6025,17 +6153,24 @@ const KEY_CHAR_FUNCS={//«
 
 //Find
 	n:()=>{resume_search(false)},
-	b:()=>{resume_search(true)},
+//	b:()=>{resume_search(true)},
 	"*":()=>{find_word(get_cur_word().word,{exact:true});},
-	"&":()=>{find_word(get_cur_word().word,{exact:true,reverse:true});},
+	"#":()=>{find_word(get_cur_word().word,{exact:true,reverse:true});},
 	"'":goto_matching_brace,
 
 //Cursor
 	"0":()=>{seek_line_start();render();},
+"^":()=>{
+let str = curarr().join("");
+let rv = str.match(/\S/);//Find first non-whitespace
+if (!rv) return;
+x = rv.index;
+render();
+},
 	"$":()=>{seek_line_end();render();},
 
 //Scroll
-	g: vcenter_cursor,
+//	g: vcenter_cursor,
 //	" ":scroll_screen_to_cursor,
 //	"[":scroll_left,
 //	"]":scroll_right,
@@ -6047,30 +6182,6 @@ const KEY_CHAR_FUNCS={//«
 //	},
 
 }//»
-const UPDOWN_FUNCS={//«
-	UP_:up,
-	DOWN_:down,
-	PGDOWN_S: () => {
-		if (lines[cy() + h - 1]) {
-			scroll_num++;
-			if (y>0) y--;
-			set_ry();
-			render({},102);
-		}
-	},
-	PGUP_S: () => {
-		if (scroll_num) {
-			scroll_num--;
-			if (y < h-2) y++;
-			set_ry();
-			render({},103);
-		}
-	},
-	PGUP_: pgup,
-	PGDOWN_:pgdn,
-	HOME_:home,
-	END_:end
-};//»
 const KEY_DOWN_EDIT_FUNCS={//«
 	TAB_: tab,
 	TAB_S: ()=>{tab({shift: true})},
@@ -6082,19 +6193,29 @@ const KEY_DOWN_EDIT_FUNCS={//«
 	ENTER_C: nobreak_enter,
 };//»
 const KEY_DOWN_FUNCS={//«
+r_C:(e)=>{
+	e.preventDefault();
+if (!is_normal_mode(true)) return;
+if (this.mode == INSERT_MODE){
+cwarn("CTRL_R INSERT");
+}
+else redo();
+
+},
+e_C:()=>{scroll_down(1,{moveCur:true});},
+d_C:()=>{scroll_down(Math.floor(Term.h/2));},
+y_C:()=>{scroll_up(1,{moveCur:true});},
+u_C:()=>{scroll_up(Math.floor(Term.h/2));},
+c_CAS:()=>{send_lines_to_gui();},
+t_CAS:()=>{send_lines_to_gui(true);},
 //Edit (must apply Action)
-c_CAS:()=>{
-send_lines_to_gui();
-},
-t_CAS:()=>{
-send_lines_to_gui(true);
-},
 o_A: create_open_fold,
 c_A: create_closed_fold,
 p_A: try_dopretty,
 j_C: do_justify,
 l_C: do_line_wrap,
-u_C: do_changecase,
+l_A: init_line_wrap_mode,
+//u_C: do_changecase,
 u_CA: ()=>{do_changecase(true);},
 
 //Non-editing (No Action needed below)
@@ -6214,13 +6335,38 @@ stat_warn("No matches!");
 }
 }//»
 };//»
+
 const LEFTRIGHT_FUNCS={//«
 	LEFT_: left,
 	RIGHT_: right,
 	LEFT_C: seek_prev_word,
 	RIGHT_C: seek_next_word,
-	e_C: handle_seek_line_end, 
-	a_C: handle_seek_line_start
+//	e_C: handle_seek_line_end, 
+//	a_C: handle_seek_line_start
+};//»
+const UPDOWN_FUNCS={//«
+	UP_:up,
+	DOWN_:down,
+	PGDOWN_S: () => {
+		if (lines[cy() + h - 1]) {
+			scroll_num++;
+			if (y>0) y--;
+			set_ry();
+			render({},102);
+		}
+	},
+	PGUP_S: () => {
+		if (scroll_num) {
+			scroll_num--;
+			if (y < h-2) y++;
+			set_ry();
+			render({},103);
+		}
+	},
+	PGUP_: pgup,
+	PGDOWN_:pgdn,
+	HOME_:home,
+	END_:end
 };//»
 const LINE_WRAP_SYMS=["DEL_","BACK_","TAB_", "ENTER_", "SPACE_C"];
 
@@ -6278,23 +6424,30 @@ this.onkeydown=async(e, sym, code)=>{//«
 		return;
 	}//»
 	if (KEY_DOWN_EDIT_FUNCS[sym]){//«
-		if (mode!==INSERT_MODE) {
-			if (mode === VIS_LINE_MODE || mode === VIS_BLOCK_MODE) {
-				if (sym==="BACK_") delete_first_space(); 
-				else if (sym==="TAB_") prepend_space("\t");
-			}
-			else if (sym==="TAB_"){
-				if (reload_win&&!reload_win._z_hold){
-					reload_win._z_hold = reload_win.winElem.style.zIndex;
-					reload_win.winElem._z = topwin.winElem.style.zIndex+1;
-				}
-			}
-			return;
+		if (mode === INSERT_MODE) {
+			KEY_DOWN_EDIT_FUNCS[sym]();
 		}
-		KEY_DOWN_EDIT_FUNCS[sym]();
+		else if (mode === REPLACE_MODE) {
+			if (sym==="TAB_"){
+				handle_press("\t");
+			}
+			else if (sym === "ENTER_") {
+				enter();
+			}
+		}
+		else if (mode === VIS_LINE_MODE || mode === VIS_BLOCK_MODE) {
+			if (sym==="BACK_") delete_first_space(); 
+			else if (sym==="TAB_") prepend_space("\t");
+		}
+		else if (sym==="TAB_") {
+			if (reload_win&&!reload_win._z_hold){
+				reload_win._z_hold = reload_win.winElem.style.zIndex;
+				reload_win.winElem._z = topwin.winElem.style.zIndex+1;
+			}
+		}
 		return;
 	}//»
-	KEY_DOWN_FUNCS[sym] && KEY_DOWN_FUNCS[sym]();	
+	KEY_DOWN_FUNCS[sym] && KEY_DOWN_FUNCS[sym](e);	
 }//»
 
 //»
@@ -6549,3 +6702,20 @@ this.quit = quit;
 
 
 
+/*
+const vcenter_cursor=()=>{//«
+//	let toy = Math.floor((h-num_stat_lines)/2)-1;
+	if (y+scroll_num<toy) {
+		y += scroll_num;
+		scroll_num = 0;
+		set_ry();
+		return;
+	}
+	let diff = y - toy;
+	if (diff<0) scroll_up(-diff);
+	else scroll_down(diff);
+	y-=diff;
+	set_ry();
+	render();
+};//»
+*/

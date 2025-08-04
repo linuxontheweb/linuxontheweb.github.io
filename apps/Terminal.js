@@ -1113,8 +1113,14 @@ the screen when it would otherwise be off screen.
 	for (let i = 0; i < donum; i++) {//«
 
 		let arr = uselines[i];
-		if (slice_from) arr = arr.slice(slice_from, slice_to);
-		else arr = arr.slice(0, this.w);
+		let is_folded = arr[0]=="\xd7";
+//		if (slice_from) arr = arr.slice(slice_from, slice_to);
+		if (!is_folded && slice_from) arr = arr.slice(slice_from, slice_to);
+		else {
+			arr = arr.slice(0, this.w);
+//if (is_folded) log(arr);
+//log();
+		}
 //DOCURSOR
 		let ind;
 		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
@@ -1176,7 +1182,8 @@ throw new Error("WUTUTUTU");
 			}//»
 
 		}//»
-		else if (arr[0]=="\xd7"){//Folded row«
+		else if (is_folded){//Folded row«
+//		else if (arr[0]=="\xd7"){
 //This marker is reserved as the first character for folded rows
 			if (tabdiv._x) arr=[];
 			else {
