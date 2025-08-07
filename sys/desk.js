@@ -648,9 +648,6 @@ const popwait = (str, cb, type) => {//«
 	});
 }
 //»
-//Keep this in since it might be useful later, but comment out to decrease the system parse/load time for Now
-//const popform=(arr,cb,title)=>{let table=make('table');let focuselm=null;for(let i=0;i<arr.length;i++){let tr=make('tr');let lab_td=make('td');lab_td.style.verticalAlign="top";let elm_td=make('td');let type=arr[i][0];let label=arr[i][1];let def=arr[i][2];let optarg=arr[i][3];let elm;if(type=="select"){if(!def)def=0;else def=parseInt(def);elm=make('select');elm.style.width="85";let list=optarg;for(let j=0;j<list.length;j++){let opt=make('option');opt.setAttribute('value',list[j]);if(j==def)opt.setAttribute("selected","true");opt.html(list[j]);elm._add(opt);}}else if(type=="field"){elm=make('span');elm.innerHTML=def;}else if(type=="check"){elm=make('input');elm.type="checkbox";if(def)elm.checked=true;elm.ael('click',e=>{setTimeout(()=>{elm.checked=!elm.checked;},1);});}else if(type=="text"){elm=make('input');elm.type="text";if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}else if(type=="textarea"){elm=make('textarea');elm.rows=6;elm.style.width=235;if(optarg)elm.setAttribute("maxlength",optarg);if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}elm.ael('mousedown',function(e){e.stopPropagation();});elm.setAttribute("name",label);lab_td.html(label+":");lab_td._tcol="#000";elm_td._add(elm);tr._add(lab_td);tr._add(elm_td);tr.elm=elm;table._add(tr);}return this.make_popup({'STR':table,'TYP':"form",'CB':cb,'TIT':title,'FOCUS':focuselm});};this.popform=popform;api.popform=(arr,title)=>{return new Promise((y,n)=>{popform(arr,y,title);});};
-
 const popyesno = (str, cb, if_rev) => {//«
 	return this.make_popup({
 		STR: str,
@@ -691,6 +688,9 @@ const poparea = (str_or_arr, title, if_rev_arr, cb, read_only, if_cancel, win) =
 		WIN:win
 	});
 }//»
+//Keep this in since it might be useful later, but comment out to decrease the system parse/load time for Now
+//const popform=(arr,cb,title)=>{let table=make('table');let focuselm=null;for(let i=0;i<arr.length;i++){let tr=make('tr');let lab_td=make('td');lab_td.style.verticalAlign="top";let elm_td=make('td');let type=arr[i][0];let label=arr[i][1];let def=arr[i][2];let optarg=arr[i][3];let elm;if(type=="select"){if(!def)def=0;else def=parseInt(def);elm=make('select');elm.style.width="85";let list=optarg;for(let j=0;j<list.length;j++){let opt=make('option');opt.setAttribute('value',list[j]);if(j==def)opt.setAttribute("selected","true");opt.html(list[j]);elm._add(opt);}}else if(type=="field"){elm=make('span');elm.innerHTML=def;}else if(type=="check"){elm=make('input');elm.type="checkbox";if(def)elm.checked=true;elm.ael('click',e=>{setTimeout(()=>{elm.checked=!elm.checked;},1);});}else if(type=="text"){elm=make('input');elm.type="text";if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}else if(type=="textarea"){elm=make('textarea');elm.rows=6;elm.style.width=235;if(optarg)elm.setAttribute("maxlength",optarg);if(def)elm.setAttribute("placeholder",def);if(!focuselm)focuselm=elm;}elm.ael('mousedown',function(e){e.stopPropagation();});elm.setAttribute("name",label);lab_td.html(label+":");lab_td._tcol="#000";elm_td._add(elm);tr._add(lab_td);tr._add(elm_td);tr.elm=elm;table._add(tr);}return this.make_popup({'STR':table,'TYP':"form",'CB':cb,'TIT':title,'FOCUS':focuselm});};this.popform=popform;api.popform=(arr,title)=>{return new Promise((y,n)=>{popform(arr,y,title);});};
+
 const mkpopup_imgdiv = (type, use_img, if_big_img) => {//«
 	let imgdiv = make('div');
 	imgdiv._pos='absolute';
@@ -970,7 +970,8 @@ this.make_popup = (arg) => {//«
 	if (typeof arg == "string") {
 		str = arg;
 		type = typearg;
-	} else if (typeof arg == "object") {
+	}
+	else if (typeof arg == "object") {
 		str = arg.STR || arg.DIV;
 		if_cancel = arg.CANCEL;
 		verybig = arg.VERYBIG;
@@ -994,7 +995,8 @@ this.make_popup = (arg) => {//«
 		selectable = arg.SEL;
 		type = arg.TYPE || arg.TYP;
 		no_buttons = arg.NOBUTTONS;
-	} else if (arg) str = arg;
+	}
+	else if (arg) str = arg;
 	if (!str) str = "";
 	if (typeof str == "object" && typeof str.length == "number") str = make_func_div(str);
 	else if (typeof str == "string") str = str.replace(/__BR__/g, "<hr style='margin:0px;height:6px;visibility:hidden;'>");
@@ -1657,6 +1659,12 @@ const DESK_CONTEXT_MENU=[
 			make_new_icon(desk, "Text")
 		}
 	],
+	"Import...", () => {
+		let inp = make('input');
+		inp.type="file";
+		inp.oninput=function(e){ save_dropped_files(inp.files, desk); }
+		popup(inp, {title: "Inport a file..."});
+	},
 	"Explorer::Alt+e",open_home_folder,
 	"Terminal::Alt+t", open_terminal,
 //	"Help::Alt+h", open_help,
@@ -2221,11 +2229,15 @@ cwarn(`win_reload: "dev mode" is not enabled!`);
 			}
 			if (!CWIN) return;
 			if (check_cwin_owned()) return;
-//				CWIN.reload();
+//			CWIN.reload();
+if (CWIN.noKbReload){
+popup("Keyboard reloading has been disabled for this window");
+return;
+}
 			win_reload();
 			return;
 		}//»
-		if (kstr=="c_A"&&CWIN.appName!==FOLDER_APP) return CWIN.contextMenuOn();
+		if ((kstr=="c_A"||kstr=="c_CA")&&CWIN.appName!==FOLDER_APP) return CWIN.contextMenuOn();
 		if (!(is_full||is_max)) {//«
 			if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
 				if (is_max) return;
@@ -2959,7 +2971,12 @@ contextMenuOn(e){//«
 		let str = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
 		popup(str);
 	});
-//		items.push(`Window id: ${winid.replace(/^win_/,"")}`, null);
+	if (dev_mode){
+		items.push("Developer reload", ()=>{
+			this.reload();
+		});
+	}
+//items.push(`Window id: ${winid.replace(/^win_/,"")}`, null);
 	CG.on();
 	let op_hold = img_div._op;
 	let usex,usey;
@@ -3712,10 +3729,10 @@ stopPointSelect(){/* « */
 
 
 }/* » */
-mkOverlay(){
+mkOverlay(){//«
 	this.overlay = mkOverlay({id: this.id});
 	this.maxOverlayLength=42;
-}
+}//»
 doOverlay(strarg){//«
 	if (!this.overlay) return;
 	let str;
@@ -3813,7 +3830,15 @@ set title(arg){//«
 //»
 
 }//»
-
+const set_win_resize_inc = async() => {//«
+	let rv = await POPAPI.popin("New resize increment?");
+	if (!rv) return;
+	if (!rv.match(/^[0-9]+$/)) return poperr(`Invalid numerical increment`);
+	let inc = parseInt(rv);
+	if (inc < 1 || inc > 500) return poperr(`Increment must be 1-500!`);
+	win_resize_inc = inc;
+	show_overlay(`New resize increment: ${win_resize_inc}`);
+};//»
 const win_reload = async () => {//«
 	if (!CWIN) return;
 	if (!await CWIN.reload()) return;
@@ -7507,7 +7532,8 @@ const get_desk_context=()=>{//«
 //Saving«
 
 //Called via "real/outer" OS file drop event(ChromeOS,Windows,etc)
-const save_dropped_files = (e, where) => {//«
+const save_dropped_files = (e_or_list, where) => {//«
+//const save_dropped_files = (e, where) => {
 /*Reading folders doesn't work!«
 function traverseFileTree(item, path) {
   path = path || "";
@@ -7542,14 +7568,26 @@ return;
 »*/
 return new Promise(async(y,n)=>{
 	let usepath = where.fullpath;
-	let usepos={X:e.clientX+desk.scrollLeft,Y:e.clientY+desk.scrollTop,};
+	let usepos, files;
+	if (e_or_list instanceof FileList){
+		usepos = {X: 0, Y: 0};
+		files = e_or_list;
+	}
+	else {
+		let e = e_or_list;
+		usepos={
+			X:e.clientX+desk.scrollLeft,
+			Y:e.clientY+desk.scrollTop
+		};
+		files = fs.event_to_files(e);
+	}
+
 /*«
 	if (!where) {
 		usepath = DESK_PATH;
 	}
 	else usepath = where.fullpath;
 »*/
-	let files = fs.event_to_files(e);
 	let iter = -1;
 	let dofile = async() => {
 		iter++;
@@ -7599,9 +7637,9 @@ cerr(mess);
 	};
 	dofile();
 });
-
-
 }
+
+//this.save_file_list_to_desk = (list) => {save_dropped_files(list, desk);};
 //»
 
 //Opens a folder in "Save As..." mode
@@ -7824,6 +7862,7 @@ const check_input = ()=>{//«
 			}//»
 			else if ((kstr == 'ENTER_') || (kstr == "ESC_" && cpr.inactive)) {
 				if (kstr=="ENTER_"){
+					if (act instanceof HTMLInputElement &&  act.type == "file") return;
 					if (!text_inactive && (act instanceof HTMLTextAreaElement) && !act._noinput) return;
 					e.preventDefault();
 					if (cpr.enterOK) return clickok();
@@ -8010,7 +8049,7 @@ cwarn("ABORT pointSelect");
 
 //Desktop and folder specific functions dealing with icons or the icon cursor:
 	if (!cwin || cwin.appName==FOLDER_APP){//«
-		if (kstr == "c_A") {//«
+		if (kstr == "c_A" || kstr == "c_CA") {//«
 			let curicon;
 			if (CUR.ison()) curicon = CUR.geticon();
 			if (curicon || ICONS.length===1){
@@ -8137,6 +8176,7 @@ cwarn("There was an unattached icon in ICONS!");
 //		case "b_A": return toggle_taskbar();
 		case "b_A": return taskbar.toggle();
 		case "e_CAS": return taskbar.toggleExpertMode();
+		case "i_CA": return set_win_resize_inc();
 		case "i_CAS": return toggle_icon_display();
 //		case "t_CAS": return tile_windows();
 		case "l_CA": return toggle_layout_mode();

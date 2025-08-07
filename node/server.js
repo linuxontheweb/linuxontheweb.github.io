@@ -1,7 +1,7 @@
 //Import«
 
 const fs = require('fs');
-const WebSocketServer = require('ws').WebSocketServer;
+//const WebSocketServer = require('ws').WebSocketServer;
 const fsprom = require('node:fs/promises');
 const https = require('https');
 const http = require('http');
@@ -287,6 +287,7 @@ if (secure) server = https.createServer(HTTPS_OPTIONS, handler).listen(PORT, HOS
 else {
 	server = http.createServer(handler).listen(PORT, HOST);
 }
+/*
 const wss = new WebSocketServer({ server });
 wss.on('connection',ws=>{
 
@@ -344,6 +345,7 @@ ws.on('close', async()=>{//«
 });//»
 
 });
+*/
 //»
 
 log(`Listening on ${HOST}:${PORT}`);

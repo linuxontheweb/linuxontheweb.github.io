@@ -2626,7 +2626,7 @@ async respInit(addMessage){//«
 	if (admin_mode){
 		init_prompt+=`\nAdmin mode: true`;
 	}
-	if (addMessage) init_prompt = `${addMessage}\n${init_prompt}`;
+	if (addMessage) init_prompt = `${init_prompt}\n${addMessage}`;
 	let env_file_path = `${this.cur_dir}/.env`; 
 	let env_lines = await env_file_path.toLines();
 	if (env_lines) {
@@ -3649,7 +3649,8 @@ onkill(if_dev_reload){//«
 //»
 
 async onappinit(appargs={}){//«
-
+//cwarn("TERMINAL!!!");
+//log(appargs.noKbReloadzzz, appargs.noKbReload);
 	await this.loadShell();
 	let {reInit} = appargs;
 	if (!reInit) {
@@ -3659,6 +3660,11 @@ async onappinit(appargs={}){//«
 	if (USE_ONRELOAD) this.onreload = this._onreload;
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {termBuffer, addMessage, commandStr, histories} = reInit;
+	if (appargs.noKbReload){
+		if (!addMessage) addMessage = "";
+		addMessage += "Keyboard reloading: disabled";
+		this.Win.noKbReload = appargs.noKbReload;
+	}
 	await this.initHistory(termBuffer);
 	await this.respInit(addMessage);
 	this.didInit = true;

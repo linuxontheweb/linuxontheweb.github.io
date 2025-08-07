@@ -246,6 +246,9 @@ pipeIn(val){/*«*/
 
 }/*»*/
 const com_less = class extends Com{//«
+static getOpts(){
+	return {l:{parsel:1}};
+}
 async init(){//«
 	if (this.term.actor) {
 		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
@@ -291,7 +294,7 @@ async init(){//«
 //	this.pager.multilineSels = sels;
 //	this.awaitCb = this.pager.init(arr, name, {opts, lineSelect: true});
 
-	this.awaitCb = this.pager.init(arr, name, {opts});
+	this.awaitCb = this.pager.init(arr, name, {opts:this.opts});
 }//»
 async run(){
 //	await this.awaitCb;
@@ -316,17 +319,58 @@ pipeIn(val){
 
 }//»
 const com_vim = class extends Com{//«
-
+static getOpts(){//«
+	return {
+		s:{
+			r: 1,//use ondevreload
+			d: 3,//Use development file for the vim module
+		},
+		l: {
+			pipeok: 1,
+			parsel: 1,
+			nosave: 1,
+			one: 1,
+			insert: 1,
+			enterquit: 1,
+			"convert-markers": 1,
+			"reload-win": 3,
+			symbols: 3,
+			"force-stdout": 1,
+			"dev-name": 3,
+			refs: 3,
+			"use-dev-reload": 1
+		}
+	};
+}//»
 async init(){//«
 	if (this.term.actor) {
 		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
 	}
 	let {args, opts, command_str, term}=this;
-	if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
+	let use_mod_name;
+	if (opts.d) {
+		use_mod_name = "local.dev.vim";
+		let txt = await opts.d.toText(term);
+		if (!isStr(txt)) return this.no(`${opts.d}: file not found`);
+		let url = URL.createObjectURL(new Blob([`(function(){"use strict";${txt}})()`]));
+		let scr;
+		try {
+			scr = await util.makeScript(url);
+		}
+		catch(e){
+cerr(e);
+			this.no(e.message);
+			return;
+		}
+	}
+	else if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 		this.no("could not load the pager module");
 		return;
 	}
-	this.editor = new NS.mods[DEF_EDITOR_MOD_NAME](this.term);
+	else{
+		use_mod_name = DEF_EDITOR_MOD_NAME;
+	}
+	this.editor = new NS.mods[use_mod_name](this.term);
 /*
 this.editor.saveFunc = async(val)=>{
 //log("SAVING...", val);
@@ -408,7 +452,7 @@ async run(){//«
 		let scr = document.getElementById(`script_mods.${DEF_EDITOR_MOD_NAME}`);
 		if (scr) scr._del();
 		else{
-cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
+//cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
 		}
 		delete NS.mods[DEF_EDITOR_MOD_NAME];
 		this.term.refresh();
@@ -715,7 +759,16 @@ async run(){
 
 }//»
 const com_rmdir = class extends Com{/*«*/
-
+static getOpts(){//«
+	return {
+		s:{
+			r:1, R:1
+		},
+		l:{
+			recursive: 1
+		}
+	};
+}//»
 async run(){
 	let{args,term,err: _err}=this;
 	let have_error=false;
@@ -957,6 +1010,9 @@ pipeIn(val){
 
 }//»
 const com_dl = class extends Com{//«
+static getOpts(){
+	return {s:{n:3,},l:{name:2}};
+}
 async init(){
 	const{opts, env, args}=this;
 	let nargs = args.length;
@@ -1177,39 +1233,4 @@ else{
 //unmount: com_unmount,
 //}//»
 
-const opts = {//«
-
-	rm: {//«
-		s:{
-			r:1, R:1
-		},
-		l:{
-			recursive: 1
-		}
-	},//»
-	vim:{//«
-		s:{
-			r: 1,//use ondevreload
-		},
-		l: {
-			pipeok: 1,
-			parsel: 1,
-			nosave: 1,
-			one: 1,
-			insert: 1,
-			enterquit: 1,
-			"convert-markers": 1,
-			"reload-win": 3,
-			symbols: 3,
-			"force-stdout": 1,
-			"dev-name": 3,
-			refs: 3,
-			"use-dev-reload": 1
-		}
-	},//»
-	less:{l:{parsel:1}},
-	dl:{s:{n:3,},l:{name:2}}
-
-}//»
-
-export {coms, opts};
+export {coms};

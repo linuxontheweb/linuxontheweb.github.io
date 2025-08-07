@@ -1851,7 +1851,7 @@ const init = async()=>{//«
 		root.kids[name] = ret;
 	}
 	await mkDir("/var","appdata");
-//	try_make_site_dir();
+	try_make_site_dir();
 	return true;
 };//»
 this.mk_user_dirs=async()=>{//«

@@ -1,4 +1,49 @@
+/*8/6/25:
+
+Now I am in LOTW, hacking on my vim with my vim!!!
+
+Now let's start the process of getting a system for
+reading keydown/keypress events so that it allows us
+to do the standard vim "normal mode" command thing:
+<num>?<command>(<num>?<motion_or_object>)?
+
+We need look carefully at the onkeydown and onkeypress
+functions, and look into refactoring it.
+
+I want to begin the process of developing//« 
+my vim inside of my vim (in LOTW).
+So we might be editing the file /home/me/vim.js.
+Then we can give the vim command an arg like:
+-d /home/me/vim.js.
+In the file, we need to put the module onto:
+LOTW.mods["local.dev.vim"]
+//»
+
+*/
 //@SRKTLDM: To enable automatic line wrapping
+//Historical development notes (and old code) are kept in doc/dev/VIM
+//«Notes
+/*8/5/25: A first attempt at replicating the "number + command" behaviour of «
+"real" vim, see everything below that deals with `cur_number_str` and `handle_multi_func`.
+The problem with this attempt is that it just repeated the given functions in 
+a dumb loop, without checking for whether the numbers might be used as an argument.
+Also, this method doesn't work with the await_X_command style of commands, because
+those need to wait for additional arguments (from the keyboard) in order to figure 
+out what exact commands to execute. All of this just means that we need to think more 
+about exactly how to implement functions and a better way of determining numerical 
+arguments vs dumb repetitions.
+
+class Fn{
+	constructor(fn, ...args){
+		this.fn = fn;
+		this.args = args || [];
+	}
+	run(...args){
+		let all_args = this.args.concat(...args);		
+		this.fn(...all_args);
+	}
+}
+»*/
 /*7/30/25: Time to do macros: read them from a config file.«
 
 I want to enable automated repeated macros (over a line, a visual section
@@ -18,8 +63,6 @@ to work on a bigger C++ codebase (https://github.com/ericgjackson/slumbot2019), 
 having gotten tired of doing the same repetitions over and over, I tried to get into
 vim's macro recording.
 »*/
-//Historical development notes (and old code) are kept in doc/dev/VIM
-//«Notes
 /*6/12/25«
 Check for more places where the "Save As" prompt is removed like @WYIROSKJ, but
 is_saving is *NOT* set back to false.
@@ -284,6 +327,8 @@ const NUM=(v)=>Number.isFinite(v);
 
 //export const mod = function(Term) {«
 export const mod = function(Term) {
+//LOTW.mods["local.dev.vim"] = function(Term) {
+
 //»
 
 //Imports«
@@ -332,7 +377,7 @@ let SYNTAX_TIMEOUT_MS = 1500;
 let syntax_timeout;
 
 const overrides=["c_A", "f_CAS"];
-const PREV_DEF_SYMS=["TAB_", "j_C", "v_C", "l_C"];
+const PREV_DEF_SYMS=["TAB_", "j_C", "v_C", "l_C", "r_C"];
 
 //const OK_DIRTY_QUIT = true;
 const OK_DIRTY_QUIT = false;
@@ -424,6 +469,8 @@ let cur_completion_str;
 const RESERVED_FOLD_CHAR = "\xd7";
 const OPEN_FOLD_CHAR = "\xab";
 const END_FOLD_CHAR = "\xbb";
+
+//let cur_number_str = "";
 
 let cur_undo;
 
@@ -667,9 +714,7 @@ const reset_display=()=>{//«
 	stat_warn("Display reset");
 //	render({},107);
 };//»
-const scr_h = ()=>{
-	return Term.h - num_stat_lines;
-};
+const scr_h = ()=>{return Term.h - num_stat_lines;};
 const at_screen_bottom = () => {return y === Term.h - num_stat_lines - 1;};
 const at_file_end = ()=>{return y+scroll_num === lines.length - 1;};
 const timestr=(stamp)=>{//«
@@ -745,6 +790,7 @@ cerr("The reload_win was not in topwin.childWins!?!?!");
 };//»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
 const onescape=()=>{//«
+//	cur_number_str = "";
 	if (stat_cb){
 		if (this.mode===CUT_BUFFER_MODE) alt_screen_escape_handler();
 		else {
@@ -809,6 +855,9 @@ const is_normal_mode = edit_ok => {//«
 //	if (edit_ok) return (!(m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE || this.stat_input_type));
 //	return (!(m===INSERT_MODE || m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE || this.stat_input_type));
 };//»
+const is_edit_mode = () => {
+	return this.mode == INSERT_MODE || this.mode == REPLACE_MODE;
+};
 /*
 const is_normal_mode = edit_ok => {//«
 	let m = this.mode;
@@ -871,7 +920,12 @@ const set_sel_end = () => {//«
 
 }//»
 const set_edit_mode = (ch)=>{//«
-	if (ch=="a"&&curch()) x++;
+	if (ch == "A"){
+		seek_line_end();
+		if (curch()) x++;
+	}
+	else if (ch=="a"&&curch()) x++;
+	else if (ch == "I") seek_line_start();
 	this.mode = INSERT_MODE;
 	render();
 };//»
@@ -906,9 +960,9 @@ const check_if_folded=(num)=>{//«
 	}
     return ln._fold;
 }//»
-const toggle_if_folded=()=>{//«
+const toggle_if_folded=(opts)=>{//«
 	if (fold_mode && lines[cy()]._fold) {
-		toggle_cur_fold();
+		toggle_cur_fold(opts);
 	}
 }//»
 const create_open_fold=()=>{//«
@@ -971,6 +1025,24 @@ const await_z_command=()=>{//«
 	};
 	stat("z");
 }//»
+const await_g_command=()=>{//«
+	stat_cb=c=>{
+		stat_cb=null;
+		if (c=="g") {
+			y = 0;
+			scroll_num = 0;
+			x = 0;
+		}
+		else if (c=="M") {
+			x = Math.floor(curarr().length/2);
+		}
+		else if (c=="e") {
+			seek_prev_end_word();
+		}
+		render({},40);
+	};
+	stat("g");
+}//»
 const await_mark_command=()=>{//«
 	stat_cb=c=>{
 		stat_cb=null;
@@ -985,7 +1057,7 @@ const await_jump_command=()=>{//«
 		let num = MARKS[c];
 		if (Number.isFinite(num)) {
 			if (num >= num_lines) num = num_lines-1;
-			scroll_to(num);
+			scroll_to(num, {doRender: true});
 		}
 		else stat(`'${c}': Mark not set`);
 //		render();
@@ -994,7 +1066,7 @@ const await_jump_command=()=>{//«
 }//»
 
 const open_fold = (lnsarg, opts={})=>{//«
-	let {noInnerFolds, useOffset} = opts;
+	let {noInnerFolds, useOffset, offsetFoldEnd} = opts;
 	let uselines;
 	if (!lnsarg._par) uselines = lines;
 	else uselines = lnsarg._par;
@@ -1010,6 +1082,10 @@ return;
 }
 //»
 	let fold = uselines[idx]._fold;
+	if (offsetFoldEnd){
+		useOffset = true;
+		fold._offset = fold.length-1;
+	}
 	for (let ln of fold){
 		if (ln._fold) {
 			if (noInnerFolds) {
@@ -1045,6 +1121,7 @@ const open_prev_line_if_folded = () => {//«
 	open_fold(ln._fold);
 	scroll_to(_y);
 };//»
+const close_fold = (i, offset) =>{//«
 const _close_fold = (lns, i, offset) =>{//«
 	let depth = 1;
 	let start_ln = lns[i];
@@ -1095,7 +1172,6 @@ const _close_fold = (lns, i, offset) =>{//«
 	}//»
 	return fold;
 };//»
-const close_fold = (i, offset) =>{//«
 	_close_fold(lines, i, offset);
 	y=i-scroll_num;
 	x=0;
@@ -1423,7 +1499,9 @@ const try_save = (if_saveas)=>{//«
 		return stat_warn(`is_saving: ${is_saving}`);
 	}
 	is_saving = true;
-	if (edit_fullpath&&!if_saveas) return edit_save();
+	if (edit_fullpath&&!if_saveas) {
+		return edit_save();
+	}
 	init_stat_input("Save As: ");
 	render({}, 110);
 };//»
@@ -2679,7 +2757,6 @@ const seek_line_end = ()=>{//«
 	}
 	set_sel_end();
 }//»
-
 const adjust_cursor=()=>{//«
 	let ln = curarr();//let ln = curln(true);
 	if (ln._fold) {
@@ -2694,6 +2771,7 @@ const adjust_cursor=()=>{//«
 	else x = usex;
 }//»
 const seek_prev_word=()=>{//«
+	toggle_if_folded({offsetFoldEnd: true});
 	let addi=0;
 	for (let i=0;;i--) {
 		let ch1 = curch(i-2);
@@ -2716,6 +2794,7 @@ const seek_prev_word=()=>{//«
 	if (x<0) {
 		if (cy() > 0) {
 			up();
+			toggle_if_folded({offsetFoldEnd: true});
 			x = curarr().length;
 			seek_prev_word(true);
 			return;
@@ -2725,7 +2804,7 @@ const seek_prev_word=()=>{//«
 	set_sel_mark();
 	render({},51);
 };//»
-const left = ()=>{//«
+const left = () => {//«
 	if (x > 0) {
 		x--;
 	}
@@ -2751,8 +2830,8 @@ const left = ()=>{//«
 	set_sel_mark();
 	render({},52);
 }//»
-const seek_next_word = (if_from_continue)=>{//«
-	const try_next=()=>{
+const seek_next_word = (if_from_continue) => {//«
+	const try_next=()=>{//«
 		if (cy() < lines.length-1) {
 			down();
 			x=0;
@@ -2763,7 +2842,7 @@ const seek_next_word = (if_from_continue)=>{//«
 			if (x<0) x=0;
 			render();
 		}
-	};
+	};//»
 	toggle_if_folded();
 	if (!curch()) {
 		try_next();
@@ -2781,7 +2860,6 @@ const seek_next_word = (if_from_continue)=>{//«
 		let ch2 = curch(i);
 		if (!ch2) break;
 		if (ch1&&ch1.match(/\s|\W/)&&ch2.match(/\w/)) break;
-//		if ((ch1===" "||ch1=="\t")&&(ch2!==" "&&ch2!="\t")) break;
 		addi++;
 	}
 	x+=addi+1;
@@ -2789,6 +2867,104 @@ const seek_next_word = (if_from_continue)=>{//«
 	set_sel_mark();
 	render({},53);
 }//»
+const seek_end_word = () => {//«
+	const do_seek_end = (if_from_continue)=>{//«
+		const try_next=()=>{//«
+							//log("NEXT");
+			if (cy() < lines.length-1) {
+				down();
+				x=0;
+				do_seek_end(true);
+			}
+			else{
+				x--;
+				if (x<0) x=0;
+				render();
+			}
+		};//»
+		toggle_if_folded();
+		let ch1 = curch();
+		if (!ch1) {
+			try_next();
+			return;
+		}
+		let ch2 = curch(1);
+		if (!ch2) {
+			try_next();
+			return;
+		}
+		if (ch1.match(/\w/) && ch2 && ch2.match(/\W/)) x++;
+		let addi=0;
+		for (let i=0;;i++) {
+			let ch1 = curch(i);
+			if (ch1&&if_from_continue && ch1.match(/\W/)) {
+				if (this.mode !== LINE_WRAP_MODE) {
+					addi--;
+					break;
+				}
+			}
+			let ch2 = curch(i+1);
+			if (!ch2) {
+				break;
+			}
+			if (ch1&&ch1.match(/\w/)&&ch2.match(/\W/)) break;
+			addi++;
+		}
+		x+=addi;
+		if (x < 0) x = 0;
+		if (x==curarr().length) return try_next();
+		set_sel_mark();
+		render({},53);
+	}//»
+	let arr = curarr();
+	let ch = arr[x];
+	let ch2 = arr[x+1];
+	//In the middle of a word
+	if (ch && ch2 && ch.match(/\w/) && ch2.match(/\w/)) {
+		do_seek_end();
+		return 
+	}
+	//Not in middle, find the start of the next word
+	seek_next_word();
+	arr = curarr();
+	ch = arr[x];
+	ch2 = arr[x+1];
+	//This is a 1 character word: either at the end of a line or not
+	if (ch && (!ch2 || (ch2 && ch.match(/\w/) && ch2.match(/\W/)))) {
+		return;
+	}
+	//At the beginning of a multi-character word
+	do_seek_end();
+}//»
+const seek_prev_end_word = () => {//«
+
+	const at_end = () => {
+		let arr = curarr();
+		let ch1 = arr[x];
+		let ch2 = arr[x+1];
+		if (ch1 && ch1.match(/\w/) && (!ch2 || ch2.match(/\W/))) return true;
+		return false;
+	};
+	const in_mid = () => {
+		let arr = curarr();
+		let ch0 = arr[x-1];
+		let ch1 = arr[x];
+		let ch2 = arr[x+1];
+		if (ch0 && ch0.match(/\w/) && ch1 && ch1.match(/\w/)) return true;
+		return false;
+	};
+
+	if (in_mid()){
+		seek_prev_word();
+	}
+	seek_prev_word();
+	if (at_end()) {
+		return;
+	}
+	seek_end_word();
+
+};//»
+
 const right = ()=>{//«
 	toggle_if_folded();
 //	if (edit_insert){
@@ -2951,37 +3127,6 @@ const scroll_down = (n, opts={}) => {//«
 	set_ry();
 	render({},60);
 };//»
-
-/*
-const scroll_down = (n, opts={}) => {//«
-//THROW("SHOULD NOT CALL SCROLL_DOWN!!!");
-log(`SCRD: ${n}`);
-	let {moveCur}=opts;
-	if (scroll_num + n >= lines.length) {
-		if (scroll_num + y < lines.length-1) {
-			y = lines.length-1-scroll_num;
-			adjust_cursor();
-			set_sel_end();
-			set_ry();
-			render({},59);
-		}
-		return;
-	}
-	scroll_num += n;
-	if (scroll_num + h - num_stat_lines > lines.length) {
-		scroll_num = lines.length - h + num_stat_lines;
-		if (scroll_num < 0) scroll_num = 0;
-	}
-	if (moveCur) {
-		y-=n;
-		if (y < 0) y=0;
-	}
-	adjust_cursor();
-	set_sel_end();
-	set_ry();
-	render({},60);
-};//»
-*/
 
 const pgdn=()=>{//«
 //log("Not doing page down");
@@ -5928,7 +6073,7 @@ const backspace = ()=>{//«
 
 const handle_press=(ch)=>{//«
 //const handle_press=(code)=>{
-
+//	let got_number = false;
 	let mess;
 	last_updown = false;
 //	toggle_hold_y = null;
@@ -5948,10 +6093,20 @@ const handle_press=(ch)=>{//«
 	else if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) handle_symbol_ch(ch);
 	else if (mode===FILE_MODE) handle_file_ch(ch);
 	else if (mode===VIS_LINE_MODE||mode===VIS_MARK_MODE||mode===VIS_BLOCK_MODE) handle_visual_key(ch);
-	else if (KEY_CHAR_FUNCS[ch]) KEY_CHAR_FUNCS[ch]();
-
+//	else if (ch.match(/[1-9]/) || (cur_number_str && ch === "0")){
+//		cur_number_str += ch;
+//		stat(cur_number_str);
+//		got_number = true;
+//	}
+	else if (KEY_CHAR_FUNCS[ch]) {
+//		if (cur_number_str) handle_multi_func(()=>{KEY_CHAR_FUNCS[ch]();});
+//		else KEY_CHAR_FUNCS[ch]();
+		KEY_CHAR_FUNCS[ch]();
+	}
+//	if (!got_number){
+//		cur_number_str = "";
+//	}
 };//»
-
 const handle_stat_char=ch=>{//«
 	if (stat_com_arr===true) {
 		stat_com_arr = [];
@@ -6009,8 +6164,6 @@ const handle_stat_cb_keydown=(sym)=>{//«
 	stat_cb(sym);
 //	if (sym==="ENTER_") return stat_cb(sym);
 };//»
-const handle_seek_line_end=()=>{seek_line_end();if(is_normal_mode()&&AUTO_INSERT_ON_LINE_SEEKS)set_edit_mode("a");render();};
-const handle_seek_line_start=()=>{seek_line_start();if(is_normal_mode()&&AUTO_INSERT_ON_LINE_SEEKS)set_edit_mode("i");render();};
 
 const handle_visual_key=ch=>{//«
 	let s;
@@ -6067,6 +6220,17 @@ const handle_visual_key=ch=>{//«
 };//»
 
 //XXXXXXXXXXXX
+/*
+const handle_multi_func=(fn)=>{
+	let num = parseInt(cur_number_str);
+log(`HANDLE MULTI`, num);
+log(fn);
+	cur_number_str = "";
+	for (let i=0; i < num; i++){
+		fn();
+	}
+};
+*/
 const KEY_CHAR_FUNCS={//«
 
 //	X: do_null_del,
@@ -6075,6 +6239,7 @@ const KEY_CHAR_FUNCS={//«
 	l: right,
 	j: down,
 	k: up,
+	G: end,
 	H:()=>{cur_to(0)},
 	M:()=>{
 		let scrh = scr_h();
@@ -6091,6 +6256,8 @@ const KEY_CHAR_FUNCS={//«
 	},
 
 	w: seek_next_word,
+	e: seek_end_word,
+
 	b: seek_prev_word,
 
 //e: seek end word
@@ -6117,6 +6284,7 @@ const KEY_CHAR_FUNCS={//«
 //Modes
 
 	a: ()=>{ set_edit_mode("a") },
+	A: ()=>{ set_edit_mode("A") },
 	i: ()=>{ set_edit_mode("i") },
 	I: ()=>{ set_edit_mode("I") },
 	m: await_mark_command,
@@ -6124,6 +6292,7 @@ const KEY_CHAR_FUNCS={//«
 	s:()=>{init_symbol_mode({adv: true})},
 	S: init_symbol_mode,
 	X: init_cut_buffer_mode,
+
 //	L: init_line_wrap_mode,
 //	e:()=>{
 //		init_symbol_mode({ref: true});
@@ -6142,7 +6311,7 @@ const KEY_CHAR_FUNCS={//«
 //	H: insert_hex_ch,
 	c: insert_comment,
 	z: await_z_command,
-
+	g: await_g_command,
 	"/": ()=>{ init_stat_input("/") },
 	"?": ()=>{ init_stat_input("?") },
 	":": ()=>{ init_stat_input(":") },
@@ -6160,13 +6329,13 @@ const KEY_CHAR_FUNCS={//«
 
 //Cursor
 	"0":()=>{seek_line_start();render();},
-"^":()=>{
-let str = curarr().join("");
-let rv = str.match(/\S/);//Find first non-whitespace
-if (!rv) return;
-x = rv.index;
-render();
-},
+	"^":()=>{
+		let str = curarr().join("");
+		let rv = str.match(/\S/);//Find first non-whitespace
+		if (!rv) return;
+		x = rv.index;
+		render();
+	},
 	"$":()=>{seek_line_end();render();},
 
 //Scroll
@@ -6193,16 +6362,28 @@ const KEY_DOWN_EDIT_FUNCS={//«
 	ENTER_C: nobreak_enter,
 };//»
 const KEY_DOWN_FUNCS={//«
-r_C:(e)=>{
-	e.preventDefault();
-if (!is_normal_mode(true)) return;
-if (this.mode == INSERT_MODE){
-cwarn("CTRL_R INSERT");
-}
-else redo();
+r_C:()=>{
+//	e.preventDefault();
+	if (!is_normal_mode(true)) return;
+	if (this.mode == INSERT_MODE){
+		cwarn("CTRL_R INSERT");
+	}
+	else redo();
 
 },
-e_C:()=>{scroll_down(1,{moveCur:true});},
+e_C:()=>{
+	if (is_edit_mode()) {
+		seek_line_end();
+		render();
+	}
+	else scroll_down(1,{moveCur:true});
+},
+a_C:()=>{
+	if (is_edit_mode()) {
+		seek_line_start()
+		render();
+	}
+},
 d_C:()=>{scroll_down(Math.floor(Term.h/2));},
 y_C:()=>{scroll_up(1,{moveCur:true});},
 u_C:()=>{scroll_up(Math.floor(Term.h/2));},
@@ -6341,8 +6522,6 @@ const LEFTRIGHT_FUNCS={//«
 	RIGHT_: right,
 	LEFT_C: seek_prev_word,
 	RIGHT_C: seek_next_word,
-//	e_C: handle_seek_line_end, 
-//	a_C: handle_seek_line_start
 };//»
 const UPDOWN_FUNCS={//«
 	UP_:up,
@@ -6401,29 +6580,35 @@ this.onkeydown=async(e, sym, code)=>{//«
 	if (sym=="ENTER_") {//«
 		if (mode===COMMAND_MODE) return toggle_cur_fold({useOffset: true});
 	}//»
-	if (UPDOWN_FUNCS[sym]) {/*«*/
+	if (UPDOWN_FUNCS[sym]) {//«
 		if (!last_updown) {
 			scroll_hold_x = x;
 		}
 		last_updown = true;
 		check_del_fold_offset();
+//		if (cur_number_str) handle_multi_func(()=>{UPDOWN_FUNCS[sym]();});
+//		else UPDOWN_FUNCS[sym]();
 		UPDOWN_FUNCS[sym]();
 		return;
-	}/*»*/
-	last_updown = false;
-	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) return handle_symbol_keydown(sym);
-	if (mode===FILE_MODE) return handle_file_keydown(sym);
-	if (LEFTRIGHT_FUNCS[sym]){//«
-		LEFTRIGHT_FUNCS[sym]();
-		return;
 	}//»
-	if (mode === LINE_WRAP_MODE){//«
+	last_updown = false;
+	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) {
+		handle_symbol_keydown(sym);
+	}
+	else if (mode===FILE_MODE) {
+		handle_file_keydown(sym);
+	}
+	else if (LEFTRIGHT_FUNCS[sym]){
+//		if (cur_number_str) handle_multi_func(()=>{LEFTRIGHT_FUNCS[sym]();});
+//		else LEFTRIGHT_FUNCS[sym]();
+		LEFTRIGHT_FUNCS[sym]();
+	}
+	else if (mode === LINE_WRAP_MODE){
 		if (LINE_WRAP_SYMS.includes(sym)){
 			handle_linewrap_key(sym);
 		}
-		return;
-	}//»
-	if (KEY_DOWN_EDIT_FUNCS[sym]){//«
+	}
+	else if (KEY_DOWN_EDIT_FUNCS[sym]){//«
 		if (mode === INSERT_MODE) {
 			KEY_DOWN_EDIT_FUNCS[sym]();
 		}
@@ -6445,9 +6630,16 @@ this.onkeydown=async(e, sym, code)=>{//«
 				reload_win.winElem._z = topwin.winElem.style.zIndex+1;
 			}
 		}
-		return;
+//		cur_number_str = "";
 	}//»
-	KEY_DOWN_FUNCS[sym] && KEY_DOWN_FUNCS[sym](e);	
+	else if (KEY_DOWN_FUNCS[sym]) {
+//		if (cur_number_str) handle_multi_func(()=>{KEY_DOWN_FUNCS[sym](e);});
+//		else KEY_DOWN_FUNCS[sym](e);	
+		KEY_DOWN_FUNCS[sym]();	
+//		cur_number_str = "";
+	}
+//	else if (cur_number_str) {
+//	}
 }//»
 
 //»
