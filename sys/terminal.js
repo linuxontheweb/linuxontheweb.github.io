@@ -3,7 +3,7 @@
 const NS = LOTW;
 const {globals} = NS;
 const{FS_PREF,fs,KC,ALWAYS_PREVENT}=globals;
-const {log, cwarn, cerr, gbid, make, mkdv, evt2Sym} = LOTW.api.util;
+const {log, cwarn, cerr, gbid, make, mkdv, evt2Sym, mkOverlay, center} = LOTW.api.util;
 //»
 
 //Var«
@@ -120,9 +120,32 @@ makeDOM(){//«
 	main._bgcol="#000";
 	win._add(main);
 	this.main=main;
+	this.Main=main;
 
 	document.body._add(win);
 }//»
+mkOverlay(){//«
+	this.overlay = mkOverlay({id: this.id});
+	this.maxOverlayLength=42;
+}//»
+doOverlay(strarg){//«
+	if (!this.overlay) return;
+	let str;
+	if (strarg) {
+		str = strarg;
+		if (str.length > this.maxOverlayLength) str = str.slice(0,this.maxOverlayLength)+"...";
+	}
+	this.overlay.innerText = str;
+	if (this.overlayTimer) clearTimeout(this.overlayTimer);
+	else this.Main.appendChild(this.overlay);
+	center(this.overlay, this.Main);
+	if (this.Main.scrollTop) this.overlay._y += this.Main.scrollTop;
+	this.overlayTimer = setTimeout(()=>{
+		this.overlayTimer = null;
+		this.overlay._del();
+	}, 1500);
+}
+//»
 loadApp(){//«
 
 return new Promise((Y,N)=>{//«
