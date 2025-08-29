@@ -9,14 +9,14 @@ const http = require('http');
 const log=(...args)=>{console.log(...args);};
 const cwarn=(...args)=>{console.warn(...args);};
 
-let ws_server, ws_client;
+//let ws_server, ws_client;
 
 //»
 //Var«
 
 //const HOST="0.0.0.0";
 const HOST = "localhost";
-const HOST_SVC_ROOT = '/usr/local/home/lotw/local/_writes';
+const HOST_SVC_ROOT = `${process.env.HOME}/zsave/writes`;
 //const PORT = 4443;
 const PORT = 8080;
 //const PORT = 8081;

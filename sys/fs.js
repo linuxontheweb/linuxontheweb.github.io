@@ -1,4 +1,4 @@
-/*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,
+/*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,«
 at the top-level, so we had to add them in at the dir mounting points during
 fs init. This bug screwed up the folder app.
 
@@ -7,7 +7,7 @@ First: intra-SHM_TYPE mv operations are trivial for both files and folders
 Next:  "   "    "   " cp operations are trivial for files
 Then we need to figure out about mv'ing and cp'ing to/from FS_TYPE.
 cp is trivial for files
-*/
+»*/
 //New Issues«
 /*9/8/2024: Made /dev/shm to allow for arbitrary in-memory files and folders. Files under here
 will use a new SHM_TYPE, which tells the system not to mess with databasing (which

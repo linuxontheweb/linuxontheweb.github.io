@@ -1,4 +1,6 @@
-/*8/6/25:
+/*8/9/25:
+*/
+/*8/6/25:«
 
 Now I am in LOTW, hacking on my vim with my vim!!!
 
@@ -19,7 +21,7 @@ In the file, we need to put the module onto:
 LOTW.mods["local.dev.vim"]
 //»
 
-*/
+»*/
 //@SRKTLDM: To enable automatic line wrapping
 //Historical development notes (and old code) are kept in doc/dev/VIM
 //«Notes
@@ -3073,7 +3075,6 @@ const scroll_up = (n, opts={} )=>{//«
 	return true;
 };//»
 »*/
-
 	let {moveCur, noRender, noSetSel}=opts;
 	if (scroll_num - n < 0) return;
 	scroll_num-=n;
@@ -3082,7 +3083,6 @@ const scroll_up = (n, opts={} )=>{//«
 		let maxy = h-num_stat_lines-1;
 		let diff = y - maxy;
 		if (diff > 0) {
-			scroll_num += diff;
 			y = maxy;
 		}
 	}
@@ -3091,7 +3091,6 @@ const scroll_up = (n, opts={} )=>{//«
 	if (!noRender) render();
 	return true;
 };//»
-
 const scroll_down = (n, opts={}) => {//«
 	let {moveCur}=opts;
 /*«

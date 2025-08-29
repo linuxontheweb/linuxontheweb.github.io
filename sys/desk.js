@@ -26,8 +26,8 @@ a system-level hotkey which simply stores the lastSelectedPoint
 onto the Window object. This is what select_point_from_window() does,
 but we are currently commenting that out @FWIKNGH.
 
-We should generalize it for the specific colors (grid crosshairs) we want for
-out background.
+We should generalize it for the specific colors (grid crosshairs) we 
+want for our background.
 »*/
 /*Keep it simple: If an app defines onreload, just call *that* instead of doing the«
 system default @HGLAURJF. This is for applications that have their own internal 
@@ -1354,7 +1354,8 @@ const{pathToNode}=fsapi;
 let dev_mode;
 let admin_mode;
 let debug_localstorage=false;
-let show_desktop_during_win_cycle = true;
+//let show_desktop_during_win_cycle = true;
+let show_desktop_during_win_cycle = false;
 let win_cycle_wins_hidden = false;
 //let folders_open_in_same_window = false;
 let folders_open_in_same_window = true;
@@ -3963,8 +3964,6 @@ const window_cycle = () => {//«
 	if (!len) return;
 
 	if (!num_win_cycles){
-//		if (taskbar_hidden&&num_minimized_wins) taskbar.show(true);
-
 		CWIN_HOLD = CWIN;
 		wins.sort((a,b)=>{
 			if (pi(a.winElem.style.zIndex) < pi(b.winElem.style.zIndex)) return 1;
@@ -3974,7 +3973,11 @@ const window_cycle = () => {//«
 		let samelen = num_minimized_wins === wins.length;
 		let first;
 		if (!(!CWIN_HOLD && !samelen)) first = wins.shift();
-		if (show_desktop_during_win_cycle) {
+
+//The NOWINDOW object is used to indicate that  the desktop will count as one of the "windows" to cycle through.
+//We always show the desktop if no windows are showing because they are all minimized
+//as we start cycling them,
+		if (show_desktop_during_win_cycle || !CWIN_HOLD) {
 			wins.push(NOWINDOW);
 			len++;
 		}
@@ -4010,26 +4013,6 @@ const window_cycle = () => {//«
 		CG.on(WIN_CYCLE_CG_OP);
 	}
 
-/*«
-	if (show_desktop_during_win_cycle) {
-		if (!win_cycle_wins_hidden){ 
-			if ((w===CWIN_HOLD) || (num_win_cycles && (!(num_win_cycles%len)))){
-				if (w===CWIN_HOLD) num_win_cycles++;
-				CWIN_HOLD=null;
-				have_window_cycle = true;
-				win_cycle_wins_hidden = true;
-				toggle_show_windows();
-				CG.off();
-				return;
-			}
-		}
-		if (win_cycle_wins_hidden){
-			win_cycle_wins_hidden = false;
-			toggle_show_windows();
-			CG.on(WIN_CYCLE_CG_OP);
-		}
-	}
-»*/
 	CWCW = w;
 	CWCW.z_hold = CWCW.winElem._z;
 	CWCW.winElem._z= CG_Z+1;
@@ -8180,7 +8163,7 @@ cwarn("There was an unattached icon in ICONS!");
 		case "i_CAS": return toggle_icon_display();
 //		case "t_CAS": return tile_windows();
 		case "l_CA": return toggle_layout_mode();
-		case "SPACE_CAS":
+//		case "SPACE_CAS":
 //if (cwin) {
 //FWIKNGH
 //	select_point_from_window();

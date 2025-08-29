@@ -110,13 +110,14 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 
 const RELOAD_LIBS=[
 //"games.poker",
-"games.cfr"
+//"games.cfr"
 ];
 
 let RELOAD_TERM_ONRELOAD = false;
 
 //This means that the terminal app's onreload method is set to _onreload (to reload the shell)
 let USE_ONRELOAD = true;
+//let USE_ONRELOAD = false;
 //let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
@@ -265,8 +266,11 @@ this.statusBar = Win.statusBar;
 this.appClass="cli";
 this.isEditor = false;
 this.isPager = false;
-this.env={};
-this.env['USER'] = globals.CURRENT_USER;
+this.env={
+USER: globals.CURRENT_USER,
+HOME: globals.home_path
+};
+//this.env['USER'] = globals.CURRENT_USER;
 //this.env = globals.TERM_ENV;
 this.ENV = this.env;
 //this.funcs = globals.TERM_FUNCS;
