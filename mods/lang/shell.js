@@ -2180,12 +2180,59 @@ this.ok();
 const com_devtest = class extends Com{
 init(){
 }
-run(){
-
-this.ok("DEVTEST!");
+async run(){
+this.ok("DEVTEST");
 }
 }
 
+const com_markdown = class extends Com{/*«*/
+	#mod;
+	async init(){
+		let modret = await util.getMod("util.showdown");
+		if (!modret) return this.no("No showdown module");
+		this.#mod = modret.getmod();
+	}
+	async run(){
+		const{args, term} = this;
+		let converter = new this.#mod.Converter();
+		let fname = args.shift();
+		if (!fname) return this.no("Need a file name!");
+		let str = await fname.toText(term);
+		if (!str) return this.no("File not found!");
+		let html = converter.makeHtml(str);
+		this.out(html);
+		this.ok();
+	}
+}/*»*/
+const com_html = class extends Com{/*«*/
+init(){
+}
+async openWin(val){
+	let win = await Desk.api.openApp("util.HTML", {appArgs: {text: val}});
+	if (!win) return this.no(`util.HTML: app not found`);
+}
+async run(){
+	const {args, opts, stdin} = this;
+	if (stdin){
+		this.openWin(stdin);
+		this.ok();
+		return;
+	}
+	else if (this.args.length){
+		this.no("Only supporting stdin methods!");
+		return;
+	}
+	else{
+// Do this method (like in com_math) to wait for EOF before opening the window
+// this.lines=[];
+	}
+}
+pipeIn(val){
+	if (!isEOF(val)) this.openWin(val);
+	else this.ok();
+}
+
+}/*»*/
 
 const com_wat2wasm = class extends Com{//«
 
@@ -3175,6 +3222,8 @@ this.defCommands={//«
 //continue: com_continue,
 //break: com_break,
 //poker: com_poker,
+html: com_html,
+markdown: com_markdown,
 wat2wasm: com_wat2wasm,
 wget: com_wget,
 continue: com_loopctrl,

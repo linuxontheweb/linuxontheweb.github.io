@@ -105,9 +105,6 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 »*/
 //»
 
-//This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
-//let USE_ONRELOAD = false;
-
 const RELOAD_LIBS=[
 //"games.poker",
 //"games.cfr"
@@ -117,6 +114,8 @@ let RELOAD_TERM_ONRELOAD = false;
 
 //This means that the terminal app's onreload method is set to _onreload (to reload the shell)
 let USE_ONRELOAD = true;
+
+//This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
 //let USE_ONRELOAD = false;
 //let NO_ONRELOAD = false;
 //Terminal Imports«
@@ -3622,10 +3621,10 @@ async _reloadLibs(arr){//«
 async _onreload(){//«
 
 //Just reload the shell (if working on a devtest command)
-//	await this._reloadShell();
+	await this._reloadShell();
 
 //	await this._reloadLibs(["games.poker"]);
-	await this._reloadLibs(RELOAD_LIBS);
+//	await this._reloadLibs(RELOAD_LIBS);
 
 }//»
 

@@ -1,3 +1,6 @@
+/*9/2/25: I want to enable the use of clips from arbitrary numbers of videos, and sequencing
+them in arbitrary orders. Then we can work on transitions (fades, etc) between clips.
+*/
 //This application assumes there is only a video track in a webm file.
 //Hence, the name of it is VideoCutter.
 
