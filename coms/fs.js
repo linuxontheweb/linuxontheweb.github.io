@@ -137,7 +137,7 @@ argument, but it was more fun getting...)
 
 async init(){//«
 	let{args, no}=this;
-
+	this.binPipe = true;
 	let s1 = args.shift();
 	let s2 = args.shift();
 	if (!(s1&&s2)){
@@ -227,11 +227,15 @@ doBrep(){//«
 
 }//»
 run(){
-	if (this.noStdin) this.doBrep();;
+	if (this.noStdin) this.doBrep();
 }
-pipeDone(lines){
-this.err("PLEASE IMPLEMENT THE CORRECT PIPING LOGIC!!!");
-this.no();
+pipeDone(bytes){
+//This should be a Uint8Array. Need to update Com._pipeIn.
+//log(bytes);
+this.bytes = bytes;
+this.doBrep();
+//this.err("PLEASE IMPLEMENT THE CORRECT PIPING LOGIC!!!");
+//this.no();
 }
 /*
 pipeIn(val){//«

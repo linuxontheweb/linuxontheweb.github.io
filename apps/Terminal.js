@@ -2703,7 +2703,8 @@ lines array (otherwise, the message gets printed onto the actor's screen.
 //This is not a bug since it is perfectly "okay" (I think) to pass aribtrary objects
 //*through* a pipeline... but not out the end of it.
 if (out.toString instanceof Function){
-	out = out.toString();
+	if (out instanceof Uint8Array) out = `Uint8Array(${out.length})`;
+	else out = out.toString();
 }
 else {
 log(out);
@@ -2715,7 +2716,6 @@ log(out);
 	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;
-//log();
 	if (out == "" && out.isNL){
 		out=" \n ";
 	}

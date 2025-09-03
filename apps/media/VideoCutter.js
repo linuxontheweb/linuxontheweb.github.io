@@ -1,3 +1,12 @@
+/*9/3/25: Instead of generalizing this app to allow for multiple files, let's create a
+shell command that takes an arbitrary number of arguments that describe all of the
+clips from all of the various VideoCutter windows to assemble into a composite video.
+One of the arguments might be a file that has a syntax to define all the clips.
+We can also have a command that simply plays the clips in the specified order (including
+whatever relevant transitions there are between the clips).
+So we can remove the assembling logic from here and put it into the relevant command library
+(or into a separate file somewhere under mods/).
+*/
 /*9/2/25: I want to enable the use of clips from arbitrary numbers of videos, and sequencing
 them in arbitrary orders. Then we can work on transitions (fades, etc) between clips.
 */

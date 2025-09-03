@@ -10,6 +10,27 @@ the only command that seems to use them is com_wget (when sending output). In co
 com_brep only wants Uint8Array's in its piped input. But since
 I just radically changed piping logic (so that commands don't really need to implement anything),
 I commented out com_brep's  prior pipeIn method (and replaced it with a pipeDone stub).
+
+LET'S ALLOW FOR A this.binPipe flag that can be set in init, and that signals the pipeline
+to automatically translate all incoming data into binary data (e.g. Uint8Array).
+class Com's _pipeIn method will do the translation, and call the command's pipeIn method,
+and push it into a JS array. Upon getting the EOF, we can concatenate all of them into
+a single Uint8Array, using the method @VEJZPMWU, and then call the command's pipeDone method
+with the final Uint8Array. This method should be used by com_brep.
+
+The problem for translating strings to Uint8Array's is that we need to do: 
+
+let reader = new FileReader();
+reader.onloadend = () => {
+//ArrayBuffer in: reader.result;
+let bytes = new Uint8Array(reader.result);
+}
+reader.readAsArrayBuffer("My string here har har ha ha hoo hoo");
+
+So in other words, we need to do some kind of awaiting before sending it off to a command
+that has set 'this.binPipe = true'. We need to check for the this.binPipe flag @ZELMGSO,
+and then do a call to toBytes. The only real question is that whatever is coming into
+the pipe is a consistent type: strings or Uint8Arrays (or Blobs, etc).
 »*/
 /*CRITICAL BUG:«
 THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
@@ -69,6 +90,7 @@ const util = LOTW.api.util;
 const {
 	strNum,
 	isArr,
+	isJSArr,
 	isStr,
 	isNum,
 	isObj,
@@ -1216,8 +1238,11 @@ if (node) {//«
 		if (fullpath == "/dev/null") return true;
 		if (fullpath == "/dev/log"){
 //			console.log(val);
-if (isArr(val)) {
+if (isJSArr(val)) {
 for (let v of val) console.log(v);
+}
+else {
+console.log(val);
 }
 			return true;
 		}
@@ -1418,6 +1443,8 @@ return;
 		let redir_lns = this.redirLines || this.envRedirLines;
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
+			if (!this.nextCom.noPipe) this.nextCom._pipeIn(val);
+/*«
 			let next_com = this.nextCom;
 			if (next_com) {//LSKDJSG: Simple commands define this
 //			if (next_com && next_com.pipeIn) {//LSKDJSG: Simple commands define this
@@ -1431,6 +1458,7 @@ return;
 cwarn("Dropping output");
 log(val);
 			}
+»*/
 			return;
 		}
 		else if(!redir_lns && this.envPipeInCb){
@@ -1447,6 +1475,7 @@ log(val);
 				}
 				else {
 					let hold = redir_lns;
+//VEJZPMWU
 					redir_lns = new Uint8Array(hold.length + val.length);
 					redir_lns.set(hold, 0);
 					redir_lns.set(val, hold.length);
@@ -1576,9 +1605,24 @@ be wrapped when output onto the terminal
 		}
 		return {lines: lnarr, colors: cols};
 	}//»
+async #pipeBytesDone(){
+	let blob = new Blob(this.#lines);
+	let bytes = await util.toBytes(blob);
+	this.pipeDone(bytes);
+}
 _pipeIn(val){
 	if (isEOF(val)){
-		if (this.pipeDone) this.pipeDone(this.#lines);
+		if (this.pipeDone) {
+//ZELMGSO
+/*
+let blob = new Blob(this.#lines);
+let bytes = await util.toBytes(blob);
+*/
+			if (this.binPipe){
+				this.#pipeBytesDone();
+			}
+			else this.pipeDone(this.#lines);
+		}
 		return;
 	}
 	if (this.pipeIn) this.pipeIn(val);
