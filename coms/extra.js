@@ -33,8 +33,11 @@ const globals = LOTW.globals;
 const{isStr, log, jlog, cwarn, cerr}=util;
 const{NS, fs}=globals;
 const fsapi = fs.api;
-const {normPath}=capi;
+const {normPath}=util;
 const {pathToNode}=fsapi;
+const {ShellMod} = globals;
+const {Com} = ShellMod.comClasses;
+//log(Com);
 //const{log, jlog, cwarn, cerr}=util;
 //»
 
@@ -69,7 +72,81 @@ const validate_out_path = async(outpath)=>{//«
 	return true;
 };//»
 //»
+const com_record = class extends Com{//«
+//«Priv
+#promCb;
+#mediaRecorder;
+#recordedChunks;
+#outPath;
+#interval;
+//»
+cancel(){//«
+	if (!this.#mediaRecorder) return;
+	clearInterval(this.#interval);
+	this.#mediaRecorder.stop();
+	setTimeout(async()=>{
+		let blob = new Blob(this.#recordedChunks, {
+			type: "video/webm"
+		});
+		let mod = await util.getMod("util.webmparser");
+		let bytes = await util.toBytes(blob);
+		let rv = await mod.coms.remux(this.term, bytes);
+		await fsapi.writeFile(this.#outPath, rv);
+//'V_MPEG4/ISO/AVC' == CODECID
+//		let rv = mod.coms.parse(term, bytes);
+//log(rv);
+//		fsapi.writeFile(out_path, blob);
+//		util.download(blob, outname);
+//		Y();
+		this.#promCb();
+	},500);
+}//»
+async doRec() {//«
+return new Promise(async(Y,N)=>{
+this.#promCb = Y;
 
+//let stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: "include", systemAudio: "include" });
+//let stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
+let stream = await navigator.mediaDevices.getDisplayMedia();
+
+let chunks = [];
+this.#recordedChunks = chunks;
+//let options = { mimeType: "video/webm; codecs=vp9" };
+let options = { mimeType: "video/webm; codecs=vp8" };
+//mediaRecorder = new MediaRecorder(stream, options);
+let mediaRecorder = new MediaRecorder(stream, options);
+this.#mediaRecorder = mediaRecorder;
+mediaRecorder.ondataavailable =  (e)=>{
+	if (e.data.size > 0) {
+		chunks.push(e.data);
+log("Chunk",chunks.length);
+	} 
+};
+this.#interval=setInterval(()=>{
+	mediaRecorder.requestData();
+},10000);
+mediaRecorder.start();
+
+});
+
+}//»
+async run(){//«
+	const {args} = this;
+	//const terr=(arg)=>{term_error(term, arg);Y();};
+	let outname = args.shift();
+	if (!outname) return this.no("No outname given");
+	let out_path = normPath(outname, this.term.cwd);
+log(`OUT: ${out_path}`);
+	let okay_rv = await validate_out_path(out_path);
+	if (isStr(okay_rv)) return this.no(okay_rv);
+	this.#outPath = out_path;
+	this.doRec();
+// The command only stops with ^C, so there is no need to await and call this.ok()
+//	await this.doRec();//
+//	this.ok();
+}//»
+}//»
+/*
 const com_walt = async (args, opts) => {//«
     let {term}=opts; 
 	let walt = (await util.getMod("util.walt")).Walt;
@@ -169,66 +246,6 @@ return terr(e.message);
 //log(mod);
 //log(await node.buffer);
 return TERM_OK;
-};//»
-
-const com_record = (term,args)=>{//«
-return new Promise(async(Y,N)=>{
-
-const terr=(arg)=>{term_error(term, arg);Y();};
-let outname = args.shift();
-if (!outname) return terr("No outname given");
-let out_path = normPath(outname, term.cur_dir);
-let okay_rv = await validate_out_path(out_path);
-if (isStr(okay_rv)) return terr(okay_rv);
-outname = out_path.split("/").pop();
-
-let interval;
-let mediaRecorder;
-
-term.kill_register(()=>{//«
-	if (!mediaRecorder) return;
-	clearInterval(interval);
-	mediaRecorder.stop();
-	setTimeout(async()=>{
-		let blob = new Blob(recordedChunks, {
-			type: "video/webm"
-		});
-		let mod = await util.getMod("webmparser");
-		let bytes = await util.toBytes(blob);
-		let rv = await mod.coms.remux(term, bytes);
-		await fsapi.writeFile(out_path, rv);
-
-//'V_MPEG4/ISO/AVC' == CODECID
-//		let rv = mod.coms.parse(term, bytes);
-//log(rv);
-//		fsapi.writeFile(out_path, blob);
-//		util.download(blob, outname);
-		Y();
-	},500);
-});//»
-
-//let stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: true, preferCurrentTab: true, selfBrowserSurface: "include", systemAudio: "include" });
-//let stream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
-let stream = await navigator.mediaDevices.getDisplayMedia();
-
-let recordedChunks = [];
-
-//let options = { mimeType: "video/webm; codecs=vp9" };
-let options = { mimeType: "video/webm; codecs=vp8" };
-//mediaRecorder = new MediaRecorder(stream, options);
-mediaRecorder = new MediaRecorder(stream, options);
-mediaRecorder.ondataavailable =  (e)=>{
-	if (e.data.size > 0) {
-		recordedChunks.push(e.data);
-log("Chunk",recordedChunks.length);
-	} 
-};
-interval=setInterval(()=>{
-	mediaRecorder.requestData();
-},10000);
-mediaRecorder.start();
-
-});
 };//»
 const com_remux = async (term, args) => {//«
 
@@ -395,13 +412,13 @@ return write_to_redir(term, blob, redir)
 
 
 };//»
-
+*/
 export const coms = {//«
-	webmcat: com_webmcat,
-	remux: com_remux,
+//	webmcat: com_webmcat,
+//	remux: com_remux,
 	record: com_record,
-	wasm: com_wasm,
-	walt: com_walt,
+//	wasm: com_wasm,
+//	walt: com_walt,
 };//»
 
 
