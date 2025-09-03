@@ -5059,7 +5059,7 @@ const com_esparse=class extends Com{//«
 init(){
 	if (this.noInputOrArgs() || (this.noStdin && !this.expectArgs(1))) this.no();
 }
-#doEsparse(str){/*«*/
+#doEsparse(str){//«
 //log(str);
 	try{
 		let ast = parse(str, {sourceType: "module"});
@@ -5073,8 +5073,8 @@ cerr(e.stack);
 		this.err(`${e.message} (${e.lineNumber}:${e.column})`);
 		this.no();
 	}
-}/*»*/
-async run() {/*«*/
+}//»
+async run() {//«
 	let {out, err, stdin, term, args, no} = this;
 	let str;
 	if (!args.length){
@@ -5096,8 +5096,12 @@ async run() {/*«*/
 		return;
 	}
 	this.#doEsparse(await node.text);
-}/*»*/
-pipeIn(val){/*«*/
+}//»
+pipeDone(lines){
+	this.#doEsparse(lines.join("\n"));
+}
+/*
+pipeIn(val){//«
 	if (isEOF(val)){
 		this.#doEsparse(this.#lines.join("\n"));
 		return;
@@ -5111,8 +5115,8 @@ this.wrn("Dropping unknown pipeline input (see console)");
 cwarn("Here is the unknown value below");
 log(val);
 	}
-}/*»*/
-
+}//»
+*/
 };//»
 
 export const coms={esparse: com_esparse};

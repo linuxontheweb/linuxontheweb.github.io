@@ -1,3 +1,16 @@
+/*9/3/25: Let's clean up the logic of piping, so that derived instances DO NOT need to«
+defined a pipeIn method. Let's put a "private" _pipeIn method on class Com.
+
+I don't have a good intuition for EXACTLY what envPipeOutLns and envPipeInCb are TRULY all about.
+I know I understood the mechanics of them when I was working out the logic, but that memory
+has faded into relative obscurity.
+
+I'm also a little sketchy about how to handle Uint8Array's inside of pipelines. In here,
+the only command that seems to use them is com_wget (when sending output). In coms/fs.js,
+com_brep only wants Uint8Array's in its piped input. But since
+I just radically changed piping logic (so that commands don't really need to implement anything),
+I commented out com_brep's  prior pipeIn method (and replaced it with a pipeDone stub).
+»*/
 /*CRITICAL BUG:«
 THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
 let val = await fname.toText(term);
@@ -1253,8 +1266,9 @@ dup(){
 }//»
 
 const Com = class {//«
-
+	#lines;
 	constructor(name, args, opts, env={}){//«
+		this.#lines = [];
 		this.isSimple = true;
 		this.name =name;
 		this.args=args;
@@ -1405,8 +1419,10 @@ return;
 //LPIRHSKF
 		if (!redir_lns && this.nextCom){
 			let next_com = this.nextCom;
-			if (next_com && next_com.pipeIn) {//LSKDJSG: Simple commands define this
-				if (!next_com.noPipe) next_com.pipeIn(val);
+			if (next_com) {//LSKDJSG: Simple commands define this
+//			if (next_com && next_com.pipeIn) {//LSKDJSG: Simple commands define this
+//				if (!next_com.noPipe) next_com.pipeIn(val);
+				if (!next_com.noPipe) next_com._pipeIn(val);
 			}
 			else if (this.envPipeOutLns){//All compound commands in pipelines have this
 				this.envPipeOutLns(val);
@@ -1560,7 +1576,21 @@ be wrapped when output onto the terminal
 		}
 		return {lines: lnarr, colors: cols};
 	}//»
-
+_pipeIn(val){
+	if (isEOF(val)){
+		if (this.pipeDone) this.pipeDone(this.#lines);
+		return;
+	}
+	if (this.pipeIn) this.pipeIn(val);
+	this.#lines.push(val);
+/*«
+    if (isStr(val)) this.#lines.push(val);
+    else if (isArr(val)) this.#lines.push(...val);
+    else{
+cwarn("WUTISTHIS", val);
+    }
+»*/
+}
 }//»
 const NoCom=class{//«
 	constructor(env){
@@ -1602,12 +1632,18 @@ constructor(shell, opts){//«
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
 			if (this.nextCom) {
+				this.nextCom._pipeIn(EOF);
+/*
+9/3/25: I DON'T UNDERSTAND THIS LOGIC. IF THERE IS A NEXT COMMAND, THEN THE EOF SHOULD ALWAYS BE SENT THERE!
+I REALLY HAVE NO IDEA WHAT THIS envPipeOutLns STUFF IS ABOUT.
+
 				if (this.nextCom.pipeIn){
 					this.nextCom.pipeIn(EOF);
 				}
 				else if (this.envPipeOutLns){
 					this.envPipeOutLns(EOF);
 				}
+*/
 			}
 			Y(rv);
 			this.killed = true;
@@ -1621,6 +1657,13 @@ _init(){//«
 		opts[k]=this.opts[k];
 	}
 	if (this.nextCom){
+		opts.envPipeInCb=(val)=>{
+//NDKSLRJL
+			if (isEOF(val)) return;
+			this.nextCom._pipeIn(val);
+		};
+/*«
+//See the comment in the constructor. I DON'T UNDERSTAND THIS LOGIC!?!
 		if (this.nextCom.pipeIn){
 			opts.envPipeInCb=(val)=>{
 //NDKSLRJL
@@ -1639,6 +1682,7 @@ _init(){//«
 cwarn("Setting envPipeInCb to NOOP!");
 			opts.envPipeInCb = ()=>{};
 		}
+»*/
 	}
 	if (this.outRedir){
 		this.redirLines = [];
@@ -1741,7 +1785,8 @@ log(rv);
 		}
 //		await sleep(0);
 	}
-	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+//	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+	if (this.nextCom) this.nextCom._pipeIn(EOF);
 	this.end(rv);
 }//»
 
@@ -1795,7 +1840,8 @@ log(rv);
 		}
 		await sleep(0);
 	}
-	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+//	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+	if (this.nextCom) this.nextCom._pipeIn(EOF);
 	this.end(rv);
 }//»
 
@@ -1811,7 +1857,8 @@ async run(){//«
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
-	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+//	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
+	if (this.nextCom) this.nextCom._pipeIn(EOF);
 	this.end(rv);
 }//»
 
@@ -2227,10 +2274,17 @@ async run(){
 // this.lines=[];
 	}
 }
+pipeDone(lines){
+this.openWin(lines.join("\n"));
+//log(lines);
+this.ok();
+}
+/*
 pipeIn(val){
 	if (!isEOF(val)) this.openWin(val);
 	else this.ok();
 }
+*/
 
 }/*»*/
 
@@ -2829,10 +2883,16 @@ const com_parse = class extends Com{/*«*/
 			return false;
 		}
 	}
+	pipeDone(lines){
+		this.tryParse(lines.join(""));
+		this.ok();
+	}
+/*
 	pipeIn(val){
 		if (!isEOF(val)) this.tryParse(val);
 		else this.ok();
 	}
+*/
 }/*»*/
 const com_stringify = class extends Com{/*«*/
 	init(){
@@ -2851,6 +2911,11 @@ const com_stringify = class extends Com{/*«*/
 			return false;
 		}
 	}
+	pipeDone(lines){
+		this.tryStringify(lines.join(""));
+		this.numErrors?this.no():this.ok();
+	}
+/*
 	pipeIn(val){
 		if (!isEOF(val)) this.tryStringify(val);
 		else {
@@ -2858,6 +2923,7 @@ const com_stringify = class extends Com{/*«*/
 			this.ok();
 		}
 	}
+*/
 }/*»*/
 const com_clear = class extends Com{//«
 	run(){
@@ -3128,13 +3194,16 @@ async run(){//«
 const com_math = class extends Com{//«
 //#lines;
 //#math;
+#usePipe;
 async init(){
 	if (!this.args.length && !this.pipeFrom) {
 		return this.no("nothing to do");
 	}
-	if (!this.args.length){
-		this.lines=[];
-	}
+	this.#usePipe = !this.args.length;
+	if (this.args.length)
+//	if (!this.args.length){
+//		this.lines=[];
+//	}
 /*math-expression-evaluator npm package/ github repo«
 
 From: https://github.com/bugwheels94/math-expression-evaluator
@@ -3157,7 +3226,6 @@ Minimized code: https://github.com/bugwheels94/math-expression-evaluator/blob/ma
     this.math = new NS.mods["util.math"]();
 }
 doMath(str){
-
 	try{
 		this.inf(`evaluating: '${str}'`);
 		this.out(this.math.eval(str)+"");
@@ -3168,9 +3236,15 @@ doMath(str){
 	}
 }
 run(){
-	if (this.killed || !this.args.length) return;
+//	if (this.killed || !this.args.length) return;
+	if (this.killed || this.#usePipe) return;
 	this.doMath(this.args.join(" "));
 }
+pipeDone(lines){
+	if (!this.#usePipe) return;
+	this.doMath(lines.join(" "));
+}
+/*
 pipeIn(val){
     if (!this.lines) return;
     if (isEOF(val)){
@@ -3184,6 +3258,7 @@ pipeIn(val){
 cwarn("WUTISTHIS", val);
     }
 }
+*/
 }//»
 const com_appicon = class extends Com{//«
 
@@ -7218,9 +7293,9 @@ log(com_ast);
 			last_com.pipeTo = true;
 		}
 		if (j > 0) {
-			if (!com.pipeIn && com.isSimple === true){
-				this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
-			}
+//			if (!com.pipeIn && com.isSimple === true){
+//				this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
+//			}
 			com.pipeFrom = true;
 			com.prevCom = last_com;
 /*

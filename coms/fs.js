@@ -1,3 +1,8 @@
+/*9/3/25: Have been doing a major update to piping logic in shell.js. The derived commands
+should define pipeIn methods for streaming purposes, and pipeDone methods in order to
+receive every all at once in a JS array, after the EOF has been received.
+com_brep uses a highly non-trivial piping logic using Uint8Array's.
+*/
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -110,7 +115,7 @@ async run(){
 }
 »*/
 
-const com_brep = class extends Com{/*«*/
+const com_brep = class extends Com{//«
 /*«
 
 Want a series of numbers for "from" and another series for "to". The only question is
@@ -130,8 +135,7 @@ argument, but it was more fun getting...)
 
 »*/
 
-
-async init(){/*«*/
+async init(){//«
 	let{args, no}=this;
 
 	let s1 = args.shift();
@@ -177,8 +181,8 @@ async init(){/*«*/
 	this.bytes = bytes;
 	this.noStdin = true;
 
-}/*»*/
-doBrep(){/*«*/
+}//»
+doBrep(){//«
 	let bytes = this.bytes;
 	let len = bytes.length;
 	let bout = new Uint8Array(len*10);
@@ -221,11 +225,16 @@ doBrep(){/*«*/
 	this.out(bytes2);
 	this.ok();
 
-}/*»*/
+}//»
 run(){
 	if (this.noStdin) this.doBrep();;
 }
-pipeIn(val){/*«*/
+pipeDone(lines){
+this.err("PLEASE IMPLEMENT THE CORRECT PIPING LOGIC!!!");
+this.no();
+}
+/*
+pipeIn(val){//«
 	if (this.noStdin) return;
 	if (isEOF(val)){
 		this.doBrep();
@@ -242,9 +251,9 @@ pipeIn(val){/*«*/
 		bytes.set(val, hold.length);
 		this.bytes = bytes;
 	}
-}/*»*/
-
-}/*»*/
+}//»
+*/
+}//»
 const com_less = class extends Com{//«
 static getOpts(){
 	return {l:{parsel:1}};
@@ -530,10 +539,13 @@ run:
 	}//»
 	pipeIn(val){//«
 		this.out(val);
-		if (isEOF(val)){
-			this.ok();
-		}
+//		if (isEOF(val)){
+//			this.ok();
+//		}
 	}//»
+	pipeDone(){
+		this.ok();
+	}
 	async doTermLoop(){//«
 		while (true){
 			let ln = await this.readLine();
@@ -587,14 +599,18 @@ async run(){//«
 	have_error?this.no():this.ok();	
 }//»
 pipeIn(val){//«
+/*
 	if (isEOF(val)){
 		this.out(val);
 		this.ok();
 		return;
 	}
+*/
 	this.doGrep(val.split("\n"));
 }//»
-
+pipeDone(){
+	this.ok();
+}
 doGrep(val){//«
 	const re = this.re;
 	if (!re) return;
@@ -997,17 +1013,22 @@ async run(){
 	have_error?this.no():this.ok();	
 }
 pipeIn(val){
-	if (this.killed) return;
-	if (this.noPipe) return;
+	if (this.killed || this.noPipe) return;
+/*
 	if (isEOF(val)){
 		this.out(val);
 		this.sendCount();
 		this.ok();
 		return;
 	}
+*/
 	this.doWC(val.split("\n"));
 }
-
+pipeDone(){
+	if (this.killed || this.noPipe) return;
+	this.sendCount();
+	this.ok();
+}
 }//»
 const com_dl = class extends Com{//«
 static getOpts(){
@@ -1019,7 +1040,7 @@ async init(){
 	if (!nargs && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (!nargs){
 		this.name = opts.name || opts.n || env["DL_NAME"] || "DL-OUT.txt";
-		this.lines=[];
+//		this.lines=[];
 	}
 	else if(nargs > 1){
 		this.no("too many arguments");
@@ -1057,6 +1078,12 @@ async run(){
 	this.name = node.name;
 	this.doDL();
 }
+pipeDone(lines){
+	if (this.noPipe) return;
+	this.lines = lines;
+	this.doDL();
+}
+/*«
 pipeIn(val){
 	if (this.noPipe) return;
 	if (isEOF(val)){
@@ -1070,7 +1097,7 @@ pipeIn(val){
 cwarn("WUTISTHIS", val);
 	}
 }
-
+»*/
 }//»
 const com_blobs = class extends Com{/*«*/
 async run(){

@@ -21,8 +21,16 @@ const com_pipe = class extends Com{//«
 	}
 	pipeIn(val){
 		this.out(val);
+	}
+	pipeDone(){
+		this.ok();
+	}
+/*
+	pipeIn(val){
+		this.out(val);
 		if (isEOF(val)) this.ok();
 	}
+*/
 }//»
 const com_deadpipe = class extends Com{/*«*/
 	run(){
@@ -30,11 +38,16 @@ const com_deadpipe = class extends Com{/*«*/
 			this.no("not in a pipe line");
 		}
 	}
+	pipeDone(){
+		this.ok();
+	}
+/*
 	pipeIn(val){
 //	this.out(val);
 log("Dropping", val);
 		if (isEOF(val)) this.ok();
 	}
+*/
 }/*»*/
 const com_badret=class extends Com{run(){this.end("SOME STRING RETURNED HAHAHA!?!?!");}}
 const com_noret=class extends Com{run(){this.end();}}
