@@ -1,3 +1,47 @@
+/*README«
+
+About the developer reload workflow in a Terminal window
+
+Normally, reloading an application window during development is a pretty trivial thing:
+the system simply replaces the old application javascript (fetched from under apps/) that
+is currently executing with the current version that exists on the server. But
+the Terminal application is different because it is a "meta" application that
+is used to load up various other bits of logic, whether these be simple shell commands
+or entire screen-based modules (like the vim editor). There may be an arbitrarily large number
+of JS files sitting on the backend that might potentially be used by the Terminal app, and 
+for any given development workflow, one or more of these might need to be refetched from the 
+server in order for the shell environment to become fully consistent. Upon dispatching a "reload" 
+event to a window (usually by pressing Alt+r), these conditions are accounted for:
+
+A. If a window's associated 'app' object/instance defines an 'onreload' method, then it will be
+called by the system. Upon loading the Terminal @QDPLMRT, the flag 'USE_ONRELOAD' is checked
+(defined below), and if true, the Terminal._onreload method is set to Terminal.onreload.
+
+  1. For reloading modules that are *NOT* screen-based, we can see @SGPEJGKH that
+     Terminal._reloadShell may be called, as well as Terminal._reloadLibs (for reloading
+     command libraries under coms/). Inside of Terminal._reloadShell, a flag 
+     (RELOAD_TERM_ONRELOAD) is also checked in case that the Terminal application window 
+     should also be reloaded.
+  2. The workflow for reloading screen-based "apps" (actually, not true apps, but modules, like 
+     Vim, kept under mods/term/) is quite complex. First, Terminal.initNewScreen is called 
+     (@UWKLHDN) by the Vim.init method, which replaces the current Terminal.onreload method, 
+     with the one defined in the module. So pressing Ctrl+r will call this function instead. From 
+     there, a call is made to Vim's internal quit method, which calls Terminal.quitNewScreen (@ZNFIKJWL). 
+     This will then call a function defined in the Vim module (Vim.cb), which resolves a Promise that 
+     was returned by the call to Vim.init, which is called by the vim command's 'init' method 
+     (e.g. const com_vim = class extends Com{init(){...}}, which is a wholly different beast from 
+     the Vim module's screen editing logic). That command is needed by the shell, so that typing
+     something like "vim myfile.txt" into the command line will have the desired effect. 
+     The command is defined inside of the 'fs' command library (coms/fs.js). The vim command's 
+     'run' method then loops while the Promise resolves to true (which indicates reloading). When 
+     it resolves to non-true, the vim command stops reloading itself and returns control back to the 
+     Terminal's screen.
+
+B. With no onreload method, the "standard" reloading of the window's associated application javascript 
+   (under apps/) will take place.
+
+
+»*/
 /*URKSPLK: In order to reload the terminal AND the shell with the same Alt+r keypress,«
 we have to call Win.reload({appOnly: true}), otherwise there'd be an infinite loop.
 
@@ -3619,7 +3663,7 @@ async _reloadLibs(arr){//«
 	}
 }//»
 async _onreload(){//«
-
+//SGPEJGKH
 //Just reload the shell (if working on a devtest command)
 	await this._reloadShell();
 
@@ -3660,6 +3704,7 @@ async onappinit(appargs={}){//«
 		reInit = {};
 	}
 //	if (!NO_ONRELOAD) this.onreload = this._onreload;
+//QDPLMRT
 	if (USE_ONRELOAD) this.onreload = this._onreload;
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {termBuffer, addMessage, commandStr, histories} = reInit;
@@ -3760,6 +3805,7 @@ setLines(linesarg, colorsarg){//«
 	this.lineColors = colorsarg;
 }//»
 initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}){//«
+//UWKLHDN
 	const{actor}=this;
 	let escape_fn = funcs.onescape;
 	let reload_fn = funcs.onreload;
@@ -3804,6 +3850,7 @@ this.doOverlay("Default onreload called");
 	return screen;
 }//»
 quitNewScreen(screen, opts={}){//«
+//ZNFIKJWL
 //	const{actor}=this;
 	let actor;
 	if (screen === this.holdTerminalScreen) this.holdTerminalScreen = null;

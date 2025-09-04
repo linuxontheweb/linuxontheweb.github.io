@@ -766,6 +766,7 @@ const set_stat_warn=(mess)=>{stat_message=mess;stat_message_type=STAT_WARN;};
 const set_stat_err=(mess)=>{stat_message=mess;stat_message_type=STAT_ERR;};
 const cancel=()=>{stat_render("Cancelled");};
 const quit=(if_reload)=>{//«
+cwarn("QUIT????");
 	delete this.command_str;
 	Term.is_dirty = false;
 	Term.is_editing = false;
