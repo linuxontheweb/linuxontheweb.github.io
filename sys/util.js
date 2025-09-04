@@ -1,6 +1,13 @@
+/*README«
 
+System-wide utility functions are defined here. Of particular interest to devlopers are:
+
+- the isX functions (e.g isStr, isBool, isInt, etc) which identify a given data type
+- the toX functions (e.g. toStr, toBytes, toBlob, etc) which convert between data types.
+  These functions are typically async, and will need to await on a Promise.
+
+»*/
 import { globals } from "config";
-
 
 const {//«
 	ALL_EXTENSIONS,

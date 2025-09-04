@@ -1,3 +1,22 @@
+/*README«
+
+This modules implements the LOTW graphical user interface.
+
+Keyboard shortcuts are defined here:
+
+@SHORTCUTS1: All shortcuts that are "intercepted" by the desktop, before being fed into the
+current window (if any)
+
+@SHORTCUTS2: If there is no current window, the desktop may use any "orphaned" shortcuts.
+
+There are many other places in the dokeydown function that determine how the keyboard
+controls the interface, but modifying those areas should be done by experts only.
+
+(Note: In vim, place your cursor over anything that looks like '@XXXXXXXX' (like @SHORTCUTSN above) 
+and press "*" in order to jump to the relevant point in the code.)
+
+»*/
+
 /*util.GetPoint: New generic keyboard-driven graphical point/pixel selector«
 With the return value (a point: {x,y}), we can do document.elementsFromPoint(x,y)
 and pinpoint the element we want without resorting to needing (wanting) the mouse.
@@ -8145,10 +8164,10 @@ cwarn("There was an unattached icon in ICONS!");
 		}
 	}//»
 
-//XKLEUIM
 	if (marr = kstr.match(/^([1-9])_AS$/)){
 		return raise_bound_win(marr[1]);
 	}
+//SHORTCUTS1
 	switch(kstr){
 		case "`_A": return window_cycle();
 		case "d_A": return (e.preventDefault(), toggle_show_windows());
@@ -8180,6 +8199,7 @@ cwarn("There was an unattached icon in ICONS!");
 		return;
 	}//»
 
+//SHORTCUTS2
 //These keys are "free" for the desktop to do what it wants
 //«
 	if (kstr == "ESC_") return handle_ESC();

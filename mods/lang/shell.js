@@ -1,3 +1,42 @@
+/*README«
+
+This file implements the Shell Command Language: tokenizer, parser (ast builder), and execution
+engine.
+
+@COMCLASS: The class that all commands must override is kept here.
+@BUILTINS: Shell builtins are kept here.
+
+Non-builtin commands are defined inside of the coms/ hierarchy. The simplest file
+that defines a command should look something like:
+
+//BEGIN
+const {Com} = LOTW.globals.ShellMod.comClasses;
+    
+const com_hello = class extends Com{
+	run(){
+		this.out("Hello!");
+		this.ok();
+	}
+}
+
+const coms = {
+	hello: com_hello
+}
+
+export {coms};
+//END
+
+If this is kept in coms/mycoms.js, then the exported command(s) (e.g. "hello") can be loaded into
+the shell via:
+
+$ import mycoms
+
+If it is kept in coms/path/to/mycoms.js, the command(s) can be loaded by:
+
+$ import path.to.mycoms
+
+»*/
+
 /*9/3/25: Let's clean up the logic of piping, so that derived instances DO NOT need to«
 defined a pipeIn method. Let's put a "private" _pipeIn method on class Com.
 
@@ -32,6 +71,8 @@ that has set 'this.binPipe = true'. We need to check for the this.binPipe flag @
 and then do a call to toBytes. The only real question is that whatever is coming into
 the pipe is a consistent type: strings or Uint8Arrays (or Blobs, etc).
 »*/
+//Notes«
+//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 /*CRITICAL BUG:«
 THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
 let val = await fname.toText(term);
@@ -58,8 +99,6 @@ Before I do anything though I need to figure out how to get back the old behavio
 refreshing the shell and the terminal at the same time...
 
 »*/
-//Notes«
-//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 
 //»
 
@@ -1289,7 +1328,7 @@ dup(){
 }
 
 }//»
-
+//COMCLASS
 const Com = class {//«
 	#lines;
 	constructor(name, args, opts, env={}){//«
@@ -2152,8 +2191,7 @@ run(){
 }
 »*/
 
-//YWPOEKRN
-//XXXXXXXXXXXX
+//BUILTINS
 /*
 continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
 */

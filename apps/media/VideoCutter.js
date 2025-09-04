@@ -1,4 +1,4 @@
-/*9/3/25: Instead of generalizing this app to allow for multiple files, let's create a
+/*9/3/25: Instead of generalizing this app to allow for multiple files, let's create a«
 shell command that takes an arbitrary number of arguments that describe all of the
 clips held by all the various VideoCutter app objects, to assemble them into a composite video.
 One of the arguments might be a file that has a syntax to define all the clips.
@@ -6,10 +6,10 @@ We can also have a command that simply plays the clips in the specified order (i
 any relevant transitions between the clips), in order to preview the composite
 video. So we can remove the assembling logic from here and put it into the relevant command library
 (or into a separate file somewhere under mods/).
-*/
-/*9/2/25: I want to enable the use of clips from arbitrary numbers of videos, and sequencing
+
+9/2/25: I want to enable the use of clips from arbitrary numbers of videos, and sequencing
 them in arbitrary orders. Then we can work on transitions (fades, etc) between clips.
-*/
+»*/
 //This application assumes there is only a video track in a webm file.
 //Hence, the name of it is VideoCutter.
 
@@ -608,6 +608,46 @@ return { ebml, tracks, CUESHASH };
 
 };//»
 
+const make_webm_file =(ebml, tracks, clusters, cluster_times, viddur) => {//«
+
+//	let cl_times = cluster_times.slice();
+//	cl_times.unshift(0);
+	let cluster_dat = [];
+	let cluster_sizes = [];
+	let all_clusters_length = 0;
+	for (let cl of clusters) {
+		let newclust = webm_mod.make_ebml_elem([0x1f, 0x43, 0xb6, 0x75], cl);
+		all_clusters_length += newclust.length;
+		cluster_sizes.push(newclust.length);
+		cluster_dat.push(newclust);
+	}
+	let all_clusters = new Uint8Array(all_clusters_length);
+	let curbyte=0;
+	for (let clust of cluster_dat){
+		all_clusters.set(clust, curbyte);
+		curbyte+=clust.length;
+	}
+
+	let f = new webm_mod.WebmFile();
+	f.duration = viddur*1000;
+	f.timeCodeScale = 1_000_000;
+	f.muxingApp = "Zgrancheed";
+	f.writingApp = "Sofflering";
+	f.tracks = tracks;
+	f.clusters = all_clusters;
+	f.clusterSizes = cluster_sizes;
+	f.clusterTimes = cluster_times;
+	f.ebml = ebml;
+	f.makeInfo();
+	f.makeSeekHead();
+	f.makeCues();
+	f.makeSegment();
+	f.makeFile();
+	return f.file;
+
+//	fs.writeFile("/home/me/Desktop/OOBOOBWOOB.webm", f.file);
+
+};//»
 const render_from_slices = async slices => {//«
 
 const err=s=>{//«
@@ -1648,47 +1688,6 @@ timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
 //center_to_curtime();
 check_timeline_right_edge_for_underflow_and_center_to_time(vid.currentTime);
-
-};//»
-
-const make_webm_file =(ebml, tracks, clusters, cluster_times, viddur) => {//«
-
-//	let cl_times = cluster_times.slice();
-//	cl_times.unshift(0);
-	let cluster_dat = [];
-	let cluster_sizes = [];
-	let all_clusters_length = 0;
-	for (let cl of clusters) {
-		let newclust = webm_mod.make_ebml_elem([0x1f, 0x43, 0xb6, 0x75], cl);
-		all_clusters_length += newclust.length;
-		cluster_sizes.push(newclust.length);
-		cluster_dat.push(newclust);
-	}
-	let all_clusters = new Uint8Array(all_clusters_length);
-	let curbyte=0;
-	for (let clust of cluster_dat){
-		all_clusters.set(clust, curbyte);
-		curbyte+=clust.length;
-	}
-
-	let f = new webm_mod.WebmFile();
-	f.duration = viddur*1000;
-	f.timeCodeScale = 1_000_000;
-	f.muxingApp = "Zgrancheed";
-	f.writingApp = "Sofflering";
-	f.tracks = tracks;
-	f.clusters = all_clusters;
-	f.clusterSizes = cluster_sizes;
-	f.clusterTimes = cluster_times;
-	f.ebml = ebml;
-	f.makeInfo();
-	f.makeSeekHead();
-	f.makeCues();
-	f.makeSegment();
-	f.makeFile();
-	return f.file;
-
-//	fs.writeFile("/home/me/Desktop/OOBOOBWOOB.webm", f.file);
 
 };//»
 

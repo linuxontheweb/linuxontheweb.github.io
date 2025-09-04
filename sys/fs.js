@@ -1,3 +1,22 @@
+/*README«
+
+The LOTW file system is implemented here. IndexedDB is used to define the structure of the
+file system, while the origin-private file system (OPFS) API is used as the storage
+solution for "normal" files. As convenience, there are String prototypes (@STRPROTOS) that enable
+the quick translation between pathnames and file system nodes as well as file contents.
+If the string is only a simple file name (e.g. my_file.txt) or a relative path (e.g. ../config.json),
+then you can pass in an object with a "cwd" member, in order for the full path to be resolved.
+
+For example:
+
+let fname = "my_file.txt";
+let path = "/home/me/Desktop";
+
+let node = await fname.toNode({cwd: path});
+//If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
+
+»*/
+
 /*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,«
 at the top-level, so we had to add them in at the dir mounting points during
 fs init. This bug screwed up the folder app.
@@ -425,7 +444,7 @@ const bad_link_cbs = {};
 //FSNode«
 
 const LOCKED_BLOBS = {};
-
+//FSNODEDEF
 class FSNode {//«
 
 constructor(name, par, path){//«
@@ -2642,6 +2661,7 @@ const path_to_par_and_name = (path) => {
 */
 //»
 
+//STRPROTOS
 //String.prototype.regpath|to(Node|Text|Lines|Bytes|Buffer|Blob)«
 {
 const toNode = async function(opts={}) {//«

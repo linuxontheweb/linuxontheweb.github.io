@@ -1,3 +1,17 @@
+/*README«
+
+System-wide constants are kept here.
+
+Of particular interest to application developers is the @APPCONFIG section. There, you
+will find:
+
+- The mapping from application names to the Unicode "emojis" that are used to represent
+  the applications in the desktop (Note: arbitrary image formats like JPEG can't currently 
+  be used as icons).
+- The mapping from file extensions (e.g. "txt") to the applications (e.g TextEdit) that 
+  open the file in the LOTW desktop.
+
+»*/
 //FJIUOPL: This was needed to get Ctrl+Alt+Shift+u to show up with a keysym of "u_CAS"
 //(otherwise, the keysym was "undefined_CAS"!?!?!?)
 
@@ -100,6 +114,7 @@ const SHELL_ERROR_CODES={
 
 //»
 
+//APPCONFIG
 //Apps/Extensions«
 
 const APPLICATIONS_MENU = [//«
