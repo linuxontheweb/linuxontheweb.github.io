@@ -1,14 +1,50 @@
-/*@AUEJRKT: This seems to fix a bug involving scrolling right (the timeline never scrolls, but
-just stays at 0) , just by commenting it out, which begs the question: WHY WAS IT THERE IN THE 
+/*9/7/25: Need to seriously simplyfy the timeline positioning/rendering logic. Right now, «
+there is an issue for when the timeline is wider than the window, and the time marker is at
+the end. It seems that the timeline is positioned so that only a couple preview frames are
+peeking out from the app window's left edge, and then it is repositioned so that this little 
+bit is centered. We can simplify the logic by getting rid of this centering gimmick, and either
+
+1) positioning the timeline so that the start is flush against the left edge, in case the current 
+time marker is within the "start window" (left justification, just set: timeline._xLoc = 0)
+
+2) positioning the timeline so that the end is flush against the right edge, in case the current
+time is within the "end window" (right justification, just call: flush_right_edge())
+
+3) the start and end are both offscreen, and the current time marker is somewhere within the
+visible time window.
+
+
+VERY IMPORTANT IDEA ABOUT HOW THIS APP WORKS:
+
+We scroll the timeline starting from handle_arrow in the keydown handler @WKMCKUH. But in order
+to "commit" these changes, we wait for the keyup handler @MOLHBXKJ, where we call handle_await_arrow_up.
+Only then do we do the operations with non-trivial delay, like getting the visible timeline images and 
+seek to vid.currentTime.
+
+ALSO: THE WHOLE THING GETS KICKED OFF WITH video_init().
+
+
+When we are within the end window, and the timeline is wider than the screen, I want EITHER
+the end ruler marker OR the right edge of the final preview image to be flush with the right
+edge of the app window, whichever comes *LAST* (has the greatest x position).
+
+
+If the timeline is wider than the window, and the timeline's right edge (either in terms of the
+end ruler marker or the right edge of the last preview frame) is less than the window's right
+edge, then the timeline's right edge should be flush with the window's right edge.
+
+»*/
+/*9/6/25: @AUEJRKT: This seems to fix a bug involving scrolling right (the timeline never scrolls, «
+but just stays at 0) , just by commenting it out, which begs the question: WHY WAS IT THERE IN THE 
 FIRST PLACE? WHAT WAS I THINKING BY THAT OLD LOGIC?
-*/
-/*9/6/25: To make this a general video slicer/dicer involving arbitrary numbers of videos,
+
+To make this a general video slicer/dicer involving arbitrary numbers of videos,
 these factors need to be taken into account:
 1) All videos can be concatenated into a single video by way of the command (in coms/extra.js): 
    webmcat (the TRACKS sections must be identical).
 2) The video as edited here can assemble its cuts in any aritrary order (i.e. the cuts 
    themselves don't need to be sequential)
-*/
+»*/
 /*9/3/25: Instead of generalizing this app to allow for multiple files, let's create a«
 shell command that takes an arbitrary number of arguments that describe all of the
 clips held by all the various VideoCutter app objects, to assemble them into a composite video.
@@ -156,6 +192,8 @@ let images_showing = true;
 
 let VID_IMG_OP = 1;
 let VID_IMG_PAD = 7;
+
+let PREV_IMG_BORDER = "0.5px solid #888";
 
 let await_arrow_up;
 let total_scroll;
@@ -970,16 +1008,25 @@ const scroll_timeline = (which, opts={}) => {//«
 
 /*
 
-1) tr.width <= mr.width
-   - center it
+1) current time is within the start window
+   - left justify
+2) current time is within the end window
+   - right justify
+3) current time is visible, and both timeline edges are offscreen
 
 */
+/*
 	if (tr.left > mr.left){
 		timeline._xLoc = 0;
 	}
-	else if (tr.right < mr.left){
-		timeline._xLoc += (mr.left - tr.right) + 100;
+	else if (tr.right < mr.right){
+		timeline._xLoc += (mr.right - tr.right);
 	}
+//	else if (tr.right < mr.left){
+//		timeline._xLoc += (mr.left - tr.right) + 100;
+//	}
+*/
+
 /*«THIS LOGIC IS WEIRD!!!
 	if (tr.left > mr.left){
 //log(2);
@@ -1031,14 +1078,14 @@ const scroll_time_marker = (which, opts={}) => {//«
 		gotto = vid.currentTime + total_scroll;
 		tmdiv.innerHTML = get_main_time_str(gotto);
 	}
-//log(1, gotto);
 	if (gotto > viddur) {
 		gotto = viddur;
 	}
 	else if (gotto < 0) gotto = 0;
-//log(2, gotto);
+//log("GOTTO");
 //	let gotto_rnd = Math.round(gotto * 1000);
 	let round_to = round_ms(gotto);
+//log(round_to);
 	if (dir > 0){
 		if (round_to > round_ms(get_visual_time_bounds().end)){
 			scroll_timeline("RIGHT");
@@ -1053,7 +1100,6 @@ const scroll_time_marker = (which, opts={}) => {//«
 	scroll_elem(mark, gotto, TIME_MARK_X_OFF);
 
 }//»
-
 const snap_curtime_to_grid = (tm, which) => {//«
 	let dir;
 	if (which == "LEFT") dir=-1;
@@ -1096,7 +1142,6 @@ const handle_await_arrow_up=(k)=>{//«
 			let gotto = vid.currentTime + total_scroll;
 			if (gotto > viddur) gotto = viddur - 0.001;
 			else if (gotto < 0) gotto = 0;
-//log(1);
 			vid.currentTime = gotto;
 			tmdiv.innerHTML = get_main_time_str(gotto);
 			mark._scroll();
@@ -1105,14 +1150,13 @@ const handle_await_arrow_up=(k)=>{//«
 			let sttm = get_visual_time_bounds().start;
 			vid.currentTime = sttm;
 			tmdiv.innerHTML = get_main_time_str(sttm);
-			update_all();
+			update_all();//This calls draw_ruler(), which calls new SetTimelineImages()
 		}
 		else{
 cwarn(`UNKNOWN SCROLL_MODE: ${scroll_mode}`);
 		}
 	}
 };//»
-
 const handle_arrow = (k, opts={}) => {//«
 	let arr = k.split("_");
 	let which = arr[0];
@@ -1293,6 +1337,7 @@ const center_to_time = tm => {//«
 	if (timeline._xLoc > 0) timeline._xLoc = 0;
 	update_all();
 };//»
+
 const seek_to_time = async(tm)=>{//«
 /*If the current time is the video duration, then doing a seek back to the beginning doesn't work.
 The video stays at the end.
@@ -1455,7 +1500,9 @@ for (let m of grid_marks){//«
 //	d._x = m._x - w/2;
 	d._x = use_padl + m._x - w/2;
 	d._z = 10;
-	d._bor = "1px solid #000";
+//	d._bor = "1px solid #fff";
+	d.style.borderRight = PREV_IMG_BORDER;
+	d.style.borderLeft = PREV_IMG_BORDER;
 	cur_images.push(d);
 }//»
 
@@ -1476,6 +1523,7 @@ v.onloadedmetadata=async()=>{//«
 		let im = new Image;
 		IMG_CACHE[tm]=im;
 		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w, VID_IMG_H);
+//		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w - 1, VID_IMG_H - 1);
 		im.src = can.toDataURL();
 		m._img = im;
 		let d = mkdv();
@@ -1485,6 +1533,9 @@ v.onloadedmetadata=async()=>{//«
 		d._over="hidden";
 		d._pos = "absolute";
 		d._w = w;
+//d._bgcol="#fff";
+//log(d);
+
 		d._h = VID_IMG_H;
 		d._op = VID_IMG_OP;
 		d._add(im);
@@ -1499,7 +1550,8 @@ v.onloadedmetadata=async()=>{//«
 			d._x = use_padl + m._x - w/2;
 		}
 		d._z = 10;
-		d._bor = "1px solid #000";
+		d.style.borderRight = PREV_IMG_BORDER;
+		d.style.borderLeft = PREV_IMG_BORDER;
 		cur_images.push(d);
 	}
 };//»
@@ -1510,6 +1562,7 @@ v.src = url;
 };//»
 
 const draw_ruler = (opts={}) => {//«
+flush_right_edge();
 ruler.innerHTML="";
 
 if (cur_set_images) {
@@ -1566,7 +1619,6 @@ for (let i=-1; i < num_grids; i++){
 	g._add(t);
 	t._bgcol="#000";
 	ruler._add(g);
-//log(t.clientWidth);
 	t._x = -t.clientWidth/2;
 	t._fs = 21;
 	t._y = TIMELINE_H/2 - 9.5;
@@ -1594,6 +1646,7 @@ for (let i=-1; i < num_grids; i++){
 		grid_time_elems.push(t);
 	}
 }
+
 if (Math.abs(viz_end-viddur) < 0.01){
 	let g = mkdv();
 
@@ -1606,19 +1659,31 @@ if (Math.abs(viz_end-viddur) < 0.01){
 	g._y = 0;
 	g._z = 1;
 	g._time = viddur;
+/*
+//  This (awkwardly) puts the preview of the final frame at the end of the timeline, but that is
+//  redundant because if the current time marker is at the end, then the main video window will
+//  show the final frame in all its main window size.
 	if (opts.addLast) {
 		grid_time_elems.push({});
 		grid_marks.push(g);
 	}
+*/
 	ruler._add(g);
 	last_x = g.getBoundingClientRect().right;
 }
+///*
+
 use_padl = (Main._w - (last_x - first_x))/2;
+//use_padl = GRID_W_HALF;
 timeline._padl = use_padl;
-//log(timeline);
-//log(img_div);
 img_div._padl = use_padl;
 
+/*
+log("PADL",use_padl);
+log(timeline);
+log(img_div);
+*/
+//*/
 if (images_showing && !await_arrow_up) {
 	cur_set_images = new SetTimelineImages();
 }
@@ -1648,6 +1713,7 @@ update_all();
 
 
 };//»
+/*
 const flush_right_edge=()=>{//«
 //Make sure the timeline location flushes with the right edge, when the visible
 //duration is long enough
@@ -1655,6 +1721,19 @@ const flush_right_edge=()=>{//«
 
 	if (duration < viddur && width < Main._w - GRID_W){
 		let x_adj = (Main._w - GRID_W) - width;
+		timeline._xLoc += x_adj;
+		return true;
+	}
+	return false;
+}//»
+*/
+const flush_right_edge=()=>{//«
+//Make sure the timeline location flushes with the right edge, when the visible
+//duration is long enough
+	let {duration, width} = get_visual_time_bounds();
+
+	if (duration < viddur && width < Main._w - GRID_W_HALF){
+		let x_adj = (Main._w - GRID_W_HALF) - width;
 		timeline._xLoc += x_adj;
 		return true;
 	}
@@ -1710,7 +1789,12 @@ if (timeline_sig_figs < 0) timeline_sig_figs = 0;
 timeline._width = viddur * mag_pix_per_sec;
 
 center_to_curtime();
-if (flush_right_edge()){update_all();}
+if (flush_right_edge()){
+	update_all();
+}
+
+//log(timeline._xLoc);
+//log(timeline);
 //center_to_time((bnds.start+bnds.end)/2);
 //update_all();
 //seek_to_timeline_start();
@@ -2048,7 +2132,9 @@ this.onkill=()=>{//«
 };//»
 this.onresize=()=>{//«
 	viddiv._h = Main._h - TIMELINE_H - VID_IMG_H - VID_IMG_PAD;
-	let dur = vid.duration;
+//	let dur = vid.duration;
+//log(mark);
+//mark._maybeScroll();
 	update_all();
 };//»
 this.onkeydown=(e,k)=>{//«
@@ -2128,6 +2214,7 @@ cwarn("Cluster times");
 log(cluster_times);
 	}
 	else if (k.match(/^(LEFT|RIGHT)_/)){
+//WKMCKUH
 		handle_arrow(k);
 	}
 	else if (k=="DEL_"){
@@ -2157,7 +2244,7 @@ stat(`Mouse scrolling: ${ALLOW_MOUSE_SCROLLING}`);
 this.onkeyup=(e,k)=>{//«
 
 if (await_arrow_up){
-
+//MOLHBXKJ
 handle_await_arrow_up(k);
 
 }
