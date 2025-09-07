@@ -100,11 +100,26 @@ let TRACKSTAGS = SEGKIDS["1654ae6b"]
 2) Do a parse_section(bytes, WHICHTAGS)
 
 »*/
+/*DEPENDING ON THE VALUE OF GRID_W, THERE MAY BE A MISALIGNMENT BETWEEN THE PREVIEW IMAGES «
+AND THE TIMELINE RULER!!! GRID_W == 100 | 130 |150 | 225 SEEMED TO WORK OK, but GRID_W = 125 DOES 
+NOT WORK RIGHT! 
 
+It seems that the call to flush_right_edge() @SAJRHTGB is somewhat to blame, especially seeing
+as I just sort of experimentally put it there in order to see what would happen. BUT EVEN WITH
+THAT, GRID_W = 125 STILL DOESN'T WORK.
+
+NOW I JUST REMOVED THE LITTLE PADDING GIMMICK  @WJHGLVG AND GRID_W = 125 SEEMS TO WORK WELL.
+
+NOW THE flush_right_edge() THING THAT I HAD COMMENTED OUT @SAJRHTGB SEEMS TO WORK OK. SO APPARENTLY
+ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
+»*/
 //The numbers and sizes of the thumbnails are determined by this
-let GRID_W = 225;
+
+let GRID_W = 125;
 
 //Vars«
+
+const WEBMPARSER_MOD = "util.webmparser";
 
 let ALLOW_MOUSE_SCROLLING = false;
 
@@ -141,7 +156,7 @@ export const app = function(Win, Desk) {//«
 //Var«
 
 let cur_set_images;
-let grid_time_elems;
+//let grid_time_elems;
 let IMG_CACHE = {};
 
 let MAG_PIX_PER_SEC_ARR = [//«
@@ -235,7 +250,7 @@ let is_waiting = false;
 let SNAP_TO_CLUSTER_THRESH = 0.5;
 let MARK_DIFF_THRESH = 0.25;
 let MARK_X_OFF = -5;
-let TIME_MARK_SZ = 15;
+let TIME_MARK_SZ = 18;
 let MARK_SZ = 20;
 let MARK_Y = -7;
 let TIME_MARK_X_OFF = -2;
@@ -318,7 +333,7 @@ ruler.setAttribute("name","ruler");
 ruler._pos="absolute";
 ruler._b = 0;
 ruler._h = "100%";
-//ruler._w = "100%";
+ruler._w = "100%";
 //ruler.style.cursor="move";
 timeline._add(ruler);
 
@@ -348,6 +363,7 @@ cluster_marks_div._b=0;
 if (!SHOW_CLUSTER_MARKS_ON_INIT){
 	cluster_marks_div._dis="none";
 }
+
 cluster_marks_div.setAttribute("name","clusters");
 timeline._add(cluster_marks_div);
 //Main._add(cluster_marks_div);
@@ -376,7 +392,7 @@ Main._add(timeline);
 //Util«
 
 const load_webm=async()=>{//«
-	webm_mod = await util.getMod("webmparser");
+	webm_mod = await util.getMod(WEBMPARSER_MOD);
 	SEG_KIDS = webm_mod.WebmTags.kids["18538067"]
 	CLUSTER_KIDS = SEG_KIDS.kids["1f43b675"];
 	file_bytes = await node.bytes;
@@ -522,7 +538,7 @@ let CUESHASH={};
 let seg_off, tracks_pos, cues_pos;
 let b,c,rv;
 
-let mod = await util.getMod("webmparser");
+let mod = await util.getMod(WEBMPARSER_MOD);
 webm_mod = mod;
 let {ebml_sz, dump_hex_lines, parse_section, parse_section_flat} = mod;
 
@@ -669,7 +685,7 @@ is_waiting = true;
 
 //Var«
 
-let mod = await util.getMod("webmparser");
+let mod = await util.getMod(WEBMPARSER_MOD);
 webm_mod = mod;
 let {ebml_sz, dump_hex_lines, parse_section, parse_section_flat} = mod;
 
@@ -1006,26 +1022,15 @@ const scroll_timeline = (which, opts={}) => {//«
 	let tr = get_timeline_rect();
 	let mr = Main.getBoundingClientRect();
 
-/*
-
-1) current time is within the start window
-   - left justify
-2) current time is within the end window
-   - right justify
-3) current time is visible, and both timeline edges are offscreen
-
-*/
-/*
 	if (tr.left > mr.left){
 		timeline._xLoc = 0;
 	}
-	else if (tr.right < mr.right){
-		timeline._xLoc += (mr.right - tr.right);
-	}
-//	else if (tr.right < mr.left){
-//		timeline._xLoc += (mr.left - tr.right) + 100;
+//	else if (tr.right < mr.right){
+//		timeline._xLoc += (mr.right - tr.right);
 //	}
-*/
+	else if (tr.right < mr.left){
+		timeline._xLoc += (mr.left - tr.right) + 100;
+	}
 
 /*«THIS LOGIC IS WEIRD!!!
 	if (tr.left > mr.left){
@@ -1148,6 +1153,15 @@ const handle_await_arrow_up=(k)=>{//«
 		}
 		else if (scroll_mode === SCROLL_MODE_TIMELINE){
 			let sttm = get_visual_time_bounds().start;
+if (!Number.isFinite(sttm)){
+reset_timeline();
+return;
+}
+//			let bounds = get_visual_time_bounds();
+//log(bounds);
+//			let sttm = bounds.start;
+//.start;
+//log(sttm);
 			vid.currentTime = sttm;
 			tmdiv.innerHTML = get_main_time_str(sttm);
 			update_all();//This calls draw_ruler(), which calls new SetTimelineImages()
@@ -1562,7 +1576,8 @@ v.src = url;
 };//»
 
 const draw_ruler = (opts={}) => {//«
-flush_right_edge();
+//SAJRHTGB
+//flush_right_edge();
 ruler.innerHTML="";
 
 if (cur_set_images) {
@@ -1594,7 +1609,6 @@ if (viz_start == 0 || diff_w > 0) {
 	ruler._add(g);
 }
 grid_times = [];
-grid_time_elems = [];
 grid_marks = [];
 cur_images = [];
 //images_showing = true;
@@ -1623,33 +1637,16 @@ for (let i=-1; i < num_grids; i++){
 	t._fs = 21;
 	t._y = TIMELINE_H/2 - 9.5;
 	g._bgcol="#555";
-	if (i==-1||i==num_grids-1) {
-		if (i==-1){
-			let lft = t.getBoundingClientRect().left;
-			let diff = lft - Main.getBoundingClientRect().left;
-			first_x = lft;
-			if (diff < 0) {
-				t._padl = -diff;
-				first_x -= diff;
-			}
+	if (i==-1) {
+		let lft = t.getBoundingClientRect().left;
+		let diff = lft - Main.getBoundingClientRect().left;
+		if (diff < 0) {//The first time label is hanging off the screen, so push it forward.
+			t._padl = -diff;
 		}
-		else{
-			let r = t.getBoundingClientRect();
-			let diff = t.getBoundingClientRect().right - Main.getBoundingClientRect().right;
-			if (diff > 0) {
-//				t._x -= diff;
-			}
-			last_x = t.getBoundingClientRect().right;
-		}
-	}
-	else {
-		grid_time_elems.push(t);
 	}
 }
-
 if (Math.abs(viz_end-viddur) < 0.01){
 	let g = mkdv();
-
 	g._pos = "absolute";
 	g._w=5;
 	g._bgcol="#aaa";
@@ -1662,22 +1659,22 @@ if (Math.abs(viz_end-viddur) < 0.01){
 /*
 //  This (awkwardly) puts the preview of the final frame at the end of the timeline, but that is
 //  redundant because if the current time marker is at the end, then the main video window will
-//  show the final frame in all its main window size.
+//  show the final frame in all the bigness of the main window size.
 	if (opts.addLast) {
-		grid_time_elems.push({});
+//		grid_time_elems.push({});
 		grid_marks.push(g);
 	}
 */
 	ruler._add(g);
-	last_x = g.getBoundingClientRect().right;
 }
 ///*
-
+/*WJHGLVG: THIS CAUSES THE PREVIEW IMAGES AND THE RULER MARKINGS TO BECOME MISALIGNED. THE BAD PART
+IS THAT THE FIRST HALF OF THE FIRST PREVIEW IMAGE IS HANGING OFF THE FRONT OFF THE APP WINDOW.
 use_padl = (Main._w - (last_x - first_x))/2;
 //use_padl = GRID_W_HALF;
 timeline._padl = use_padl;
 img_div._padl = use_padl;
-
+*/
 /*
 log("PADL",use_padl);
 log(timeline);
@@ -1798,7 +1795,7 @@ if (flush_right_edge()){
 //center_to_time((bnds.start+bnds.end)/2);
 //update_all();
 //seek_to_timeline_start();
-
+//log(ruler);
 };//»
 const demagnify=()=>{//«
 
@@ -1979,16 +1976,20 @@ if (!CUESHASH){
 cerr("NO CUES!");
 return;
 }
-let keys = CUESHASH._keys;
+//let keys = CUESHASH._keys;
+//log(CUESHASH);
+let keys = Object.keys(CUESHASH);
+//log(keys);
 for (let k of keys){
 	cluster_times.push(parseInt(k)/1000);
 }
+stat(`Got: ${cluster_times.length} clusters`);
 cluster_times.shift();
 add_cluster_time_marks();
 
 scroll_cluster_marks();
 
-log(cluster_times);
+//log(cluster_times);
 
 };//»
 const encode = frames =>{//«
@@ -2043,9 +2044,11 @@ for (let fr of frames){
 
 //»
 //Listeners«
-
+/*
 ruler.draggable = true;
+
 ruler.ondragstart=e=>{//«
+//log("???");
 	e.preventDefault();
 	if (!ALLOW_MOUSE_SCROLLING) {
 		stat("Mouse scrolling is currently disabled ( Ctrl + Alt + Shift + m to enable)");
@@ -2055,6 +2058,7 @@ ruler.ondragstart=e=>{//«
 	RDX = e.clientX;
 	TLX = timeline._xLoc;
 };//»
+*/
 let mousemove=e=>{//«
 	if (RDX==null) return;
 	let x = e.clientX;
@@ -2226,6 +2230,7 @@ log(cluster_times);
 	else if (k=="4_S"||k=="e_C"){
 		seek_to_end();
 	}
+/*
 	else if (k=="m_CAS"){
 //		magnify_to_center = !magnify_to_center;
 //		stat(`Magnifying to center: ${magnify_to_center}`);
@@ -2233,6 +2238,7 @@ ALLOW_MOUSE_SCROLLING = !ALLOW_MOUSE_SCROLLING;
 stat(`Mouse scrolling: ${ALLOW_MOUSE_SCROLLING}`);
 
 	}
+*/
 	else if (k=="i_"){
 //		toggle_images();
 	}
