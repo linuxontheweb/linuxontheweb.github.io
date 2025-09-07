@@ -81,6 +81,8 @@ const{
 	TERMINAL_APP,
 	IMAGE_APP,
 	MEDIA_APP,
+	MEDIA_EDIT_APP,
+	MEDIA_APPS,
 
 	VIEWONLY_APPS,
 	TEXT_EXTENSIONS,
@@ -4798,10 +4800,20 @@ let menu = [//«
 "Delete", () => {delete_selected_files(this);}
 ];//»
 let open_opts=["Binary\xa0Viewer", ()=>{open_icon(this,{useApp: DEF_BIN_APP});}];
+/*
+If this is a media app, then it is probably going to be opened by the default
+player app. But we also want an option to edit it if there is an app that
+is capable of editing the given extension.
+Currently, there is only an app for editing webm videos: media.VideoCutter
+*/
 if (this.appName !== FOLDER_APP){
 	if (TEXT_EXTENSIONS.includes(this.ext)){
 		open_opts.unshift(()=>{open_icon(this,{useApp:TEXT_EDITOR_APP});});
 		open_opts.unshift("Text\xa0Editor");
+	}
+	else if (this.ext === "webm" && this.appName != MEDIA_EDIT_APP){
+		open_opts.unshift(()=>{open_icon(this,{useApp:MEDIA_EDIT_APP});});
+		open_opts.unshift("Video\xa0Editor");
 	}
 	menu.unshift(open_opts);
 	menu.unshift("Open\xa0with...");
@@ -5824,19 +5836,22 @@ const switch_icons = () => {//«
 	icon_array_off();
 }//»
 
-const check_special_ext = node =>{//«
+const check_special_ext = (node, use_app) =>{//«
 	if (node.type !== FS_TYPE) return false;
 	let ext = node.ext;
 	if (!ext) return false;
 //log(node);
+
+	if (use_app && !MEDIA_APPS.includes(use_app)) return false;
+
 	if (MEDIA_EXTENSIONS.includes(ext.toLowerCase())) {
 		let url = fsUrl(`/blobs/${node.blobId}`);
-		open_app(MEDIA_APP, {appArgs:{url, node}});
+		open_app(use_app || MEDIA_APP, {appArgs:{url, node}});
 		return true;
 	}
 	if (IMAGE_EXTENSIONS.includes(ext.toLowerCase())) {
 		let url = fsUrl(`/blobs/${node.blobId}`);
-		open_app(IMAGE_APP, {appArgs:{url, node}});
+		open_app(use_app || IMAGE_APP, {appArgs:{url, node}});
 		return true;
 	}   
 	return false; 
@@ -5921,7 +5936,10 @@ the prevPaths array still holds good.*/
 	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE];
 	if (!OK_TYPES.includes(typ)) return poperr(`Cannot open type: ${typ}`);
 
-	if (check_special_ext(node)) return;
+//	if (check_special_ext(node)) return;
+//log(useApp);
+	if (check_special_ext(node, useApp)) return;
+//	if (!useApp && check_special_ext(node)) return;
 	
 	if (typ==FS_TYPE&&!fs.check_fs_dir_perm(node)) return noopen("permission denied");
 	let ret = await node.bytes;

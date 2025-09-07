@@ -1,3 +1,14 @@
+/*@AUEJRKT: This seems to fix a bug involving scrolling right (the timeline never scrolls, but
+just stays at 0) , just by commenting it out, which begs the question: WHY WAS IT THERE IN THE 
+FIRST PLACE? WHAT WAS I THINKING BY THAT OLD LOGIC?
+*/
+/*9/6/25: To make this a general video slicer/dicer involving arbitrary numbers of videos,
+these factors need to be taken into account:
+1) All videos can be concatenated into a single video by way of the command (in coms/extra.js): 
+   webmcat (the TRACKS sections must be identical).
+2) The video as edited here can assemble its cuts in any aritrary order (i.e. the cuts 
+   themselves don't need to be sequential)
+*/
 /*9/3/25: Instead of generalizing this app to allow for multiple files, let's create a«
 shell command that takes an arbitrary number of arguments that describe all of the
 clips held by all the various VideoCutter app objects, to assemble them into a composite video.
@@ -55,7 +66,7 @@ let TRACKSTAGS = SEGKIDS["1654ae6b"]
 »*/
 
 //The numbers and sizes of the thumbnails are determined by this
-let GRID_W = 125;
+let GRID_W = 225;
 
 //Vars«
 
@@ -157,6 +168,8 @@ let PIX_PER_SEC = 10;
 let MAX_MAG_LEVEL = 10000;
 let MIN_SANE_MAG_LEVEL = 0.01;
 
+let MARK_ON_COL = "#dd7";
+let MARK_OFF_COL = "#ccc";
 
 let webm_mod, file;
 let file_bytes;
@@ -215,7 +228,6 @@ viddiv._x=0;
 viddiv._y=0;
 viddiv._w="100%";
 
-Main._add(viddiv);
 
 let vid = mk('video');
 vid._w="100%";
@@ -230,8 +242,6 @@ timeline._h=TIMELINE_H;
 timeline._b=0;
 timeline._bgcol="#000";
 
-Main._add(timeline);
-
 let tmdiv = mkdv();
 tmdiv._fs=26;
 tmdiv._fw=900;
@@ -239,7 +249,6 @@ tmdiv._pos="absolute";
 tmdiv._x=0;
 tmdiv._y=0;
 tmdiv._tcol="#ccc";
-Main._add(tmdiv);
 
 let durdiv = mkdv();
 durdiv._fs=26;
@@ -248,7 +257,6 @@ durdiv._pos="absolute";
 durdiv._r=0;
 durdiv._y=0;
 durdiv._tcol="#ccc";
-Main._add(durdiv);
 
 
 let mark = mkdv();
@@ -294,7 +302,6 @@ overdiv.oncontextmenu = NOPROPDEF;
 overdiv.onmouseout = NOPROPDEF;
 overdiv.onmouseleave = NOPROPDEF;
 overdiv._dis="none";
-Main._add(overdiv);
 
 let cluster_marks_div = mkdv();
 cluster_marks_div.pos="absolute";
@@ -316,9 +323,15 @@ img_div._b=TIMELINE_H;
 img_div._w="100%";
 
 img_div._bgcol="#000";
+
+Main._add(viddiv);
+Main._add(tmdiv);
+Main._add(durdiv);
+Main._add(overdiv);
 Main._add(img_div);
+Main._add(timeline);
 
-
+//log(Main);
 //»
 //Funcs«
 
@@ -395,7 +408,9 @@ const toint = (arr, if_cp) => {//«
 const try_delete = async()=>{//«
 	if (cur_mark){
 		is_waiting = true;
-		if (await wdg.popyesno(`Delete current marker?`)){
+//		await cur_mark._on();
+		await seek_to_time(cur_mark._time);
+		if (await wdg.popyesno(`Delete marker: '${cur_mark._id}'?`)){
 			cur_mark._delIt();
 		}
 		is_waiting = false;
@@ -415,52 +430,6 @@ this.try_kill = async() => {//«
 	if (await wdg.popyesno("There is an unsaved file. Really close the window?")){
 		Win.forceKill();
 	}
-};//»
-const get_render_slices = (arr, errarg) => {//«
-
-const err = errarg || wdg.poperr;
-
-let hash = {};
-for (let m of marks){
-	hash[m._id] = m;
-}
-
-let slices = [];
-for (let m of arr){
-	let m1 = m[0];
-	let mrk1 = hash[m1];
-	let m2 = m[1];
-	let mrk2 = hash[m2];
-
-	if (!mrk1) return err(`${m1}: Not a marker`);
-	if (!mrk2) return err(`${m2}: Not a marker`);
-	if (m1===m2) return err(`${m1}${m2}: Cannot make a null slice`);
-	if (mrk1._time > mrk2._time) return err(`${m1}${m2}: Cannot make a negative time slice`);
-	slices.push([Math.floor(mrk1._time*1000), Math.floor(mrk2._time*1000)]);
-}
-
-return slices;
-//log("RENDER THESE SLICES");
-//jlog(slices);
-
-};//»
-
-const get_render_args_from_str = str => {//«
-	let arr;
-	if (!str) return;
-	str = str.trim();
-	if (!str) return;
-	if (!str.match(/^[ a-zA-Z]+$/)){
-		return false;
-	}
-	arr = str.split(/ +/);
-	for (let s of arr){
-		if (!s.match(/^[a-zA-Z]{2}$/)){
-			return false;
-		}
-	}
-	return arr;
-
 };//»
 
 const sleep=(ms)=>{//«
@@ -893,6 +862,51 @@ stat(`Output duration: ${(tot_time/1000).toFixed(3)}s `);
 return make_webm_file(ebml, tracks, new_clusters, new_cluster_times, tot_time/1000);
 
 };//»
+const get_render_slices = (arr, errarg) => {//«
+
+const err = errarg || wdg.poperr;
+
+let hash = {};
+for (let m of marks){
+	hash[m._id] = m;
+}
+
+let slices = [];
+for (let m of arr){
+	let m1 = m[0];
+	let mrk1 = hash[m1];
+	let m2 = m[1];
+	let mrk2 = hash[m2];
+
+	if (!mrk1) return err(`${m1}: Not a marker`);
+	if (!mrk2) return err(`${m2}: Not a marker`);
+	if (m1===m2) return err(`${m1}${m2}: Cannot make a null slice`);
+	if (mrk1._time > mrk2._time) return err(`${m1}${m2}: Cannot make a negative time slice`);
+	slices.push([Math.floor(mrk1._time*1000), Math.floor(mrk2._time*1000)]);
+}
+
+return slices;
+//log("RENDER THESE SLICES");
+//jlog(slices);
+
+};//»
+const get_render_args_from_str = str => {//«
+	let arr;
+	if (!str) return;
+	str = str.trim();
+	if (!str) return;
+	if (!str.match(/^[ a-zA-Z]+$/)){
+		return false;
+	}
+	arr = str.split(/ +/);
+	for (let s of arr){
+		if (!s.match(/^[a-zA-Z]{2}$/)){
+			return false;
+		}
+	}
+	return arr;
+
+};//»
 const render_from_script = str => {//«
 
 	let args = get_render_args_from_str(str);
@@ -947,23 +961,46 @@ const scroll_timeline = (which, opts={}) => {//«
 	else{
 		inc = TIMELINE_SCROLL_PER * dir * Main._w;
 	}
+//log(inc);
 	let gotx = x+inc;
+//log(gotx);
 	timeline._xLoc = gotx;
 	let tr = get_timeline_rect();
 	let mr = Main.getBoundingClientRect();
+
+/*
+
+1) tr.width <= mr.width
+   - center it
+
+*/
 	if (tr.left > mr.left){
 		timeline._xLoc = 0;
 	}
+	else if (tr.right < mr.left){
+		timeline._xLoc += (mr.left - tr.right) + 100;
+	}
+/*«THIS LOGIC IS WEIRD!!!
+	if (tr.left > mr.left){
+//log(2);
+		timeline._xLoc = 0;
+	}
 	else if (tr.right < mr.right){
+//log(2);
 		gotx = x + mr.right - tr.right;
 		if (gotx > 0) {
-			timeline._xLoc = 0;
+//AUEJRKT
+//cwarn("RESET X TO 0!!!", gotx, ">", 0);
+//			timeline._xLoc = 0;
 		}
 		else if (tr.right < mr.left){
 			timeline._xLoc += (mr.left - tr.right) + 100;
 		}
 	}
-	else{}
+	else{
+//log(3);
+	}
+»*/
 	align_timeline();
 	let xdiff = x - timeline._xLoc;
 	mark._xLoc -= xdiff;
@@ -994,10 +1031,12 @@ const scroll_time_marker = (which, opts={}) => {//«
 		gotto = vid.currentTime + total_scroll;
 		tmdiv.innerHTML = get_main_time_str(gotto);
 	}
+//log(1, gotto);
 	if (gotto > viddur) {
 		gotto = viddur;
 	}
 	else if (gotto < 0) gotto = 0;
+//log(2, gotto);
 //	let gotto_rnd = Math.round(gotto * 1000);
 	let round_to = round_ms(gotto);
 	if (dir > 0){
@@ -1055,8 +1094,9 @@ const handle_await_arrow_up=(k)=>{//«
 				cur_set_images = new SetTimelineImages();
 			}
 			let gotto = vid.currentTime + total_scroll;
-			if (gotto > viddur) gotto = viddur;
+			if (gotto > viddur) gotto = viddur - 0.001;
 			else if (gotto < 0) gotto = 0;
+//log(1);
 			vid.currentTime = gotto;
 			tmdiv.innerHTML = get_main_time_str(gotto);
 			mark._scroll();
@@ -1254,6 +1294,9 @@ const center_to_time = tm => {//«
 	update_all();
 };//»
 const seek_to_time = async(tm)=>{//«
+/*If the current time is the video duration, then doing a seek back to the beginning doesn't work.
+The video stays at the end.
+*/
 	await await_seek(tm);
 	let ctr_time;
 	if (tm == viddur){
@@ -1270,7 +1313,8 @@ const seek_to_time = async(tm)=>{//«
 const seek_to_end=async()=>{//«
 	timeline._xLoc = Main._w - timeline._width - GRID_W;
 	align_timeline();
-	await seek_to_time(viddur);
+//	await seek_to_time(viddur);
+	await seek_to_time(viddur-0.001);
 	draw_ruler({addLast:true});
 };//»
 const center_to_curtime = () => {//«
@@ -1399,7 +1443,6 @@ for (let m of grid_marks){//«
 	let d = mkdv();
 	d.onclick=()=>{
 		scroll_to_time(tm, 1);
-
 	};
 	d._pos = "absolute";
 	d._over="hidden";
@@ -1707,6 +1750,7 @@ const try_seek_mark=async()=>{//«
 		let nogo=false;
 		for (let mrk of marks){
 			if (mrk._id == rv){
+				if (cur_mark) cur_mark._off();
 				mrk._on();
 				break;
 			}
@@ -1724,11 +1768,12 @@ const try_create_mark=async()=>{//«
 		for (let mrk of marks){
 			if (mrk._id == rv){
 				nogo = true;
-				stat(`Another mark with id '${rv}' exists!`);
+				wdg.poperr(`Another mark with id '${rv}' exists!`);
 				break;
 			}
 		}
 		if (!nogo){
+			if (cur_mark) cur_mark._off();
 			create_mark(vid.currentTime, rv);
 		}
 	}
@@ -1739,33 +1784,38 @@ const create_mark=(usetime, id, if_auto)=>{//«
 	for (let m of marks){
 		let diff = Math.abs(m._time - tm);
 		if (diff < MARK_DIFF_THRESH){
-			stat(`Another mark is too close (${diff} < ${MARK_DIFF_THRESH})`);
+			wdg.poperr(`Another mark is too close (${diff} < ${MARK_DIFF_THRESH})`);
 			return;
 		}
 	}
 	let mrk = mkdv();
 	mrk._pos="absolute";
 //	mrk._tcol="#000";
-	mrk.innerHTML='v';
+//	mrk.innerHTML='v';
+	mrk.innerHTML=id;
 	mrk._fs = MARK_SZ;
 	mrk._y = MARK_Y;
 //	mrk._fw=900;
 	mrk.setAttribute("name","marker");
-	mrk._z = 1;
+	mrk._z = 100;
 	mrk._time = tm;
 	mrk._id = id;
 //log(mrk);
+//	mrk._tcol=MARK_OFF_COL;
 	mrk._off = ()=>{
-		mrk._tcol="#ccc";
+		mrk._tcol=MARK_OFF_COL;
+		mrk._fw="";
 		cur_mark = null;
 	};
 	mrk._on = async()=>{
-		mrk._tcol="#ff0";
+		mrk._tcol=MARK_ON_COL;
+		mrk._fw="900";
 		cur_mark = mrk;
 		await seek_to_time(mrk._time);
 		center_to_curtime();
 		scroll_marks();
 		scroll_cluster_marks();
+		stat(`Current mark: '${id}' (${tm.toFixed(3)}s)`);
 	};
 	mrk._delIt = ()=>{
 		remove_elem(mrk, marks);
@@ -1776,9 +1826,9 @@ const create_mark=(usetime, id, if_auto)=>{//«
 	mrk._maybeScroll = ()=>{
 		check_scroll(mrk);
 	}
-if (!if_auto) {
-	mrk._on();
-}
+	if (if_auto) mrk._off();
+	else mrk._on();
+
 	timeline._add(mrk);
 	marks.push(mrk);
 	marks = marks.sort((a,b)=>{
@@ -2101,7 +2151,7 @@ stat(`Mouse scrolling: ${ALLOW_MOUSE_SCROLLING}`);
 	}
 	else if (k=="._"||k=="/_"){
 //		toggle_images();
-		dew_yoimpst();
+//		dew_yoimpst();
 	}
 };//»
 this.onkeyup=(e,k)=>{//«

@@ -134,7 +134,10 @@ const IMAGE_EXTENSIONS=["jpg","gif","png","webp"];
 const TERMINAL_APP = "Terminal";
 const IMAGE_APP = "util.ImageView";
 const MEDIA_APP = "MediaPlayer";
-//const MEDIA_APP = "media.VideoCutter";
+const MEDIA_EDIT_APP = "media.VideoCutter";
+//We are using "MEDIA" to refer either to individual video-based apps or to 
+//the array of video- and image-based apps.
+const MEDIA_APPS = [IMAGE_APP, MEDIA_APP, MEDIA_EDIT_APP];
 //const MEDIA_APP = "media.MediaPlayer";
 const DEF_BIN_APP = "BinView";
 const HTML_APP = "util.HTML";
@@ -469,7 +472,9 @@ export const globals = {//«
 	TEXT_APP,
 	TERMINAL_APP,
 	MEDIA_APP,
+	MEDIA_EDIT_APP,
 	IMAGE_APP,
+	MEDIA_APPS,
 	APPICONS,
 	TEXT_EDITOR_APP,
 	DEF_BIN_APP,
@@ -528,6 +533,5 @@ what.another_old_func
 }
 ;//»
 NS.globals = globals;
-
 //»
 

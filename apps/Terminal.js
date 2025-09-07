@@ -1,6 +1,6 @@
 /*README«
 
-About the developer reload workflow in a Terminal window
+About the developer reload workflow in Terminal windows
 
 Normally, reloading an application window during development is a pretty trivial thing:
 the system simply replaces the old application javascript (fetched from under apps/) that

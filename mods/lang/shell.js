@@ -2439,6 +2439,7 @@ async run(){//«
 }//»
 const com_wget = class extends Com{//«
 /*How github names their files within repos, and how to fetch them from LOTW«
+
 If this is the github repo:
 https://github.com/mrdoob/three.js/
 
@@ -2453,6 +2454,11 @@ https://github.com/mrdoob/three.js/raw/refs/heads/dev/playground/index.html
 
 And this is the same file that is okay to fetch:
 https://raw.githubusercontent.com/mrdoob/three.js/refs/heads/dev/playground/index.html
+
+This gets the entire directory structure (but the output is sent to the console as Uint8Array, 
+rather than text, since there is no indication in the URL that the returned value is JSON):
+https://api.github.com/repos/mrdoob/three.js/git/trees/refs/heads/dev?recursive=true
+
 »*/
 static getOpts(){
 	return {l: {dl: 1, local: 1}, s: {l: 1}};
