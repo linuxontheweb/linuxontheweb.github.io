@@ -1,12 +1,30 @@
-/*9/9/25: 3 ways of referencing the time points in a video timeline:
+/*9/9/25: «
+
+@FSKROTKL: Uncomment those 2 lines so that when scrolling the timeline, the main video
+will seek to the first time showing on the ruler, and the marker will be set there.
+
+Otherwise, the current time marker will not always be visible, but when starting to
+play the video  , we MAY want to seek to it.
+
+@PXJKFMG: I don't know if this actually ever really DID anything!?!?
+
+
+3 ways of referencing the time points in a video timeline
 
 1) floating point: this is the literal time value (no mark created)
 2) decimal: this is the mark's number in an array of anonymous marks
 3) symbolic: currently, only single (1 byte) alphabetic characters: a-zA-Z
 
-The main question is whether the named marks are only in a hash map or are also in
+@AQUEORK, I am trying to remove the await part that causes the delay factor when
+seeking to the end of the timeline. I just want to be able to hurry up and draw
+the ruler without having to wait for the video seek operation to finish.
 
-*/
+We are only calling await_seek() ONCE now, when doing reencode() inside of
+render_from_slices(). It is NECESSARY that we wait for the video to seek to the
+given frame (decode it so the image shows up in the video element) so that the 
+call to createImageBitmap(vid) actually works.
+
+»*/
 /*9/7/25: Need to seriously simplyfy the timeline positioning/rendering logic. Right now, «
 there is an issue for when the timeline is wider than the window, and the time marker is at
 the end. It seems that the timeline is positioned so that only a couple preview frames are
@@ -413,7 +431,7 @@ const load_webm=async()=>{//«
 	file_bytes = await node.bytes;
 	get_clusters();
 };//»
-
+///*
 const await_seek = (tm)=>{//«
 	return new Promise((Y,N)=>{
 		vid.onseeked = ()=>{
@@ -423,6 +441,11 @@ const await_seek = (tm)=>{//«
 		tmdiv.innerHTML = get_main_time_str(tm);
 	});
 };//»
+//*/
+const set_curtime = tm => {
+	vid.currentTime = tm;
+	tmdiv.innerHTML = get_main_time_str(tm);
+};
 
 const handle_tab = k => {//«
 
@@ -485,7 +508,8 @@ const try_delete = async()=>{//«
 	if (cur_mark){
 		is_waiting = true;
 //		await cur_mark._on();
-		await seek_to_time(cur_mark._time);
+//		await seek_to_time(cur_mark._time);
+		seek_to_time(cur_mark._time);
 		let use_id = cur_mark._id;
 		if (isNum(use_id)) use_id++;
 		if (await wdg.popyesno(`Delete marker: '${use_id}'?`)){
@@ -1039,7 +1063,10 @@ This is either called by scroll_time_marker or by handle_arrow.
 	if (which == "LEFT") dir=1;
 	else dir = -1;
 	let inc;
-	if (opts.small){
+	if (opts.delta){
+		inc = dir*opts.delta;
+	}
+	else if (opts.small){
 		inc = dir*GRID_W;
 	}
 	else{
@@ -1050,8 +1077,9 @@ This is either called by scroll_time_marker or by handle_arrow.
 	let diff = Main._w - ((viddur+(gotx/mag_pix_per_sec)) * mag_pix_per_sec); 
 	let did_adjust = false;
 	if(diff > 0){
-		did_adjust = true;
-		gotx+=diff;
+//log("DID ADJUST", diff);
+//		did_adjust = true;
+//		gotx+=diff;
 	}
 	timeline._xLoc = gotx;
 	let tr = get_timeline_rect();
@@ -1063,8 +1091,11 @@ This is either called by scroll_time_marker or by handle_arrow.
 	}
 
 	align_timeline(did_adjust);
-	let xdiff = tm_x - timeline._xLoc;
-	mark._xLoc -= xdiff;
+
+//PXJKFMG
+//	let xdiff = tm_x - timeline._xLoc;
+//	mark._xLoc -= xdiff;
+
 	update_all();
 
 };//»
@@ -1161,13 +1192,13 @@ if (!Number.isFinite(sttm)){
 reset_timeline();
 return;
 }
-//			let bounds = get_visual_time_bounds();
-//log(bounds);
-//			let sttm = bounds.start;
-//.start;
-//log(sttm);
-			vid.currentTime = sttm;
-			tmdiv.innerHTML = get_main_time_str(sttm);
+/*FSKROTKL: When scrolling the timeline, using the following 2 lines will:
+1) Update the main video display
+2) Cause the marker to move to the start time
+*/
+//			vid.currentTime = sttm;
+//			tmdiv.innerHTML = get_main_time_str(sttm);
+
 			update_all();//This calls draw_ruler(), which calls new SetTimelineImages()
 		}
 		else{
@@ -1346,12 +1377,26 @@ const update_all = () => {//«
 };//»
 const center_to_time = tm => {//«
 //	tm = mag_sec_per_grid * Math.floor(tm/mag_sec_per_grid);
+
+//If the timeline width is < the window width, just set _xLoc to 0
+if (timeline._width < Main._w){
+	timeline._xLoc = 0;
+	update_all();
+	return;
+}
+//If the end marker is on the screen, flush it to the right edge of the app window,
+//so that as much of the timeline is showing as possible (max number of preview frames).
+if (flush_right_edge()){
+	update_all();
+	return;
+}
 	let bounds = get_visual_time_bounds();
 	let ctr_time = (bounds.end + bounds.start)/2;
 	let off_secs = tm - ctr_time;
 	off_secs -= (off_secs % mag_sec_per_grid);
 	let pix_off = mag_pix_per_sec * off_secs;
 	timeline._xLoc-=pix_off;
+//If the start marker is past the left edge of the app window, always flush it to to the left
 	if (timeline._xLoc > 0) timeline._xLoc = 0;
 	update_all();
 };//»
@@ -1360,7 +1405,11 @@ const seek_to_time = async(tm, if_end)=>{//«
 /*If the current time is the video duration, then doing a seek back to the beginning doesn't work.
 The video stays at the end.
 */
+//XKLGFREH
 	await await_seek(tm);
+//	await_seek(tm);
+//	vid.currentTime = tm;
+//	tmdiv.innerHTML = get_main_time_str(tm);
 	let ctr_time;
 	if (tm == viddur){
 		let start_x = GRID_W_HALF;
@@ -1377,6 +1426,7 @@ The video stays at the end.
 const seek_to_end=async()=>{//«
 	timeline._xLoc = Main._w - timeline._width - GRID_W_HALF;
 	align_timeline();
+//AQUEORK
 //	await seek_to_time(viddur-0.001, true);
 	seek_to_time(viddur-0.0001, true);
 	draw_ruler({addLast:true});
@@ -1605,7 +1655,7 @@ let {
 } = get_visual_time_bounds();
 
 if (invalid) {
-cwarn("NOT UPDATING RULER!!!!");
+cwarn("INVALID: RESET TIMELINE!!!!");
 reset_timeline();
 	return;
 }
@@ -1736,6 +1786,8 @@ update_all();
 const flush_right_edge=()=>{//«
 //Make sure the timeline location flushes with the right edge, when the visible
 //duration is long enough
+	return false;
+/*
 	let {duration, width} = get_visual_time_bounds();
 
 	if (duration < viddur && width < Main._w - GRID_W_HALF){
@@ -1744,6 +1796,7 @@ const flush_right_edge=()=>{//«
 		return true;
 	}
 	return false;
+*/
 }//»
 const check_timeline_right_edge_for_underflow_and_center_to_time=(tm)=>{//«
 
@@ -1775,9 +1828,8 @@ given how wide it would be at the given magnification level.
 		}
 	}
 	flush_right_edge();
-	center_to_time(tm);
-
-//log(get_visual_time_bounds());
+	update_all();
+//	center_to_time(tm);
 
 }//»
 
@@ -1833,9 +1885,11 @@ const scroll_marks=()=>{//«
 		scroll_elem(m, m._time, MARK_X_OFF, bounds_start);
 	}
 };//»
+/*
 const seek_to_timeline_start=async()=>{//«
 	await await_seek(get_visual_time_bounds().start);
 };//»
+*/
 const try_seek_mark=async(if_popin)=>{//«
 	is_waiting = true;
 	let rv;
@@ -1970,8 +2024,9 @@ const create_mark=(usetime, id, if_auto)=>{//«
 		mrk._tcol=MARK_ON_COL;
 		mrk._fw="900";
 		cur_mark = mrk;
-		await seek_to_time(mrk._time);
-		center_to_curtime();
+//		await seek_to_time(mrk._time);
+		seek_to_time(mrk._time);
+//		center_to_curtime();
 		scroll_marks();
 		scroll_cluster_marks();
 		if (isNum(id)) stat(`Pos mark: #${mrk._id+1} (${tm.toFixed(3)}s)`);
@@ -2278,6 +2333,17 @@ this.onkeydown=(e,k)=>{//«
 	else if (k=="SPACE_"){
 		e.preventDefault();
 		if (vid.paused) {
+			let bounds = get_visual_time_bounds();
+			let start_diff = bounds.start - vid.currentTime;
+			if (start_diff > 0){
+				scroll_timeline("LEFT", {delta: start_diff * mag_pix_per_sec});
+			}
+			else{
+				let end_diff = vid.currentTime - bounds.end;
+				if (end_diff > 0) {
+					scroll_timeline("RIGHT", {delta: end_diff * mag_pix_per_sec});
+				}
+			}
 			vid.play();
 			vid.ontimeupdate = timeupdate;
 		}
