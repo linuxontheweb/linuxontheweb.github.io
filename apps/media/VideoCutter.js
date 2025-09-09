@@ -255,6 +255,9 @@ let MARK_SZ = 20;
 let MARK_Y = -7;
 let TIME_MARK_X_OFF = -2;
 let TIME_MARK_B = -8;
+let END_MARK_WID = 5;
+let END_MARK_WID_HALF = END_MARK_WID/2;
+
 let viddur;
 let vidw, vidh;
 
@@ -272,6 +275,7 @@ const NOPROPDEF=e=>{e.stopPropagation();e.preventDefault();};
 let statbar = Win.statusBar;
 let Main = Win.main;
 Main._bgcol="#111";
+Main._over = "hidden";
 let canvas = mk('canvas');
 let ctx = canvas.getContext('2d',{willReadFrequently: true});
 
@@ -1003,8 +1007,14 @@ mark._scroll = ()=>{
 }
 //»
 const scroll_timeline = (which, opts={}) => {//«
+/*
+This is either called by scroll_time_marker or by handle_arrow.
+*/
+	let mr = Main.getBoundingClientRect();
+	let tm_x = timeline._xLoc;
+	let tm_wid = timeline._width;
+	let tm_rgt = tm_wid + tm_x;
 
-	let x = timeline._xLoc;
 	let dir;
 	if (which == "LEFT") dir=1;
 	else dir = -1;
@@ -1015,51 +1025,29 @@ const scroll_timeline = (which, opts={}) => {//«
 	else{
 		inc = TIMELINE_SCROLL_PER * dir * Main._w;
 	}
-//log(inc);
-	let gotx = x+inc;
-//log(gotx);
+	let gotx = tm_x + inc;
+
+	let diff = Main._w - ((viddur+(gotx/mag_pix_per_sec)) * mag_pix_per_sec); 
+	let did_adjust = false;
+	if(diff > 0){
+		did_adjust = true;
+		gotx+=diff;
+	}
 	timeline._xLoc = gotx;
 	let tr = get_timeline_rect();
-	let mr = Main.getBoundingClientRect();
-
 	if (tr.left > mr.left){
 		timeline._xLoc = 0;
 	}
-//	else if (tr.right < mr.right){
-//		timeline._xLoc += (mr.right - tr.right);
-//	}
 	else if (tr.right < mr.left){
 		timeline._xLoc += (mr.left - tr.right) + 100;
 	}
 
-/*«THIS LOGIC IS WEIRD!!!
-	if (tr.left > mr.left){
-//log(2);
-		timeline._xLoc = 0;
-	}
-	else if (tr.right < mr.right){
-//log(2);
-		gotx = x + mr.right - tr.right;
-		if (gotx > 0) {
-//AUEJRKT
-//cwarn("RESET X TO 0!!!", gotx, ">", 0);
-//			timeline._xLoc = 0;
-		}
-		else if (tr.right < mr.left){
-			timeline._xLoc += (mr.left - tr.right) + 100;
-		}
-	}
-	else{
-//log(3);
-	}
-»*/
-	align_timeline();
-	let xdiff = x - timeline._xLoc;
+	align_timeline(did_adjust);
+	let xdiff = tm_x - timeline._xLoc;
 	mark._xLoc -= xdiff;
 	update_all();
 
 };//»
-
 const scroll_time_marker = (which, opts={}) => {//«
 	let dir;
 	if (which == "LEFT") dir=-1;
@@ -1087,17 +1075,13 @@ const scroll_time_marker = (which, opts={}) => {//«
 		gotto = viddur;
 	}
 	else if (gotto < 0) gotto = 0;
-//log("GOTTO");
-//	let gotto_rnd = Math.round(gotto * 1000);
 	let round_to = round_ms(gotto);
-//log(round_to);
 	if (dir > 0){
 		if (round_to > round_ms(get_visual_time_bounds().end)){
 			scroll_timeline("RIGHT");
 		}
 	}
 	else{
-//log(gotto , get_visual_time_bounds().start);
 		if (round_to < round_ms(get_visual_time_bounds().start)){
 			scroll_timeline("LEFT");
 		}
@@ -1352,7 +1336,7 @@ const center_to_time = tm => {//«
 	update_all();
 };//»
 
-const seek_to_time = async(tm)=>{//«
+const seek_to_time = async(tm, if_end)=>{//«
 /*If the current time is the video duration, then doing a seek back to the beginning doesn't work.
 The video stays at the end.
 */
@@ -1366,14 +1350,14 @@ The video stays at the end.
 		ctr_time = (viddur + start_tm) / 2;
 	}
 	else ctr_time = vid.currentTime;
-	center_to_time(ctr_time);
+	if (if_end) update_all();
+	else center_to_time(ctr_time);
 	return true;
 }//»
 const seek_to_end=async()=>{//«
-	timeline._xLoc = Main._w - timeline._width - GRID_W;
+	timeline._xLoc = Main._w - timeline._width - GRID_W_HALF;
 	align_timeline();
-//	await seek_to_time(viddur);
-	await seek_to_time(viddur-0.001);
+	await seek_to_time(viddur-0.001, true);
 	draw_ruler({addLast:true});
 };//»
 const center_to_curtime = () => {//«
@@ -1509,10 +1493,9 @@ for (let m of grid_marks){//«
 	d._h = VID_IMG_H;
 	d._op = VID_IMG_OP;
 	d._add(im);
-//	timeline._add(d);
 	img_div._add(d)
-//	d._x = m._x - w/2;
 	d._x = use_padl + m._x - w/2;
+//	d._x = use_padl + m._x;
 	d._z = 10;
 //	d._bor = "1px solid #fff";
 	d.style.borderRight = PREV_IMG_BORDER;
@@ -1553,15 +1536,14 @@ v.onloadedmetadata=async()=>{//«
 		d._h = VID_IMG_H;
 		d._op = VID_IMG_OP;
 		d._add(im);
-//		timeline._add(d);
 		img_div._add(d);
 		if (tm==viddur){
 //			d._x = m._x;
 			d._x = use_padl + m._x;
 		}
 		else{
-//			d._x = m._x - w/2;
 			d._x = use_padl + m._x - w/2;
+//			d._x = use_padl + m._x;
 		}
 		d._z = 10;
 		d.style.borderRight = PREV_IMG_BORDER;
@@ -1586,7 +1568,15 @@ if (cur_set_images) {
 
 for (let im of cur_images) im._del();
 
-let {invalid, startDiff: left_diff, start: viz_start, end: viz_end, duration: viz_duration, width: viz_width} = get_visual_time_bounds();
+let {
+	invalid, 
+	startDiff: left_diff, 
+	start: viz_start, 
+	end: viz_end, 
+	duration: viz_duration, 
+	width: viz_width
+} = get_visual_time_bounds();
+
 if (invalid) {
 cwarn("NOT UPDATING RULER!!!!");
 reset_timeline();
@@ -1646,12 +1636,14 @@ for (let i=-1; i < num_grids; i++){
 	}
 }
 if (Math.abs(viz_end-viddur) < 0.01){
+
 	let g = mkdv();
 	g._pos = "absolute";
-	g._w=5;
+	g._w=END_MARK_WID;
 	g._bgcol="#aaa";
 	g._h="100%";
-	g._x = ((viddur-viz_start) * mag_pix_per_sec);
+//QMGHDLI
+	g._x = ((viddur-viz_start) * mag_pix_per_sec) - END_MARK_WID_HALF;
 //	last_x = g._x;
 	g._y = 0;
 	g._z = 1;
@@ -1666,6 +1658,7 @@ if (Math.abs(viz_end-viddur) < 0.01){
 	}
 */
 	ruler._add(g);
+
 }
 ///*
 /*WJHGLVG: THIS CAUSES THE PREVIEW IMAGES AND THE RULER MARKINGS TO BECOME MISALIGNED. THE BAD PART
@@ -1686,10 +1679,12 @@ if (images_showing && !await_arrow_up) {
 }
 
 };//»
-const align_timeline = ()=>{//«
+const align_timeline = (did_adjust)=>{//«
 	let {start} = get_visual_time_bounds();
 	let secs_per_grid = GRID_W/mag_pix_per_sec;
 	let num_grids = Math.round(start/secs_per_grid);
+	if (did_adjust) num_grids++;//This ensures that the end marker does not hang off the edge of the app window
+
 	let secs_to_start = secs_per_grid * num_grids;
 	let pix_to_start = mag_pix_per_sec * secs_to_start;
 	timeline._xLoc = -pix_to_start;
@@ -1710,20 +1705,7 @@ update_all();
 
 
 };//»
-/*
-const flush_right_edge=()=>{//«
-//Make sure the timeline location flushes with the right edge, when the visible
-//duration is long enough
-	let {duration, width} = get_visual_time_bounds();
 
-	if (duration < viddur && width < Main._w - GRID_W){
-		let x_adj = (Main._w - GRID_W) - width;
-		timeline._xLoc += x_adj;
-		return true;
-	}
-	return false;
-}//»
-*/
 const flush_right_edge=()=>{//«
 //Make sure the timeline location flushes with the right edge, when the visible
 //duration is long enough

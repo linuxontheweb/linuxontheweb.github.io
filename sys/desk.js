@@ -2259,7 +2259,11 @@ return;
 			win_reload();
 			return;
 		}//»
-		if ((kstr=="c_A"||kstr=="c_CA")&&CWIN.appName!==FOLDER_APP) return CWIN.contextMenuOn();
+		if ((kstr=="c_A"||kstr=="c_CA")&&CWIN.appName!==FOLDER_APP) {
+			if (CWIN.isLayout) return;
+			CWIN.contextMenuOn();
+			return;
+		}
 		if (!(is_full||is_max)) {//«
 			if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {
 				if (is_max) return;
@@ -8094,6 +8098,7 @@ cwarn("There was an unattached icon in ICONS!");
 			}
 			else if (cobj && cobj.get_context) {
 				if (!(cobj.overrides && cobj.overrides["c_A"])) {
+					if (cwin.isLayout) return;
 					cwin.contextMenuOn();
 					return;
 				}
