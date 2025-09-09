@@ -613,12 +613,19 @@ const popup = (str, opts={}) => {//«
 		WIDE: opts.wide
 	});
 }//»
-const popkey = (arr, cb, opts={}) => {//«
-	let str="";
+const popkey = (str, cb, opts={}) => {//«
+//const popkey = (arr, cb, opts={}) => {
+//	let str="";
 	let chars={};
 	let ch;
+	if (opts.digit){
+		for (let i=48; i <= 57; i++){
+			ch = String.fromCharCode(i);
+			chars[ch] = i;
+		}
+	}
 	if (opts.alpha){
-		str = arr;
+//		str = arr;
 		for (let i=65; i <= 90; i++){
 			ch = String.fromCharCode(i);
 			chars[ch] = i;
@@ -628,6 +635,7 @@ const popkey = (arr, cb, opts={}) => {//«
 			chars[ch] = i;
 		}
 	}
+/*
 	else{
 		for (let i = 0; i < arr.length; i++) {
 			if (i<10) ch = String.fromCharCode(i + 48);
@@ -638,6 +646,7 @@ const popkey = (arr, cb, opts={}) => {//«
 			chars[ch]=arr[i];
 		}
 	}
+*/
 	return this.make_popup({
 		'TIT': opts.title||"Choose one",
 		'STR': str,

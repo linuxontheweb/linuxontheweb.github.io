@@ -1,3 +1,12 @@
+/*9/9/25: 3 ways of referencing the time points in a video timeline:
+
+1) floating point: this is the literal time value (no mark created)
+2) decimal: this is the mark's number in an array of anonymous marks
+3) symbolic: currently, only single (1 byte) alphabetic characters: a-zA-Z
+
+The main question is whether the named marks are only in a hash map or are also in
+
+*/
 /*9/7/25: Need to seriously simplyfy the timeline positioning/rendering logic. Right now, «
 there is an issue for when the timeline is wider than the window, and the time marker is at
 the end. It seems that the timeline is positioned so that only a couple preview frames are
@@ -240,7 +249,8 @@ let clusters;
 let cluster_times = [];
 let cluster_time_marks;
 
-let marks = [];
+let sym_marks = [];
+let pos_marks = [];
 //let mark_times
 
 let min_time_wid=0;
@@ -415,7 +425,14 @@ const await_seek = (tm)=>{//«
 };//»
 
 const handle_tab = k => {//«
-	let m = find_next_of_arr(k, cur_mark, marks);
+
+	let all_marks = pos_marks.concat(sym_marks);
+	all_marks = all_marks.sort((a,b)=>{
+		if (a._time < b._time) return -1;
+		return 1;
+	});
+//	let m = find_next_of_arr(k, cur_mark, sym_marks);
+	let m = find_next_of_arr(k, cur_mark, all_marks);
 	if (!m) return;
 	if (cur_mark) {
 		cur_mark._off();
@@ -469,7 +486,9 @@ const try_delete = async()=>{//«
 		is_waiting = true;
 //		await cur_mark._on();
 		await seek_to_time(cur_mark._time);
-		if (await wdg.popyesno(`Delete marker: '${cur_mark._id}'?`)){
+		let use_id = cur_mark._id;
+		if (isNum(use_id)) use_id++;
+		if (await wdg.popyesno(`Delete marker: '${use_id}'?`)){
 			cur_mark._delIt();
 		}
 		is_waiting = false;
@@ -926,7 +945,7 @@ const get_render_slices = (arr, errarg) => {//«
 const err = errarg || wdg.poperr;
 
 let hash = {};
-for (let m of marks){
+for (let m of sym_marks){
 	hash[m._id] = m;
 }
 
@@ -994,8 +1013,8 @@ cwarn("No output");
 	is_waiting = false;
 };//»
 
-const scroll_elem = (elem, tm, x_off)=>{//«
-	let offset = get_timeline_offset(tm);
+const scroll_elem = (elem, tm, x_off, bounds_start_arg)=>{//«
+	let offset = get_timeline_offset(tm, bounds_start_arg);
 	if (offset < -10||offset>Main._w+10) elem._dis = "none";
 	else{
 		elem._dis = "";
@@ -1130,7 +1149,7 @@ const handle_await_arrow_up=(k)=>{//«
 				cur_set_images = new SetTimelineImages();
 			}
 			let gotto = vid.currentTime + total_scroll;
-			if (gotto > viddur) gotto = viddur - 0.001;
+			if (gotto > viddur) gotto = viddur - 0.0001;
 			else if (gotto < 0) gotto = 0;
 			vid.currentTime = gotto;
 			tmdiv.innerHTML = get_main_time_str(gotto);
@@ -1358,15 +1377,22 @@ The video stays at the end.
 const seek_to_end=async()=>{//«
 	timeline._xLoc = Main._w - timeline._width - GRID_W_HALF;
 	align_timeline();
-	await seek_to_time(viddur-0.001, true);
+//	await seek_to_time(viddur-0.001, true);
+	seek_to_time(viddur-0.0001, true);
 	draw_ruler({addLast:true});
 };//»
 const center_to_curtime = () => {//«
 	center_to_time(vid.currentTime);
 };//»
-const get_timeline_offset = tm => {//«
-	let bounds = get_visual_time_bounds();
-	let tmoff = tm - bounds.start;
+const get_timeline_offset = (tm, bounds_start_arg) => {//«
+	let tmoff;
+	if (isNum(bounds_start_arg)){
+		tmoff = tm - bounds_start_arg;
+	}
+	else {
+		let bounds = get_visual_time_bounds();
+		tmoff = tm - bounds.start;
+	}
 	let peroff = tmoff / viddur;
 	return peroff * timeline._width;
 };//»
@@ -1799,20 +1825,67 @@ check_timeline_right_edge_for_underflow_and_center_to_time(vid.currentTime);
 };//»
 
 const scroll_marks=()=>{//«
-	for (let m of marks){
-		scroll_elem(m, m._time, MARK_X_OFF);
+//	let bounds = get_visual_time_bounds();
+	let bounds_start = get_visual_time_bounds().start;
+	let all_marks = pos_marks.concat(sym_marks);
+	for (let m of all_marks){
+//		scroll_elem(m, m._time, MARK_X_OFF);
+		scroll_elem(m, m._time, MARK_X_OFF, bounds_start);
 	}
 };//»
 const seek_to_timeline_start=async()=>{//«
 	await await_seek(get_visual_time_bounds().start);
 };//»
+const try_seek_mark=async(if_popin)=>{//«
+	is_waiting = true;
+	let rv;
+	if (if_popin) rv = await wdg.popin(`Seek to mark?`);
+//	else rv = await wdg.popkey(`Seek to sym mark?`, {alpha: true});
+	else rv = await wdg.popkey(`Seek to mark?`, {alpha: true, digit: true});
+	if (rv)	{
+		let gotit = false;
+		if (isNum(rv)){
+			rv = String.fromCharCode(rv);
+		}
+		if (rv.match(/^[a-zA-Z]$/)){
+			for (let mrk of sym_marks){
+				if (mrk._id == rv){
+					if (cur_mark) cur_mark._off();
+					gotit = true;
+					mrk._on();
+					break;
+				}
+			}
+		}
+		else if (rv.match(/^\d+$/)){
+			let id = parseInt(rv) - 1;
+			for (let mrk of pos_marks){
+				if (mrk._id == id){
+					if (cur_mark) cur_mark._off();
+					gotit = true;
+					mrk._on();
+					break;
+				}
+			}
+		}
+		else{
+			wdg.poperr(`Invalid mark id: ${rv}`);
+			gotit = true;
+		}
+		if (!gotit){
+			wdg.popup(`The mark does not exist: '${rv}'`);
+		}
+	}
+	is_waiting = false;
+};//»
+/*
 const try_seek_mark=async()=>{//«
 	is_waiting = true;
-	let rv = await wdg.popkey(`Seek to marker?`, {alpha: true});
+	let rv = await wdg.popkey(`Seek to sym mark?`, {alpha: true});
 	if (rv)	{
 		rv = String.fromCharCode(rv);
 		let nogo=false;
-		for (let mrk of marks){
+		for (let mrk of sym_marks){
 			if (mrk._id == rv){
 				if (cur_mark) cur_mark._off();
 				mrk._on();
@@ -1822,14 +1895,20 @@ const try_seek_mark=async()=>{//«
 	}
 	is_waiting = false;
 };//»
-const try_create_mark=async()=>{//«
+*/
+const try_create_mark=async(if_sym)=>{//«
+	if (!if_sym){
+		if (cur_mark) cur_mark._off();
+		create_mark(vid.currentTime);
+		return;
+	}
 	is_waiting = true;
 	let rv = await wdg.popkey(`New marker id?`, {alpha: true});
 //log(rv);
 	if (rv)	{
 		rv = String.fromCharCode(rv);
 		let nogo=false;
-		for (let mrk of marks){
+		for (let mrk of sym_marks){
 			if (mrk._id == rv){
 				nogo = true;
 				wdg.poperr(`Another mark with id '${rv}' exists!`);
@@ -1843,29 +1922,45 @@ const try_create_mark=async()=>{//«
 	}
 	is_waiting = false;
 };//»
+const renumber_pos_marks = ()=> {
+	for (let i=0; i < pos_marks.length; i++){
+		let m = pos_marks[i];
+		m._id = i;
+		m.innerHTML = i+1;
+	}
+}
 const create_mark=(usetime, id, if_auto)=>{//«
 	let tm = usetime || vid.currentTime;
-	for (let m of marks){
+	let all_marks = pos_marks.concat(sym_marks);
+//	for (let m of sym_marks){
+	for (let m of all_marks){
 		let diff = Math.abs(m._time - tm);
 		if (diff < MARK_DIFF_THRESH){
 			wdg.poperr(`Another mark is too close (${diff} < ${MARK_DIFF_THRESH})`);
 			return;
 		}
 	}
+	let mark_pos;
+	if (!id){
+		id = 0;
+		for (let m of pos_marks){
+//cwarn(tm, m._time);
+			if (tm < m._time){
+				break;
+			}
+			id++;
+		}
+//log("ID",id);
+	}
 	let mrk = mkdv();
 	mrk._pos="absolute";
-//	mrk._tcol="#000";
-//	mrk.innerHTML='v';
-	mrk.innerHTML=id;
+	mrk.innerHTML = id;
+	mrk._id = id;
 	mrk._fs = MARK_SZ;
 	mrk._y = MARK_Y;
-//	mrk._fw=900;
 	mrk.setAttribute("name","marker");
 	mrk._z = 100;
 	mrk._time = tm;
-	mrk._id = id;
-//log(mrk);
-//	mrk._tcol=MARK_OFF_COL;
 	mrk._off = ()=>{
 		mrk._tcol=MARK_OFF_COL;
 		mrk._fw="";
@@ -1879,12 +1974,21 @@ const create_mark=(usetime, id, if_auto)=>{//«
 		center_to_curtime();
 		scroll_marks();
 		scroll_cluster_marks();
-		stat(`Current mark: '${id}' (${tm.toFixed(3)}s)`);
+		if (isNum(id)) stat(`Pos mark: #${mrk._id+1} (${tm.toFixed(3)}s)`);
+		else stat(`Sym mark: '${mrk._id}' (${tm.toFixed(3)}s)`);
 	};
 	mrk._delIt = ()=>{
-		remove_elem(mrk, marks);
+		if (isNum(id)){
+			remove_elem(mrk, pos_marks);
+			renumber_pos_marks();
+		}
+		else {
+			remove_elem(mrk, sym_marks);
+		}
+		if (isNum(id)) stat(`Deleted: #${mrk._id+1}`);
+		else stat(`Deleted: '${mrk._id}'`);
 		mrk._del();
-		if (marks.length) marks[0]._on();
+		cur_mark = null;
 	};
 	if (cur_mark) cur_mark._off();
 	mrk._maybeScroll = ()=>{
@@ -1892,21 +1996,29 @@ const create_mark=(usetime, id, if_auto)=>{//«
 	}
 	if (if_auto) mrk._off();
 	else mrk._on();
-
 	timeline._add(mrk);
-	marks.push(mrk);
-	marks = marks.sort((a,b)=>{
-		if (a._time < b._time) return -1;
-		return 1;
-	});
+
+	if (isNum(id)){
+		pos_marks.splice(id, 0, mrk);
+		renumber_pos_marks();
+	}
+	else {
+		sym_marks.push(mrk);
+		sym_marks = sym_marks.sort((a,b)=>{
+			if (a._time < b._time) return -1;
+			return 1;
+		});
+	}
+
 	scroll_marks();
 	scroll_cluster_marks();
 };//»
 
 const scroll_cluster_marks=()=>{//«
 	if (cluster_marks_div._dis=="none") return;
+	let bounds_start = get_visual_time_bounds().start;
 	for (let i=0; i < cluster_times.length; i++){
-		scroll_elem(cluster_time_marks[i], cluster_times[i], MARK_X_OFF);
+		scroll_elem(cluster_time_marks[i], cluster_times[i], MARK_X_OFF, bounds_start);
 	}
 };//»
 const add_cluster_time_marks=()=>{//«
@@ -2160,13 +2272,6 @@ this.onkeydown=(e,k)=>{//«
 		let {start, end} = get_visual_time_bounds();
 		seek_to_time((start+end)/2);
 	}
-	else if (k=="m_S"){
-		if (cluster_marks_div._dis=="none") {
-			cluster_marks_div._dis="";
-			scroll_cluster_marks();
-		}
-		else cluster_marks_div._dis="none";
-	}
 	else if (k=="s_C"){
 		try_save();
 	}
@@ -2178,18 +2283,30 @@ this.onkeydown=(e,k)=>{//«
 		}
 		else {
 			vid.pause();
-//update_all();
-//			cur_set_images = new SetTimelineImages();
-//draw_ruler();
 			vid.ontimeupdate = null;
 		}
 	}
 	else if (k=="m_"){
 		try_create_mark();
 	}
+	else if (k=="m_S"){
+		try_create_mark(true);
+	}
 	else if (k=="`_"){
 		try_seek_mark();
 	}
+	else if (k=="`_S"){
+		try_seek_mark(true);
+	}
+/*
+	else if (k=="m_S"){
+		if (cluster_marks_div._dis=="none") {
+			cluster_marks_div._dis="";
+			scroll_cluster_marks();
+		}
+		else cluster_marks_div._dis="none";
+	}
+*/
 	else if (k=="f_"){
 		fit_timeline_to_window();
 	}
