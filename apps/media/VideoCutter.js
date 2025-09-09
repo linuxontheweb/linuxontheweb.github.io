@@ -115,7 +115,8 @@ ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
 »*/
 //The numbers and sizes of the thumbnails are determined by this
 
-let GRID_W = 125;
+//let GRID_W = 125;
+let GRID_W = 175;
 
 //Vars«
 
@@ -1652,11 +1653,11 @@ if (Math.abs(viz_end-viddur) < 0.01){
 //  This (awkwardly) puts the preview of the final frame at the end of the timeline, but that is
 //  redundant because if the current time marker is at the end, then the main video window will
 //  show the final frame in all the bigness of the main window size.
-	if (opts.addLast) {
-//		grid_time_elems.push({});
-		grid_marks.push(g);
-	}
 */
+//	if (opts.addLast) {
+//		grid_time_elems.push({});
+//		grid_marks.push(g);
+//	}
 	ruler._add(g);
 
 }
@@ -2093,7 +2094,8 @@ const timeupdate = ()=>{//«
 	tmdiv.innerHTML = get_main_time_str(ctime);
 	mark._scroll();
 	if (ctime > get_visual_time_bounds().end) {
-		handle_arrow("RIGHT_S");
+//		handle_arrow("RIGHT_S"); //For some reason, using handle_arrow does NOT render the preview images
+		scroll_timeline("RIGHT"); //This automatically renders the preview images
 	}
 };//»
 
@@ -2176,6 +2178,9 @@ this.onkeydown=(e,k)=>{//«
 		}
 		else {
 			vid.pause();
+//update_all();
+//			cur_set_images = new SetTimelineImages();
+//draw_ruler();
 			vid.ontimeupdate = null;
 		}
 	}
