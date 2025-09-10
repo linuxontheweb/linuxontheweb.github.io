@@ -67,7 +67,13 @@ const get_post_data = (req) => {//«
 };//»
 const ok = (res, mime) => {//«
 	if (!mime) mime = text_mime();
-	res.writeHead(200, {'Content-Type': mime});
+//log(123);
+	res.writeHead(200, 
+	{
+		'Content-Type': mime,
+		'Cross-Origin-Opener-Policy':"same-origin",
+		'Cross-Origin-Embedder-Policy': "require-corp"
+	});
 };//»
 const no = (res, arg) => {//«
 	res.writeHead(404, {'Content-Type': "text/plain"});

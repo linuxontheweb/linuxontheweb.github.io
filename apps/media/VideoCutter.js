@@ -72,6 +72,21 @@ that it is possible for the marker to move off the right edge of the window, but
 is still taken to be visible by the logic. So to be perfectly "pixel precise" about everything,
 we need to figure out how to account for USE_TIMELINE_X.
 
+
+*   *   *
+
+JUST RAN OUT OF MEMORY WHILE DOING MANY MAGNIFICATIONS AND SCROLLING OPERATIONS. SO WE SHOULD
+PROBABLY DO STUFF LIKE CLEAR 'IMG_CACHE' WHEN GOING TO DIFFERENT MAG LEVELS. SO JUST CREATED
+A 'CLEAR_CACHE_WHEN_MAGNIFYING' FLAG.
+
+
+*   *   *
+
+TICKY TACK STUFF TO LOOK OUT FOR:
+
+@FHYAENK: In scroll_timeline()
+@WYROTJGL: in center_to_time()
+
 »*/
 /*9/9/25:«
 
@@ -220,6 +235,7 @@ ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
 //let GRID_W = 125;
 let GRID_W = 175;
 let USE_TIMELINE_X = GRID_W / 2;
+let CLEAR_CACHE_WHEN_MAGNIFYING = true;
 //let USE_TIMELINE_X = 0;
 
 //Vars«
@@ -678,6 +694,116 @@ const video_init = async ()=>{//«
 	update_all();
 };//»
 
+const SetTimelineImages = function(){//«
+
+const seek = (tm)=>{//«
+	return new Promise((Y,N)=>{
+		v.onseeked = Y;
+		v.currentTime = tm;
+//		tmdiv.innerHTML = get_main_time_str(tm);
+	});
+};//»
+
+//if (grid_marks && grid_marks.length && grid_marks[0]._img){
+//	stat("Already have images! (use 'i' to toggle them)");
+//	return;
+//}
+
+let cancelled = false;
+this.cancel = ()=>{
+	cancelled = true;
+};
+
+cur_images = [];
+let cache_miss = false;
+
+let aspect = vid.videoWidth/vid.videoHeight;
+let w = VID_IMG_H * aspect;
+
+for (let m of grid_marks){//«
+	if (cancelled) return;
+	let tm = m._time;
+	let im = IMG_CACHE[tm];
+	if (!im){
+		cache_miss = true;
+		continue;
+	}
+	m._img = im;
+	let d = mkdv();
+	d.onclick=()=>{
+		scroll_to_time(tm, 1);
+	};
+	d._pos = "absolute";
+	d._over="hidden";
+	d._w = w;
+	d._h = VID_IMG_H;
+	d._op = VID_IMG_OP;
+	d._add(im);
+	img_div._add(d)
+	d._x = use_padl + m._x - w/2;
+//	d._x = use_padl + m._x;
+	d._z = 10;
+//	d._bor = "1px solid #fff";
+	d.style.borderRight = PREV_IMG_BORDER;
+	d.style.borderLeft = PREV_IMG_BORDER;
+	cur_images.push(d);
+}//»
+
+if (!cache_miss) return;
+
+let v = make('video');
+let can = mk('canvas');
+let cx = can.getContext('2d',{willReadFrequently: true});
+
+check_memory();
+
+v.onloadedmetadata=async()=>{//«
+	for (let m of grid_marks){
+		if (cancelled) return;
+		let tm = m._time;
+//log(tm);
+		await seek(tm);
+		if (cancelled) return;
+		if (IMG_CACHE[tm]) continue;
+		let im = new Image;
+		IMG_CACHE[tm]=im;
+		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w, VID_IMG_H);
+//		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w - 1, VID_IMG_H - 1);
+		im.src = can.toDataURL();
+		m._img = im;
+		let d = mkdv();
+		d.onclick=()=>{
+			scroll_to_time(tm, 2);
+		};
+		d._over="hidden";
+		d._pos = "absolute";
+		d._w = w;
+//d._bgcol="#fff";
+//log(d);
+
+		d._h = VID_IMG_H;
+		d._op = VID_IMG_OP;
+		d._add(im);
+		img_div._add(d);
+//		if (tm==viddur){
+//			d._x = m._x;
+//			d._x = use_padl + m._x;
+//		}
+//		else{
+			d._x = use_padl + m._x - w/2;
+//			d._x = use_padl + m._x;
+//		}
+		d._z = 10;
+		d.style.borderRight = PREV_IMG_BORDER;
+		d.style.borderLeft = PREV_IMG_BORDER;
+		cur_images.push(d);
+	}
+};//»
+
+v.src = url;
+
+
+};//»
 /*
 Want this to be a library function that returns the positions of:
 cues, info, and tracks
@@ -781,7 +907,20 @@ return { ebml, tracks, CUESHASH };
 
 
 };//»
-
+const check_memory = async () => {
+	let mem = performance.memory;
+	if (mem){
+//log("TOT", mem.totalJSHeapSize);
+//log("USED", mem.usedJSHeapSize);
+return;
+	}
+/*
+	if (!crossOriginIsolated) return;
+	if (!performance.measureUserAgentSpecificMemory) return;
+	let rv = await performance.measureUserAgentSpecificMemory();
+*/
+//log("MEMORY", rv.bytes);
+};
 const make_webm_file =(ebml, tracks, clusters, cluster_times, viddur) => {//«
 
 //	let cl_times = cluster_times.slice();
@@ -1194,9 +1333,10 @@ This is either called by scroll_time_marker or by handle_arrow.
 	let did_adjust = false;
 	let diff = Main._w - ((viddur+(gotx/mag_pix_per_sec)) * mag_pix_per_sec); 
 	if(diff > 0){
+//FHYAENK
 //log("DID ADJUST", diff);
 //		did_adjust = true;
-//		gotx+=diff;
+		gotx+=diff;
 	}
 	timeline._xLoc = gotx;
 	let tr = get_timeline_rect();
@@ -1214,7 +1354,6 @@ This is either called by scroll_time_marker or by handle_arrow.
 //	mark._xLoc -= xdiff;
 
 	update_all();
-
 };//»
 const scroll_time_marker = (which, opts={}) => {//«
 	let dir;
@@ -1315,7 +1454,7 @@ return;
 */
 //			vid.currentTime = sttm;
 //			tmdiv.innerHTML = get_main_time_str(sttm);
-
+//log(123);
 			update_all();//This calls draw_ruler(), which calls new SetTimelineImages()
 		}
 		else{
@@ -1501,18 +1640,23 @@ if (timeline._width < Main._w){
 	update_all();
 	return;
 }
+let bounds = get_visual_time_bounds();
 //If the end marker is on the screen, flush it to the right edge of the app window,
 //so that as much of the timeline is showing as possible (max number of preview frames).
-if (flush_right_edge()){
+if (tm > bounds.start && flush_right_edge()){
+//if (flush_right_edge()){
+//WYROTJGL
+//log("FLUSH!");
+	align_timeline();
 	update_all();
 	return;
 }
-	let bounds = get_visual_time_bounds();
 //	let ctr_time = (bounds.end + bounds.start)/2;
 	let ctr_time = ((bounds.end + bounds.start)/2) - USE_ADJ_SEC;
 	let off_secs = tm - ctr_time;
 //If we don't make this adjustment, then all times on the right side are one grid square too far to the right
-	if (off_secs > 0) off_secs++;
+//But this makes centering after magnification WAY OFF!!!
+//	if (off_secs > 0) off_secs++;
 //log(off_secs);
 	off_secs -= (off_secs % mag_sec_per_grid);//Snap to grid so the ruler times are "nice"
 	let pix_off = mag_pix_per_sec * off_secs;
@@ -1684,115 +1828,6 @@ const scroll_to_time = (tm, which)=>{//«
 	mark._scroll();
 };//»
 
-const SetTimelineImages = function(){//«
-
-const seek = (tm)=>{//«
-	return new Promise((Y,N)=>{
-		v.onseeked = Y;
-		v.currentTime = tm;
-//		tmdiv.innerHTML = get_main_time_str(tm);
-	});
-};//»
-
-//if (grid_marks && grid_marks.length && grid_marks[0]._img){
-//	stat("Already have images! (use 'i' to toggle them)");
-//	return;
-//}
-
-let cancelled = false;
-this.cancel = ()=>{
-	cancelled = true;
-};
-
-cur_images = [];
-let cache_miss = false;
-
-let aspect = vid.videoWidth/vid.videoHeight;
-let w = VID_IMG_H * aspect;
-
-for (let m of grid_marks){//«
-	if (cancelled) return;
-	let tm = m._time;
-	let im = IMG_CACHE[tm];
-	if (!im){
-		cache_miss = true;
-		continue;
-	}
-	m._img = im;
-	let d = mkdv();
-	d.onclick=()=>{
-		scroll_to_time(tm, 1);
-	};
-	d._pos = "absolute";
-	d._over="hidden";
-	d._w = w;
-	d._h = VID_IMG_H;
-	d._op = VID_IMG_OP;
-	d._add(im);
-	img_div._add(d)
-	d._x = use_padl + m._x - w/2;
-//	d._x = use_padl + m._x;
-	d._z = 10;
-//	d._bor = "1px solid #fff";
-	d.style.borderRight = PREV_IMG_BORDER;
-	d.style.borderLeft = PREV_IMG_BORDER;
-	cur_images.push(d);
-}//»
-
-if (!cache_miss) return;
-
-let v = make('video');
-let can = mk('canvas');
-let cx = can.getContext('2d',{willReadFrequently: true});
-
-v.onloadedmetadata=async()=>{//«
-	for (let m of grid_marks){
-		if (cancelled) return;
-		let tm = m._time;
-//log(tm);
-		await seek(tm);
-		if (cancelled) return;
-		if (IMG_CACHE[tm]) continue;
-		let im = new Image;
-		IMG_CACHE[tm]=im;
-		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w, VID_IMG_H);
-//		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w - 1, VID_IMG_H - 1);
-		im.src = can.toDataURL();
-		m._img = im;
-		let d = mkdv();
-		d.onclick=()=>{
-			scroll_to_time(tm, 2);
-		};
-		d._over="hidden";
-		d._pos = "absolute";
-		d._w = w;
-//d._bgcol="#fff";
-//log(d);
-
-		d._h = VID_IMG_H;
-		d._op = VID_IMG_OP;
-		d._add(im);
-		img_div._add(d);
-//		if (tm==viddur){
-//			d._x = m._x;
-//			d._x = use_padl + m._x;
-//		}
-//		else{
-			d._x = use_padl + m._x - w/2;
-//			d._x = use_padl + m._x;
-//		}
-		d._z = 10;
-		d.style.borderRight = PREV_IMG_BORDER;
-		d.style.borderLeft = PREV_IMG_BORDER;
-		cur_images.push(d);
-	}
-};//»
-
-v.src = url;
-
-
-};//»
-
 const draw_ruler = (opts={}) => {//«
 //SAJRHTGB
 //flush_right_edge();
@@ -1948,17 +1983,18 @@ update_all();
 const flush_right_edge=()=>{//«
 //Make sure the timeline location flushes with the right edge, when the visible
 //duration is long enough
-	return false;
-/*
+//	return false;
+///*
 	let {duration, width} = get_visual_time_bounds();
 
 	if (duration < viddur && width < Main._w - GRID_W_HALF){
-		let x_adj = (Main._w - GRID_W_HALF) - width;
+//		let x_adj = (Main._w - GRID_W_HALF) - width;
+		let x_adj = (Main._w - GRID_W) - width;
 		timeline._xLoc += x_adj;
 		return true;
 	}
 	return false;
-*/
+//*/
 }//»
 const check_timeline_right_edge_for_underflow_and_center_to_time=(tm)=>{//«
 
@@ -2000,6 +2036,10 @@ cur_mag_level = Math.floor(cur_mag_level);
 if (cur_mag_level+1 == MAX_MAG_ITER){
 return;
 }
+if (CLEAR_CACHE_WHEN_MAGNIFYING) {
+//cwarn("CLEAR");
+	IMG_CACHE = {};
+}
 let bnds = get_visual_time_bounds();
 cur_mag_level++;
 mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
@@ -2008,24 +2048,18 @@ mag_sec_per_grid = GRID_W/mag_pix_per_sec;
 timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
 timeline._width = viddur * mag_pix_per_sec;
-
 center_to_curtime();
-if (flush_right_edge()){
-	update_all();
-}
 
-//log(timeline._xLoc);
-//log(timeline);
-//center_to_time((bnds.start+bnds.end)/2);
-//update_all();
-//seek_to_timeline_start();
-//log(ruler);
 };//»
 const demagnify=()=>{//«
 
 cur_mag_level = Math.ceil(cur_mag_level);
 if (cur_mag_level-1 < 0){
 	return;
+}
+if (CLEAR_CACHE_WHEN_MAGNIFYING) {
+//cwarn("CLEAR");
+	IMG_CACHE = {};
 }
 cur_mag_level--;
 mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
