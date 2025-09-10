@@ -1,4 +1,69 @@
-/*9/9/25: «
+/*9/10/25: This app should be able to export an object like: «
+
+{
+	file: '/some/path/to/video.webm',
+	symMarks:{
+		<markA>: <timestampA>,
+		<markB>: <timestampB>,
+		<markC>: <timestampC>,
+		...
+		<markZ>: <timestampZ>,
+	},
+	posMarks:[
+		<timestamp1>,
+		<timestamp2>,
+		<timestamp3>,
+		...,
+		<timestampN>,
+	],
+	videoElem: <instance of HTMLVideoElement>, //Optional: trivial to implement from the file path field
+}
+
+Then an importing command (or another app) can define slices by way of ranges that are bracketed by
+the following types of markers:
+	1) floating point (literal time points: between 0.0 - <video_duration>)
+	2) integer (1-based indices into posMarks)
+	3) symbolic (name-like keys into symMarks)
+
+*   *   *
+
+Let's have a a video sequence player command (e.g. 'playseq' or 'setseq') that defines
+slices based on the 3 kinds of markers above, and then takes a window id
+argument, and calls some exported method (e.g. playSequence or setSequenceMode)
+of that window's app. The method should first ensure that the slices are valid
+(that the markers exist and that the slice begin and end timestamps are
+consecutive).  Then the app will go into "sequence mode", such that playing the
+video (e.g.  toggling the spacebar) plays the slices in order. In this mode, we
+can't do any editing of time markers, meaning that once the slices are
+initially validated, they cannot become invalidated through the gui interface.
+
+Then of course, there can be a video sequence renderer command (e.g. 'rendseq')
+that takes the above exported object together with the arguments to 'playseq',
+and then renders a wholly new video using render_from_slices() (which is
+currently defined here, but should be moved into whatever command library, or
+module that the library loads, that has these commands).
+
+For sequence preview mode, the ontimeupdate callback is apparently called every
+~0.25 sec (meaning we cannot have an extremely granular view of the playback at
+normal playback speed).  However, if we we set the video's playbackRate
+property to less than 1 (e.g. 0.125 like @KLIOPMDS), then we can get this
+called (e.g. every ~0.03 sec). So the "real time" callback rate is
+approximately constant 4/sec, and the callbacks are called every n video secs 
+according to the formula: playbackRate * 0.25:
+
+playbackRate 	callback every n secs of the video's timeline 
+1				0.25
+0.5				0.125
+0.25			0.0625
+0.125			0.03125
+
+*   *   *
+
+I'm not sure what the supposed "snap to boundaries" stuff @FWPHUNKM is *really*
+doing. Particularly, the 'cur_clust' array is not used for anything at all.
+
+»*/
+/*9/9/25:«
 
 @FSKROTKL: Uncomment those 2 lines so that when scrolling the timeline, the main video
 will seek to the first time showing on the ruler, and the marker will be set there.
@@ -25,7 +90,7 @@ given frame (decode it so the image shows up in the video element) so that the
 call to createImageBitmap(vid) actually works.
 
 »*/
-/*9/7/25: Need to seriously simplyfy the timeline positioning/rendering logic. Right now, «
+/*9/7/25: Need to seriously simplify the timeline positioning/rendering logic. Right now, «
 there is an issue for when the timeline is wider than the window, and the time marker is at
 the end. It seems that the timeline is positioned so that only a couple preview frames are
 peeking out from the app window's left edge, and then it is repositioned so that this little 
@@ -284,8 +349,12 @@ let MARK_SZ = 20;
 let MARK_Y = -7;
 let TIME_MARK_X_OFF = -2;
 let TIME_MARK_B = -8;
-let END_MARK_WID = 5;
-let END_MARK_WID_HALF = END_MARK_WID/2;
+//let END_MARK_WID = 3;
+//let END_MARK_WID_HALF = END_MARK_WID/2;
+let TIME_MARK_WID = 3;
+
+let RULER_TIME_FS = 21;
+let RULER_TIME_Y_POS = TIMELINE_H/2 - 9.5;
 
 let viddur;
 let vidw, vidh;
@@ -301,34 +370,36 @@ let use_padl=0;
 
 const NOPROPDEF=e=>{e.stopPropagation();e.preventDefault();};
 
-let statbar = Win.statusBar;
-let Main = Win.main;
+const statbar = Win.statusBar;
+const Main = Win.main;
 Main._bgcol="#111";
 Main._over = "hidden";
-let canvas = mk('canvas');
-let ctx = canvas.getContext('2d',{willReadFrequently: true});
+const canvas = mk('canvas');
+const ctx = canvas.getContext('2d',{willReadFrequently: true});
 
-let viddiv = mk('div');
+const viddiv = mk('div');
 viddiv._pos="absolute";
 viddiv._x=0;
 viddiv._y=0;
 viddiv._w="100%";
 
 
-let vid = mk('video');
+const vid = mk('video');
 vid._w="100%";
 vid._h="100%";
 viddiv._add(vid);
-let timeline = mk('div');
-timeline._pos="absolute";
-timeline._w="100%";
-timeline._x=0;
+
+const timeline = mk('div');
+//timeline._pos="absolute";
+timeline._pos="relative";
+//timeline._w="100%";
+//timeline._x=0;
 timeline._xLoc = 0;
 timeline._h=TIMELINE_H;
-timeline._b=0;
+//timeline._b=0;
 timeline._bgcol="#000";
 
-let tmdiv = mkdv();
+const tmdiv = mkdv();
 tmdiv._fs=26;
 tmdiv._fw=900;
 tmdiv._pos="absolute";
@@ -336,7 +407,7 @@ tmdiv._x=0;
 tmdiv._y=0;
 tmdiv._tcol="#ccc";
 
-let durdiv = mkdv();
+const durdiv = mkdv();
 durdiv._fs=26;
 durdiv._fw=900;
 durdiv._pos="absolute";
@@ -345,7 +416,7 @@ durdiv._y=0;
 durdiv._tcol="#ccc";
 
 
-let mark = mkdv();
+const mark = mkdv();
 mark.setAttribute("name","current-time");
 mark._pos="absolute";
 mark._fs = TIME_MARK_SZ;
@@ -360,7 +431,7 @@ mark._tcol="#fff";
 //mark._dis="none";
 timeline._add(mark);
 
-let ruler = mkdv();
+const ruler = mkdv();
 ruler._tcol="#999";
 ruler.setAttribute("name","ruler");
 ruler._pos="absolute";
@@ -370,7 +441,7 @@ ruler._w = "100%";
 //ruler.style.cursor="move";
 timeline._add(ruler);
 
-let overdiv = mkdv();
+const overdiv = mkdv();
 overdiv._pos="absolute";
 overdiv._bgcol="#00f";
 overdiv._op=0.1;
@@ -389,7 +460,7 @@ overdiv.onmouseout = NOPROPDEF;
 overdiv.onmouseleave = NOPROPDEF;
 overdiv._dis="none";
 
-let cluster_marks_div = mkdv();
+const cluster_marks_div = mkdv();
 cluster_marks_div.pos="absolute";
 cluster_marks_div._w="100%";
 cluster_marks_div._b=0;
@@ -401,13 +472,14 @@ cluster_marks_div.setAttribute("name","clusters");
 timeline._add(cluster_marks_div);
 //Main._add(cluster_marks_div);
 
-let img_div = mkdv();
-img_div._padt = VID_IMG_PAD;
+const img_div = mkdv();
+//img_div._padt = VID_IMG_PAD;
 //img_div._padb = VID_IMG_PAD;
-img_div._pos="absolute";
-img_div._x=0;
-img_div._b=TIMELINE_H;
-img_div._w="100%";
+//img_div._pos="absolute";
+img_div._pos="relative";
+//img_div._x=0;
+//img_div._b=TIMELINE_H;
+//img_div._w="100%";
 
 img_div._bgcol="#000";
 
@@ -415,8 +487,20 @@ Main._add(viddiv);
 Main._add(tmdiv);
 Main._add(durdiv);
 Main._add(overdiv);
-Main._add(img_div);
-Main._add(timeline);
+
+const bot_wrap = make('div');
+bot_wrap._pos = "absolute";
+bot_wrap._b = 0;
+bot_wrap._w="100%";
+bot_wrap._add(img_div);
+bot_wrap._add(timeline);
+
+//bot_wrap._padl = GRID_W_HALF/2;
+
+Main._add(bot_wrap);
+
+//log(img_div);
+//log(timeline);
 
 //log(Main);
 //»
@@ -553,6 +637,9 @@ const get_blocks_from_cluster=(clust)=>{//«
 
 const video_init = async ()=>{//«
 	viddur = vid.duration;
+//log(vid.playbackRate);
+//KLIOPMDS
+//vid.playbackRate = 0.125;
 	timeline._width = viddur * mag_pix_per_sec;
 	vidh = vid.videoHeight;
 	vidw = vid.videoWidth;
@@ -754,10 +841,10 @@ let { ebml, tracks, CUESHASH } = await webm_prep();
 
 //»
 
-/*
+/*FWPHUNKM
 {//«Check/Update the slices arg array to "snap" to close cluster boundaries
-cue_times = CUESHASH._keys;
-let clust_thresh_ms = SNAP_TO_CLUSTER_THRESH * 1000;
+cue_times = Object.keys(CUESHASH);
+let clust_thresh_ms = SNAP_TO_CLUSTER_THRESH * 1000;//If SNAP_TO_CLUSTER_THRESH = 0.5s, this is 500 ms.
 for (let sl of slices) {
 	let cur_clust = [];
 	for (let i=0; i < 2; i++) {
@@ -793,7 +880,7 @@ for (let sl of slices){
 }
 //»
 
-jlog(out_slices);
+//jlog(out_slices);
 
 //«Main loop: All chunks not cluster aligned must be re-encoded
 for (let sl of out_slices){
@@ -1685,25 +1772,26 @@ for (let i=-1; i < num_grids; i++){
 	let g = mkdv();
 	grid_marks.push(g);
 	g._pos = "absolute";
-	g._w=3;
+	g._w=TIME_MARK_WID;
+	g._bgcol="#555";
 	g._h="100%";
 	g._x = ((i + 1) * GRID_W)-1;
 	g._y = 0;
 	g._z = 1;
+	ruler._add(g);
+	let tm = viz_start + ((i+1) * mag_sec);
+	g._time = tm;
+	if (!tm) continue;
 	let t = mkdv();
 	t._pos = "absolute";
 	t._z = 1;
-	let tm = viz_start + ((i+1) * mag_sec);
 	grid_times.push(Math.round(tm*1000));
-	g._time = tm;
 	t.innerHTML=get_ruler_time_str(tm);
 	g._add(t);
 	t._bgcol="#000";
-	ruler._add(g);
 	t._x = -t.clientWidth/2;
-	t._fs = 21;
-	t._y = TIMELINE_H/2 - 9.5;
-	g._bgcol="#555";
+	t._fs = RULER_TIME_FS;
+	t._y = RULER_TIME_Y_POS;
 	if (i==-1) {
 		let lft = t.getBoundingClientRect().left;
 		let diff = lft - Main.getBoundingClientRect().left;
@@ -1716,15 +1804,16 @@ if (Math.abs(viz_end-viddur) < 0.01){
 
 	let g = mkdv();
 	g._pos = "absolute";
-	g._w=END_MARK_WID;
+	g._w=TIME_MARK_WID;
 	g._bgcol="#aaa";
 	g._h="100%";
 //QMGHDLI
-	g._x = ((viddur-viz_start) * mag_pix_per_sec) - END_MARK_WID_HALF;
+	g._x = ((viddur-viz_start) * mag_pix_per_sec);
 //	last_x = g._x;
 	g._y = 0;
 	g._z = 1;
 	g._time = viddur;
+
 /*
 //  This (awkwardly) puts the preview of the final frame at the end of the timeline, but that is
 //  redundant because if the current time marker is at the end, then the main video window will
@@ -1885,11 +1974,6 @@ const scroll_marks=()=>{//«
 		scroll_elem(m, m._time, MARK_X_OFF, bounds_start);
 	}
 };//»
-/*
-const seek_to_timeline_start=async()=>{//«
-	await await_seek(get_visual_time_bounds().start);
-};//»
-*/
 const try_seek_mark=async(if_popin)=>{//«
 	is_waiting = true;
 	let rv;
@@ -1932,24 +2016,6 @@ const try_seek_mark=async(if_popin)=>{//«
 	}
 	is_waiting = false;
 };//»
-/*
-const try_seek_mark=async()=>{//«
-	is_waiting = true;
-	let rv = await wdg.popkey(`Seek to sym mark?`, {alpha: true});
-	if (rv)	{
-		rv = String.fromCharCode(rv);
-		let nogo=false;
-		for (let mrk of sym_marks){
-			if (mrk._id == rv){
-				if (cur_mark) cur_mark._off();
-				mrk._on();
-				break;
-			}
-		}
-	}
-	is_waiting = false;
-};//»
-*/
 const try_create_mark=async(if_sym)=>{//«
 	if (!if_sym){
 		if (cur_mark) cur_mark._off();
@@ -1976,13 +2042,13 @@ const try_create_mark=async(if_sym)=>{//«
 	}
 	is_waiting = false;
 };//»
-const renumber_pos_marks = ()=> {
+const renumber_pos_marks = ()=> {//«
 	for (let i=0; i < pos_marks.length; i++){
 		let m = pos_marks[i];
 		m._id = i;
 		m.innerHTML = i+1;
 	}
-}
+}/*»*/
 const create_mark=(usetime, id, if_auto)=>{//«
 	let tm = usetime || vid.currentTime;
 	let all_marks = pos_marks.concat(sym_marks);
@@ -2191,6 +2257,27 @@ for (let fr of frames){
 
 });
 };//»
+const toggle_play = () => {//«
+	if (vid.paused) {
+		let bounds = get_visual_time_bounds();
+		let start_diff = bounds.start - vid.currentTime;
+		if (start_diff > 0){
+			scroll_timeline("LEFT", {delta: start_diff * mag_pix_per_sec});
+		}
+		else{
+			let end_diff = vid.currentTime - bounds.end;
+			if (end_diff > 0) {
+				scroll_timeline("RIGHT", {delta: end_diff * mag_pix_per_sec});
+			}
+		}
+		vid.play();
+		vid.ontimeupdate = dotimeupdate;
+	}
+	else {
+		vid.pause();
+		vid.ontimeupdate = null;
+	}
+};/*»*/
 
 //»
 //Listeners«
@@ -2255,15 +2342,23 @@ timeline.onmousedown=(e)=>{//«
 
 vid.onloadedmetadata=video_init;
 
-const timeupdate = ()=>{//«
+const dotimeupdate = () => {//«
 	let ctime = vid.currentTime;
-//	mark._scroll();
 	tmdiv.innerHTML = get_main_time_str(ctime);
-	mark._scroll();
+//	mark._scroll();
+
+/*
+If in sequence playback mode, we first check to see if we are >= the end time of the current 
+slice, and if so, seek to the start of the next slice.
+
+Otherwise, we can do the check for being past the end of the current visual boundary as below.
+*/
 	if (ctime > get_visual_time_bounds().end) {
 //		handle_arrow("RIGHT_S"); //For some reason, using handle_arrow does NOT render the preview images
 		scroll_timeline("RIGHT"); //This automatically renders the preview images
 	}
+	else mark._scroll();
+
 };//»
 
 //»
@@ -2332,25 +2427,7 @@ this.onkeydown=(e,k)=>{//«
 	}
 	else if (k=="SPACE_"){
 		e.preventDefault();
-		if (vid.paused) {
-			let bounds = get_visual_time_bounds();
-			let start_diff = bounds.start - vid.currentTime;
-			if (start_diff > 0){
-				scroll_timeline("LEFT", {delta: start_diff * mag_pix_per_sec});
-			}
-			else{
-				let end_diff = vid.currentTime - bounds.end;
-				if (end_diff > 0) {
-					scroll_timeline("RIGHT", {delta: end_diff * mag_pix_per_sec});
-				}
-			}
-			vid.play();
-			vid.ontimeupdate = timeupdate;
-		}
-		else {
-			vid.pause();
-			vid.ontimeupdate = null;
-		}
+		toggle_play();
 	}
 	else if (k=="m_"){
 		try_create_mark();
@@ -2431,4 +2508,28 @@ handle_await_arrow_up(k);
 
 }//»
 
+
+
+
+/*OLD
+const seek_to_timeline_start=async()=>{//«
+	await await_seek(get_visual_time_bounds().start);
+};//»
+const try_seek_mark=async()=>{//«
+	is_waiting = true;
+	let rv = await wdg.popkey(`Seek to sym mark?`, {alpha: true});
+	if (rv)	{
+		rv = String.fromCharCode(rv);
+		let nogo=false;
+		for (let mrk of sym_marks){
+			if (mrk._id == rv){
+				if (cur_mark) cur_mark._off();
+				mrk._on();
+				break;
+			}
+		}
+	}
+	is_waiting = false;
+};//»
+*/
 
