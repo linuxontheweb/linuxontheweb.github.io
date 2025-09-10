@@ -62,6 +62,16 @@ playbackRate 	callback every n secs of the video's timeline
 I'm not sure what the supposed "snap to boundaries" stuff @FWPHUNKM is *really*
 doing. Particularly, the 'cur_clust' array is not used for anything at all.
 
+*   *   *
+
+Setting USE_TIMELINE_X > 0 below means that we will be able to see all of the first preview image,
+but when we are at the start of the video, it means that the first time marker is at the
+position of USE_TIMELINE_X (so that everything to the left of it would be negative time). Doing
+this then messes up our calculations for get_visual_time_bounds(), with the result being
+that it is possible for the marker to move off the right edge of the window, but it
+is still taken to be visible by the logic. So to be perfectly "pixel precise" about everything,
+we need to figure out how to account for USE_TIMELINE_X.
+
 »*/
 /*9/9/25:«
 
@@ -209,6 +219,8 @@ ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
 
 //let GRID_W = 125;
 let GRID_W = 175;
+let USE_TIMELINE_X = GRID_W / 2;
+//let USE_TIMELINE_X = 0;
 
 //Vars«
 
@@ -308,7 +320,6 @@ let total_scroll;
 //let TIMELINE_H = 35;
 let TIMELINE_H = 42;
 //let TIMELINE_H = 35;
-let USE_TIMELINE_X = 0;
 let PIX_PER_SEC = 10;
 
 let MAX_MAG_LEVEL = 10000;
@@ -363,6 +374,8 @@ let RDX = null;//Ruler Drag Event
 let TLX;
 
 let use_padl=0;
+
+let USE_ADJ_SEC = USE_TIMELINE_X / mag_pix_per_sec;
 
 //»
 
@@ -491,14 +504,17 @@ Main._add(overdiv);
 const bot_wrap = make('div');
 bot_wrap._pos = "absolute";
 bot_wrap._b = 0;
+bot_wrap._bgcol = "#000";
 bot_wrap._w="100%";
 bot_wrap._add(img_div);
 bot_wrap._add(timeline);
 
+//bot_wrap._x = USE_TIMELINE_X;
+bot_wrap._padl = USE_TIMELINE_X;
+//bot_wrap._padl = USE_TIMELINE_X;
 //bot_wrap._padl = GRID_W_HALF/2;
 
 Main._add(bot_wrap);
-
 //log(img_div);
 //log(timeline);
 
@@ -1123,7 +1139,7 @@ cwarn("No output");
 	}
 	is_waiting = false;
 };//»
-
+/*
 const scroll_elem = (elem, tm, x_off, bounds_start_arg)=>{//«
 	let offset = get_timeline_offset(tm, bounds_start_arg);
 	if (offset < -10||offset>Main._w+10) elem._dis = "none";
@@ -1132,6 +1148,20 @@ const scroll_elem = (elem, tm, x_off, bounds_start_arg)=>{//«
 		elem._x = x_off + offset;
 		elem._padl = use_padl;
 	}
+};
+mark._scroll = ()=>{
+	scroll_elem(mark, vid.currentTime, TIME_MARK_X_OFF);
+}
+//»
+*/
+const scroll_elem = (elem, tm, x_off, bounds_start_arg)=>{//«
+	let offset = get_timeline_offset(tm, bounds_start_arg);
+//	if (offset < -10||offset>Main._w+10) elem._dis = "none";
+//	else{
+	elem._dis = "";
+	elem._x = x_off + offset;
+	elem._padl = use_padl;
+//	}
 };
 mark._scroll = ()=>{
 	scroll_elem(mark, vid.currentTime, TIME_MARK_X_OFF);
@@ -1161,8 +1191,8 @@ This is either called by scroll_time_marker or by handle_arrow.
 	}
 	let gotx = tm_x + inc;
 
-	let diff = Main._w - ((viddur+(gotx/mag_pix_per_sec)) * mag_pix_per_sec); 
 	let did_adjust = false;
+	let diff = Main._w - ((viddur+(gotx/mag_pix_per_sec)) * mag_pix_per_sec); 
 	if(diff > 0){
 //log("DID ADJUST", diff);
 //		did_adjust = true;
@@ -1215,12 +1245,12 @@ const scroll_time_marker = (which, opts={}) => {//«
 	else if (gotto < 0) gotto = 0;
 	let round_to = round_ms(gotto);
 	if (dir > 0){
-		if (round_to > round_ms(get_visual_time_bounds().end)){
+		if (round_to > round_ms(get_visual_time_bounds().end - USE_ADJ_SEC)){
 			scroll_timeline("RIGHT");
 		}
 	}
 	else{
-		if (round_to < round_ms(get_visual_time_bounds().start)){
+		if (round_to < round_ms(get_visual_time_bounds().start - USE_ADJ_SEC)){
 			scroll_timeline("LEFT");
 		}
 	}
@@ -1478,9 +1508,13 @@ if (flush_right_edge()){
 	return;
 }
 	let bounds = get_visual_time_bounds();
-	let ctr_time = (bounds.end + bounds.start)/2;
+//	let ctr_time = (bounds.end + bounds.start)/2;
+	let ctr_time = ((bounds.end + bounds.start)/2) - USE_ADJ_SEC;
 	let off_secs = tm - ctr_time;
-	off_secs -= (off_secs % mag_sec_per_grid);
+//If we don't make this adjustment, then all times on the right side are one grid square too far to the right
+	if (off_secs > 0) off_secs++;
+//log(off_secs);
+	off_secs -= (off_secs % mag_sec_per_grid);//Snap to grid so the ruler times are "nice"
 	let pix_off = mag_pix_per_sec * off_secs;
 	timeline._xLoc-=pix_off;
 //If the start marker is past the left edge of the app window, always flush it to to the left
@@ -1511,7 +1545,8 @@ The video stays at the end.
 	return true;
 }//»
 const seek_to_end=async()=>{//«
-	timeline._xLoc = Main._w - timeline._width - GRID_W_HALF;
+	timeline._xLoc = Main._w - timeline._width - GRID_W;
+//	timeline._xLoc = Main._w - timeline._width - GRID_W_HALF;
 	align_timeline();
 //AQUEORK
 //	await seek_to_time(viddur-0.001, true);
@@ -1557,16 +1592,55 @@ mark._maybeScroll=()=>{
 
 //»
 const get_timeline_rect = ()=>{//«
-	return {
-		left: timeline._xLoc,
-		right: timeline._xLoc+timeline._width,
-		width: timeline._width
-	};
+let use_off = 0;
+//let use_off = USE_TIMELINE_X;
+return {
+	left: timeline._xLoc-use_off,
+	right: timeline._xLoc+timeline._width-use_off,
+	width: timeline._width
+};
 };//»
-const get_visual_time_bounds=()=>{//«
+
+const get_visual_time_bounds = () => {//«
+
+let tr = get_timeline_rect();
+let mw = Main._w;
+
+let left_edge = 0 > tr.left ? 0 : tr.left;
+let right_edge = mw < tr.right ? mw : tr.right;
+
+let viz_duration = (right_edge - left_edge)/mag_pix_per_sec;
+
+let viz_start;
+let viz_end;
+
+let left_diff = tr.left;
+if (left_diff > 0){
+	if (tr.left > mw){
+		return {invalid: true, type: 1};
+	}
+	viz_start = 0;
+}
+else {
+	if (tr.right < 0){
+		return {invalid: true, type: 2, diff: -tr.right};
+	}
+	viz_start = -left_diff/mag_pix_per_sec;
+}
+viz_end = viz_start + viz_duration;
+
+return {
+	start: viz_start,
+	end: viz_end,
+	duration: viz_duration,
+	width: viz_duration * mag_pix_per_sec
+};
+
+};//»
+/*
+const get_visual_time_bounds = () => {//«
 
 let rr = get_timeline_rect();
-//log("RR", rr);
 let mw = Main._w;
 
 let left_edge = 0 > rr.left ? 0 : rr.left;
@@ -1582,7 +1656,6 @@ let viz_end;
 let left_diff = rr.left;
 if (left_diff > 0){
 	let diff = rr.left - mw;
-//log(1, diff);
 	if (rr.left > mw){
 		return {invalid: true, type: 1};
 	}
@@ -1600,12 +1673,11 @@ return {
 	start: viz_start,
 	end: viz_end,
 	duration: viz_duration,
-	startDiff: left_diff,
 	width: viz_duration * mag_pix_per_sec
 };
 
 };//»
-
+*/
 const scroll_to_time = (tm, which)=>{//«
 	vid.currentTime = tm;
 	tmdiv.innerHTML = get_main_time_str(tm);
@@ -1701,14 +1773,14 @@ v.onloadedmetadata=async()=>{//«
 		d._op = VID_IMG_OP;
 		d._add(im);
 		img_div._add(d);
-		if (tm==viddur){
+//		if (tm==viddur){
 //			d._x = m._x;
-			d._x = use_padl + m._x;
-		}
-		else{
+//			d._x = use_padl + m._x;
+//		}
+//		else{
 			d._x = use_padl + m._x - w/2;
 //			d._x = use_padl + m._x;
-		}
+//		}
 		d._z = 10;
 		d.style.borderRight = PREV_IMG_BORDER;
 		d.style.borderLeft = PREV_IMG_BORDER;
@@ -1734,11 +1806,9 @@ for (let im of cur_images) im._del();
 
 let {
 	invalid, 
-	startDiff: left_diff, 
 	start: viz_start, 
 	end: viz_end, 
 	duration: viz_duration, 
-	width: viz_width
 } = get_visual_time_bounds();
 
 if (invalid) {
@@ -1767,7 +1837,7 @@ grid_marks = [];
 cur_images = [];
 //images_showing = true;
 let last_x;
-let first_x;
+//let first_x;
 for (let i=-1; i < num_grids; i++){
 	let g = mkdv();
 	grid_marks.push(g);
@@ -1776,6 +1846,7 @@ for (let i=-1; i < num_grids; i++){
 	g._bgcol="#555";
 	g._h="100%";
 	g._x = ((i + 1) * GRID_W)-1;
+	last_x = g._x;
 	g._y = 0;
 	g._z = 1;
 	ruler._add(g);
@@ -1821,7 +1892,9 @@ if (Math.abs(viz_end-viddur) < 0.01){
 */
 //	if (opts.addLast) {
 //		grid_time_elems.push({});
-//		grid_marks.push(g);
+//If the x value is < GRID_W_HALF from the previous one, do not add this 
+//log(g._x - last_x,GRID_W_HALF);
+	if (g._x - last_x >= GRID_W_HALF) grid_marks.push(g);
 //	}
 	ruler._add(g);
 
@@ -1930,6 +2003,7 @@ return;
 let bnds = get_visual_time_bounds();
 cur_mag_level++;
 mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
+USE_ADJ_SEC = USE_TIMELINE_X / mag_pix_per_sec;
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
 timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
@@ -1955,6 +2029,7 @@ if (cur_mag_level-1 < 0){
 }
 cur_mag_level--;
 mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
+USE_ADJ_SEC = USE_TIMELINE_X / mag_pix_per_sec;
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
 let w = timeline._width;
 timeline._width = viddur * mag_pix_per_sec;
@@ -2353,7 +2428,7 @@ slice, and if so, seek to the start of the next slice.
 
 Otherwise, we can do the check for being past the end of the current visual boundary as below.
 */
-	if (ctime > get_visual_time_bounds().end) {
+	if (ctime > get_visual_time_bounds().end - USE_ADJ_SEC) {
 //		handle_arrow("RIGHT_S"); //For some reason, using handle_arrow does NOT render the preview images
 		scroll_timeline("RIGHT"); //This automatically renders the preview images
 	}
@@ -2420,7 +2495,8 @@ this.onkeydown=(e,k)=>{//«
 	}
 	else if (k=="c_"){
 		let {start, end} = get_visual_time_bounds();
-		seek_to_time((start+end)/2);
+//		seek_to_time((start+end)/2);
+		seek_to_time(((start+end)/2)-USE_ADJ_SEC);
 	}
 	else if (k=="s_C"){
 		try_save();
