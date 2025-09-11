@@ -232,9 +232,9 @@ ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
 »*/
 //The numbers and sizes of the thumbnails are determined by this
 
-//let GRID_W = 125;
-let GRID_W = 175;
-let USE_TIMELINE_X = GRID_W / 2;
+let GRID_W = 125;
+//let GRID_W = 175;
+let USE_TIMELINE_X = GRID_W / 4;
 let CLEAR_CACHE_WHEN_MAGNIFYING = true;
 //let USE_TIMELINE_X = 0;
 
@@ -1905,6 +1905,15 @@ for (let i=-1; i < num_grids; i++){
 			t._padl = -diff;
 		}
 	}
+	else if (i==num_grids-1) {
+		let lft = t.getBoundingClientRect().right;
+		let diff = lft - Main.getBoundingClientRect().right;
+		if (diff > 0) {//The last time label is hanging off the screen, so push it back.
+			t._x -= diff;
+		}
+
+	}
+
 }
 if (Math.abs(viz_end-viddur) < 0.01){
 
