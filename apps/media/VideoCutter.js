@@ -1,3 +1,16 @@
+/*9/12/25:«
+
+First: identify every update of the timeline's "position" (change of xLoc).
+Next: Put a function call there so that the validation logic is centralized.
+
+@SBKPOMEU: If the end of the timeline is on the screen and the marker is also there,
+then we need to call flush_right_edge, and then do the centering.
+
+@XKLGFREH in seek_to_time: IS IT ALWAYS OK TO *NOT* AWAIT HERE? AWAITING HERE DURING SEEK_TO_END 
+ALWAYS ADDS A VERY ANNOYING DELAY FACTOR BEFORE THE TIME MARKER SHOWS UP ON THE
+END GRID.
+
+»*/
 /*9/10/25: This app should be able to export an object like: «
 
 {
@@ -96,9 +109,6 @@ will seek to the first time showing on the ruler, and the marker will be set the
 Otherwise, the current time marker will not always be visible, but when starting to
 play the video  , we MAY want to seek to it.
 
-@PXJKFMG: I don't know if this actually ever really DID anything!?!?
-
-
 3 ways of referencing the time points in a video timeline
 
 1) floating point: this is the literal time value (no mark created)
@@ -122,7 +132,7 @@ peeking out from the app window's left edge, and then it is repositioned so that
 bit is centered. We can simplify the logic by getting rid of this centering gimmick, and either
 
 1) positioning the timeline so that the start is flush against the left edge, in case the current 
-time marker is within the "start window" (left justification, just set: timeline._xLoc = 0)
+time marker is within the "start window" (left justification, just set: xLoc = 0)
 
 2) positioning the timeline so that the end is flush against the right edge, in case the current
 time is within the "end window" (right justification, just call: flush_right_edge())
@@ -276,6 +286,9 @@ export const app = function(Win, Desk) {//«
 
 //Var«
 
+let xLoc = 0;
+let tmWid;
+
 let cur_set_images;
 //let grid_time_elems;
 let IMG_CACHE = {};
@@ -386,10 +399,8 @@ let RULER_TIME_Y_POS = TIMELINE_H/2 - 9.5;
 let viddur;
 let vidw, vidh;
 
-let RDX = null;//Ruler Drag Event
-let TLX;
-
-let use_padl=0;
+//let RDX = null;//Ruler Drag Event
+//let TLX;
 
 let USE_ADJ_SEC = USE_TIMELINE_X / mag_pix_per_sec;
 
@@ -423,7 +434,6 @@ const timeline = mk('div');
 timeline._pos="relative";
 //timeline._w="100%";
 //timeline._x=0;
-timeline._xLoc = 0;
 timeline._h=TIMELINE_H;
 //timeline._b=0;
 timeline._bgcol="#000";
@@ -451,7 +461,6 @@ mark._pos="absolute";
 mark._fs = TIME_MARK_SZ;
 //mark._x = MARK_X_OFF;
 mark._z = 10;
-mark._xLoc = 0;
 mark._b = TIME_MARK_B;
 mark._fw=900;
 mark.innerHTML="^";
@@ -537,6 +546,27 @@ Main._add(bot_wrap);
 //log(Main);
 //»
 //Funcs«
+
+const update_xloc = val => {//«
+/*
+	if (val > 0) {
+		xLoc = 0;
+	}
+	else if (val + tmWid < 0) {
+	}
+	else {
+		xLoc = val;
+	}
+*/
+	if (val > 0) {
+		xLoc = 0;
+	}
+	else if (val + tmWid >= 0) {
+		xLoc = val;
+	}
+//Silently pass over every attempt to place the timeline's right edge before the front edge
+
+};/*»*/
 
 //Util«
 
@@ -672,7 +702,7 @@ const video_init = async ()=>{//«
 //log(vid.playbackRate);
 //KLIOPMDS
 //vid.playbackRate = 0.125;
-	timeline._width = viddur * mag_pix_per_sec;
+	tmWid = viddur * mag_pix_per_sec;
 	vidh = vid.videoHeight;
 	vidw = vid.videoWidth;
 
@@ -740,7 +770,7 @@ for (let m of grid_marks){//«
 	d._op = VID_IMG_OP;
 	d._add(im);
 	img_div._add(d)
-	d._x = use_padl + m._x - w/2;
+	d._x = m._x - w/2;
 //	d._x = use_padl + m._x;
 	d._z = 10;
 //	d._bor = "1px solid #fff";
@@ -761,14 +791,12 @@ v.onloadedmetadata=async()=>{//«
 	for (let m of grid_marks){
 		if (cancelled) return;
 		let tm = m._time;
-//log(tm);
 		await seek(tm);
 		if (cancelled) return;
 		if (IMG_CACHE[tm]) continue;
 		let im = new Image;
 		IMG_CACHE[tm]=im;
 		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w, VID_IMG_H);
-//		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w - 1, VID_IMG_H - 1);
 		im.src = can.toDataURL();
 		m._img = im;
 		let d = mkdv();
@@ -778,21 +806,11 @@ v.onloadedmetadata=async()=>{//«
 		d._over="hidden";
 		d._pos = "absolute";
 		d._w = w;
-//d._bgcol="#fff";
-//log(d);
-
 		d._h = VID_IMG_H;
 		d._op = VID_IMG_OP;
 		d._add(im);
 		img_div._add(d);
-//		if (tm==viddur){
-//			d._x = m._x;
-//			d._x = use_padl + m._x;
-//		}
-//		else{
-			d._x = use_padl + m._x - w/2;
-//			d._x = use_padl + m._x;
-//		}
+		d._x =  m._x - w/2;
 		d._z = 10;
 		d.style.borderRight = PREV_IMG_BORDER;
 		d.style.borderLeft = PREV_IMG_BORDER;
@@ -802,13 +820,11 @@ v.onloadedmetadata=async()=>{//«
 
 v.src = url;
 
-
 };//»
-/*
-Want this to be a library function that returns the positions of:
-cues, info, and tracks
-*/
+
 const webm_prep = async()=>{//«
+//Want this to be a library function that returns the positions of:
+//cues, info, and tracks
 
 let ebml, tracks;
 let CUESHASH={};
@@ -907,7 +923,7 @@ return { ebml, tracks, CUESHASH };
 
 
 };//»
-const check_memory = async () => {
+const check_memory = async () => {//«
 	let mem = performance.memory;
 	if (mem){
 //log("TOT", mem.totalJSHeapSize);
@@ -920,7 +936,7 @@ return;
 	let rv = await performance.measureUserAgentSpecificMemory();
 */
 //log("MEMORY", rv.bytes);
-};
+};/*»*/
 const make_webm_file =(ebml, tracks, clusters, cluster_times, viddur) => {//«
 
 //	let cl_times = cluster_times.slice();
@@ -1278,32 +1294,13 @@ cwarn("No output");
 	}
 	is_waiting = false;
 };//»
-/*
-const scroll_elem = (elem, tm, x_off, bounds_start_arg)=>{//«
+const scroll_mark = (elem, tm, x_off, bounds_start_arg)=>{//«
 	let offset = get_timeline_offset(tm, bounds_start_arg);
-	if (offset < -10||offset>Main._w+10) elem._dis = "none";
-	else{
-		elem._dis = "";
-		elem._x = x_off + offset;
-		elem._padl = use_padl;
-	}
-};
-mark._scroll = ()=>{
-	scroll_elem(mark, vid.currentTime, TIME_MARK_X_OFF);
-}
-//»
-*/
-const scroll_elem = (elem, tm, x_off, bounds_start_arg)=>{//«
-	let offset = get_timeline_offset(tm, bounds_start_arg);
-//	if (offset < -10||offset>Main._w+10) elem._dis = "none";
-//	else{
 	elem._dis = "";
 	elem._x = x_off + offset;
-	elem._padl = use_padl;
-//	}
 };
 mark._scroll = ()=>{
-	scroll_elem(mark, vid.currentTime, TIME_MARK_X_OFF);
+	scroll_mark(mark, vid.currentTime, TIME_MARK_X_OFF);
 }
 //»
 const scroll_timeline = (which, opts={}) => {//«
@@ -1311,8 +1308,8 @@ const scroll_timeline = (which, opts={}) => {//«
 This is either called by scroll_time_marker or by handle_arrow.
 */
 	let mr = Main.getBoundingClientRect();
-	let tm_x = timeline._xLoc;
-	let tm_wid = timeline._width;
+	let tm_x = xLoc;
+	let tm_wid = tmWid;
 	let tm_rgt = tm_wid + tm_x;
 
 	let dir;
@@ -1328,31 +1325,8 @@ This is either called by scroll_time_marker or by handle_arrow.
 	else{
 		inc = TIMELINE_SCROLL_PER * dir * Main._w;
 	}
-	let gotx = tm_x + inc;
-
-	let did_adjust = false;
-	let diff = Main._w - ((viddur+(gotx/mag_pix_per_sec)) * mag_pix_per_sec); 
-	if(diff > 0){
-//FHYAENK
-//log("DID ADJUST", diff);
-//		did_adjust = true;
-		gotx+=diff;
-	}
-	timeline._xLoc = gotx;
-	let tr = get_timeline_rect();
-	if (tr.left > mr.left){
-		timeline._xLoc = 0;
-	}
-	else if (tr.right < mr.left){
-		timeline._xLoc += (mr.left - tr.right) + 100;
-	}
-
-	align_timeline(did_adjust);
-
-//PXJKFMG
-//	let xdiff = tm_x - timeline._xLoc;
-//	mark._xLoc -= xdiff;
-
+	update_xloc(tm_x + inc);
+	align_timeline();
 	update_all();
 };//»
 const scroll_time_marker = (which, opts={}) => {//«
@@ -1393,7 +1367,7 @@ const scroll_time_marker = (which, opts={}) => {//«
 			scroll_timeline("LEFT");
 		}
 	}
-	scroll_elem(mark, gotto, TIME_MARK_X_OFF);
+	scroll_mark(mark, gotto, TIME_MARK_X_OFF);
 
 }//»
 const snap_curtime_to_grid = (tm, which) => {//«
@@ -1619,8 +1593,9 @@ timeline_sig_figs = (Math.floor(mag_pix_per_sec)+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
 //log(timeline_sig_figs);
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
-timeline._xLoc = 0;
-timeline._width = viddur * mag_pix_per_sec;
+//xLoc = 0;
+update_xloc(0);
+tmWid = viddur * mag_pix_per_sec;
 update_all();
 
 };//»
@@ -1634,24 +1609,26 @@ const update_all = () => {//«
 const center_to_time = tm => {//«
 //	tm = mag_sec_per_grid * Math.floor(tm/mag_sec_per_grid);
 
-//If the timeline width is < the window width, just set _xLoc to 0
-if (timeline._width < Main._w){
-	timeline._xLoc = 0;
+//If the timeline width is < the window width, just set xLoc to 0
+if (tmWid < Main._w){
+	update_xloc(0);
 	update_all();
 	return;
 }
 let bounds = get_visual_time_bounds();
+//SBKPOMEU
 //If the end marker is on the screen, flush it to the right edge of the app window,
 //so that as much of the timeline is showing as possible (max number of preview frames).
+/*
 if (tm > bounds.start && flush_right_edge()){
 //if (flush_right_edge()){
 //WYROTJGL
-//log("FLUSH!");
+log("FLUSH!");
 	align_timeline();
 	update_all();
 	return;
 }
-//	let ctr_time = (bounds.end + bounds.start)/2;
+*/
 	let ctr_time = ((bounds.end + bounds.start)/2) - USE_ADJ_SEC;
 	let off_secs = tm - ctr_time;
 //If we don't make this adjustment, then all times on the right side are one grid square too far to the right
@@ -1660,9 +1637,7 @@ if (tm > bounds.start && flush_right_edge()){
 //log(off_secs);
 	off_secs -= (off_secs % mag_sec_per_grid);//Snap to grid so the ruler times are "nice"
 	let pix_off = mag_pix_per_sec * off_secs;
-	timeline._xLoc-=pix_off;
-//If the start marker is past the left edge of the app window, always flush it to to the left
-	if (timeline._xLoc > 0) timeline._xLoc = 0;
+	update_xloc(xLoc - pix_off);
 	update_all();
 };//»
 
@@ -1671,10 +1646,8 @@ const seek_to_time = async(tm, if_end)=>{//«
 The video stays at the end.
 */
 //XKLGFREH
-	await await_seek(tm);
 //	await_seek(tm);
-//	vid.currentTime = tm;
-//	tmdiv.innerHTML = get_main_time_str(tm);
+	vid.currentTime = tm;
 	let ctr_time;
 	if (tm == viddur){
 		let start_x = GRID_W_HALF;
@@ -1686,16 +1659,21 @@ The video stays at the end.
 	else ctr_time = vid.currentTime;
 	if (if_end) update_all();
 	else center_to_time(ctr_time);
+//	await await_seek(tm);
 	return true;
 }//»
 const seek_to_end=async()=>{//«
-	timeline._xLoc = Main._w - timeline._width - GRID_W;
-//	timeline._xLoc = Main._w - timeline._width - GRID_W_HALF;
+//The timeline's endpoint is off the screen
+if (xLoc + tmWid > Main._w) {
+	update_xloc(Main._w - tmWid - GRID_W);
+//	xLoc = Main._w - tmWid - GRID_W;
+//	xLoc = Main._w - tmWid - GRID_W_HALF;
 	align_timeline();
+}
 //AQUEORK
 //	await seek_to_time(viddur-0.001, true);
 	seek_to_time(viddur-0.0001, true);
-	draw_ruler({addLast:true});
+//	draw_ruler({addLast:true});
 };//»
 const center_to_curtime = () => {//«
 	center_to_time(vid.currentTime);
@@ -1710,7 +1688,7 @@ const get_timeline_offset = (tm, bounds_start_arg) => {//«
 		tmoff = tm - bounds.start;
 	}
 	let peroff = tmoff / viddur;
-	return peroff * timeline._width;
+	return peroff * tmWid;
 };//»
 const check_scroll = elm => {//«
 	let r = elm.getBoundingClientRect();
@@ -1724,10 +1702,11 @@ const check_scroll = elm => {//«
 	let mr = Main.getBoundingClientRect();
 	let main_middle = (mr.left+mr.right)/2;
 	let diff_x = x - main_middle;
-	let tx = timeline._xLoc;
+	let tx = xLoc;
 	let gotx = tx - diff_x;
 	if (gotx > 0) gotx = 0;
-	timeline._xLoc = gotx;
+//	xLoc = gotx;
+	update_xloc(gotx);
 	update_all();
 };
 mark._maybeScroll=()=>{
@@ -1735,14 +1714,12 @@ mark._maybeScroll=()=>{
 };
 
 //»
-const get_timeline_rect = ()=>{//«
-let use_off = 0;
-//let use_off = USE_TIMELINE_X;
-return {
-	left: timeline._xLoc-use_off,
-	right: timeline._xLoc+timeline._width-use_off,
-	width: timeline._width
-};
+const get_timeline_rect = () =>{//«
+	return {
+		left: xLoc,
+		right: xLoc+tmWid,
+		width: tmWid
+	};
 };//»
 
 const get_visual_time_bounds = () => {//«
@@ -1761,12 +1738,14 @@ let viz_end;
 let left_diff = tr.left;
 if (left_diff > 0){
 	if (tr.left > mw){
+cerr(`tr.left(${tr.left}) > mw(${mw})`);
 		return {invalid: true, type: 1};
 	}
 	viz_start = 0;
 }
 else {
 	if (tr.right < 0){
+cerr(`tr.right(${tr.right}) < 0`);
 		return {invalid: true, type: 2, diff: -tr.right};
 	}
 	viz_start = -left_diff/mag_pix_per_sec;
@@ -1781,47 +1760,6 @@ return {
 };
 
 };//»
-/*
-const get_visual_time_bounds = () => {//«
-
-let rr = get_timeline_rect();
-let mw = Main._w;
-
-let left_edge = 0 > rr.left ? 0 : rr.left;
-let right_edge = mw < rr.right ? mw : rr.right;
-
-let vw = right_edge - left_edge;
-
-let viz_duration = vw/mag_pix_per_sec;
-
-let viz_start;
-let viz_end;
-
-let left_diff = rr.left;
-if (left_diff > 0){
-	let diff = rr.left - mw;
-	if (rr.left > mw){
-		return {invalid: true, type: 1};
-	}
-	viz_start = 0;
-}
-else {
-	if (rr.right < 0){
-		return {invalid: true, type: 2, diff: -rr.right};
-	}
-	viz_start = -left_diff/mag_pix_per_sec;
-}
-viz_end = viz_start + viz_duration;
-
-return {
-	start: viz_start,
-	end: viz_end,
-	duration: viz_duration,
-	width: viz_duration * mag_pix_per_sec
-};
-
-};//»
-*/
 const scroll_to_time = (tm, which)=>{//«
 	vid.currentTime = tm;
 	tmdiv.innerHTML = get_main_time_str(tm);
@@ -1855,7 +1793,7 @@ reset_timeline();
 let mag_sec = GRID_W/mag_pix_per_sec;
 
 let num_grids = Math.floor(viz_duration / mag_sec);
-let diff_w = (Main._w-GRID_W) - timeline._width;
+let diff_w = (Main._w-GRID_W) - tmWid;
 if (viz_start == 0 || diff_w > 0) {
 	let g = mkdv();
 	g._pos = "absolute";
@@ -1962,15 +1900,14 @@ if (images_showing && !await_arrow_up) {
 }
 
 };//»
-const align_timeline = (did_adjust)=>{//«
+const align_timeline = ()=>{//«
+
 	let {start} = get_visual_time_bounds();
 	let secs_per_grid = GRID_W/mag_pix_per_sec;
 	let num_grids = Math.round(start/secs_per_grid);
-	if (did_adjust) num_grids++;//This ensures that the end marker does not hang off the edge of the app window
-
 	let secs_to_start = secs_per_grid * num_grids;
 	let pix_to_start = mag_pix_per_sec * secs_to_start;
-	timeline._xLoc = -pix_to_start;
+	update_xloc(-pix_to_start);
 };//»
 
 const reset_timeline = ()=>{//«
@@ -1980,16 +1917,16 @@ mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
 timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
-timeline._width = viddur * PIX_PER_SEC;
+tmWid = viddur * PIX_PER_SEC;
 
-timeline._xLoc = 0;
-
+//xLoc = 0;
+update_xloc(0);
 update_all();
 
 
 };//»
 
-const flush_right_edge=()=>{//«
+const flush_right_edge = (opts = {}) => {//«
 //Make sure the timeline location flushes with the right edge, when the visible
 //duration is long enough
 //	return false;
@@ -1999,7 +1936,8 @@ const flush_right_edge=()=>{//«
 	if (duration < viddur && width < Main._w - GRID_W_HALF){
 //		let x_adj = (Main._w - GRID_W_HALF) - width;
 		let x_adj = (Main._w - GRID_W) - width;
-		timeline._xLoc += x_adj;
+//		xLoc += x_adj;
+		update_xloc(xLoc + x_adj);
 		return true;
 	}
 	return false;
@@ -2019,11 +1957,12 @@ given how wide it would be at the given magnification level.
 
 */
 
-	let tw = timeline._width;
-	let tx = timeline._xLoc;
+	let tw = tmWid;
+	let tx = xLoc;
 	let right_loc = tx + tw;
 	if (right_loc < 0) {
-		timeline._xLoc -= right_loc-(Main._w-GRID_W_HALF);
+//		xLoc -= right_loc-(Main._w-GRID_W_HALF);
+update_xloc(xLoc - right_loc-(Main._w-GRID_W_HALF));
 	}
 	let view_w = Main._w-GRID_W;
 	let bnds = get_visual_time_bounds();
@@ -2031,7 +1970,8 @@ given how wide it would be at the given magnification level.
 	if (tw > view_w){
 		let diff_w = view_w - width;
 		if (diff_w > 0){
-			timeline._xLoc += diff_w;
+//			xLoc += diff_w;
+update_xloc(xLoc + diff_w);
 		}
 	}
 	flush_right_edge();
@@ -2056,7 +1996,7 @@ USE_ADJ_SEC = USE_TIMELINE_X / mag_pix_per_sec;
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
 timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
-timeline._width = viddur * mag_pix_per_sec;
+tmWid = viddur * mag_pix_per_sec;
 center_to_curtime();
 
 };//»
@@ -2074,8 +2014,8 @@ cur_mag_level--;
 mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
 USE_ADJ_SEC = USE_TIMELINE_X / mag_pix_per_sec;
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
-let w = timeline._width;
-timeline._width = viddur * mag_pix_per_sec;
+let w = tmWid;
+tmWid = viddur * mag_pix_per_sec;
 timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
 //center_to_curtime();
@@ -2088,8 +2028,7 @@ const scroll_marks=()=>{//«
 	let bounds_start = get_visual_time_bounds().start;
 	let all_marks = pos_marks.concat(sym_marks);
 	for (let m of all_marks){
-//		scroll_elem(m, m._time, MARK_X_OFF);
-		scroll_elem(m, m._time, MARK_X_OFF, bounds_start);
+		scroll_mark(m, m._time, MARK_X_OFF, bounds_start);
 	}
 };//»
 const try_seek_mark=async(if_popin)=>{//«
@@ -2257,7 +2196,7 @@ const scroll_cluster_marks=()=>{//«
 	if (cluster_marks_div._dis=="none") return;
 	let bounds_start = get_visual_time_bounds().start;
 	for (let i=0; i < cluster_times.length; i++){
-		scroll_elem(cluster_time_marks[i], cluster_times[i], MARK_X_OFF, bounds_start);
+		scroll_mark(cluster_time_marks[i], cluster_times[i], MARK_X_OFF, bounds_start);
 	}
 };//»
 const add_cluster_time_marks=()=>{//«
@@ -2399,42 +2338,16 @@ const toggle_play = () => {//«
 
 //»
 //Listeners«
-/*
-ruler.draggable = true;
-
-ruler.ondragstart=e=>{//«
-//log("???");
-	e.preventDefault();
-	if (!ALLOW_MOUSE_SCROLLING) {
-		stat("Mouse scrolling is currently disabled ( Ctrl + Alt + Shift + m to enable)");
-		return;
-	}
-	Main.style.cursor="move";
-	RDX = e.clientX;
-	TLX = timeline._xLoc;
-};//»
-*/
-let mousemove=e=>{//«
-	if (RDX==null) return;
-	let x = e.clientX;
-	let diff = e.clientX - RDX;
-	timeline._xLoc = TLX + diff;
-	update_all();
-
-}//»
-const clear_drag=()=>{RDX = null;Main.style.cursor="";};
-Main.addEventListener('mousemove',mousemove);
-Main.addEventListener('mouseup',clear_drag);
-Main.addEventListener('mouseleave',clear_drag);
 
 timeline.onmousedown=(e)=>{//«
 	let dur = vid.duration;
 	if (!dur) return;
 	let r = get_timeline_rect();
-	let x = e.clientX - Main.getBoundingClientRect().left - use_padl;
+	let x = e.clientX - Main.getBoundingClientRect().left;
 	let per = (x - r.left)/r.width;
 	if (!vid.paused) vid.pause();
-	let tm = per*dur;
+//	let tm = per*dur;
+	let tm = per*dur-USE_ADJ_SEC;
 	if (!e.ctrlKey){
 		scroll_to_time(tm, 3);
 		return;
@@ -2629,26 +2542,31 @@ handle_await_arrow_up(k);
 
 
 
-
-/*OLD
-const seek_to_timeline_start=async()=>{//«
-	await await_seek(get_visual_time_bounds().start);
-};//»
-const try_seek_mark=async()=>{//«
-	is_waiting = true;
-	let rv = await wdg.popkey(`Seek to sym mark?`, {alpha: true});
-	if (rv)	{
-		rv = String.fromCharCode(rv);
-		let nogo=false;
-		for (let mrk of sym_marks){
-			if (mrk._id == rv){
-				if (cur_mark) cur_mark._off();
-				mrk._on();
-				break;
-			}
-		}
+/*
+ruler.draggable = true;
+ruler.ondragstart=e=>{//«
+//log("???");
+	e.preventDefault();
+	if (!ALLOW_MOUSE_SCROLLING) {
+		stat("Mouse scrolling is currently disabled ( Ctrl + Alt + Shift + m to enable)");
+		return;
 	}
-	is_waiting = false;
+	Main.style.cursor="move";
+	RDX = e.clientX;
+//	TLX = xLoc;
+
 };//»
+let mousemove=e=>{//«
+	if (RDX==null) return;
+	let x = e.clientX;
+	let diff = e.clientX - RDX;
+	xLoc = TLX + diff;
+	update_all();
+
+}//»
+const clear_drag=()=>{RDX = null;Main.style.cursor="";};
+Main.addEventListener('mousemove',mousemove);
+Main.addEventListener('mouseup',clear_drag);
+Main.addEventListener('mouseleave',clear_drag);
 */
 
