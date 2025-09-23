@@ -1,3 +1,11 @@
+/*9/16/25: How about a "redraw ruler" command for when things seem to get stuck?«
+I am current editing a ~22 min long video, and there are times where not all the
+preview images are drawn. I'm just trying to understand why the rendering of
+preview images sometimes gets "stuck".
+
+The problem is that some timestamps get "stuck" because the 'await seek' operation never
+succeeds.
+*//*»*/
 /*9/12/25:«
 
 First: identify every update of the timeline's "position" (change of xLoc).
@@ -242,8 +250,8 @@ ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
 »*/
 //The numbers and sizes of the thumbnails are determined by this
 
-let GRID_W = 125;
-//let GRID_W = 175;
+//let GRID_W = 125;
+let GRID_W = 175;
 let USE_TIMELINE_X = GRID_W / 4;
 let CLEAR_CACHE_WHEN_MAGNIFYING = true;
 //let USE_TIMELINE_X = 0;
@@ -728,9 +736,13 @@ const SetTimelineImages = function(){//«
 
 const seek = (tm)=>{//«
 	return new Promise((Y,N)=>{
-		v.onseeked = Y;
+		v.onseeked = ()=>{
+			Y();
+log(`SEEK OUT: ${tm}`);
+		};
+
+log(`SEEK IN: ${tm}`);
 		v.currentTime = tm;
-//		tmdiv.innerHTML = get_main_time_str(tm);
 	});
 };//»
 
@@ -749,15 +761,19 @@ let cache_miss = false;
 
 let aspect = vid.videoWidth/vid.videoHeight;
 let w = VID_IMG_H * aspect;
-
+//cwarn("CHECK CACHE");
+//log(grid_marks);
 for (let m of grid_marks){//«
 	if (cancelled) return;
 	let tm = m._time;
+//log("CHECK ", tm);
 	let im = IMG_CACHE[tm];
 	if (!im){
+//log(`MISS: ${tm}`);
 		cache_miss = true;
 		continue;
 	}
+//log(`USE CACHE: ${tm}`);
 	m._img = im;
 	let d = mkdv();
 	d.onclick=()=>{
@@ -779,7 +795,10 @@ for (let m of grid_marks){//«
 	cur_images.push(d);
 }//»
 
-if (!cache_miss) return;
+if (!cache_miss) {
+//cwarn("NOMISS!!!");
+	return;
+}
 
 let v = make('video');
 let can = mk('canvas');
@@ -787,13 +806,20 @@ let cx = can.getContext('2d',{willReadFrequently: true});
 
 check_memory();
 
+//cwarn("MAKE IMG");
+//log(grid_marks);
 v.onloadedmetadata=async()=>{//«
 	for (let m of grid_marks){
 		if (cancelled) return;
 		let tm = m._time;
+//log("MAKE", tm);
+		if (IMG_CACHE[tm]) {
+//log(`IS CACHED: ${tm}`);
+			continue;
+		}
 		await seek(tm);
+
 		if (cancelled) return;
-		if (IMG_CACHE[tm]) continue;
 		let im = new Image;
 		IMG_CACHE[tm]=im;
 		cx.drawImage(v, 0, 0, vidw, vidh, 0, 0, w, VID_IMG_H);
@@ -1911,18 +1937,17 @@ const align_timeline = ()=>{//«
 };//»
 
 const reset_timeline = ()=>{//«
-
+/*
 cur_mag_level = DEF_MAG_LEVEL;
 mag_pix_per_sec = MAG_PIX_PER_SEC_ARR[cur_mag_level];
 mag_sec_per_grid = GRID_W/mag_pix_per_sec;
 timeline_sig_figs = (mag_pix_per_sec+"").length-2;
 if (timeline_sig_figs < 0) timeline_sig_figs = 0;
 tmWid = viddur * PIX_PER_SEC;
-
+*/
 //xLoc = 0;
 update_xloc(0);
 update_all();
-
 
 };//»
 
@@ -2436,8 +2461,16 @@ this.onkeydown=(e,k)=>{//«
 //		set_timeline_images();
 //	}
 	else if (k=="r_"){
-//		reset_timeline();
-		try_render();
+		reset_timeline();
+//		try_render();
+//log(cur_images);
+//ruler.innerHTML = "";
+//draw_ruler();
+//IMG_CACHE = {};
+//for (let im of cur_images) im._del();
+//cur_images = [];
+//cur_set_images = new SetTimelineImages();
+
 	}
 	else if (k=="=_"){
 		reset_timeline();

@@ -4824,7 +4824,8 @@ if (this.appName !== FOLDER_APP){
 		open_opts.unshift(()=>{open_icon(this,{useApp:TEXT_EDITOR_APP});});
 		open_opts.unshift("Text\xa0Editor");
 	}
-	else if (this.ext === "webm" && this.appName != MEDIA_EDIT_APP){
+//	else if (this.ext === "webm" && this.appName != MEDIA_EDIT_APP){
+	else if ((this.ext == "webm" || this.ext == "mp4") && this.appName != MEDIA_EDIT_APP){
 		open_opts.unshift(()=>{open_icon(this,{useApp:MEDIA_EDIT_APP});});
 		open_opts.unshift("Video\xa0Editor");
 	}

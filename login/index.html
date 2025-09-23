@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Auth</title>
+</head>
+<body>
+
+<!--
+
+Here's a dead-simple single-file index.html for GitHub Pages using Firebase
+Auth (email/password + Google) via CDN (v10.12.5). Replace firebaseConfig with
+your project's config from Firebase console. Deploy to GitHub Pages.
+
+After auth, access database via getFirestore(app) (add import if needed).
+
+-->
+
+    <div id="login" style="display: block; text-align: center;">
+<!--
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <br><br>
+        <button id="signUpBtn">Sign Up</button>
+        <button id="signInBtn">Sign In</button>
+-->
+        <button id="googleSignInBtn" style="font-size: 24px;">Sign In with Google</button>
+<br>
+<br>
+        <button id="githubSignInBtn" style="font-size: 24px;">Sign In with GitHub</button>
+    </div>
+    <div id="authPart" style="display: none;">
+        <h1>Authenticated</h1>
+        <p id="userInfo"></p>
+        <button id="signOutBtn">Sign Out</button>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, GithubAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+
+        const firebaseConfig = {
+            // Your config: apiKey, authDomain, projectId, etc.
+		  apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
+		  authDomain: "linuxontheweb.firebaseapp.com",
+		  databaseURL: "https://linuxontheweb.firebaseio.com",
+		  projectId: "linuxontheweb",
+		  storageBucket: "linuxontheweb.firebasestorage.app",
+		  messagingSenderId: "668423415088",
+		  appId: "1:668423415088:web:979b40c704cab2322ed4f5"
+        };
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+//      const provider = new GoogleAuthProvider();
+		const googleProvider = new GoogleAuthProvider();
+		const githubProvider = new GithubAuthProvider(); // Added GitHub provider
+
+        const emailEl = document.getElementById('email');
+        const passwordEl = document.getElementById('password');
+        const loginDiv = document.getElementById('login');
+        const authDiv = document.getElementById('authPart');
+        const userInfo = document.getElementById('userInfo');
+
+        // Auth state observer
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+console.log(user);
+                loginDiv.style.display = 'none';
+                authDiv.style.display = 'block';
+                userInfo.textContent = `Welcome, ${user.email || user.displayName}`;
+            } else {
+                loginDiv.style.display = 'block';
+                authDiv.style.display = 'none';
+            }
+        });
+/*
+        // Sign up
+        document.getElementById('signUpBtn').addEventListener('click', () => {
+            createUserWithEmailAndPassword(auth, emailEl.value, passwordEl.value)
+                .then(() => alert('Signed up'))
+                .catch((error) => alert(error.message));
+        });
+
+        // Sign in
+        document.getElementById('signInBtn').addEventListener('click', () => {
+            signInWithEmailAndPassword(auth, emailEl.value, passwordEl.value)
+                .then(() => alert('Signed in'))
+                .catch((error) => alert(error.message));
+        });
+
+        // Google sign in
+        document.getElementById('googleSignInBtn').addEventListener('click', () => {
+            signInWithPopup(auth, provider)
+                .then(() => alert('Google signed in'))
+                .catch((error) => alert(error.message));
+        });
+*/
+
+
+		// Google sign in
+        document.getElementById('googleSignInBtn').addEventListener('click', () => {
+            signInWithPopup(auth, googleProvider)
+                .then(() => console.log('Google signed in'))
+                .catch((error) => console.error(error));
+        });
+
+        // GitHub sign in
+        document.getElementById('githubSignInBtn').addEventListener('click', () => {
+            signInWithPopup(auth, githubProvider)
+                .then(() => console.log('GitHub signed in'))
+                .catch((error) => console.error(error));
+        });
+
+
+        // Sign out
+        document.getElementById('signOutBtn').addEventListener('click', () => {
+            signOut(auth).then(() => alert('Signed out'));
+        });
+
+    </script>
+
+<!--
+
+
+-->
+
+</body>
+</html>
