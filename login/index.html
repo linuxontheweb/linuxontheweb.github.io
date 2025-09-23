@@ -3,7 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Firebase Auth</title>
+	<link rel="icon" href="/www/favicon.ico">
+    <title>Firebase Auth for LOTW</title>
+<style>
+.maindiv{
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+	width: 100vw;
+	align-items: center;
+	justify-content: center;
+}
+.gsi-material-button {
+  -moz-user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+  -webkit-appearance: none;
+  background-color: WHITE;
+  background-image: none;
+  border: 1px solid #747775;
+  -webkit-border-radius: 20px;
+  border-radius: 20px;
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+  color: #1f1f1f;
+  cursor: pointer;
+  font-family: 'Roboto', arial, sans-serif;
+  font-size: 14px;
+  height: 40px;
+  letter-spacing: 0.25px;
+  outline: none;
+  overflow: hidden;
+  padding: 0 12px;
+  position: relative;
+  text-align: center;
+  -webkit-transition: background-color .218s, border-color .218s, box-shadow .218s;
+  transition: background-color .218s, border-color .218s, box-shadow .218s;
+  vertical-align: middle;
+  white-space: nowrap;
+  width: auto;
+  max-width: 400px;
+  min-width: min-content;
+}
+
+.gsi-material-button .gsi-material-button-icon {
+  height: 20px;
+  margin-right: 12px;
+  min-width: 20px;
+  width: 20px;
+}
+
+.gsi-material-button .gsi-material-button-content-wrapper {
+  -webkit-align-items: center;
+  align-items: center;
+  display: flex;
+  -webkit-flex-direction: row;
+  flex-direction: row;
+  -webkit-flex-wrap: nowrap;
+  flex-wrap: nowrap;
+  height: 100%;
+  justify-content: space-between;
+  position: relative;
+  width: 100%;
+}
+
+.gsi-material-button .gsi-material-button-contents {
+  -webkit-flex-grow: 1;
+  flex-grow: 1;
+  font-family: 'Roboto', arial, sans-serif;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: top;
+}
+
+.gsi-material-button .gsi-material-button-state {
+  -webkit-transition: opacity .218s;
+  transition: opacity .218s;
+  bottom: 0;
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  right: 0;
+  top: 0;
+}
+
+.gsi-material-button:disabled {
+  cursor: default;
+  background-color: #ffffff61;
+  border-color: #1f1f1f1f;
+}
+
+.gsi-material-button:disabled .gsi-material-button-contents {
+  opacity: 38%;
+}
+
+.gsi-material-button:disabled .gsi-material-button-icon {
+  opacity: 38%;
+}
+
+.gsi-material-button:not(:disabled):active .gsi-material-button-state, 
+.gsi-material-button:not(:disabled):focus .gsi-material-button-state {
+  background-color: #303030;
+  opacity: 12%;
+}
+
+.gsi-material-button:not(:disabled):hover {
+  -webkit-box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+}
+
+.gsi-material-button:not(:disabled):hover .gsi-material-button-state {
+  background-color: #303030;
+  opacity: 8%;
+}
+
+</style>
 </head>
 <body>
 
@@ -17,7 +132,10 @@ After auth, access database via getFirestore(app) (add import if needed).
 
 -->
 
-    <div id="login" style="display: block; text-align: center;">
+    <div id="login" class="maindiv">
+<h2>Sign in to enable LOTW+Firebase integration</h2>
+<b style="font-size: 20px;">(Under construction)</b>
+<br>
 <!--
         <input type="email" id="email" placeholder="Email">
         <input type="password" id="password" placeholder="Password">
@@ -25,18 +143,52 @@ After auth, access database via getFirestore(app) (add import if needed).
         <button id="signUpBtn">Sign Up</button>
         <button id="signInBtn">Sign In</button>
 -->
-        <button id="googleSignInBtn" style="font-size: 24px;">Sign In with Google</button>
-<br>
-<br>
-        <button id="githubSignInBtn" style="font-size: 24px;">Sign In with GitHub</button>
+<!--        <button id="googleSignInBtn" style="font-size: 24px;">Sign In with Google</button>-->
+
+<button disabled id="googleSignInBtn" class="gsi-material-button">
+  <div class="gsi-material-button-state"></div>
+  <div class="gsi-material-button-content-wrapper">
+    <div class="gsi-material-button-icon">
+      <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style="display: block;">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+        <path fill="none" d="M0 0h48v48H0z"></path>
+      </svg>
     </div>
-    <div id="authPart" style="display: none;">
-        <h1>Authenticated</h1>
-        <p id="userInfo"></p>
-        <button id="signOutBtn">Sign Out</button>
+    <span class="gsi-material-button-contents">Sign in with Google</span>
+    <span style="display: none;">Sign in with Google</span>
+  </div>
+</button>
+<br>
+<button disabled id="githubSignInBtn" class="gsi-material-button">
+  <div class="gsi-material-button-state"></div>
+  <div class="gsi-material-button-content-wrapper">
+    <div class="gsi-material-button-icon">
+
+<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
+  <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.08-.731.084-.716.084-.716 1.192.085 1.816 1.29 1.816 1.29 1.063 1.816 2.784 1.29 3.465.987.108-.767.422-1.29.763-1.59-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.462-2.381 1.229-3.221-.124-.3-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.046.138 3.003.404 2.292-1.552 3.3-.931 3.3-.931.653 1.653.242 2.876.118 3.176.768.84 1.228 1.911 1.228 3.221 0 4.611-2.801 5.625-5.476 5.922.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.196-6.086 8.196-11.386 0-6.627-5.373-12-12-12z"/>
+</svg>
+    </div>
+    <span class="gsi-material-button-contents">Sign in with GitHub</span>
+    <span style="display: none;">Sign in with GitHub</span>
+  </div>
+</button>
+
+
     </div>
 
-    <script type="module">
+
+    <div id="authPart" class="maindiv" style="display: none;">
+        <h2>Authenticated for Firebase access!</h2>
+        <p id="userInfo"></p>
+        <button id="signOutBtn" class="gsi-material-button">
+    	<span class="gsi-material-button-contents">Sign out</span>
+		</button>
+    </div>
+
+    <!--script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, GithubAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
@@ -67,10 +219,21 @@ After auth, access database via getFirestore(app) (add import if needed).
             if (user) {
 console.log(user);
                 loginDiv.style.display = 'none';
-                authDiv.style.display = 'block';
-                userInfo.textContent = `Welcome, ${user.email || user.displayName}`;
+                authDiv.style.display = 'flex';
+                userInfo.innerHTML = `Welcome, ${user.email || user.displayName}`;
+let provdat = user.providerData[0];
+if (!provdat) return;
+
+if (provdat.providerId){
+	userInfo.innerHTML+= `<br>You are signed in via: ${provdat.providerId}`;
+}
+if (provdat.photoURL){
+	userInfo.innerHTML+= `<br><br><div><center><img src="${provdat.photoURL}" style="max-height: 48px;max-width: 48px;" /></center></div>`;
+}
+
+
             } else {
-                loginDiv.style.display = 'block';
+                loginDiv.style.display = 'flex';
                 authDiv.style.display = 'none';
             }
         });
@@ -115,15 +278,10 @@ console.log(user);
 
         // Sign out
         document.getElementById('signOutBtn').addEventListener('click', () => {
-            signOut(auth).then(() => alert('Signed out'));
+            signOut(auth).then(() => console.log('Signed out'));
         });
 
-    </script>
-
-<!--
-
-
--->
+    </script-->
 
 </body>
 </html>
