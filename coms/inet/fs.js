@@ -33,6 +33,7 @@ const firebaseConfig = {
 
 const FBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 const FBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+const FBASE_DB_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
 //LOGIN_BUTTONS_STR«
 const GOOGLE_BUT_ID = "googleSignInBtn";
@@ -206,26 +207,51 @@ cerr("WHERE ARE THE BUTTONS (goog_but && gh_but)?");
 //Funcs«
 
 const init_fbase = async()=>{//«
-	let initializeApp;
-	let getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, GithubAuthProvider, signOut;
-	try {
-		({ initializeApp } = await import(FBASE_APP_URL));
-		({ getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, GithubAuthProvider, signOut } =  await import(FBASE_AUTH_URL));
-	}
-	catch(e){
-		cerr(e);
-		return "Could not import!";
-	}
-	//fbase.initializeApp = initializeApp;
-	fbase.app = initializeApp(firebaseConfig);
-	fbase.getAuth=getAuth; 
-	fbase.onAuthStateChanged=onAuthStateChanged; 
-	fbase.signInWithPopup=signInWithPopup; 
-	fbase.GoogleAuthProvider=GoogleAuthProvider; 
-	fbase.GithubAuthProvider=GithubAuthProvider; 
-	fbase.signOut=signOut;
-	fbase.didInit = true;
-	return true;
+
+let initializeApp;
+let getAuth,
+	onAuthStateChanged,
+	signInWithPopup,
+	GoogleAuthProvider,
+	GithubAuthProvider,
+	signOut;
+let getDatabase,
+	ref,
+	set;
+try {
+	({ initializeApp } = await import(FBASE_APP_URL));
+	({
+		getAuth,
+		onAuthStateChanged,
+		signInWithPopup,
+		GoogleAuthProvider,
+		GithubAuthProvider,
+		signOut 
+	} =  await import(FBASE_AUTH_URL));
+	({ 
+		getDatabase,
+		ref,
+		set 
+	} = await import(FBASE_DB_URL));
+}
+catch(e){
+	cerr(e);
+	return "Could not import!";
+}
+//fbase.initializeApp = initializeApp;
+fbase.app = initializeApp(firebaseConfig);
+fbase.getAuth = getAuth; 
+fbase.onAuthStateChanged=onAuthStateChanged; 
+fbase.signInWithPopup=signInWithPopup; 
+fbase.GoogleAuthProvider=GoogleAuthProvider; 
+fbase.GithubAuthProvider=GithubAuthProvider; 
+fbase.signOut=signOut;
+fbase.getDatabase = getDatabase;
+fbase.ref = ref;
+fbase.set = set;
+fbase.didInit = true;
+return true;
+
 }//»
 
 const get_fbase_user = () =>{
@@ -264,19 +290,7 @@ let is_signin = com === "signin" || com === "in" || com === "i";
 let is_signout = com === "signout" || com === "out" || com === "o";
 let is_stat = com === "stat";
 
-if (!fbase.didInit){
-	let rv = await init_fbase();
-	if (rv !== true){
-		if (isStr(rv)){
-			this.no(rv);
-		}
-		else{
-			log(rv);
-			this.no("Unknown value returned from init_fbase() (see console)");
-		}
-		return;
-	}
-}
+if (!fbase.didInit) return this.no("Did not initialize firebase");
 
 const auth = fbase.getAuth(fbase.app);
 
@@ -407,11 +421,71 @@ this.ok();
 	}
 }//»
 
+const com_fbase = class extends Com{//«
+	async run(){
+		const{args}=this;
+		let com = args.shift();
+		if (!com) com = "init";
+		if (com == "init") {
+			if (fbase.didInit){
+				this.wrn("did already init");
+				this.ok();
+				return;
+			}
+			let rv = await init_fbase();
+			if (rv === true){
+				this.ok("init: ok");
+				return;
+			}
+			if (isStr(rv)) return this.no(rv);
+			log(rv);
+			this.no("Unknown value returned from init_fbase() (see console)");
+			return;
+		}
+		if (!fbase.didInit){
+			this.no("did not init firebase");
+			return;
+		}
+		let db = fbase.getDatabase(fbase.app);
+		if (com == "db") {
+log(db);
+this.ok();
+		}
+		else if (com == "ref") {
+let path = args.shift();
+let ref;
+if (path) ref = fbase.ref(db, path);
+else ref = fbase.ref(db);
+log(ref);
+this.ok();
+		}
+		else if (com == "set") {
+let val = args.shift();
+if (!val) val = true;
+let path = args.shift();
+let ref;
+if (path) ref = fbase.ref(db, path);
+else ref = fbase.ref(db);
+try {
+let rv = await fbase.set(ref, val);
+this.ok();
+}
+catch(e){
+this.no(e.message);
+cerr(e);
+}
+		}
+		else{
+			this.no(`'${com}': unknown command`);
+		}
+	}
+}//»
 //»
 
 const coms = {//«
 	users: com_users,
-	user: com_user
+	user: com_user,
+	fbase: com_fbase
 }//»
 
 export {coms};
