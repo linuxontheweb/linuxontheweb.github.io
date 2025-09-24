@@ -134,7 +134,6 @@ After auth, access database via getFirestore(app) (add import if needed).
 
     <div id="login" class="maindiv">
 <h2>Sign in to enable LOTW+Firebase integration</h2>
-<b style="font-size: 20px;">(Under construction)</b>
 <br>
 <!--
         <input type="email" id="email" placeholder="Email">
@@ -145,7 +144,7 @@ After auth, access database via getFirestore(app) (add import if needed).
 -->
 <!--        <button id="googleSignInBtn" style="font-size: 24px;">Sign In with Google</button>-->
 
-<button disabled id="googleSignInBtn" class="gsi-material-button">
+<button id="googleSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
   <div class="gsi-material-button-content-wrapper">
     <div class="gsi-material-button-icon">
@@ -162,7 +161,7 @@ After auth, access database via getFirestore(app) (add import if needed).
   </div>
 </button>
 <br>
-<button disabled id="githubSignInBtn" class="gsi-material-button">
+<button id="githubSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
   <div class="gsi-material-button-content-wrapper">
     <div class="gsi-material-button-icon">
@@ -188,7 +187,7 @@ After auth, access database via getFirestore(app) (add import if needed).
 		</button>
     </div>
 
-    <!--script type="module">
+    <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
         import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, GithubAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
@@ -281,7 +280,7 @@ if (provdat.photoURL){
             signOut(auth).then(() => console.log('Signed out'));
         });
 
-    </script-->
+    </script>
 
 </body>
 </html>

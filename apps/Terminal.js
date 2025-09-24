@@ -3656,7 +3656,10 @@ if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
 }//»
 async _reloadLibs(arr){//«
 	for (let mod of arr){
-		if (!this.ShellMod.allLibs[mod]) continue;
+		if (!this.ShellMod.allLibs[mod]) {
+cwarn(`Skipping: ${mod}`);
+			continue;
+		}
 		this.doOverlay(`Delete: ${mod}`);
 		await this.ShellMod.util.deleteMods([mod]);
 		await this.ShellMod.util.doImports([mod], cerr);
@@ -3665,9 +3668,9 @@ async _reloadLibs(arr){//«
 async _onreload(){//«
 //SGPEJGKH
 //Just reload the shell (if working on a devtest command)
-	await this._reloadShell();
+//	await this._reloadShell();
 
-//	await this._reloadLibs(["games.poker"]);
+	await this._reloadLibs(["inet.fs"]);
 //	await this._reloadLibs(RELOAD_LIBS);
 
 }//»

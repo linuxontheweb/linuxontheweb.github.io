@@ -1034,6 +1034,7 @@ const do_imports = async(arr, err_cb) => {//«
 		try{
 			let num = await import_coms(name);
 			out.push(`${name}(${num})`);
+log(`Imported ${num} from ${name}`);
 		}catch(e){
 			err_cb(`${name}: error importing the module`);
 cerr(e);
@@ -1311,8 +1312,11 @@ patharr.pop();
 let parpath = patharr.join("/");
 if (!parpath) return `${fname}: Permission denied`;
 let parnode = await fsapi.pathToNode(parpath);
+if (!parnode){
+	return `${fname}: invalid or unsupported path`;
+}
 let typ = parnode.type;
-if (!(parnode&&parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
+if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
 	return `${fname}: invalid or unsupported path`;
 }
 if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {

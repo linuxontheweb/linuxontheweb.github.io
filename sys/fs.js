@@ -16,7 +16,25 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
+/*9/24/25: Yesterday I implemented a sign in system in order to enable access to the Firebase
+backend, so that LOTW could have networking capabilities. Earlier this morning, I was feeling
+bad about the kind of "violence" this would entail to the LOTW system, what with a bunch of
+new/untested code. Then I focused my thoughts on this module, and resolved to figure out how
+to allow for external fs modules (e.g. sys/inet_fs.js) to mount their roots somewhere on
+the main root (@JSHFMOK), and register whatever callbacks they needed to allow for basic functions
+like populate_dirobj (@PHDEYHJ).
 
+I want to "kick off" everything with a command to mount a new filesystem type.
+The following command will mount the "users" tree onto "/" (e.g. /users), and will be of
+type "users".
+
+$ users up
+
+I just created a file in coms/inet/fs.js, so we can have a suite of tools to enable testing, 
+debugging, and eventually real-world use cases..
+
+*/
+//New Issues«
 /*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,«
 at the top-level, so we had to add them in at the dir mounting points during
 fs init. This bug screwed up the folder app.
@@ -27,7 +45,6 @@ Next:  "   "    "   " cp operations are trivial for files
 Then we need to figure out about mv'ing and cp'ing to/from FS_TYPE.
 cp is trivial for files
 »*/
-//New Issues«
 /*9/8/2024: Made /dev/shm to allow for arbitrary in-memory files and folders. Files under here
 will use a new SHM_TYPE, which tells the system not to mess with databasing (which
 means that the entire directory is "forgotten" after each page reload). This makes
@@ -97,6 +114,7 @@ const {
 	FS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
+	USERS_TYPE,
 	USERNAME,
 	HOME_PATH,
 	DESK_PATH,
@@ -402,8 +420,8 @@ globals.fs = new function() {
 //Var«
 
 let rootId;
-
 const root=(()=>{
+//JSHFMOK
 	let o = {name:"/",appName:FOLDER_APP,kids:{},treeroot:true,type:"root",sys:true,path:"/",fullpath:"/",done:true};
 	o.kids['..'] = o;
 	o.kids['.'] = o;
@@ -452,30 +470,10 @@ constructor(name, par, path){//«
 	this.par = par;
 	this.root = par.root;
 	this.icons = [];
-/*//«
-//	this.path = path;
-//this.name = name
-//	this.isDir = arg.isDir;
-//	this.isLink = arg.isLink;
-//	this.isData = arg.isData;
-//	this.isFile = arg.isFile;
-	for (let k of Object.keys(arg)){
-		this[k] = arg[k];
-		if (k=="name") this.setName(arg[k]);
-		if (k=="kids"){
-			this.kids["."]=this; 
-			this.kids[".."]=this.par;
-		}
-	}
-//»*/
 }//»
 
 setName(val){//«
 	this._name = val;
-//	if (this.isDir||this.isLink){
-//		this.baseName = val;
-//		return;
-//	}
 	let arr = getNameExt(val);
 	if (arr[1]) {
 		this.ext = arr[1];
@@ -720,11 +718,11 @@ get _file(){//«
 }//»
 class DevNode extends FSNode{//«
 
-constructor(name, par){//«
+constructor(name, par){
 	super(name, par);
 	this.isDevice = true;
 	this.appName = "Device";
-}//»
+}
 
 }//»
 
@@ -1842,7 +1840,7 @@ const mount_dir=(list, par)=>{//«
 	}
 };//»
 const try_make_site_dir=async()=>{//«
-	mount_tree("site", MOUNT_TYPE);
+//	mount_tree("site", MOUNT_TYPE);
 	let rv = await fetch(`/list.json`);
 	if (!rv.ok){
 		cwarn("Could not get list.json for /site");
@@ -1850,6 +1848,8 @@ const try_make_site_dir=async()=>{//«
 	}
 	let list = await rv.json();
 	mount_dir(list, root.kids.site);
+	root.kids.site.done = true;
+	return true;
 };//»
 
 const init = async()=>{//«
@@ -1870,7 +1870,8 @@ const init = async()=>{//«
 		root.kids[name] = ret;
 	}
 	await mkDir("/var","appdata");
-	try_make_site_dir();
+//	try_make_site_dir();
+	mount_tree("site", MOUNT_TYPE);
 	return true;
 };//»
 this.mk_user_dirs=async()=>{//«
@@ -1985,7 +1986,9 @@ const mount_tree=(name, type, pararg)=>{//«
 	dir.kids['.']=dir;
 	dir.kids['..']=root;
 	return dir;
-}//»
+}
+this.mount_tree = mount_tree;
+//»
 const make_fs_tree = async name => {//«
 	const new_root_tree = (name, type) => {//«
 /*«
@@ -2052,6 +2055,7 @@ const make_dev_tree = ()=>{//«
 };//»
 
 const populate_dirobj_by_path = async(patharg, opts={}) => {//«
+//cwarn("POPPATH:", patharg);
 	let obj = await pathToNode(patharg);
 	if (!obj) return cerr(`${patharg}: not found`);
 	if (obj.appName !== FOLDER_APP) return cerr(`${patharg}: not a directory`);
@@ -2064,6 +2068,30 @@ const populate_dirobj_by_path = async(patharg, opts={}) => {//«
 //»
 const populate_dirobj = async(dirobj, opts = {}) => {//«
 	if (dirobj.type == FS_TYPE) return populate_fs_dirobj(dirobj, opts);
+	if (!dirobj.done){
+		if (dirobj.sys == true) {
+			if (dirobj.type == MOUNT_TYPE) await try_make_site_dir();
+			else if (dirobj.type == USERS_TYPE) {
+//PHDEYHJ
+/*
+Upon calling `$ users mount` (imported from the inet.fs command library), we can
+export a default function to do this populating. If they want finer grained control
+of how to populate '/users' (with a list of known/friendly users, for example), they should
+consult the "documentation" for the `users` command.
+*/
+cwarn("POPULATE /users ...");
+			}
+			else{
+cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
+log(dirobj);
+			}
+		}
+		else{
+cwarn("Got dirobj.sys = false");
+log(dirobj);
+		}
+		
+	}
 	return dirobj.kids;
 }//»
 const populate_fs_dirobj = async(parobj, opts={}) => {//«
@@ -2081,8 +2109,6 @@ cerr(`getAll failure for id: ${dirid}`);
 let rows = rv.rows;
 for (let obj of rows){
 	let {id, name, type, value} = obj;
-//	let isLink = type == LINK_FS_TYPE;
-//	let isData = type == IDB_DATA_TYPE;
 	let isDir, isLink, isData, isFile;
 	switch(type){
 		case DIRECTORY_FS_TYPE:
@@ -2098,7 +2124,6 @@ for (let obj of rows){
 			isFile = true;
 	}
 	let kid = mk_dir_kid(parobj, name, {
-//		isDir: (type == DIRECTORY_FS_TYPE),
 		isDir,
 		isLink,
 		isData,

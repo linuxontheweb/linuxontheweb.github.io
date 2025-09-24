@@ -655,7 +655,7 @@ init(){
 	}	
 }
 async run(){
-	let{args, err: _err, term}=this;
+	let{args, term}=this;
 	let have_error=false;
 	const err=mess=>{
 		this.err(mess);
@@ -735,9 +735,9 @@ const com_cp = class extends Com{//«
 const com_mkdir = class extends Com{//«
 
 async run(){
-	let{args,term,err: _err}=this;
+	let{args,term}=this;
 	let have_error=false;
-	const err=(mess)=>{if(!mess)return;have_error=true;_err(mess);};
+	const err=(mess)=>{if(!mess)return;have_error=true;this.err(mess);};
 	if (!args.length) {
 		err("missing operand");
 	}
@@ -790,9 +790,9 @@ static getOpts(){//«
 	};
 }//»
 async run(){
-	let{args,term,err: _err}=this;
+	let{args,term}=this;
 	let have_error=false;
-	const err=(mess)=>{if(!mess)return;have_error=true;_err(mess);};
+	const err=(mess)=>{if(!mess)return;have_error=true;this.err(mess);};
 	if (!args.length) {
 		err("missing operand");
 	}
@@ -807,10 +807,10 @@ async run(){
 const com_rm = class extends Com{//«
 
 async run(){
-	let{args,term,err: _err, env, opts}=this;
+	let{args,term, env, opts}=this;
 	let have_error=false;
 	let is_recur = (opts.recursive || opts.R || opts.r);
-	const err=(mess)=>{if(!mess)return;have_error=true;_err(mess);};
+	const err=(mess)=>{if(!mess)return;have_error=true;this.err(mess);};
 	if (!args.length) {
 		err("missing operand");
 	}
@@ -843,9 +843,9 @@ async run(){
 const com_ln = class extends Com{//«
 
 async run(){
-	let{args,term,err: _err}=this;
+	let{args,term}=this;
 	const err=(mess)=>{
-		_err(mess);
+		this.err(mess);
 		this.no();
 	};
 	if (!args.length) {
@@ -910,9 +910,9 @@ async run(){
 const com_symln = class extends Com{//«
 
 async run(){
-	let{args,term,err: _err}=this;
+	let{args,term}=this;
 	const err=(mess)=>{
-		_err(mess);
+		this.err(mess);
 		this.no();
 	};
 	if (!args.length) {
@@ -995,7 +995,7 @@ sendCount(){
 }
 async run(){
 	if (this.killed) return;
-	let{args, err: _err, out}=this;
+	let{args, out}=this;
 	if (!args.length) {
 		if (this.stdin){
 			this.doWC(this.stdin);
@@ -1008,7 +1008,7 @@ async run(){
 	const err=mess=>{
 		if (!mess) return;
 		have_error=true;
-		_err(mess);
+		this.err(mess);
 	};
 	let rv = await get_file_lines_from_args(args, this.term, err);
 //	if (rv.err && rv.err.length) err(rv.err);
@@ -1165,11 +1165,11 @@ const com_purge = class extends Com{/*«*/
 async run(){
 	if (globals.read_only) return this.no("Read only");
 
-	const{err: _err, args}=this;
+	const{args}=this;
 	let have_error = false;
 	const err=(mess)=>{
 		have_error=true;
-		_err(mess);
+		this.err(mess);
 	}
 	let dir = await fsapi.getBlobDir();
 	for (let arg of args){

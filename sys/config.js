@@ -76,7 +76,7 @@ const FS_PREF = qObj.branch || DEF_BRANCH_NAME;
 const FS_TYPE= "fs";
 const MOUNT_TYPE= "mnt";
 const SHM_TYPE= "shm";
-
+const USERS_TYPE = "users";
 //Node types
 const DIR_TYPE="d",LINK_TYPE="l",BAD_LINK_TYPE="b",IDB_DATA_TYPE="i";
 
@@ -443,6 +443,7 @@ export const globals = {//«
 	FS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
+	USERS_TYPE,
 
 	DIR_TYPE,
 	LINK_TYPE,
@@ -505,7 +506,7 @@ export const globals = {//«
 	lists:{},
 	vim:{},
 	boundWins:{},
-
+	fbase:{didInit: false},
 /*Legacy code can put things here so vim can have a mode to import them as strings:«
 
 In Terminal.js: 

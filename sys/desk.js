@@ -610,7 +610,8 @@ const popup = (str, opts={}) => {//«
 		SEL: opts.sel,
 		WIN: opts.win,
 		CB: opts.cb,
-		WIDE: opts.wide
+		WIDE: opts.wide,
+		OKTXT: opts.oktxt
 	});
 }//»
 const popkey = (str, cb, opts={}) => {//«
@@ -1072,10 +1073,7 @@ this.make_popup = (arg) => {//«
 	div.nosave = true;
 	div._w = usewid;
 	div._h = def_h;
-//	div._bgcol="#fff";
-//let WIN_COL_OFF="#232333";
 	div._bgcol="#232333";
-//	div._tcol="#ccc";
 	div._pos='absolute';
 	if (!win) {
 		div._z = 10000000;
