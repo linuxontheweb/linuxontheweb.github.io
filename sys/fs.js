@@ -16,7 +16,7 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
-/*9/24/25: Yesterday I implemented a sign in system in order to enable access to the Firebase
+/*9/24/25: Yesterday I implemented a sign-in system to enable access to the Firebase«
 backend, so that LOTW could have networking capabilities. Earlier this morning, I was feeling
 bad about the kind of "violence" this would entail to the LOTW system, what with a bunch of
 new/untested code. Then I focused my thoughts on this module, and resolved to figure out how
@@ -33,7 +33,7 @@ $ users up
 I just created a file in coms/inet/fs.js, so we can have a suite of tools to enable testing, 
 debugging, and eventually real-world use cases..
 
-*/
+»*/
 //New Issues«
 /*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,«
 at the top-level, so we had to add them in at the dir mounting points during
