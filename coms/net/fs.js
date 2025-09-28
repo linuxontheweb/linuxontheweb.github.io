@@ -1264,16 +1264,22 @@ Here is the JSON:
 »*/
 
 /*9/28/25: ONLY DOING GITHUB AUTH«
+These are my actual rules:
+
+{
+	"rules": {
+		".read": false,
+		".write": false,
+		"user": {    
+			"$uid": {
+				".read": "auth != null",
+				".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
+			}
+		} 
+	}
+}
 
 So a user can write to their directory at: e.g. for me /uids/7414094
-
-"user":{	
-	$uid:{
-	".read": "auth != null",
-	".write": "auth != null && auth.provider === 'github' &&  \
-							   auth.token.firebase.identities['github.com'][0] === $uid"
-	}
-}	
 
 To map from username to id:
 https://api.github.com/users/linuxontheweb
@@ -1292,42 +1298,29 @@ questions. The idea of having a github account is the one standard way we have o
 is along these lines. The idea of letting google "users" use the site effectively allows anonymous
 users, since google (especially now that there is no G+ anymore) has no way to look anybody up.
 
-Got the github username @SUKFMGH.
-const githubUsernameRegex = /^(?!.*--)(?!-)[a-zA-Z0-9-]{1,39}(?<!-)$/;
 
-{
-".read": false,
-".write": false,
-uids:{
-
-//uid->name
-
-$uid: {
-	".read": "auth != null && auth.uid === $uid",
-	".write": "auth != null && auth.provider === 'github' && auth.uid === $uid && !data.exists()",
-	".validate": "newData().isString() && newData.val().matches(/^(?!.*--)(?!-)[a-zA-Z0-9-]{1,39}(?<!-)$/)"
-}
-
-},
-name_map:{
-	//name->uid
-	$name:{
-		".read": false,
-		".write": "auth != null && auth.provider === 'github'  && !data.exists()",
-		".validate": "newData().isString() && auth.uid === newData.val()",
-//		".validate": "newData().isString() && auth.uid === newData.val() && root.child('uids').child(auth.uid).val() === $name",
-	}
-},
-
-users:{
-
-}
-
-}
-
-//"root.child('users').child(auth.uid).child('role').val() === 'admin'",
 »*/
-/*9/27/25: Simple: If you have a user directory, you CAN'T change your username«
+/*9/27/25: To sanitize strings for Firebase keys:«
+
+JS String -> binary string -> btoa -> encodeURIComponent (for the "/" characters in btoa).
+
+function sanitizeKey(key) {
+	const encoder = new TextEncoder();
+	const data = encoder.encode(key);
+	return btoa(String.fromCharCode(...data))
+		.replace(/\+/g, '-')
+		.replace(/\//g, '_')
+		.replace(/=+$/, '');
+}
+
+function unsanitizeKey(safeKey) {
+	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
+	const decoded = atob(padded);
+	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+	return new TextDecoder().decode(bytes);
+}
+
+Simple: If you have a user directory, you CAN'T change your username
 You must delete the directory first!
 
 $ setname [u|update]
@@ -1360,25 +1353,6 @@ usersRef.orderByChild('name').equalTo('<filename>').once('value', (snapshot) => 
 	});
 });
 
-To sanitize strings for Firebase keys:
-
-JS String -> binary string -> btoa -> encodeURIComponent (for the "/" characters in btoa).
-
-function sanitizeKey(key) {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(key);
-	return btoa(String.fromCharCode(...data))
-		.replace(/\+/g, '-')
-		.replace(/\//g, '_')
-		.replace(/=+$/, '');
-}
-
-function unsanitizeKey(safeKey) {
-	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
-	const decoded = atob(padded);
-	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-	return new TextDecoder().decode(bytes);
-}
 
 »*/
 /* 9/25/25: How to *force* ref.transaction(val) to complete the write, before continuing «
@@ -1771,6 +1745,37 @@ const set_auth = (uid, login) => {//«
 //»
 //Commands«
 
+const com_ghname2id = class extends Com{//«
+
+async run(){
+const{args}=this;
+let name = args.shift();
+if (!name) return this.no("Need a github username!");
+let rv;
+try{
+rv  = await fetch(`https://api.github.com/users/${name}`)
+}
+catch(e){
+this.no(e.message);
+cerr(e)
+return;
+}
+if (!rv.ok){
+this.no("Could not fetch");
+return;
+}
+let obj = await rv.json();
+if (!(obj&&obj.id)){
+	this.no("NO OBJ && OBJ.ID FOUND?!?!? (see console)");
+	cwarn("There is no id on the object below!?!?!?");
+	log(obj);
+	return;
+}
+this.out(obj.id+"");
+this.ok();
+}
+
+}//»
 const com_user = class extends Com{//«
 /*
 This will be the interface into one's own user account
@@ -2038,7 +2043,8 @@ cerr(e);
 const coms = {//«
 	users: com_users,
 	user: com_user,
-	fbase: com_fbase
+	fbase: com_fbase,
+	ghname2id: com_ghname2id,
 }//»
 
 export {coms};

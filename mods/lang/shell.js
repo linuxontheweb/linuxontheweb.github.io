@@ -1547,7 +1547,6 @@ log(val);
 			if (val instanceof Uint8Array) val = `Uint8Array(${val.length})`;
 //			this.subLines.push(val);
 //YSHFKSOK
-//log(val);
 			val = val.replace(/\x22/g, '\\"');
 			val = val.replace(/\x27/g, "\\'");
 			this.subLines.push(val.split(" ").join("\n"));
