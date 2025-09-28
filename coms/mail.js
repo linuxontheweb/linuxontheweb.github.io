@@ -233,15 +233,19 @@ const E_NEED_NODEJS = "Commands in the 'mail' library require a local Node.js in
 const {globals}=LOTW;
 const {fs: fsapi, util}=LOTW.api;
 const {
-	DEF_PAGER_MOD_NAME,
-	DEF_EDITOR_MOD_NAME,
-	MAIL_DB_NAME,
-	MAIL_DB_VERNUM,
 	ShellMod,
-	TERM_STAT_TYPES,
 	dev_mode
 //	dev_mode
 } = globals;
+const{
+	MAIL_DB_NAME,
+	MAIL_DB_VERNUM,
+}=globals.mail;
+const{
+	DEF_PAGER_MOD_NAME,
+	DEF_EDITOR_MOD_NAME,
+	TERM_STAT_TYPES,
+}=globals.term;
 const{isStr, isNum, isObj, log, jlog, cwarn, cerr, mkdv, make}=util;
 const {Com} = ShellMod.comClasses;
 const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
@@ -955,7 +959,7 @@ class EmailUser {//«
 
 constructor(addr){//«
 
-	this.#mailDataPath = `${globals.APPDATA_PATH}/mail`;
+	this.#mailDataPath = `${globals.fs.APPDATA_PATH}/mail`;
 	this.#userDirPath = `${this.#mailDataPath}/${addr}`;
 	this.#lastUIDPath = `${this.#userDirPath}/last_uid`;
 	this.emailAddr = addr;
@@ -1218,7 +1222,7 @@ log("Upgrading...");
 async initMailDir(){//«
 	let node = await this.#mailDataPath.toNode();
 	if (!node){
-		if (!await fsapi.mkDir(globals.APPDATA_PATH, "mail")){
+		if (!await fsapi.mkDir(globals.fs.APPDATA_PATH, "mail")){
 			return `fatal: could not create the mail data directory: ${this.#mailDataPath}`;
 		}
 		return true;
@@ -1393,7 +1397,7 @@ const{args, opts, term, env}=this;
 let rv;
 
 if (opts.r){//«
-	let path = `${globals.APPDATA_PATH}/mail`;
+	let path = `${globals.fs.APPDATA_PATH}/mail`;
 	rv = await term.getch(`Recursively remove the *entire* mail directory: '${path}'? [y/n]`);
 	if (!rv) return this.no("not deleting");
 cwarn("DO DELETE");
@@ -1535,7 +1539,7 @@ const com_dbdrop = class extends Com{//«
 				this.err(`${arg}: not an installed database`);
 				continue;
 			}
-			if (arg === globals.FS_DB_NAME){
+			if (arg === globals.fs.FS_DB_NAME){
 				this.err(`${arg}: not deleting the entire filesystem!`);
 				continue;
 			}

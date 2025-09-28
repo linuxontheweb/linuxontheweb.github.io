@@ -21,23 +21,29 @@ const {
 	normPath
 } = util;
 const {
-	fs,
+	fsMod,
 	NS,
-	TEXT_EDITOR_APP,
-	LINK_APP,
-	FOLDER_APP,
-	FS_TYPE,
-	MOUNT_TYPE,
-	SHM_TYPE,
-	DEF_EDITOR_MOD_NAME,
-	DEF_PAGER_MOD_NAME,
-	SHELL_ERROR_CODES,
 //	comClasses,
 	ShellMod,
 	admin_mode
 } = globals;
+const{
+	DEF_EDITOR_MOD_NAME,
+	DEF_PAGER_MOD_NAME,
+	SHELL_ERROR_CODES,
+}=globals.term;
+const{
+	FS_TYPE,
+	MOUNT_TYPE,
+	SHM_TYPE,
+}=globals.fs;
+const{
+	TEXT_EDITOR_APP,
+	LINK_APP,
+	FOLDER_APP,
+}=globals.app;
 //const{comClasses}
-const fsapi = fs.api;
+const fsapi = fsMod.api;
 const widgets = NS.api.widgets;
 const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;

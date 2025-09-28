@@ -10,14 +10,18 @@ System-wide utility functions are defined here. Of particular interest to devlop
 import { globals } from "config";
 
 const {//«
-	ALL_EXTENSIONS,
-	EXT_TO_APP_MAP,
-	APPICONS,
 //	DEF_APP,
 	NS,
 	KC,
-	EOF
 }=globals;
+const{
+	ALL_EXTENSIONS,
+	EXT_TO_APP_MAP,
+	APPICONS,
+}=globals.app;
+const{
+	EOF
+}=globals.term;
 //»
 
 //Logging«

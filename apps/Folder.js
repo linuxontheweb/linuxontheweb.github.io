@@ -19,7 +19,13 @@ the child_window...
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 //const {getAppIcon}= capi;
-const{NS, FS_TYPE, FOLDER_APP}=globals;
+const{NS}=globals;
+const{
+    FS_TYPE,
+}=globals.fs;
+const{
+    FOLDER_APP,
+}=globals.app;
 const{poperr} = globals.widgets;
 const{make,mkdv,mk,mksp,log,cwarn,cerr, getAppIcon, isStr, jlog}=util;
 const {fs}=NS.api;
@@ -503,7 +509,7 @@ this.onresize = () => {//«
 	let icn = Main.lasticon;
 	if (!icn) return;
 	icn.iconElem.scrollIntoViewIfNeeded();
-	cur.curElem._loc(icn.iconElem.offsetLeft+globals.CUR_FOLDER_XOFF, icn.iconElem.offsetTop+globals.CUR_FOLDER_XOFF);
+	cur.curElem._loc(icn.iconElem.offsetLeft+globals.css.CUR_FOLDER_XOFF, icn.iconElem.offsetTop+globals.css.CUR_FOLDER_XOFF);
 
 }//»
 this.onappinit=(arg, prevpaths)=>{//«

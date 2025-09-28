@@ -438,36 +438,14 @@ export const globals = {//«
 	KC,
 	NS,
 	isMobile,
-	isFox: navigator.userAgent.match(/Firefox/),
-	FS_PREF,
-	FS_TYPE,
-	MOUNT_TYPE,
-	SHM_TYPE,
-	USERS_TYPE,
-
-	DIR_TYPE,
-	LINK_TYPE,
-	BAD_LINK_TYPE,
-	IDB_DATA_TYPE,
-
-	BACKGROUND_IMAGE_URL,
-	BACKGROUND_GRADIENT,
-	BEWARE_RED,
-	USERNAME,
-	CURRENT_USER,
-	EOF: {EOF: true},
-	TERM_ENV,
-	TERM_FUNCS,
-	TERM_STAT_TYPES,
-	VIM_MODES,
-	SHELL_ERROR_CODES,
-
-	HOME_PATH,
-	DESK_PATH,
-	APPDATA_PATH,
-//	PROJECT_ROOT_MOUNT_NAME,
+	MAX_TEXTAREA_BYTES,
+	ALWAYS_PREVENT,
+//	isFox: navigator.userAgent.match(/Firefox/),
+auth:{
+	github:{}
+},
+app: {
 	APPLICATIONS_MENU,
-
 	LINK_APP,
 	FOLDER_APP,
 	TEXT_APP,
@@ -481,24 +459,55 @@ export const globals = {//«
 	DEF_BIN_APP,
 	WRITING_APPS,
 	VIEWONLY_APPS,
-
-	FS_DB_NAME,
-	MAIL_DB_NAME,
-	MAIL_DB_VERNUM,
-
-	DEF_EDITOR_MOD_NAME,
-	DEF_PAGER_MOD_NAME,
-
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
 	ALL_EXTENSIONS,
 	ALL_EXTENSIONS_RE,
 	EXT_TO_APP_MAP,
+},
+css:{
+	desk:{
+		BACKGROUND_IMAGE_URL,
+		BACKGROUND_GRADIENT,
+	},
+	BEWARE_RED,
+},
+fs: {
+	FS_PREF,
+	FS_TYPE,
+	FS_DB_NAME,
+	MOUNT_TYPE,
+	SHM_TYPE,
+	USERS_TYPE,
 
-	MAX_TEXTAREA_BYTES,
+	DIR_TYPE,
+	LINK_TYPE,
+	BAD_LINK_TYPE,
+	IDB_DATA_TYPE,
+	APPDATA_PATH,
+},
+mail: {
+	MAIL_DB_NAME,
+	MAIL_DB_VERNUM,
+},
+term:{
+	EOF: {EOF: true},
+	TERM_ENV,
+	TERM_FUNCS,
+	TERM_STAT_TYPES,
+	VIM_MODES,
+	SHELL_ERROR_CODES,
+	DEF_EDITOR_MOD_NAME,
+	DEF_PAGER_MOD_NAME,
+},
+user:{
+	USERNAME,
+	CURRENT_USER,
+	HOME_PATH,
+	DESK_PATH,
+},
 
-	ALWAYS_PREVENT,
 	dbs:{},//database handles
 	mods: {},
 	apps: {},
@@ -507,6 +516,7 @@ export const globals = {//«
 	vim:{},
 	boundWins:{},
 	fbase:{didInit: false},
+
 /*Legacy code can put things here so vim can have a mode to import them as strings:«
 
 In Terminal.js: 

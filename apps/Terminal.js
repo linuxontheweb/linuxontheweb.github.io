@@ -193,28 +193,33 @@ const {//«
 } = util;//»
 const {//«
 	KC,
-	DEF_PAGER_MOD_NAME,
-	TEXT_EDITOR_APP,
-	LINK_APP,
-	FOLDER_APP,
+	fsMod,
+	isMobile,
+	dev_mode,
+	admin_mode,
+//	nodejs_mode,
+} = globals;//»
+const{
 	FS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
-
     DIR_TYPE,
     LINK_TYPE,
     BAD_LINK_TYPE,
     IDB_DATA_TYPE,
 
-	fs,
-	isMobile,
-	dev_mode,
-	admin_mode,
+}=globals.fs;
+const{
+	TEXT_EDITOR_APP,
+	LINK_APP,
+	FOLDER_APP,
+}=globals.app;
+const{
+	DEF_PAGER_MOD_NAME,
 	EOF,
-//	nodejs_mode,
 	TERM_STAT_TYPES,
 	VIM_MODES
-} = globals;//»
+}=globals.term;
 
 const TAB_KC = KC['TAB'];
 const RIGHT_KC = KC['RIGHT'];
@@ -250,11 +255,11 @@ const {
 	REF_MODE
 } = VIM_MODES;
 
-const fsapi = fs.api;
+const fsapi = fsMod.api;
 const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
 
-const HISTORY_FOLDER = `${globals.HOME_PATH}/.history`;
+const HISTORY_FOLDER = `${globals.user.HOME_PATH}/.history`;
 const HISTORY_PATH = `${HISTORY_FOLDER}/shell.txt`;
 const HISTORY_PATH_SPECIAL = `${HISTORY_FOLDER}/shell_special.txt`;
 const LEFT_KEYCODE = KC.LEFT;
@@ -310,8 +315,8 @@ this.appClass="cli";
 this.isEditor = false;
 this.isPager = false;
 this.env={
-USER: globals.CURRENT_USER,
-HOME: globals.home_path
+USER: globals.user.CURRENT_USER,
+HOME: globals.user.home_path
 };
 //this.env['USER'] = globals.CURRENT_USER;
 //this.env = globals.TERM_ENV;
@@ -428,7 +433,7 @@ this.lineColors=[];
 this.currentCutStr="";
 this.history=[];
 
-this.env['USER'] = globals.CURRENT_USER;
+this.env['USER'] = globals.user.CURRENT_USER;
 this.cur_dir = this.getHomedir();
 this.cwd = this.cur_dir;
 
@@ -878,7 +883,7 @@ objToString(obj ){//«
 async getHistory(val){//«
 	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
 	if (!fnode){
-		if (!await fsapi.mkDir(globals.HOME_PATH, ".history")){
+		if (!await fsapi.mkDir(globals.user.HOME_PATH, ".history")){
 cerr("Could not make the .history folder!");
 			return;
 		}
@@ -910,7 +915,7 @@ focusOrCopy(){//«
 
 getHomedir(){//«
 	if (this.rootState) return "/";
-	return globals.HOME_PATH;
+	return globals.user.HOME_PATH;
 }
 //»
 getBuffer(if_str){//«
@@ -3670,7 +3675,7 @@ async _onreload(){//«
 //Just reload the shell (if working on a devtest command)
 //	await this._reloadShell();
 
-	await this._reloadLibs(["inet.fs"]);
+	await this._reloadLibs(["net.fs"]);
 //	await this._reloadLibs(RELOAD_LIBS);
 
 }//»

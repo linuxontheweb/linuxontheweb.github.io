@@ -9,7 +9,6 @@ let silent_mode = false;
 //var globals = Core.globals;
 var audio_ctx = globals.audio_ctx;
 
-var fs = globals.fs;
 
 function GBEmulator(arcade_obj, romArrayBuffer, mod, canvasEl, outgain, maincb) {//«
 "use strict";
@@ -148,7 +147,6 @@ Emulator.prototype.run=function(){//«
 Emulator.prototype.getCycles = function(){return funcs._emulator_get_cycles(this.e)>>>0;};
 Emulator.prototype.renderVideo = function(startMs) {//«
 //We should only do this if there is not an interval
-//  fs.get_all_gp_events(true);
   arcade_obj.poll_gp();
 
   this.rafCancelToken = requestAnimationFrame(this.renderVideo.bind(this));

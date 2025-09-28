@@ -2,7 +2,7 @@
 //Imports«
 const NS = LOTW;
 const {globals} = NS;
-const{FS_PREF,fs,KC,ALWAYS_PREVENT}=globals;
+const{FS_PREF,fsMod: fs,KC,ALWAYS_PREVENT}=globals;
 const {log, cwarn, cerr, gbid, make, mkdv, evt2Sym, mkOverlay, center} = LOTW.api.util;
 //»
 

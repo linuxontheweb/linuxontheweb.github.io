@@ -290,11 +290,19 @@ const util = LOTW.api.util;
 //import { globals } from "config";
 const globals = LOTW.globals;
 const{
+fsMod: fs,
 dev_mode,
 ShellMod,
-TERM_STAT_TYPES,
-VIM_MODES,
+NS
 }=globals;
+const{
+	TERM_STAT_TYPES,
+	VIM_MODES,
+}=globals.term;
+const{
+	FS_TYPE,
+	SHM_TYPE,
+}=globals.fs;
 const{isArr, isStr, isEOF, log, jlog, cwarn, cerr, consoleLog: con}=LOTW.api.util;
 const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
 const {
@@ -313,7 +321,6 @@ const {
 } = VIM_MODES;
 //log(C);
 //const{log:clog, nlog: cnlog}=consoleLog;
-const{fs,FS_TYPE,SHM_TYPE,NS}=globals;
 const fsapi = fs.api;
 const {widgets} = NS.api;
 const {popkey, popok, poperr} = widgets;
@@ -1661,7 +1668,7 @@ if (!name.match(/^[-/a-z0-9_~.]+$/i)) {//«
 	render({},83);
 	return;
 }//»
-name = name.replace(/^~\x2f/, `${globals.home_path}/`);
+name = name.replace(/^~\x2f/, `${globals.user.home_path}/`);
 let path = util.normPath(name, cur_dir);
 let arr = path.split("/");
 let fname = arr.pop();
@@ -1843,7 +1850,7 @@ const handle_tab_path_completion = async(if_ctrl, gotpath, stat_com_pref)=>{//«
 			let arr = gotpath.split("/");
 			arr.shift();
 			usename = arr.pop();
-			usedir = (globals.home_path+arr.join("/")).regpath();
+			usedir = (globals.user.home_path+arr.join("/")).regpath();
 //			gotpath = gotpath.replace(/^~/, globals.home_path);
 		}
 

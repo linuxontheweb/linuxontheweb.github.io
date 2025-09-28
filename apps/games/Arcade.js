@@ -224,7 +224,7 @@ const handle_drop=(bytes,namearg)=>{
 main.ondrop = async function(e){
 	e.preventDefault();
 	e.stopPropagation();
-	let files = globals.fs.event_to_files(e);
+	let files = globals.fsMod.event_to_files(e);
 	let f = files[0];
 	if (!f) return;
 	let dat = await fsapi.getDataFromFsFile(f, "bytes");

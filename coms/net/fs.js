@@ -1263,6 +1263,70 @@ Here is the JSON:
 
 »*/
 
+/*9/28/25: ONLY DOING GITHUB AUTH«
+
+So a user can write to their directory at: e.g. for me /uids/7414094
+
+"user":{	
+	$uid:{
+	".read": "auth != null",
+	".write": "auth != null && auth.provider === 'github' &&  \
+							   auth.token.firebase.identities['github.com'][0] === $uid"
+	}
+}	
+
+To map from username to id:
+https://api.github.com/users/linuxontheweb
+
+{
+	"login": "linuxontheweb",
+	"id": 7414094,
+	"url": "https://api.github.com/users/linuxontheweb",
+	"html_url": "https://github.com/linuxontheweb",
+	"name": "Dennis Kane",
+	//...
+}
+
+I don't want to even think about who a LOTW user is when it comes to computer development 
+questions. The idea of having a github account is the one standard way we have of knowing who a user
+is along these lines. The idea of letting google "users" use the site effectively allows anonymous
+users, since google (especially now that there is no G+ anymore) has no way to look anybody up.
+
+Got the github username @SUKFMGH.
+const githubUsernameRegex = /^(?!.*--)(?!-)[a-zA-Z0-9-]{1,39}(?<!-)$/;
+
+{
+".read": false,
+".write": false,
+uids:{
+
+//uid->name
+
+$uid: {
+	".read": "auth != null && auth.uid === $uid",
+	".write": "auth != null && auth.provider === 'github' && auth.uid === $uid && !data.exists()",
+	".validate": "newData().isString() && newData.val().matches(/^(?!.*--)(?!-)[a-zA-Z0-9-]{1,39}(?<!-)$/)"
+}
+
+},
+name_map:{
+	//name->uid
+	$name:{
+		".read": false,
+		".write": "auth != null && auth.provider === 'github'  && !data.exists()",
+		".validate": "newData().isString() && auth.uid === newData.val()",
+//		".validate": "newData().isString() && auth.uid === newData.val() && root.child('uids').child(auth.uid).val() === $name",
+	}
+},
+
+users:{
+
+}
+
+}
+
+//"root.child('users').child(auth.uid).child('role').val() === 'admin'",
+»*/
 /*9/27/25: Simple: If you have a user directory, you CAN'T change your username«
 You must delete the directory first!
 
@@ -1454,26 +1518,9 @@ const FBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth
 const FBASE_DB_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
 //LOGIN_BUTTONS_STR«
-const GOOGLE_BUT_ID = "googleSignInBtn";
+//const GOOGLE_BUT_ID = "googleSignInBtn";
 const GITHUB_BUT_ID = "githubSignInBtn";
 const LOGIN_BUTTONS_STR = `
-<button name="${GOOGLE_BUT_ID}" class="gsi-material-button">
-  <div class="gsi-material-button-state"></div>
-  <div class="gsi-material-button-content-wrapper">
-    <div class="gsi-material-button-icon">
-      <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style="display: block;">
-        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
-        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
-        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
-        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
-        <path fill="none" d="M0 0h48v48H0z"></path>
-      </svg>
-    </div>
-    <span class="gsi-material-button-contents">Sign in with Google</span>
-    <span style="display: none;">Sign in with Google</span>
-  </div>
-</button>
-<br><br>
 <button name="${GITHUB_BUT_ID}" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
   <div class="gsi-material-button-content-wrapper">
@@ -1608,18 +1655,25 @@ if (!document.getElementById(GSI_CSS_ID)) {
 const button_div = mkdv();
 button_div.innerHTML = LOGIN_BUTTONS_STR;
 
-let goog_but, gh_but;
+//let goog_but, gh_but;
+let gh_but;
 let buttons = button_div.getElementsByTagName("button");
 for (let but of buttons){
+	if (but.name == GITHUB_BUT_ID){
+		gh_but = but;
+	}
+/*
 	if (but.name == GOOGLE_BUT_ID){
 		goog_but = but;
 	}
 	else if (but.name == GITHUB_BUT_ID){
 		gh_but = but;
 	}
+*/
 }
-if (!(goog_but && gh_but)){
-cerr("WHERE ARE THE BUTTONS (goog_but && gh_but)?");
+//if (!(goog_but && gh_but)){
+if (!gh_but){
+cerr("WHERE IS THE BUTTON (gh_but)?");
 }
 //»
 //Funcs«
@@ -1634,7 +1688,7 @@ let initializeApp;//App
 let getAuth,//Auth
 	onAuthStateChanged,
 	signInWithPopup,
-	GoogleAuthProvider,
+//	GoogleAuthProvider,
 	GithubAuthProvider,
 	signOut;
 
@@ -1654,7 +1708,7 @@ try {
 		getAuth,
 		onAuthStateChanged,
 		signInWithPopup,
-		GoogleAuthProvider,
+//		GoogleAuthProvider,
 		GithubAuthProvider,
 		signOut 
 	} =  await import(FBASE_AUTH_URL));
@@ -1677,7 +1731,7 @@ fbase.app = initializeApp(firebaseConfig);
 fbase.getAuth = getAuth; 
 fbase.onAuthStateChanged=onAuthStateChanged; 
 fbase.signInWithPopup=signInWithPopup; 
-fbase.GoogleAuthProvider=GoogleAuthProvider; 
+//fbase.GoogleAuthProvider=GoogleAuthProvider; 
 fbase.GithubAuthProvider=GithubAuthProvider; 
 fbase.signOut=signOut;
 fbase.getDatabase = getDatabase;
@@ -1690,7 +1744,7 @@ return true;
 
 }//»
 
-const get_fbase_user = () =>{
+const get_fbase_user = () =>{//«
 if (!fbase.didInit){
 throw new Error("NEVER CALLED init_fbase() ?!?!");
 }
@@ -1701,7 +1755,18 @@ throw new Error("NEVER CALLED init_fbase() ?!?!");
 			Y(user);
 		});
 	});
-};
+};//»
+const delete_auth = () => {//«
+	if (globals.auth.github.uid) {
+		localStorage.removeItem(`github-${globals.auth.github.uid}`);
+		delete globals.auth.github.uid;
+		delete globals.auth.github.login;
+	}
+};//»
+const set_auth = (uid, login) => {//«
+	globals.auth.github.uid = uid;
+	globals.auth.github.login = login;
+};//»
 
 //»
 //Commands«
@@ -1710,12 +1775,19 @@ const com_user = class extends Com{//«
 /*
 This will be the interface into one's own user account
 */
+static getOpts(){
+	return{
+		s:{
+			f: 1
+		}
+	};
+}
 async run(){
 
-const{args}=this;
+const{args, opts, env}=this;
 let com = args.shift();
 if (!com) com = "stat";
-
+//log(env);
 const coms = ["signin", "in", "i", "signout", "out", "o", "stat"];
 if (!coms.includes(com)){
 	this.no(`invalid command: ${com}`);
@@ -1728,14 +1800,21 @@ let is_stat = com === "stat";
 
 if (!fbase.didInit) return this.no("Did not initialize firebase");
 
+if ((is_stat || is_signin) && globals.auth.github.login && !opts.f){
+	let already = "";
+//	if (is_signin) already = " already";
+	this.ok(`you are${already} signed in as: ${globals.auth.github.login}`);
+	return;
+}
+
 const auth = fbase.getAuth(fbase.app);
 
-let cb = fbase.onAuthStateChanged(auth, async (user) => {//«
-cb();//Just doing this once, so the returned value is supposed to unregister the callback.
-if (user){
+const handle_user = async user => {//«
+
 	if (is_signout){
 		try{
 			await fbase.signOut(auth);
+			delete_auth();
 			this.ok('Signed out');
 		}
 		catch(e){
@@ -1745,31 +1824,71 @@ if (user){
 		return;
 	}
 	let already = "";
-	if (is_signin) already = " already";
-	let prov_id="";
-	if (user.providerData && user.providerData[0].providerId){
-		prov_id = ` (w/${user.providerData[0].providerId})`;
+//	if (is_signin) already = " already";
+	if (!(user.uid && user.providerData && user.providerData[0].uid)){
+		this.no("'uid' NOT FOUND in user OR user.providerData[0]! (see console)");
+cwarn("Here is the offending user object without user.id OR user.providerData[0].uid");
+log(user);
+		return;
 	}
-	this.ok(`You are${already} signed in${prov_id}`);
-	return;
-}
-if (is_stat){
+//	let gh_uid = user.providerData[0].uid;
+	let uid = user.providerData[0].uid;
+	env["GITHUB_ID"] = uid;
+//	let uid = user.uid;
+	let login = localStorage.getItem(`github-${uid}`);
+	if (login){
+log("Got github login", login);
+		set_auth(uid, login);
+		this.ok(`you are${already} signed in as: ${login}`);
+		return;
+	}
+	let rv;
+	try{
+		rv = await fetch(`https://api.github.com/user/${uid}`);
+	}
+	catch(e){
+		this.no(`fetch error: ${e.message}`);
+cerr(e);
+		return;
+	}
+	if (!rv.ok){
+		this.no(`could not fetch the user object for github uid(${uid}) from api.github.com!`);
+		return;
+	}
+	let obj = await rv.json();
+//SUKFMGH
+	login = obj.login;
+	if (!login){
+		this.no(`no login name for github uid(${uid}) on the user object received from api.github.com!`);
+		return;
+	}
+log("Setting", `github-${uid}`, login);
+	localStorage.setItem(`github-${uid}`, login);
+	set_auth(uid, login);
+	this.ok(`you are${already} signed in as: ${login}`);
+};//»
+
+let cb = fbase.onAuthStateChanged(auth, user => {//«
+cb();//Just doing this once, so the returned value is supposed to unregister the callback.
+
+if (user) return handle_user(user);
+
+delete_auth();
+
+if (!is_signin) {
 	this.ok("You are signed out");
 	return;
 }
-if (!is_signin){
-	this.ok("You are already signed out");
-	return;
-}
+
 let is_active = false;
-/*
+/*«
 Either the user clicks a sign-in button, and pop_div.cancel() will be called, or
 they will click the popup's lone button (here arbitrarily labelled "CANCEL"), and 
 the command will immediately return. 
 
 If they try clicking the popup's button after clicking one of the sign-in
 buttons, the popup's callback will return because the is_active flag is set.
-*/
+»*/
 let pop_div = popup(button_div, {//«
 	cb: ()=>{
 		if (is_active) return;
@@ -1779,31 +1898,25 @@ let pop_div = popup(button_div, {//«
 	}, 
 	oktxt: "CANCEL"
 });//»
-goog_but.onclick=async()=>{//«
-	is_active = true;
-	goog_but.onclick = null;
-	gh_but.onclick = null;
-	try {
-		await fbase.signInWithPopup(auth, new fbase.GoogleAuthProvider());
-		this.ok("Signed in with Google!");
-	}
-	catch(e){
-		cerr(e);
-		this.no(e.message);
-	}
-	pop_div.cancel();
-};//»
 gh_but.onclick=async()=>{//«
 	is_active = true;
 	gh_but.onclick = null;
-	goog_but.onclick = null;
+//	goog_but.onclick = null;
 	try {
 		await fbase.signInWithPopup(auth, new fbase.GithubAuthProvider());
-		this.ok("Signed in with GitHub!");
 	}
 	catch(e){
 		cerr(e);
 		this.no(e.message);
+		pop_div.cancel();
+		return;
+	}
+	let user = await get_fbase_user();
+	if (user){
+		handle_user(user);
+	}
+	else{
+		this.no(`Failed to get user object after after signing in`);
 	}
 	pop_div.cancel();
 };//»
@@ -1899,9 +2012,9 @@ this.ok();
 ".write": "newData.child('timestamp').val() > now - 60000"
 //".write": "newData.child('timestamp').val() > now - 60000 || !data.exists()"//???
 */
+let path = args.shift();
 let val = args.shift();
 if (!val) val = true;
-let path = args.shift();
 let ref;
 if (path) ref = fbase.ref(db, path);
 else ref = fbase.ref(db);
@@ -1929,4 +2042,38 @@ const coms = {//«
 }//»
 
 export {coms};
+
+/*«
+goog_but.onclick=async()=>{//«
+	is_active = true;
+	goog_but.onclick = null;
+	gh_but.onclick = null;
+	try {
+		await fbase.signInWithPopup(auth, new fbase.GoogleAuthProvider());
+		this.ok("Signed in with Google!");
+	}
+	catch(e){
+		cerr(e);
+		this.no(e.message);
+	}
+	pop_div.cancel();
+};//»
+<button name="${GOOGLE_BUT_ID}" class="gsi-material-button">
+  <div class="gsi-material-button-state"></div>
+  <div class="gsi-material-button-content-wrapper">
+    <div class="gsi-material-button-icon">
+      <svg version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" xmlns:xlink="http://www.w3.org/1999/xlink" style="display: block;">
+        <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"></path>
+        <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"></path>
+        <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"></path>
+        <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"></path>
+        <path fill="none" d="M0 0h48v48H0z"></path>
+      </svg>
+    </div>
+    <span class="gsi-material-button-contents">Sign in with Google</span>
+    <span style="display: none;">Sign in with Google</span>
+  </div>
+</button>
+<br><br>
+»*/
 

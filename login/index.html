@@ -43,7 +43,7 @@
   white-space: nowrap;
   width: auto;
   max-width: 400px;
-  min-width: min-content;
+  min-width: 200px;
 }
 
 .gsi-material-button .gsi-material-button-icon {
@@ -132,17 +132,22 @@ After auth, access database via getFirestore(app) (add import if needed).
 
 -->
 
-    <div id="login" class="maindiv">
+<div id="status" class="maindiv" style="display: flex;">
+<h2>Checking authentication status...</h2>
+<h3>Please be patient!</h3>
+</div>
+<div id="login" class="maindiv" style="display: none;">
 <h2>Sign in to enable LOTW+Firebase integration</h2>
 <br>
 <!--
-        <input type="email" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <br><br>
-        <button id="signUpBtn">Sign Up</button>
-        <button id="signInBtn">Sign In</button>
--->
-<!--        <button id="googleSignInBtn" style="font-size: 24px;">Sign In with Google</button>-->
+<div>
+<input type="email" id="email" placeholder="Email">
+<input type="password" id="password" placeholder="Password">
+<br><br>
+<button id="signUpBtn">Sign Up</button>
+<button id="signInBtn">Sign In</button>
+<br><br>
+</div>
 
 <button id="googleSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
@@ -160,7 +165,10 @@ After auth, access database via getFirestore(app) (add import if needed).
     <span style="display: none;">Sign in with Google</span>
   </div>
 </button>
+
 <br>
+
+-->
 <button id="githubSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
   <div class="gsi-material-button-content-wrapper">
@@ -169,15 +177,36 @@ After auth, access database via getFirestore(app) (add import if needed).
 <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">
   <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.08-.731.084-.716.084-.716 1.192.085 1.816 1.29 1.816 1.29 1.063 1.816 2.784 1.29 3.465.987.108-.767.422-1.29.763-1.59-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.462-2.381 1.229-3.221-.124-.3-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.046.138 3.003.404 2.292-1.552 3.3-.931 3.3-.931.653 1.653.242 2.876.118 3.176.768.84 1.228 1.911 1.228 3.221 0 4.611-2.801 5.625-5.476 5.922.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.196-6.086 8.196-11.386 0-6.627-5.373-12-12-12z"/>
 </svg>
+
     </div>
     <span class="gsi-material-button-contents">Sign in with GitHub</span>
     <span style="display: none;">Sign in with GitHub</span>
   </div>
 </button>
+<!--
+<br>
+<button id="facebookSignInBtn" class="gsi-material-button">
+  <div class="gsi-material-button-state"></div>
+  <div class="gsi-material-button-content-wrapper">
+    <div class="gsi-material-button-icon">
 
+<svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" xml:space="preserve" viewBox="0 0 40 40">
+  <linearGradient id="a" x1="-277.375" x2="-277.375" y1="406.6018" y2="407.5726" gradientTransform="matrix(40 0 0 -39.7778 11115.001 16212.334)" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0062e0"/>
+    <stop offset="1" stop-color="#19afff"/>
+  </linearGradient>
+  <path fill="url(#a)" d="M16.7 39.8C7.2 38.1 0 29.9 0 20 0 9 9 0 20 0s20 9 20 20c0 9.9-7.2 18.1-16.7 19.8l-1.1-.9h-4.4l-1.1.9z"/>
+  <path fill="#fff" d="m27.8 25.6.9-5.6h-5.3v-3.9c0-1.6.6-2.8 3-2.8H29V8.2c-1.4-.2-3-.4-4.4-.4-4.6 0-7.8 2.8-7.8 7.8V20h-5v5.6h5v14.1c1.1.2 2.2.3 3.3.3 1.1 0 2.2-.1 3.3-.3V25.6h4.4z"/>
+</svg>
 
     </div>
+    <span class="gsi-material-button-contents">Sign in with Facebook</span>
+    <span style="display: none;">Sign in with Facebook</span>
+  </div>
+</button>
+-->
 
+    </div>
 
     <div id="authPart" class="maindiv" style="display: none;">
         <h2>Authenticated for Firebase access!</h2>
@@ -189,7 +218,16 @@ After auth, access database via getFirestore(app) (add import if needed).
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-        import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, GoogleAuthProvider, signInWithPopup, GithubAuthProvider } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+        import { getAuth, 
+//			createUserWithEmailAndPassword, 
+//			signInWithEmailAndPassword, 
+			onAuthStateChanged, 
+			signOut, 
+//			GoogleAuthProvider, 
+			signInWithPopup, 
+			GithubAuthProvider,
+//			FacebookAuthProvider 
+		} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
         const firebaseConfig = {
             // Your config: apiKey, authDomain, projectId, etc.
@@ -204,22 +242,25 @@ After auth, access database via getFirestore(app) (add import if needed).
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 //      const provider = new GoogleAuthProvider();
-		const googleProvider = new GoogleAuthProvider();
-		const githubProvider = new GithubAuthProvider(); // Added GitHub provider
+//		const googleProvider = new GoogleAuthProvider();
+		const githubProvider = new GithubAuthProvider(); 
+//		const facebookProvider = new FacebookAuthProvider(); 
 
         const emailEl = document.getElementById('email');
         const passwordEl = document.getElementById('password');
         const loginDiv = document.getElementById('login');
+        const statusDiv = document.getElementById('status');
         const authDiv = document.getElementById('authPart');
         const userInfo = document.getElementById('userInfo');
 
         // Auth state observer
         onAuthStateChanged(auth, (user) => {
+			statusDiv.style.display = 'none';
             if (user) {
 console.log(user);
                 loginDiv.style.display = 'none';
                 authDiv.style.display = 'flex';
-                userInfo.innerHTML = `Welcome, ${user.email || user.displayName}`;
+                userInfo.innerHTML = `Welcome, ${user.displayName || user.email}`;
 let provdat = user.providerData[0];
 if (!provdat) return;
 
@@ -229,8 +270,13 @@ if (provdat.providerId){
 if (provdat.photoURL){
 	userInfo.innerHTML+= `<br><br><div><center><img src="${provdat.photoURL}" style="max-height: 48px;max-width: 48px;" /></center></div>`;
 }
-
-
+let email = user.email || provdat.email;
+if (!email){
+console.error("No email!");
+}
+else {
+console.log(`Got email: ${email}`);
+}
             } else {
                 loginDiv.style.display = 'flex';
                 authDiv.style.display = 'none';
@@ -250,16 +296,6 @@ if (provdat.photoURL){
                 .then(() => alert('Signed in'))
                 .catch((error) => alert(error.message));
         });
-
-        // Google sign in
-        document.getElementById('googleSignInBtn').addEventListener('click', () => {
-            signInWithPopup(auth, provider)
-                .then(() => alert('Google signed in'))
-                .catch((error) => alert(error.message));
-        });
-*/
-
-
 		// Google sign in
         document.getElementById('googleSignInBtn').addEventListener('click', () => {
             signInWithPopup(auth, googleProvider)
@@ -267,13 +303,21 @@ if (provdat.photoURL){
                 .catch((error) => console.error(error));
         });
 
+*/
+
         // GitHub sign in
         document.getElementById('githubSignInBtn').addEventListener('click', () => {
             signInWithPopup(auth, githubProvider)
                 .then(() => console.log('GitHub signed in'))
                 .catch((error) => console.error(error));
         });
-
+/*
+        document.getElementById('facebookSignInBtn').addEventListener('click', () => {
+            signInWithPopup(auth, facebookProvider)
+                .then(() => console.log('Facebook signed in'))
+                .catch((error) => console.error(error));
+        });
+*/
 
         // Sign out
         document.getElementById('signOutBtn').addEventListener('click', () => {

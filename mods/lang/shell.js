@@ -107,9 +107,21 @@ refreshing the shell and the terminal at the same time...
 const NS = LOTW;
 const {globals, Desk} = LOTW;
 const {
+
+	dev_mode,
+//	nodejs_mode,
+	fsMod
+} = globals;
+const{
 	TEXT_EDITOR_APP,
 	LINK_APP,
 	FOLDER_APP,
+}=globals.app;
+const{
+	EOF,
+	SHELL_ERROR_CODES,
+}=globals.term;
+const{
 	FS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
@@ -118,13 +130,7 @@ const {
 	LINK_TYPE,
 	BAD_LINK_TYPE,
 	IDB_DATA_TYPE,
-
-	SHELL_ERROR_CODES,
-	dev_mode,
-	EOF,
-//	nodejs_mode,
-	fs
-} = globals;
+}=globals.fs;
 const util = LOTW.api.util;
 const {
 	strNum,
@@ -151,7 +157,7 @@ const {
 	sleep
 } = util;
 
-const fsapi = fs.api;
+const fsapi = fsMod.api;
 
 //let ALLOW_REDIR_CLOBBER = false;
 let ALLOW_REDIR_CLOBBER = true;
@@ -3657,7 +3663,7 @@ continue;
 tildeExpansion(){//«
 	const {val} = this;
 	let parts = this.assignmentParts;
-	let home_path = globals.HOME_PATH;
+	let home_path = globals.user.HOME_PATH;
 	let home_path_len = home_path.length;
 	if (!parts){
 		if (val[0]!=="~") return;

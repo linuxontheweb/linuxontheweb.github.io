@@ -7242,7 +7242,7 @@ return nes;
 
 this.init = function(appobj, buf, canvas, gain, cb){
 	num_frames = 0;
-	if (!globals.emylators) globals.emulators = {};
+	if (!globals.emulators) globals.emulators = {};
 	let nes = globals.emulators.nes;
 	if (nes) nes.kill();
 	else {

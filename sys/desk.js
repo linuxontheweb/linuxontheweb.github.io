@@ -65,16 +65,9 @@ const {globals} = NS;
 const{
 	isMobile,
 	qObj,
-		
-	FS_PREF,
-	FS_TYPE, 
-	MOUNT_TYPE,
-	SHM_TYPE,
-
-	USERNAME,
-	HOME_PATH,
-	DESK_PATH,
-
+	ALWAYS_PREVENT,
+	KC
+/*«
 	FOLDER_APP,
 	LINK_APP,
 	TEXT_APP,
@@ -92,14 +85,48 @@ const{
 	TEXT_EDITOR_APP,
 	DEF_BIN_APP,
 	WRITING_APPS,
-
+»*/
+}=globals;
+const{
+	USERNAME,
+	HOME_PATH,
+	DESK_PATH,
+}=globals.user;
+const{
+	FS_PREF,
+	FS_TYPE, 
+	MOUNT_TYPE,
+	SHM_TYPE,
+}=globals.fs;
+const{
+	APPLICATIONS_MENU,
+	LINK_APP,
+	FOLDER_APP,
+	TEXT_APP,
+	TERMINAL_APP,
+	MEDIA_APP,
+	MEDIA_EDIT_APP,
+	IMAGE_APP,
+	MEDIA_APPS,
+	APPICONS,
+	TEXT_EDITOR_APP,
+	DEF_BIN_APP,
+	WRITING_APPS,
+	VIEWONLY_APPS,
+	TEXT_EXTENSIONS,
+	MEDIA_EXTENSIONS,
+	IMAGE_EXTENSIONS,
+	ALL_EXTENSIONS,
+	ALL_EXTENSIONS_RE,
+	EXT_TO_APP_MAP,
+}= globals.app;
+const{
 	BACKGROUND_IMAGE_URL,
 	BACKGROUND_GRADIENT,
+}=globals.css.desk;
+const{
 	BEWARE_RED,
-//	DESK_GRADIENT,
-	ALWAYS_PREVENT,
-	KC
-}=globals;
+}=globals.css;
 
 //»
 const {//«
@@ -1374,7 +1401,7 @@ globals.api.wdg = api;
 //FS«
 //const fs = new fsmod();
 //globals.fs = fs;
-const fs = globals.fs;
+const fs = globals.fsMod;
 const fsapi = fs.api;
 const{pathToNode}=fsapi;
 //»
@@ -1563,8 +1590,8 @@ let TASKBAR_OP=1;
 //In Folder.js, Main._pad= 5. We need this value here so the icon selection cursor will line up right.
 let CUR_FOLDER_XOFF = 5;
 let CUR_FOLDER_YOFF = 5;
-globals.CUR_FOLDER_XOFF=CUR_FOLDER_XOFF;
-globals.CUR_FOLDER_YOFF=CUR_FOLDER_YOFF;
+globals.css.CUR_FOLDER_XOFF=CUR_FOLDER_XOFF;
+globals.css.CUR_FOLDER_YOFF=CUR_FOLDER_YOFF;
 
 let DEF_BG_IMG_OP = 0.3;
 let DESK_ICON_BOR = "2px solid rgba(255,255,64,0.66)";
@@ -1667,7 +1694,7 @@ Object.defineProperty(this,"WINS",{get:()=>windows});
 
 //Menu«
 
-const open_home_folder=()=>{open_file_by_path(globals.home_path);};
+const open_home_folder=()=>{open_file_by_path(globals.user.home_path);};
 const open_terminal = () => {
 	open_app(TERMINAL_APP, {force: true});
 };
@@ -6531,8 +6558,8 @@ throw new Error("WHAT THE IN THE EVERLIVING CRAP IS THIS?????");
 const Taskbar = class {
 
 constructor(){/*«*/
-	this.lstHidden = `taskbar_hidden:${globals.current_user}`;
-	this.lstExpert = `taskbar_expert:${globals.current_user}`;
+	this.lstHidden = `taskbar_hidden:${globals.user.CURRENT_USER}`;
+	this.lstExpert = `taskbar_expert:${globals.user.CURRENT_USER}`;
 	this.makeDOM();
 	this.addListeners();
 	this.init();
@@ -7678,7 +7705,7 @@ cerr(mess);
 //DWEUNFKL
 api.saveAs=(win, ext)=>{//«
 	return new Promise(async(Y,N)=>{
-		open_file_by_path(globals.home_path, {
+		open_file_by_path(globals.user.home_path, {
 			winArgs: {bottomPad: SAVEAS_BOTTOM_HGT},
 			saver:{
 				ext, 
@@ -8326,7 +8353,7 @@ const dokeyup = function(e) {//«
 	CUR.set(0);
 	if (!isMobile && !qObj.nocursor && globals.is_local) CUR.on(true);
 	await reloadIcons();
-	if (localStorage[`taskbar_hidden:${globals.current_user}`]) taskbar.hide();
+	if (localStorage[`taskbar_hidden:${globals.user.CURRENT_USER}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
 
 //	if (dev_mode && !(qObj["no-desk-init"])) {

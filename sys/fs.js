@@ -106,7 +106,7 @@ const {
 } = util;
 
 //const sleep=()=>{return new Promise((Y,N)=>{});}
-
+/*
 const {
 //	PROJECT_ROOT_MOUNT_NAME,
 	FS_DB_NAME,
@@ -118,13 +118,35 @@ const {
 	USERNAME,
 	HOME_PATH,
 	DESK_PATH,
+} = globals;
+*/
+const {
+
 	LINK_APP,
 	FOLDER_APP,
 	TEXT_EXTENSIONS,
 	ALL_EXTENSIONS_RE
-} = globals;
 
-
+} = globals.app;
+const {
+    FS_PREF,
+    FS_TYPE,
+    FS_DB_NAME,
+    MOUNT_TYPE,
+    SHM_TYPE,
+    USERS_TYPE,
+    DIR_TYPE,
+    LINK_TYPE,
+    BAD_LINK_TYPE,
+    IDB_DATA_TYPE,
+    APPDATA_PATH,
+} = globals.fs;
+const {
+    USERNAME,
+    CURRENT_USER,
+    HOME_PATH,
+    DESK_PATH,
+} = globals.user;
 //»
 
 //Var«
@@ -139,7 +161,7 @@ const DEF_NODE_ID = 1;
 const DBSIZE = 10*1024*1024;
 const FIRST_BLOB_ID = 100;
 const NULL_BLOB_FS_TYPE="n";
-const IDB_DATA_TYPE="i";
+//const IDB_DATA_TYPE="i";
 const DIRECTORY_FS_TYPE="d";
 const LINK_FS_TYPE="l";
 const FILE_FS_TYPE="f";
@@ -414,7 +436,7 @@ cwarn("BLOCKED");
 //FS«
 
 //new FS(){«
-globals.fs = new function() {
+globals.fsMod = new function() {
 //»
 
 //Var«
@@ -1024,7 +1046,7 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 		errcb(`not removing directory type: '${rtype}': ${path}`);
 		return;
 	}
-	if (NS.Desk && (path == globals.desk_path)) {
+	if (NS.Desk && (path == globals.user.desk_path)) {
 		errcb(`not removing the working desktop path: ${path}`);
 		return;
 	} 
@@ -1219,7 +1241,7 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${path}: not (currently) copying directories`});
 	}
-	else if (isfolder && path == globals.desk_path){
+	else if (isfolder && path == globals.user.desk_path){
 		mvarr.push({ERR:`not modifying the working desktop path: ${path}`});
 	}
 	else mvarr.push([path, srcret]);
@@ -1875,12 +1897,12 @@ const init = async()=>{//«
 	return true;
 };//»
 this.mk_user_dirs=async()=>{//«
-	let home_path = `/home/${globals.CURRENT_USER}`;
-	globals.home_path = home_path;
-	globals.desk_path = `${home_path}/Desktop`.regpath();
+	let home_path = `/home/${globals.user.CURRENT_USER}`;
+	globals.user.home_path = home_path;
+	globals.user.desk_path = `${home_path}/Desktop`.regpath();
 	try{
 		await mkDir(home_path, null, {root: true, noMakeIcon: true});
-		await mkDir(globals.desk_path, null, {root: true, noMakeIcon: true});
+		await mkDir(globals.user.desk_path, null, {root: true, noMakeIcon: true});
 		await popDirByPath('/home');
 		await popDirByPath(home_path);
 	} catch (e) {
@@ -2595,7 +2617,7 @@ const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
 			else if (isStr(perm)) {
 				if (is_root) return true;
 //				let checkname = userarg || Core.get_username();
-				let checkname = userarg || globals.CURRENT_USER;
+				let checkname = userarg || globals.user.CURRENT_USER;
 				return (checkname === perm);
 //				return (Core.get_username() === perm);
 			}
