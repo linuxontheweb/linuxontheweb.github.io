@@ -16,6 +16,16 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
+/*9/29/25: Proposing: NetNode
+
+ Let's put a new kind of FSNode in here (NetNode @TWKMJORH) devoted to
+network-based file systems. I think it is fundamentally important for the logic
+of any file system node to *finally* through this module.  The new node will
+need to import the logic from the various modules that actually implement all
+of the operations that are needed to interact with the given backend in
+question (we DON'T want that messy sort of logic "polluting" this file).
+
+*/
 /*9/24/25: Yesterday I implemented a sign-in system to enable access to the Firebase«
 backend, so that LOTW could have networking capabilities. Earlier this morning, I was feeling
 bad about the kind of "violence" this would entail to the LOTW system, what with a bunch of
@@ -747,6 +757,9 @@ constructor(name, par){
 }
 
 }//»
+//TWKMJORH
+//class NetNode extends FSNode{
+//}
 
 const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof LinkNode || n instanceof DataNode || n instanceof DevNode);};
 util.isNode = isNode;

@@ -379,6 +379,7 @@ QueryConstraint
 //»
 //»
 function(query, ...)// get, query, off, onValue, onChild(Added|Changed|Moved|Removed)«
+
 get(query)//«
 Gets the most up-to-date result for this query.
 
@@ -692,13 +693,20 @@ export declare function runTransaction(ref: DatabaseReference, transactionUpdate
 Parameters
 Parameter	Type	Description
 ref	DatabaseReference	The location to atomically modify.
-transactionUpdate	(currentData: any) => unknown	A developer-supplied function which will be passed the current data stored at this location (as a JavaScript object). The function should return the new value it would like written (as a JavaScript object). If undefined is returned (i.e. you return with no arguments) the transaction will be aborted and the data at this location will not be modified.
+
+transactionUpdate	(currentData: any) => unknown	A developer-supplied function which will be 
+passed the current data stored at this location (as a JavaScript object). 
+The function should return the new value it would like written (as a JavaScript object). 
+If undefined is returned (i.e. you return with no arguments) the transaction will be aborted 
+and the data at this location will not be modified.
+
 options	TransactionOptions	An options object to configure transactions.
 Returns:
 
 Promise<TransactionResult>
 
 A Promise that can optionally be used instead of the onComplete callback to handle success and failure.
+
 //»
 set(ref, value)//«
 Writes data to this Database location.
@@ -817,6 +825,7 @@ Returns:
 Promise<void>
 
 Resolves when update on server is complete.
+
 //»
 //»
 function(value, ...)// end(At|Before), start(At|Before), equalTo«
@@ -1155,7 +1164,6 @@ db.ref("baskets").orderByChild("owner").equalTo(auth.currentUser.uid).on("value"
 db.ref("baskets").on("value", cb)
 
 
-
 messages: {
 	".read": "query.orderByKey && query.limitToFirst <= 1000"
 }
@@ -1263,6 +1271,44 @@ Here is the JSON:
 
 »*/
 
+/*9/29/25: Just need to work out the details of how files/folders are represented«
+on the backend, and how they may be queried. Then we can package these functions
+into an api that can be exported to sys/fs.js, so that the NetNode may be finally
+in control of how everything flows through the lOTW system.
+
+"$uid":{
+	"1234567":{
+		type: "d",
+		size: 2,
+		list: {
+			vals: ["dir1", "file1.txt"],
+			details: [-1, 100],
+		},
+		kids: {
+			"ZmlsZTEudHh0" : {// key=sanitize("file1.txt")
+				type: "f",
+				size: 100,
+				created:  1234567890.
+				modified: 1234901234.
+				enc: "utf8",
+				value : "This is the thing in the time of the place of file1!?!?!"
+			},
+			"ZGlyMQ":{// key=sanitize("dir1")
+				type: "d",
+				size: <list.vals.length>,
+				list: {
+					vals: [...],
+					details: [...]
+				},
+				kids: {
+					//...
+				}
+			}
+		}
+	}
+}
+
+»*/
 /*9/28/25: ONLY DOING GITHUB AUTH«
 These are my actual rules:
 
@@ -1270,6 +1316,12 @@ These are my actual rules:
 	"rules": {
 		".read": false,
 		".write": false,
+		"home_dirs": {
+			"$uid": {
+				".read": "auth != null",
+				".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
+			}
+		},
 		"user": {    
 			"$uid": {
 				".read": "auth != null",
@@ -1471,12 +1523,14 @@ coms/fs.js (for file moving, copying, etc).
 const{globals}=LOTW;
 const {USERS_TYPE, fs, fbase}=globals;
 const {Com} = globals.ShellMod.comClasses;
-const{mkdv, mk, isArr,isStr,isEOF,log,jlog,cwarn,cerr}=LOTW.api.util;
+const{mkdv, mk, isArr,isStr,isEOF,isErr,log,jlog,cwarn,cerr}=LOTW.api.util;
 const{root, mount_tree}=fs;
 const {popup} = globals.popup;
 
 //»
 //Var«
+
+//Firebase«
 const firebaseConfig = {
 	apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
 	authDomain: "linuxontheweb.firebaseapp.com",
@@ -1490,6 +1544,7 @@ const firebaseConfig = {
 const FBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 const FBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 const FBASE_DB_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
+//»
 
 //LOGIN_BUTTONS_STR«
 //const GOOGLE_BUT_ID = "googleSignInBtn";
@@ -1617,8 +1672,32 @@ const GSI_CSS_STR = `
 }
 `;
 //»
+
 const GSI_CSS_ID = "gsi_css";
+
+const NEW_DIR = {
+	type: "d",
+	size: 0,
+	list: {
+		names: [false],
+		vals: [false]
+	},
+	kids:{
+		"%init": true
+	}
+};
+Object.freeze(NEW_DIR);
+Object.freeze(NEW_DIR.list);
+Object.freeze(NEW_DIR.kids);
+
+const NEW_FILE = {type: "f", size: 0};
+Object.freeze(NEW_FILE);
+
+const FBASE_DIRECTORY_VAL = -1;
+const DEF_TRANS_DELAY = 5000;
+
 //»
+
 //DOM«
 if (!document.getElementById(GSI_CSS_ID)) {
 	let sty = mk("style");
@@ -1652,10 +1731,23 @@ cerr("WHERE IS THE BUTTON (gh_but)?");
 //»
 //Funcs«
 
+const sanitizeKey=(key) => {//«
+	const encoder = new TextEncoder();
+	const data = encoder.encode(key);
+	let b64;
+	if (data.toBase64) b64 = data.toBase64();
+	else b64 = btoa(String.fromCharCode(...data));
+	return b64.replace(/\+/g, '-')
+		.replace(/\x2f/g, '_')
+		.replace(/=+$/, '');
+}//»
+const unsanitizeKey=(safeKey)=>{//«
+	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
+	const decoded = atob(padded);
+	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+	return new TextDecoder().decode(bytes);
+};//»
 const init_fbase = async()=>{//«
-
-
-
 
 let initializeApp;//App
 
@@ -1669,6 +1761,7 @@ let getAuth,//Auth
 let getDatabase,//Database
 	ref,
 	set,
+	get,
 	runTransaction,
 	enableLogging;
 
@@ -1692,6 +1785,7 @@ try {
 		getDatabase,
 		ref,
 		set,
+		get,
 		runTransaction,
 		enableLogging
 	} = await import(FBASE_DB_URL));
@@ -1711,13 +1805,13 @@ fbase.signOut=signOut;
 fbase.getDatabase = getDatabase;
 fbase.ref = ref;
 fbase.set = set;
+fbase.get = get;
 fbase.runTransaction = runTransaction;
 fbase.enableLogging = enableLogging;
 fbase.didInit = true;
 return true;
 
 }//»
-
 const get_fbase_user = () =>{//«
 if (!fbase.didInit){
 throw new Error("NEVER CALLED init_fbase() ?!?!");
@@ -1729,6 +1823,25 @@ throw new Error("NEVER CALLED init_fbase() ?!?!");
 			Y(user);
 		});
 	});
+};//»
+const get_ref = (path) => {//«
+	let db = fbase.getDatabase(fbase.app);
+	let ref;
+	if (path) ref = fbase.ref(db, path);
+	else ref = fbase.ref(db);
+	return ref;
+};//»
+const get_value = async(ref)=>{//«
+
+let rv;
+try{
+	rv = await fbase.get(ref);
+	return rv;
+}
+catch(e){
+	return e;
+}
+
 };//»
 const delete_auth = () => {//«
 	if (globals.auth.github.uid) {
@@ -1742,9 +1855,185 @@ const set_auth = (uid, login) => {//«
 	globals.auth.github.login = login;
 };//»
 
-//»
-//Commands«
+const run_transaction = (ref, value, delay=DEF_TRANS_DELAY) => {//«
+// * Executes a Firebase transaction with a timeout, ensuring a pending write is
+// * aborted if it hasn't completed within the delay.
+// *
+// * @param {firebase.database.Reference} ref The database reference.
+// * @param {*} value The value to set.
+// * @param {number} delay The timeout duration in milliseconds.
+// * @returns {Promise<void>} A promise that resolves when the transaction
+// *   completes or rejects if it fails or times out.
 
+return new Promise(async(resolve, reject) => {
+	// Flag to track if the timeout has already occurred
+	let timedOut = false;
+	let timer;
+	// Reject the promise and abort the transaction on timeout
+	const onTimeout = () => {
+		timedOut = true;
+//		ref.transaction(() => undefined); // Send an abort command to the queue
+		fbase.runTransaction(ref, ()=>{return undefined;});
+		resolve(new Error('Firebase write operation timed out.'));
+	};
+
+	// Start the timeout timer
+	timer = setTimeout(onTimeout, delay);
+	let result;
+	try {
+		result = await fbase.runTransaction(ref, curVal=>{
+			// If the timer has already fired, abort the transaction
+			if (timedOut) {
+				return undefined; // Returning undefined aborts the transaction
+			}
+			return value;
+		});
+		clearTimeout(timer);
+		if (result.committed) {
+//log('Transaction successfully committed.');
+			resolve(true);
+		} 
+		else {
+			// If the transaction aborted for a reason other than our timeout
+//log('Transaction aborted by another process.');
+			resolve(new Error('Transaction aborted by another client.'));
+		}
+	}
+	catch(error){
+		clearTimeout(timer);
+cerr(error);
+		resolve(error);
+	}
+/*«
+	ref.transaction((currentValue) => {
+	}).then((result) => {
+		// Clear the timer if the transaction completes for any reason
+	}).catch((error) => {
+		// Clear the timer if the transaction fails
+		clearTimeout(timer);
+		reject(error);
+	});
+»*/
+});
+}//»
+const fbase_prep = ()=> {//«
+	if (!fbase.didInit){
+		return "did not init firebase";
+	}
+	let gh_id = globals.auth.github.uid;
+	if (!gh_id){
+		return "please call 'user' first!";
+	}
+	return parseInt(gh_id);
+};//»
+
+const create_new_file_or_dir = async(_this, opts={}) => {//«
+
+let ghid = fbase_prep();
+if (isStr(ghid)){
+	_this.no(ghid);
+	return;
+}
+/*
+This currently only works in the base user dir
+*/
+let use_obj;
+let use_val;
+let say_type;
+if (opts.isDir){
+	use_obj = NEW_DIR;
+	use_val = FBASE_DIRECTORY_VAL;
+	say_type = "folder";
+}
+else{
+	use_obj = NEW_FILE
+	use_val = 0;
+	say_type = "file";
+}
+
+const{args}=_this;
+
+//let ghid = globals.auth.github.uid;
+let path = args.shift();
+
+if (!path) return _this.no("no path given");
+
+let rel_path_enc = "";
+let name;
+if (path.match(/\x2f/)) {
+	let arr = path.split("/");
+//log(arr);
+	name = arr.pop();
+	for (let name of arr){
+		rel_path_enc+=`/kids/${sanitizeKey(name)}`;
+	}
+//	return _this.no("not (yet) allowing '/' in the name!");
+}
+else{
+	name = path;
+}
+let base_path = `/user/${ghid}${rel_path_enc}`;
+let list_ref = get_ref(`${base_path}/list`);
+let snap = await get_value(list_ref);
+if (isErr(snap)){
+	return _this.no(snap.message);
+}
+if (!snap.exists()){
+	if (!rel_path_enc) _this.no("you must create your user directory with fbmkhomedir!");
+	else{
+		_this.no(`the parent directory was not found`);
+	}
+	return 
+}
+
+let list = snap.val();
+if (list.names.includes(name)){
+	if (opts.isDir) _this.no(`exists: ${name}`);
+	else _this.ok(`exists: ${name}`);
+	return;
+}
+if (list.names[0]===false){
+	list.names = [name];
+	list.vals = [use_val];
+}
+else{
+	list.names.push(name);
+	list.vals.push(use_val);
+}
+
+let enc_path = sanitizeKey(name);
+let path_ref = get_ref(`${base_path}/kids/${enc_path}`);
+
+let rv = await run_transaction(path_ref, use_obj);
+if (isErr(rv)) return _this.no(rv.message);
+rv = await run_transaction(list_ref, list);
+if (isErr(rv)) {
+	_this.no(`The ${say_type} was created, but the list failed to be updated (error message: ${rv.message})`);
+	return;
+}
+let size_ref = get_ref(`${base_path}/size`);
+rv = await run_transaction(size_ref, list.names.length);
+if (isErr(rv)) {
+	_this.no(`The list size failed to be updated (error message: ${rv.message})`);
+	return;
+}
+
+_this.ok();
+
+};//»
+
+//»
+
+
+//Commands«
+/*
+const com_ = class extends Com{
+async run(){
+const{args}=this;
+
+}
+}
+*/
 const com_ghname2id = class extends Com{//«
 
 async run(){
@@ -1836,7 +2125,6 @@ cwarn("Here is the offending user object without user.id OR user.providerData[0]
 log(user);
 		return;
 	}
-//	let gh_uid = user.providerData[0].uid;
 	let uid = user.providerData[0].uid;
 	env["GITHUB_ID"] = uid;
 //	let uid = user.uid;
@@ -2037,14 +2325,105 @@ cerr(e);
 		}
 	}
 }//»
+const com_fbtouch = class extends Com{//«
+run(){
+	create_new_file_or_dir(this);
+}
+}//»
+const com_fbmkdir = class extends Com{//«
+run(){
+	create_new_file_or_dir(this, {isDir: true});
+}
+}//»
+const com_fbmkhomedir = class extends Com{//«
+async run(){
+const{args}=this;
+
+if (!fbase.didInit){
+	this.no("did not init firebase");
+	return;
+}
+const gh = globals.auth.github;
+if (!gh.uid){
+	return this.no("please call 'user' first!");
+}
+
+let type_ref = get_ref(`/user/${gh.uid}/type`);
+let snap = await get_value(type_ref);
+if (isErr(snap)){
+	return this.no(snap.message);
+}
+if (snap.exists()){
+	this.wrn("the home directory exists");
+	this.ok();
+	return;
+}
+
+let home_ref = get_ref(`/user/${gh.uid}`);
+
+let rv = await run_transaction(home_ref, NEW_DIR);
+if (isErr(rv)) return this.no(rv.message);
+this.ok();
+
+}
+}//»
+const com_fbls = class extends Com{//«
+async run(){
+const{args}=this;
+
+let ghid = fbase_prep();
+if (isStr(ghid)) return this.no(ghid);
+let path = args.shift();
+let path_enc = "";
+if (path){
+	let arr = path.split("/");
+	for (let name of arr){
+		path_enc+=`/kids/${sanitizeKey(name)}`;
+	}
+}
+let fullpath = `/user/${ghid}${path_enc}/list`;
+let ref = get_ref(fullpath); 
+
+let snap = await get_value(ref);
+if (isErr(snap)){
+	return this.no(snap.message);
+}
+if (!snap.exists()){
+	return this.no(`path not found`);
+}
+let list = snap.val();
+let names = list.names;
+if (names[0]===false){
+	this.wrn(`the directory is empty`);
+	this.ok();
+	return;
+}
+let vals = list.vals;
+let out = "";
+for (let i=0; i < names.length; i++){
+	let nm = names[i];
+	if (vals[i]===-1){
+		nm = `${nm}/`;
+	}
+	out += `${nm} `;
+}
+this.out(out);
+this.ok();
+}
+}//»
+
 
 //»
 
 const coms = {//«
 	users: com_users,
 	user: com_user,
-	fbase: com_fbase,
 	ghname2id: com_ghname2id,
+	fbase: com_fbase,
+	fbtouch: com_fbtouch,
+	fbmkdir: com_fbmkdir,
+	fbmkhomedir: com_fbmkhomedir,
+	fbls: com_fbls,
 }//»
 
 export {coms};
