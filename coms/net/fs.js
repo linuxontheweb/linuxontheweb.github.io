@@ -1,3 +1,29 @@
+/*Current security rules«
+
+{
+"rules": {
+
+".read": false,
+".write": false,
+
+"user": {    
+	"$uid": {
+		".read": "auth != null",
+		".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
+	}
+},
+"status" :{
+	"$uid": {
+		".read": "auth != null",
+		".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid",
+		".validate": "newData.hasChildren(['time', 'content']) && newData.child('content').isString() && newData.child('time').isNumber() && (data.exists() && newData.child('content').val().length <= data.child('content').val().length) || newData.child('content').val().length <= 501"
+	}
+}
+
+}
+}
+
+»*/
 /*Firebase Realtime database documentation«
 From: https://firebase.google.com/docs/reference/js/database
 
@@ -362,7 +388,7 @@ times on the same query is an error.
 Firebase queries allow you to order your data by any child key on the fly.
 However, if you know in advance what your indexes will be, you can define them
 via the .indexOn rule in your Security Rules for better performance. See
-thehttps://firebase.google.com/docs/database/security/indexing-data rule for
+the https://firebase.google.com/docs/database/security/indexing-data rule for
 more information.
 
 You can read more about orderByChild() in Sort data.
@@ -923,6 +949,7 @@ Returns:
 QueryConstraint
 //»
 startAt(value, key)//«
+
 Creates a QueryConstraint with the specified starting point.
 
 Using startAt(), startAfter(), endBefore(), endAt() and equalTo() allows you to
@@ -1310,26 +1337,6 @@ in control of how everything flows through the lOTW system.
 
 »*/
 /*9/28/25: ONLY DOING GITHUB AUTH«
-These are my actual rules:
-
-{
-	"rules": {
-		".read": false,
-		".write": false,
-		"home_dirs": {
-			"$uid": {
-				".read": "auth != null",
-				".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
-			}
-		},
-		"user": {    
-			"$uid": {
-				".read": "auth != null",
-				".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
-			}
-		} 
-	}
-}
 
 So a user can write to their directory at: e.g. for me /uids/7414094
 
@@ -1521,13 +1528,14 @@ coms/fs.js (for file moving, copying, etc).
 //Imports«
 
 const{globals}=LOTW;
-const {USERS_TYPE, fs, fbase}=globals;
+const {USERS_TYPE, fsMod: fs, fbase}=globals;
 const {Com} = globals.ShellMod.comClasses;
 const{mkdv, mk, isArr,isStr,isEOF,isErr,log,jlog,cwarn,cerr}=LOTW.api.util;
 const{root, mount_tree}=fs;
 const {popup} = globals.popup;
 
 //»
+
 //Var«
 
 //Firebase«
@@ -1731,22 +1739,6 @@ cerr("WHERE IS THE BUTTON (gh_but)?");
 //»
 //Funcs«
 
-const sanitizeKey=(key) => {//«
-	const encoder = new TextEncoder();
-	const data = encoder.encode(key);
-	let b64;
-	if (data.toBase64) b64 = data.toBase64();
-	else b64 = btoa(String.fromCharCode(...data));
-	return b64.replace(/\+/g, '-')
-		.replace(/\x2f/g, '_')
-		.replace(/=+$/, '');
-}//»
-const unsanitizeKey=(safeKey)=>{//«
-	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
-	const decoded = atob(padded);
-	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-	return new TextDecoder().decode(bytes);
-};//»
 const init_fbase = async()=>{//«
 
 let initializeApp;//App
@@ -1762,7 +1754,13 @@ let getDatabase,//Database
 	ref,
 	set,
 	get,
+	query,
 	runTransaction,
+	serverTimestamp,
+	orderByChild,
+	limitToFirst,
+	limitToLast,
+	startAt,
 	enableLogging;
 
 try {
@@ -1786,7 +1784,13 @@ try {
 		ref,
 		set,
 		get,
+		query,
 		runTransaction,
+		serverTimestamp,
+		orderByChild,
+		limitToFirst,
+		limitToLast,
+		startAt,
 		enableLogging
 	} = await import(FBASE_DB_URL));
 }
@@ -1806,10 +1810,97 @@ fbase.getDatabase = getDatabase;
 fbase.ref = ref;
 fbase.set = set;
 fbase.get = get;
+fbase.query = query;
 fbase.runTransaction = runTransaction;
+fbase.orderByChild = orderByChild;
+fbase.limitToFirst = limitToFirst;
+fbase.limitToLast = limitToLast;
+fbase.startAt = startAt;
+fbase.serverTimestamp = serverTimestamp;
 fbase.enableLogging = enableLogging;
 fbase.didInit = true;
 return true;
+
+}//»
+
+const sanitizeKey=(key) => {//«
+	const encoder = new TextEncoder();
+	const data = encoder.encode(key);
+	let b64;
+	if (data.toBase64) b64 = data.toBase64();
+	else b64 = btoa(String.fromCharCode(...data));
+	return b64.replace(/\+/g, '-')
+		.replace(/\x2f/g, '_')
+		.replace(/=+$/, '');
+}//»
+const unsanitizeKey=(safeKey)=>{//«
+	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
+	const decoded = atob(padded);
+	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+	return new TextDecoder().decode(bytes);
+};//»
+
+const parallel_sort = (primary, secondary, if_rev) => {//«
+/*«
+Say you are given 2 JS arrays of equal length. One of them must be sorted
+according to the results of a call to sort, and the other one should likewise
+be sorted such that all of its elements should have their positions swapped in
+the same manner as the first.
+
+Grok: doesn't work!
+function sortWithPartner(arr1, arr2) {
+	const indices = arr1.map((_, i) => i);
+	indices.sort((a, b) => arr1[a] - arr1[b]);
+	return [
+		indices.map(i => arr1[i]),
+		indices.map(i => arr2[i])
+	];
+}
+»*/
+// 1. Combine into an array of objects
+const combined = primary.map((value, index) => {
+	return {
+		first: value,
+		second: secondary[index]
+	};
+});
+
+// 2. Sort the array of objects based on the first  value
+if (if_rev){
+	combined.sort((a, b) => {
+		if (a.first > b.first) {
+			return -1;
+		}
+		if (a.first < b.first) {
+			return 1;
+		}
+		return 0;
+	});
+}
+else {
+	combined.sort((a, b) => {
+		if (a.first < b.first) {
+			return -1;
+		}
+		if (a.first > b.first) {
+			return 1;
+		}
+		return 0;
+	});
+}
+
+/*
+// 3. Separate the sorted values back into new arrays
+const sortedPrimary = combined.map(item => item.first);
+const sortedSecondary = combined.map(item => item.second);
+
+return [sortedPrimary, sortedSecondary];
+*/
+
+return [
+	combined.map(item => item.first),
+	combined.map(item => item.second)
+];
 
 }//»
 const get_fbase_user = () =>{//«
@@ -1926,7 +2017,6 @@ const fbase_prep = ()=> {//«
 	}
 	return parseInt(gh_id);
 };//»
-
 const create_new_file_or_dir = async(_this, opts={}) => {//«
 
 let ghid = fbase_prep();
@@ -1999,6 +2089,10 @@ if (list.names[0]===false){
 else{
 	list.names.push(name);
 	list.vals.push(use_val);
+	let rv = parallel_sort(list.names, list.vals);
+//log(rv);
+	list.names = rv[0];
+	list.vals = rv[1];
 }
 
 let enc_path = sanitizeKey(name);
@@ -2024,16 +2118,50 @@ _this.ok();
 
 //»
 
-
 //Commands«
-/*
+
+/*«
 const com_ = class extends Com{
 async run(){
 const{args}=this;
 
 }
 }
-*/
+»*/
+
+const com_fbstats = class extends Com{//«
+
+async run(){
+const{args}=this;
+
+//Change this to go back further in time
+let mins_ago = 72;
+
+//Change this to get more/less statuses
+let num_recent_stats = 10;
+
+let start_time = new Date().getTime() - (mins_ago * 60000);
+let c1 = fbase.orderByChild('time');
+let c2 = fbase.startAt(start_time);
+let c3 = fbase.limitToLast(num_recent_stats);
+let ref = get_ref("status");
+let q = fbase.query(ref, c1, c2, c3);
+let snap = await get_value(q);
+if (isErr(snap)){
+	return this.no(snap.message);
+}
+if (!snap.exists()){
+	return this.no(`no statuses were found`);
+}
+snap.forEach(kid=>{
+	let val = kid.val();
+	let arr = (new Date(val.time)+"").split(" ");
+	let str = `${arr[1]} ${arr[2]} ${arr[3]} ${arr[4]}`
+	this.out(`${kid.key} (${str}): ${val.content}`);
+});
+this.ok();
+}
+}//»
 const com_ghname2id = class extends Com{//«
 
 async run(){
@@ -2061,6 +2189,37 @@ if (!(obj&&obj.id)){
 	return;
 }
 this.out(obj.id+"");
+this.ok();
+}
+
+}//»
+const com_ghid2name = class extends Com{//«
+
+async run(){
+const{args}=this;
+let id = args.shift();
+if (!id) return this.no("Need a github id!");
+let rv;
+try{
+rv  = await fetch(`https://api.github.com/user/${id}`)
+}
+catch(e){
+this.no(e.message);
+cerr(e)
+return;
+}
+if (!rv.ok){
+this.no("Could not fetch");
+return;
+}
+let obj = await rv.json();
+if (!(obj&&obj.login)){
+	this.no("NO OBJ && OBJ.LOGIN FOUND?!?!? (see console)");
+	cwarn("There is no login on the object below!?!?!?");
+	log(obj);
+	return;
+}
+this.out(obj.login+"");
 this.ok();
 }
 
@@ -2411,7 +2570,29 @@ this.out(out);
 this.ok();
 }
 }//»
+const com_fbstat = class extends Com {//«
+/*This allows for the ability to run a query on the numerical ids, and get back whatever relevant
+information they might want to provide.
+*/
+	async run(){
+		const{args}=this;
 
+		let ghid = fbase_prep();
+		if (isStr(ghid)) return this.no(ghid);
+		if (!args.length){
+			return this.no("Nothing given!");
+		}
+		let ref = get_ref(`/status/${ghid}`);
+		let obj = {
+//			time: Math.floor((new Date().getTime())/1000),
+			time: fbase.serverTimestamp(),
+			content: args.join(" ")
+		};
+		let rv = await run_transaction(ref, obj);
+		if (isErr(rv)) return this.no(rv.message);
+		this.ok();
+	}
+}//»
 
 //»
 
@@ -2419,11 +2600,14 @@ const coms = {//«
 	users: com_users,
 	user: com_user,
 	ghname2id: com_ghname2id,
+	ghid2name: com_ghid2name,
 	fbase: com_fbase,
 	fbtouch: com_fbtouch,
 	fbmkdir: com_fbmkdir,
 	fbmkhomedir: com_fbmkhomedir,
 	fbls: com_fbls,
+	fbstat: com_fbstat,
+	fbstats: com_fbstats,
 }//»
 
 export {coms};
