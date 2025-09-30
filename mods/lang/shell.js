@@ -611,7 +611,7 @@ const maybe_neg=(which)=>{//«
 	if (which) return E_ERR;
 	return E_SUC;
 };//»
-const UNARY_OPS=[/*«*/
+const UNARY_OPS=[//«
 	"-n",//non-zerp
 	"-z",//zero
 
@@ -623,8 +623,8 @@ const UNARY_OPS=[/*«*/
 	"-r",
 	"-s",
 	"-w",
-];/*»*/
-const BINARY_OPS=[/*«*/
+];//»
+const BINARY_OPS=[//«
 	"=",//String equal
 	"!=",//String equal
 	"=~",//String match
@@ -640,7 +640,7 @@ const BINARY_OPS=[/*«*/
 	"-ef",//equal files (same inode)
 	"-nt",//newer than
 	"-ot",//older than
-];/*»*/
+];//»
 const BAD_ARGS=["(",")","-a","-o"];
 
 for (let arg of args){
@@ -664,7 +664,7 @@ else{
 //if (!args.length) return maybe_neg(false);
 if (args.length < 2) return maybe_neg(args.length);
 if (args.length > 3) return "too many arguments";
-if (args.length==2){/*«*/
+if (args.length==2){//«
 	let op = args.shift();
 	if (!UNARY_OPS.includes(op)) return `'${op}': unary operator expected`
 	let arg = args.shift();
@@ -693,13 +693,13 @@ if (!node) return maybe_neg(false);
 if (op==="-e"||op==="-r") return maybe_neg(true);
 if (op==="-f") return maybe_neg(node.isFile);
 if (op==="-h"||op==="-L") return maybe_neg(node.isLink);
-if (op==="-w"){/*«*/
+if (op==="-w"){//«
 	let usenode;
 	if (node.isDir) usenode = node;
 	else usenode = node.par;
 	return maybe_neg(await fsapi.checkDirPerm(usenode));
-}/*»*/
-if (op==="-s"){/*«*/
+}//»
+if (op==="-s"){//«
 	if (!node.isFile) return maybe_neg(true);
 	if (node.type!==FS_TYPE) {
 cwarn("Not checking the size of non-local-fs files");
@@ -711,12 +711,12 @@ cwarn("No file returned from node._file!!!", node);
 		return maybe_neg(false);
 	}
 	return maybe_neg(!!f.size);
-}/*»*/
+}//»
 
 cerr(`UNUSED OPERATOR (${op}), RETURNING ERROR`);
 
 	return E_ERR;
-}/*»*/
+}//»
 
 let arg1 = args[0];
 let op = args[1];
@@ -739,7 +739,7 @@ return E_SUC;
 
 if (arg1.match(/^\d+$/)&&!arg2.match(/^\d+$/)) return `'${arg2}': integer expression expected`;
 if (arg2.match(/^\d+$/)&&!arg1.match(/^\d+$/)) return `'${arg1}': integer expression expected`;
-if (arg1.match(/^\d+$/)){/*«*/
+if (arg1.match(/^\d+$/)){//«
 let n1 = parseInt(arg1);
 let n2 = parseInt(arg2);
 switch(op){
@@ -752,7 +752,7 @@ switch(op){
 	case "-le": return maybe_neg(n1 <= n2);
 	case "-lt": return maybe_neg(n1 < n2);
 }
-}/*»*/
+}//»
 if (op==="=") {
 	return maybe_neg(arg1 === arg2);
 }
@@ -766,37 +766,37 @@ if (!(node1.isFile&&node2.isFile)) return maybe_neg(node1===node2);
 //	"-ef",//equal files (same inode)
 //	"-nt",//newer than
 //	"-ot",//older than
-if (op==="-ef"){/*«*/
+if (op==="-ef"){//«
 	if (Number.isFinite(node1.blobId) &&  Number.isFinite(node2.blobId)){
 		return maybe_neg(node1.blobId===node2.blobId);
 	}
 	return maybe_neg(node1===node2);
-}/*»*/
-if (node1.type===FS_TYPE&&node2.type===FS_TYPE){/*«*/
+}//»
+if (node1.type===FS_TYPE&&node2.type===FS_TYPE){//«
 
 let f1 = await node1._file;
 let f2 = await node2._file;
-if (!(f1&&f2)){/*«*/
+if (!(f1&&f2)){//«
 cwarn("No files on the node[s]");
 log(node1, node2);
 	return E_ERR;
-}/*»*/
+}//»
 let m1 = f1.lastModified;
 let m2 = f2.lastModified;
-if (!(m1&&m2)){/*«*/
+if (!(m1&&m2)){//«
 cwarn("No lastModified times on the node.file[s]");
 log(f1, f2);
 return E_ERR;
-}/*»*/
+}//»
 if (op==="-ot") return maybe_neg(m1 > m2);
 if (op==="-nt") return maybe_neg(m1 < m2);
 
-}/*»*/
-else{/*«*/
+}//»
+else{//«
 cwarn("Not comparing modification times of nodes that are non-fs files");
 log(node1, node2);
 return E_ERR;
-}/*»*/
+}//»
 cerr(`UNUSED OPERATOR (${op}), RETURNING ERROR`);
 //if (op)
 
@@ -1025,7 +1025,7 @@ cwarn(`The option ${opt} already exists!`);
 		}
 		sh_opts[opt] = opts[opt];
 	}
-	NS.coms[libname] = {coms, opts};
+	NS.coms[libname] = {coms, opts, onkill: imp.onkill};
 	return ok_coms.length;
 }//»
 const do_imports = async(arr, err_cb) => {//«
@@ -1063,6 +1063,8 @@ continue;
 //cwarn(`The command library: ${libname} was in this.allLibs, but not in NS.coms!?!?!`);
 			continue;
 		}
+//log("KILL", lib.onkill);
+		lib.onkill && lib.onkill();
 		let coms = lib.coms;
 		let all = Object.keys(coms);
 		let num_deleted = 0;
@@ -1789,11 +1791,11 @@ cancel(){this.killed=true;}
 
 class BraceGroupCom extends CompoundCom{//«
 
-constructor(shell, opts, list){/*«*/
+constructor(shell, opts, list){//«
 	super(shell, opts);
 	this.list = list;
 	this.name="brace_group";
-}/*»*/
+}//»
 async run(){//«
 	if (this.isFunc){
 		this.opts.scriptArgs = this.args.slice();
@@ -2323,7 +2325,7 @@ this.ok("DEVTEST");
 }
 }
 
-const com_markdown = class extends Com{/*«*/
+const com_markdown = class extends Com{//«
 	#mod;
 	async init(){
 		let modret = await util.getMod("util.showdown");
@@ -2341,8 +2343,8 @@ const com_markdown = class extends Com{/*«*/
 		this.out(html);
 		this.ok();
 	}
-}/*»*/
-const com_html = class extends Com{/*«*/
+}//»
+const com_html = class extends Com{//«
 init(){
 }
 async openWin(val){
@@ -2377,7 +2379,7 @@ pipeIn(val){
 }
 */
 
-}/*»*/
+}//»
 
 const com_wat2wasm = class extends Com{//«
 
@@ -2937,7 +2939,7 @@ async run(){//«
 }//»
 
 }//»
-const com_env = class extends Com{/*«*/
+const com_env = class extends Com{//«
 run(){
 	let {term, args}=this; 
 	if (args.length) {
@@ -2953,8 +2955,8 @@ run(){
 	this.out(out.join("\n"));
 	this.ok();
 }
-}/*»*/
-const com_parse = class extends Com{/*«*/
+}//»
+const com_parse = class extends Com{//«
 	async run(){
 		if (this.pipeFrom) return;
 		let f;
@@ -2990,8 +2992,8 @@ const com_parse = class extends Com{/*«*/
 		else this.ok();
 	}
 */
-}/*»*/
-const com_stringify = class extends Com{/*«*/
+}//»
+const com_stringify = class extends Com{//«
 	init(){
 		if (!this.pipeFrom) return this.no("expecting piped input");
 	}
@@ -3021,7 +3023,7 @@ const com_stringify = class extends Com{/*«*/
 		}
 	}
 */
-}/*»*/
+}//»
 const com_clear = class extends Com{//«
 	run(){
 		this.term.clear();
@@ -3101,32 +3103,32 @@ async run(){
 
 }//»
 
-const com_msleep = class extends Com{/*«*/
+const com_msleep = class extends Com{//«
 	async run(){
 		let ms = parseInt(this.args.shift());
 		if (!Number.isFinite(ms)) ms = 0;
 		await sleep(ms);
 		this.ok();
 	}
-}/*»*/
-const com_hist = class extends Com{/*«*/
+}//»
+const com_hist = class extends Com{//«
 	async run(){
 		this.out((await this.term.getHistory()).join("\n"));
 		this.ok();
 	}
-}/*»*/
-const com_pwd = class extends Com{/*«*/
+}//»
+const com_pwd = class extends Com{//«
 	run(){
 		this.out(this.term.cur_dir);
 		this.ok();
 	}
-}/*»*/
-const com_libs = class extends Com{/*«*/
+}//»
+const com_libs = class extends Com{//«
 	async run(){
 		this.out((await util.getList("/site/coms/")).join("\n"));
 		this.ok();
 	}
-}/*»*/
+}//»
 const com_lib = class extends Com{//«
 init(){
 	if (!this.args.length) return this.no("no lib given");
@@ -3183,12 +3185,12 @@ async run(){
 	have_error?this.no():this.ok();
 }
 }//»
-const com_epoch = class extends Com{/*«*/
+const com_epoch = class extends Com{//«
 	run(){
 		this.out(Math.round((new Date).getTime()/ 1000)+"");
 		this.ok();
 	}
-}/*»*/
+}//»
 const com_getch = class extends Com{//«
 
 async run(){
@@ -3201,7 +3203,7 @@ async run(){
 }
 
 }//»
-const com_export = class extends Com{/*«*/
+const com_export = class extends Com{//«
 	run(){
 //		let rv = ShellMod.util.addToEnv(this.args, this.term.ENV, {if_export: true});
 		let rv = add_to_env(this.args, this.term.ENV, {if_export: true});
@@ -3211,8 +3213,8 @@ const com_export = class extends Com{/*«*/
 		}
 		else this.ok();
 	}
-}/*»*/
-const com_curcol = class extends Com{/*«*/
+}//»
+const com_curcol = class extends Com{//«
 	run(){
 		let which = this.args.shift();
 		if (which=="white"){
@@ -3227,7 +3229,7 @@ const com_curcol = class extends Com{/*«*/
 			this.no(`missing or invalid arg`);
 		}
 	}
-}/*»*/
+}//»
 const com_read = class extends Com{//«
 init(){
 //log("HI READ", this);
@@ -3370,7 +3372,7 @@ async run(){
 }
 
 }//»
-const com_import = class extends Com{/*«*/
+const com_import = class extends Com{//«
 async run(){
 	let {term, opts, args}=this;
 	let have_error = false;
@@ -3387,7 +3389,7 @@ async run(){
 	if (rv) this.inf(`imported: ${rv}`);
 	have_error?this.no():this.ok();
 }
-}/*»*/
+}//»
 
 this.defCommands={//«
 
@@ -3725,22 +3727,22 @@ dup(){//«
 	}
 	return word;
 }//»
-toString(){/*«*/
+toString(){//«
 //We actually need to do field splitting instead of doing this...
 //log("TOSTRING!!!", this.val.join(""));
 //log(this.fields);
 //If only 0 or 1 fields, there will be no newlines
 //if (this.fields) return this.fields.join("\n");
 return this.val.join("");
-}/*»*/
-get isChars(){/*«*/
+}//»
+get isChars(){//«
 	let chars = this.val;
 	for (let ch of chars) {
 		if (!isStr(ch)) return false;
 	}
 	return true;
-}/*»*/
-get isSimple(){/*«*/
+}//»
+get isSimple(){//«
 	for (let ent of this.val){
 		if (ent instanceof DQuote){
 			for (let ent2 of ent.val){
@@ -3750,10 +3752,10 @@ get isSimple(){/*«*/
 		else if (!(isStr(ent)||(ent instanceof SQuote)||(ent instanceof DSQuote))) return false;
 	}
 	return true;
-}/*»*/
+}//»
 
 }//»
-const SQuote = class extends Sequence{/*«*/
+const SQuote = class extends Sequence{//«
 	expand(){
 		return this.toString();
 	}
@@ -3763,8 +3765,8 @@ const SQuote = class extends Sequence{/*«*/
 	toString(){
 		return this.val.join("");
 	}
-}/*»*/
-const DSQuote = class extends Sequence{/*«*/
+}//»
+const DSQuote = class extends Sequence{//«
 expand(){
 //cwarn("EXPAND DSQUOTE!");
 let wrd = this.val;
@@ -3775,12 +3777,12 @@ return tok;
 }
 let arr = wrd;
 let out = [];
-for (let i=0; i < arr.length; i++){/*«*/
+for (let i=0; i < arr.length; i++){//«
 	let ch = arr[i];
 	let next = arr[i+1];
 	if (ch.escaped){
 	let c;
-//switch(ch){/*«*/
+//switch(ch){//«
 //\" yields a <quotation-mark> (double-quote) character, but note that
 //<quotation-mark> can be included unescaped.
 if  (ch=='"') {c='"';}
@@ -3814,7 +3816,7 @@ else if (ch=='t') { c='\t';}
 //\v yields a <vertical-tab> character.
 else if (ch=='v') { c='\x0b';}
 
-else if (ch=='x'){/*«*/
+else if (ch=='x'){//«
 //\xXX yields the byte whose value is the hexadecimal value XX (one or more hexadecimal digits). If more than two hexadecimal digits follow \x, the results are unspecified.
 	if (next&&next.match(/[0-9a-fA-F]/)){
 	let next2 = arr[i+2];
@@ -3827,10 +3829,10 @@ else if (ch=='x'){/*«*/
 			i++;
 		}
 	}
-}/*»*/
+}//»
 
 //\ddd yields the byte whose value is the octal value ddd (one to three octal digits).
-else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){/*«*/
+else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){//«
 	let s = ch;
 //Array.includes tests for strict equality, so escaped chars will not match...
 	if (next&&OCTAL_CHARS.includes(next)){
@@ -3843,7 +3845,7 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 		else i++;
 		c = eval( '"\\x' + (parseInt(s, 8).toString(16).padStart(2, "0")) + '"' );
 	}
-}/*»*/
+}//»
 
 //The behavior of an unescaped <backslash> immediately followed by any other
 //character, including <newline>, is unspecified.
@@ -3854,14 +3856,14 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 //yields the <FS> control character since the <backslash> character has to be
 //escaped.
 
-//}/*»*/
+//}//»
 	if (c) out.push(c);
 	else out.push(ch);
 	}
 	else{
 		out.push(ch);
 	}
-}/*»*/
+}//»
 this.val = out;
 //log("OUT",out.join(""));
 return out.join("");
@@ -3873,7 +3875,7 @@ dup(){
 toString(){
 return this.val.join("");
 }
-}/*»*/
+}//»
 
 const DQuote = class extends Sequence{//«
 
@@ -4262,7 +4264,7 @@ const isLineTerminator = (cp) => {//«
 };//»
 
 //const COMPOUND_START_WORDS = [
-const COMPOUND_NON_START_WORDS = [/*«*/
+const COMPOUND_NON_START_WORDS = [//«
 	'then',
 	'else',
 	'elif',
@@ -4272,8 +4274,8 @@ const COMPOUND_NON_START_WORDS = [/*«*/
 	'esac',
 	'}',
 	'in'
-];/*»*/
-const RESERVERD_WORDS = [/*«*/
+];//»
+const RESERVERD_WORDS = [//«
 	'if',
 	'then',
 	'else',
@@ -4289,15 +4291,15 @@ const RESERVERD_WORDS = [/*«*/
 	'{',
 	'}',
 	'in'
-];/*»*/
-const RESERVED_START_WORDS = [/*«*/
+];//»
+const RESERVED_START_WORDS = [//«
 	"{",
 	"for",
 	"if",
 	"while",
 	"until",
 	"case"
-];/*»*/
+];//»
 
 const EOF_Type = 1;
 
@@ -4493,12 +4495,12 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 			out.push(sub);
 			cur=this.index;
 		}//»
-		else if (check_subs && ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){/*«*/
+		else if (check_subs && ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||SPECIAL_SYMBOLS.includes(this.source[cur+1]))){//«
 			let sub = new ParamSub(cur);
 			sub.val=[this.source[cur+1]];
 			out.push(sub);
 			this.index++;
-		}/*»*/
+		}//»
 		else if (check_bq&&ch==="`"){//«
 			this.index = cur;
 			rv = await this.scanQuote(quote, "`");
@@ -5208,7 +5210,7 @@ this.throwUnexpectedToken("unexpected EOF reached");
 //log(raw);
 	return word;
 }//»
-scanNewlines(par, env, heredoc_flag){/*«*/
+scanNewlines(par, env, heredoc_flag){//«
 
 	let start = this.index;
 //	let this.source = this.source;
@@ -5230,7 +5232,7 @@ scanNewlines(par, env, heredoc_flag){/*«*/
 	newlines.newlines = iter;
 	return newlines;
 
-}/*»*/
+}//»
 spliceSource(len){//«
 	this.source.splice(this.index-len, len);
 	this.index-=len;
@@ -5396,13 +5398,13 @@ eatSemicolon(){//«
 	}
 	return false;
 }//»
-pushNewline(){/*«*/
+pushNewline(){//«
 	let nl = new Newlines();
 	nl.inserted = true;
 	this.tokens.push(nl);
 //LCMJHFUEM
 	this.numToks++;
-}/*»*/
+}//»
 getWordSeq(){//«
 	let list=[];
 	let toks = this.tokens;
@@ -5695,7 +5697,7 @@ async parseSubshell(){//«
 	return {type: "subshell", compound_command: list};
 }//»
 
-async parseCasePatternList(seq_arg){/*«*/
+async parseCasePatternList(seq_arg){//«
 
 /*«
 4. [Case statement termination]
@@ -5738,7 +5740,7 @@ the entire case_clause;
 	this.tokNum++;
 	return this.parseCasePatternList(seq);
 
-}/*»*/
+}//»
 async parseCaseItem(){//«
 
 //isDSemi
@@ -5795,7 +5797,7 @@ if (tok.isCaseItemEnd){
 return {case_item: {pattern_list, compound_list}};
 
 }//»
-async parseCaseList(seq_arg){/*«*/
+async parseCaseList(seq_arg){//«
 //case_list        : case_list case_item//«
 //                 |           case_item
 //                 ;//»
@@ -5814,7 +5816,7 @@ else if (!item){
 seq.push(item);
 return this.parseCaseList(seq);
 
-}/*»*/
+}//»
 async parseCaseClause(){//«
 
 //case_clause      : Case WORD linebreak in linebreak case_list    Esac//«
@@ -7083,7 +7085,7 @@ cerr(e);
 makeCompoundCommand(com, opts){//«
 	let typ = com.type;
 	let comp = com.compound_command;
-	if (typ === "if_clause") {/*«*/
+	if (typ === "if_clause") {//«
 		let if_list = comp.if_list;
 		let then_list = comp.then_list;
 		let conditions = [if_list.compound_list.term];
@@ -7102,7 +7104,7 @@ makeCompoundCommand(com, opts){//«
 			fallback = else_part.else_list.compound_list.term;
 		}
 		return new IfCom(this, opts, conditions, consequences, fallback);
-	}/*»*/
+	}//»
 	if (typ === "brace_group") return new BraceGroupCom(this, opts, comp.compound_list.term);
 	if (typ === "subshell") return new SubshellCom(this, opts, comp.compound_list.term);
 	if (typ === "for_clause") return new ForCom(this, opts, comp.name, comp.in_list, comp.do_group.compound_list.term);

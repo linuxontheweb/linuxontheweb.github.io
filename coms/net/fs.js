@@ -24,1286 +24,12 @@
 }
 
 »*/
-/*Firebase Realtime database documentation«
 
-From: https://firebase.google.com/docs/reference/js/database
-
-function(app, ...)// getDatabase«
-
-getDatabase(app, url)//«
-
-Returns the instance of the Realtime Database SDK that is associated with the
-provided FirebaseApp. Initializes a new instance with default settings if no
-instance exists or if the existing instance uses a custom database URL.
-
-Signature:
-
-export declare function getDatabase(app?: FirebaseApp, url?: string): Database;
-Parameters
-Parameter	Type	Description
-app	FirebaseApp	The FirebaseApp instance that the returned Realtime Database instance is associated with.
-url	string	The URL of the Realtime Database instance to connect to. If not provided, the SDK connects to the default instance of the Firebase App.
-Returns:
-
-Database
-
-The Database instance of the provided app.
-//»
-
-//»
-function(db, ...)// ref, refFromURL«
-
-connectDatabaseEmulator(db, host, port, options)//«
-Modify the provided instance to communicate with the Realtime Database emulator.
-
-Note: This method must be called before performing any other operation.
-
-Signature:
-
-
-export declare function connectDatabaseEmulator(db: Database, host: string, port: number, options?: {
-    mockUserToken?: EmulatorMockTokenOptions | string;
-}): void;
-Parameters
-Parameter	Type	Description
-db	Database	The instance to modify.
-host	string	The emulator host (ex: localhost)
-port	number	The emulator port (ex: 8080)
-options	{ mockUserToken?: EmulatorMockTokenOptions | string; }	
-Returns:
-
-void
-//»
-goOffline(db)//«
-Disconnects from the server (all Database operations will be completed offline).
-
-The client automatically maintains a persistent connection to the Database
-server, which will remain active indefinitely and reconnect when disconnected.
-However, the goOffline() and goOnline() methods may be used to control the
-client connection in cases where a persistent connection is undesirable.
-
-While offline, the client will no longer receive data updates from the
-Database. However, all Database operations performed locally will continue to
-immediately fire events, allowing your application to continue behaving
-normally. Additionally, each operation performed locally will automatically be
-queued and retried upon reconnection to the Database server.
-
-To reconnect to the Database and begin receiving remote events, see goOnline().
-
-Signature:
-
-
-export declare function goOffline(db: Database): void;
-Parameters
-Parameter	Type	Description
-db	Database	The instance to disconnect.
-Returns:
-
-void
-//»
-goOnline(db)//«
-Reconnects to the server and synchronizes the offline Database state with the server state.
-
-This method should be used after disabling the active connection with
-goOffline(). Once reconnected, the client will transmit the proper data and
-fire the appropriate events so that your client "catches up" automatically.
-
-Signature:
-
-export declare function goOnline(db: Database): void;
-Parameters
-Parameter	Type	Description
-db	Database	The instance to reconnect.
-Returns:
-
-void
-//»
-ref(db, path)//«
-
-Returns a Reference representing the location in the Database corresponding to
-the provided path. If no path is provided, the Reference will point to the root
-of the Database.
-
-Signature:
-
-
-export declare function ref(db: Database, path?: string): DatabaseReference;
-Parameters
-Parameter	Type	Description
-db	Database	The database instance to obtain a reference for.
-path	string	Optional path representing the location the returned Reference will point. If not provided, the returned Reference will point to the root of the Database.
-Returns:
-
-DatabaseReference
-
-If a path is provided, a Reference pointing to the provided path. Otherwise, a Reference pointing to the root of the Database.
-//»
-refFromURL(db, url)//«
-
-Returns a Reference representing the location in the Database corresponding to
-the provided Firebase URL.
-
-An exception is thrown if the URL is not a valid Firebase Database URL or it
-has a different domain than the current Database instance.
-
-Note that all query parameters (orderBy, limitToLast, etc.) are ignored and are
-not applied to the returned Reference.
-
-
-Signature:
-
-export declare function refFromURL(db: Database, url: string): DatabaseReference;
-Parameters
-Parameter	Type	Description
-db	Database	The database instance to obtain a reference for.
-url	string	The Firebase URL at which the returned Reference will point.
-Returns:
-
-DatabaseReference
-
-A Reference pointing to the provided Firebase URL.
-//»
-
-//»
-function()// orderBy(Key|Priority|Value), force(LongPolling|WebSockets), serverTimestamp«
-
-forceLongPolling()//«
-
-Force the use of longPolling instead of websockets. This will be ignored if
-websocket protocol is used in databaseURL.
-
-Signature:
-
-export declare function forceLongPolling(): void;
-Returns:
-
-void
-//»
-forceWebSockets()//«
-Force the use of websockets instead of longPolling.
-
-Signature:
-
-export declare function forceWebSockets(): void;
-Returns:
-
-void
-//»
-orderByKey()//«
-
-Creates a new QueryConstraint that orders by the key.
-
-Sorts the results of a query by their (ascending) key values.
-
-You can read more about orderByKey() in Sort data.
-
-Signature:
-
-export declare function orderByKey(): QueryConstraint;
-Returns:
-
-QueryConstraint
-//»
-orderByPriority()//«
-
-Creates a new QueryConstraint that orders by priority.
-
-Applications need not use priority but can order collections by ordinary
-properties (see Sort data for alternatives to priority.
-
-Signature:
-
-
-export declare function orderByPriority(): QueryConstraint;
-Returns:
-
-QueryConstraint
-//»
-orderByValue()//«
-
-Creates a new QueryConstraint that orders by value.
-
-If the children of a query are all scalar values (string, number, or boolean),
-you can order the results by their (ascending) values.
-
-You can read more about orderByValue() in Sort data.
-
-Signature:
-
-
-export declare function orderByValue(): QueryConstraint;
-Returns:
-
-QueryConstraint
-//»
-serverTimestamp()//«
-
-Returns a placeholder value for auto-populating the current timestamp (time
-since the Unix epoch, in milliseconds) as determined by the Firebase servers.
-
-Signature:
-
-
-export declare function serverTimestamp(): object;
-Returns:
-
-object
-//»
-
-//»
-function(delta, ...)// increment«
-increment(delta)//«
-
-Returns a placeholder value that can be used to atomically increment the
-current database value by the provided delta.
-
-Signature:
-
-
-export declare function increment(delta: number): object;
-Parameters
-Parameter	Type	Description
-delta	number	the amount to modify the current value atomically.
-Returns:
-
-object
-
-A placeholder value for modifying data atomically server-side.
-//»
-//»
-function(limit, ...)// limitTo(First|Last)«
-limitToFirst(limit)//«
-
-Creates a new QueryConstraint that if limited to the first specific number of children.
-
-The limitToFirst() method is used to set a maximum number of children to be
-synced for a given callback. If we set a limit of 100, we will initially only
-receive up to 100 child_added events. If we have fewer than 100 messages stored
-in our Database, a child_added event will fire for each message. However, if we
-have over 100 messages, we will only receive a child_added event for the first
-100 ordered messages. As items change, we will receive child_removed events for
-each item that drops out of the active list so that the total number stays at
-100.
-
-You can read more about limitToFirst() in Filtering data.
-
-Signature:
-
-
-export declare function limitToFirst(limit: number): QueryConstraint;
-Parameters
-Parameter	Type	Description
-limit	number	The maximum number of nodes to include in this query.
-Returns:
-
-QueryConstraint
-//»
-limitToLast(limit)//«
-
-Creates a new QueryConstraint that is limited to return only the last specified number of children.
-
-The limitToLast() method is used to set a maximum number of children to be
-synced for a given callback. If we set a limit of 100, we will initially only
-receive up to 100 child_added events. If we have fewer than 100 messages stored
-in our Database, a child_added event will fire for each message. However, if we
-have over 100 messages, we will only receive a child_added event for the last
-100 ordered messages. As items change, we will receive child_removed events for
-each item that drops out of the active list so that the total number stays at
-100.
-
-You can read more about limitToLast() in Filtering data.
-
-Signature:
-
-
-export declare function limitToLast(limit: number): QueryConstraint;
-Parameters
-Parameter	Type	Description
-limit	number	The maximum number of nodes to include in this query.
-Returns:
-
-QueryConstraint
-//»
-//»
-function(parent, ...)// child, push«
-child(parent, path)//«
-
-Gets a Reference for the location at the specified relative path.
-
-The relative path can either be a simple child name (for example, "ada") or a
-deeper slash-separated path (for example, "ada/name/first").
-
-Signature:
-
-
-export declare function child(parent: DatabaseReference, path: string): DatabaseReference;
-Parameters
-Parameter	Type	Description
-parent	DatabaseReference	The parent location.
-path	string	A relative path from this location to the desired child location.
-Returns:
-
-DatabaseReference
-
-The specified child location.
-//»
-push(parent, value)//«
-
-Generates a new child location using a unique key and returns its Reference.
-
-This is the most common pattern for adding data to a collection of items.
-
-If you provide a value to push(), the value is written to the generated
-location. If you don't pass a value, nothing is written to the database and the
-child remains empty (but you can use the Reference elsewhere).
-
-The unique keys generated by push() are ordered by the current time, so the
-resulting list of items is chronologically sorted. The keys are also designed
-to be unguessable (they contain 72 random bits of entropy).
-
-See Append to a list of data. See The 2^120 Ways to Ensure Unique Identifiers.
-
-Signature:
-
-
-export declare function push(parent: DatabaseReference, value?: unknown): ThenableReference;
-Parameters
-Parameter	Type	Description
-parent	DatabaseReference	The parent location.
-value	unknown	Optional value to be written at the generated location.
-Returns:
-
-ThenableReference
-
-Combined Promise and Reference; resolves when write is complete, but can be used immediately as the Reference to the child location.
-//»
-//»
-function(path, ...)// orderByChild«
-orderByChild(path)//«
-
-Creates a new QueryConstraint that orders by the specified child key.
-
-Queries can only order by one key at a time. Calling orderByChild() multiple
-times on the same query is an error.
-
-Firebase queries allow you to order your data by any child key on the fly.
-However, if you know in advance what your indexes will be, you can define them
-via the .indexOn rule in your Security Rules for better performance. See
-the https://firebase.google.com/docs/database/security/indexing-data rule for
-more information.
-
-You can read more about orderByChild() in Sort data.
-
-Signature:
-
-export declare function orderByChild(path: string): QueryConstraint;
-Parameters
-Parameter	Type	Description
-path	string	The path to order by.
-Returns:
-
-QueryConstraint
-//»
-//»
-function(query, ...)// get, query, off, onValue, onChild(Added|Changed|Moved|Removed)«
-
-get(query)//«
-Gets the most up-to-date result for this query.
-
-Signature:
-
-export declare function get(query: Query): Promise<DataSnapshot>;
-Parameters
-Parameter	Type	Description
-query	Query	The query to run.
-Returns:
-
-Promise<DataSnapshot>
-
-A Promise which resolves to the resulting DataSnapshot if a value is available,
-or rejects if the client is unable to return a value (e.g., if the server is
-unreachable and there is nothing cached).
-
-//»
-off(query, eventType, callback)//«
-
-Detaches a callback previously attached with the corresponding on*() (onValue,
-onChildAdded) listener. Note: This is not the recommended way to remove a
-listener. Instead, please use the returned callback function from the
-respective on* callbacks.
-
-Detach a callback previously attached with on*(). Calling off() on a parent
-listener will not automatically remove listeners registered on child nodes,
-off() must also be called on any child listeners to remove the callback.
-
-If a callback is not specified, all callbacks for the specified eventType will
-be removed. Similarly, if no eventType is specified, all callbacks for the
-Reference will be removed.
-
-Individual listeners can also be removed by invoking their unsubscribe callbacks.
-
-Signature:
-
-export declare function off(query: Query, eventType?: EventType, callback?: (snapshot: DataSnapshot, previousChildName?: string | null) => unknown): void;
-Parameters
-Parameter	Type	Description
-query	Query	The query that the listener was registered with.
-eventType	EventType	One of the following strings: "value", "child_added", "child_changed", "child_removed", or "child_moved." If omitted, all callbacks for the Reference will be removed.
-callback	(snapshot: DataSnapshot, previousChildName?: string | null) => unknown	The callback function that was passed to on() or undefined to remove all callbacks.
-Returns:
-
-void
-//»
-onChildAdded(query, callback, cancelCallback?, options?)//«
-
-onChildAdded(query, callback, cancelCallback)
-onChildAdded(query, callback, options)
-onChildAdded(query, callback, cancelCallback, options)
-
-Listens for data changes at a particular location.
-
-This is the primary way to read data from a Database. Your callback will be
-triggered for the initial data and again whenever the data changes. Invoke the
-returned unsubscribe callback to stop receiving updates. See Retrieve Data on
-the Web for more details.
-
-An onChildAdded event will be triggered once for each initial child at this
-location, and it will be triggered again every time a new child is added. The
-DataSnapshot passed into the callback will reflect the data for the relevant
-child. For ordering purposes, it is passed a second argument which is a string
-containing the key of the previous sibling child by sort order, or null if it
-is the first child.
-
-Signature:
-
-export declare function onChildAdded(query: Query, callback: (snapshot: DataSnapshot, previousChildName?: string | null) => unknown, cancelCallback?: (error: Error) => unknown): Unsubscribe;
-
-Parameters
-Parameter	Type	Description
-query	Query	The query to run.
-callback	(snapshot: DataSnapshot, previousChildName?: string | null) => unknown	A callback that fires when the specified event occurs. The callback will be passed a DataSnapshot and a string containing the key of the previous child, by sort order, or null if it is the first child.
-cancelCallback	(error: Error) => unknown	An optional callback that will be notified if your event subscription is ever canceled because your client does not have permission to read this data (or it had permission but has now lost it). This callback will be passed an Error object indicating why the failure occurred.
-options	ListenOptions	An object that can be used to configure onlyOnce, which then removes the listener after its first invocation.
-Returns:
-
-Unsubscribe
-
-A function that can be invoked to remove the listener.
-//»
-onChildChanged(query, callback, cancelCallback?, options?)//«
-
-onChildChanged(query, callback, cancelCallback)
-onChildChanged(query, callback, options)
-onChildChanged(query, callback, cancelCallback, options)
-
-Listens for data changes at a particular location.
-
-This is the primary way to read data from a Database. Your callback will be
-triggered for the initial data and again whenever the data changes. Invoke the
-returned unsubscribe callback to stop receiving updates. See Retrieve Data on
-the Web for more details.
-
-An onChildChanged event will be triggered when the data stored in a child (or
-any of its descendants) changes. Note that a single child_changed event may
-represent multiple changes to the child. The DataSnapshot passed to the
-callback will contain the new child contents. For ordering purposes, the
-callback is also passed a second argument which is a string containing the key
-of the previous sibling child by sort order, or null if it is the first child.
-
-Signature:
-
-export declare function onChildChanged(query: Query, callback: (snapshot: DataSnapshot, previousChildName: string | null) => unknown, cancelCallback?: (error: Error) => unknown): Unsubscribe;
-Parameters
-Parameter	Type	Description
-query	Query	The query to run.
-callback	(snapshot: DataSnapshot, previousChildName: string | null) => unknown	A callback that fires when the specified event occurs. The callback will be passed a DataSnapshot and a string containing the key of the previous child, by sort order, or null if it is the first child.
-cancelCallback	(error: Error) => unknown	An optional callback that will be notified if your event subscription is ever canceled because your client does not have permission to read this data (or it had permission but has now lost it). This callback will be passed an Error object indicating why the failure occurred.
-options	ListenOptions	An object that can be used to configure onlyOnce, which then removes the listener after its first invocation.
-Returns:
-
-Unsubscribe
-
-A function that can be invoked to remove the listener.
-//»
-onChildMoved(query, callback, cancelCallback?, options?)//«
-
-onChildMoved(query, callback, cancelCallback)
-onChildMoved(query, callback, options)
-onChildMoved(query, callback, cancelCallback, options)
-
-Listens for data changes at a particular location.
-
-This is the primary way to read data from a Database. Your callback will be
-triggered for the initial data and again whenever the data changes. Invoke the
-returned unsubscribe callback to stop receiving updates. See Retrieve Data on
-the Web for more details.
-
-An onChildMoved event will be triggered when a child's sort order changes such
-that its position relative to its siblings changes. The DataSnapshot passed to
-the callback will be for the data of the child that has moved. It is also
-passed a second argument which is a string containing the key of the previous
-sibling child by sort order, or null if it is the first child.
-
-Signature:
-
-export declare function onChildMoved(query: Query, callback: (snapshot: DataSnapshot, previousChildName: string | null) => unknown, cancelCallback?: (error: Error) => unknown): Unsubscribe;
-Parameters
-Parameter	Type	Description
-query	Query	The query to run.
-callback	(snapshot: DataSnapshot, previousChildName: string | null) => unknown	A callback that fires when the specified event occurs. The callback will be passed a DataSnapshot and a string containing the key of the previous child, by sort order, or null if it is the first child.
-cancelCallback	(error: Error) => unknown	An optional callback that will be notified if your event subscription is ever canceled because your client does not have permission to read this data (or it had permission but has now lost it). This callback will be passed an Error object indicating why the failure occurred.
-options	ListenOptions	An object that can be used to configure onlyOnce, which then removes the listener after its first invocation.
-Returns:
-
-Unsubscribe
-
-A function that can be invoked to remove the listener.
-//»
-onChildRemoved(query, callback, cancelCallback?, options?)//«
-
-onChildRemoved(query, callback, cancelCallback)
-onChildRemoved(query, callback, options)
-onChildRemoved(query, callback, cancelCallback, options)
-
-Listens for data changes at a particular location.
-
-This is the primary way to read data from a Database. Your callback will be
-triggered for the initial data and again whenever the data changes. Invoke the
-returned unsubscribe callback to stop receiving updates. See Retrieve Data on
-the Web for more details.
-
-An onChildRemoved event will be triggered once every time a child is removed.
-The DataSnapshot passed into the callback will be the old data for the child
-that was removed. A child will get removed when either:
-
-a client explicitly calls remove() on that child or one of its ancestors - a
-client calls set(null) on that child or one of its ancestors - that child has
-all of its children removed - there is a query in effect which now filters out
-the child (because it's sort order changed or the max limit was hit)
-
-Signature:
-
-export declare function onChildRemoved(query: Query, callback: (snapshot: DataSnapshot) => unknown, cancelCallback?: (error: Error) => unknown): Unsubscribe;
-Parameters
-Parameter	Type	Description
-query	Query	The query to run.
-callback	(snapshot: DataSnapshot) => unknown	A callback that fires when the specified event occurs. The callback will be passed a DataSnapshot and a string containing the key of the previous child, by sort order, or null if it is the first child.
-cancelCallback	(error: Error) => unknown	An optional callback that will be notified if your event subscription is ever canceled because your client does not have permission to read this data (or it had permission but has now lost it). This callback will be passed an Error object indicating why the failure occurred.
-options	ListenOptions	An object that can be used to configure onlyOnce, which then removes the listener after its first invocation.
-Returns:
-
-Unsubscribe
-
-A function that can be invoked to remove the listener.
-//»
-onValue(query, callback, cancelCallback?, options?)//«
-
-onValue(query, callback, cancelCallback)
-onValue(query, callback, options)
-onValue(query, callback, cancelCallback, options)
-
-Listens for data changes at a particular location.
-
-This is the primary way to read data from a Database. Your callback will be
-triggered for the initial data and again whenever the data changes. Invoke the
-returned unsubscribe callback to stop receiving updates. See Retrieve Data on
-the Web for more details.
-
-An onValue event will trigger once with the initial data stored at this
-location, and then trigger again each time the data changes. The DataSnapshot
-passed to the callback will be for the location at which on() was called. It
-won't trigger until the entire contents has been synchronized. If the location
-has no data, it will be triggered with an empty DataSnapshot (val() will return
-null).
-
-Signature:
-
-export declare function onValue(query: Query, callback: (snapshot: DataSnapshot) => unknown, cancelCallback: (error: Error) => unknown, options: ListenOptions): Unsubscribe;
-Parameters
-Parameter	Type	Description
-query	Query	The query to run.
-callback	(snapshot: DataSnapshot) => unknown	A callback that fires when the specified event occurs. The callback will be passed a DataSnapshot.
-cancelCallback	(error: Error) => unknown	An optional callback that will be notified if your event subscription is ever canceled because your client does not have permission to read this data (or it had permission but has now lost it). This callback will be passed an Error object indicating why the failure occurred.
-options	ListenOptions	An object that can be used to configure onlyOnce, which then removes the listener after its first invocation.
-Returns:
-
-Unsubscribe
-
-A function that can be invoked to remove the listener.
-//»
-
-query(query, queryConstraints)//«
-Creates a new immutable instance of Query that is extended to also include additional query constraints.
-
-Signature:
-
-export declare function query(query: Query, ...queryConstraints: QueryConstraint[]): Query;
-Parameters
-Parameter	Type	Description
-query	Query	The Query instance to use as a base for the new constraints.
-queryConstraints	QueryConstraint[]	The list of QueryConstraints to apply.
-Returns:
-
-Query
-
-Exceptions
-if any of the provided query constraints cannot be combined with the existing or new constraints.
-//»
-//»
-function(ref, ...)// set, update, remove, runTransaction«
-onDisconnect(ref)//«
-
-Returns an OnDisconnect object - see Enabling Offline Capabilities in
-JavaScript for more information on how to use it.
-
-Signature:
-
-export declare function onDisconnect(ref: DatabaseReference): OnDisconnect;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The reference to add OnDisconnect triggers for.
-Returns:
-
-OnDisconnect
-//»
-remove(ref)//«
-
-Removes the data at this Database location.
-
-Any data at child locations will also be deleted.
-
-The effect of the remove will be visible immediately and the corresponding
-event 'value' will be triggered. Synchronization of the remove to the Firebase
-servers will also be started, and the returned Promise will resolve when
-complete. If provided, the onComplete callback will be called asynchronously
-after synchronization has finished.
-
-Signature:
-
-export declare function remove(ref: DatabaseReference): Promise<void>;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The location to remove.
-Returns:
-
-Promise<void>
-
-Resolves when remove on server is complete.
-//»
-runTransaction(ref, transactionUpdate, options)//«
-
-Atomically modify the data at this location. Unlike a normal set(), which just
-overwrites the data regardless of its previous value, runTransaction() is used
-to modify the existing value to a new value, ensuring there are no conflicts
-with other clients writing to the same location at the same time.
-
-To accomplish this, you pass runTransaction() an update function which is used
-to transform the current value into a new value. If another client writes to
-the location before your new value is successfully written, your update
-function will be called again with the new current value, and the write will be
-retried. This will happen repeatedly until your write succeeds without conflict
-or you abort the transaction by not returning a value from your update
-function.
-
-Note: Modifying data with set() will cancel any pending transactions at that
-location, so extreme care should be taken if mixing set() and runTransaction()
-to update the same data.
-
-Note: When using transactions with Security and Firebase Rules in place, be
-aware that a client needs .read access in addition to .write access in order to
-perform a transaction. This is because the client-side nature of transactions
-requires the client to read the data in order to transactionally update it.
-
-Signature:
-
-export declare function runTransaction(ref: DatabaseReference, transactionUpdate: (currentData: any) => unknown, options?: TransactionOptions): Promise<TransactionResult>;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The location to atomically modify.
-
-transactionUpdate	(currentData: any) => unknown	A developer-supplied function which will be 
-passed the current data stored at this location (as a JavaScript object). 
-The function should return the new value it would like written (as a JavaScript object). 
-If undefined is returned (i.e. you return with no arguments) the transaction will be aborted 
-and the data at this location will not be modified.
-
-options	TransactionOptions	An options object to configure transactions.
-Returns:
-
-Promise<TransactionResult>
-
-A Promise that can optionally be used instead of the onComplete callback to handle success and failure.
-
-//»
-set(ref, value)//«
-Writes data to this Database location.
-
-This will overwrite any data at this location and all child locations.
-
-The effect of the write will be visible immediately, and the corresponding
-events ("value", "child_added", etc.) will be triggered. Synchronization of the
-data to the Firebase servers will also be started, and the returned Promise
-will resolve when complete. If provided, the onComplete callback will be called
-asynchronously after synchronization has finished.
-
-Passing null for the new value is equivalent to calling remove(); namely, all
-data at this location and all child locations will be deleted.
-
-set() will remove any priority stored at this location, so if priority is meant
-to be preserved, you need to use setWithPriority() instead.
-
-Note that modifying data with set() will cancel any pending transactions at
-that location, so extreme care should be taken if mixing set() and
-transaction() to modify the same data.
-
-A single set() will generate a single "value" event at the location where the
-set() was performed.
-
-Signature:
-
-export declare function set(ref: DatabaseReference, value: unknown): Promise<void>;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The location to write to.
-value	unknown	The value to be written (string, number, boolean, object, array, or null).
-Returns:
-
-Promise<void>
-
-Resolves when write to server is complete.
-//»
-setPriority(ref, priority)//«
-Sets a priority for the data at this Database location.
-
-Applications need not use priority but can order collections by ordinary
-properties (see Sorting and filtering data ).
-
-Signature:
-
-export declare function setPriority(ref: DatabaseReference, priority: string | number | null): Promise<void>;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The location to write to.
-priority	string | number | null	The priority to be written (string, number, or null).
-Returns:
-
-Promise<void>
-
-Resolves when write to server is complete.
-//»
-setWithPriority(ref, value, priority)//«
-Writes data the Database location. Like set() but also specifies the priority for that data.
-
-Applications need not use priority but can order collections by ordinary
-properties (see Sorting and filtering data ).
-
-Signature:
-
-export declare function setWithPriority(ref: DatabaseReference, value: unknown, priority: string | number | null): Promise<void>;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The location to write to.
-value	unknown	The value to be written (string, number, boolean, object, array, or null).
-priority	string | number | null	The priority to be written (string, number, or null).
-Returns:
-
-Promise<void>
-
-Resolves when write to server is complete.
-//»
-update(ref, values)//«
-Writes multiple values to the Database at once.
-
-The values argument contains multiple property-value pairs that will be written
-to the Database together. Each child property can either be a simple property
-(for example, "name") or a relative path (for example, "name/first") from the
-current location to the data to update.
-
-As opposed to the set() method, update() can be use to selectively update only
-the referenced properties at the current location (instead of replacing all the
-child properties at the current location).
-
-The effect of the write will be visible immediately, and the corresponding
-events ('value', 'child_added', etc.) will be triggered. Synchronization of the
-data to the Firebase servers will also be started, and the returned Promise
-will resolve when complete. If provided, the onComplete callback will be called
-asynchronously after synchronization has finished.
-
-A single update() will generate a single "value" event at the location where
-the update() was performed, regardless of how many children were modified.
-
-Note that modifying data with update() will cancel any pending transactions at
-that location, so extreme care should be taken if mixing update() and
-transaction() to modify the same data.
-
-Passing null to update() will remove the data at this location.
-
-See Introducing multi-location updates and more.
-
-Signature:
-
-export declare function update(ref: DatabaseReference, values: object): Promise<void>;
-Parameters
-Parameter	Type	Description
-ref	DatabaseReference	The location to write to.
-values	object	Object containing multiple values.
-Returns:
-
-Promise<void>
-
-Resolves when update on server is complete.
-
-//»
-
-//»
-function(value, ...)// end(At|Before), start(At|Before), equalTo«
-endAt(value, key)//«
-Creates a QueryConstraint with the specified ending point.
-
-Using startAt(), startAfter(), endBefore(), endAt() and equalTo() allows you to
-choose arbitrary starting and ending points for your queries.
-
-The ending point is inclusive, so children with exactly the specified value
-will be included in the query. The optional key argument can be used to further
-limit the range of the query. If it is specified, then children that have
-exactly the specified value must also have a key name less than or equal to the
-specified key.
-
-You can read more about endAt() in Filtering data.
-
-Signature:
-
-export declare function endAt(value: number | string | boolean | null, key?: string): QueryConstraint;
-Parameters
-Parameter	Type	Description
-value	number | string | boolean | null	The value to end at. The argument type depends on which orderBy() function was used in this query. Specify a value that matches the orderBy() type. When used in combination with orderByKey(), the value must be a string.
-key	string	The child key to end at, among the children with the previously specified priority. This argument is only allowed if ordering by child, value, or priority.
-Returns:
-
-QueryConstraint
-//»
-endBefore(value, key)//«
-Creates a QueryConstraint with the specified ending point (exclusive).
-
-Using startAt(), startAfter(), endBefore(), endAt() and equalTo() allows you to
-choose arbitrary starting and ending points for your queries.
-
-The ending point is exclusive. If only a value is provided, children with a
-value less than the specified value will be included in the query. If a key is
-specified, then children must have a value less than or equal to the specified
-value and a key name less than the specified key.
-
-Signature:
-
-export declare function endBefore(value: number | string | boolean | null, key?: string): QueryConstraint;
-Parameters
-Parameter	Type	Description
-value	number | string | boolean | null	The value to end before. The argument type depends on which orderBy() function was used in this query. Specify a value that matches the orderBy() type. When used in combination with orderByKey(), the value must be a string.
-key	string	The child key to end before, among the children with the previously specified priority. This argument is only allowed if ordering by child, value, or priority.
-Returns:
-
-QueryConstraint
-//»
-equalTo(value, key)//«
-Creates a QueryConstraint that includes children that match the specified value.
-
-Using startAt(), startAfter(), endBefore(), endAt() and equalTo() allows you to
-choose arbitrary starting and ending points for your queries.
-
-The optional key argument can be used to further limit the range of the query.
-If it is specified, then children that have exactly the specified value must
-also have exactly the specified key as their key name. This can be used to
-filter result sets with many matches for the same value.
-
-You can read more about equalTo() in Filtering data.
-
-Signature:
-
-export declare function equalTo(value: number | string | boolean | null, key?: string): QueryConstraint;
-Parameters
-Parameter	Type	Description
-value	number | string | boolean | null	The value to match for. The argument type depends on which orderBy() function was used in this query. Specify a value that matches the orderBy() type. When used in combination with orderByKey(), the value must be a string.
-key	string	The child key to start at, among the children with the previously specified priority. This argument is only allowed if ordering by child, value, or priority.
-Returns:
-
-QueryConstraint
-//»
-startAfter(value, key)//«
-Creates a QueryConstraint with the specified starting point (exclusive).
-
-Using startAt(), startAfter(), endBefore(), endAt() and equalTo() allows you to
-choose arbitrary starting and ending points for your queries.
-
-The starting point is exclusive. If only a value is provided, children with a
-value greater than the specified value will be included in the query. If a key
-is specified, then children must have a value greater than or equal to the
-specified value and a a key name greater than the specified key.
-
-Signature:
-
-export declare function startAfter(value: number | string | boolean | null, key?: string): QueryConstraint;
-Parameters
-Parameter	Type	Description
-value	number | string | boolean | null	The value to start after. The argument type depends on which orderBy() function was used in this query. Specify a value that matches the orderBy() type. When used in combination with orderByKey(), the value must be a string.
-key	string	The child key to start after. This argument is only allowed if ordering by child, value, or priority.
-Returns:
-
-QueryConstraint
-//»
-startAt(value, key)//«
-
-Creates a QueryConstraint with the specified starting point.
-
-Using startAt(), startAfter(), endBefore(), endAt() and equalTo() allows you to
-choose arbitrary starting and ending points for your queries.
-
-The starting point is inclusive, so children with exactly the specified value
-will be included in the query. The optional key argument can be used to further
-limit the range of the query. If it is specified, then children that have
-exactly the specified value must also have a key name greater than or equal to
-the specified key.
-
-You can read more about startAt() in Filtering data.
-
-Signature:
-
-export declare function startAt(value?: number | string | boolean | null, key?: string): QueryConstraint;
-Parameters
-Parameter	Type	Description
-value	number | string | boolean | null	The value to start at. The argument type depends on which orderBy() function was used in this query. Specify a value that matches the orderBy() type. When used in combination with orderByKey(), the value must be a string.
-key	string	The child key to start at. This argument is only allowed if ordering by child, value, or priority.
-Returns:
-
-QueryConstraint
-//»
-//»
-function(enabled, ...)// enableLogging«
-enableLogging(enabled, persistent)//«
-enableLogging(enabled, persistent)	Logs debugging information to the console.
-Logs debugging information to the console.
-
-Signature:
-
-
-export declare function enableLogging(enabled: boolean, persistent?: boolean): any;
-Parameters
-Parameter	Type	Description
-enabled	boolean	Enables logging if true, disables logging if false.
-persistent	boolean	Remembers the logging state between page refreshes if true.
-Returns:
-
-any
-//»
-//»
-function(logger, ...)// enableLogging«
-enableLogging(logger)//«
-enableLogging(logger)	Logs debugging information to the console.
-Logs debugging information to the console.
-
-Signature:
-
-
-export declare function enableLogging(logger: (message: string) => unknown): any;
-Parameters
-Parameter	Type	Description
-logger	(message: string) => unknown	A custom logger function to control how things get logged.
-Returns:
-
-any
-//»
-//»
-
-Classes//«
-Class	Description
-Database	Class representing a Firebase Realtime Database.
-DataSnapshot	A DataSnapshot contains data from a Database location.Any time you read data from the Database, you receive the data as a DataSnapshot. A DataSnapshot is passed to the event callbacks you attach with on() or once(). You can extract the contents of the snapshot as a JavaScript object by calling the val() method. Alternatively, you can traverse into the snapshot by calling child() to return child snapshots (which you could then call val() on).A DataSnapshot is an efficiently generated, immutable copy of the data at a Database location. It cannot be modified and will never change (to modify data, you always call the set() method on a Reference directly).
-OnDisconnect	The onDisconnect class allows you to write or clear data when your client disconnects from the Database server. These updates occur whether your client disconnects cleanly or not, so you can rely on them to clean up data even if a connection is dropped or a client crashes.The onDisconnect class is most commonly used to manage presence in applications where it is useful to detect how many clients are connected and when other clients disconnect. See Enabling Offline Capabilities in JavaScript for more information.To avoid problems when a connection is dropped before the requests can be transferred to the Database server, these functions should be called before writing any data.Note that onDisconnect operations are only triggered once. If you want an operation to occur each time a disconnect occurs, you'll need to re-establish the onDisconnect operations each time you reconnect.
-QueryConstraint	A QueryConstraint is used to narrow the set of documents returned by a Database query. QueryConstraints are created by invoking endAt(), endBefore(), startAt(), startAfter(), limitToFirst(), limitToLast(), orderByChild(), orderByChild(), orderByKey() , orderByPriority() , orderByValue() or equalTo() and can then be passed to query() to create a new query instance that also contains this QueryConstraint.
-TransactionResult	A type for the resolve value of runTransaction().
-//»
-Interfaces//«
-Interface	Description
-DatabaseReference	A DatabaseReference represents a specific location in your Database and can be used for reading or writing data to that Database location.You can reference the root or child location in your Database by calling ref() or ref("child/path").Writing is done with the set() method and reading can be done with the on*() method. See https://firebase.google.com/docs/database/web/read-and-write
-IteratedDataSnapshot	Represents a child snapshot of a Reference that is being iterated over. The key will never be undefined.
-ListenOptions	An options objects that can be used to customize a listener.
-Query	A Query sorts and filters the data at a Database location so only a subset of the child data is included. This can be used to order a collection of data by some attribute (for example, height of dinosaurs) as well as to restrict a large list of items (for example, chat messages) down to a number suitable for synchronizing to the client. Queries are created by chaining together one or more of the filter methods defined here.Just as with a DatabaseReference, you can receive data from a Query by using the on*() methods. You will only receive events and DataSnapshots for the subset of the data that matches your query.See https://firebase.google.com/docs/database/web/lists-of-data#sorting_and_filtering_data for more information.
-ThenableReference	A Promise that can also act as a DatabaseReference when returned by push(). The reference is available immediately and the Promise resolves as the write to the backend completes.
-TransactionOptions	An options object to configure transactions.
-//»
-Type Aliases//«
-Type Alias	Description
-EventType	One of the following strings: "value", "child_added", "child_changed", "child_removed", or "child_moved."
-QueryConstraintType	Describes the different query constraints available in this SDK.
-Unsubscribe	A callback that can invoked to remove a listener.//»
-EventType//«
-One of the following strings: "value", "child_added", "child_changed", "child_removed", or "child_moved."
-
-Signature:
-
-export declare type EventType = 'value' | 'child_added' | 'child_changed' | 'child_moved' | 'child_removed';
-//»
-QueryConstraintType//«
-Describes the different query constraints available in this SDK.
-
-Signature:
-
-export declare type QueryConstraintType = 'endAt' | 'endBefore' | 'startAt' | 'startAfter' | 'limitToFirst' | 'limitToLast' | 'orderByChild' | 'orderByKey' | 'orderByPriority' | 'orderByValue' | 'equalTo';
-//»
-Unsubscribe//«
-A callback that can invoked to remove a listener.
-
-Signature:
-
-export declare type Unsubscribe = () => void;
-//»
-
-»*/
-/*Firebase security language/rules«
-
-Console link:
-https://console.firebase.google.com/project/linuxontheweb/database/linuxontheweb/rules
-
-Basics
-From: https://firebase.google.com/docs/rules/basics
-
-All authenticated users
-"some_path": {
-	".read": "auth.uid !== null",
-	".write": "auth.uid !== null"
-}
-
-Content-owner only access
-"some_path": {
-	"$uid": {
-		// Allow only authenticated content owners access to their data
-		".read": "auth !== null && auth.uid === $uid",
-		".write": "auth !== null && auth.uid === $uid"
-	}
-}
-
-Attribute-based and Role-based access
-"some_path": {
-	"${subpath}": {
-		".write": "root.child('users').child(auth.uid).child('role').val() === 'admin'",
-		".read": true
-	}
-}
-
-Custom-claim attributes and roles
-https://firebase.google.com/docs/auth/admin/custom-claims
-"some_path": {
-	"$uid": {
-		// Create a custom claim for each role or group
-		// you want to use
-		".write": "auth.uid !== null && auth.token.writer === true",
-		".read": "auth.uid !== null && auth.token.reader === true"
-	}
-}
-
-Rules language
-https://firebase.google.com/docs/rules/rules-language
-
-Pre-defined variables
-
-There are a number of helpful, pre-defined variables that can be accessed
-inside a rule definition. Here is a brief summary of each:
-
-Predefined Variables
-
-now			The current time in milliseconds since Linux epoch. This works
-			particularly well for validating timestamps created with the SDK's
-			firebase.database.ServerValue.TIMESTAMP.
-
-root		A RuleDataSnapshot representing the root path in the Firebase
-			database as it exists before the attempted operation.
-
-newData		A RuleDataSnapshot representing the data as it would exist after
-			the attempted operation. It includes the new data being written and existing
-			data.
-
-data		A RuleDataSnapshot representing the data as it existed before the attempted operation.
-
-$ 			variables	A wildcard path used to represent ids and dynamic child keys.
-
-auth		Represents an authenticated user's token payload.
-
-
-"messages": {
-	"$message": {
-		// only messages from the last ten minutes can be read
-		".read": "data.child('timestamp').val() > (now - 600000)",
-
-		// new messages must have a string content and a number timestamp
-		".validate": "newData.hasChildren(['content', 'timestamp']) &&
-			newData.child('content').isString() &&
-			newData.child('timestamp').isNumber()"
-	}
-}
-
-"rooms": {
-	// This rule applies to any child of /rooms/, the key for each room id
-	// is stored inside $room_id variable for reference
-	"$room_id": {
-		"topic": {
-			// The room's topic can be changed if the room id has "public" in it
-			".write": "$room_id.contains('public')"
-		}
-	}
-}
-
-
-"widget": {
-	// a widget can have a title or color attribute
-	"title": { ".validate": true },
-	"color": { ".validate": true },
-
-	// but no other child paths are allowed
-	// in this case, $other means any key excluding "title" and "color"
-	"$other": { ".validate": false }
-}
-
-"foo": {
-	// /foo is readable by the world
-	".read": true,
-
-	// /foo is writable by the world
-	".write": true,
-
-	// data written to /foo must be a string less than 100 characters
-	".validate": "newData.isString() && newData.val().length < 100"
-}
-
-Consider this example, which allows write operations as long as the value of
-the /allow_writes/ node is true, the parent node does not have a readOnly flag
-set, and there is a child named foo in the newly written data:
-
-".write": "root.child('allow_writes').val() === true && !data.parent().child('readOnly').exists() &&
-			newData.child('foo').exists()"
-
-
-"baskets": {
-	".read": "auth.uid !== null && query.orderByChild === 'owner' &&
-				query.equalTo === auth.uid" // restrict basket access to owner of basket
-}
-
-// Would succeed
-db.ref("baskets").orderByChild("owner").equalTo(auth.currentUser.uid).on("value", cb)                 
-
-// Would fail with PermissionDenied
-db.ref("baskets").on("value", cb)
-
-
-messages: {
-	".read": "query.orderByKey && query.limitToFirst <= 1000"
-}
-
-
-// Example queries:
-
-// Would fail with PermissionDenied
-db.ref("messages").on("value", cb)
-
-// Would succeed (default order by key)
-db.ref("messages").limitToFirst(1000).on("value", cb)
-
-The following query. expressions are available in Realtime Database Security Rules.
-
-Query-based rule expressions
-
-Expression				Type	Description
-query.orderByKey		boolean	True for queries ordered by key, priority, or value. False otherwise.
-query.orderByPriority
-query.orderByValue	
-query.orderByChild		string 	Use a string to represent the relative path to a child node. 
-						null	For example, query.orderByChild === "address/zip". If the query 
-								isn't ordered by a child node, this value is null.
-
-query.startAt			string	Retrieves the bounds of the executing query, or returns null if there 
-query.endAt  			number	is no bound set.
-query.equalTo			boolean 	
-             			null	
-
-query.limitToFirst		number	Retrieves the limit on the executing query, or returns null if 
-query.limitToLast		null	there is no limit set.
-
-
-»*/
-/*Example logs scanning in Google Cloud Logs Explorer:«
-
-https://console.cloud.google.com/logs/query?project=linuxontheweb
-
-Sample Queries Page:
-https://cloud.google.com/logging/docs/view/query-library
-
-severity=NOTICE AND
-resource.labels.method=~"firebase" AND
-protoPayload.authenticationInfo.principalEmail=~"gmail\.com$" AND
-timestamp>="2025-09-22T00:00:00Z" AND timestamp<="2025-09-24T00:00:00Z"
-
-Here is the JSON:
-
-{
-"protoPayload": {
-	"@type": "type.googleapis.com/google.cloud.audit.AuditLog",
-	"status": {},
-	"authenticationInfo": {
-		"principalEmail": "XXXXXX@gmail.com"
-	},
-	"requestMetadata": {
-		"callerIp": "XXXX:XXXX:XXXX:XXXX:XX:XXXX:XXXX:XXXX",
-		"callerSuppliedUserAgent": "Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36,gzip(gfe),gzip(gfe)",
-		"requestAttributes": {
-			"time": "2025-09-24T22:15:52.015862Z",
-			"auth": {}
-		},
-		"destinationAttributes": {}
-	},
-	"serviceName": "mobilesdk-pa.googleapis.com",
-	"methodName": "google.internal.firebase.v1.SettingsService.GetFirebaseTokens",
-	"authorizationInfo": [
-		{
-			"resource": "projects/668423415088",
-			"permission": "firebasehosting.sites.update",
-			"granted": true,
-			"resourceAttributes": {},
-			"permissionType": "ADMIN_WRITE"
-		},
-		{
-			"resource": "projects/668423415088",
-			"permission": "firebasedatabase.instances.update",
-			"granted": true,
-			"resourceAttributes": {},
-			"permissionType": "ADMIN_WRITE"
-		}
-	],
-	"resourceName": "projects/668423415088",
-	"request": {
-		"@type": "type.googleapis.com/google.internal.firebase.v1.GetFirebaseTokensRequest",
-		"projectNumber": "668423415088",
-		"namespace": "linuxontheweb"
-	}
-},
-"insertId": "XXXXXXXXXX",
-"resource": {
-	"type": "audited_resource",
-	"labels": {
-		"service": "mobilesdk-pa.googleapis.com",
-		"method": "google.internal.firebase.v1.SettingsService.GetFirebaseTokens",
-		"project_id": "linuxontheweb"
-	}
-},
-"timestamp": "2025-09-24T22:15:51.883631Z",
-"severity": "NOTICE",
-"logName": "projects/linuxontheweb/logs/cloudaudit.googleapis.com%2Factivity",
-"receiveTimestamp": "2025-09-24T22:15:52.389570564Z"
-}
-
-»*/
-/*9/30/25: Let's use update (instead of runTransaction). We will always check
+/*9/30/25: Let's use update (instead of runTransaction). We will always check«
 is_connected, and use a flag (e.g. "force-offline") to force updates when it is false.
 This affects stuff like @NSBDHFUR, where there is (currently) 3 successive calls to
 run_transaction.
-*/
+»*/
 /*9/29/25: Just need to work out the details of how files/folders are represented«
 on the backend, and how they may be queried. Then we can package these functions
 into an api that can be exported to sys/fs.js, so that the NetNode may be finally
@@ -1580,18 +306,31 @@ import {
 		enableLogging
 } from "firebase_database";
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-// Attach a listener to detect changes in the connection state
-let is_connected = false;
-onValue(ref(db, ".info/connected"), (snap) => {
-	is_connected = snap.val();
-cwarn(`Connected: ${is_connected}`);
-});
 
 //»
 
 //Var«
+
+const AWAIT_UPDATE_MS = 5000;
+let update_num = 1;
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+// Attach a listener to detect changes in the connection state
+let is_connected = false;
+/*
+When we do tons of dev reloading, this never gets unregistered, and we end up getting tons
+of warnings, upon reconnecting after disconnecting (e.g. due to closing the laptop cover).
+Perhaps we can export an onkill method.
+*/
+const DISCON_CB = onValue(ref(db, ".info/connected"), (snap) => {
+	is_connected = snap.val();
+cwarn(`Connected: ${is_connected}`);
+});
+const onkill = ()=>{
+	DISCON_CB();
+};
+
 
 //LOGIN_BUTTONS_STR«
 //const GOOGLE_BUT_ID = "googleSignInBtn";
@@ -1762,13 +501,41 @@ cerr("WHERE IS THE BUTTON (gh_but)?");
 //»
 //Funcs«
 
+const B64 = bytes =>{
+	if (bytes.toBase64) return bytes.toBase64();
+	return btoa(String.fromCharCode(...bytes));
+};
+const FROMB64 = str => {
+if (!Uint8Array.fromBase64){
+	try{
+		return Uint8Array.fromBase64(str);
+	}
+	catch(e){
+cerr(s);
+		return null;
+	}
+}
+str = atob(str);
+let arr = new Uint8Array(str.length);
+let len = arr.length;
+for (let i = 0; i < len; i++) {
+	arr[i] = str.charCodeAt(i);
+}
+return arr;
+
+};
+
 const sanitizeKey=(key) => {//«
 	const encoder = new TextEncoder();
 	const data = encoder.encode(key);
+/*
 	let b64;
 	if (data.toBase64) b64 = data.toBase64();
 	else b64 = btoa(String.fromCharCode(...data));
-	return b64.replace(/\+/g, '-')
+*/
+//	return b64.replace(/\+/g, '-')
+
+	return B64(data).replace(/\+/g, '-')
 		.replace(/\x2f/g, '_')
 		.replace(/=+$/, '');
 }//»
@@ -1778,9 +545,6 @@ const unsanitizeKey=(safeKey)=>{//«
 	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
 	return new TextDecoder().decode(bytes);
 };//»
-
-const AWAIT_UPDATE_MS = 5000;
-let update_num = 1;
 
 const update = async (refarg, obj) => {//«
 /*
@@ -1971,16 +735,17 @@ cerr(error);
 »*/
 });
 }//»
-const fbase_prep = ()=> {//«
+const get_id = ()=> {//«
 	let gh_id = globals.auth.github.uid;
 	if (!gh_id){
 		return "please call 'user' first!";
 	}
 	return parseInt(gh_id);
 };//»
-const create_new_file_or_dir = async(_this, optsArg={}) => {//«
 
-let ghid = fbase_prep();
+const do_fbase_fs_op = async(_this, optsArg={}) => {//«
+
+let ghid = get_id();
 if (isStr(ghid)){
 	_this.no(ghid);
 	return;
@@ -1988,19 +753,6 @@ if (isStr(ghid)){
 /*
 This currently only works in the base user dir
 */
-let use_obj;
-let use_val;
-let say_type;
-if (optsArg.isDir){
-	use_obj = NEW_DIR;
-	use_val = FBASE_DIRECTORY_VAL;
-	say_type = "folder";
-}
-else{
-	use_obj = NEW_FILE
-	use_val = 0;
-	say_type = "file";
-}
 
 const{args, opts}=_this;
 if (!is_connected && !opts.offline){
@@ -2013,11 +765,42 @@ let path = args.shift();
 
 if (!path) return _this.no("no path given");
 
+let use_obj;
+let use_val;
+let say_type;
+if (optsArg.mkDir){
+	use_obj = NEW_DIR;
+	use_val = FBASE_DIRECTORY_VAL;
+	say_type = "folder";
+}
+else if (optsArg.bytes){
+	let bytes = optsArg.bytes;
+	use_val = bytes.byteLength;
+	say_type = "file";
+	use_obj = {type: "f", size: bytes.byteLength, contents: B64(bytes)};
+}
+else if (optsArg.rmDir) {
+	say_type = "folder";
+	use_obj = {};//This effectively deletes the object from the database
+}
+else if (optsArg.rmFile){
+	say_type = "file";
+	use_obj = {};//Same as above
+}
+else {
+	use_obj = NEW_FILE
+	use_val = 0;
+	say_type = "file";
+}
+
+
 let rel_path_enc = "";
 let name;
 if (path.match(/\x2f/)) {
+if (path === "/"){
+return _this.no("'/': invalid path");
+}
 	let arr = path.split("/");
-//log(arr);
 	name = arr.pop();
 	for (let name of arr){
 		rel_path_enc+=`/kids/${sanitizeKey(name)}`;
@@ -2042,22 +825,73 @@ if (!snap.exists()){
 }
 
 let list = snap.val();
-if (list.names.includes(name)){
-	if (opts.isDir) _this.no(`exists: ${name}`);
-	else _this.ok(`exists: ${name}`);
-	return;
+let ind = list.names.indexOf(name);
+if (ind >= 0){
+	if (optsArg.mkDir) {
+		_this.no(`exists: ${name}`);
+		return;
+	}
+	else if (optsArg.rmDir){
+		if (list.vals[ind] !== FBASE_DIRECTORY_VAL){
+			_this.no(`'${name}': not a directory`);
+			return;
+		}
+		let rv = await get_value(get_ref(`${base_path}/kids/${sanitizeKey(name)}/size`));
+		if (isErr(rv)){
+			return _this.no(rv.message);
+		}
+		if (rv.val() > 0){
+			return _this.no(`'${name}': the directory is not empty`);
+		}
+	}
+	else if (optsArg.rmFile){
+		if (list.vals[ind] === FBASE_DIRECTORY_VAL){
+			_this.no(`'${name}': is a directory`);
+			return;
+		}
+	}
+	else if (!use_val){
+		_this.ok(`exists: ${name}`);
+		return;
+	}
+	else if (list.vals[ind] === FBASE_DIRECTORY_VAL){
+		_this.no(`'${name}': cannot write to the directory`);
+		return;
+	}
+	else{
+//We have a value and a file (update it)
+		list.names.splice(ind, 1);
+		list.vals.splice(ind, 1);
+	}
 }
-if (list.names[0]===false){
+else if (optsArg.rmDir || optsArg.rmFile){
+
+_this.no(`'${name}': not found`);
+return;
+}
+
+let use_len;
+if (optsArg.rmDir || optsArg.rmFile){
+	list.names.splice(ind, 1);
+	list.vals.splice(ind, 1);
+	use_len = list.names.length;
+	if (!use_len){
+		list.names=[false];
+		list.vals=[false];
+	}
+}
+else if (!list.names[0]){
 	list.names = [name];
 	list.vals = [use_val];
+	use_len = 1;
 }
 else{
 	list.names.push(name);
 	list.vals.push(use_val);
 	let rv = parallel_sort(list.names, list.vals);
-//log(rv);
 	list.names = rv[0];
 	list.vals = rv[1];
+	use_len = list.names.length;
 }
 
 
@@ -2065,35 +899,11 @@ let enc_path = sanitizeKey(name);
 
 let update_obj = {
 	list,
-	size: list.names.length,
+//	size: list.names.length,
+	size: use_len,
 	[`kids/${enc_path}`]: use_obj
 };
-//log(update_obj);
-//log(base_path);
-//log(ref(base_path));
-
 update(base_path, update_obj);
-
-/*«
-let path_ref = get_ref(`${base_path}/kids/${enc_path}`);
-
-//NSBDHFUR: Change to a single update call!
-let rv = await run_transaction(path_ref, use_obj);
-if (isErr(rv)) return _this.no(rv.message);
-rv = await run_transaction(list_ref, list);
-if (isErr(rv)) {
-	_this.no(`The ${say_type} was created, but the list failed to be updated (error message: ${rv.message})`);
-	return;
-}
-let size_ref = get_ref(`${base_path}/size`);
-rv = await run_transaction(size_ref, list.names.length);
-if (isErr(rv)) {
-	_this.no(`The list size failed to be updated (error message: ${rv.message})`);
-	return;
-}
-
-»*/
-
 _this.ok();
 };//»
 
@@ -2445,7 +1255,26 @@ static getOpts(){
 	}
 }
 run(){
-	create_new_file_or_dir(this);
+	do_fbase_fs_op(this);
+}
+}//»
+const com_fbwrite = class extends Com{//«
+static getOpts(){
+	return {
+		l: {offline: 1}
+	}
+}
+async run(){
+/*
+Should we just do a base64 of the bytes?
+*/
+const{args, term}=this;
+let path = args.shift();
+if (!path) return this.no("File arg needed");
+let bytes = await path.toBytes(term);
+if (!bytes) return this.no(`${path}: invalid path`);
+if (!bytes.length) return do_fbase_fs_op(this);
+do_fbase_fs_op(this, {bytes});
 }
 }//»
 const com_fbmkdir = class extends Com{//«
@@ -2455,7 +1284,7 @@ static getOpts(){
 	}
 }
 run(){
-	create_new_file_or_dir(this, {isDir: true});
+	do_fbase_fs_op(this, {mkDir: true});
 }
 }//»
 const com_fbmkhomedir = class extends Com{//«
@@ -2496,7 +1325,7 @@ const com_fbls = class extends Com{//«
 async run(){
 const{args}=this;
 
-let ghid = fbase_prep();
+let ghid = get_id();
 if (isStr(ghid)) return this.no(ghid);
 let path = args.shift();
 let path_enc = "";
@@ -2540,7 +1369,7 @@ const com_fbstat = class extends Com {//«
 	async run(){
 		const{args}=this;
 
-		let ghid = fbase_prep();
+		let ghid = get_id();
 		if (isStr(ghid)) return this.no(ghid);
 		if (!args.length){
 			return this.no("Nothing given!");
@@ -2590,6 +1419,74 @@ snap.forEach(kid=>{
 this.ok();
 }
 }//»
+const com_fbrm = class extends Com{//«
+async run(){
+const{args}=this;
+//This is just like write, but we pass null to existing file ref
+do_fbase_fs_op(this, {rmFile: true});
+}
+}//»
+const com_fbrmdir = class extends Com{//«
+async run(){
+const{args}=this;
+//This is just like write, but we pass null to an existing directory ref
+do_fbase_fs_op(this, {rmDir: true});
+}
+}//»
+const com_fbread = class extends Com{//«
+
+async run(){
+
+const{args}=this;
+let ghid = get_id();
+if (isStr(ghid)){
+	this.no(ghid);
+	return;
+}
+let path = args.shift();
+if (!path){
+	return this.no("path not given");
+}
+let is_text = path.hasTextExt();
+let rel_path_enc = "";
+if (path.match(/\x2f/)) {
+if (path === "/"){
+return this.no("'/': invalid path");
+}
+	let arr = path.split("/");
+//	name = arr.pop();
+	for (let name of arr){
+		rel_path_enc+=`/kids/${sanitizeKey(name)}`;
+	}
+//	return _this.no("not (yet) allowing '/' in the name!");
+}
+else{
+	rel_path_enc=`/kids/${sanitizeKey(path)}`;
+}
+
+let base_path = `/user/${ghid}${rel_path_enc}/contents`;
+
+let snap = await get_value(get_ref(base_path));
+if (isErr(snap)){
+	return this.no(snap.message);
+}
+if (!snap.exists()){
+	this.no(`${path}: not found`);
+	return;
+}
+
+if (is_text){
+	this.out(atob(snap.val()));
+}
+else {
+	let bytes = FROMB64(snap.val());
+	this.out(bytes);
+}
+
+this.ok();
+
+}
+}//»
 
 //»
 
@@ -2605,9 +1502,13 @@ const coms = {//«
 	fbls: com_fbls,
 	fbstat: com_fbstat,
 	fbstats: com_fbstats,
+	fbwrite: com_fbwrite,
+	fbrm: com_fbrm,
+	fbrmdir: com_fbrmdir,
+	fbread: com_fbread,
 }//»
 
-export {coms};
+export {coms, onkill};
 
 /*«
 goog_but.onclick=async()=>{//«

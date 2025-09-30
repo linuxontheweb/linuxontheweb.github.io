@@ -2771,6 +2771,10 @@ _.toText = async function(opts = {}) {
 	if (opts.lines === true) return txt.split("\n");
 	return txt;
 };
+_.hasTextExt = function(opts={}){
+	let ext = this.split(".").pop();
+	return TEXT_EXTENSIONS.includes(ext);
+}
 _.toLines=function(opts={}){
 	opts.lines = true;
 	return this.toText(opts);

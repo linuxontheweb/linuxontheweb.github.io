@@ -3666,7 +3666,7 @@ cwarn(`Skipping: ${mod}`);
 			continue;
 		}
 		this.doOverlay(`Delete: ${mod}`);
-		await this.ShellMod.util.deleteMods([mod]);
+		await this.ShellMod.util.deleteComs([mod]);
 		await this.ShellMod.util.doImports([mod], cerr);
 	}
 }//»
