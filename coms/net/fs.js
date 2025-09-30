@@ -25,6 +25,7 @@
 
 »*/
 /*Firebase Realtime database documentation«
+
 From: https://firebase.google.com/docs/reference/js/database
 
 function(app, ...)// getDatabase«
@@ -853,6 +854,7 @@ Promise<void>
 Resolves when update on server is complete.
 
 //»
+
 //»
 function(value, ...)// end(At|Before), start(At|Before), equalTo«
 endAt(value, key)//«
@@ -1297,7 +1299,11 @@ Here is the JSON:
 }
 
 »*/
-
+/*9/30/25: Let's use update (instead of runTransaction). We will always check
+is_connected, and use a flag (e.g. "force-offline") to force updates when it is false.
+This affects stuff like @NSBDHFUR, where there is (currently) 3 successive calls to
+run_transaction.
+*/
 /*9/29/25: Just need to work out the details of how files/folders are represented«
 on the backend, and how they may be queried. Then we can package these functions
 into an api that can be exported to sys/fs.js, so that the NetNode may be finally
@@ -1532,11 +1538,7 @@ const {USERS_TYPE, fsMod: fs, fbase}=globals;
 const {Com} = globals.ShellMod.comClasses;
 const{mkdv, mk, isArr,isStr,isEOF,isErr,log,jlog,cwarn,cerr}=LOTW.api.util;
 const{root, mount_tree}=fs;
-const {popup} = globals.popup;
-
-//»
-
-//Var«
+//const {popup} = globals.popup;
 
 //Firebase«
 const firebaseConfig = {
@@ -1548,11 +1550,48 @@ const firebaseConfig = {
 	messagingSenderId: "668423415088",
 	appId: "1:668423415088:web:979b40c704cab2322ed4f5"
 };
-
-const FBASE_APP_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-const FBASE_AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-const FBASE_DB_URL = "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 //»
+//Database
+
+import {initializeApp} from "firebase_app";
+
+import {
+		getAuth,
+		onAuthStateChanged,
+		signInWithPopup,
+		GithubAuthProvider,
+		signOut 
+} from "firebase_auth";
+
+import { 
+		getDatabase,
+		ref,
+		set,
+		get,
+		update as _update,
+		query,
+		runTransaction,
+		serverTimestamp,
+		orderByChild,
+		limitToFirst,
+		limitToLast,
+		startAt,
+		onValue,
+		enableLogging
+} from "firebase_database";
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+// Attach a listener to detect changes in the connection state
+let is_connected = false;
+onValue(ref(db, ".info/connected"), (snap) => {
+	is_connected = snap.val();
+cwarn(`Connected: ${is_connected}`);
+});
+
+//»
+
+//Var«
 
 //LOGIN_BUTTONS_STR«
 //const GOOGLE_BUT_ID = "googleSignInBtn";
@@ -1576,111 +1615,110 @@ const LOGIN_BUTTONS_STR = `
 //GSI_CSS_STR«
 const GSI_CSS_STR = `
 .gsi-material-button {
-  -moz-user-select: none;
-  -webkit-user-select: none;
-  -ms-user-select: none;
-  -webkit-appearance: none;
-  background-color: WHITE;
-  background-image: none;
-  border: 1px solid #747775;
-  -webkit-border-radius: 20px;
-  border-radius: 20px;
-  -webkit-box-sizing: border-box;
-  box-sizing: border-box;
-  color: #1f1f1f;
-  cursor: pointer;
-  font-family: 'Roboto', arial, sans-serif;
-  font-size: 14px;
-  height: 40px;
-  letter-spacing: 0.25px;
-  outline: none;
-  overflow: hidden;
-  padding: 0 12px;
-  position: relative;
-  text-align: center;
-  -webkit-transition: background-color .218s, border-color .218s, box-shadow .218s;
-  transition: background-color .218s, border-color .218s, box-shadow .218s;
-  vertical-align: middle;
-  white-space: nowrap;
-  width: auto;
-  max-width: 400px;
-  min-width: min-content;
+-moz-user-select: none;
+-webkit-user-select: none;
+-ms-user-select: none;
+-webkit-appearance: none;
+background-color: WHITE;
+background-image: none;
+border: 1px solid #747775;
+-webkit-border-radius: 20px;
+border-radius: 20px;
+-webkit-box-sizing: border-box;
+box-sizing: border-box;
+color: #1f1f1f;
+cursor: pointer;
+font-family: 'Roboto', arial, sans-serif;
+font-size: 14px;
+height: 40px;
+letter-spacing: 0.25px;
+outline: none;
+overflow: hidden;
+padding: 0 12px;
+position: relative;
+text-align: center;
+-webkit-transition: background-color .218s, border-color .218s, box-shadow .218s;
+transition: background-color .218s, border-color .218s, box-shadow .218s;
+vertical-align: middle;
+white-space: nowrap;
+width: auto;
+max-width: 400px;
+min-width: min-content;
 }
 
 .gsi-material-button .gsi-material-button-icon {
-  height: 20px;
-  margin-right: 12px;
-  min-width: 20px;
-  width: 20px;
+height: 20px;
+margin-right: 12px;
+min-width: 20px;
+width: 20px;
 }
 
 .gsi-material-button .gsi-material-button-content-wrapper {
-  -webkit-align-items: center;
-  align-items: center;
-  display: flex;
-  -webkit-flex-direction: row;
-  flex-direction: row;
-  -webkit-flex-wrap: nowrap;
-  flex-wrap: nowrap;
-  height: 100%;
-  justify-content: space-between;
-  position: relative;
-  width: 100%;
+-webkit-align-items: center;
+align-items: center;
+display: flex;
+-webkit-flex-direction: row;
+flex-direction: row;
+-webkit-flex-wrap: nowrap;
+flex-wrap: nowrap;
+height: 100%;
+justify-content: space-between;
+position: relative;
+width: 100%;
 }
 
 .gsi-material-button .gsi-material-button-contents {
-  -webkit-flex-grow: 1;
-  flex-grow: 1;
-  font-family: 'Roboto', arial, sans-serif;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: top;
+-webkit-flex-grow: 1;
+flex-grow: 1;
+font-family: 'Roboto', arial, sans-serif;
+font-weight: 500;
+overflow: hidden;
+text-overflow: ellipsis;
+vertical-align: top;
 }
 
 .gsi-material-button .gsi-material-button-state {
-  -webkit-transition: opacity .218s;
-  transition: opacity .218s;
-  bottom: 0;
-  left: 0;
-  opacity: 0;
-  position: absolute;
-  right: 0;
-  top: 0;
+-webkit-transition: opacity .218s;
+transition: opacity .218s;
+bottom: 0;
+left: 0;
+opacity: 0;
+position: absolute;
+right: 0;
+top: 0;
 }
 
 .gsi-material-button:disabled {
-  cursor: default;
-  background-color: #ffffff61;
-  border-color: #1f1f1f1f;
+cursor: default;
+background-color: #ffffff61;
+border-color: #1f1f1f1f;
 }
 
 .gsi-material-button:disabled .gsi-material-button-contents {
-  opacity: 38%;
+opacity: 38%;
 }
 
 .gsi-material-button:disabled .gsi-material-button-icon {
-  opacity: 38%;
+opacity: 38%;
 }
 
 .gsi-material-button:not(:disabled):active .gsi-material-button-state, 
 .gsi-material-button:not(:disabled):focus .gsi-material-button-state {
-  background-color: #303030;
-  opacity: 12%;
+background-color: #303030;
+opacity: 12%;
 }
 
 .gsi-material-button:not(:disabled):hover {
-  -webkit-box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
-  box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+-webkit-box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
+box-shadow: 0 1px 2px 0 rgba(60, 64, 67, .30), 0 1px 3px 1px rgba(60, 64, 67, .15);
 }
 
 .gsi-material-button:not(:disabled):hover .gsi-material-button-state {
-  background-color: #303030;
-  opacity: 8%;
+background-color: #303030;
+opacity: 8%;
 }
 `;
 //»
-
 const GSI_CSS_ID = "gsi_css";
 
 const NEW_DIR = {
@@ -1707,15 +1745,8 @@ const DEF_TRANS_DELAY = 5000;
 //»
 
 //DOM«
-if (!document.getElementById(GSI_CSS_ID)) {
-	let sty = mk("style");
-	sty.innerHTML = GSI_CSS_STR;
-	sty.id = GSI_CSS_ID;
-	document.head.appendChild(sty);
-}
-const button_div = mkdv();
-button_div.innerHTML = LOGIN_BUTTONS_STR;
 
+/*
 //let goog_but, gh_but;
 let gh_but;
 let buttons = button_div.getElementsByTagName("button");
@@ -1723,105 +1754,13 @@ for (let but of buttons){
 	if (but.name == GITHUB_BUT_ID){
 		gh_but = but;
 	}
-/*
-	if (but.name == GOOGLE_BUT_ID){
-		goog_but = but;
-	}
-	else if (but.name == GITHUB_BUT_ID){
-		gh_but = but;
-	}
-*/
 }
-//if (!(goog_but && gh_but)){
 if (!gh_but){
 cerr("WHERE IS THE BUTTON (gh_but)?");
 }
+*/
 //»
 //Funcs«
-
-const init_fbase = async()=>{//«
-
-let initializeApp;//App
-
-let getAuth,//Auth
-	onAuthStateChanged,
-	signInWithPopup,
-//	GoogleAuthProvider,
-	GithubAuthProvider,
-	signOut;
-
-let getDatabase,//Database
-	ref,
-	set,
-	get,
-	query,
-	runTransaction,
-	serverTimestamp,
-	orderByChild,
-	limitToFirst,
-	limitToLast,
-	startAt,
-	enableLogging;
-
-try {
-
-//App
-	({ initializeApp } = await import(FBASE_APP_URL));
-
-//Auth
-	({
-		getAuth,
-		onAuthStateChanged,
-		signInWithPopup,
-//		GoogleAuthProvider,
-		GithubAuthProvider,
-		signOut 
-	} =  await import(FBASE_AUTH_URL));
-
-//Database
-	({ 
-		getDatabase,
-		ref,
-		set,
-		get,
-		query,
-		runTransaction,
-		serverTimestamp,
-		orderByChild,
-		limitToFirst,
-		limitToLast,
-		startAt,
-		enableLogging
-	} = await import(FBASE_DB_URL));
-}
-catch(e){
-	cerr(e);
-	return "Could not import!";
-}
-//fbase.initializeApp = initializeApp;
-fbase.app = initializeApp(firebaseConfig);
-fbase.getAuth = getAuth; 
-fbase.onAuthStateChanged=onAuthStateChanged; 
-fbase.signInWithPopup=signInWithPopup; 
-//fbase.GoogleAuthProvider=GoogleAuthProvider; 
-fbase.GithubAuthProvider=GithubAuthProvider; 
-fbase.signOut=signOut;
-fbase.getDatabase = getDatabase;
-fbase.ref = ref;
-fbase.set = set;
-fbase.get = get;
-fbase.query = query;
-fbase.runTransaction = runTransaction;
-fbase.orderByChild = orderByChild;
-fbase.limitToFirst = limitToFirst;
-fbase.limitToLast = limitToLast;
-fbase.startAt = startAt;
-fbase.serverTimestamp = serverTimestamp;
-fbase.enableLogging = enableLogging;
-fbase.didInit = true;
-return true;
-
-}//»
 
 const sanitizeKey=(key) => {//«
 	const encoder = new TextEncoder();
@@ -1840,6 +1779,35 @@ const unsanitizeKey=(safeKey)=>{//«
 	return new TextDecoder().decode(bytes);
 };//»
 
+const AWAIT_UPDATE_MS = 5000;
+let update_num = 1;
+
+const update = async (...args) => {
+/*
+This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
+not completed within the specified interval. If after returning, we have previously warned,
+then we let the user know that the update has finished. In case everything works fine,
+nothing is reported.
+*/
+	let have_num = update_num;
+	update_num++;
+	let did_warn = false;
+	let timeout = setTimeout(()=>{
+cwarn(`update#${have_num} has not returned after: ${AWAIT_UPDATE_MS}ms!`);
+		did_warn = true;
+	}, AWAIT_UPDATE_MS);
+	try {
+		await _update(...args);
+		clearTimeout(timeout);
+		if (did_warn){
+log(`update#${have_num} has finally returned!`);
+		}
+	}
+	catch(e){
+cwarn(`An error has occurred for update#${have_num}`);
+cerr(e);
+	}
+};
 const parallel_sort = (primary, secondary, if_rev) => {//«
 /*«
 Say you are given 2 JS arrays of equal length. One of them must be sorted
@@ -1904,29 +1872,23 @@ return [
 
 }//»
 const get_fbase_user = () =>{//«
-if (!fbase.didInit){
-throw new Error("NEVER CALLED init_fbase() ?!?!");
-}
 	return new Promise((Y,N)=>{
-		const auth = fbase.getAuth(fbase.app);
-		let cb = fbase.onAuthStateChanged(auth, (user) => {
+		const auth = getAuth(app);
+		let cb = onAuthStateChanged(auth, (user) => {
 			cb();
 			Y(user);
 		});
 	});
 };//»
 const get_ref = (path) => {//«
-	let db = fbase.getDatabase(fbase.app);
-	let ref;
-	if (path) ref = fbase.ref(db, path);
-	else ref = fbase.ref(db);
-	return ref;
+	if (path) return ref(db, path);
+	return  ref(db);
 };//»
 const get_value = async(ref)=>{//«
 
 let rv;
 try{
-	rv = await fbase.get(ref);
+	rv = await get(ref);
 	return rv;
 }
 catch(e){
@@ -1964,7 +1926,7 @@ return new Promise(async(resolve, reject) => {
 	const onTimeout = () => {
 		timedOut = true;
 //		ref.transaction(() => undefined); // Send an abort command to the queue
-		fbase.runTransaction(ref, ()=>{return undefined;});
+		runTransaction(ref, ()=>{return undefined;});
 		resolve(new Error('Firebase write operation timed out.'));
 	};
 
@@ -1972,7 +1934,7 @@ return new Promise(async(resolve, reject) => {
 	timer = setTimeout(onTimeout, delay);
 	let result;
 	try {
-		result = await fbase.runTransaction(ref, curVal=>{
+		result = await runTransaction(ref, curVal=>{
 			// If the timer has already fired, abort the transaction
 			if (timedOut) {
 				return undefined; // Returning undefined aborts the transaction
@@ -2008,16 +1970,13 @@ cerr(error);
 });
 }//»
 const fbase_prep = ()=> {//«
-	if (!fbase.didInit){
-		return "did not init firebase";
-	}
 	let gh_id = globals.auth.github.uid;
 	if (!gh_id){
 		return "please call 'user' first!";
 	}
 	return parseInt(gh_id);
 };//»
-const create_new_file_or_dir = async(_this, opts={}) => {//«
+const create_new_file_or_dir = async(_this, optsArg={}) => {//«
 
 let ghid = fbase_prep();
 if (isStr(ghid)){
@@ -2030,7 +1989,7 @@ This currently only works in the base user dir
 let use_obj;
 let use_val;
 let say_type;
-if (opts.isDir){
+if (optsArg.isDir){
 	use_obj = NEW_DIR;
 	use_val = FBASE_DIRECTORY_VAL;
 	say_type = "folder";
@@ -2041,7 +2000,11 @@ else{
 	say_type = "file";
 }
 
-const{args}=_this;
+const{args, opts}=_this;
+if (!is_connected && !opts.offline){
+	_this.no("not connected (use --offline to force)");
+	return;
+}
 
 //let ghid = globals.auth.github.uid;
 let path = args.shift();
@@ -2095,9 +2058,24 @@ else{
 	list.vals = rv[1];
 }
 
+
 let enc_path = sanitizeKey(name);
+
+let update_obj = {
+	list,
+	size: list.names.length,
+	[`kids/${enc_path}`]: use_obj
+};
+//log(update_obj);
+//log(base_path);
+//log(ref(base_path));
+
+update(get_ref(base_path), update_obj);
+
+/*«
 let path_ref = get_ref(`${base_path}/kids/${enc_path}`);
 
+//NSBDHFUR: Change to a single update call!
 let rv = await run_transaction(path_ref, use_obj);
 if (isErr(rv)) return _this.no(rv.message);
 rv = await run_transaction(list_ref, list);
@@ -2112,8 +2090,9 @@ if (isErr(rv)) {
 	return;
 }
 
-_this.ok();
+»*/
 
+_this.ok();
 };//»
 
 //»
@@ -2141,11 +2120,11 @@ let mins_ago = 72;
 let num_recent_stats = 10;
 
 let start_time = new Date().getTime() - (mins_ago * 60000);
-let c1 = fbase.orderByChild('time');
-let c2 = fbase.startAt(start_time);
-let c3 = fbase.limitToLast(num_recent_stats);
+let c1 = orderByChild('time');
+let c2 = startAt(start_time);
+let c3 = limitToLast(num_recent_stats);
 let ref = get_ref("status");
-let q = fbase.query(ref, c1, c2, c3);
+let q = query(ref, c1, c2, c3);
 let snap = await get_value(q);
 if (isErr(snap)){
 	return this.no(snap.message);
@@ -2231,7 +2210,12 @@ This will be the interface into one's own user account
 static getOpts(){
 	return{
 		s:{
-			f: 1
+			f: 1,
+			c: 1
+		},
+		l:{
+			force: 1,
+			click: 1
 		}
 	};
 }
@@ -2251,22 +2235,20 @@ let is_signin = com === "signin" || com === "in" || com === "i";
 let is_signout = com === "signout" || com === "out" || com === "o";
 let is_stat = com === "stat";
 
-if (!fbase.didInit) return this.no("Did not initialize firebase");
-
-if ((is_stat || is_signin) && globals.auth.github.login && !opts.f){
+if ((is_stat || is_signin) && globals.auth.github.login && !(opts.force || opts.f)){
 	let already = "";
 //	if (is_signin) already = " already";
 	this.ok(`you are${already} signed in as: ${globals.auth.github.login}`);
 	return;
 }
 
-const auth = fbase.getAuth(fbase.app);
+const auth = getAuth(app);
 
 const handle_user = async user => {//«
 
 	if (is_signout){
 		try{
-			await fbase.signOut(auth);
+			await signOut(auth);
 			delete_auth();
 			this.ok('Signed out');
 		}
@@ -2320,7 +2302,7 @@ log("Setting", `github-${uid}`, login);
 	this.ok(`you are${already} signed in as: ${login}`);
 };//»
 
-let cb = fbase.onAuthStateChanged(auth, user => {//«
+let cb = onAuthStateChanged(auth, async user => {//«
 cb();//Just doing this once, so the returned value is supposed to unregister the callback.
 
 if (user) return handle_user(user);
@@ -2332,7 +2314,6 @@ if (!is_signin) {
 	return;
 }
 
-let is_active = false;
 /*«
 Either the user clicks a sign-in button, and pop_div.cancel() will be called, or
 they will click the popup's lone button (here arbitrarily labelled "CANCEL"), and 
@@ -2341,7 +2322,49 @@ the command will immediately return.
 If they try clicking the popup's button after clicking one of the sign-in
 buttons, the popup's callback will return because the is_active flag is set.
 »*/
-let pop_div = popup(button_div, {//«
+
+/*
+*/
+let pop_div;
+let is_active = false;
+const do_signin = async()=> {//«
+	try {
+		await signInWithPopup(auth, new GithubAuthProvider());
+		pop_div && pop_div.cancel();
+	}
+	catch(e){
+		cerr(e);
+		this.no(e.message);
+		pop_div && pop_div.cancel();
+		return;
+	}
+	user = await get_fbase_user();
+	if (user){
+		handle_user(user);
+	}
+	else{
+		this.no(`Failed to get user object after after signing in`);
+	}
+};//»
+if ((opts.click || opts.c) && globals.popup) {//«
+
+if (!document.getElementById(GSI_CSS_ID)) {
+	let sty = mk("style");
+	sty.innerHTML = GSI_CSS_STR;
+	sty.id = GSI_CSS_ID;
+	document.head.appendChild(sty);
+}
+
+const button_div = mkdv();
+button_div.innerHTML = LOGIN_BUTTONS_STR;
+let gh_but;
+let buttons = button_div.getElementsByTagName("button");
+for (let but of buttons){
+	if (but.name == GITHUB_BUT_ID){
+		gh_but = but;
+	}
+}
+pop_div = globals.popup.popup(button_div, {//«
 	cb: ()=>{
 		if (is_active) return;
 //If we get down here, neither of the sign-in buttons will have been clicked
@@ -2354,24 +2377,13 @@ gh_but.onclick=async()=>{//«
 	is_active = true;
 	gh_but.onclick = null;
 //	goog_but.onclick = null;
-	try {
-		await fbase.signInWithPopup(auth, new fbase.GithubAuthProvider());
-	}
-	catch(e){
-		cerr(e);
-		this.no(e.message);
-		pop_div.cancel();
-		return;
-	}
-	let user = await get_fbase_user();
-	if (user){
-		handle_user(user);
-	}
-	else{
-		this.no(`Failed to get user object after after signing in`);
-	}
-	pop_div.cancel();
+	do_signin();
 };//»
+
+}//»
+else{
+	do_signin();
+}
 
 });//»
 
@@ -2409,7 +2421,6 @@ shell/terminal functions like ls and doing tab complete.
 		}//»
 		else if (com=="list") {//«
 			if (!did_mount) return this.no("Did not mount!");
-			if (!fbase.didInit) return this.no("Did not initialize firebase");
 let user = await get_fbase_user();
 if (!user) return this.no("Not signed in!");
 log(user);
@@ -2425,37 +2436,11 @@ const com_fbase = class extends Com{//«
 	async run(){
 		const{args}=this;
 		let com = args.shift();
-		if (!com) com = "init";
-		if (com == "init") {
-			if (fbase.didInit){
-				this.wrn("did already init");
-				this.ok();
-				return;
-			}
-			let rv = await init_fbase();
-			if (rv === true){
-				this.ok("init: ok");
-				return;
-			}
-			if (isStr(rv)) return this.no(rv);
-			log(rv);
-			this.no("Unknown value returned from init_fbase() (see console)");
-			return;
-		}
-		if (!fbase.didInit){
-			this.no("did not init firebase");
-			return;
-		}
-		let db = fbase.getDatabase(fbase.app);
-		if (com == "db") {
-log(db);
-this.ok();
-		}
-		else if (com == "ref") {
+		if (com == "ref") {
 let path = args.shift();
 let ref;
-if (path) ref = fbase.ref(db, path);
-else ref = fbase.ref(db);
+if (path) ref = ref(db, path);
+else ref = ref(db);
 log(ref);
 this.ok();
 		}
@@ -2468,10 +2453,10 @@ let path = args.shift();
 let val = args.shift();
 if (!val) val = true;
 let ref;
-if (path) ref = fbase.ref(db, path);
-else ref = fbase.ref(db);
+if (path) ref = ref(db, path);
+else ref = ref(db);
 try {
-let rv = await fbase.set(ref, val);
+let rv = await set(ref, val);
 this.ok();
 }
 catch(e){
@@ -2485,11 +2470,21 @@ cerr(e);
 	}
 }//»
 const com_fbtouch = class extends Com{//«
+static getOpts(){
+	return {
+		l: {offline: 1}
+	}
+}
 run(){
 	create_new_file_or_dir(this);
 }
 }//»
 const com_fbmkdir = class extends Com{//«
+static getOpts(){
+	return {
+		l: {offline: 1}
+	}
+}
 run(){
 	create_new_file_or_dir(this, {isDir: true});
 }
@@ -2498,10 +2493,10 @@ const com_fbmkhomedir = class extends Com{//«
 async run(){
 const{args}=this;
 
-if (!fbase.didInit){
-	this.no("did not init firebase");
-	return;
-}
+//if (!fbase.didInit){
+//	this.no("did not init firebase");
+//	return;
+//}
 const gh = globals.auth.github;
 if (!gh.uid){
 	return this.no("please call 'user' first!");
@@ -2585,7 +2580,7 @@ information they might want to provide.
 		let ref = get_ref(`/status/${ghid}`);
 		let obj = {
 //			time: Math.floor((new Date().getTime())/1000),
-			time: fbase.serverTimestamp(),
+			time: serverTimestamp(),
 			content: args.join(" ")
 		};
 		let rv = await run_transaction(ref, obj);

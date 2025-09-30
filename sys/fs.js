@@ -18,9 +18,9 @@ let node = await fname.toNode({cwd: path});
 »*/
 /*9/29/25: Proposing: NetNode
 
- Let's put a new kind of FSNode in here (NetNode @TWKMJORH) devoted to
+Let's put a new kind of FSNode in here (NetNode @TWKMJORH) devoted to
 network-based file systems. I think it is fundamentally important for the logic
-of any file system node to *finally* through this module.  The new node will
+of any file system node to *finally* go through this module.  The new node will
 need to import the logic from the various modules that actually implement all
 of the operations that are needed to interact with the given backend in
 question (we DON'T want that messy sort of logic "polluting" this file).
