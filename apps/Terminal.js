@@ -3666,8 +3666,11 @@ cwarn(`Skipping: ${mod}`);
 			continue;
 		}
 		this.doOverlay(`Delete: ${mod}`);
+
+//Reload command libraries
 		await this.ShellMod.util.deleteComs([mod]);
 		await this.ShellMod.util.doImports([mod], cerr);
+
 	}
 }//»
 async _onreload(){//«

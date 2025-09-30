@@ -24,7 +24,6 @@
 }
 
 »*/
-
 /*9/30/25: Let's use update (instead of runTransaction). We will always check«
 is_connected, and use a flag (e.g. "force-offline") to force updates when it is false.
 This affects stuff like @NSBDHFUR, where there is (currently) 3 successive calls to
@@ -282,28 +281,29 @@ const firebaseConfig = {
 import {initializeApp} from "firebase_app";
 
 import {
-		getAuth,
-		onAuthStateChanged,
-		signInWithPopup,
-		GithubAuthProvider,
-		signOut 
+getAuth,
+onAuthStateChanged,
+signInWithPopup,
+GithubAuthProvider,
+signOut 
 } from "firebase_auth";
 
 import { 
-		getDatabase,
-		ref,
-		set,
-		get,
-		update as _update,
-		query,
-		runTransaction,
-		serverTimestamp,
-		orderByChild,
-		limitToFirst,
-		limitToLast,
-		startAt,
-		onValue,
-		enableLogging
+getDatabase,
+ref,
+set,
+get,
+update as _update,
+query,
+runTransaction,
+serverTimestamp,
+orderByChild,
+limitToFirst,
+limitToLast,
+startAt,
+onValue,
+increment,
+enableLogging
 } from "firebase_database";
 
 
@@ -501,11 +501,20 @@ cerr("WHERE IS THE BUTTON (gh_but)?");
 //»
 //Funcs«
 
-const B64 = bytes =>{
+/*
+function incrementCounter(path, amount) {
+  const counterRef = ref(db, path);
+  set(counterRef, increment(amount));
+}
+incrementCounter('posts/postId123/likes', 1);
+incrementCounter('pages/pageId456/views', -1);
+*/
+
+const B64 = bytes =>{//«
 	if (bytes.toBase64) return bytes.toBase64();
 	return btoa(String.fromCharCode(...bytes));
-};
-const FROMB64 = str => {
+};//»
+const FROMB64 = str => {//«
 if (!Uint8Array.fromBase64){
 	try{
 		return Uint8Array.fromBase64(str);
@@ -523,7 +532,7 @@ for (let i = 0; i < len; i++) {
 }
 return arr;
 
-};
+};//»
 
 const sanitizeKey=(key) => {//«
 	const encoder = new TextEncoder();
@@ -906,6 +915,44 @@ let update_obj = {
 update(base_path, update_obj);
 _this.ok();
 };//»
+const get_name = async()=>{//«
+	let ghid = get_id();
+	if (isStr(ghid)) return new Error(ghid);
+	let rv;
+	try{
+		rv  = await fetch(`https://api.github.com/user/${ghid}`)
+	}
+	catch(e){
+cerr(e)
+//		return e.message;
+		return e;
+	}
+	if (!rv.ok){
+		return new Error("Could not fetch");
+	}
+	let obj = await rv.json();
+	if (!(obj&&obj.login)){
+cwarn("There is no login on the object below!?!?!?");
+log(obj);
+		return new Error("NO OBJ && OBJ.LOGIN FOUND?!?!? (see console)");
+	}
+	return obj.login;
+};/*»*/
+
+
+const set_name = async(use_name)=>{//«
+
+if (!use_name) {
+	use_name = await get_name();
+	if (isErr(use_name)) return use_name;
+//	if (isStr(use_name)) return use_name;
+}
+//log(`SETTING: ${ghid}: ${use_name}`);
+update(`/names`, {[ghid]: use_name});
+
+return true;
+
+};//»
 
 //»
 
@@ -982,6 +1029,14 @@ this.ok();
 }
 
 }//»
+const com_fbsetname = class extends Com{//«
+async run(){
+const{args}=this;
+let rv = await set_name();
+if (isErr(rv)) this.no(rv.message);
+else this.ok();
+}
+}//»
 const com_user = class extends Com{//«
 /*
 This will be the interface into one's own user account
@@ -1024,7 +1079,6 @@ if ((is_stat || is_signin) && globals.auth.github.login && !(opts.force || opts.
 const auth = getAuth(app);
 
 const handle_user = async user => {//«
-
 	if (is_signout){
 		try{
 			await signOut(auth);
@@ -1291,15 +1345,10 @@ const com_fbmkhomedir = class extends Com{//«
 async run(){
 const{args}=this;
 
-//if (!fbase.didInit){
-//	this.no("did not init firebase");
-//	return;
-//}
 const gh = globals.auth.github;
 if (!gh.uid){
 	return this.no("please call 'user' first!");
 }
-
 let type_ref = get_ref(`/user/${gh.uid}/type`);
 let snap = await get_value(type_ref);
 if (isErr(snap)){
@@ -1311,12 +1360,19 @@ if (snap.exists()){
 	return;
 }
 
-//let home_ref = get_ref(`/user/${gh.uid}`);
+let username = await get_name();
+if (isErr(username)){
+cerr(username);
+this.no(username.message);
+return;
+}
 
-//let rv = await run_transaction(home_ref, NEW_DIR);
-//if (isErr(rv)) return this.no(rv.message);
 
-update("/user", {[`${gh.uid}`]: NEW_DIR});
+update("/", {
+	[`names/${gh.uid}`]: username, 
+	[`user/${gh.uid}`]: NEW_DIR
+});
+
 this.ok();
 
 }
@@ -1506,6 +1562,7 @@ const coms = {//«
 	fbrm: com_fbrm,
 	fbrmdir: com_fbrmdir,
 	fbread: com_fbread,
+	fbsetname: com_fbsetname,
 }//»
 
 export {coms, onkill};
@@ -1543,4 +1600,3 @@ goog_but.onclick=async()=>{//«
 </button>
 <br><br>
 »*/
-
