@@ -1782,13 +1782,15 @@ const unsanitizeKey=(safeKey)=>{//«
 const AWAIT_UPDATE_MS = 5000;
 let update_num = 1;
 
-const update = async (...args) => {
+const update = async (refarg, obj) => {//«
 /*
 This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
 not completed within the specified interval. If after returning, we have previously warned,
 then we let the user know that the update has finished. In case everything works fine,
 nothing is reported.
 */
+	if (isStr(refarg)) refarg = get_ref(refarg);
+
 	let have_num = update_num;
 	update_num++;
 	let did_warn = false;
@@ -1797,7 +1799,7 @@ cwarn(`update#${have_num} has not returned after: ${AWAIT_UPDATE_MS}ms!`);
 		did_warn = true;
 	}, AWAIT_UPDATE_MS);
 	try {
-		await _update(...args);
+		await _update(refarg, obj);
 		clearTimeout(timeout);
 		if (did_warn){
 log(`update#${have_num} has finally returned!`);
@@ -1807,7 +1809,7 @@ log(`update#${have_num} has finally returned!`);
 cwarn(`An error has occurred for update#${have_num}`);
 cerr(e);
 	}
-};
+};//»
 const parallel_sort = (primary, secondary, if_rev) => {//«
 /*«
 Say you are given 2 JS arrays of equal length. One of them must be sorted
@@ -2070,7 +2072,7 @@ let update_obj = {
 //log(base_path);
 //log(ref(base_path));
 
-update(get_ref(base_path), update_obj);
+update(base_path, update_obj);
 
 /*«
 let path_ref = get_ref(`${base_path}/kids/${enc_path}`);
@@ -2108,39 +2110,6 @@ const{args}=this;
 }
 »*/
 
-const com_fbstats = class extends Com{//«
-
-async run(){
-const{args}=this;
-
-//Change this to go back further in time
-let mins_ago = 72;
-
-//Change this to get more/less statuses
-let num_recent_stats = 10;
-
-let start_time = new Date().getTime() - (mins_ago * 60000);
-let c1 = orderByChild('time');
-let c2 = startAt(start_time);
-let c3 = limitToLast(num_recent_stats);
-let ref = get_ref("status");
-let q = query(ref, c1, c2, c3);
-let snap = await get_value(q);
-if (isErr(snap)){
-	return this.no(snap.message);
-}
-if (!snap.exists()){
-	return this.no(`no statuses were found`);
-}
-snap.forEach(kid=>{
-	let val = kid.val();
-	let arr = (new Date(val.time)+"").split(" ");
-	let str = `${arr[1]} ${arr[2]} ${arr[3]} ${arr[4]}`
-	this.out(`${kid.key} (${str}): ${val.content}`);
-});
-this.ok();
-}
-}//»
 const com_ghname2id = class extends Com{//«
 
 async run(){
@@ -2513,10 +2482,12 @@ if (snap.exists()){
 	return;
 }
 
-let home_ref = get_ref(`/user/${gh.uid}`);
+//let home_ref = get_ref(`/user/${gh.uid}`);
 
-let rv = await run_transaction(home_ref, NEW_DIR);
-if (isErr(rv)) return this.no(rv.message);
+//let rv = await run_transaction(home_ref, NEW_DIR);
+//if (isErr(rv)) return this.no(rv.message);
+
+update("/user", {[`${gh.uid}`]: NEW_DIR});
 this.ok();
 
 }
@@ -2566,9 +2537,6 @@ this.ok();
 }
 }//»
 const com_fbstat = class extends Com {//«
-/*This allows for the ability to run a query on the numerical ids, and get back whatever relevant
-information they might want to provide.
-*/
 	async run(){
 		const{args}=this;
 
@@ -2577,16 +2545,50 @@ information they might want to provide.
 		if (!args.length){
 			return this.no("Nothing given!");
 		}
-		let ref = get_ref(`/status/${ghid}`);
 		let obj = {
-//			time: Math.floor((new Date().getTime())/1000),
 			time: serverTimestamp(),
 			content: args.join(" ")
 		};
-		let rv = await run_transaction(ref, obj);
-		if (isErr(rv)) return this.no(rv.message);
+		update("/status", {[ghid]: obj});
 		this.ok();
 	}
+}//»
+const com_fbstats = class extends Com{//«
+
+/*This allows for the ability to run a query on the numerical ids, and get back whatever relevant
+information they might want to provide.
+*/
+
+async run(){
+const{args}=this;
+
+//Change this to go back further in time
+let mins_ago = 72;
+
+//Change this to get more/less statuses
+let num_recent_stats = 10;
+
+let start_time = new Date().getTime() - (mins_ago * 60000);
+let c1 = orderByChild('time');
+let c2 = startAt(start_time);
+let c3 = limitToLast(num_recent_stats);
+let ref = get_ref("status");
+let q = query(ref, c1, c2, c3);
+let snap = await get_value(q);
+if (isErr(snap)){
+	return this.no(snap.message);
+}
+if (!snap.exists()){
+	return this.no(`no statuses were found`);
+}
+snap.forEach(kid=>{
+	let val = kid.val();
+	let arr = (new Date(val.time)+"").split(" ");
+	let str = `${arr[1]} ${arr[2]} ${arr[3]} ${arr[4]}`
+	this.out(`${kid.key} (${str}): ${val.content}`);
+});
+this.ok();
+}
 }//»
 
 //»
