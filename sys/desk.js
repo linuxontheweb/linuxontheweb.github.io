@@ -95,6 +95,7 @@ const{
 const{
 	FS_PREF,
 	FS_TYPE, 
+	USERS_TYPE, 
 	MOUNT_TYPE,
 	SHM_TYPE,
 }=globals.fs;
@@ -5901,7 +5902,7 @@ const open_icon = async(icn, opts={}) => {//«
 //	const{e, winCb, force, useApp}=opts;
 	const{e, force, useApp}=opts;
 	const noopen = (mess) => {
-		let str = "The file could not be opened:&nbsp;" + fullpath;
+		let str = `The file could not be opened:&nbsp;${fullpath}`;
 		if (mess) str += `<br>(${mess})`;
 		poperr(str);
 	};
@@ -5972,7 +5973,7 @@ the prevPaths array still holds good.*/
 	}
 	let typ = node.type;
 
-	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE];
+	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE,USERS_TYPE];
 	if (!OK_TYPES.includes(typ)) return poperr(`Cannot open type: ${typ}`);
 
 //	if (check_special_ext(node)) return;

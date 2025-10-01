@@ -301,6 +301,7 @@ const{
 }=globals.term;
 const{
 	FS_TYPE,
+	USERS_TYPE,
 	SHM_TYPE,
 }=globals.fs;
 const{isArr, isStr, isEOF, log, jlog, cwarn, cerr, consoleLog: con}=LOTW.api.util;
@@ -1587,7 +1588,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 	}
 	let opts={retObj: true};
 	let usepath = edit_fullpath;
-	let OK_TYPES=[FS_TYPE];
+	let OK_TYPES=[FS_TYPE, USERS_TYPE];
 	if (!OK_TYPES.includes(edit_ftype)){
 		if (usepath.match(/\/dev\/shm/)) {
 		}
@@ -1610,7 +1611,14 @@ cerr(e);
 		}
 	}
 	if (!edit_fobj) {
-		rv = await fsapi.saveFsByPath(usepath, val, opts);
+		if (edit_ftype === USERS_TYPE){
+			let node = await fsapi.writeFile(usepath, val);
+			if (node) rv = {node, size: node.size};
+		}
+		else {
+			rv = await fsapi.saveFsByPath(usepath, val, opts);
+		}
+log(rv);
 if (!(rv&&rv.node)){
 stat_err("There was a problem writing the file (see console)");
 cwarn("Here is the returned value from saveFsByPath");
@@ -1647,7 +1655,7 @@ const err=s=>{//«
 };//»
 const checkok = () =>{//«
 	rtype = rootobj.type;
-	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) return `Cannot create file type: ${rootobj.type}`;
+	if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype==USERS_TYPE)) return `Cannot create file type: ${rootobj.type}`;
 	if (!fs.check_fs_dir_perm(parobj,is_root)) return `Permission denied: ${fname}`;
 	return true;
 }; //» 

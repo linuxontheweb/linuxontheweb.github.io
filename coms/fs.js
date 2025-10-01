@@ -547,15 +547,8 @@ run:
 		}
 		this.nok();
 	}//»
-	pipeIn(val){//«
-		this.out(val);
-//		if (isEOF(val)){
-//			this.ok();
-//		}
-	}//»
-	pipeDone(){
-		this.ok();
-	}
+	pipeIn(val){this.out(val);}
+	pipeDone(){this.ok();}
 	async doTermLoop(){//«
 		while (true){
 			let ln = await this.readLine();

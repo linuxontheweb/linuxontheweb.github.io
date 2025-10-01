@@ -747,7 +747,7 @@ if (!snap.exists()){
 	return new Error(`${path}: not found`);
 }
 
-if (opts.forceText){
+if (opts.forceText || opts.text){
 	return (atob(snap.val()));
 }
 else {
@@ -1028,11 +1028,8 @@ let update_obj = {
 	size: use_len,
 	[`kids/${enc_path}`]: use_obj
 };
-//cwarn("DEWW OYMMPP!");
-//log(enc_path);
-//log(update_obj);
 update(base_path, update_obj);
-return true;
+return sz;
 
 };
 //»

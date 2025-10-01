@@ -16,7 +16,7 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
-/*9/29/25: Proposing: NetFileNode
+/*9/29/25: Proposing: NetFileNode«
 
 Let's put a new kind of FSNode in here (NetFileNode @TWKMJORH) devoted to
 network-based file systems. I think it is fundamentally important for the logic
@@ -25,7 +25,7 @@ need to import the logic from the various modules that actually implement all
 of the operations that are needed to interact with the given backend in
 question (we DON'T want that messy sort of logic "polluting" this file).
 
-*/
+»*/
 /*9/24/25: Yesterday I implemented a sign-in system to enable access to the Firebase«
 backend, so that LOTW could have networking capabilities. Earlier this morning, I was feeling
 bad about the kind of "violence" this would entail to the LOTW system, what with a bunch of
@@ -40,7 +40,7 @@ type "users".
 
 $ users up
 
-I just created a file in coms/inet/fs.js, so we can have a suite of tools to enable testing, 
+I just created a file in coms/net/fs.js, so we can have a suite of tools to enable testing, 
 debugging, and eventually real-world use cases..
 
 »*/
@@ -723,12 +723,6 @@ log(this);
 		Y(ent);
 	});
 }//»
-get buffer(){//«
-	if (!this.okGet()) return;
-	return getBlob(this, {
-		buffer: true
-	});
-}//»
 get bytes(){//«
 	if (!this.okGet()) return;
 	return getBlob(this, {
@@ -765,27 +759,26 @@ constructor(name, par, data){//«
 	super(name, par, data);
 	this.isFile = true;
 }//»
-get text(){//«
+async #_getVal(opts){//«
 let arr = this.fullpath.split("/");
 arr.shift();
 arr.shift();
 arr.shift();
 let path = arr.join("/");
-return (async()=>{
-let rv = await globals.funcs["netfs.fbRead"](this.appData.id, path, {forceText: true});
-if (isStr(rv)){
-return rv;
-}
+let rv = await globals.funcs["netfs.fbRead"](this.appData.id, path, opts);
 if (isErr(rv)){
-cerr(rv);
+	cerr(rv);
 }
-else{
-cwarn("Unknown value returned from netfs.fbRead (see belov)");
-log(rv);
-}
-return "";
-})();
+else return rv;
 }//»
+getValue(opts){return this.#_getVal(opts);}
+async setValue(val, opts){//«
+	let rv =  await writeFile(this.fullpath, val);
+	if (!rv) return;
+	return {node: rv, size: rv.size};
+}//»
+get bytes(){return this.#_getVal();}
+get text(){return this.#_getVal({forceText: true});}
 
 }//»
 
@@ -1642,11 +1635,31 @@ const writeFile = async(path, val, opts = {}) => {//«
 		return true;
 	}
 	if (rootdir === "users"){
+
 let rv = await globals.funcs["netfs.fbWrite"](path, val);
-if (rv === true) return true;
 if (isErr(rv)){
 if (opts.reject) throw rv;
 else return false;
+}
+if (isNum(rv)) {
+	let kid;
+	if (exists) kid = exists;
+	else {
+		let arr = path.split("/");
+		let name = arr.pop();
+		let parpath = arr.join("/");
+		let parnode = await pathToNode(parpath);
+		if (!parnode) {
+			cwarn(`NO PARENT NODE FOUND AT: ${parpath}`);
+			return;
+		}
+		else{
+			kid = mk_dir_kid(parnode, name, {isNetFile: true, appData: parnode.appData});
+			parnode.kids[name] = kid;
+		}
+	}
+	kid.size = rv;
+	return kid;
 }
 cerr("Unkown value returned from netfs.fbWrite");
 log(rv);
@@ -2233,13 +2246,15 @@ return kids;
 const populate_users_dirobj = (parobj, opts) =>{//«
 	let kids = parobj.kids;
 	let arr = opts.vals;
+	let login = globals.auth.github.login;
 	for (let i=0; i < arr.length; i+=2){
-	let name = arr[i];
-	let id = arr[i+1];
+		let name = arr[i];
+		let id = arr[i+1];
 		let kid = mk_dir_kid(parobj, name, {
 			isDir: true,
 			appData: {id}
 		});
+		kid.perm = name === login;
 		kids[name] = kid;
 	}
 	parobj.done = true;
@@ -2253,9 +2268,12 @@ let arr = parobj.fullpath.split("/");
 arr.shift();
 arr.shift();
 let name = arr.shift();
+
+parobj.perm = name === globals.auth.github.login;
+//log(`PERM: ${parobj.perm}`);
+
 let appData = root.kids.users.kids[name].appData;
 let path = arr.join("/");
-cwarn(name, path);
 let list = await globals.funcs["netfs.getUserDirList"](appData.id, path);
 if (isErr(list)){
 cerr(list);
@@ -2263,7 +2281,7 @@ return kids;
 }
 //log(list);
 let names = list.names;
-if (names.length == 1 && names[0]===false){
+if (names.length == 1 && names[0]===false) {
 
 parobj.done=true;
 return kids;
@@ -2274,7 +2292,6 @@ for (let i=0; i < names.length; i++){
 let nm = names[i];
 let val = vals[i];
 let kid;
-//log(nm, val);
 if (val === -1){
 	kid = mk_dir_kid(parobj, nm, {
 		isDir: true,
