@@ -507,7 +507,7 @@ user:{
 	HOME_PATH,
 	DESK_PATH,
 },
-
+	funcs:{},
 	dbs:{},//database handles
 	mods: {},
 	apps: {},

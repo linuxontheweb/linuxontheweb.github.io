@@ -1,29 +1,33 @@
 /*Current security rules«
 
 {
-"rules": {
-
-".read": false,
-".write": false,
-
-"user": {    
-	"$uid": {
+  "rules": {
+    ".read": false,
+    ".write": false,
+	"user": {    
+		"$uid": {
+			".read": "auth != null",
+			".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
+   	 	}
+	},
+	"status" :{
 		".read": "auth != null",
-		".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
+		".indexOn": ["time"],
+   		"$uid": {
+			".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid",
+			".validate": "newData.hasChildren(['time', 'msg', 'name']) && newData.child('msg').isString() && newData.child('time').isNumber() && newData.child('msg').val().length <= 500 && newData.child('name').isString() && newData.child('name').val().length < 40"
+		}
 	}
-},
-"status" :{
-	"$uid": {
-		".read": "auth != null",
-		".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid",
-		".validate": "newData.hasChildren(['time', 'content']) && newData.child('content').isString() && newData.child('time').isNumber() && (data.exists() && newData.child('content').val().length <= data.child('content').val().length) || newData.child('content').val().length <= 501"
-	}
-}
-
-}
+  }
 }
 
 »*/
+/*10/1/25: To mount /users, we need to have a cache of the last N statuses, and check for the
+cache or get them. This gives us id->username mappings. Then we'll mount them with the
+usernames for the key names.
+
+We should put a appData field on FSNode, for use by the individual applications.
+*/
 /*9/30/25: Let's use update (instead of runTransaction). We will always check«
 is_connected, and use a flag (e.g. "force-offline") to force updates when it is false.
 This affects stuff like @NSBDHFUR, where there is (currently) 3 successive calls to
@@ -90,160 +94,6 @@ users, since google (especially now that there is no G+ anymore) has no way to l
 
 
 »*/
-/*9/27/25: To sanitize strings for Firebase keys:«
-
-JS String -> binary string -> btoa -> encodeURIComponent (for the "/" characters in btoa).
-
-function sanitizeKey(key) {
-	const encoder = new TextEncoder();
-	const data = encoder.encode(key);
-	return btoa(String.fromCharCode(...data))
-		.replace(/\+/g, '-')
-		.replace(/\//g, '_')
-		.replace(/=+$/, '');
-}
-
-function unsanitizeKey(safeKey) {
-	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
-	const decoded = atob(padded);
-	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-	return new TextDecoder().decode(bytes);
-}
-
-Simple: If you have a user directory, you CAN'T change your username
-You must delete the directory first!
-
-$ setname [u|update]
-
-".validate": "newData.isString() && 
-	newData.val().matches(/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}$/i)"
-
-Dir listing format: 
-<name>: <integer>
-	Dir = -1
-	File = 0-MAXLEN
-	ListName = true
-
-So in every dir, we might have:
-{
-	lists:{
-		public:["dir1", -1, "file1", 100, "file2", 500, "sloom", -1],
-		private:["public", true, "blarr.d": -1, "file3", 101, "file2", 202]
-//		private:["private", true, "file3", 101, "file2", 202] //BAD: Infinite recursion
-	}
-}
-
-The '"public", true' pair means to include the contents of lists.public. Need to ensure that
-infinite recursion doesn't occur here.
-
-const usersRef = firebase.database().ref('users');
-usersRef.orderByChild('name').equalTo('<filename>').once('value', (snapshot) => {
-	snapshot.forEach((childSnapshot) => {
-		console.log(childSnapshot.key, childSnapshot.val());
-	});
-});
-
-
-»*/
-/* 9/25/25: How to *force* ref.transaction(val) to complete the write, before continuing «
-with the app logic.
-
-//Google AI, using aborted transactions
-//«function transactWithTimeout(ref, value, delay) {
-// * Executes a Firebase transaction with a timeout, ensuring a pending write is
-// * aborted if it hasn't completed within the delay.
-// *
-// * @param {firebase.database.Reference} ref The database reference.
-// * @param {*} value The value to set.
-// * @param {number} delay The timeout duration in milliseconds.
-// * @returns {Promise<void>} A promise that resolves when the transaction
-// *   completes or rejects if it fails or times out.
-
-return new Promise((resolve, reject) => {
-	// Flag to track if the timeout has already occurred
-	let timedOut = false;
-	let timer;
-
-	// Reject the promise and abort the transaction on timeout
-	const onTimeout = () => {
-		timedOut = true;
-		ref.transaction(() => undefined); // Send an abort command to the queue
-		reject(new Error('Firebase write operation timed out.'));
-	};
-
-	// Start the timeout timer
-	timer = setTimeout(onTimeout, delay);
-
-	ref.transaction((currentValue) => {
-		// If the timer has already fired, abort the transaction
-		if (timedOut) {
-			return undefined; // Returning undefined aborts the transaction
-		}
-		return value;
-	}).then((result) => {
-		// Clear the timer if the transaction completes for any reason
-		clearTimeout(timer);
-
-		if (result.committed) {
-			console.log('Transaction successfully committed.');
-			resolve();
-		} else {
-			// If the transaction aborted for a reason other than our timeout
-			console.log('Transaction aborted by another process.');
-			reject(new Error('Transaction aborted by another client.'));
-		}
-	}).catch((error) => {
-		// Clear the timer if the transaction fails
-		clearTimeout(timer);
-		reject(error);
-	});
-});
-}
-//»
-
-//Grok, using goOffline
-function curlLikeWrite(ref, value, timeoutMs = 5000, maxAttempts = 3) {//«
-return new Promise((resolve, reject) => {
-let timeoutId;
-let completed = false;
-
-// Single set call
-firebase.database().set(ref, value).then(() => {
-clearTimeout(timeoutId); // Cancel any active timeout
-completed = true; // Stop further attempts
-console.log('Write completed');
-resolve(true);
-}).catch(error => {
-clearTimeout(timeoutId); // Cancel any active timeout
-completed = true; // Stop further attempts
-reject(error);
-});
-
-// Attempt network connection checks
-function attemptNetworkConnect(attempt) {
-if (completed) return; // Exit if write completed
-if (attempt > maxAttempts) {
-firebase.database().goOffline();
-alert('Max attempts reached. Reload page.');
-reject(new Error('Max attempts exceeded'));
-return;
-}
-
-timeoutId = setTimeout(() => {
-if (!completed && confirm(`Reconnect attempt ${attempt} of ${maxAttempts}. Check network and click OK.`)) {
-attemptNetworkConnect(attempt + 1); // Next attempt
-} else {
-firebase.database().goOffline();
-alert('Write cancelled. Reload page.');
-reject(new Error('User cancelled'));
-}
-}, timeoutMs);
-}
-attemptNetworkConnect(1);
-});
-}//»
-
-»*/
 /*9/24/25: This library exists as a suite of tools for internet-based filesystems, using«
 backends like the Firebase Realtime Database. We will need to integrate with the logic
 in sys/fs.js in order to allow for getting directory listings.
@@ -259,10 +109,12 @@ coms/fs.js (for file moving, copying, etc).
 //Imports«
 
 const{globals}=LOTW;
-const {USERS_TYPE, fsMod: fs, fbase}=globals;
+const {fsMod: fs, fbase}=globals;
+const {USERS_TYPE, APPDATA_PATH} = globals.fs;
 const {Com} = globals.ShellMod.comClasses;
 const{mkdv, mk, isArr,isStr,isEOF,isErr,log,jlog,cwarn,cerr}=LOTW.api.util;
 const{root, mount_tree}=fs;
+const {fs: fsapi}=LOTW.api;
 //const {popup} = globals.popup;
 
 //Firebase«
@@ -310,6 +162,8 @@ enableLogging
 //»
 
 //Var«
+
+const FBASE_DIRECTORY_VAL = -1;
 
 const AWAIT_UPDATE_MS = 5000;
 let update_num = 1;
@@ -478,7 +332,6 @@ Object.freeze(NEW_DIR.kids);
 const NEW_FILE = {type: "f", size: 0};
 Object.freeze(NEW_FILE);
 
-const FBASE_DIRECTORY_VAL = -1;
 const DEF_TRANS_DELAY = 5000;
 
 //»
@@ -534,27 +387,52 @@ return arr;
 
 };//»
 
-const sanitizeKey=(key) => {//«
+const encode_key=(key) => {//«
 	const encoder = new TextEncoder();
 	const data = encoder.encode(key);
-/*
-	let b64;
-	if (data.toBase64) b64 = data.toBase64();
-	else b64 = btoa(String.fromCharCode(...data));
-*/
-//	return b64.replace(/\+/g, '-')
-
 	return B64(data).replace(/\+/g, '-')
 		.replace(/\x2f/g, '_')
 		.replace(/=+$/, '');
 }//»
-const unsanitizeKey=(safeKey)=>{//«
+/*
+const decode_key=(safeKey)=>{//«
 	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
 	const decoded = atob(padded);
 	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
 	return new TextDecoder().decode(bytes);
 };//»
+*/
+const USERS_CACHE_PATH = `${APPDATA_PATH}/netfs/cache`;
 
+const set_user_dirs = async () => {//«
+	if (!await fsapi.mkDir(APPDATA_PATH, "netfs")){
+		return new Error(`could not create the 'netfs' data directory`);
+	}
+	let rv = await USERS_CACHE_PATH.toNode();
+let obj;
+if (rv){
+cwarn("HAVE CACHE...");
+	obj = await USERS_CACHE_PATH.toJson();
+	if (!obj) return new Error(`could not get the user statuses data`);
+}
+else {
+cwarn("GET STATUSES...");
+let stats = await get_statuses();
+if (isErr(stats)) return stats;
+obj = stats.val();
+if (!await fsapi.writeFile(USERS_CACHE_PATH, JSON.stringify(obj))){
+	return new Error(`could not cache the user statuses`);
+}
+}
+let keys = Object.keys(obj);
+let arr = [];
+for (let key of keys){
+arr.push(obj[key].name, key);
+//arr.push();
+}
+await fsapi.popDir(root.kids.users, {vals: arr});
+	return true;
+};//»
 const update = async (refarg, obj) => {//«
 /*
 This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
@@ -752,6 +630,133 @@ const get_id = ()=> {//«
 	return parseInt(gh_id);
 };//»
 
+const get_name = async(idarg)=>{//«
+	let ghid = idarg || (get_id());
+	if (isStr(ghid)) return new Error(ghid);
+	let rv;
+	try{
+		rv  = await fetch(`https://api.github.com/user/${ghid}`)
+	}
+	catch(e){
+cerr(e)
+//		return e.message;
+		return e;
+	}
+	if (!rv.ok){
+		return new Error("Could not fetch");
+	}
+	let obj = await rv.json();
+	if (!(obj&&obj.login)){
+cwarn("There is no login on the object below!?!?!?");
+log(obj);
+		return new Error("NO OBJ && OBJ.LOGIN FOUND?!?!? (see console)");
+	}
+	return obj.login;
+};//»
+const set_name = async(use_name)=>{//«
+
+if (!use_name) {
+	use_name = await get_name();
+	if (isErr(use_name)) return use_name;
+//	if (isStr(use_name)) return use_name;
+}
+//log(`SETTING: ${ghid}: ${use_name}`);
+update(`/names`, {[ghid]: use_name});
+
+return true;
+
+};//»
+
+const DEF_STATS_MINS_AGO = 1000;
+const DEF_STATS_NUM_RECENT = 20;
+
+const get_statuses=async(opts={minsAgo: DEF_STATS_MINS_AGO, numRecent: DEF_STATS_NUM_RECENT})=>{//«
+	//Change this to go back further in time
+//	let mins_ago = 72;
+	//Change this to get more/less statuses
+//	let num_recent_stats = 10;
+	let mins_ago = opts.minsAgo;
+	let num_recent_stats = opts.numRecent;
+
+	let start_time = new Date().getTime() - (mins_ago * 60000);
+	let c1 = orderByChild('time');
+	let c2 = startAt(start_time);
+	let c3 = limitToLast(num_recent_stats);
+	let ref = get_ref("status");
+	let q = query(ref, c1, c2, c3);
+	let snap = await get_value(q);
+	if (isErr(snap)){
+		return snap;
+//		return this.no(snap.message);
+	}
+	if (!snap.exists()){
+		return new Error(`no statuses were found`);		
+//		return this.no(`no statuses were found`);
+	}
+	return snap;
+};//»
+
+const get_user_dir_list = async (ghid, path)=>{//«
+
+let path_enc = "";
+if (path){
+	let arr = path.split("/");
+	for (let name of arr){
+		path_enc+=`/kids/${encode_key(name)}`;
+	}
+}
+let fullpath = `/user/${ghid}${path_enc}/list`;
+let ref = get_ref(fullpath); 
+
+let snap = await get_value(ref);
+if (isErr(snap)){
+	return snap;
+}
+if (!snap.exists()){
+	return new Error(`path not found`);
+}
+return snap.val();
+
+};//»
+globals.funcs["netfs.getUserDirList"] = get_user_dir_list;
+
+const fb_read = async(ghid, path, opts = {})=>{//«
+
+let rel_path_enc = "";
+if (path.match(/\x2f/)) {
+if (path === "/"){
+return new Error("'/': invalid path");
+}
+	let arr = path.split("/");
+	for (let name of arr){
+		rel_path_enc+=`/kids/${encode_key(name)}`;
+	}
+}
+else{
+	rel_path_enc=`/kids/${encode_key(path)}`;
+}
+
+let base_path = `/user/${ghid}${rel_path_enc}/contents`;
+
+let snap = await get_value(get_ref(base_path));
+if (isErr(snap)){
+//	return this.no(snap.message);
+	return snap;
+}
+if (!snap.exists()){
+	return new Error(`${path}: not found`);
+}
+
+if (opts.forceText){
+	return (atob(snap.val()));
+}
+else {
+	return FROMB64(snap.val());
+}
+
+};//»
+globals.funcs["netfs.fbRead"] = fb_read;
+
 const do_fbase_fs_op = async(_this, optsArg={}) => {//«
 
 let ghid = get_id();
@@ -777,7 +782,7 @@ if (!path) return _this.no("no path given");
 let use_obj;
 let use_val;
 let say_type;
-if (optsArg.mkDir){
+if (optsArg.mkDir){//«
 	use_obj = NEW_DIR;
 	use_val = FBASE_DIRECTORY_VAL;
 	say_type = "folder";
@@ -800,8 +805,7 @@ else {
 	use_obj = NEW_FILE
 	use_val = 0;
 	say_type = "file";
-}
-
+}//»
 
 let rel_path_enc = "";
 let name;
@@ -812,9 +816,8 @@ return _this.no("'/': invalid path");
 	let arr = path.split("/");
 	name = arr.pop();
 	for (let name of arr){
-		rel_path_enc+=`/kids/${sanitizeKey(name)}`;
+		rel_path_enc+=`/kids/${encode_key(name)}`;
 	}
-//	return _this.no("not (yet) allowing '/' in the name!");
 }
 else{
 	name = path;
@@ -845,7 +848,7 @@ if (ind >= 0){
 			_this.no(`'${name}': not a directory`);
 			return;
 		}
-		let rv = await get_value(get_ref(`${base_path}/kids/${sanitizeKey(name)}/size`));
+		let rv = await get_value(get_ref(`${base_path}/kids/${encode_key(name)}/size`));
 		if (isErr(rv)){
 			return _this.no(rv.message);
 		}
@@ -903,56 +906,137 @@ else{
 	use_len = list.names.length;
 }
 
-
-let enc_path = sanitizeKey(name);
+let enc_path = encode_key(name);
 
 let update_obj = {
 	list,
-//	size: list.names.length,
 	size: use_len,
 	[`kids/${enc_path}`]: use_obj
 };
 update(base_path, update_obj);
 _this.ok();
+
 };//»
-const get_name = async()=>{//«
-	let ghid = get_id();
-	if (isStr(ghid)) return new Error(ghid);
-	let rv;
-	try{
-		rv  = await fetch(`https://api.github.com/user/${ghid}`)
-	}
-	catch(e){
-cerr(e)
-//		return e.message;
-		return e;
-	}
-	if (!rv.ok){
-		return new Error("Could not fetch");
-	}
-	let obj = await rv.json();
-	if (!(obj&&obj.login)){
-cwarn("There is no login on the object below!?!?!?");
-log(obj);
-		return new Error("NO OBJ && OBJ.LOGIN FOUND?!?!? (see console)");
-	}
-	return obj.login;
-};/*»*/
 
+const fb_write = async(path, val, opts={})=> {//«
+/*
+This must be a fullpath
 
-const set_name = async(use_name)=>{//«
+*/
 
-if (!use_name) {
-	use_name = await get_name();
-	if (isErr(use_name)) return use_name;
-//	if (isStr(use_name)) return use_name;
+if (!is_connected && !opts.offline){
+	return new Error("not connected (use --offline to force)");
 }
-//log(`SETTING: ${ghid}: ${use_name}`);
-update(`/names`, {[ghid]: use_name});
 
+let saypath = path;
+if (!path.match(/^\x2fusers\x2f/)){
+return new Error(`${path}: invalid path`);
+}
+let gh = globals.auth.github;
+if (!(gh.uid && gh.login)){
+return new Error(`Not logged in`);
+}
+let arr = path.split("/");
+arr.shift();
+arr.shift();
+let username = arr.shift();
+if (username !== gh.login){
+return new Error(`Permission denied`);
+}
+path = arr.join("/");
+if (!arr.length) {
+	return new Error(`'${saypath}': invalid path`);
+}
+let rel_path_enc = "";
+let name;
+if (path.match(/\x2f/)) {
+if (path === "/"){
+return new Error("'/': invalid path");
+}
+	let arr = path.split("/");
+	name = arr.pop();
+	for (let name of arr){
+		rel_path_enc+=`/kids/${encode_key(name)}`;
+	}
+}
+else{
+	name = path;
+}
+let base_path = `/user/${gh.uid}${rel_path_enc}`;
+let list_ref = get_ref(`${base_path}/list`);
+let snap = await get_value(list_ref);
+if (isErr(snap)){
+	return snap;
+}
+if (!snap.exists()){
+	if (!rel_path_enc) return new Error("you must create your user directory with fbmkhomedir!");
+	else{
+		return new Error(`the parent directory was not found`);
+	}
+}
+
+
+let list = snap.val();
+let ind = list.names.indexOf(name);
+if (ind >= 0){
+	if (list.vals[ind] === FBASE_DIRECTORY_VAL){
+		return new Error(`'${name}': cannot write to the directory`);
+	}
+	else{
+//We have a value and a file (update it)
+		list.names.splice(ind, 1);
+		list.vals.splice(ind, 1);
+	}
+}
+
+
+let bytes;
+if (isStr(val)) {
+	bytes = (new TextEncoder()).encode(val);
+}
+else if (val instanceof Uint8Array){
+	bytes = val;
+}
+else{
+log(val);
+return new Error("Unknown value given to fb_write (see console)");
+}
+let sz = bytes.byteLength;
+let str = B64(bytes);
+
+let use_len;
+if (!list.names[0]){
+	list.names = [name];
+	list.vals = [sz];
+	use_len = 1;
+}
+else{
+	list.names.push(name);
+	list.vals.push(sz);
+	let rv = parallel_sort(list.names, list.vals);
+	list.names = rv[0];
+	list.vals = rv[1];
+	use_len = list.names.length;
+}
+
+let enc_path = encode_key(name);
+
+let use_obj = {type: "f", size: sz, contents: str};
+
+let update_obj = {
+	list,
+	size: use_len,
+	[`kids/${enc_path}`]: use_obj
+};
+//cwarn("DEWW OYMMPP!");
+//log(enc_path);
+//log(update_obj);
+update(base_path, update_obj);
 return true;
 
-};//»
+};
+//»
+globals.funcs["netfs.fbWrite"] = fb_write;
 
 //»
 
@@ -1091,8 +1175,6 @@ const handle_user = async user => {//«
 		}
 		return;
 	}
-	let already = "";
-//	if (is_signin) already = " already";
 	if (!(user.uid && user.providerData && user.providerData[0].uid)){
 		this.no("'uid' NOT FOUND in user OR user.providerData[0]! (see console)");
 cwarn("Here is the offending user object without user.id OR user.providerData[0].uid");
@@ -1104,11 +1186,19 @@ log(user);
 //	let uid = user.uid;
 	let login = localStorage.getItem(`github-${uid}`);
 	if (login){
+		env["GITHUB_NAME"] = login;
 log("Got github login", login);
 		set_auth(uid, login);
-		this.ok(`you are${already} signed in as: ${login}`);
+		this.ok(`you are signed in as: ${login}`);
 		return;
 	}
+	login = await get_name(uid);
+	if (isErr(login)){
+		this.no(login.message);
+		return;
+	}
+	env["GITHUB_NAME"] = login;
+/*«
 	let rv;
 	try{
 		rv = await fetch(`https://api.github.com/user/${uid}`);
@@ -1130,9 +1220,10 @@ cerr(e);
 		return;
 	}
 log("Setting", `github-${uid}`, login);
+»*/
 	localStorage.setItem(`github-${uid}`, login);
 	set_auth(uid, login);
-	this.ok(`you are${already} signed in as: ${login}`);
+	this.ok(`you are signed in as: ${login}`);
 };//»
 
 let cb = onAuthStateChanged(auth, async user => {//«
@@ -1233,6 +1324,11 @@ list; give fine-grained control over what user directories to list inside of /us
 	async run(){
 		const{args}=this;
 		let com = args.shift();
+
+if (!globals.auth.github.uid){
+	return this.no("please call 'user' first!");
+}
+
 		if (!com){
 			this.no(`missing command`);
 			return;
@@ -1244,14 +1340,31 @@ list; give fine-grained control over what user directories to list inside of /us
 			}
 			else{
 				mount_tree("users", USERS_TYPE);
+				this.suc("/users: successfully mounted");
+let rv = await set_user_dirs();
+this.inf("Mounting the users...");
+if (isErr(rv)){
+this.wrn(`${rv.message}`);
+}
+else if (rv === true){
+this.suc("OK!");
+}
+else{
+this.wrn("Unknown value returned from set_user_dirs! (see console)");
+log(rv);
+}
 /*
 Maybe we should export a basic function to fs.populate_dirobj for use with the basic
 shell/terminal functions like ls and doing tab complete.
 */
-				this.suc("/users: successfully mounted");
 			}
 			this.ok();
 		}//»
+		else if (com == "umount"){
+			if (did_mount) delete root.kids.users;
+			else this.wrn("/users: not mounted");
+			this.ok();
+		}
 		else if (com=="list") {//«
 			if (!did_mount) return this.no("Did not mount!");
 let user = await get_fbase_user();
@@ -1367,12 +1480,16 @@ this.no(username.message);
 return;
 }
 
+update("/user", {
+	[gh.uid]: NEW_DIR
+});
 
+/*
 update("/", {
 	[`names/${gh.uid}`]: username, 
 	[`user/${gh.uid}`]: NEW_DIR
 });
-
+*/
 this.ok();
 
 }
@@ -1384,24 +1501,8 @@ const{args}=this;
 let ghid = get_id();
 if (isStr(ghid)) return this.no(ghid);
 let path = args.shift();
-let path_enc = "";
-if (path){
-	let arr = path.split("/");
-	for (let name of arr){
-		path_enc+=`/kids/${sanitizeKey(name)}`;
-	}
-}
-let fullpath = `/user/${ghid}${path_enc}/list`;
-let ref = get_ref(fullpath); 
-
-let snap = await get_value(ref);
-if (isErr(snap)){
-	return this.no(snap.message);
-}
-if (!snap.exists()){
-	return this.no(`path not found`);
-}
-let list = snap.val();
+let list = await get_user_dir_list(ghid, path);
+if (isErr(list)) return this.no(list.message);
 let names = list.names;
 if (names[0]===false){
 	this.wrn(`the directory is empty`);
@@ -1425,52 +1526,49 @@ const com_fbstat = class extends Com {//«
 	async run(){
 		const{args}=this;
 
-		let ghid = get_id();
-		if (isStr(ghid)) return this.no(ghid);
+//		let ghid = get_id();
+//		if (isStr(ghid)) return this.no(ghid);
+		let id = globals.auth.github.uid;
+		let login = globals.auth.github.login;
+		if (!(id && login)) return this.no("please call 'user' first");
 		if (!args.length){
 			return this.no("Nothing given!");
 		}
 		let obj = {
 			time: serverTimestamp(),
-			content: args.join(" ")
+			msg: args.join(" "),
+			name: login
 		};
-		update("/status", {[ghid]: obj});
+		update("/status", {[id]: obj});
 		this.ok();
 	}
 }//»
 const com_fbstats = class extends Com{//«
-
+static getOpts(){
+return {
+s:{
+y: 1,
+s: 1
+}
+}
+}
 /*This allows for the ability to run a query on the numerical ids, and get back whatever relevant
 information they might want to provide.
 */
 
 async run(){
-const{args}=this;
+const{args, opts}=this;
 
-//Change this to go back further in time
-let mins_ago = 72;
-
-//Change this to get more/less statuses
-let num_recent_stats = 10;
-
-let start_time = new Date().getTime() - (mins_ago * 60000);
-let c1 = orderByChild('time');
-let c2 = startAt(start_time);
-let c3 = limitToLast(num_recent_stats);
-let ref = get_ref("status");
-let q = query(ref, c1, c2, c3);
-let snap = await get_value(q);
-if (isErr(snap)){
-	return this.no(snap.message);
-}
-if (!snap.exists()){
-	return this.no(`no statuses were found`);
-}
+let snap = await get_statuses();
+if (isErr(snap)) return this.no(snap.message);
+let use_year = opts.y;
+let use_secs = opts.s;
 snap.forEach(kid=>{
 	let val = kid.val();
 	let arr = (new Date(val.time)+"").split(" ");
-	let str = `${arr[1]} ${arr[2]} ${arr[3]} ${arr[4]}`
-	this.out(`${kid.key} (${str}): ${val.content}`);
+	let time = use_secs ? arr[4] : arr[4].replace(/:..$/, "");
+	let str = use_year ? `${arr[1]} ${arr[2]} ${arr[3]} ${time}` : `${arr[1]} ${arr[2]} ${time}`;
+	this.out(`${val.name} (${str}): ${val.msg}`);
 });
 this.ok();
 }
@@ -1489,6 +1587,7 @@ const{args}=this;
 do_fbase_fs_op(this, {rmDir: true});
 }
 }//»
+
 const com_fbread = class extends Com{//«
 
 async run(){
@@ -1504,20 +1603,20 @@ if (!path){
 	return this.no("path not given");
 }
 let is_text = path.hasTextExt();
+let val = await fb_read(ghid, path, {forceText: is_text});
+/*«
 let rel_path_enc = "";
 if (path.match(/\x2f/)) {
 if (path === "/"){
 return this.no("'/': invalid path");
 }
 	let arr = path.split("/");
-//	name = arr.pop();
 	for (let name of arr){
-		rel_path_enc+=`/kids/${sanitizeKey(name)}`;
+		rel_path_enc+=`/kids/${encode_key(name)}`;
 	}
-//	return _this.no("not (yet) allowing '/' in the name!");
 }
 else{
-	rel_path_enc=`/kids/${sanitizeKey(path)}`;
+	rel_path_enc=`/kids/${encode_key(path)}`;
 }
 
 let base_path = `/user/${ghid}${rel_path_enc}/contents`;
@@ -1530,14 +1629,12 @@ if (!snap.exists()){
 	this.no(`${path}: not found`);
 	return;
 }
-
-if (is_text){
-	this.out(atob(snap.val()));
+»*/
+if (isErr(val)){
+this.no(val.message);
+return;
 }
-else {
-	let bytes = FROMB64(snap.val());
-	this.out(bytes);
-}
+this.out(val);
 
 this.ok();
 
@@ -1546,7 +1643,8 @@ this.ok();
 
 //»
 
-const coms = {//«
+//Export«
+const coms = {
 	users: com_users,
 	user: com_user,
 	ghname2id: com_ghname2id,
@@ -1563,9 +1661,11 @@ const coms = {//«
 	fbrmdir: com_fbrmdir,
 	fbread: com_fbread,
 	fbsetname: com_fbsetname,
-}//»
+}
 
 export {coms, onkill};
+
+//»
 
 /*«
 goog_but.onclick=async()=>{//«

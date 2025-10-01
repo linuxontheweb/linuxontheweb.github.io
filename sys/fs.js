@@ -16,9 +16,9 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
-/*9/29/25: Proposing: NetNode
+/*9/29/25: Proposing: NetFileNode
 
-Let's put a new kind of FSNode in here (NetNode @TWKMJORH) devoted to
+Let's put a new kind of FSNode in here (NetFileNode @TWKMJORH) devoted to
 network-based file systems. I think it is fundamentally important for the logic
 of any file system node to *finally* go through this module.  The new node will
 need to import the logic from the various modules that actually implement all
@@ -108,6 +108,7 @@ const {
 	isInt,
 	isStr,
 	isEOF,
+	isErr,
 //	isArr,
 	getNameExt,
 	getFullPath,
@@ -497,11 +498,12 @@ const LOCKED_BLOBS = {};
 //FSNODEDEF
 class FSNode {//«
 
-constructor(name, par, path){//«
+constructor(name, par, data){//«
 	this.setName(name);
 	this.par = par;
 	this.root = par.root;
 	this.icons = [];
+	if (data) this.appData = data;
 }//»
 
 setName(val){//«
@@ -549,11 +551,10 @@ writeLocked(){return false;}
 
 class DirNode extends FSNode{//«
 
-constructor(name, par){//«
-	super(name, par);
+constructor(name, par, data){//«
+	super(name, par, data);
 	this.isDir = true;
 	this.appName = FOLDER_APP;
-//	appName: FOLDER_APP,
 }//»
 
 setName(val){//«
@@ -583,8 +584,8 @@ get ref(){return pathToNode(this.link);}
 }//»
 class DataNode extends FSNode{//«
 
-constructor(name, par){//«
-	super(name, par);
+constructor(name, par, data){//«
+	super(name, par, data);
 	this.isData = true;
 }//»
 setName(val){//«
@@ -648,8 +649,8 @@ cerr(e);
 }//»
 class FileNode extends FSNode{//«
 
-constructor(name, par){//«
-	super(name, par);
+constructor(name, par, data){//«
+	super(name, par, data);
 	this.isFile = true;
 }//»
 writeLocked(){return LOCKED_BLOBS[this.blobId];}
@@ -750,24 +751,52 @@ get _file(){//«
 }//»
 class DevNode extends FSNode{//«
 
-constructor(name, par){
-	super(name, par);
+constructor(name, par, data){
+	super(name, par, data);
 	this.isDevice = true;
 	this.appName = "Device";
 }
 
 }//»
 //TWKMJORH
-//class NetNode extends FSNode{
-//}
+class NetFileNode extends FSNode{//«
 
-const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof LinkNode || n instanceof DataNode || n instanceof DevNode);};
+constructor(name, par, data){//«
+	super(name, par, data);
+	this.isFile = true;
+}//»
+get text(){//«
+let arr = this.fullpath.split("/");
+arr.shift();
+arr.shift();
+arr.shift();
+let path = arr.join("/");
+return (async()=>{
+let rv = await globals.funcs["netfs.fbRead"](this.appData.id, path, {forceText: true});
+if (isStr(rv)){
+return rv;
+}
+if (isErr(rv)){
+cerr(rv);
+}
+else{
+cwarn("Unknown value returned from netfs.fbRead (see belov)");
+log(rv);
+}
+return "";
+})();
+}//»
+
+}//»
+
+const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof NetFileNode || n instanceof LinkNode || n instanceof DataNode || n instanceof DevNode);};
 util.isNode = isNode;
 //const isDir=n=>{return (n instanceof FSNode && n.isDir===true);};
 const isDir=n=>{return (n instanceof DirNode);};
 util.isDir = isDir;
 //const isFile=n=>{return (n instanceof FSNode && n.isFile===true);};
-const isFile=n=>{return (n instanceof FileNode);};
+//const isFile=n=>{return (n instanceof FileNode);};
+const isFile=n=>{return (n instanceof FileNode || n instanceof NetFileNode);};
 util.isFile = isFile;
 
 //»
@@ -1612,6 +1641,17 @@ const writeFile = async(path, val, opts = {}) => {//«
 		else if (name==="log") console.log(val);
 		return true;
 	}
+	if (rootdir === "users"){
+let rv = await globals.funcs["netfs.fbWrite"](path, val);
+if (rv === true) return true;
+if (isErr(rv)){
+if (opts.reject) throw rv;
+else return false;
+}
+cerr("Unkown value returned from netfs.fbWrite");
+log(rv);
+return;
+	}
 cerr("Invalid or unsupported root dir:\x20" + rootdir);
 }//»
 const writeNewFile=(path, val, opts = {})=>{//«
@@ -1930,7 +1970,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 //	let is_dir = opts.isDir;
 //	let is_link = opts.isLink;
 //	let is_data = opts.isData;
-	let {isDir, isLink, isData, isFile} = opts;
+	let {isDir, isLink, isData, isFile, isNetFile, appData} = opts;
 	let mod_time = opts.modTime;
 	let path = opts.path;
 	let fullpath = `${path}/${name}`;
@@ -1940,10 +1980,11 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	let kid;
 	if (opts.useKid) kid = opts.useKid;
 	else {
-		if (isFile) kid = new FileNode(name, par, path);
-		else if (isDir) kid = new DirNode(name, par, path);
-		else if (isLink) kid = new LinkNode(name, par, path);
-		else if (isData) kid = new DataNode(name, par, path);
+		if (isFile) kid = new FileNode(name, par, appData);
+		else if (isDir) kid = new DirNode(name, par, appData);
+		else if (isLink) kid = new LinkNode(name, par, appData);
+		else if (isData) kid = new DataNode(name, par, appData);
+		else if (isNetFile) kid = new NetFileNode(name, par, appData);
 		else FATAL("WHAT KIND OF NODE???");
 /*«
 		kid = new FSNode({
@@ -2114,12 +2155,19 @@ export a default function to do this populating. If they want finer grained cont
 of how to populate '/users' (with a list of known/friendly users, for example), they should
 consult the "documentation" for the `users` command.
 */
-cwarn("POPULATE /users ...");
+//cwarn("POPULATE /users with vals...");
+//log(opts.vals);
+return populate_users_dirobj(dirobj, opts);
 			}
 			else{
 cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
 log(dirobj);
 			}
+		}
+		else if (dirobj.type == USERS_TYPE){
+/*We need a handle 
+*/
+			return populate_user_dirobj(dirobj, opts);
 		}
 		else{
 cwarn("Got dirobj.sys = false");
@@ -2131,7 +2179,6 @@ log(dirobj);
 }//»
 const populate_fs_dirobj = async(parobj, opts={}) => {//«
 
-let path = parobj.fullpath;
 let kids = parobj.kids;
 let rv;
 //db.init();
@@ -2183,6 +2230,68 @@ parobj.done=true;
 return kids;
 
 }//»
+const populate_users_dirobj = (parobj, opts) =>{//«
+	let kids = parobj.kids;
+	let arr = opts.vals;
+	for (let i=0; i < arr.length; i+=2){
+	let name = arr[i];
+	let id = arr[i+1];
+		let kid = mk_dir_kid(parobj, name, {
+			isDir: true,
+			appData: {id}
+		});
+		kids[name] = kid;
+	}
+	parobj.done = true;
+	return kids;
+};//»
+const populate_user_dirobj = async(parobj, opts)=>{//«
+
+let kids = parobj.kids;
+//let id = parobj.appData
+let arr = parobj.fullpath.split("/");
+arr.shift();
+arr.shift();
+let name = arr.shift();
+let appData = root.kids.users.kids[name].appData;
+let path = arr.join("/");
+cwarn(name, path);
+let list = await globals.funcs["netfs.getUserDirList"](appData.id, path);
+if (isErr(list)){
+cerr(list);
+return kids;
+}
+//log(list);
+let names = list.names;
+if (names.length == 1 && names[0]===false){
+
+parobj.done=true;
+return kids;
+
+}
+let vals = list.vals;
+for (let i=0; i < names.length; i++){
+let nm = names[i];
+let val = vals[i];
+let kid;
+//log(nm, val);
+if (val === -1){
+	kid = mk_dir_kid(parobj, nm, {
+		isDir: true,
+		appData
+	});
+}
+else{
+	kid = mk_dir_kid(parobj, nm, {
+		isNetFile: true,
+		appData
+	});
+}
+kids[nm] = kid;
+}
+parobj.done=true;
+return kids;
+};//»
 
 /*«This is old stuff (mounting backend folders onto /mnt) that was replaced by a
 //single /site dir which uses a backend generated "list.json" file, that is

@@ -123,6 +123,7 @@ const{
 }=globals.term;
 const{
 	FS_TYPE,
+	USERS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
 
@@ -1324,7 +1325,7 @@ if (!parnode){
 	return `${fname}: invalid or unsupported path`;
 }
 let typ = parnode.type;
-if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
+if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||USERS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
 	return `${fname}: invalid or unsupported path`;
 }
 if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
@@ -2805,7 +2806,23 @@ const com_echodelay = class extends Com{//«
 
 }//»
 const com_ls = class extends Com{//«
-
+static getOpts(){
+	return {//«
+		s: {
+			a: 1,
+//			l: 1,
+//			r: 1,
+			R: 1,
+			f: 1
+		},
+		l: {
+//			long: 1,
+			all: 1,
+			force: 1,
+			recursive: 1
+		}
+	}//»
+}
 init(){//«
 	let {opts, args}=this;
 	if (!args.length) args.push("./");
@@ -2814,7 +2831,7 @@ init(){//«
 }//»
 async run(){//«
 //	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
-	const{pipeTo, isSub, term, args} = this;
+	const{pipeTo, isSub, term, args, opts} = this;
 	const out=(...args)=>{
 		this.out(...args);
 	};
@@ -2826,6 +2843,7 @@ async run(){//«
 	let dir_was_last = false;
 	let all = this.optAll;
 	let recur = this.optRecur;
+	let force = opts.force || opts.f;
 	const do_path = async(node_or_path)=>{//«
 		let node;
 		let wants_dir;
@@ -2868,7 +2886,7 @@ async run(){//«
 			out(`${node.name} ${sz}`);
 			return;
 		}
-		if (!node.done) await fsapi.popDir(node);
+		if (force || !node.done) await fsapi.popDir(node);
 		dir_was_last = true;
 		let kids = node.kids;
 		let arr = Object.keys(kids);//let arr = kids._keys;
@@ -3458,19 +3476,6 @@ Long options may be given an argument like this:
 ~$ dosomething --like-this="Right here" to_some.json
 
 »*/
-	ls: {//«
-		s: {
-			a: 1,
-//			l: 1,
-//			r: 1,
-			R: 1
-		},
-		l: {
-//			long: 1,
-			all: 1,
-			recursive: 1
-		}
-	},//»
 	read:{l:{prompt:3}},
 	import:{s:{d:1},l:{delete: 1}},
 	bindwin:{s:{d:3},l:{desc: 3}},
