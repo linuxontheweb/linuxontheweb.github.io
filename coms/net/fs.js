@@ -22,12 +22,506 @@
 }
 
 »*/
-/*10/1/25: To mount /users, we need to have a cache of the last N statuses, and check for the
+
+/*10/3/25: Let's do everything from yesterday. Upon mounting the /users dir, we check for our«
+next_key value. Then everytime we update, we check for the time difference between now
+and the last successful update. If it is greater that MAX_SECONDS_TO_CHECK_KEY_VAL (e.g. 1 hr = 
+60 min/hr * 60 sec/min = 3600 sec/hr), then we get the next_key value before doing the update.
+This should not noticeably degrade performance, since we are only getting a single numerical
+value.
+
+In the event that an update doesn't work, we'll do MAX_RETRIES (e.g. 2) worth of 
+get(next_val) + update(next_val, obj) before finally giving up (in the case that the next_val
+that we get is the same as the next_val that we have, then we have what seems to be a
+fairly impossible situation). It is *extremely unlikely* that a single retry wouldn't
+work (a fetch immediately followed by an update should take <250 ms, depending on data payload
+size).
+
+
+Conversation w/Google AI about how to implement the database schema and decide whether to
+perform requests based on a two-step lookup or a one-step query-based approach.
+
+QUESTION 1//«
+
+Let's say I need to get a single object from the Firebase Realtime DB, with a
+field that has a value that is guaranteed to be unique. So to get this object
+based on that field, I assume I will need to create an index for it, via the
+".indexOn" security rule. Let's say there are very many objects in the
+database. I assume that using a query parameter like limitToFirst(1) would
+greatly maximize the efficiency of this sort of query.
+//»
+ANSWER 1//«
+
+In cases where a unique identifier must be mutable, Firebase Realtime Database's fan-out strategy is the best approach, combined with a transaction to ensure atomic updates. This combines the performance of key-based lookups with the flexibility to modify the unique identifier. 
+Using this method, you have a primary location for the object with a stable, permanent key, and a separate, secondary location (the "fan-out" node) for the mutable unique identifier. 
+The fan-out strategy for mutable unique fields
+1. Define your data structure
+
+
+
+Let's say I need to get a single object from the Firebase Realtime DB, with a field that has a value that is guaranteed to be unique. So to get this object based on that field, I assume I will need to create an index for it, via the ".indexOn" security rule. Let's say there are very many objects in the database. I assume that using a query parameter like limitToFirst(1) would greatly maximize the efficiency of this sort of query.
+While your approach is valid, it's not the most efficient way to query a single, uniquely identifiable item in the Firebase Realtime Database. The recommended pattern is to structure your data with the unique identifier as the key itself. 
+Why limitToFirst(1) isn't the best method
+Using a query with orderByChild(), equalTo(), and limitToFirst(1) will work and will leverage your .indexOn rule, but it still performs a server-side query on the indexed data set. 
+How it works: The Realtime Database first finds all items matching the query and then applies the limit. Even with a unique field, it has to do the work of finding the single item within the index before returning it.
+Drawbacks: For a simple key-based lookup, this adds unnecessary overhead compared to a direct lookup, especially as the data grows. 
+The most efficient approach: Structure data by unique key
+For maximum efficiency, use the unique identifier as the database key. This allows for a direct, indexed key-value lookup, which is the fastest possible read operation in the Realtime Database. 
+Example: Users with a unique username
+Suboptimal structure (your proposed method):
+json
+"users": {
+  "-YcZ-yB...": {
+    "username": "alice",
+    "email": "alice@example.com"
+  },
+  "-YcZ-oB...": {
+    "username": "bob",
+    "email": "bob@example.com"
+  }
+}
+Use code with caution.
+
+To find "bob," you would query:
+javascript
+const dbRef = ref(db, 'users');
+const bobQuery = query(dbRef, orderByChild('username'), equalTo('bob'), limitToFirst(1));
+const snapshot = await get(bobQuery);
+Use code with caution.
+
+This requires an .indexOn: "username" security rule. 
+Optimal structure (unique key method):
+json
+"users": {
+  "alice": {
+    "email": "alice@example.com"
+  },
+  "bob": {
+    "email": "bob@example.com"
+  }
+}
+Use code with caution.
+
+To find "bob," you would perform a direct lookup:
+javascript
+const bobRef = ref(db, 'users/bob');
+const snapshot = await get(bobRef);
+Use code with caution.
+
+This is a direct fetch and is significantly faster, as it doesn't need to perform an ordered search. 
+Hybrid approach for multiple unique fields
+If you need to query by multiple unique fields, you can use a "fan-out" approach. This involves creating a lookup table for each unique field. 
+Example: Users with a unique username and unique email
+json
+"users": {
+  "aliceUid": {
+    "username": "alice",
+    "email": "alice@example.com"
+  }
+},
+"usernames": {
+  "alice": "aliceUid"
+},
+"emails": {
+  "alice@example.com": "aliceUid"
+}
+Use code with caution.
+
+This allows for direct lookups by either username or email.
+To find the user by username:
+Look up the user's UID in the usernames table: ref(db, 'usernames/alice').
+Fetch the user's data using the retrieved UID: ref(db, 'users/aliceUid').
+AI responses may include mistakes. Learn more
+
+
+
+
+What are the drawbacks of using the unique field as the key?
+
+Show me how to implement the fan-out approach
+
+How can I enforce uniqueness when setting data with a custom key?
+
+undefined
+undefined
+undefined
+7 sites
+Retrieving Data | Firebase Realtime Database - Google
+Sep 8, 2025 — Filtering Data. We can construct queries to filter data based on various factors. To start, you specify how you want...
+favicon
+Firebase
+How to get data by specific value : r/Firebase - Reddit
+Apr 10, 2024 — You should think of rtdb more like a javascript object - since you know the uid , you'll need to filter over each n...
+favicon
+Reddit
+Index Your Data | Firebase Realtime Database - Google
+Aug 18, 2025 — Since we're using orderByValue() to create the leaderboard, we can optimize our queries by adding a .value rule at ...
+favicon
+Firebase
+Show all
+ //»
+
+QUESTION 2//«
+
+In my particular case, the unique identifier in question *must* be modifiable by the application.
+//»
+ANSWER 2//«
+
+In cases where a unique identifier must be mutable, Firebase Realtime Database's fan-out strategy is the best approach, combined with a transaction to ensure atomic updates. This combines the performance of key-based lookups with the flexibility to modify the unique identifier. 
+Using this method, you have a primary location for the object with a stable, permanent key, and a separate, secondary location (the "fan-out" node) for the mutable unique identifier. 
+The fan-out strategy for mutable unique fields
+1. Define your data structure
+First, organize your data into a primary collection using a stable, non-modifiable ID, such as a Firebase push() key or a user's UID. This prevents having to move large objects around when the mutable field changes. 
+Then, create a separate "lookup" or "index" collection that maps the mutable field to the stable ID.
+Example: A list of products with a unique sku that can change
+json
+{
+  "products": {
+    "product_stable_id_1": {
+      "name": "Widget",
+      "sku": "WGT-001",
+      "price": 10.99
+   },
+   "product_stable_id_2": {
+      "name": "Gadget",
+      "sku": "GGT-002",
+      "price": 19.99
+    }
+  },
+  "skus": {
+    "WGT-001": "product_stable_id_1",
+    "GGT-002": "product_stable_id_2"
+  }
+}
+2. Update the unique field atomically with a transaction
+When you need to change the unique identifier, you must perform a multi-location update atomically to avoid data inconsistencies. Firebase transactions are designed for this exact purpose. 
+The transaction will handle the race condition of two users trying to update the same field at the same time. If a concurrent write is detected, the transaction will automatically run again. 
+Example: Updating a product's SKU from WGT-001 to WGT-003
+Retrieve the current value: First, read the skus/WGT-001 node to get the product_stable_id_1.
+Start a transaction: Use a transaction to update both locations simultaneously.
+Perform the updates:
+Set the new SKU: skus/WGT-003 should be set to product_stable_id_1.
+Remove the old SKU: skus/WGT-001 should be deleted.
+Update the sku field on the main product object: products/product_stable_id_1/sku should be set to WGT-003. 
+The transaction ensures that either all these writes succeed or all of them fail together. 
+3. Perform a fast, two-step lookup
+To find an item by its unique field:
+Read the skus index to get the stable ID.
+Use that stable ID to perform a direct, fast read from the products collection.
+This method is far more efficient than a full database scan or a deep query, especially on large datasets. 
+Pros and cons of the fan-out approach
+Pros 	Cons
+Speed: Queries for a unique item are always a direct key lookup, which is the fastest operation possible.	Complexity: It requires more application code to manage the lookup index.
+Consistency: Using a transaction guarantees that updates to the unique field are atomic, preventing data integrity issues.	Cost: A transaction is slightly more complex and may use more operations than a simple set() or update(). However, the cost is minimal and worth the data consistency guarantee.
+Scalability: As your database grows, this approach remains fast and performant because it avoids expensive orderByChild() queries.	Latency: A transaction requires one or more roundtrips to the server, which can introduce a small amount of latency compared to a single-shot write.
+//»
+
+QUESTION 3//«
+
+But wouldn't a network round-trip be needed in order to do the sku->stable_id lookup in the first place, before the relevant object can be retrieved by its key? In that case, then my original question can be replaced by the question of whether this round-trip is *actually* more efficient than a query based on orderByChild("sku").limitToFirst(1).
+//»
+ANSWER 3//«
+
+You are correct that the fan-out method requires two network round trips, which is a valid consideration. However, the fan-out approach is almost always more efficient and scalable for large datasets than using an orderByChild().equalTo().limitToFirst(1) query, for several reasons. 
+The core difference lies in how Firebase processes each request.
+The fan-out (two-step lookup) approach
+Request 1: Key lookup. You make a direct request for a specific key (skus/WGT-001). This is the fastest possible read operation in Firebase because it's a simple, indexed, key-value lookup. The server does not need to scan any data; it goes directly to the requested key. The data payload for this request is extremely small, containing only the stable ID (e.g., "product_stable_id_1").
+Request 2: Object retrieval. You make a second, direct request for the full object using the stable ID (products/product_stable_id_1). This is also a fast, direct key lookup. 
+The two network trips are for highly optimized, direct-access operations. The speed is dominated by network latency, but the server-side processing is minimal and constant, regardless of the database size. 
+The orderByChild().equalTo() query approach
+Request 1: Indexed query. You make a request to query a large collection (products) based on a child field (sku). Even with an .indexOn rule, the Firebase server has to perform the following steps:
+Access the index: The server must access and iterate through the sorted index of all sku values in the entire collection.
+Find the match: It has to find the one item in the index where the sku value is "WGT-001".
+Retrieve the object: Once the match is found, it must retrieve the corresponding object from the main data storage. 
+This process involves more server-side work than a direct lookup, and while the limitToFirst(1) helps by stopping the search after the first match, the server-side indexing and searching process is still inherently more complex than a direct key lookup. The performance of this query depends on the total number of items in the collection, even with an index, which can introduce performance degradation as your dataset grows. 
+The key differences and why fan-out is better
+Aspect 	Fan-out (Two-step Lookup)	orderByChild().equalTo().limitToFirst(1) Query
+Server-side work	Two direct, indexed key lookups. Extremely low and constant overhead, unaffected by database size.	Search and retrieval on a potentially large index. The work scales with the total number of items, even with limitToFirst(1).
+Network trips	Two trips. First trip returns a very small payload (the ID). The second trip returns the full object.	One trip. The response contains the full object, just like the second fan-out trip.
+Data payload	The first request has a minimal payload, reducing network usage. The second request has the payload of the full object.	The single request returns the full object payload.
+Scalability	Performance remains consistently fast as the database grows.	Performance may degrade as the number of total items increases, as the server has to work harder to service the index-based query.
+Atomicity	You can use a transaction to guarantee atomic updates when modifying the unique field, preventing race conditions.	Modifying the unique field and the parent object is a separate operation, increasing the risk of data inconsistency.
+Conclusion
+The potential additional network latency of a two-step lookup is a small and predictable price to pay for a query that remains performant at any scale. The efficiency gain from
+using a direct key-based lookup, which is constant-time, far outweighs the cost of the extra network hop when compared to the variable-time complexity of an orderByChild() query on a large dataset. 
+For this reason, the fan-out approach is the standard best practice in Firebase for querying data by a mutable, unique identifier. 
+//»
+
+QUESTION 4//«
+
+I think the maximally robust solution would account for the trade-offs between index size and network latency, and form database requests based on whether the actual context should prioritize for the size or for network conditions.
+//»
+ANSWER 4//«
+
+You are correct. A maximally robust solution acknowledges that different scenarios call for different optimization strategies. While the fan-out approach is the standard for long-term scalability, there are specific contexts where a single-trip query might be preferable, even with a large index. The key is to understand the trade-offs: Two-Trip (Fan-Out) Approach: Optimizes for database size and scalable performance. It is always fast, regardless of how large your dataset grows.One-Trip (\(`orderByChild().equalTo().limitToFirst(1)`\)) Approach: Prioritizes minimizing network round trips. It is faster only when the query index is small and network latency is a significant bottleneck. How to decide between the two strategies
+
+Here is a breakdown to help you make an informed, context-driven decision.
+Prioritize the fan-out (two-trip) approach when:
+Your dataset is large and growing. This is the most critical factor. As the number of items in your database increases, the performance cost of scanning a large index in a single trip becomes much more significant than the overhead of a second network request. This is the path to long-term scalable performance.
+You need to perform atomic updates. If you need to modify the unique ID, the fan-out model is the only way to do so reliably using a transaction. The single-trip query approach has no way to guarantee consistency for a mutable unique ID.
+Your network latency is consistently low. If your users are geographically close to your database, the added latency from a second trip is negligible and easily outweighed by the performance of the indexed key lookups.
+
+You are already performing multi-location lookups. If your application is already built with a normalized or fan-out structure, you don't add any new architectural complexity by using another fan-out lookup. 
+Prioritize the one-trip query when:
+Your dataset is guaranteed to remain very small. If you know the number of objects will be small (e.g., in the hundreds or low thousands), the overhead of the indexed lookup is minimal. In this scenario, the single trip is genuinely faster.
+Network latency is exceptionally high and unpredictable. In a mobile or IoT environment where network conditions are poor, every network round trip adds significant, variable latency. If this is your most critical performance constraint, a single, albeit less efficient, round trip may result in a better user experience.
+Simplicity is the primary goal. The single-trip approach requires less data modeling
+
+and application logic. It's simpler to implement if you aren't concerned with long-term scalability.
+
+The unique identifier is truly immutable. If the unique field can never change,
+you can use it as the key directly, making the fan-out model unnecessary and
+achieving the fastest possible single-trip lookup. 
+
+What about a dynamic solution?
+
+A dynamic solution, as you suggested, would be to switch strategies based on
+the context. While interesting in theory, it is not recommended in practice.
+The database schema is a fundamental design decision. Changing the data access
+pattern dynamically would likely introduce significant code complexity, edge
+cases, and potential for data inconsistencies. 
+
+Instead, the most robust solution is to select the fan-out model from the
+start. Even if your dataset is small today, building for scalability ensures
+your application will perform well as it grows, without requiring a fundamental
+architectural change later on. The small extra overhead of the second network
+request is a small price to pay for future-proofing your application. 
+//»
+
+QUESTION 5//«
+
+I don't see how the choice of *accessing* the relevant objects (i.e. two-steps
+vs one-step) affects the choice of database *schema* in any manner. Those are
+two wholly different points. With my proposed dynamical approach, the "fan out"
+lookup table would obviously need to be *implemented* (in case that index size
+is the priority), but my point is that it wouldn't need to be *used* within any
+client conext that chooses to proritize network conditions.  
+//»
+ANSWER 5//«
+
+You've raised an excellent point about the distinction between schema design
+and access strategy. It is absolutely possible to build a fan-out index into
+your schema but have a client-side strategy that dynamically chooses whether or
+not to use it. This approach combines the robustness of a scalable schema with
+the flexibility to prioritize performance based on context. 
+
+Here is a breakdown of how this dynamic strategy would work and the factors you
+would need to consider.
+
+How to implement the dynamic access strategy
+1. Implement the scalable fan-out schema
+
+First, you would structure your database using the fan-out pattern, as
+previously described. This is the foundational, robust part of your system. 
+
+
+json
+{
+  "products": {
+    "product_stable_id_1": {
+      "name": "Widget",
+      "sku": "WGT-001"
+    }
+  },
+  "skus": {
+    "WGT-001": "product_stable_id_1"
+  }
+}
+
+This schema is not optional; its presence is what allows for the scalable, two-trip lookup. 
+
+2. Create the "fast" (one-trip) access method
+
+On the client, you would write a function that performs the one-trip query
+using orderByChild().equalTo().limitToFirst(1). 
+
+javascript
+// Function for a one-trip query
+async function getProductBySkuFast(sku) {
+  const productsRef = ref(db, 'products');
+  const q = query(productsRef, orderByChild('sku'), equalTo(sku), limitToFirst(1));
+  const snapshot = await get(q);
+  // ... process and return result
+}
+
+3. Create the "scalable" (two-trip) access method
+
+Next, you would write the function that performs the two-trip fan-out lookup,
+which uses the dedicated skus index. 
+
+javascript
+// Function for a two-trip, scalable query
+async function getProductBySkuScalable(sku) {
+  const skuRef = ref(db, `skus/${sku}`);
+  const idSnapshot = await get(skuRef);
+  if (idSnapshot.exists()) {
+    const stableId = idSnapshot.val();
+    const productRef = ref(db, `products/${stableId}`);
+    const productSnapshot = await get(productRef);
+    // ... process and return result
+  }
+}
+
+4. Implement the dynamic logic on the client
+
+Finally, you would write the logic that decides which of these two functions to
+call based on the current context. 
+
+javascript
+async function getProductBySku(sku) {
+  // Check if network conditions are poor or if the index is small.
+  // This could be based on:
+  // - a pre-defined threshold for the estimated size of the products collection.
+  // - real-time network conditions.
+  // - a simple feature flag to disable the scalable method.
+
+  const isHighLatency = getNetworkLatencyEstimate() > someThreshold;
+  const isIndexSmall = getEstimatedProductCount() < someThreshold;
+  if (isHighLatency && isIndexSmall) {
+    // Prioritize network latency by using the one-trip query.
+    return getProductBySkuFast(sku);
+  } else {
+    // Prioritize scalability by using the two-trip query.
+    return getProductBySkuScalable(sku);
+  }
+}
+
+Addressing your point on schema vs. access
+
+Your observation is accurate: the choice of accessing the data does not dictate
+the database schema. The schema must be robust enough to support all potential
+access patterns.
+
+The fan-out index is part of the schema and must be implemented if you ever
+need the scalable access pattern.
+
+The one-trip query is an alternative access pattern that can be performed on
+the same schema. 
+
+This is a powerful and flexible design. You are not locked into one approach. 
+
+The trade-offs of this dynamic approach
+While this offers flexibility, it introduces complexity that must be managed. 
+
+Pros:
+
+Flexibility: Allows you to optimize for different scenarios (e.g., small
+internal app vs. large public service).
+
+Scalability: Retains the option for highly scalable lookups when the dataset grows.
+Performance: Can provide better latency in specific cases (small index, high network latency). 
+Cons:
+
+Complexity: The client-side logic for making the decision adds complexity to your codebase.
+
+Decision Metrics: Determining the "right" threshold for switching strategies
+(e.g., how to measure getEstimatedProductCount() reliably) is non-trivial.
+
+Maintenance: You now have two distinct query implementations to maintain and
+test, which increases the chance of bugs. 
+
+In conclusion, your idea of a dynamic strategy is sound and a valid
+architectural approach. For many applications, the fan-out approach is
+sufficient because its performance advantages outweigh the minor latency cost,
+but if your specific context is highly sensitive to network latency with a
+small dataset, a dynamic strategy can be the most robust solution. 
+//»
+
+»*/
+/*10/2/25: Need to refactor the backend structure to separate the file storage«
+from the directories:
+
+Just like with our local file system, we should have a separate blob storage on the backend. 
+
+LET'S JUST COPY THE *ENTIRE* LOCAL METHOD, DERP!!!
+
+Question: is it possible to instruct Firebase to save by an auto-incrementing key?
+NO: We need to push method to generate auto-incremented keys.
+
+Nodes
+Key Value
+ABC	{parId: TUV, path: '000/<name1>', type: 'd'}
+BCD	{parId: UVW, path: 'ABC/<name2>', type: 'd'}
+CDE	{parId: WXY, path: 'BCD/<name3>', type: 'f', blobId: XYZ}
+
+000: Represents the root of all branches (which doesn't need exist in the schema)
+Otherwise, all keys like 'ABC' are shorthands for the real keys returned from push.
+
+
+Now with next_key, we are in charge of the key handling, and the database will look exactly like
+our front end.
+
+root: {
+
+next_key: {
+	"$ghid": {
+		".read": "auth.ghid = $ghid",
+		".write": "auth.ghid = $ghid",
+		".validate": "newData.isNumber() && (!data.exists() && newData.val() === 0 || (data.exists() && newData.val() === data.val() + 1)"
+	}
+}
+
+nodes: {
+	".indexOn" = ["parId", "blobId", "path"],
+	"$ghid": {
+		".read": "auth != null",
+		".write": "auth.ghid = $ghid",
+		"parId": {
+			".validate": "newData.isString() && newData.val().length < $PATH_MAX"
+		},
+		"blobId": {
+			".validate": "newData.isString() && newData.val().length < $PATH_MAX"
+		},
+		"path": {
+			".validate": "newData.isString() && newData.val().length < $PATH_MAX"
+		},
+		"type": {
+			".validate": "newData.isString() && newData.val().length < $TYPE_MAX"
+		},
+		"$other": {
+			".validate": false
+		}
+	}
+},
+
+blobs: {
+
+	"$ghid": {
+		".read": "auth != null",
+		".write": "auth.ghid = $ghid",
+		"meta": { // Example
+			"field1": {
+				".validate": "newData.isString() && newData.val().length < $FIELD1_MAX"
+			},
+			"field2": {
+				".validate": "newData.isNumber()" 
+			},
+			"field3": {
+				".validate": "newData.isBoolean()"
+			},
+			".other": {
+				".validate": false
+			}
+		},
+		"contents": {
+			".validate": "newData.isString() && newData.val().length < $CONTENTS_MAX"
+		},
+		".other":{
+			".validate": false
+		}
+	}
+}
+
+}
+
+Also: Let's await on update.
+»*/
+/*10/1/25: To mount /users, we need to have a cache of the last N statuses, and check for the«
 cache or get them. This gives us id->username mappings. Then we'll mount them with the
 usernames for the key names.
 
 We should put a appData field on FSNode, for use by the individual applications.
-*/
+»*/
 /*9/30/25: Let's use update (instead of runTransaction). We will always check«
 is_connected, and use a flag (e.g. "force-offline") to force updates when it is false.
 This affects stuff like @NSBDHFUR, where there is (currently) 3 successive calls to
@@ -434,12 +928,23 @@ await fsapi.popDir(root.kids.users, {vals: arr});
 	return true;
 };//»
 const update = async (refarg, obj) => {//«
+	if (isStr(refarg)) refarg = get_ref(refarg);
+	try{
+		await _update(refarg, obj);
+		return true;
+	}
+	catch(e){
+cwarn("The update failed!");
+cerr(e);
+		return false;
+	}
+};//»
 /*
-This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
-not completed within the specified interval. If after returning, we have previously warned,
-then we let the user know that the update has finished. In case everything works fine,
-nothing is reported.
-*/
+const update = async (refarg, obj) => {//«
+//This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
+//not completed within the specified interval. If after returning, we have previously warned,
+//then we let the user know that the update has finished. In case everything works fine,
+//nothing is reported.
 	if (isStr(refarg)) refarg = get_ref(refarg);
 
 	let have_num = update_num;
@@ -461,6 +966,7 @@ cwarn(`An error has occurred for update#${have_num}`);
 cerr(e);
 	}
 };//»
+*/
 const parallel_sort = (primary, secondary, if_rev) => {//«
 /*«
 Say you are given 2 JS arrays of equal length. One of them must be sorted
@@ -661,9 +1167,7 @@ if (!use_name) {
 //	if (isStr(use_name)) return use_name;
 }
 //log(`SETTING: ${ghid}: ${use_name}`);
-update(`/names`, {[ghid]: use_name});
-
-return true;
+return await update(`/names`, {[ghid]: use_name});
 
 };//»
 
@@ -913,8 +1417,8 @@ let update_obj = {
 	size: use_len,
 	[`kids/${enc_path}`]: use_obj
 };
-update(base_path, update_obj);
-_this.ok();
+if (await update(base_path, update_obj)) _this.ok();
+else _this.no("Update failed! (see console for error)");
 
 };//»
 
@@ -1028,7 +1532,7 @@ let update_obj = {
 	size: use_len,
 	[`kids/${enc_path}`]: use_obj
 };
-update(base_path, update_obj);
+if (!await update(base_path, update_obj)) return;
 return sz;
 
 };
@@ -1113,9 +1617,8 @@ this.ok();
 const com_fbsetname = class extends Com{//«
 async run(){
 const{args}=this;
-let rv = await set_name();
-if (isErr(rv)) this.no(rv.message);
-else this.ok();
+if (await set_name()) this.ok();
+else this.no("Update failed! (see console for error)");
 }
 }//»
 const com_user = class extends Com{//«
@@ -1477,9 +1980,8 @@ this.no(username.message);
 return;
 }
 
-update("/user", {
-	[gh.uid]: NEW_DIR
-});
+if (await update("/user", {[gh.uid]: NEW_DIR})) this.ok();
+else this.no("Update failed! (see console for error)");
 
 /*
 update("/", {
@@ -1487,7 +1989,6 @@ update("/", {
 	[`user/${gh.uid}`]: NEW_DIR
 });
 */
-this.ok();
 
 }
 }//»
@@ -1536,8 +2037,8 @@ const com_fbstat = class extends Com {//«
 			msg: args.join(" "),
 			name: login
 		};
-		update("/status", {[id]: obj});
-		this.ok();
+		if (await update("/status", {[id]: obj})) this.ok();
+		else this.no("Update failed! (see console for error)");
 	}
 }//»
 const com_fbstats = class extends Com{//«
