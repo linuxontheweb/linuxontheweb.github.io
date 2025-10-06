@@ -43,6 +43,8 @@ LOTW_FS: {
 		cur_session_id: {
 			'.validate": "newData.isString() && newData.val().length >= 4"
 		},
+		next_node_id: {
+		},
 		nodes: {
 			".indexOn" = ["parId", "path"],
 			"$nodeId": {
@@ -103,7 +105,7 @@ OTHER_NS: {
 Also: Let's await on update.
 »*/
 
-/*10/6/25: Persistent session ids«
+/*10/6/25: Persistent session ids, create_new_file() example«
 
 Let's do persistent 24 bit session ids (4 chars, ~16M  possible). This is instead of
 jumping through all the hoops of constantly changing them. Only upon the first
@@ -111,12 +113,6 @@ usage of the database in a client instance (local database initialization) do
 we need to secure a unique id. We just need to keep a little bit of local
 state, such as an object in e.g. APPDATA_PATH/netfs/sid.
 
-Now we can do these 2 operations in a row, wrapped in a Promise:
-1) get_next_id
-2) increment_next_id
-
-We know that if another session id is set between these 2 steps, then
-increment_next_id won't work, and we won't have any gaps in the ids.
 
 const SESS_ID_BYTE_LEN = 3; // 4 ascii chars long
 const get_sess_id = () => {
@@ -126,6 +122,44 @@ let sess_id = (crypto.getRandomValues(new Uint8Array(SESS_ID_BYTE_LEN))).toBase6
 		.replace(/=+$/, '');
 	return sess_id;
 };
+
+
+Now we can do these 2 operations in a row, wrapped in a Promise:
+1) get_next_id
+2) increment_next_id
+
+We know that if another session id is set between these 2 steps, then
+increment_next_id won't work, and we won't have any gaps in the ids.
+
+Or increment_next_id rather gets put into an update operation, which creates a new
+node:
+
+const create_new_file = async (par_id, name, bytes) => {
+
+	let node_id = await get_next_node_id(); // Use this as the blob_id: they're in different "tables"
+	let update_obj = {
+		nodes: {
+			[node_id]: {
+				type: "f",
+				parId: par_id,
+				blobId: node_id,
+				path: `${par_id}/${name}`
+			}
+		},
+		blobs: {
+			[node_id]: {
+				contents: bytes.toBase64(),
+				meta: {
+					//...
+				}
+			}
+		},
+		next_node_id: increment(1)
+	};
+	await update("/$ghid", update_obj); // If this fails, no incrementing is done
+
+};
+
 
 »*/
 /*10/5/25: Session ids«
