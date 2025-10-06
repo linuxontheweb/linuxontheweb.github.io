@@ -34,14 +34,14 @@ root: {
 ".read": false,
 ".write": false,
 
-LOTWFS: {
+LOTW_FS: {
 
 	"$ghid": {
-		session_id: {
-			'.validate": "newData.isString() && newData.val().length >= 4"
+		session_ids: { // Register a unique session id  here upon local initialization
+			".validate": "!root.child($ghid).child('session_ids')[newData.val()]"
 		},
-		old_session_ids: {
-			".validate": "!root.child($ghid).child('old_session_ids')[newData.val()]"
+		cur_session_id: {
+			'.validate": "newData.isString() && newData.val().length >= 4"
 		},
 		nodes: {
 			".indexOn" = ["parId", "path"],
@@ -101,6 +101,32 @@ OTHER_NS: {
 }
 
 Also: Let's await on update.
+»*/
+
+/*10/6/25: Persistent session ids«
+
+Let's do persistent 24 bit session ids (4 chars, ~16M  possible). This is instead of
+jumping through all the hoops of constantly changing them. Only upon the first
+usage of the database in a client instance (local database initialization) do
+we need to secure a unique id. We just need to keep a little bit of local
+state, such as an object in e.g. APPDATA_PATH/netfs/sid.
+
+Now we can do these 2 operations in a row, wrapped in a Promise:
+1) get_next_id
+2) increment_next_id
+
+We know that if another session id is set between these 2 steps, then
+increment_next_id won't work, and we won't have any gaps in the ids.
+
+const SESS_ID_BYTE_LEN = 3; // 4 ascii chars long
+const get_sess_id = () => {
+let sess_id = (crypto.getRandomValues(new Uint8Array(SESS_ID_BYTE_LEN))).toBase64()
+		.replace(/\+/g, '-')
+		.replace(/\x2f/g, '_')
+		.replace(/=+$/, '');
+	return sess_id;
+};
+
 »*/
 /*10/5/25: Session ids«
 Let's get a crypto-secure 24bit value as Base64 (4 ascii characters), and call set_session
@@ -274,23 +300,12 @@ coms/fs.js (for file moving, copying, etc).
 const{globals}=LOTW;
 const {fsMod: fs, fbase}=globals;
 const {USERS_TYPE, APPDATA_PATH} = globals.fs;
+const {config: firebaseConfig} = globals.firebase;
 const {Com} = globals.ShellMod.comClasses;
 const{mkdv, mk, isArr,isStr,isEOF,isErr,log,jlog,cwarn,cerr}=LOTW.api.util;
 const{root, mount_tree}=fs;
 const {fs: fsapi}=LOTW.api;
 //const {popup} = globals.popup;
-
-//Firebase«
-const firebaseConfig = {
-	apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
-	authDomain: "linuxontheweb.firebaseapp.com",
-	databaseURL: "https://linuxontheweb.firebaseio.com",
-	projectId: "linuxontheweb",
-	storageBucket: "linuxontheweb.firebasestorage.app",
-	messagingSenderId: "668423415088",
-	appId: "1:668423415088:web:979b40c704cab2322ed4f5"
-};
-//»
 //Database
 
 import {initializeApp} from "firebase_app";
@@ -320,7 +335,6 @@ onValue,
 increment,
 enableLogging
 } from "firebase_database";
-
 
 //»
 
@@ -1834,6 +1848,9 @@ export {coms, onkill};
 
 //»
 
+cwarn("Firebase config");
+log(firebaseConfig);
+
 /*«
 goog_but.onclick=async()=>{//«
 	is_active = true;
@@ -1866,4 +1883,15 @@ goog_but.onclick=async()=>{//«
   </div>
 </button>
 <br><br>
+»*/
+/*«
+const firebaseConfig = {
+	apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
+	authDomain: "linuxontheweb.firebaseapp.com",
+	databaseURL: "https://linuxontheweb.firebaseio.com",
+	projectId: "linuxontheweb",
+	storageBucket: "linuxontheweb.firebasestorage.app",
+	messagingSenderId: "668423415088",
+	appId: "1:668423415088:web:979b40c704cab2322ed4f5"
+};
 »*/

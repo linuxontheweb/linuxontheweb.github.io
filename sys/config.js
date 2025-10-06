@@ -430,6 +430,17 @@ const VIM_MODES={
 	REF_MODE: 12,
 };
 //»
+//Firebase«
+const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
+    authDomain: "linuxontheweb.firebaseapp.com",
+    databaseURL: "https://linuxontheweb.firebaseio.com",
+    projectId: "linuxontheweb",
+    storageBucket: "linuxontheweb.firebasestorage.app",
+    messagingSenderId: "668423415088",
+    appId: "1:668423415088:web:979b40c704cab2322ed4f5"
+};
+//»
 export const globals = {//«
 	workers:{
 //		faust: new Worker("/wasm/faust.js"),
@@ -472,6 +483,9 @@ css:{
 		BACKGROUND_GRADIENT,
 	},
 	BEWARE_RED,
+},
+firebase: {
+	config: FIREBASE_CONFIG
 },
 fs: {
 	FS_PREF,

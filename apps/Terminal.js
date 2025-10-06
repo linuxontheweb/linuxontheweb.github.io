@@ -52,6 +52,20 @@ inputs. Also of relevance is the bit @WZZKUDJK that takes the valueOf() of each 
 character, which is necessary for password mode chars to return the "real" string rather
 than, e.g. "********".
 » */
+/*10/6/25: Can we put 'IMPORT_COM_LIBS=<...>' into .env? «
+
+The environment logic is in initLibs @SXFHFMG.
+So from there we can look for IMPORT_COM_LIBS, and do auto-loading from there. But just underneath
+that point in initLibs, we have:
+
+if (dev_mode){
+	let rv = await this.ShellMod.util.doImports(ADD_COMS, cwarn);
+}
+
+So this gives us a nice pathway in which to change everything up from an ad-hoc,
+dev-centric workflow to a more systematic one.
+
+»*/
 /*5/6/25: Just put the shell into mods/lang/shell.js.«
 Now need to figure out how to deal with the onreload situation:
 1) In normal REPL mode, we might want to reload the terminal app (this file) or the shell
@@ -2671,7 +2685,7 @@ fmtLinesSync(arr, startx){//«
 }
 //»
 
-async respInit(addMessage){//«
+async initLibs(addMessage){//«
 
 	let init_prompt = `LOTW shell`;
 	if (!Desk.isFake) init_prompt +=`\x20(${this.winid.replace("_","#")})`
@@ -2679,21 +2693,23 @@ async respInit(addMessage){//«
 		init_prompt+=`\nAdmin mode: true`;
 	}
 	if (addMessage) init_prompt = `${init_prompt}\n${addMessage}`;
+//SXFHFMG
 	let env_file_path = `${this.cur_dir}/.env`; 
 	let env_lines = await env_file_path.toLines();
 	if (env_lines) {
 		let rv = this.ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
-//		let rv = add_to_env(env_lines, this.env, {if_export: true});
 		if (rv.length){
 			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
 		}
+		if (this.env.IMPORT_COM_LIBS) {
+			let add_com_libs = this.env.IMPORT_COM_LIBS.split(",");
+			if (add_com_libs){
+				let rv = await this.ShellMod.util.doImports(add_com_libs, cwarn);
+				if (rv) init_prompt += "\nImported libs: "+rv;
+			}
+		}
 	}
 
-if (dev_mode){
-	let rv = await this.ShellMod.util.doImports(ADD_COMS, cwarn);
-//	let rv = await do_imports(ADD_COMS, cwarn);
-if (rv) init_prompt += "\nImported libs: "+rv;
-}
 	this.response(init_prompt);
 
 }//»
@@ -3725,7 +3741,7 @@ async onappinit(appargs={}){//«
 		this.Win.noKbReload = appargs.noKbReload;
 	}
 	await this.initHistory(termBuffer);
-	await this.respInit(addMessage);
+	await this.initLibs(addMessage);
 	this.didInit = true;
 	this.sleeping = false;
 	this.isFocused = true;
