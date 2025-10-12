@@ -38,6 +38,7 @@ that the backend might possibly be used for.
 
 MOST RECENT:
 
+
 {
 	"rules": {
 		".read": false,
@@ -53,19 +54,21 @@ MOST RECENT:
 				},
 				"cur_session_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
-					".validate": "newData.isString() && newData.val().length == 4"
+					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+					".validate": "newData.isString() && newData.val().length == 4 && root.child('LOTW_FS').child($ghid).child('session_ids').child(newData.val()).val() === true"
 				},
 				"next_node_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
-					".validate": true
+					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.hasChildren(['sid', 'nodeid']) && newData.child('sid').val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').child('sid').val()",
+					"nodeid":{
+						".validate": "newData.isNumber() && newData.val() > root.child('LOTW_FS').child($ghid).child('next_node_id').child('nodeid').val()"
+					}
 				},
 				"nodes": {
 					".indexOn": ["parId", "path"],
 					"$nodeId": {
 						".read": "auth != null && auth.provider === 'github'",
-						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').child('sid').val()",
 						".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path'])",
 						"parId": {
 							".validate": "newData.isNumber()"
@@ -87,7 +90,7 @@ MOST RECENT:
 				"blobs": {
 					"$blobId": {
 						".read": "auth != null && auth.provider === 'github'",
-						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').child('sid').val()",
 						"meta": {
 							".validate": true
 						},
@@ -103,6 +106,7 @@ MOST RECENT:
 		}
 	}
 }
+
 
 Also: Let's await on update.
 »*/
