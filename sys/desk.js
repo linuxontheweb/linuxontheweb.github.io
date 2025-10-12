@@ -16,7 +16,7 @@ controls the interface, but modifying those areas should be done by experts only
 and press "*" in order to jump to the relevant point in the code.)
 
 »*/
-
+//10/10/25: Something like: '$ cat --binary /path/to/sloom.jpg > /style/desk/bgimg'
 /*util.GetPoint: New generic keyboard-driven graphical point/pixel selector«
 With the return value (a point: {x,y}), we can do document.elementsFromPoint(x,y)
 and pinpoint the element we want without resorting to needing (wanting) the mouse.

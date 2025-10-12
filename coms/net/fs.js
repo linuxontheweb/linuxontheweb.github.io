@@ -22,89 +22,124 @@
 }
 
 »*/
-/*DB SCHEMA«
+/*CURRENT DB SCHEMA«
 
 Just like with our local file system, we should have a separate blob storage on the backend. 
 
-The outer "namespaces" (like LOTWFS) are meant to encapsulate the data of the various applications 
+The outer "namespaces" (like LOTW_FS) are meant to encapsulate the data of the various (siloed) applications 
 that the backend might possibly be used for. 
 
-root: {
+// Generic read/write rules ($ghid is our numerical github id, and is used as the name of an outer object)
+// ".read": "auth != null",
+// ".write": "auth != null &&  // Yes we are authorized...
+//		auth.provider === 'github' && // by github...
+//		auth.token.firebase.identities['github.com'][0] === $ghid && // with the correct id...
+//		newData.child('sid').val() == root.child('cur_session_id').val() // identified by the current session
 
-".read": false,
-".write": false,
+MOST RECENT:
 
-LOTW_FS: {
-
-	"$ghid": {
-		session_ids: { // Register a unique session id  here upon local initialization
-			".validate": "!root.child($ghid).child('session_ids')[newData.val()]"
-		},
-		cur_session_id: {
-			'.validate": "newData.isString() && newData.val().length >= 4"
-		},
-		next_node_id: {
-		},
-		nodes: {
-			".indexOn" = ["parId", "path"],
-			"$nodeId": {
-				".read": "auth != null",
-				".write": "auth.ghid = $ghid",
-				".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path'])",
-				"parId": { // Mutable
-					".validate": "newData.isNumber()"
-				},
-				"path": { // Mutable: parId/name
-					".validate": "newData.isString() && newData.val().length < $PATH_MAX"
-				},
-				"type": {
-					".validate": "!data.exists() && newData.isString() && newData.val().length < $TYPE_MAX"
-				},
-				"blobId": {
-					".validate": "!data.exists() && newData.isString() && newData.val().length < $ID_MAX"
-				}
-				"$other": {
-					".validate": false
-				}
-			}
-		},
-		blobs: {
-			"$blobId": {
-				"meta": { // Example
-					"field1": {
-						".validate": "newData.isString() && newData.val().length < $FIELD1_MAX"
-					},
-					"field2": {
-						".validate": "newData.isNumber()" 
-					},
-					"field3": {
-						".validate": "newData.isBoolean()"
-					},
-					".other": {
-						".validate": false
+{
+	"rules": {
+		".read": false,
+		".write": false,
+		"LOTW_FS": {
+			"$ghid": {
+				"session_ids": {
+					"$sid":{
+						".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+						".validate": "newData.isBoolean() && newData.val() === true && !root.child('LOTW_FS').child($ghid).child('session_ids').child($sid).exists()"
 					}
 				},
-				"contents": {
-					".validate": "newData.isString() && newData.val().length < $CONTENTS_MAX"
+				"cur_session_id": {
+					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
+					".validate": "newData.isString() && newData.val().length == 4"
 				},
-				"$other": {
-					".validate": false
+				"next_node_id": {
+					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
+					".validate": true
+				},
+				"nodes": {
+					".indexOn": ["parId", "path"],
+					"$nodeId": {
+						".read": "auth != null && auth.provider === 'github'",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
+						".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path'])",
+						"parId": {
+							".validate": "newData.isNumber()"
+						},
+						"path": {
+							".validate": "newData.isString() && newData.val().length < 100"
+						},
+						"type": {
+							".validate": "!data.exists() && newData.isString() && newData.val().length < 5"
+						},
+						"blobId": {
+							".validate": "!data.exists() && newData.isNumber()"
+						},
+						"$other": {
+							".validate": false
+						}
+					}
+				},
+				"blobs": {
+					"$blobId": {
+						".read": "auth != null && auth.provider === 'github'",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('cur_session_id').val()",
+						"meta": {
+							".validate": true
+						},
+						"contents": {
+							".validate": "newData.isString() && newData.val().length < 100000"
+						},
+						"$other": {
+							".validate": false
+						}
+					}
 				}
 			}
 		}
 	}
-},
-
-OTHER_NS: {
-
-}
-
-
 }
 
 Also: Let's await on update.
 »*/
 
+/*10/11/25: The urgency is arising. First, we'll delete everything from the firebase datastore,«
+and replace the security rules, whole cloth, with our new ones (the DB SCHEMA). Then we'll put 
+this file in another location, and start it over again. We are going to need to clean up the
+logic that we've recently added to sys/fs.js. The plan is to do a 1:1 mapping of the 
+(indexedDB) database logic used in sys/fs.js.
+
+Way more than that stupid crap (below) about hardware APIs there is a need of a central location for, 
+and common interface into all of the various ways of interacting, computationally-speaking, 
+with the wider world.
+
+»*/
+/*10/9/25: The fundamental idea I am having is to do only what is necessary to support an«
+"ecosystem" that is centered around web-client-centric scripting languages.
+
+One of the more telling outcomes will/should be the increasing usage of (web-based) hardware
+APIs, as opposed to DOM APIs.
+»*/
+/*10/7/25: Overall workflow«
+
+1. Load the net.fs library
+2. Get the current user object
+  - If not found, the user can only proceed by logging in
+3. Once logged in, check that a remote user directory has been set up. 
+  - If none exists, the user must create one.
+4. Check for the session id ($sid) in local storage.
+  - If not found, call create_session_id() until an unused one is found, and set it in local storage.
+5. Call set_session_id() with the value of $sid.
+6. Perform remote fs operations.
+  - If these fail with permission denied (on one's own directory), this most likely means that
+     another session has called set_session_id. Report this (likely) error condition, and inform 
+     the user that they must manually reset the session id to continue.
+
+»*/
 /*10/6/25: Persistent session ids, create_new_file() example«
 
 Let's do persistent 24 bit session ids (4 chars, ~16M  possible). This is instead of
@@ -1885,6 +1920,87 @@ export {coms, onkill};
 cwarn("Firebase config");
 log(firebaseConfig);
 
+
+
+
+
+/*«
+
+PAST:
+
+root: {
+
+".read": false,
+".write": false,
+
+LOTW_FS: {
+
+	"$ghid": {
+		session_ids: { // Register a unique session id here upon local initialization, stored locally
+			".validate": "!root.child($ghid).child('session_ids')[newData.val()]"
+		},
+		cur_session_id: {
+			'.validate": "newData.isString() && newData.val().length == 4"
+		},
+		next_node_id: {
+		},
+		nodes: {
+			".indexOn" = ["parId", "path"],
+			"$nodeId": {
+				".read": "auth != null",
+				".write": "auth.ghid = $ghid",
+				".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path'])",
+				"parId": { // Mutable
+					".validate": "newData.isNumber()"
+				},
+				"path": { // Mutable: parId/name
+					".validate": "newData.isString() && newData.val().length < $PATH_MAX"
+				},
+				"type": {
+					".validate": "!data.exists() && newData.isString() && newData.val().length < $TYPE_MAX"
+				},
+				"blobId": {
+					".validate": "!data.exists() && newData.isString() && newData.val().length < $ID_MAX"
+				}
+				"$other": {
+					".validate": false
+				}
+			}
+		},
+		blobs: {
+			"$blobId": {
+				"meta": { // Example
+					"field1": {
+						".validate": "newData.isString() && newData.val().length < $FIELD1_MAX"
+					},
+					"field2": {
+						".validate": "newData.isNumber()" 
+					},
+					"field3": {
+						".validate": "newData.isBoolean()"
+					},
+					".other": {
+						".validate": false
+					}
+				},
+				"contents": {
+					".validate": "newData.isString() && newData.val().length < $CONTENTS_MAX"
+				},
+				"$other": {
+					".validate": false
+				}
+			}
+		}
+	}
+},
+
+OTHER_NS: {
+
+}
+
+}
+
+»*/
 /*«
 goog_but.onclick=async()=>{//«
 	is_active = true;
@@ -1929,3 +2045,4 @@ const firebaseConfig = {
 	appId: "1:668423415088:web:979b40c704cab2322ed4f5"
 };
 »*/
+
