@@ -244,6 +244,9 @@ After auth, access database via getFirestore(app) (add import if needed).
 //      const provider = new GoogleAuthProvider();
 //		const googleProvider = new GoogleAuthProvider();
 		const githubProvider = new GithubAuthProvider(); 
+		githubProvider.setCustomParameters({
+			prompt: 'select_account'
+		});
 //		const facebookProvider = new FacebookAuthProvider(); 
 
         const emailEl = document.getElementById('email');

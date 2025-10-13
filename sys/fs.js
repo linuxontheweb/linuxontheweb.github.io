@@ -179,10 +179,8 @@ const FILE_FS_TYPE="f";
 
 //»
 
-const FsDB = class {//«
-//const FsDB = function(){
+class FsDB {//«
 #db;
-//let db;
 
 initDB(){//«
 	return new Promise((Y,N)=>{

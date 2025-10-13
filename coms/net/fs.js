@@ -46,10 +46,10 @@ MOST RECENT:
 		"LOTW_FS": {
 			"$ghid": {
 				"session_ids": {
-					"$sid":{
+					"$sid": {
 						".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
 						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-						".validate": "newData.isBoolean() && newData.val() === true && !root.child('LOTW_FS').child($ghid).child('session_ids').child($sid).exists()"
+						".validate": "!data.exists() && newData.isBoolean() && newData.val() === true"
 					}
 				},
 				"cur_session_id": {
@@ -59,17 +59,24 @@ MOST RECENT:
 				},
 				"next_node_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.hasChildren(['sid', 'nodeid']) && newData.child('sid').val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').child('sid').val()",
-					"nodeid":{
-						".validate": "newData.isNumber() && newData.val() > root.child('LOTW_FS').child($ghid).child('next_node_id').child('nodeid').val()"
+					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+					".validate": "newData.hasChildren(['sid', 'nodeid'])",
+					"nodeid": {
+						".validate": "newData.isNumber() && ((data.exists() && newData.val() === data.val() + 1) || (!data.exists() && newData.val() === 1))"
+					},
+					"sid": {
+						".validate": "newData.isString() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()" 
+					},
+					"$other": {
+						".validate": false
 					}
 				},
 				"nodes": {
 					".indexOn": ["parId", "path"],
 					"$nodeId": {
 						".read": "auth != null && auth.provider === 'github'",
-						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').child('sid').val()",
-						".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path'])",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+						".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path', 'sid'])",
 						"parId": {
 							".validate": "newData.isNumber()"
 						},
@@ -82,6 +89,9 @@ MOST RECENT:
 						"blobId": {
 							".validate": "!data.exists() && newData.isNumber()"
 						},
+						"sid": {
+							".validate": "newData.isString() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()" 
+						},
 						"$other": {
 							".validate": false
 						}
@@ -90,17 +100,24 @@ MOST RECENT:
 				"blobs": {
 					"$blobId": {
 						".read": "auth != null && auth.provider === 'github'",
-						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid && newData.child('sid').val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').child('sid').val()",
+						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+						".validate": "newData.hasChildren(['sid', 'contents'])",
 						"meta": {
 							".validate": true
 						},
 						"contents": {
 							".validate": "newData.isString() && newData.val().length < 100000"
 						},
+						"sid": {
+							".validate": "newData.isString() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()" 
+						},
 						"$other": {
 							".validate": false
 						}
 					}
+				},
+				"$other": {
+					".validate": false
 				}
 			}
 		}
@@ -110,6 +127,59 @@ MOST RECENT:
 
 Also: Let's await on update.
 »*/
+
+/*10/13/25: I want a tidy database object (something like 'FsDb' in sys/fs.js):«
+
+After commenting out the entirety of the last version of this file, I decided to
+use the onAuthStateChanged callback via the same "global" way as the 
+onValue('.info/connected') callback.
+
+I also wanted to get rid of the gui interface aspects of logging in (i.e. buttons with
+logos on them). If they want to go that route, the dedicated /login url can be used
+for that purpose.
+
+Since we should support MULTIPLE github logins from the same LOTW instance, we
+should namespace the session ids (either in localStorage or /var/appdata) via
+the (persistent numerical) github user ids.
+
+Now the question is simple: SHOULD AN INSTANCE OF NetFsDB BE TIED TO A SINGLE (NUMERICAL) 
+GITHUB ID? Should any NetFsDB instance indeed exist if no remote directory has even
+been set up yet?  If there is no session id, does/should this *guarantee* that there 
+is no database on the backend? Regardless, we just need to check for:
+LOTW_FS/$GHID/next_node_id/nodeid (Number >= 1).
+
+Now when setting it up:
+let session_id = get_session_id();
+let next_node_id = 1;
+const base_path = `LOTW_FS/${ghid}`;
+
+1)
+update(base_path, {
+	[`session_ids/${session_id}`]: true, //This must always work upon database creation
+})
+
+2) The given session_id must be registered in the session_ids table (from step 1).
+update(base_path, {
+	cur_session_id: session_id
+});
+
+3) The sid field must be the same as the db's value of cur_session_id (from step 3).
+update(base_path, {
+	next_node_id: {
+		sid: session_id,
+		nodeid: next_node_id
+	}
+});
+
+4) If step 1 succeeds and step 2 or 3 fails, then we seem to have an inconsistent state,
+and we'll need to triage the situation and abort these steps.
+
+5) Otherwise, if all steps have succeeded, save session_id in localStorage, e.g.:
+  - localStorage.setValue(`fbase-sess_id-github:${ghid}`, session_id).
+
+»*/
+
+//Notes«
 
 /*10/11/25: The urgency is arising. First, we'll delete everything from the firebase datastore,«
 and replace the security rules, whole cloth, with our new ones (the DB SCHEMA). Then we'll put 
@@ -130,7 +200,7 @@ APIs, as opposed to DOM APIs.
 »*/
 /*10/7/25: Overall workflow«
 
-1. Load the net.fs library
+1. Load the net.fs library (this module)
 2. Get the current user object
   - If not found, the user can only proceed by logging in
 3. Once logged in, check that a remote user directory has been set up. 
@@ -368,6 +438,7 @@ coms/fs.js (for file moving, copying, etc).
 
 »*/
 
+//»
 //Imports«
 
 const{globals}=LOTW;
@@ -413,6 +484,119 @@ enableLogging
 
 //Var«
 
+const fbase_app = initializeApp(firebaseConfig);
+const fbase_auth = getAuth(fbase_app);
+const fbase_db = getDatabase(fbase_app);
+
+const gh_provider = new GithubAuthProvider();
+gh_provider.setCustomParameters({
+	prompt: 'select_account'
+});
+
+// Attach a listener to detect changes in the connection state
+let is_connected = false;
+//When we do tons of dev reloading, this never gets unregistered, and we end up getting tons
+//of warnings, upon reconnecting after disconnecting (e.g. due to closing the laptop cover).
+//Perhaps we can export an onkill method.
+const DISCON_CB = onValue(ref(fbase_db, ".info/connected"), (snap) => {
+	is_connected = snap.val();
+cwarn(`Connected: ${is_connected}`);
+});
+let cur_user;
+const AUTH_CB = onAuthStateChanged(fbase_auth, user=>{
+	cur_user = user;
+cwarn("User", cur_user);
+});
+
+const onkill = ()=>{
+cwarn("KILL OIMPT!");
+	AUTH_CB();
+	DISCON_CB();
+};
+//»
+
+class NetFsDB {
+
+}
+
+
+const db = new NetFsDB();
+
+//Commands«
+/*«
+const com_ = class extends Com{
+async run(){
+const{args}=this;
+
+}
+}
+»*/
+
+class com_ghlogin extends Com {//«
+
+async run(){
+
+const{args}=this;
+if (cur_user){
+	this.wrn("Already logged in!");
+	this.ok();
+	return;
+}
+
+try {
+	await signInWithPopup(fbase_auth, gh_provider);
+//	await signInWithPopup(fbase_auth, new GithubAuthProvider());
+	this.ok();
+}
+catch(e){
+cerr(e);
+	this.no(e.message);
+	return;
+}
+
+}
+
+}
+//»
+class com_ghlogout extends Com {//«
+
+async run(){
+const{args}=this;
+if (!cur_user){
+this.wrn("Already logged out!");
+this.ok();
+return;
+}
+//this.ok("DOLOGOUT");
+	try{
+		await signOut(fbase_auth);
+//		delete_auth();
+		this.ok('Signed out');
+	}
+	catch(e){
+cerr(e);
+		this.no(e.message);
+	}
+}
+
+}//»
+
+
+const coms = {
+ghlogin: com_ghlogin,
+ghlogout: com_ghlogout
+}
+
+//»
+
+export {coms, onkill};
+
+
+//Old«
+
+/*
+//Var«
+
 const FBASE_DIRECTORY_VAL = -1;
 
 const AWAIT_UPDATE_MS = 5000;
@@ -422,11 +606,9 @@ const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 // Attach a listener to detect changes in the connection state
 let is_connected = false;
-/*
-When we do tons of dev reloading, this never gets unregistered, and we end up getting tons
-of warnings, upon reconnecting after disconnecting (e.g. due to closing the laptop cover).
-Perhaps we can export an onkill method.
-*/
+//When we do tons of dev reloading, this never gets unregistered, and we end up getting tons
+//of warnings, upon reconnecting after disconnecting (e.g. due to closing the laptop cover).
+//Perhaps we can export an onkill method.
 const DISCON_CB = onValue(ref(db, ".info/connected"), (snap) => {
 	is_connected = snap.val();
 cwarn(`Connected: ${is_connected}`);
@@ -588,30 +770,26 @@ const DEF_TRANS_DELAY = 5000;
 
 //DOM«
 
-/*
-//let goog_but, gh_but;
-let gh_but;
-let buttons = button_div.getElementsByTagName("button");
-for (let but of buttons){
-	if (but.name == GITHUB_BUT_ID){
-		gh_but = but;
-	}
-}
-if (!gh_but){
-cerr("WHERE IS THE BUTTON (gh_but)?");
-}
-*/
+////let goog_but, gh_but;
+//let gh_but;
+//let buttons = button_div.getElementsByTagName("button");
+//for (let but of buttons){
+//	if (but.name == GITHUB_BUT_ID){
+//		gh_but = but;
+//	}
+//}
+//if (!gh_but){
+//cerr("WHERE IS THE BUTTON (gh_but)?");
+//}
 //»
 //Funcs«
 
-/*
-function incrementCounter(path, amount) {
-  const counterRef = ref(db, path);
-  set(counterRef, increment(amount));
-}
-incrementCounter('posts/postId123/likes', 1);
-incrementCounter('pages/pageId456/views', -1);
-*/
+//function incrementCounter(path, amount) {
+//  const counterRef = ref(db, path);
+//  set(counterRef, increment(amount));
+//}
+//incrementCounter('posts/postId123/likes', 1);
+//incrementCounter('pages/pageId456/views', -1);
 
 const B64 = bytes =>{//«
 	if (bytes.toBase64) return bytes.toBase64();
@@ -644,14 +822,12 @@ const encode_key=(key) => {//«
 		.replace(/\x2f/g, '_')
 		.replace(/=+$/, '');
 }//»
-/*
-const decode_key=(safeKey)=>{//«
-	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
-	const decoded = atob(padded);
-	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
-	return new TextDecoder().decode(bytes);
-};//»
-*/
+//const decode_key=(safeKey)=>{//«
+//	const padded = safeKey.replace(/-/g, '+').replace(/_/g, '/') + '=='.slice(0, (4 - safeKey.length % 4) % 4);
+//	const decoded = atob(padded);
+//	const bytes = Uint8Array.from(decoded, c => c.charCodeAt(0));
+//	return new TextDecoder().decode(bytes);
+//};//»
 const USERS_CACHE_PATH = `${APPDATA_PATH}/netfs/cache`;
 
 const set_user_dirs = async () => {//«
@@ -695,51 +871,49 @@ cerr(e);
 		return false;
 	}
 };//»
-/*
-const update = async (refarg, obj) => {//«
-//This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
-//not completed within the specified interval. If after returning, we have previously warned,
-//then we let the user know that the update has finished. In case everything works fine,
-//nothing is reported.
-	if (isStr(refarg)) refarg = get_ref(refarg);
-
-	let have_num = update_num;
-	update_num++;
-	let did_warn = false;
-	let timeout = setTimeout(()=>{
-cwarn(`update#${have_num} has not returned after: ${AWAIT_UPDATE_MS}ms!`);
-		did_warn = true;
-	}, AWAIT_UPDATE_MS);
-	try {
-		await _update(refarg, obj);
-		clearTimeout(timeout);
-		if (did_warn){
-log(`update#${have_num} has finally returned!`);
-		}
-	}
-	catch(e){
-cwarn(`An error has occurred for update#${have_num}`);
-cerr(e);
-	}
-};//»
-*/
+//const update = async (refarg, obj) => {//«
+////This "safe" update sets a timeout for a "reasonable" period, and warns if the server has
+////not completed within the specified interval. If after returning, we have previously warned,
+////then we let the user know that the update has finished. In case everything works fine,
+////nothing is reported.
+//	if (isStr(refarg)) refarg = get_ref(refarg);
+//
+//	let have_num = update_num;
+//	update_num++;
+//	let did_warn = false;
+//	let timeout = setTimeout(()=>{
+//cwarn(`update#${have_num} has not returned after: ${AWAIT_UPDATE_MS}ms!`);
+//		did_warn = true;
+//	}, AWAIT_UPDATE_MS);
+//	try {
+//		await _update(refarg, obj);
+//		clearTimeout(timeout);
+//		if (did_warn){
+//log(`update#${have_num} has finally returned!`);
+//		}
+//	}
+//	catch(e){
+//cwarn(`An error has occurred for update#${have_num}`);
+//cerr(e);
+//	}
+//};//»
 const parallel_sort = (primary, secondary, if_rev) => {//«
-/*«
-Say you are given 2 JS arrays of equal length. One of them must be sorted
-according to the results of a call to sort, and the other one should likewise
-be sorted such that all of its elements should have their positions swapped in
-the same manner as the first.
-
-Grok: doesn't work!
-function sortWithPartner(arr1, arr2) {
-	const indices = arr1.map((_, i) => i);
-	indices.sort((a, b) => arr1[a] - arr1[b]);
-	return [
-		indices.map(i => arr1[i]),
-		indices.map(i => arr2[i])
-	];
-}
-»*/
+//«
+//Say you are given 2 JS arrays of equal length. One of them must be sorted
+//according to the results of a call to sort, and the other one should likewise
+//be sorted such that all of its elements should have their positions swapped in
+//the same manner as the first.
+//
+//Grok: doesn't work!
+//function sortWithPartner(arr1, arr2) {
+//	const indices = arr1.map((_, i) => i);
+//	indices.sort((a, b) => arr1[a] - arr1[b]);
+//	return [
+//		indices.map(i => arr1[i]),
+//		indices.map(i => arr2[i])
+//	];
+//}
+//»
 // 1. Combine into an array of objects
 const combined = primary.map((value, index) => {
 	return {
@@ -772,13 +946,11 @@ else {
 	});
 }
 
-/*
-// 3. Separate the sorted values back into new arrays
-const sortedPrimary = combined.map(item => item.first);
-const sortedSecondary = combined.map(item => item.second);
-
-return [sortedPrimary, sortedSecondary];
-*/
+//// 3. Separate the sorted values back into new arrays
+//const sortedPrimary = combined.map(item => item.first);
+//const sortedSecondary = combined.map(item => item.second);
+//
+//return [sortedPrimary, sortedSecondary];
 
 return [
 	combined.map(item => item.first),
@@ -872,16 +1044,16 @@ return new Promise(async(resolve, reject) => {
 cerr(error);
 		resolve(error);
 	}
-/*«
-	ref.transaction((currentValue) => {
-	}).then((result) => {
-		// Clear the timer if the transaction completes for any reason
-	}).catch((error) => {
-		// Clear the timer if the transaction fails
-		clearTimeout(timer);
-		reject(error);
-	});
-»*/
+//«
+//	ref.transaction((currentValue) => {
+//	}).then((result) => {
+//		// Clear the timer if the transaction completes for any reason
+//	}).catch((error) => {
+//		// Clear the timer if the transaction fails
+//		clearTimeout(timer);
+//		reject(error);
+//	});
+//»
 });
 }//»
 const get_id = ()=> {//«
@@ -1024,9 +1196,7 @@ if (isStr(ghid)){
 	_this.no(ghid);
 	return;
 }
-/*
-This currently only works in the base user dir
-*/
+//This currently only works in the base user dir
 
 const{args, opts}=_this;
 if (!is_connected && !opts.offline){
@@ -1179,10 +1349,8 @@ else _this.no("Update failed! (see console for error)");
 };//»
 
 const fb_write = async(path, val, opts={})=> {//«
-/*
-This must be a fullpath
+//This must be a fullpath
 
-*/
 
 if (!is_connected && !opts.offline){
 	return new Error("not connected (use --offline to force)");
@@ -1299,14 +1467,6 @@ globals.funcs["netfs.fbWrite"] = fb_write;
 
 //Commands«
 
-/*«
-const com_ = class extends Com{
-async run(){
-const{args}=this;
-
-}
-}
-»*/
 
 const com_ghname2id = class extends Com{//«
 
@@ -1378,9 +1538,7 @@ else this.no("Update failed! (see console for error)");
 }
 }//»
 const com_user = class extends Com{//«
-/*
-This will be the interface into one's own user account
-*/
+//This will be the interface into one's own user account
 static getOpts(){
 	return{
 		s:{
@@ -1454,29 +1612,29 @@ log("Got github login", login);
 		return;
 	}
 	env["GITHUB_NAME"] = login;
-/*«
-	let rv;
-	try{
-		rv = await fetch(`https://api.github.com/user/${uid}`);
-	}
-	catch(e){
-		this.no(`fetch error: ${e.message}`);
-cerr(e);
-		return;
-	}
-	if (!rv.ok){
-		this.no(`could not fetch the user object for github uid(${uid}) from api.github.com!`);
-		return;
-	}
-	let obj = await rv.json();
-//SUKFMGH
-	login = obj.login;
-	if (!login){
-		this.no(`no login name for github uid(${uid}) on the user object received from api.github.com!`);
-		return;
-	}
-log("Setting", `github-${uid}`, login);
-»*/
+//«
+//	let rv;
+//	try{
+//		rv = await fetch(`https://api.github.com/user/${uid}`);
+//	}
+//	catch(e){
+//		this.no(`fetch error: ${e.message}`);
+//cerr(e);
+//		return;
+//	}
+//	if (!rv.ok){
+//		this.no(`could not fetch the user object for github uid(${uid}) from api.github.com!`);
+//		return;
+//	}
+//	let obj = await rv.json();
+////SUKFMGH
+//	login = obj.login;
+//	if (!login){
+//		this.no(`no login name for github uid(${uid}) on the user object received from api.github.com!`);
+//		return;
+//	}
+//log("Setting", `github-${uid}`, login);
+//»
 	localStorage.setItem(`github-${uid}`, login);
 	set_auth(uid, login);
 	this.ok(`you are signed in as: ${login}`);
@@ -1494,17 +1652,15 @@ if (!is_signin) {
 	return;
 }
 
-/*«
-Either the user clicks a sign-in button, and pop_div.cancel() will be called, or
-they will click the popup's lone button (here arbitrarily labelled "CANCEL"), and 
-the command will immediately return. 
+//«
+//Either the user clicks a sign-in button, and pop_div.cancel() will be called, or
+//they will click the popup's lone button (here arbitrarily labelled "CANCEL"), and 
+//the command will immediately return. 
+//
+//If they try clicking the popup's button after clicking one of the sign-in
+//buttons, the popup's callback will return because the is_active flag is set.
+//»
 
-If they try clicking the popup's button after clicking one of the sign-in
-buttons, the popup's callback will return because the is_active flag is set.
-»*/
-
-/*
-*/
 let pop_div;
 let is_active = false;
 const do_signin = async()=> {//«
@@ -1570,13 +1726,11 @@ else{
 }
 }//»
 const com_users = class extends Com{//«
-/*
 
-mount: mount a filesystem under "/users" of type: USERS_TYPE.
+//mount: mount a filesystem under "/users" of type: USERS_TYPE.
 
-list; give fine-grained control over what user directories to list inside of /users.
+//list; give fine-grained control over what user directories to list inside of /users.
 
-*/
 	async run(){
 		const{args}=this;
 		let com = args.shift();
@@ -1609,10 +1763,8 @@ else{
 this.wrn("Unknown value returned from set_user_dirs! (see console)");
 log(rv);
 }
-/*
-Maybe we should export a basic function to fs.populate_dirobj for use with the basic
-shell/terminal functions like ls and doing tab complete.
-*/
+//Maybe we should export a basic function to fs.populate_dirobj for use with the basic
+//shell/terminal functions like ls and doing tab complete.
 			}
 			this.ok();
 		}//»
@@ -1647,10 +1799,8 @@ log(ref);
 this.ok();
 		}
 		else if (com == "set") {
-/*
-".write": "newData.child('timestamp').val() > now - 60000"
-//".write": "newData.child('timestamp').val() > now - 60000 || !data.exists()"//???
-*/
+//".write": "newData.child('timestamp').val() > now - 60000"
+////".write": "newData.child('timestamp').val() > now - 60000 || !data.exists()"//???
 let path = args.shift();
 let val = args.shift();
 if (!val) val = true;
@@ -1688,9 +1838,7 @@ static getOpts(){
 	}
 }
 async run(){
-/*
-Should we just do a base64 of the bytes?
-*/
+//Should we just do a base64 of the bytes?
 const{args, term}=this;
 let path = args.shift();
 if (!path) return this.no("File arg needed");
@@ -1739,12 +1887,10 @@ return;
 if (await update("/user", {[gh.uid]: NEW_DIR})) this.ok();
 else this.no("Update failed! (see console for error)");
 
-/*
-update("/", {
-	[`names/${gh.uid}`]: username, 
-	[`user/${gh.uid}`]: NEW_DIR
-});
-*/
+//update("/", {
+//	[`names/${gh.uid}`]: username, 
+//	[`user/${gh.uid}`]: NEW_DIR
+//});
 
 }
 }//»
@@ -1806,9 +1952,8 @@ s: 1
 }
 }
 }
-/*This allows for the ability to run a query on the numerical ids, and get back whatever relevant
-information they might want to provide.
-*/
+//This allows for the ability to run a query on the numerical ids, and get back whatever relevant
+//information they might want to provide.
 
 async run(){
 const{args, opts}=this;
@@ -1858,32 +2003,32 @@ if (!path){
 }
 let is_text = path.hasTextExt();
 let val = await fb_read(ghid, path, {forceText: is_text});
-/*«
-let rel_path_enc = "";
-if (path.match(/\x2f/)) {
-if (path === "/"){
-return this.no("'/': invalid path");
-}
-	let arr = path.split("/");
-	for (let name of arr){
-		rel_path_enc+=`/kids/${encode_key(name)}`;
-	}
-}
-else{
-	rel_path_enc=`/kids/${encode_key(path)}`;
-}
-
-let base_path = `/user/${ghid}${rel_path_enc}/contents`;
-
-let snap = await get_value(get_ref(base_path));
-if (isErr(snap)){
-	return this.no(snap.message);
-}
-if (!snap.exists()){
-	this.no(`${path}: not found`);
-	return;
-}
-»*/
+//«
+//let rel_path_enc = "";
+//if (path.match(/\x2f/)) {
+//if (path === "/"){
+//return this.no("'/': invalid path");
+//}
+//	let arr = path.split("/");
+//	for (let name of arr){
+//		rel_path_enc+=`/kids/${encode_key(name)}`;
+//	}
+//}
+//else{
+//	rel_path_enc=`/kids/${encode_key(path)}`;
+//}
+//
+//let base_path = `/user/${ghid}${rel_path_enc}/contents`;
+//
+//let snap = await get_value(get_ref(base_path));
+//if (isErr(snap)){
+//	return this.no(snap.message);
+//}
+//if (!snap.exists()){
+//	this.no(`${path}: not found`);
+//	return;
+//}
+//»
 if (isErr(val)){
 this.no(val.message);
 return;
@@ -1920,13 +2065,7 @@ const coms = {
 export {coms, onkill};
 
 //»
-
-cwarn("Firebase config");
-log(firebaseConfig);
-
-
-
-
+*/
 
 /*«
 
@@ -2049,4 +2188,6 @@ const firebaseConfig = {
 	appId: "1:668423415088:web:979b40c704cab2322ed4f5"
 };
 »*/
+
+//»
 
