@@ -149,6 +149,12 @@ Now let's create 2 commends:
 1) chkfbdb
 2) mkfbdb
 
+Now we have the 2 main variables (sid and nextNodeId) as the initialization variables 
+of a 'NetFsDb' object. So now the idea is to add methods to this object to make
+it look like the system 'FsDb' object.
+
+
+
 »*/
 /*10/13/25: I want a tidy database object (something like 'FsDb' in sys/fs.js):«
 
@@ -518,6 +524,135 @@ gh_provider.setCustomParameters({
 	prompt: 'select_account'
 });
 
+let is_connected = false;
+let cur_user;
+let db;
+//let next_node_id;
+//let cur_sid;
+
+// Attach a listener to detect changes in the connection state
+//When we do tons of dev reloading, this never gets unregistered, and we end up getting tons
+//of warnings, upon reconnecting after disconnecting (e.g. due to closing the laptop cover).
+//Perhaps we can export an onkill method.
+
+const DISCON_CB = onValue(ref(fbase_db, ".info/connected"), (snap) => {
+	is_connected = snap.val();
+cwarn(`Connected: ${is_connected}`);
+});
+const AUTH_CB = onAuthStateChanged(fbase_auth, user => {
+	cur_user = user;
+	if (!cur_user){
+//		next_node_id = undefined;
+//		cur_sid = undefined;
+		db = undefined;
+	}
+cwarn("User", cur_user);
+});
+
+const ONKILL = ()=>{
+cwarn("KILL");
+	AUTH_CB();
+	DISCON_CB();
+};
+
+//»
+
+class NetFsDB {//«
+
+constructor(sid_arg, next_node_id_arg){//«
+	this.sid = sid_arg;
+	this.nextNodeId = next_node_id_arg;
+}//»
+
+async createDirNode(parId, name){//«
+
+if (!(Number.isFinite(parId) && isStr(name))){
+	throw new Error(`Invalid args to createDirNode`);
+}
+
+let path = `${parId}/${name}`;
+let node = {parId, path, type: "d"};
+this.nextNodeId++;
+await UPDATE(UBASE(),{
+	next_node_id: {
+		nodeid: this.nextNodeId+1,
+		sid: this.sid
+	},
+	[`nodes/${this.nextNodeId}`]: {
+		parId,
+		path,
+		sid: this.sid,
+		type: "d"
+	}
+});
+return true;
+}//»
+async createFileNode(parId, name, val){//«
+
+if (!(Number.isFinite(parId) && isStr(name))){
+	throw new Error(`Invalid args to createFileNode`);
+}
+
+let path = `${parId}/${name}`;
+let use_blob_id;
+if (!val) use_blob_id = 0;
+else use_blob_id = this.nextNodeId;
+
+let obj = {
+	next_node_id: {
+		nodeid: this.nextNodeId+1,
+		sid: this.sid
+	},
+	[`nodes/${this.nextNodeId}`]: {
+		parId,
+		path,
+		blobId: use_blob_id,
+		sid: this.sid,
+		type: "f"
+	}
+};
+if (val){
+	let bytes;
+	if (isStr(val)){
+		bytes = (new TextEncoder()).encode(val);
+	}
+	else if (val instanceof Uint8Array){
+		bytes = val;
+	}
+	else{
+cwarn("WHAT THE HELL TYPE IS THIS???");
+log(val);
+		throw new Error("UNKNOWN FILE VALUE TYPE IN createFileNode!!! (see value above)");
+	}
+	obj[`blobs/${this.nextNodeId}`] = {
+		sid: this.sid,
+		contents: B64(bytes)
+	}
+}
+
+this.nextNodeId++;
+await UPDATE(UBASE(), obj);
+return true;
+
+}//»
+
+}//»
+
+//Funcs«
+
+const UID = () =>{if (cur_user && cur_user.providerData) return cur_user.providerData[0].uid;};
+const UBASE = ()=> {//«
+	let id = UID();
+	if (!id) return;
+	return `LOTW_FS/${id}`;
+};//»
+const SID = (val) => {//«
+	let id = UID();
+	if (!id) return;
+	let key = `fbase-sid-gh-${id}`;
+	if (!val) return localStorage.getItem(key);
+	localStorage.setItem(key, val);
+};//»
 const REF = (path)=> {//«
 	return ref(fbase_db, path);
 //	if (path) return ref(fbase_db, path);
@@ -546,60 +681,50 @@ catch(e){
 }
 
 };//»
-const UID = () =>{
-	if (cur_user && cur_user.providerData) return cur_user.providerData[0].uid;
-};
-const UBASE = ()=> {
-	let id = UID();
-	if (!id) return;
-	return `LOTW_FS/${id}`;
-};
-const SID_KEY = ()=>{
+const B64 = bytes =>{//«
+	if (bytes.toBase64) return bytes.toBase64();
+	return btoa(String.fromCharCode(...bytes));
+};//»
+const FROMB64 = str => {//«
+if (!Uint8Array.fromBase64){
+	try{
+		return Uint8Array.fromBase64(str);
+	}
+	catch(e){
+cerr(s);
+		return null;
+	}
+}
+str = atob(str);
+let arr = new Uint8Array(str.length);
+let len = arr.length;
+for (let i = 0; i < len; i++) {
+	arr[i] = str.charCodeAt(i);
+}
+return arr;
+
+};//»
+
+/*
+const SID_KEY = ()=>{//«
 	let id = UID();
 	if (!id) return;
 	return `fbase-sid-gh-${id}`;
-};
+};//»
+*/
 
-// Attach a listener to detect changes in the connection state
-let is_connected = false;
-//When we do tons of dev reloading, this never gets unregistered, and we end up getting tons
-//of warnings, upon reconnecting after disconnecting (e.g. due to closing the laptop cover).
-//Perhaps we can export an onkill method.
-const DISCON_CB = onValue(ref(fbase_db, ".info/connected"), (snap) => {
-	is_connected = snap.val();
-cwarn(`Connected: ${is_connected}`);
-});
-let cur_user;
-const AUTH_CB = onAuthStateChanged(fbase_auth, user=>{
-	cur_user = user;
-cwarn("User", cur_user);
-});
-
-const onkill = ()=>{
-cwarn("KILL OIMPT!");
-	AUTH_CB();
-	DISCON_CB();
-};
-
-let next_node_id;
-//»
-
-//Funcs«
-const get_session_id = () => {
+const get_session_id = () => {//«
 	let sess_id = (crypto.getRandomValues(new Uint8Array(SESS_ID_BYTE_LEN))).toBase64()
 		.replace(/\+/g, '-')
 		.replace(/\x2f/g, '_')
 		.replace(/=+$/, '');
 	return sess_id;
-};
+};//»
+
 //»
 
-/*
-class NetFsDB {}
-const db = new NetFsDB();
-*/
-
 //Commands«
+
 /*«
 class   extends Com{
 async run(){
@@ -663,13 +788,21 @@ class com_chkfbdb extends Com {//«
 		let base = UBASE();
 		if (!base) return this.no("not signed in!");
 		if (!is_connected) return this.no("not connected!");
+		if (db) return this.ok("already checked");
 		let snap = await GET(`${base}/next_node_id/nodeid`);
 		if (isErr(snap)) return this.no(snap.message);
-		next_node_id = snap.val();
+		let next_node_id = snap.val();
 		if (next_node_id) {
-log(`NNI: ${next_node_id}`);
+//log(`NNI: ${next_node_id}`);
+			let cur_sid = SID();
+			if (!cur_sid){
+				return this.no(`cur_sid: not found in local storage, but next_node_id exists`);
+			}
+			db = new NetFsDB(cur_sid, next_node_id);
+log(db);
 			return this.ok("OK");
 		}
+//		if (cur_sid) return this.no(`cur_sid: was found in local storage, but next_node_id doesn't exist`);
 		this.no("NO");
 	}
 }//»
@@ -694,10 +827,16 @@ class com_mkfbdb extends Com {//«
 				sid: sid // Added: !data.exists()
 			}
 		});
-		next_node_id = 1;
+//		next_node_id = 1;
+		SID(sid);
+//		cur_sid = sid;
+/*
 		let key = SID_KEY();
 cwarn(`localStorage.setItem(${key}, ${sid})`);
 		localStorage.setItem(key, sid);
+*/
+		db = new NetFsDB(sid, 1);
+log(db);
 		this.ok();
 	}
 
@@ -714,7 +853,7 @@ mkfbdb: com_mkfbdb,
 
 //»
 
-export {coms, onkill};
+export {coms, ONKILL as onkill};
 
 
 //Old«
@@ -916,29 +1055,6 @@ const DEF_TRANS_DELAY = 5000;
 //incrementCounter('posts/postId123/likes', 1);
 //incrementCounter('pages/pageId456/views', -1);
 
-const B64 = bytes =>{//«
-	if (bytes.toBase64) return bytes.toBase64();
-	return btoa(String.fromCharCode(...bytes));
-};//»
-const FROMB64 = str => {//«
-if (!Uint8Array.fromBase64){
-	try{
-		return Uint8Array.fromBase64(str);
-	}
-	catch(e){
-cerr(s);
-		return null;
-	}
-}
-str = atob(str);
-let arr = new Uint8Array(str.length);
-let len = arr.length;
-for (let i = 0; i < len; i++) {
-	arr[i] = str.charCodeAt(i);
-}
-return arr;
-
-};//»
 
 const encode_key=(key) => {//«
 	const encoder = new TextEncoder();
