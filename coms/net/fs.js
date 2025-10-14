@@ -55,7 +55,7 @@ MOST RECENT:
 				"cur_session_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
 					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-					".validate": "newData.isString() && newData.val().length == 4 && root.child('LOTW_FS').child($ghid).child('session_ids').child(newData.val()).val() === true"
+					".validate": "newData.isString() && newData.val().length == 4 && ((data.exists() && root.child('LOTW_FS').child($ghid).child('session_ids').child(newData.val()).val() === true) || !data.exists())"
 				},
 				"next_node_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
@@ -65,7 +65,7 @@ MOST RECENT:
 						".validate": "newData.isNumber() && ((data.exists() && newData.val() === data.val() + 1) || (!data.exists() && newData.val() === 1))"
 					},
 					"sid": {
-						".validate": "newData.isString() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()" 
+						".validate": "newData.isString() && ((data.exists() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()) || !data.exists())"
 					},
 					"$other": {
 						".validate": false
@@ -128,6 +128,28 @@ MOST RECENT:
 Also: Let's await on update.
 »*/
 
+/*10/14/25: Reducing the complexity of the 3-step process of initializing a remote user directory.«
+
+in the new db schema, I just checked for '!data.exists()' in the appropriate places
+so that we can now do a one-step initialization process like:
+
+let session_id = get_session_id();
+let next_node_id = 1;
+const base_path = `LOTW_FS/${ghid}`;
+update(base_path, {
+	[`session_ids/${session_id}`]: true,
+	cur_session_id: session_id, // Added: !data.exists()
+	next_node_id: {
+		nodeid: next_node_id, // (!data.exists() && newData.val() === 1)
+		sid: session_id // Added: !data.exists()
+	}
+});
+
+Now let's create 2 commends:
+1) chkfbdb
+2) mkfbdb
+
+»*/
 /*10/13/25: I want a tidy database object (something like 'FsDb' in sys/fs.js):«
 
 After commenting out the entirety of the last version of this file, I decided to
@@ -467,7 +489,8 @@ getDatabase,
 ref,
 set,
 get,
-update as _update,
+//update as _update,
+update,
 query,
 runTransaction,
 serverTimestamp,
@@ -484,6 +507,8 @@ enableLogging
 
 //Var«
 
+const SESS_ID_BYTE_LEN = 3; // 4 ascii chars long
+
 const fbase_app = initializeApp(firebaseConfig);
 const fbase_auth = getAuth(fbase_app);
 const fbase_db = getDatabase(fbase_app);
@@ -492,6 +517,48 @@ const gh_provider = new GithubAuthProvider();
 gh_provider.setCustomParameters({
 	prompt: 'select_account'
 });
+
+const REF = (path)=> {//«
+	return ref(fbase_db, path);
+//	if (path) return ref(fbase_db, path);
+//	return ref(db);
+};//»
+const GET = async(ref_or_path)=>{//«
+
+if (isStr(ref_or_path)) ref_or_path = ref(fbase_db, ref_or_path);
+try {
+	return await get(ref_or_path);
+}
+catch(e){
+	return e;
+}
+
+};//»
+const UPDATE = async(ref_or_path, vals)=>{//«
+
+if (isStr(ref_or_path)) ref_or_path = ref(fbase_db, ref_or_path);
+try {
+	await update(ref_or_path, vals);
+	return true;
+}
+catch(e){
+	return e;
+}
+
+};//»
+const UID = () =>{
+	if (cur_user && cur_user.providerData) return cur_user.providerData[0].uid;
+};
+const UBASE = ()=> {
+	let id = UID();
+	if (!id) return;
+	return `LOTW_FS/${id}`;
+};
+const SID_KEY = ()=>{
+	let id = UID();
+	if (!id) return;
+	return `fbase-sid-gh-${id}`;
+};
 
 // Attach a listener to detect changes in the connection state
 let is_connected = false;
@@ -513,18 +580,28 @@ cwarn("KILL OIMPT!");
 	AUTH_CB();
 	DISCON_CB();
 };
+
+let next_node_id;
 //»
 
-class NetFsDB {
+//Funcs«
+const get_session_id = () => {
+	let sess_id = (crypto.getRandomValues(new Uint8Array(SESS_ID_BYTE_LEN))).toBase64()
+		.replace(/\+/g, '-')
+		.replace(/\x2f/g, '_')
+		.replace(/=+$/, '');
+	return sess_id;
+};
+//»
 
-}
-
-
+/*
+class NetFsDB {}
 const db = new NetFsDB();
+*/
 
 //Commands«
 /*«
-const com_ = class extends Com{
+class   extends Com{
 async run(){
 const{args}=this;
 
@@ -580,11 +657,59 @@ cerr(e);
 }
 
 }//»
+class com_chkfbdb extends Com {//«
+	async run() {
+		const{args}=this;
+		let base = UBASE();
+		if (!base) return this.no("not signed in!");
+		if (!is_connected) return this.no("not connected!");
+		let snap = await GET(`${base}/next_node_id/nodeid`);
+		if (isErr(snap)) return this.no(snap.message);
+		next_node_id = snap.val();
+		if (next_node_id) {
+log(`NNI: ${next_node_id}`);
+			return this.ok("OK");
+		}
+		this.no("NO");
+	}
+}//»
+class com_mkfbdb extends Com {//«
 
+	async run() {
+		const{args}=this;
+		let base = UBASE();
+		if (!base) return this.no("not signed in!");
+		let snap = await GET(`${base}/next_node_id/nodeid`);
+		if (isErr(snap)) return this.no(snap.message);
+		if (snap.val()) {
+			return this.no("database exists!");
+		}
+		let sid = get_session_id();
+		if (!is_connected) return this.no("not connected!");
+		await UPDATE(base, {
+			[`session_ids/${sid}`]: true,
+			cur_session_id: sid, // Added: !data.exists()
+			next_node_id: {
+				nodeid: 1, // (!data.exists() && newData.val() === 1)
+				sid: sid // Added: !data.exists()
+			}
+		});
+		next_node_id = 1;
+		let key = SID_KEY();
+cwarn(`localStorage.setItem(${key}, ${sid})`);
+		localStorage.setItem(key, sid);
+		this.ok();
+	}
+
+}//»
 
 const coms = {
+
 ghlogin: com_ghlogin,
-ghlogout: com_ghlogout
+ghlogout: com_ghlogout,
+chkfbdb: com_chkfbdb,
+mkfbdb: com_mkfbdb,
+
 }
 
 //»
