@@ -2292,6 +2292,7 @@ return kids;
 //log(list);
 let names = list.names;
 let vals = list.vals;
+let ids = list.ids;
 for (let i=0; i < names.length; i++){
 let nm = names[i];
 let val = vals[i];
@@ -2308,6 +2309,8 @@ else{
 		appData
 	});
 }
+kid.id = ids[i];
+log(kid);
 kids[nm] = kid;
 }
 //parobj.done=true;

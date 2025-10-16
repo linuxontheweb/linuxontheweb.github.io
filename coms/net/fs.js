@@ -69,8 +69,8 @@ MOST RECENT:
 				},
 				"nodes": {
 					".indexOn": ["parId", "path"],
+					".read": "auth != null",
 					"$nodeId": {
-						".read": "auth != null && auth.provider === 'github'",
 						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
 						".validate": "data.exists() || newData.hasChildren(['parId', 'type', 'path', 'sid'])",
 						"parId": {
@@ -554,6 +554,7 @@ orderByChild,
 limitToFirst,
 limitToLast,
 startAt,
+equalTo,
 onValue,
 increment,
 enableLogging
@@ -631,7 +632,6 @@ if (!(Number.isFinite(parId) && isStr(name))){
 
 let path = `${parId}/${name}`;
 let node = {parId, path, type: "d"};
-this.nextNodeId++;
 await UPDATE(UBASE(),{
 	next_node_id: {
 		nodeid: this.nextNodeId+1,
@@ -644,7 +644,9 @@ await UPDATE(UBASE(),{
 		type: "d"
 	}
 });
-return true;
+let id = this.nextNodeId;
+this.nextNodeId++;
+return id;
 }//»
 async createFileNode(parId, name, val){//«
 
@@ -697,7 +699,24 @@ await UPDATE(UBASE(), obj);
 return sz;
 
 }//»
+async getDirList(ghid, parId){
+let ref = REF(`LOTW/${ghid}/nodes`);
+let c1 = orderByChild('parId');
+let c2 = equalTo(parId);
+let q = query(ref, c1, c2);
+let snap = await GET(q);
+if (isErr(snap)){
+cerr(snap);
+return;
+//	return snap;
+}
+if (!snap.exists()){
+cerr(`NOTFOUND`);		
+return;
+}
+return snap.val();
 
+}
 }//»
 
 //Funcs«
@@ -838,11 +857,6 @@ cwarn("GET STATUSES...");
 	return true;
 };//»
 
-const check_user_path = path => {
-
-
-};
-
 const get_user_dir_list = async (ghid, path)=>{//«
 /*«
 let path_enc = "";
@@ -865,11 +879,30 @@ if (!snap.exists()){
 return snap.val();
 »*/
 cwarn(`GET(${ghid}): <${path}>`);
+let parId;
+if (!path) parId = 0;
+else{
+cerr("HAVEPATHWUTPARID");
+return;
+}
+let rv = await db.getDirList(ghid, parId);
+let keys = Object.keys(rv);
+let names = [];
+let vals = [];
 
-
+for (let k of keys){
+	let obj = rv[k];
+	let name = obj.path.split("/")[1];
+	let val;
+	if (obj.type==="d") val = -1;
+	else val = 0;
+	names.push(name);
+	vals.push(val);
+}
 return {
-names: [],
-vals: []
+	names: names,
+	vals: vals,
+	ids: keys
 }; 
 
 };//»
@@ -1050,11 +1083,43 @@ await update("/$ghid", update_obj); // If this fails, no incrementing is done
 //»
 globals.funcs["netfs.fbWrite"] = fb_write;
 
-const fb_mkdir = async(parpath, name) =>{
+const fb_mkdir = async(parpath, name) =>{//«
+
+
+if (!parpath.match(/^\x2fusers\x2f/)){
+cerr(`${path}: invalid path`);
+	return
+}
+if (!name){
+cerr(`NO NAME GIVEN`);
+	return
+}
+
+let arr = parpath.split("/");
+arr.shift();
+arr.shift();
+let username = arr.shift();
+if (!db){
+cerr("NOTLOGGEDON");
+return;
+}
+if (username !== db.login){
+cerr("Permission denied");
+return;
+}
+parpath = arr.join("/");
+let parId;
+if (!parpath) parId = 0;
+else {
+cerr("HAVEPARPATH!!!");
+return;
+}
 
 cwarn(`MKDIR: <${parpath}> <${name}>`);
+return await db.createDirNode(parId, name);
 
-};
+
+};/*»*/
 globals.funcs["netfs.fbMkdir"] = fb_mkdir;
 
 //»
