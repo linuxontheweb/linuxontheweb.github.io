@@ -711,8 +711,7 @@ return;
 //	return snap;
 }
 if (!snap.exists()){
-cerr(`NOTFOUND`);		
-return;
+return [];
 }
 return snap.val();
 
@@ -857,7 +856,7 @@ cwarn("GET STATUSES...");
 	return true;
 };//»
 
-const get_user_dir_list = async (ghid, path)=>{//«
+const get_user_dir_list = async (ghid, parId, path)=>{//«
 /*«
 let path_enc = "";
 if (path){
@@ -879,13 +878,8 @@ if (!snap.exists()){
 return snap.val();
 »*/
 cwarn(`GET(${ghid}): <${path}>`);
-let parId;
-if (!path) parId = 0;
-else{
-cerr("HAVEPATHWUTPARID");
-return;
-}
-let rv = await db.getDirList(ghid, parId);
+if (!parId) parId = 0;
+let rv = await db.getDirList(ghid, parseInt(parId));
 let keys = Object.keys(rv);
 let names = [];
 let vals = [];
@@ -1083,7 +1077,7 @@ await update("/$ghid", update_obj); // If this fails, no incrementing is done
 //»
 globals.funcs["netfs.fbWrite"] = fb_write;
 
-const fb_mkdir = async(parpath, name) =>{//«
+const fb_mkdir = async(parpath, parId, name) =>{//«
 
 
 if (!parpath.match(/^\x2fusers\x2f/)){
@@ -1108,15 +1102,11 @@ cerr("Permission denied");
 return;
 }
 parpath = arr.join("/");
-let parId;
-if (!parpath) parId = 0;
-else {
-cerr("HAVEPARPATH!!!");
-return;
-}
+
+if (!parId) parId = 0;
 
 cwarn(`MKDIR: <${parpath}> <${name}>`);
-return await db.createDirNode(parId, name);
+return await db.createDirNode(parseInt(parId), name);
 
 
 };/*»*/

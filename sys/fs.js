@@ -1877,7 +1877,7 @@ log("PAROBJ",parobj);
 		if (!id) return cerr("DEYBGJTU");
 	}
 	else if (typ === USERS_TYPE){
-		id = await globals.funcs["netfs.fbMkdir"](parpath, name);
+		id = await globals.funcs["netfs.fbMkdir"](parpath, parobj.id, name);
 		if (!id) return cerr("INVALID VALUE FROM fbMkdir");
 	}
 	let kid = mk_dir_kid(parobj, name, {isDir: true});
@@ -2284,7 +2284,8 @@ parobj.perm = name === globals.auth.github.login;
 
 let appData = root.kids.users.kids[name].appData;
 let path = arr.join("/");
-let list = await globals.funcs["netfs.getUserDirList"](appData.id, path);
+//log(parobj);
+let list = await globals.funcs["netfs.getUserDirList"](appData.id, parobj.id, path);
 if (isErr(list)){
 cerr(list);
 return kids;
@@ -2310,10 +2311,10 @@ else{
 	});
 }
 kid.id = ids[i];
-log(kid);
+//log(kid);
 kids[nm] = kid;
 }
-//parobj.done=true;
+parobj.done=true;
 return kids;
 };//»
 
