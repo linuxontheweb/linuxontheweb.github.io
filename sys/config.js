@@ -522,6 +522,7 @@ user:{
 	DESK_PATH,
 },
 	funcs:{},
+	"var":{},
 	dbs:{},//database handles
 	mods: {},
 	apps: {},

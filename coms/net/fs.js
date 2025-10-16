@@ -1,32 +1,8 @@
-/*Current security rules«
-
-{
-  "rules": {
-    ".read": false,
-    ".write": false,
-	"user": {    
-		"$uid": {
-			".read": "auth != null",
-			".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid"
-   	 	}
-	},
-	"status" :{
-		".read": "auth != null",
-		".indexOn": ["time"],
-   		"$uid": {
-			".write": "auth != null && auth.provider === 'github' &&  auth.token.firebase.identities['github.com'][0] === $uid",
-			".validate": "newData.hasChildren(['time', 'msg', 'name']) && newData.child('msg').isString() && newData.child('time').isNumber() && newData.child('msg').val().length <= 500 && newData.child('name').isString() && newData.child('name').val().length < 40"
-		}
-	}
-  }
-}
-
-»*/
 /*CURRENT DB SCHEMA«
 
 Just like with our local file system, we should have a separate blob storage on the backend. 
 
-The outer "namespaces" (like LOTW_FS) are meant to encapsulate the data of the various (siloed) applications 
+The outer "namespaces" (like LOTW) are meant to encapsulate the data of the various (siloed) applications 
 that the backend might possibly be used for. 
 
 // Generic read/write rules ($ghid is our numerical github id, and is used as the name of an outer object)
@@ -43,7 +19,27 @@ MOST RECENT:
 	"rules": {
 		".read": false,
 		".write": false,
-		"LOTW_FS": {
+		"LOTW": {
+			"status": {
+				".indexOn": ["time"],
+				".read": "auth != null",
+				"$ghid": {
+					".validate": "newData.hasChildren(['time', 'name'])",
+					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+					"time": {
+						".validate": "newData.isNumber()"
+					},
+					"msg": {
+						".validate":"newData.isString() && newData.val().length < 100"
+					},
+					"name": {
+						".validate":"newData.isString() && newData.val().length <= 39"
+					},
+					"$other": {
+						".validate": false
+					}
+				}
+			},
 			"$ghid": {
 				"session_ids": {
 					"$sid": {
@@ -55,7 +51,7 @@ MOST RECENT:
 				"cur_session_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
 					".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-					".validate": "newData.isString() && newData.val().length == 4 && ((data.exists() && root.child('LOTW_FS').child($ghid).child('session_ids').child(newData.val()).val() === true) || !data.exists())"
+					".validate": "newData.isString() && newData.val().length == 4 && ((data.exists() && root.child('LOTW').child($ghid).child('session_ids').child(newData.val()).val() === true) || !data.exists())"
 				},
 				"next_node_id": {
 					".read": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
@@ -65,7 +61,7 @@ MOST RECENT:
 						".validate": "newData.isNumber() && ((data.exists() && newData.val() === data.val() + 1) || (!data.exists() && newData.val() === 1))"
 					},
 					"sid": {
-						".validate": "newData.isString() && ((data.exists() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()) || !data.exists())"
+						".validate": "newData.isString() && ((data.exists() && newData.val() === root.child('LOTW').child($ghid).child('cur_session_id').val()) || !data.exists())"
 					},
 					"$other": {
 						".validate": false
@@ -90,7 +86,7 @@ MOST RECENT:
 							".validate": "!data.exists() && newData.isNumber()"
 						},
 						"sid": {
-							".validate": "newData.isString() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()" 
+							".validate": "newData.isString() && newData.val() === root.child('LOTW').child($ghid).child('cur_session_id').val()" 
 						},
 						"$other": {
 							".validate": false
@@ -109,7 +105,7 @@ MOST RECENT:
 							".validate": "newData.isString() && newData.val().length < 100000"
 						},
 						"sid": {
-							".validate": "newData.isString() && newData.val() === root.child('LOTW_FS').child($ghid).child('cur_session_id').val()" 
+							".validate": "newData.isString() && newData.val() === root.child('LOTW').child($ghid).child('cur_session_id').val()" 
 						},
 						"$other": {
 							".validate": false
@@ -127,7 +123,61 @@ MOST RECENT:
 
 Also: Let's await on update.
 »*/
+/*10/16/25: Put 'status' back into the db.
 
+Now we should integrate everything from 2 days ago with:
+	- the github login name fetching/storing (use this in the constructor of NetFsDB)
+	- Set the initial status update along with setting everything else (msg: "hi", time: serverTimestamp())
+	- Mount the users directory with the same logic as before (query for most recent status updates)
+
+*/
+/*10/15/25: How to discover other user's home directories?«
+
+- Reimplement the (~100 char) status thing, like before?
+- Maybe a "rank" (or "points") field, so the top N users may be queried.
+- Below we have a groups structure that can be used to authorize the writes of, 
+  e.g. "administrative" users
+
+"groups": {
+	"admin": {
+		".read": false,
+		".write": "auth != null && auth.provider === 'github' && 
+				auth.token.firebase.identities['github.com'][0] === 7414094",
+		$ghid: {
+			".validate": "newData.isBoolean()"
+		}
+	}
+},
+"status": {
+	".indexOn": ["time", "rank"],
+	"$ghid": {
+		".read": "auth != null",
+		".validate": "newData.hasChildren(['time', 'name']) || newData.hasChildren(['rank'])",
+		"time": {
+			".validate": "newData.isNumber()",
+			".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+		},
+		"msg": {
+			".validate":"newData.isString() && newData.val().length < 100",
+			".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+		},
+		"name": {
+			".validate":"newData.isString() && newData.val().length <= 39",
+			".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
+		},
+		"rank": { // Only users in the admin group can write
+			".validate": "newData.isNumber()",
+			".write": "auth != null && auth.provider === 'github' && 
+						root.child('LOTW').child('groups').child('admin')
+						.child(auth.token.firebase.identities['github.com'][0]) === true",
+		},
+		"$other": {
+			".validate": false
+		}
+	}
+}
+
+»*/
 /*10/14/25: Reducing the complexity of the 3-step process of initializing a remote user directory.«
 
 in the new db schema, I just checked for '!data.exists()' in the appropriate places
@@ -135,7 +185,7 @@ so that we can now do a one-step initialization process like:
 
 let session_id = get_session_id();
 let next_node_id = 1;
-const base_path = `LOTW_FS/${ghid}`;
+const base_path = `LOTW/${ghid}`;
 update(base_path, {
 	[`session_ids/${session_id}`]: true,
 	cur_session_id: session_id, // Added: !data.exists()
@@ -150,7 +200,7 @@ Now let's create 2 commends:
 2) mkfbdb
 
 Now we have the 2 main variables (sid and nextNodeId) as the initialization variables 
-of a 'NetFsDb' object. So now the idea is to add methods to this object to make
+of a 'NetFsDB' object. So now the idea is to add methods to this object to make
 it look like the system 'FsDb' object.
 
 
@@ -174,12 +224,12 @@ Now the question is simple: SHOULD AN INSTANCE OF NetFsDB BE TIED TO A SINGLE (N
 GITHUB ID? Should any NetFsDB instance indeed exist if no remote directory has even
 been set up yet?  If there is no session id, does/should this *guarantee* that there 
 is no database on the backend? Regardless, we just need to check for:
-LOTW_FS/$GHID/next_node_id/nodeid (Number >= 1).
+LOTW/$GHID/next_node_id/nodeid (Number >= 1).
 
 Now when setting it up:
 let session_id = get_session_id();
 let next_node_id = 1;
-const base_path = `LOTW_FS/${ghid}`;
+const base_path = `LOTW/${ghid}`;
 
 1)
 update(base_path, {
@@ -513,6 +563,7 @@ enableLogging
 
 //Var«
 
+
 const SESS_ID_BYTE_LEN = 3; // 4 ascii chars long
 
 const fbase_app = initializeApp(firebaseConfig);
@@ -527,6 +578,9 @@ gh_provider.setCustomParameters({
 let is_connected = false;
 let cur_user;
 let db;
+
+const DEF_STATS_MINS_AGO = 1000;
+const DEF_STATS_NUM_RECENT = 20;
 //let next_node_id;
 //let cur_sid;
 
@@ -553,14 +607,19 @@ const ONKILL = ()=>{
 cwarn("KILL");
 	AUTH_CB();
 	DISCON_CB();
+if (db){
+globals["var"]["netfs.login"] = db.login;
+globals["var"]["netfs.nextNodeId"] = db.nextNodeId;
+globals["var"]["netfs.sid"] = db.sid;
+}
 };
-
 //»
 
 class NetFsDB {//«
 
-constructor(sid_arg, next_node_id_arg){//«
+constructor(sid_arg, login_arg, next_node_id_arg){//«
 	this.sid = sid_arg;
+	this.login = login_arg;
 	this.nextNodeId = next_node_id_arg;
 }//»
 
@@ -611,6 +670,7 @@ let obj = {
 		type: "f"
 	}
 };
+let sz;
 if (val){
 	let bytes;
 	if (isStr(val)){
@@ -628,11 +688,13 @@ log(val);
 		sid: this.sid,
 		contents: B64(bytes)
 	}
+	sz = bytes.byteLength;
 }
+else sz = 0;
 
 this.nextNodeId++;
 await UPDATE(UBASE(), obj);
-return true;
+return sz;
 
 }//»
 
@@ -644,12 +706,19 @@ const UID = () =>{if (cur_user && cur_user.providerData) return cur_user.provide
 const UBASE = ()=> {//«
 	let id = UID();
 	if (!id) return;
-	return `LOTW_FS/${id}`;
+	return `LOTW/${id}`;
 };//»
 const SID = (val) => {//«
 	let id = UID();
 	if (!id) return;
 	let key = `fbase-sid-gh-${id}`;
+	if (!val) return localStorage.getItem(key);
+	localStorage.setItem(key, val);
+};//»
+const GH_UNAME = (val) => {//«
+	let id = UID();
+	if (!id) return;
+	let key = `uname-gh-${id}`;
 	if (!val) return localStorage.getItem(key);
 	localStorage.setItem(key, val);
 };//»
@@ -704,14 +773,7 @@ for (let i = 0; i < len; i++) {
 return arr;
 
 };//»
-
-/*
-const SID_KEY = ()=>{//«
-	let id = UID();
-	if (!id) return;
-	return `fbase-sid-gh-${id}`;
-};//»
-*/
+const DIE = mess => {throw new Error(mess);};
 
 const get_session_id = () => {//«
 	let sess_id = (crypto.getRandomValues(new Uint8Array(SESS_ID_BYTE_LEN))).toBase64()
@@ -720,13 +782,287 @@ const get_session_id = () => {//«
 		.replace(/=+$/, '');
 	return sess_id;
 };//»
+const get_gh_login = async()=>{//«
+	let gotname = GH_UNAME();
+	if (gotname) return gotname;
+	let ghid = UID();
+	if (!ghid) return DIE(`Called get_gh_login when not signed in!?!?`);
+	let rv;
+	try{
+		rv  = await fetch(`https://api.github.com/user/${ghid}`)
+	}
+	catch(e){
+cerr(e)
+//		return e.message;
+		return e;
+	}
+	if (!rv.ok){
+		return new Error("Could not fetch");
+	}
+	let obj = await rv.json();
+	if (!(obj&&obj.login)){
+cwarn("There is no login on the object below!?!?!?");
+log(obj);
+		return new Error("NO OBJ && OBJ.LOGIN FOUND?!?!? (see console)");
+	}
+	GH_UNAME(obj.login);
+	return obj.login;
+};//»
+const get_statuses=async(opts={minsAgo: DEF_STATS_MINS_AGO, numRecent: DEF_STATS_NUM_RECENT})=>{//«
+	let mins_ago = opts.minsAgo;
+	let num_recent_stats = opts.numRecent;
+
+	let start_time = new Date().getTime() - (mins_ago * 60000);
+	let c1 = orderByChild('time');
+	let c2 = startAt(start_time);
+	let c3 = limitToLast(num_recent_stats);
+	let ref = REF("LOTW/status");
+	let q = query(ref, c1, c2, c3);
+	let snap = await GET(q);
+	if (isErr(snap)){
+		return snap;
+	}
+	if (!snap.exists()){
+		return new Error(`no statuses were found`);		
+	}
+	return snap.val();
+};//»
+const set_user_dirs = async () => {//«
+cwarn("GET STATUSES...");
+	let stats = await get_statuses();
+	if (isErr(stats)) return stats;
+	let keys = Object.keys(stats);
+	let arr = [];
+	for (let key of keys) arr.push(stats[key].name, key);
+	await fsapi.popDir(root.kids.users, {vals: arr});
+	return true;
+};//»
+
+const check_user_path = path => {
+
+
+};
+
+const get_user_dir_list = async (ghid, path)=>{//«
+/*«
+let path_enc = "";
+if (path){
+	let arr = path.split("/");
+	for (let name of arr){
+		path_enc+=`/kids/${encode_key(name)}`;
+	}
+}
+let fullpath = `/user/${ghid}${path_enc}/list`;
+let ref = get_ref(fullpath); 
+
+let snap = await get_value(ref);
+if (isErr(snap)){
+	return snap;
+}
+if (!snap.exists()){
+	return new Error(`path not found`);
+}
+return snap.val();
+»*/
+cwarn(`GET(${ghid}): <${path}>`);
+
+
+return {
+names: [],
+vals: []
+}; 
+
+};//»
+globals.funcs["netfs.getUserDirList"] = get_user_dir_list;
+const fb_write = async(path, val, opts={})=> {//«
+//This must be a fullpath
+cwarn(`WRITE(${path})`);
+/*«
+if (!is_connected && !opts.offline){
+	return new Error("not connected (use --offline to force)");
+}
+
+let saypath = path;
+if (!path.match(/^\x2fusers\x2f/)){
+return new Error(`${path}: invalid path`);
+}
+let gh = globals.auth.github;
+if (!(gh.uid && gh.login)){
+return new Error(`Not logged in`);
+}
+let arr = path.split("/");
+arr.shift();
+arr.shift();
+let username = arr.shift();
+if (username !== gh.login){
+return new Error(`Permission denied`);
+}
+path = arr.join("/");
+if (!arr.length) {
+	return new Error(`'${saypath}': invalid path`);
+}
+let rel_path_enc = "";
+let name;
+if (path.match(/\x2f/)) {
+if (path === "/"){
+return new Error("'/': invalid path");
+}
+	let arr = path.split("/");
+	name = arr.pop();
+	for (let name of arr){
+		rel_path_enc+=`/kids/${encode_key(name)}`;
+	}
+}
+else{
+	name = path;
+}
+let base_path = `/user/${gh.uid}${rel_path_enc}`;
+let list_ref = get_ref(`${base_path}/list`);
+let snap = await get_value(list_ref);
+if (isErr(snap)){
+	return snap;
+}
+if (!snap.exists()){
+	if (!rel_path_enc) return new Error("you must create your user directory with fbmkhomedir!");
+	else{
+		return new Error(`the parent directory was not found`);
+	}
+}
+
+
+let list = snap.val();
+let ind = list.names.indexOf(name);
+if (ind >= 0){
+	if (list.vals[ind] === FBASE_DIRECTORY_VAL){
+		return new Error(`'${name}': cannot write to the directory`);
+	}
+	else{
+//We have a value and a file (update it)
+		list.names.splice(ind, 1);
+		list.vals.splice(ind, 1);
+	}
+}
+
+
+let bytes;
+if (isStr(val)) {
+	bytes = (new TextEncoder()).encode(val);
+}
+else if (val instanceof Uint8Array){
+	bytes = val;
+}
+else{
+log(val);
+return new Error("Unknown value given to fb_write (see console)");
+}
+let sz = bytes.byteLength;
+let str = B64(bytes);
+
+let use_len;
+if (!list.names[0]){
+	list.names = [name];
+	list.vals = [sz];
+	use_len = 1;
+}
+else{
+	list.names.push(name);
+	list.vals.push(sz);
+	let rv = parallel_sort(list.names, list.vals);
+	list.names = rv[0];
+	list.vals = rv[1];
+	use_len = list.names.length;
+}
+
+let enc_path = encode_key(name);
+
+let use_obj = {type: "f", size: sz, contents: str};
+
+let update_obj = {
+	list,
+	size: use_len,
+	[`kids/${enc_path}`]: use_obj
+};
+if (!await update(base_path, update_obj)) return;
+return sz;
+»*/
+
+let saypath = path;
+if (!path.match(/^\x2fusers\x2f/)){
+	return new Error(`${path}: invalid path`);
+}
+if (!db){
+cerr("Not logged in");
+	return new Error(`Not logged in`);
+}
+let arr = path.split("/");
+arr.shift();
+arr.shift();
+let username = arr.shift();
+if (username !== db.login){
+cerr("Permission denied");
+	return new Error(`Permission denied`);
+}
+let name = arr.pop();
+if (!name){
+cerr("WUTNOFILENAME");
+return;
+}
+let parpath = arr.join("/");
+
+let parId;
+if (!parpath) parId = 0;
+else {
+cerr("HAVEPARPATH!!!");
+return;
+}
+log(`<${parpath}> <${name}>`);
+return await db.createFileNode(parId, name, val);
+
+//log(db);
+//cwarn(`OK: ${username} === ${db.login}`);
+
+/*
+let update_obj = {
+	nodes: {
+		[node_id]: {
+			type: "f",
+			parId: par_id,
+			blobId: node_id,
+			path: `${par_id}/${name}`
+		}
+	},
+	blobs: {
+		[node_id]: {
+			contents: bytes.toBase64(),
+			meta: {
+				//...
+			}
+		}
+	},
+	next_node_id: increment(1)
+};
+await update("/$ghid", update_obj); // If this fails, no incrementing is done
+*/
+
+
+
+};
+//»
+globals.funcs["netfs.fbWrite"] = fb_write;
+
+const fb_mkdir = async(parpath, name) =>{
+
+cwarn(`MKDIR: <${parpath}> <${name}>`);
+
+};
+globals.funcs["netfs.fbMkdir"] = fb_mkdir;
 
 //»
 
 //Commands«
 
 /*«
-class   extends Com{
+class  extends Com{
 async run(){
 const{args}=this;
 
@@ -798,7 +1134,9 @@ class com_chkfbdb extends Com {//«
 			if (!cur_sid){
 				return this.no(`cur_sid: not found in local storage, but next_node_id exists`);
 			}
-			db = new NetFsDB(cur_sid, next_node_id);
+			let login = await get_gh_login();
+			if (isErr(login)) return this.no(login.message);
+			db = new NetFsDB(cur_sid, login, next_node_id);
 log(db);
 			return this.ok("OK");
 		}
@@ -810,36 +1148,71 @@ class com_mkfbdb extends Com {//«
 
 	async run() {
 		const{args}=this;
-		let base = UBASE();
-		if (!base) return this.no("not signed in!");
-		let snap = await GET(`${base}/next_node_id/nodeid`);
+		let id = UID();
+		if (!id) return this.no("not signed in!");
+		let snap = await GET(`LOTW/status/${id}/name`);
 		if (isErr(snap)) return this.no(snap.message);
 		if (snap.val()) {
 			return this.no("database exists!");
 		}
 		let sid = get_session_id();
+		let login = await get_gh_login();
+		if (isErr(login)) return this.no(e.message);
 		if (!is_connected) return this.no("not connected!");
-		await UPDATE(base, {
-			[`session_ids/${sid}`]: true,
-			cur_session_id: sid, // Added: !data.exists()
-			next_node_id: {
+		await UPDATE("LOTW", {
+			[`status/${id}`]: {
+				time: serverTimestamp(),
+				msg: "HELO",
+				name: login
+			},
+			[`${id}/session_ids/${sid}`]: true,
+			[`${id}/cur_session_id`]: sid, // Added: !data.exists()
+			[`${id}/next_node_id`]: {
 				nodeid: 1, // (!data.exists() && newData.val() === 1)
 				sid: sid // Added: !data.exists()
 			}
 		});
-//		next_node_id = 1;
 		SID(sid);
-//		cur_sid = sid;
-/*
-		let key = SID_KEY();
-cwarn(`localStorage.setItem(${key}, ${sid})`);
-		localStorage.setItem(key, sid);
-*/
-		db = new NetFsDB(sid, 1);
+		db = new NetFsDB(sid, login, 1);
 log(db);
 		this.ok();
 	}
 
+}//»
+class com_touchfbfile extends Com {//«
+async run(){
+const{args}=this;
+if (!db) return this.no("No db");
+log(db);
+this.ok();
+}
+}//»
+class com_mountusers extends Com{//«
+
+	async run(){
+		const{args}=this;
+		if (!!root.kids.users){
+			this.wrn("already mounted");
+			return;
+		}
+		mount_tree("users", USERS_TYPE);
+//		this.suc("/users: successfully mounted");
+		this.inf("Searching for users...");
+		let rv = await set_user_dirs();
+		if (isErr(rv)){
+			this.wrn(`${rv.message}`);
+		}
+		else if (rv === true){
+			this.suc("OK!");
+		}
+		else{
+			this.wrn("Unknown value returned from set_user_dirs! (see console)");
+			log(rv);
+		}
+//Maybe we should export a basic function to fs.populate_dirobj for use with the basic
+//shell/terminal functions like ls and doing tab complete.
+		this.ok();
+	}
 }//»
 
 const coms = {
@@ -848,6 +1221,8 @@ ghlogin: com_ghlogin,
 ghlogout: com_ghlogout,
 chkfbdb: com_chkfbdb,
 mkfbdb: com_mkfbdb,
+touchfbfile: com_touchfbfile,
+mountusers: com_mountusers,
 
 }
 
@@ -855,6 +1230,13 @@ mkfbdb: com_mkfbdb,
 
 export {coms, ONKILL as onkill};
 
+
+if (globals["var"]["netfs.sid"]) {
+	db = new NetFsDB(globals["var"]["netfs.sid"], globals["var"]["netfs.login"], globals["var"]["netfs.nextNodeId"]);
+log(db);
+}
+//globals["var"]["netfs.nextNodeId"] = db.nextNodeId;
+//globals["var"]["netfs.sid"] = db.sid;
 
 //Old«
 
@@ -1305,29 +1687,6 @@ const get_id = ()=> {//«
 	return parseInt(gh_id);
 };//»
 
-const get_name = async(idarg)=>{//«
-	let ghid = idarg || (get_id());
-	if (isStr(ghid)) return new Error(ghid);
-	let rv;
-	try{
-		rv  = await fetch(`https://api.github.com/user/${ghid}`)
-	}
-	catch(e){
-cerr(e)
-//		return e.message;
-		return e;
-	}
-	if (!rv.ok){
-		return new Error("Could not fetch");
-	}
-	let obj = await rv.json();
-	if (!(obj&&obj.login)){
-cwarn("There is no login on the object below!?!?!?");
-log(obj);
-		return new Error("NO OBJ && OBJ.LOGIN FOUND?!?!? (see console)");
-	}
-	return obj.login;
-};//»
 const set_name = async(use_name)=>{//«
 
 if (!use_name) {
@@ -1340,58 +1699,8 @@ return await update(`/names`, {[ghid]: use_name});
 
 };//»
 
-const DEF_STATS_MINS_AGO = 1000;
-const DEF_STATS_NUM_RECENT = 20;
 
-const get_statuses=async(opts={minsAgo: DEF_STATS_MINS_AGO, numRecent: DEF_STATS_NUM_RECENT})=>{//«
-	//Change this to go back further in time
-//	let mins_ago = 72;
-	//Change this to get more/less statuses
-//	let num_recent_stats = 10;
-	let mins_ago = opts.minsAgo;
-	let num_recent_stats = opts.numRecent;
 
-	let start_time = new Date().getTime() - (mins_ago * 60000);
-	let c1 = orderByChild('time');
-	let c2 = startAt(start_time);
-	let c3 = limitToLast(num_recent_stats);
-	let ref = get_ref("status");
-	let q = query(ref, c1, c2, c3);
-	let snap = await get_value(q);
-	if (isErr(snap)){
-		return snap;
-//		return this.no(snap.message);
-	}
-	if (!snap.exists()){
-		return new Error(`no statuses were found`);		
-//		return this.no(`no statuses were found`);
-	}
-	return snap;
-};//»
-
-const get_user_dir_list = async (ghid, path)=>{//«
-
-let path_enc = "";
-if (path){
-	let arr = path.split("/");
-	for (let name of arr){
-		path_enc+=`/kids/${encode_key(name)}`;
-	}
-}
-let fullpath = `/user/${ghid}${path_enc}/list`;
-let ref = get_ref(fullpath); 
-
-let snap = await get_value(ref);
-if (isErr(snap)){
-	return snap;
-}
-if (!snap.exists()){
-	return new Error(`path not found`);
-}
-return snap.val();
-
-};//»
-globals.funcs["netfs.getUserDirList"] = get_user_dir_list;
 
 const fb_read = async(ghid, path, opts = {})=>{//«
 
@@ -1589,120 +1898,6 @@ else _this.no("Update failed! (see console for error)");
 
 };//»
 
-const fb_write = async(path, val, opts={})=> {//«
-//This must be a fullpath
-
-
-if (!is_connected && !opts.offline){
-	return new Error("not connected (use --offline to force)");
-}
-
-let saypath = path;
-if (!path.match(/^\x2fusers\x2f/)){
-return new Error(`${path}: invalid path`);
-}
-let gh = globals.auth.github;
-if (!(gh.uid && gh.login)){
-return new Error(`Not logged in`);
-}
-let arr = path.split("/");
-arr.shift();
-arr.shift();
-let username = arr.shift();
-if (username !== gh.login){
-return new Error(`Permission denied`);
-}
-path = arr.join("/");
-if (!arr.length) {
-	return new Error(`'${saypath}': invalid path`);
-}
-let rel_path_enc = "";
-let name;
-if (path.match(/\x2f/)) {
-if (path === "/"){
-return new Error("'/': invalid path");
-}
-	let arr = path.split("/");
-	name = arr.pop();
-	for (let name of arr){
-		rel_path_enc+=`/kids/${encode_key(name)}`;
-	}
-}
-else{
-	name = path;
-}
-let base_path = `/user/${gh.uid}${rel_path_enc}`;
-let list_ref = get_ref(`${base_path}/list`);
-let snap = await get_value(list_ref);
-if (isErr(snap)){
-	return snap;
-}
-if (!snap.exists()){
-	if (!rel_path_enc) return new Error("you must create your user directory with fbmkhomedir!");
-	else{
-		return new Error(`the parent directory was not found`);
-	}
-}
-
-
-let list = snap.val();
-let ind = list.names.indexOf(name);
-if (ind >= 0){
-	if (list.vals[ind] === FBASE_DIRECTORY_VAL){
-		return new Error(`'${name}': cannot write to the directory`);
-	}
-	else{
-//We have a value and a file (update it)
-		list.names.splice(ind, 1);
-		list.vals.splice(ind, 1);
-	}
-}
-
-
-let bytes;
-if (isStr(val)) {
-	bytes = (new TextEncoder()).encode(val);
-}
-else if (val instanceof Uint8Array){
-	bytes = val;
-}
-else{
-log(val);
-return new Error("Unknown value given to fb_write (see console)");
-}
-let sz = bytes.byteLength;
-let str = B64(bytes);
-
-let use_len;
-if (!list.names[0]){
-	list.names = [name];
-	list.vals = [sz];
-	use_len = 1;
-}
-else{
-	list.names.push(name);
-	list.vals.push(sz);
-	let rv = parallel_sort(list.names, list.vals);
-	list.names = rv[0];
-	list.vals = rv[1];
-	use_len = list.names.length;
-}
-
-let enc_path = encode_key(name);
-
-let use_obj = {type: "f", size: sz, contents: str};
-
-let update_obj = {
-	list,
-	size: use_len,
-	[`kids/${enc_path}`]: use_obj
-};
-if (!await update(base_path, update_obj)) return;
-return sz;
-
-};
-//»
-globals.funcs["netfs.fbWrite"] = fb_write;
 
 //»
 
@@ -2317,7 +2512,7 @@ root: {
 ".read": false,
 ".write": false,
 
-LOTW_FS: {
+LOTW: {
 
 	"$ghid": {
 		session_ids: { // Register a unique session id here upon local initialization, stored locally

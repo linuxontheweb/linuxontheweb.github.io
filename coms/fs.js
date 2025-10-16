@@ -36,6 +36,7 @@ const{
 	FS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
+	USERS_TYPE
 }=globals.fs;
 const{
 	TEXT_EDITOR_APP,
@@ -760,12 +761,13 @@ async run(){
 			err(`${parpath}: not a directory`);
 			continue; 
 		}
-		let OK_TYPES = [FS_TYPE, SHM_TYPE];
+		let OK_TYPES = [FS_TYPE, SHM_TYPE, USERS_TYPE];
 		if (!OK_TYPES.includes(parnode.type)) {
 			err(`${fullpath}: the parent directory has an unsupported type: '${parnode.type}'`);
 			continue; 
 		}
-		if (!await fsapi.checkDirPerm(parnode)) {
+//		if (!await fsapi.checkDirPerm(parnode)) {
+		if (parnode.type === FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 			err(`${fullpath}: permission denied`);
 			continue;
 		}

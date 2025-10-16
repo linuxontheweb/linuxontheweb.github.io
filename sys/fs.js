@@ -1842,11 +1842,19 @@ const mkDir=async(parpatharg, name, opts={})=>{//«
 	let fullpath = `${parpath}/${name}`.regpath();
 	let parobj = await pathToNode(parpath);
 	if (!parobj) return;
-	let no_db = false;
+//	let no_db = false;
+	let typ = parobj.type;
+/*«
 	if (parobj.type!==FS_TYPE) {
 		if (parobj.type==SHM_TYPE) no_db = true;
+		else if (parobj.type==USERS_TYPE) {
+//cwarn(`mkDir: USERS: <${parpath}> <${name}>`);
+//return;
+			no_db = true;
+		}
 		else return;
 	}
+»*/
 	if (await pathToNode(fullpath)){//«
 		let kid = parobj.kids[name];
 		if (kid) return kid;
@@ -1862,11 +1870,15 @@ log("PAROBJ",parobj);
 		return;
 	}//»
 	let id;
-	if (!no_db) {
+	if (typ===FS_TYPE) {
 		let parid = parobj.id;
 		if (!parid) return cerr("GEJ76GF");
 		id = await db.createNode(name, DIRECTORY_FS_TYPE, parid);
 		if (!id) return cerr("DEYBGJTU");
+	}
+	else if (typ === USERS_TYPE){
+		id = await globals.funcs["netfs.fbMkdir"](parpath, name);
+		if (!id) return cerr("INVALID VALUE FROM fbMkdir");
 	}
 	let kid = mk_dir_kid(parobj, name, {isDir: true});
 	kid.id = id;
@@ -2279,12 +2291,6 @@ return kids;
 }
 //log(list);
 let names = list.names;
-if (names.length == 1 && names[0]===false) {
-
-parobj.done=true;
-return kids;
-
-}
 let vals = list.vals;
 for (let i=0; i < names.length; i++){
 let nm = names[i];
@@ -2304,7 +2310,7 @@ else{
 }
 kids[nm] = kid;
 }
-parobj.done=true;
+//parobj.done=true;
 return kids;
 };//»
 
