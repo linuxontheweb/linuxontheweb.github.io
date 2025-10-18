@@ -123,14 +123,27 @@ MOST RECENT:
 
 Also: Let's await on update.
 »*/
-/*10/16/25: Put 'status' back into the db.
+
+/*10/17/25: Need to export a try_get_kid sort of function so that path_to_node in sys/fs.js
+can do the same type of path resolution mechanism as for FS_TYPE nodes.
+
+- getUsersNodeByNameAndPar
+
+So now we should be able to resolve multi-path paths (e.g. /users/guyhar123/dir1/dir2/dir3/dir4/file.txt) 
+by querying only for the nodes of the constituent directories in the path (dir1, dir2, dir3, dir4), 
+rather than for their full listings.
+
+We might eventually do a lookup map that associates paths with their node ids.
+
+*/
+/*10/16/25: Put 'status' back into the db.«
 
 Now we should integrate everything from 2 days ago with:
 	- the github login name fetching/storing (use this in the constructor of NetFsDB)
 	- Set the initial status update along with setting everything else (msg: "hi", time: serverTimestamp())
 	- Mount the users directory with the same logic as before (query for most recent status updates)
 
-*/
+»*/
 /*10/15/25: How to discover other user's home directories?«
 
 - Reimplement the (~100 char) status thing, like before?
@@ -699,7 +712,7 @@ await UPDATE(UBASE(), obj);
 return sz;
 
 }//»
-async getDirList(ghid, parId){
+async getDirList(ghid, parId){/*«*/
 let ref = REF(`LOTW/${ghid}/nodes`);
 let c1 = orderByChild('parId');
 let c2 = equalTo(parId);
@@ -715,7 +728,8 @@ return [];
 }
 return snap.val();
 
-}
+}/*»*/
+
 }//»
 
 //Funcs«
@@ -745,11 +759,15 @@ const REF = (path)=> {//«
 //	if (path) return ref(fbase_db, path);
 //	return ref(db);
 };//»
-const GET = async(ref_or_path)=>{//«
-
-if (isStr(ref_or_path)) ref_or_path = ref(fbase_db, ref_or_path);
+const GET = async(arg)=>{//«
+/*arg might be:
+- a string (implicitly means convert it to a ref)
+- a ref
+- a query (which is a reference together with a list of constraints)
+*/
+if (isStr(arg)) arg = ref(fbase_db, arg);
 try {
-	return await get(ref_or_path);
+	return await get(arg);
 }
 catch(e){
 	return e;
@@ -832,10 +850,11 @@ const get_statuses=async(opts={minsAgo: DEF_STATS_MINS_AGO, numRecent: DEF_STATS
 
 	let start_time = new Date().getTime() - (mins_ago * 60000);
 	let c1 = orderByChild('time');
-	let c2 = startAt(start_time);
+//	let c2 = startAt(start_time);
 	let c3 = limitToLast(num_recent_stats);
 	let ref = REF("LOTW/status");
-	let q = query(ref, c1, c2, c3);
+	let q = query(ref, c1, c3);
+//	let q = query(ref, c1, c2, c3);
 	let snap = await GET(q);
 	if (isErr(snap)){
 		return snap;
@@ -883,24 +902,44 @@ let rv = await db.getDirList(ghid, parseInt(parId));
 let keys = Object.keys(rv);
 let names = [];
 let vals = [];
-
+let blobIds = [];
 for (let k of keys){
 	let obj = rv[k];
 	let name = obj.path.split("/")[1];
 	let val;
 	if (obj.type==="d") val = -1;
 	else val = 0;
+	blobIds.push(obj.blobId);
 	names.push(name);
 	vals.push(val);
 }
 return {
 	names: names,
 	vals: vals,
-	ids: keys
+	ids: keys,
+	blobIds
 }; 
 
 };//»
 globals.funcs["netfs.getUserDirList"] = get_user_dir_list;
+
+//const fb_read = async(ghid, parid, name, opts={}) => {
+const fb_read = async(ghid, blobId, opts={}) => {
+//cwarn(`READ(${ghid}): ${parid}/${name}`);
+//log("OPTS", opts);
+//log(`GET: /LOTW/${ghid}/blobs/${blobId}`);
+
+	let rv = await GET(`LOTW/${ghid}/blobs/${blobId}`);
+	if (isErr(rv)) return;
+	let bytes = FROMB64(rv.val().contents);
+	if (opts.forceText) {
+		return new TextDecoder().decode(bytes);
+	}
+	return bytes;
+
+};
+
+globals.funcs["netfs.fbRead"] = fb_read;
 const fb_write = async(path, val, opts={})=> {//«
 //This must be a fullpath
 cwarn(`WRITE(${path})`);
@@ -1109,8 +1148,52 @@ cwarn(`MKDIR: <${parpath}> <${name}>`);
 return await db.createDirNode(parseInt(parId), name);
 
 
-};/*»*/
+};//»
 globals.funcs["netfs.fbMkdir"] = fb_mkdir;
+
+const fb_get_users_node_by_name_and_par = async (name, parnode) => {//«
+// parnode.appData was undefined after mkDir
+//cwarn('PARNODE');
+//log(parnode);
+let ghid = parnode.appData.id;
+let pathname = `${parnode.id}/${name}`;
+log(`GET USER(${ghid}): ${pathname}`);
+let q = query(REF(`/LOTW/${ghid}/nodes`), orderByChild('path'), equalTo(pathname), limitToFirst(1));
+let rv = await GET(q);
+if (isErr(rv)){
+cerr(rv);
+return;
+}
+if (!rv.exists()){
+cwarn("NOT FOUND");
+return;
+}
+let val = rv.val();
+let keys = Object.keys(val);
+if (keys.length !== 1){
+cerr(`HOW MANY KEYS, wanted 1, but got: ${keys.length}! Here is the object:`);
+log(val);
+return;
+}
+let id = keys[0];
+let node = val[id];
+//log();
+//let name = node.path.split("/")[1];
+let typ;
+if (node.type==="d") typ = -1;
+else typ = 0;
+return {
+	blobId: node.blobId,
+	id,
+	name,
+	val: typ
+};
+
+};//»
+globals.funcs["netfs.getUsersNodeByNameAndPar"] = fb_get_users_node_by_name_and_par;
+
+
+
 
 //»
 

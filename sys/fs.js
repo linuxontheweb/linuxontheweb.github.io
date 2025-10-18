@@ -763,7 +763,10 @@ arr.shift();
 arr.shift();
 arr.shift();
 let path = arr.join("/");
-let rv = await globals.funcs["netfs.fbRead"](this.appData.id, path, opts);
+//log("BLOBID?",this.blobId);
+//let rv = await globals.funcs["netfs.fbRead"](this.appData.id, this.par.id, this.name, opts);
+let rv = await globals.funcs["netfs.fbRead"](this.appData.id, this.blobId, opts);
+//let rv = await globals.funcs["netfs.fbRead"](this.appData.id, path, opts);
 if (isErr(rv)){
 	cerr(rv);
 }
@@ -801,15 +804,15 @@ const getNodesByBlobId = async (blobId) =>{//«
 //	log(rv);
 };//»
 
-const try_get_kid=async(nm, curpar)=>{//«
+const try_get_fs_type_kid=async(nm, curpar)=>{//«
+/*
+This is currently for FS_TYPE only, but we should extend it to whatever other types that
+do the same kind of dynamic discovery mechanism.
+*/
 	let rv = await db.getNodeByNameAndParId(nm, curpar.id);
 	if (!check_db_rv(rv)) return;
 	let gotrow = rv.rows[0];
 	if (!gotrow) return;
-//	let isLink = gotrow.value === LINK_FS_TYPE;
-//	let isData = gotrow.value === IDB_DATA_TYPE;
-//	let isDir = gotrow.value === DIRECTORY_FS_TYPE;
-//cwarn("TRY",nm);
 	let isDir, isLink, isData, isFile;
 	switch(gotrow.value){
 		case DIRECTORY_FS_TYPE:
@@ -846,17 +849,46 @@ const try_get_kid=async(nm, curpar)=>{//«
 	if (!kid.root) kid.root = curpar.root;
 	return kid;
 };//»
+const try_get_users_type_kid = async(nm, parnode) => {//«
+//cwarn(`GET USERS KID: ${parnode.appData.id} ${parnode.id}/${nm}`);
+let rv = await globals.funcs["netfs.getUsersNodeByNameAndPar"](nm, parnode);
+if (!rv){
+//cwarn("NOTHING");
+return;
+}
+/*
+{id, name, val}
+*/
+	let isDir, isNetFile;
+	switch(rv.val){
+		case -1:
+			isDir = true;
+			break
+		default:
+			isNetFile = true;
+	}
+	let kid = mk_dir_kid(parnode, nm,{
+		isDir,
+		isNetFile,
+		path: parnode.fullpath,
+		appData: parnode.appData
+	});
+	kid.id = rv.id;
+	if (rv.blobId) kid.blobId = rv.blobId;
+	if (!kid.root) kid.root = parnode.root;
+	return kid;
+
+};//»
+
 const path_to_node = async(patharg, if_get_link, iter) =>{//«
 	if (!iter) iter=0;
 	const done=async()=>{//«
 /*Return here if://«
 1) There is not a node (this operation failed)
-2) The node is NOT a link
+2) The node is NOT a sym link
 3) We have a link, and want the link node iteself
 »*/
-//		if (!node||node.appName!==LINK_APP||if_get_link) return [node, curpar, path];
 		if (!node||node.appName!==LINK_APP||if_get_link) return node;
-//		if (iter > MAX_LINK_ITERS) return [null, curpar, path];
 		if (iter > MAX_LINK_ITERS) return null;
 		if (node.type==FS_TYPE){
 			if (!node.link){
@@ -873,15 +905,12 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 	};//»
 	let node;
 	let path = normPath(patharg);
-//	if (path==="/") return [root,null,path];
 	if (path==="/") return root;
 	let parts = path.split("/");
 	parts.shift();
 	let topname = parts.shift();
 	let curpar = root.kids[topname];
-//	if (!curpar) return [null, root, path];
 	if (!curpar) return null;
-//	if (!parts.length) return [curpar, root, path];
 	if (!parts.length) return curpar;
 
 	let curkids = curpar.kids;
@@ -895,27 +924,29 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 			if (!curpar.done) {
 				let rtype = curpar.type;
 				if (rtype==FS_TYPE){
-					let kid = await try_get_kid(nm, curpar);
+					let kid = await try_get_fs_type_kid(nm, curpar);
 					if (!kid) return done();
 					curkids[nm] = kid;
 				}
+else if (rtype == USERS_TYPE){
+	let kid = await try_get_users_type_kid(nm, curpar);
+	if (!kid) return done();
+	curkids[nm] = kid;
+
+}
 				else await popDir(curpar);
 				gotkid = curkids[nm];
-//				if (!gotkid) return [null, curpar, path];
 				if (!gotkid) return null;
 				curpar = gotkid;
 			}
 			let newpar = curkids[nm];
-//			if (!(newpar&&newpar.appName===FOLDER_APP)) return [null, curpar, path];
 			if (!(newpar&&newpar.appName===FOLDER_APP)) return null;
 			curpar = newpar;
 		}//»
 		if (curpar.appName===LINK_APP){//«
-//			if (iter > MAX_LINK_ITERS) return [null, curpar, path];
 			if (iter > MAX_LINK_ITERS) return null;
 			if (curpar.type==FS_TYPE){
 				let gotdir = await curpar.ref;
-//				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return [null, curpar, curpath];
 				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return null;
 				curpar = gotdir;
 			}
@@ -925,7 +956,6 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 				let rv = await get_data_from_fs_file(curpar.file,"text");
 				let [gotdir, lastdir, gotpath] = await path_to_node(rv, if_get_link, ++iter);
-//				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return [null, curpar, gotpath];
 				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return null;
 				curpar = gotdir;
 			}
@@ -940,25 +970,52 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 		curkids = curpar.kids;
 	}
 	if (!curkids) return done();
-	node = curkids[`${fname}`];
+//	node = curkids[`${fname}`];
+	node = curkids[fname];
 	if (node||curpar.done) {
 		if (node && !node.root) node.root = curpar.root;
 		return done();
 	}
+
+
+/*10/17.25: This was refactored below
 	if (curpar.type!==FS_TYPE){//«
 		await popDir(curpar);
 		let gotnode = curkids[fname];
-//		if (!gotnode) return [null, curpar, path];
 		if (!gotnode) return null;
 		node = gotnode;
 		if (!node.root) node.root = curpar.root;
 		return done();
 	}//»
-	let kid = await try_get_kid(fname, curpar);
+	let kid = await try_get_fs_type_kid(fname, curpar);
 	if (!kid) return done();
 	node = kid;
 	curkids[fname] = kid;
 	return done();
+*/
+
+	if (curpar.type===FS_TYPE){//«
+		let kid = await try_get_fs_type_kid(fname, curpar);
+		if (!kid) return done();
+		node = kid;
+		curkids[fname] = kid;
+		return done();
+	}//»
+	else if (curpar.type===USERS_TYPE){
+		let kid = await try_get_users_type_kid(fname, curpar);
+		if (!kid) return done();
+		node = kid;
+		curkids[fname] = kid;
+		return done();
+	}
+	else{
+		await popDir(curpar);
+		let gotnode = curkids[fname];
+		if (!gotnode) return null;
+		node = gotnode;
+		if (!node.root) node.root = curpar.root;
+		return done();
+	}
 
 };
 const pathToNode = path_to_node;
@@ -1858,29 +1915,34 @@ const mkDir=async(parpatharg, name, opts={})=>{//«
 	if (await pathToNode(fullpath)){//«
 		let kid = parobj.kids[name];
 		if (kid) return kid;
-cwarn(`WHY IS THERE NO PAROBJ.KIDS in mkDir AFTER SUCCESSFULLY GETTING PATHTONODE("${fullpath}") ???`);
-		kid = await try_get_kid(name, parobj);
+cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING PATHTONODE("${fullpath}") ???`);
+/*
+		kid = await try_get_fs_type_kid(name, parobj);
 		if (kid){
 			parobj.kids[name] = kid;
 			return kid;
 		}
-cerr(`Got NO KID after try_get_kid in mkDir("${parpatharg}","${name}"), WITH ARGS BELOW`);
+cerr(`Got NO KID after try_get_fs_type_kid in mkDir("${parpatharg}","${name}"), WITH ARGS BELOW`);
 log("NAME", name);
 log("PAROBJ",parobj);
+*/
 		return;
 	}//»
 	let id;
+	let kid;
 	if (typ===FS_TYPE) {
 		let parid = parobj.id;
 		if (!parid) return cerr("GEJ76GF");
 		id = await db.createNode(name, DIRECTORY_FS_TYPE, parid);
 		if (!id) return cerr("DEYBGJTU");
+		kid = mk_dir_kid(parobj, name, {isDir: true});
 	}
 	else if (typ === USERS_TYPE){
 		id = await globals.funcs["netfs.fbMkdir"](parpath, parobj.id, name);
 		if (!id) return cerr("INVALID VALUE FROM fbMkdir");
+log("parobj.APPDATA?", parobj.appData);
+		kid = mk_dir_kid(parobj, name, {isDir: true, appData: parobj.appData});
 	}
-	let kid = mk_dir_kid(parobj, name, {isDir: true});
 	kid.id = id;
 	parobj.kids[name] = kid;
 
@@ -2265,6 +2327,7 @@ const populate_users_dirobj = (parobj, opts) =>{//«
 			appData: {id}
 		});
 		kid.perm = name === login;
+		kid.id = 0;
 		kids[name] = kid;
 	}
 	parobj.done = true;
@@ -2294,9 +2357,11 @@ return kids;
 let names = list.names;
 let vals = list.vals;
 let ids = list.ids;
+let blobids = list.blobIds;
 for (let i=0; i < names.length; i++){
 let nm = names[i];
 let val = vals[i];
+let blobid = blobids[i];
 let kid;
 if (val === -1){
 	kid = mk_dir_kid(parobj, nm, {
@@ -2311,6 +2376,7 @@ else{
 	});
 }
 kid.id = ids[i];
+if (blobid) kid.blobId = blobid;
 //log(kid);
 kids[nm] = kid;
 }
@@ -2723,7 +2789,7 @@ const get_keys = obj => {//«
 const check_db_rv = (rv, if_log)=>{//«
     if (!(rv.rows||rv.message)) {
 cwarn(rv);
-//        cberr("Unknown return value");
+//cberr("Unknown return value");
         return false;
     }   
     if (!rv.message) {
