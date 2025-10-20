@@ -1441,7 +1441,7 @@ cwarn("NO RELOAD_WIN._DATA_URL!!?");
 	stat("Reloading...");
 	let rv = await reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([`(function(){"use strict";${get_edit_str()}})()`]))});
 	stat("Done!");
-}/*»*/
+}//»
 const ondevreload=()=>{//«
 	return reload_dev_win();
 };//»
@@ -1521,8 +1521,9 @@ const try_save_as=(opts={})=>{//«
 };//»
 const edit_save = async(if_nostat, com_opts={})=>{//«
 	let write_err = "";
-	const write_cb_func = async(ret)=>{//«
-		if (ret) {
+	const write_cb_func = async(node)=>{//«
+//	const write_cb_func = async(ret)=>{
+		if (node) {
 //We were doing a "save as" from another file, so we need to unlock it since we
 //aren't using that file anymore
 			if (edit_fobj_hold){
@@ -1530,7 +1531,7 @@ const edit_save = async(if_nostat, com_opts={})=>{//«
 				edit_fobj_hold = null;
 			}
 
-			let {node} = ret;
+//			let {node} = ret;
 			if (!edit_fobj){
 				edit_fobj = node;
 				edit_fullpath = edit_fobj.fullpath;
@@ -1541,10 +1542,11 @@ const edit_save = async(if_nostat, com_opts={})=>{//«
 			if (Desk) Desk.make_icon_if_new(node);
 			if (!if_nostat) {
 				if (write_err) stat_message_type = STAT_ERR;
-				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${ret.size}C written${write_err}`;
+				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${node.size}C written${write_err}`;
+//				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${ret.size}C written${write_err}`;
 			}
 			else{
-	log("Saved",ret.size);
+log("Saved",node.size);
 			}
 			dirty_flag = false;
 			Term.is_dirty = false;
@@ -1586,7 +1588,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 		render();
 		return;
 	}
-	let opts={retObj: true};
+//	let opts={retObj: true};
 	let usepath = edit_fullpath;
 	let OK_TYPES=[FS_TYPE, USERS_TYPE];
 	if (!OK_TYPES.includes(edit_ftype)){
@@ -1610,29 +1612,42 @@ cerr(e);
 			write_err = " (bad JSON)";
 		}
 	}
-	if (!edit_fobj) {
+	let node;
+	if (!edit_fobj) {//«
+		node = await fsapi.writeFile(usepath, val);
+/*«
 		if (edit_ftype === USERS_TYPE){
-			let node = await fsapi.writeFile(usepath, val);
-			if (node) rv = {node, size: node.size};
+			node = await fsapi.writeFile(usepath, val);
+//			if (node) rv = {node, size: node.size};
 		}
 		else {
-			rv = await fsapi.saveFsByPath(usepath, val, opts);
+//			rv = await fsapi.saveFsByPath(usepath, val, opts);
+			node = await fsapi.saveFsByPath(usepath, val);//IN BLOCK COMMENT
 		}
-log(rv);
+*/
+//log(rv);
+/*
 if (!(rv&&rv.node)){
 stat_err("There was a problem writing the file (see console)");
 cwarn("Here is the returned value from saveFsByPath");
 log(rv);
 return;
 }
-	}
-	else {
+»*/
+	}//»
+	else {//«
 		let par = edit_fobj.par;
-		if (par.type === FS_TYPE && !await fsapi.checkDirPerm(par)){
+//		if (par.type === FS_TYPE && !await fsapi.checkDirPerm(par)){
+//		if (!await fsapi.checkDirPerm(par)){
+		if (!par.okWrite){
 			stat_err("Permission denied");
 			return;
 		}
-		rv = await edit_fobj.setValue(val, opts);
+//		rv = await edit_fobj.setValue(val, opts);
+		if (await edit_fobj.setValue(val)){
+			node = edit_fobj;
+		}
+/*«
 if (!(rv&&rv.node)){
 stat_err("There was a problem writing the file (see console)");
 cwarn("Here is the returned value from node.setValue");
@@ -1640,8 +1655,10 @@ log(rv);
 is_saving = false;
 return;
 }
-	}
-	return write_cb_func(rv);
+»*/
+	}//»
+//	return write_cb_func(rv);
+	return write_cb_func(node);
 }
 //»
 const save_as = async (name)=>{//«
@@ -1656,7 +1673,8 @@ const err=s=>{//«
 const checkok = () =>{//«
 	rtype = rootobj.type;
 	if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype==USERS_TYPE)) return `Cannot create file type: ${rootobj.type}`;
-	if (!fs.check_fs_dir_perm(parobj,is_root)) return `Permission denied: ${fname}`;
+//	if (!fs.check_fs_dir_perm(parobj,is_root)) return `Permission denied: ${fname}`;
+	if (!parobj.okWrite) return `Permission denied: ${fname}`;
 	return true;
 }; //» 
 const save_ok = ifnew => {//«
@@ -1847,7 +1865,7 @@ const handle_tab_path_completion = async(if_ctrl, gotpath, stat_com_pref)=>{//«
 //	let gotpath;
 //	gotpath = stat_com_arr.join("").trim();
 	let usedir, usename;
-	if(!num_completion_tabs) {/*«*/
+	if(!num_completion_tabs) {//«
 		if (gotpath.match(/^\//)){
 			let arr = gotpath.split("/");
 			usename = arr.pop();
@@ -1876,7 +1894,7 @@ const handle_tab_path_completion = async(if_ctrl, gotpath, stat_com_pref)=>{//«
 		cur_completion_str = gotpath;
 		cur_completion_name = usename;
 		cur_completion_dir = usedir;
-	}/*»*/
+	}//»
 	let rv = await Term.getDirContents(cur_completion_dir, cur_completion_name);
 	if (!rv.length) return;
 	rv.push([cur_completion_name]);
@@ -6885,7 +6903,7 @@ return;
 	if (!stdin_lines) stdin_lines = newlines;
 	else stdin_lines.push(...newlines);
 
-};/*»*/
+};//»
 this.quit = quit;
 //}; End vim mod«
 }

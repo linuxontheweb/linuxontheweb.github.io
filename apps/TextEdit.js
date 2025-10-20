@@ -111,20 +111,19 @@ cwarn("Got topwin.fullpath but not topwin.icon!!!");
 
 let ext = EXTENSIONS[USE_EXT];
 
-let {path, name} = await Desk.api.saveAs(topwin, ext);
-//cwarn("WHAT IN THE HELLLLL????????");
-//Win.up();
-//Win.on();
-if (!path) {
+//let {path, name} = await Desk.api.saveAs(topwin, ext);
+let {parNode, name} = await Desk.api.saveAs(topwin, ext);
+if (!parNode) {
 	return;
 }
+let path = parNode.fullpath;
 name = name.trim();
 if (!name.match(/^[-._a-zA-Z0-9 ]+$/)){
 	return poperr("Invalid name");
 }
 let fullpath = `${path}/${name}.${ext}`;
-
-if (! await fsapi.checkDirPerm(path)) return poperr(`${path}: permission denied`);
+//if (! await fsapi.checkDirPerm(path)) return poperr(`${path}: permission denied`);
+if (!parNode.okWrite) return poperr(`${path}: permission denied`);
 if (await fsapi.pathToNode(fullpath)) return poperr(`${fullpath}: Already exists`);
 
 let node = await fsapi.writeFile(fullpath, area.value);

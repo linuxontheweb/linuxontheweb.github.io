@@ -124,7 +124,7 @@ MOST RECENT:
 Also: Let's await on update.
 »*/
 
-/*10/17/25: Need to export a try_get_kid sort of function so that path_to_node in sys/fs.js
+/*10/17/25: Need to export a try_get_kid sort of function so that path_to_node in sys/fs.js«
 can do the same type of path resolution mechanism as for FS_TYPE nodes.
 
 - getUsersNodeByNameAndPar
@@ -135,7 +135,7 @@ rather than for their full listings.
 
 We might eventually do a lookup map that associates paths with their node ids.
 
-*/
+»*/
 /*10/16/25: Put 'status' back into the db.«
 
 Now we should integrate everything from 2 days ago with:
@@ -537,7 +537,19 @@ const {fsMod: fs, fbase}=globals;
 const {USERS_TYPE, APPDATA_PATH} = globals.fs;
 const {config: firebaseConfig} = globals.firebase;
 const {Com} = globals.ShellMod.comClasses;
-const{mkdv, mk, isArr,isStr,isEOF,isErr,log,jlog,cwarn,cerr}=LOTW.api.util;
+const{
+mkdv,
+mk,
+isArr,
+isNum,
+isStr,
+isEOF,
+isErr,
+log,
+jlog,
+cwarn,
+cerr
+}=LOTW.api.util;
 const{root, mount_tree}=fs;
 const {fs: fsapi}=LOTW.api;
 //const {popup} = globals.popup;
@@ -609,9 +621,11 @@ cwarn(`Connected: ${is_connected}`);
 });
 const AUTH_CB = onAuthStateChanged(fbase_auth, user => {
 	cur_user = user;
-	if (!cur_user){
-//		next_node_id = undefined;
-//		cur_sid = undefined;
+	if (cur_user){
+		globals.auth.github.uid = cur_user.providerData[0].uid;
+	}
+	else if (!cur_user){
+		delete globals.auth.github.uid;
 		db = undefined;
 	}
 cwarn("User", cur_user);
@@ -645,7 +659,7 @@ if (!(Number.isFinite(parId) && isStr(name))){
 
 let path = `${parId}/${name}`;
 let node = {parId, path, type: "d"};
-await UPDATE(UBASE(),{
+let rv = await UPDATE(UBASE(),{
 	next_node_id: {
 		nodeid: this.nextNodeId+1,
 		sid: this.sid
@@ -657,6 +671,11 @@ await UPDATE(UBASE(),{
 		type: "d"
 	}
 });
+if (isErr(rv)){
+cerr(rv);
+return rv;
+}
+
 let id = this.nextNodeId;
 this.nextNodeId++;
 return id;
@@ -667,17 +686,18 @@ if (!(Number.isFinite(parId) && isStr(name))){
 	throw new Error(`Invalid args to createFileNode`);
 }
 
+let id = this.nextNodeId;
 let path = `${parId}/${name}`;
 let use_blob_id;
 if (!val) use_blob_id = 0;
-else use_blob_id = this.nextNodeId;
+else use_blob_id = id;
 
 let obj = {
 	next_node_id: {
-		nodeid: this.nextNodeId+1,
+		nodeid: id+1,
 		sid: this.sid
 	},
-	[`nodes/${this.nextNodeId}`]: {
+	[`nodes/${id}`]: {
 		parId,
 		path,
 		blobId: use_blob_id,
@@ -699,20 +719,24 @@ cwarn("WHAT THE HELL TYPE IS THIS???");
 log(val);
 		throw new Error("UNKNOWN FILE VALUE TYPE IN createFileNode!!! (see value above)");
 	}
-	obj[`blobs/${this.nextNodeId}`] = {
+	obj[`blobs/${id}`] = {
 		sid: this.sid,
 		contents: B64(bytes)
 	}
 	sz = bytes.byteLength;
 }
 else sz = 0;
-
 this.nextNodeId++;
-await UPDATE(UBASE(), obj);
-return sz;
+let rv = await UPDATE(UBASE(), obj);
+if (isErr(rv)){
+cerr(rv);
+return rv;
+}
+return {id, size: sz};
+//return sz;
 
 }//»
-async getDirList(ghid, parId){/*«*/
+async getDirList(ghid, parId){//«
 let ref = REF(`LOTW/${ghid}/nodes`);
 let c1 = orderByChild('parId');
 let c2 = equalTo(parId);
@@ -728,13 +752,76 @@ return [];
 }
 return snap.val();
 
-}/*»*/
+}//»
+async setBlob(blob_id, node_id, val, start_bytes){//«
+if (!isNum(blob_id)){
+DIE(`BLOBID IS NaN --> ${blob_id}`);
+}
+	let bytes;
+	if (isStr(val)){
+		bytes = (new TextEncoder()).encode(val);
+	}
+	else if (val instanceof Uint8Array){
+		bytes = val;
+	}
+	else{
+cwarn("WHAT THE HELL TYPE IS THIS???");
+log(val);
+		throw new Error("UNKNOWN FILE VALUE TYPE IN createFileNode!!! (see value above)");
+	}
+	if (start_bytes){
+		let end_bytes = bytes;
+		bytes = new Uint8Array(start_bytes.byteLength + end_bytes.byteLength);
+		bytes.set(start_bytes, 0);
+		bytes.set(end_bytes, start_bytes.byteLength);
+	}
+	let obj = {};
+	let use_blob_id;
+	let do_inc;
+	if (blob_id === 0) {
+		use_blob_id = this.nextNodeId;
+cwarn(`UPDATING THE blobId of node(${node_id}) to ${use_blob_id}`);
+		do_inc = true;
+		obj[`nodes/${node_id}/blobId`] = use_blob_id;
+		obj['next_node_id'] = {
+			nodeid: this.nextNodeId+1,
+			sid: this.sid
+		};
+	}
+	else{
+		use_blob_id = blob_id;
+		do_inc = false;
+	}
+/*«
+	let obj = {
+		[`blobs/${blob_id}`]: {
+			sid: this.sid,
+			contents: B64(bytes)
+		}
+	};	
+»*/
+	obj[`blobs/${use_blob_id}`] = {
+		sid: this.sid,
+		contents: B64(bytes)
+	};
+	let rv = await UPDATE(UBASE(), obj);
+if (isErr(rv)){
+cerr(rv);
+return;
+}
+	if (do_inc) this.nextNodeId++;
+	return bytes.byteLength;
+}//»
 
 }//»
 
 //Funcs«
 
-const UID = () =>{if (cur_user && cur_user.providerData) return cur_user.providerData[0].uid;};
+const UID = () =>{
+	if (cur_user && cur_user.providerData) return cur_user.providerData[0].uid;
+};
+globals.funcs["netfs.getUserId"] = UID;
+
 const UBASE = ()=> {//«
 	let id = UID();
 	if (!id) return;
@@ -875,28 +962,10 @@ cwarn("GET STATUSES...");
 	return true;
 };//»
 
+//Exported functions (to sys/fs.js)
 const get_user_dir_list = async (ghid, parId, path)=>{//«
-/*«
-let path_enc = "";
-if (path){
-	let arr = path.split("/");
-	for (let name of arr){
-		path_enc+=`/kids/${encode_key(name)}`;
-	}
-}
-let fullpath = `/user/${ghid}${path_enc}/list`;
-let ref = get_ref(fullpath); 
-
-let snap = await get_value(ref);
-if (isErr(snap)){
-	return snap;
-}
-if (!snap.exists()){
-	return new Error(`path not found`);
-}
-return snap.val();
-»*/
-cwarn(`GET(${ghid}): <${path}>`);
+//cwarn(`GETLIST(${ghid}): <${path}>`);
+cwarn(`GETLIST(${ghid}): <${parId}> (${path})`);
 if (!parId) parId = 0;
 let rv = await db.getDirList(ghid, parseInt(parId));
 let keys = Object.keys(rv);
@@ -920,15 +989,16 @@ return {
 	blobIds
 }; 
 
-};//»
+};
 globals.funcs["netfs.getUserDirList"] = get_user_dir_list;
-
+//»
+const fb_read = async(ghid, blobId, opts={}) => {//«
 //const fb_read = async(ghid, parid, name, opts={}) => {
-const fb_read = async(ghid, blobId, opts={}) => {
-//cwarn(`READ(${ghid}): ${parid}/${name}`);
-//log("OPTS", opts);
-//log(`GET: /LOTW/${ghid}/blobs/${blobId}`);
-
+cwarn(`READ(LOTW/${ghid}/blobs/${blobId})`);
+	if (!blobId) {
+		if (opts.forceText) return "";
+		return new Uint8Array(0);
+	}
 	let rv = await GET(`LOTW/${ghid}/blobs/${blobId}`);
 	if (isErr(rv)) return;
 	let bytes = FROMB64(rv.val().contents);
@@ -936,128 +1006,18 @@ const fb_read = async(ghid, blobId, opts={}) => {
 		return new TextDecoder().decode(bytes);
 	}
 	return bytes;
-
 };
-
 globals.funcs["netfs.fbRead"] = fb_read;
+//»
 const fb_write = async(path, val, opts={})=> {//«
 //This must be a fullpath
 cwarn(`WRITE(${path})`);
-/*«
-if (!is_connected && !opts.offline){
-	return new Error("not connected (use --offline to force)");
-}
-
-let saypath = path;
-if (!path.match(/^\x2fusers\x2f/)){
-return new Error(`${path}: invalid path`);
-}
-let gh = globals.auth.github;
-if (!(gh.uid && gh.login)){
-return new Error(`Not logged in`);
-}
-let arr = path.split("/");
-arr.shift();
-arr.shift();
-let username = arr.shift();
-if (username !== gh.login){
-return new Error(`Permission denied`);
-}
-path = arr.join("/");
-if (!arr.length) {
-	return new Error(`'${saypath}': invalid path`);
-}
-let rel_path_enc = "";
-let name;
-if (path.match(/\x2f/)) {
-if (path === "/"){
-return new Error("'/': invalid path");
-}
-	let arr = path.split("/");
-	name = arr.pop();
-	for (let name of arr){
-		rel_path_enc+=`/kids/${encode_key(name)}`;
-	}
-}
-else{
-	name = path;
-}
-let base_path = `/user/${gh.uid}${rel_path_enc}`;
-let list_ref = get_ref(`${base_path}/list`);
-let snap = await get_value(list_ref);
-if (isErr(snap)){
-	return snap;
-}
-if (!snap.exists()){
-	if (!rel_path_enc) return new Error("you must create your user directory with fbmkhomedir!");
-	else{
-		return new Error(`the parent directory was not found`);
-	}
-}
-
-
-let list = snap.val();
-let ind = list.names.indexOf(name);
-if (ind >= 0){
-	if (list.vals[ind] === FBASE_DIRECTORY_VAL){
-		return new Error(`'${name}': cannot write to the directory`);
-	}
-	else{
-//We have a value and a file (update it)
-		list.names.splice(ind, 1);
-		list.vals.splice(ind, 1);
-	}
-}
-
-
-let bytes;
-if (isStr(val)) {
-	bytes = (new TextEncoder()).encode(val);
-}
-else if (val instanceof Uint8Array){
-	bytes = val;
-}
-else{
-log(val);
-return new Error("Unknown value given to fb_write (see console)");
-}
-let sz = bytes.byteLength;
-let str = B64(bytes);
-
-let use_len;
-if (!list.names[0]){
-	list.names = [name];
-	list.vals = [sz];
-	use_len = 1;
-}
-else{
-	list.names.push(name);
-	list.vals.push(sz);
-	let rv = parallel_sort(list.names, list.vals);
-	list.names = rv[0];
-	list.vals = rv[1];
-	use_len = list.names.length;
-}
-
-let enc_path = encode_key(name);
-
-let use_obj = {type: "f", size: sz, contents: str};
-
-let update_obj = {
-	list,
-	size: use_len,
-	[`kids/${enc_path}`]: use_obj
-};
-if (!await update(base_path, update_obj)) return;
-return sz;
-»*/
 
 let saypath = path;
 if (!path.match(/^\x2fusers\x2f/)){
 	return new Error(`${path}: invalid path`);
 }
 if (!db){
-cerr("Not logged in");
 	return new Error(`Not logged in`);
 }
 let arr = path.split("/");
@@ -1065,57 +1025,57 @@ arr.shift();
 arr.shift();
 let username = arr.shift();
 if (username !== db.login){
-cerr("Permission denied");
 	return new Error(`Permission denied`);
 }
 let name = arr.pop();
 if (!name){
-cerr("WUTNOFILENAME");
-return;
+return new Error("WUTNOFILENAME");
 }
 let parpath = arr.join("/");
-
 let parId;
 if (!parpath) parId = 0;
 else {
-cerr("HAVEPARPATH!!!");
-return;
+	let parnode = await parpath.toNode();
+	if (!parnode) {
+		return new Error(`NOPARNODE (${parpath})`);
+	}
+	parId = parnode.id;
 }
-log(`<${parpath}> <${name}>`);
+log(`<${parpath}>(${parId}) <${name}>`);
+if (!is_connected){
+	return new Error("Not connected!");
+}
 return await db.createFileNode(parId, name, val);
 
-//log(db);
-//cwarn(`OK: ${username} === ${db.login}`);
-
-/*
-let update_obj = {
-	nodes: {
-		[node_id]: {
-			type: "f",
-			parId: par_id,
-			blobId: node_id,
-			path: `${par_id}/${name}`
-		}
-	},
-	blobs: {
-		[node_id]: {
-			contents: bytes.toBase64(),
-			meta: {
-				//...
-			}
-		}
-	},
-	next_node_id: increment(1)
 };
-await update("/$ghid", update_obj); // If this fails, no incrementing is done
-*/
-
-
-
-};
-//»
 globals.funcs["netfs.fbWrite"] = fb_write;
+//»
+const fb_set_blob = async (uid, node_id, blob_id, val, opts={}) => {//«
+if (uid !== UID()){
+cerr(`uid mismatch: ${uid} !== ${UID()}`);
+return;
+}
+if (!Number.isFinite(blob_id)){
+cerr(`INVALID BLOB_ID (NAN: ${blob_id})`);
+return;
+}
+if (blob_id <= 0){
+cerr(`BLOB_ID <= 0 (${blob_id})`);
+return;
+}
+let start_bytes;
+if (opts.append){
+let rv = await fb_read(uid, blob_id);
+if (!(rv instanceof Uint8Array)){
+	return;
+}
+start_bytes = rv;
+}
+return db.setBlob(blob_id, node_id, val, start_bytes);
 
+};
+globals.funcs["netfs.fbSetBlob"] = fb_set_blob;
+//»
 const fb_mkdir = async(parpath, parId, name) =>{//«
 
 
@@ -1148,9 +1108,9 @@ cwarn(`MKDIR: <${parpath}> <${name}>`);
 return await db.createDirNode(parseInt(parId), name);
 
 
-};//»
+};
 globals.funcs["netfs.fbMkdir"] = fb_mkdir;
-
+//»
 const fb_get_users_node_by_name_and_par = async (name, parnode) => {//«
 // parnode.appData was undefined after mkDir
 //cwarn('PARNODE');
@@ -1189,11 +1149,9 @@ return {
 	val: typ
 };
 
-};//»
+};
 globals.funcs["netfs.getUsersNodeByNameAndPar"] = fb_get_users_node_by_name_and_par;
-
-
-
+//»
 
 //»
 

@@ -1,8 +1,8 @@
-/*9/3/25: Have been doing a major update to piping logic in shell.js. The derived commands
+/*9/3/25: Have been doing a major update to piping logic in shell.js. The derived commands«
 should define pipeIn methods for streaming purposes, and pipeDone methods in order to
 receive every all at once in a JS array, after the EOF has been received.
 com_brep uses a highly non-trivial piping logic using Uint8Array's.
-*/
+»*/
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -439,7 +439,8 @@ return {mess: "YIM ON THE YIM YIM YIM", type: 2};
 			let path = arr.join("/");
 			parnode = await fsapi.pathToNode(path);
 			if (!parnode) return this.no(`${path}: no such directory`);
-			if (!await fsapi.checkDirPerm(path)) return this.no(`${fullpath}: permission denied`);
+//			if (!await fsapi.checkDirPerm(path)) return this.no(`${fullpath}: permission denied`);
+			if (!parnode.okWrite) return this.no(`${fullpath}: permission denied`);
 			val = "";
 			typ = parnode.root.type;
 		}
@@ -676,13 +677,12 @@ async run(){
 			err(`${parpath}: Not a directory`);
 			continue; 
 		}
-
-		let OK_TYPES = [FS_TYPE, SHM_TYPE];
+		let OK_TYPES = [FS_TYPE, SHM_TYPE, USERS_TYPE];
 		if (!OK_TYPES.includes(parnode.type)) {
 			err(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
 			continue; 
 		}
-		if (!await fsapi.checkDirPerm(parnode)) {
+		if (!parnode.okWrite) {
  			err(`${path}: Permission denied`);
 			continue;
 		}
@@ -767,7 +767,8 @@ async run(){
 			continue; 
 		}
 //		if (!await fsapi.checkDirPerm(parnode)) {
-		if (parnode.type === FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+		if (!parnode.okWrite) {
+//		if (parnode.type === FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 			err(`${fullpath}: permission denied`);
 			continue;
 		}
@@ -877,7 +878,8 @@ async run(){
 		return err("the target node does not have an associated blob in the blob store");
 	}
 
-	if (!await fsapi.checkDirPerm(target_node.par)) {
+//	if (!await fsapi.checkDirPerm(target_node.par)) {
+	if (!target_node.par.okWrite) {
 		return err(`${target_node.par.fullpath}: permission denied`);
 	}
 
@@ -897,7 +899,8 @@ async run(){
 	if (parnode.type !== FS_TYPE) {
 		return err(`${fullpath}: the parent directory is not of type '${FS_TYPE}'`);
 	}
-	if (!await fsapi.checkDirPerm(parnode)) {
+//	if (!await fsapi.checkDirPerm(parnode)) {
+	if (!parnode.okWrite) {
 		return err(`${path}: permission denied`);
 	}
 	let newnode = await fsapi.makeHardLink(parnode, fname, blobid);
@@ -943,7 +946,8 @@ async run(){
 	if (parnode.type !== FS_TYPE) {
 		return err(`${fullpath}: the parent directory is not of type '${FS_TYPE}'`);
 	}
-	if (!await fsapi.checkDirPerm(parnode)) {
+//	if (!await fsapi.checkDirPerm(parnode)) {
+	if (!parnode.okWrite) {
 		return err(`${path}: permission denied`);
 	}
 	let newnode = await fsapi.makeLink(parnode, fname, target, normPath(target, this.term.cur_dir));

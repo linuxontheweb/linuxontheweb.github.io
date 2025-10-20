@@ -698,7 +698,8 @@ if (op==="-w"){//«
 	let usenode;
 	if (node.isDir) usenode = node;
 	else usenode = node.par;
-	return maybe_neg(await fsapi.checkDirPerm(usenode));
+//	return maybe_neg(await fsapi.checkDirPerm(usenode));
+	return maybe_neg(usenode.okWrite);
 }//»
 if (op==="-s"){//«
 	if (!node.isFile) return maybe_neg(true);
@@ -1328,12 +1329,34 @@ let typ = parnode.type;
 if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||USERS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
 	return `${fname}: invalid or unsupported path`;
 }
-if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+//if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
+if (!parnode.okWrite) {
 	return `${fname}: Permission denied`;
 }
-if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) return `${fname}: Could not write to the file`;
-return true;
+if (node){
+	if (!await node.setValue(val, {append: op === ">>"})) return `${fname}: Could not write to the file`;
+}
+else{
+	if (!await fsapi.writeFile(fullpath, val)) return `${fname}: Could not write to the file`;
+}
 
+/*
+if (!node || op===">>"){
+	if (!await fsapi.writeFile(fullpath, val, {append: true})) return `${fname}: Could not write to the file`;
+}
+else if (op === ">"){
+cwarn("CLOBBER: call setValue on node");
+//log(node);
+let rv = await node.setValue(val);
+log("RETURNED", rv);
+return true;
+}
+else{
+cwarn(`UNKNOWN REDIRECT OPERATOR: '${op}'`);
+return `Unknown redirect operator: '${op}'`;
+}
+return true;
+*/
 }//»
 
 dup(){

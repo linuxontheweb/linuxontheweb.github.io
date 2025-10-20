@@ -2904,7 +2904,8 @@ addDOMListeners(){//«
 			if (CDICN){
 				let thispath = this.fullpath;
 				if (CDICN.path === thispath) return nogo();
-				if (!await fsapi.checkDirPerm(thispath)||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
+//				if (!await fsapi.checkDirPerm(thispath)||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
+				if (!this.app.node.okWrite||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
 				didleave = false;
 				if (!CDICN) return;
 				if (!didleave) on();
@@ -4710,7 +4711,8 @@ wrapper.onmouseover = async e => {//«
 		ref.type;
 		node = ref;
 	}
-	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
+//	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
+	if (CDICN.noMove || typ!==FS_TYPE || !node.okWrite || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
 		not_allowed = true;
 	}
 	didleave = false;
@@ -5981,7 +5983,9 @@ the prevPaths array still holds good.*/
 	if (check_special_ext(node, useApp)) return;
 //	if (!useApp && check_special_ext(node)) return;
 	
-	if (typ==FS_TYPE&&!fs.check_fs_dir_perm(node)) return noopen("permission denied");
+//	if (typ==FS_TYPE&&!fs.check_fs_dir_perm(node)) return noopen("permission denied");
+//log(node.par);
+	if (typ==FS_TYPE&&!node.par.okWrite) return noopen("permission denied");
 	let ret = await node.bytes;
 	if (!ret) return noopen();
 	icn.node = node;
@@ -7717,7 +7721,8 @@ api.saveAs=(win, ext)=>{//«
 					win.saveFolder.forceKill();
 					win.saveFolder = null;
 					if (!fwin) Y({});
-					else Y({path: fwin.fullpath, name: savename});
+//					else Y({path: fwin.fullpath, name: savename});
+					else Y({parNode: fwin.app.node, name: savename});
 					CWIN = null;
 					win.up();
 					win.on();

@@ -395,6 +395,7 @@ cwarn("No path given (Win._fullpath)");
 	}
 	dir = await fs.pathToNode(path);
 	if (!dir) {
+		delete this.node;
 		if (path) poperr(`Directory not found: ${path}`);
 		else cwarn("Opening in 'app mode'");
 		return;
@@ -428,7 +429,7 @@ cwarn("No path given (Win._fullpath)");
         load_dir();
     }//»
 	else load_dir();
-
+	this.node = dir;
 	if (dir.type!==FS_TYPE) {
 		num_entries = Object.keys(dir.kids).length-2;
 		stat_num();

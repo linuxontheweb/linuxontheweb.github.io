@@ -16,6 +16,106 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
+
+/*10/19/25: LOTS OF CHANGES! «
+
+The notes below are from earlier in the day. I got rid of all invocations of checkDirPerm
+and check_fs_dir_perm, and replaced with (getter) DirNode.okWrite (@SIEMGKG).
+
+I did a major overhaul by getting rid of all external invocations of saveFsByPath.
+writeFile can only be called when writing new files. Otherwise, use the given
+node's setValue method (currently only implemented on FileNode or NetFileNode).
+
+In apps/Folder.js, I added 'this.node' property to show up as Win.app.node, in
+order to clean up the logic of calling the desktop's saveAs (e.g. from TextEdit).
+
+*	*	*
+
+VERY UGLY THINGS GOING ON @WNGKHPLK. AFTER ALL THESE YEARS, THERE IS *STILL* NO
+RHYME OR REASON RELATED TO WHAT IS RETURNED FROM THE VARIOUS FILE SAVING/WRITING FUNCTIONS. 
+WE ARE CURRENTLY RETURNING A NUMBER (BYTES WRITTEN), BUT IF A NODE IS BEING CREATED, THEN 
+THE NEW NODE'S ID IS A MUCH, MUCH MORE SIGNIFICANT PIECE OF INFORMATION.
+
+The fundamental distinction I want to make is:
+1) If a file exists (pathToNode yields a node), then use the node's setValue method
+to handle all write operations.
+2) If not, use writeFile.
+
+saveFsByPath
+Returns«
+
+let rv = await write_blob(await node.entry, blob, opts); // rv == {size: blob.size};
+
+node.size = rv.size;
+if (opts.retObj) {
+	rv.node = node;
+	return rv;
+}
+return node;
+»
+
+vim«
+//We want the size information here because of reporting it.
+let opts={retObj: true};
+//...
+if (edit_ftype === USERS_TYPE){
+	let node = await fsapi.writeFile(usepath, val);
+	if (node) rv = {node, size: node.size};
+}
+else {
+	rv = await fsapi.saveFsByPath(usepath, val, opts);
+}
+if (!(rv&&rv.node)){
+//REPORT ERROR!!!
+return;
+}
+»
+cp from MOUNT_TYPE (@JPDKAJD)
+cp from FS_TYPE -> copy_node (@EYTKFHSC)
+
+writeFile (calls saveFsByPath)
+Shell redirect (Stdout.write)«
+
+if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) {
+	return `${fname}: Could not write to the file`;
+}
+return true;
+»
+Desktop«
+In the desktop, when going through the gui to create a new text file, save_icon_editing->doend
+calls writeFile.
+»
+TextEdit«
+
+if (topwin.icon){
+    let rv = await topwin.icon.node.setValue(area.value);
+    if (rv && !Number.isFinite(rv.size)) poperr("Could not save the file");
+    else{
+        statbar.innerText = `${rv.size} bytes written`;
+    }
+    return;
+}
+else if (topwin.fullpath){
+cwarn("Got topwin.fullpath but not topwin.icon!!!");
+    let rv = await fsapi.writeFile(topwin.fullpath, area.value, {noMakeIcon: true});
+    if (!rv) return poperr("Could not write the file");
+    statbar.innerText = `${rv.size} bytes written`;
+    return;
+}
+//...
+let node = await fsapi.writeFile(fullpath, area.value);
+//...
+Win.node = node;
+//»
+Terminal: Saving history files, etc
+com_record (coms/extra.js)
+
+
+com_ytdl (coms/yt.js): Old style command, depends upon websockets backend won't work unless updated.
+
+
+In DirNode, just made an okWrite getter method @SIEMGKG
+»*/
 /*9/29/25: Proposing: NetFileNode«
 
 Let's put a new kind of FSNode in here (NetFileNode @TWKMJORH) devoted to
@@ -107,6 +207,8 @@ const {
 	isNum,
 	isInt,
 	isStr,
+	isBool,
+	isFunc,
 	isEOF,
 	isErr,
 //	isArr,
@@ -554,10 +656,30 @@ constructor(name, par, data){//«
 	this.isDir = true;
 	this.appName = FOLDER_APP;
 }//»
-
 setName(val){//«
 	this._name = val;
 	this.baseName = val;
+}//»
+//SIEMGKG
+get okWrite(){//«
+cwarn(`OKWRITE: ${this.fullpath}`);
+	let obj = this;
+	while (obj.treeroot !== true) {
+		if (obj.readonly){
+			return false;
+		}
+		if ("perm" in obj) {
+			let perm = obj.perm;
+			if (isBool(perm)) return perm;
+			if (isStr(perm)) return (globals.user.CURRENT_USER === perm);
+			if (isFunc(perm)) return obj.perm();
+			else {
+cerr("Unknown obj.perm field:", obj);
+			}
+		}
+		obj = obj.par;
+	}
+	return false;
 }//»
 
 }//»
@@ -689,7 +811,6 @@ async setValue(val, opts={}){//«
 cerr("Unknown value", val);
 		return;
 	}
-	opts.node = this;
 	if (this.blobId===NULL_BLOB_FS_TYPE){//«
 		if (!await this.getRealBlobId()){
 cerr("Could not getRealBlobId()!?!?!?");
@@ -698,7 +819,8 @@ cerr("Could not getRealBlobId()!?!?!?");
 	}//»
 	opts.node = this;
 	let rv = await write_blob(await this.entry, blob, opts);
-	rv.node = this;
+//	rv.node = this;
+	this.size = rv.size;
 	return rv;
 }//»
 get entry(){//«
@@ -773,10 +895,25 @@ if (isErr(rv)){
 else return rv;
 }//»
 getValue(opts){return this.#_getVal(opts);}
+
 async setValue(val, opts){//«
-	let rv =  await writeFile(this.fullpath, val);
+
+let rv = await globals.funcs["netfs.fbSetBlob"](this.appData.id, this.id, this.blobId, val, opts);
+if (isNum(rv) && rv >= 0){
+this.size = rv;
+return true;
+}
+cwarn("Unknown value returned from netfs.fbSetBlob!");
+log(rv);
+//«
+/*
+	let rv = await writeFile(this.fullpath, val);
 	if (!rv) return;
-	return {node: rv, size: rv.size};
+	this.size = rv.size;
+	return true;
+*/
+//	return {node: rv, size: rv.size};
+//»
 }//»
 get bytes(){return this.#_getVal();}
 get text(){return this.#_getVal({forceText: true});}
@@ -1127,7 +1264,8 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 			return;
 		}
 
-		if (!check_fs_dir_perm(obj.par, is_root)) errcb(`${path}: permission denied`);
+//		if (!check_fs_dir_perm(obj.par, is_root)) errcb(`${path}: permission denied`);
+		if (!obj.par.okWrite) errcb(`${path}: permission denied`);
 		else if (obj.writeLocked()) errcb(`${path} is "write locked"`);
 		else return obj;
 		return;
@@ -1154,7 +1292,8 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 		errcb(`${path}: not an empty folder`);
 		return;
 	}
-	if (!check_fs_dir_perm(obj, is_root)) {
+//	if (!check_fs_dir_perm(obj, is_root)) {
+	if (!obj.okWrite) {
 		errcb(`${path}: permission denied`);
 		return;
 	}
@@ -1281,7 +1420,8 @@ else if (args.length===1){
 	}
 }
 if (destret && destret.type == FS_TYPE) {
-	if (!check_fs_dir_perm(destret, is_root)) {
+//	if (!check_fs_dir_perm(destret, is_root)) {
+	if (!destret.okWrite) {
 		no_move_all();
 		return cberr(`${topatharg}: permission denied`);
 	}
@@ -1464,6 +1604,7 @@ for (let arr of mvarr) {//«
 	if (type==MOUNT_TYPE){//«
 		let tofullpath = `${savedir.fullpath}/${savename}`;
 		let gotbuf = await node.buffer;
+//JPDKAJD
 		let newnode = await saveFsByPath(tofullpath, gotbuf);
 		if (!newnode) {
 			werr(`${tofullpath}: There was a problem saving to the file`);
@@ -1538,9 +1679,10 @@ return true;
 }
 this.com_mv = com_mv;
 //»
-const copy_node=async(node, newName, toNode)=>{//«
+const copy_node = async(node, newName, toNode)=>{//«
 	let newpath = `${toNode.fullpath}/${newName}`;
 	if (util.newPathIsBad(node.fullpath, newpath)) return;
+//EYTKFHSC
 	return saveFsByPath(newpath, await getBlob(node, {binary: true}));
 };//»
 const move_node = async(node, newName, toNode)=>{//«
@@ -1671,61 +1813,62 @@ const writeFile = async(path, val, opts = {}) => {//«
 	arr.shift();
 	let rootdir = arr.shift();
 	if (!rootdir) return invalid();
-	let exists = await pathToNode(path);
-	if (exists && opts.newOnly){
-		if (opts.reject) throw new Error(`The file exists (have 'newOnly')`);
-		else return false;
-	};
-	if (root_dirs.includes(rootdir)||path.match(/\/dev\/shm/)){
-		let node = await saveFsByPath(path, val, opts);
-		if (!(exists || opts.noMakeIcon)) {
-			NS.Desk.move_icon_by_path(null, path, node.appName, {node});
-		}
-		return node;
-	}
-	if (rootdir === "dev"){
+	let is_dev_shm;
+	if (rootdir === "dev" && !(is_dev_shm = path.match(/\/dev\/shm/))){//«
 		let name = arr.shift();
 		if (name==="null"){}
 		else if (name==="log") console.log(val);
 		return true;
+	}//»
+	let exists = await pathToNode(path);
+	if (exists) {
+//	if (exists && !opts.append){
+cwarn("writeFile was called on an existing file!?!?!");
+		if (opts.reject) throw new Error(`The file exists`);
+		else return false;
 	}
-	if (rootdir === "users"){
-
-let rv = await globals.funcs["netfs.fbWrite"](path, val);
-if (isErr(rv)){
-if (opts.reject) throw rv;
-else return false;
-}
-if (isNum(rv)) {
-	let kid;
-	if (exists) kid = exists;
-	else {
+	if (root_dirs.includes(rootdir)||is_dev_shm){//«
+//	if (root_dirs.includes(rootdir)||path.match(/\/dev\/shm/)){
+		let node = await saveFsByPath(path, val, opts);
+//		if (!(exists || opts.noMakeIcon)) {
+		if (!opts.noMakeIcon) {
+			NS.Desk.move_icon_by_path(null, path, node.appName, {node});
+		}
+		return node;
+	}//»
+	else if (rootdir === "users") {//«
+//WNGKHPLK
+		let rv = await globals.funcs["netfs.fbWrite"](path, val);
+		if (isErr(rv)){
+cerr(rv);
+			if (opts.reject) throw rv;
+			else return false;
+		}
+		let node;
 		let arr = path.split("/");
 		let name = arr.pop();
 		let parpath = arr.join("/");
 		let parnode = await pathToNode(parpath);
 		if (!parnode) {
-			cwarn(`NO PARENT NODE FOUND AT: ${parpath}`);
+cwarn(`NO PARENT NODE FOUND AT: ${parpath}`);
 			return;
 		}
 		else{
-			kid = mk_dir_kid(parnode, name, {isNetFile: true, appData: parnode.appData});
-			parnode.kids[name] = kid;
+			node = mk_dir_kid(parnode, name, {isNetFile: true, appData: parnode.appData});
+			parnode.kids[name] = node;
+//			if (!(exists || opts.noMakeIcon)) {
+			if (!opts.noMakeIcon) {
+				NS.Desk.move_icon_by_path(null, path, node.appName, {node});
+			}
 		}
-	}
-	kid.size = rv;
-	return kid;
-}
-cerr("Unkown value returned from netfs.fbWrite");
-log(rv);
-return;
-	}
+		node.id = rv.id;
+		node.size = rv.size;
+		return node;
+	}//»
+	else {
 cerr("Invalid or unsupported root dir:\x20" + rootdir);
+	}
 }//»
-const writeNewFile=(path, val, opts = {})=>{//«
-	opts.newOnly = true;
-	return writeFile(path, val, opts)
-};//»
 const writeDataFile=(path, val, opts = {})=>{//«
 	if (!(isObj(val) && isStr(val.type))){
 cerr(`${path}: Expected an object with a 'type' field! (for inline data storage)`);
@@ -1820,8 +1963,21 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	let parid = parobj.id;
 	let rv;
 	let id;
-	let is_shm;
-	if (is_shm = parobj.type==SHM_TYPE){
+	let is_shm = parobj.type==SHM_TYPE;
+	let is_users = parobj.type==USERS_TYPE;
+	if (is_shm){
+	}
+	else if (is_users){
+		let rv = await globals.funcs["netfs.fbWrite"](`${parobj.fullpath}/${name}`);
+		if (isErr(rv)){
+cerr(rv);
+			return;
+		}
+		id = rv.id;
+if (!isNum(id)){
+cerr(`ID IS NaN!?! id=${id}`);
+return;
+}
 	}
 	else {
 		if (opts.data) {
@@ -1841,6 +1997,9 @@ cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)
 	});
 
 	if (is_shm){
+	}
+	else if (is_users){
+		kid.blobId = 0;
 	}
 	else if (opts.data) {
 		kid.blobId = IDB_DATA_TYPE;
@@ -1968,15 +2127,6 @@ const makeLink=async(parobj, name, target, fullpath)=>{//«
 	return kid;
 };//»
 
-const checkDirPerm=async(path_or_obj,opts={})=>{//«
-	let obj;
-	if (isStr(path_or_obj)){
-		obj = await pathToNode(path_or_obj);
-		if (!obj) return Y(false);
-	}
-	else obj = path_or_obj;
-	return check_fs_dir_perm(obj, opts.root, opts.sys, opts.user);
-};//»
 
 //»
 //Init/Populate/Mount Dirs«
@@ -2315,10 +2465,11 @@ parobj.done=true;
 return kids;
 
 }//»
-const populate_users_dirobj = (parobj, opts) =>{//«
+const populate_users_dirobj = (parobj, opts) => {//«
 	let kids = parobj.kids;
 	let arr = opts.vals;
-	let login = globals.auth.github.login;
+//	let login = globals.auth.github.login;
+	let uid = globals.auth.github.uid;
 	for (let i=0; i < arr.length; i+=2){
 		let name = arr[i];
 		let id = arr[i+1];
@@ -2326,14 +2477,16 @@ const populate_users_dirobj = (parobj, opts) =>{//«
 			isDir: true,
 			appData: {id}
 		});
-		kid.perm = name === login;
+//		kid.perm = name === login;
+//		kid.perm = uid === id;
+		kid.perm = () => {return id === globals.auth.github.uid;};
 		kid.id = 0;
 		kids[name] = kid;
 	}
 	parobj.done = true;
 	return kids;
 };//»
-const populate_user_dirobj = async(parobj, opts)=>{//«
+const populate_user_dirobj = async(parobj, opts) => {//«
 
 let kids = parobj.kids;
 //let id = parobj.appData
@@ -2342,12 +2495,15 @@ arr.shift();
 arr.shift();
 let name = arr.shift();
 
-parobj.perm = name === globals.auth.github.login;
+//parobj.perm = parobj.id === globals.auth.github.uid;
+parobj.perm = ()=>{return parobj.appData.id === globals.auth.github.uid;};
+//parobj.perm = name === globals.auth.github.login;
 //log(`PERM: ${parobj.perm}`);
 
 let appData = root.kids.users.kids[name].appData;
 let path = arr.join("/");
 //log(parobj);
+//The path argument is for debugging (not needed to get the list from the database)
 let list = await globals.funcs["netfs.getUserDirList"](appData.id, parobj.id, path);
 if (isErr(list)){
 cerr(list);
@@ -2808,45 +2964,6 @@ cerr(rv.message)
     return false;
 }//»
 
-const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
-	if (is_sys) return true;
-	let iter = 0;
-	while (obj.treeroot !== true) {
-		iter++;
-		if (iter >= 10000) throw new Error("UMWUT");
-		if (obj.readonly){
-			if (is_sys) return true;
-			return false;
-		}
-		if ("perm" in obj) {
-			let perm = obj.perm;
-			if (perm === true) {
-				return true;
-			}
-			else if (perm === false) {
-				if (is_root) return true;
-				return false;
-			}
-			else if (isStr(perm)) {
-				if (is_root) return true;
-//				let checkname = userarg || Core.get_username();
-				let checkname = userarg || globals.user.CURRENT_USER;
-				return (checkname === perm);
-//				return (Core.get_username() === perm);
-			}
-			else {
-cerr("Unknown obj.perm field:", obj);
-			}
-		}
-		obj = obj.par;
-	}
-
-	if (is_root) return true;
-	return false;
-};
-this.check_fs_dir_perm=check_fs_dir_perm;
-//»
-
 const add_lock_funcs=kid=>{//«
 	let lock = {};
 	kid.unlockFile =()=>{
@@ -3016,12 +3133,11 @@ this.api = {//«
 	makeHardLink,
 	touchFile,
 	mkFile,
-	saveFsByPath,
+//	saveFsByPath,
 	doFsRm,
 	mkDir,
 
 	writeFile,
-	writeNewFile,
 	writeDataFile,
 
 	getBlob,
@@ -3039,7 +3155,7 @@ this.api = {//«
 
 	pathToNode,
 
-	checkDirPerm,
+//	checkDirPerm,
 
 }
 NS.api.fs=this.api;
@@ -3054,3 +3170,60 @@ globals.api.fs=this.api;
 //»
 
 
+
+
+
+
+
+
+
+/*
+const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
+	if (is_sys) return true;
+	let iter = 0;
+	while (obj.treeroot !== true) {
+		iter++;
+		if (iter >= 10000) throw new Error("UMWUT");
+		if (obj.readonly){
+			if (is_sys) return true;
+			return false;
+		}
+		if ("perm" in obj) {
+			let perm = obj.perm;
+			if (perm === true) {
+				return true;
+			}
+			else if (perm === false) {
+				if (is_root) return true;
+				return false;
+			}
+			else if (isStr(perm)) {
+				if (is_root) return true;
+//				let checkname = userarg || Core.get_username();
+				let checkname = userarg || globals.user.CURRENT_USER;
+				return (checkname === perm);
+//				return (Core.get_username() === perm);
+			}
+			else if (isFunc(perm)) return obj.perm();
+			else {
+cerr("Unknown obj.perm field:", obj);
+			}
+		}
+		obj = obj.par;
+	}
+
+	if (is_root) return true;
+	return false;
+};
+this.check_fs_dir_perm=check_fs_dir_perm;
+//»
+onst checkDirPerm=async(path_or_obj,opts={})=>{//«
+	let obj;
+	if (isStr(path_or_obj)){
+		obj = await pathToNode(path_or_obj);
+		if (!obj) return Y(false);
+	}
+	else obj = path_or_obj;
+	return check_fs_dir_perm(obj, opts.root, opts.sys, opts.user);
+};//»
+*/

@@ -66,7 +66,8 @@ const validate_out_path = async(outpath)=>{//«
 	let parpath = arr.join("/");
 	let parnode = await pathToNode(parpath);
 	if (!parnode) return `${parpath}: The directory doesn't exist`;
-	if (! await fsapi.checkDirPerm(parnode)){
+//	if (! await fsapi.checkDirPerm(parnode)){
+	if (!parnode.okWrite){
 		return `${parpath}: permission denied`;
 	}
 	return true;

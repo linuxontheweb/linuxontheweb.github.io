@@ -894,25 +894,6 @@ objToString(obj ){//«
 	return `[object ${obj.constructor.name}]`;
 }
 //»
-async getHistory(val){//«
-	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
-	if (!fnode){
-		if (!await fsapi.mkDir(globals.user.HOME_PATH, ".history")){
-cerr("Could not make the .history folder!");
-			return;
-		}
-	}
-	else if (fnode.appName !== FOLDER_APP){
-		cwarn("History directory path is NOT a directory!!!");
-		return;
-	}
-	let node = await fsapi.pathToNode(HISTORY_PATH);
-	if (!node) return;
-	let text = await node.text;
-	if (!text) return;
-	return text.split("\n");
-}
-//»
 scrollMiddle(){//«
 	const{main}=this;
 	let y1 = main.scrollTop;
@@ -2003,6 +1984,8 @@ historyDownMatching(){//«
 	}
 }//»
 async saveSpecialCommand(){//«
+cwarn("UPDATE saveSpecialCommand to call node.setValue (and not fsapi.writeFile!!!)");
+return;
 	let s = this.getComArr().join("");
 	if (!s.match(/[a-z]/i)) {
 log("Not saving", s);
@@ -2013,7 +1996,8 @@ log("Not saving", s);
 };
 //»
 async appendToHistory(str){//«
-	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
+//	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
+	if (!await this.historyNode.setValue(`${str}\n`, {append: true})) {
 cwarn(`Could not write to history: ${HISTORY_PATH}`);
 	}
 };
@@ -2049,6 +2033,30 @@ async initHistory(termBuffer){//«
 		this.history = arr.reverse();
 	}
 }//»
+async getHistory(val){//«
+	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
+	if (!fnode){
+		if (!await fsapi.mkDir(globals.user.HOME_PATH, ".history")){
+cerr("Could not make the .history folder!");
+			return;
+		}
+	}
+	else if (fnode.appName !== FOLDER_APP){
+		cwarn("History directory path is NOT a directory!!!");
+		return;
+	}
+	let node = await fsapi.pathToNode(HISTORY_PATH);
+	if (!node) {
+		node = await fsapi.touchFile(fnode, "shell.txt");
+		this.historyNode = node;
+		return;
+	}
+	this.historyNode = node;
+	let text = await node.text;
+	if (!text) return;
+	return text.split("\n");
+}
+//»
 
 /*
 async saveHistory(){//«
