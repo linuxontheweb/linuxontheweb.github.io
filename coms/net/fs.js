@@ -780,8 +780,7 @@ log(val);
 	let do_inc;
 	if (blob_id === 0) {
 		use_blob_id = this.nextNodeId;
-//cwarn(`UPDATING THE blobId of node(${node_id}) to ${use_blob_id}`);
-cwarn(`MAKE SURE THAT THE blobId PROPERTY OF THE NetFsDB NODE SOMEHOW GETS UPDATED TO: ${use_blob_id}`);
+//cwarn(`MAKE SURE THAT THE blobId PROPERTY OF THE NetFsDB NODE SOMEHOW GETS UPDATED TO: ${use_blob_id}`);
 		do_inc = true;
 		obj[`nodes/${node_id}/blobId`] = use_blob_id;
 		obj['next_node_id'] = {
@@ -805,8 +804,6 @@ cwarn(`MAKE SURE THAT THE blobId PROPERTY OF THE NetFsDB NODE SOMEHOW GETS UPDAT
 		sid: this.sid,
 		contents: B64(bytes)
 	};
-cwarn("SETBLOB!?!?!?");
-log(obj);
 	let rv = await UPDATE(UBASE(), obj);
 if (isErr(rv)){
 cerr(rv);

@@ -902,7 +902,7 @@ let rv = await globals.funcs["netfs.fbSetBlob"](this.appData.id, this.id, this.b
 //if (isNum(rv) && rv >= 0){
 if (rv && isNum(rv.size) && rv.size >= 0){
 	this.blobId = rv.blobId;
-	this.size = rv;
+	this.size = rv.size;
 	return true;
 }
 cwarn("Unknown value returned from netfs.fbSetBlob!");
