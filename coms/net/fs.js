@@ -83,7 +83,7 @@ MOST RECENT:
 							".validate": "!data.exists() && newData.isString() && newData.val().length < 5"
 						},
 						"blobId": {
-							".validate": "!data.exists() && newData.isNumber()"
+							".validate": "newData.isNumber()"
 						},
 						"sid": {
 							".validate": "newData.isString() && newData.val() === root.child('LOTW').child($ghid).child('cur_session_id').val()" 
@@ -780,7 +780,8 @@ log(val);
 	let do_inc;
 	if (blob_id === 0) {
 		use_blob_id = this.nextNodeId;
-cwarn(`UPDATING THE blobId of node(${node_id}) to ${use_blob_id}`);
+//cwarn(`UPDATING THE blobId of node(${node_id}) to ${use_blob_id}`);
+cwarn(`MAKE SURE THAT THE blobId PROPERTY OF THE NetFsDB NODE SOMEHOW GETS UPDATED TO: ${use_blob_id}`);
 		do_inc = true;
 		obj[`nodes/${node_id}/blobId`] = use_blob_id;
 		obj['next_node_id'] = {
@@ -804,13 +805,19 @@ cwarn(`UPDATING THE blobId of node(${node_id}) to ${use_blob_id}`);
 		sid: this.sid,
 		contents: B64(bytes)
 	};
+cwarn("SETBLOB!?!?!?");
+log(obj);
 	let rv = await UPDATE(UBASE(), obj);
 if (isErr(rv)){
 cerr(rv);
 return;
 }
 	if (do_inc) this.nextNodeId++;
-	return bytes.byteLength;
+return {
+blobId: use_blob_id,
+size: bytes.byteLength
+};
+//	return bytes.byteLength;
 }//»
 
 }//»
@@ -978,7 +985,7 @@ for (let k of keys){
 	let val;
 	if (obj.type==="d") val = -1;
 	else val = 0;
-	blobIds.push(obj.blobId);
+	blobIds.push(obj.blobId||0);
 	names.push(name);
 	vals.push(val);
 }
@@ -995,14 +1002,15 @@ globals.funcs["netfs.getUserDirList"] = get_user_dir_list;
 const fb_read = async(ghid, blobId, opts={}) => {//«
 //const fb_read = async(ghid, parid, name, opts={}) => {
 cwarn(`READ(LOTW/${ghid}/blobs/${blobId})`);
+	let is_text = opts.forceText || opts.text;
 	if (!blobId) {
-		if (opts.forceText) return "";
+		if (is_text) return "";
 		return new Uint8Array(0);
 	}
 	let rv = await GET(`LOTW/${ghid}/blobs/${blobId}`);
 	if (isErr(rv)) return;
 	let bytes = FROMB64(rv.val().contents);
-	if (opts.forceText) {
+	if (is_text) {
 		return new TextDecoder().decode(bytes);
 	}
 	return bytes;
@@ -1059,10 +1067,7 @@ if (!Number.isFinite(blob_id)){
 cerr(`INVALID BLOB_ID (NAN: ${blob_id})`);
 return;
 }
-if (blob_id <= 0){
-cerr(`BLOB_ID <= 0 (${blob_id})`);
-return;
-}
+
 let start_bytes;
 if (opts.append){
 let rv = await fb_read(uid, blob_id);

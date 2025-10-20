@@ -899,9 +899,11 @@ getValue(opts){return this.#_getVal(opts);}
 async setValue(val, opts){//«
 
 let rv = await globals.funcs["netfs.fbSetBlob"](this.appData.id, this.id, this.blobId, val, opts);
-if (isNum(rv) && rv >= 0){
-this.size = rv;
-return true;
+//if (isNum(rv) && rv >= 0){
+if (rv && isNum(rv.size) && rv.size >= 0){
+	this.blobId = rv.blobId;
+	this.size = rv;
+	return true;
 }
 cwarn("Unknown value returned from netfs.fbSetBlob!");
 log(rv);
@@ -2517,7 +2519,7 @@ let blobids = list.blobIds;
 for (let i=0; i < names.length; i++){
 let nm = names[i];
 let val = vals[i];
-let blobid = blobids[i];
+//let blobid = blobids[i];
 let kid;
 if (val === -1){
 	kid = mk_dir_kid(parobj, nm, {
@@ -2530,9 +2532,11 @@ else{
 		isNetFile: true,
 		appData
 	});
+	kid.blobId = blobids[i];
 }
 kid.id = ids[i];
-if (blobid) kid.blobId = blobid;
+//if (blobid) kid.blobId = blobid;
+//if (blobid) kid.blobId = blobid;
 //log(kid);
 kids[nm] = kid;
 }
