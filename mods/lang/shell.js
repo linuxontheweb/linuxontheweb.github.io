@@ -37,6 +37,93 @@ $ import path.to.mycoms
 
 »*/
 
+/*«
+»*/
+
+/*12/3/25: MAJOR OVERHAUL TIME!«
+
+We are going to rename, refactor, and simplify everything as much as possible.
+Let's start by using only echo, pipe, true, false, and compound compositions thereof, then
+add in other commands as we go along (read, cat, grep, wc, etc).
+
+We are going to start with only 2 I/O methods:
+1) stdin: read from terminal
+2) stdout: write to terminal
+
+»*/
+/*12/2/25«
+
+Ways of receiving standard input for all simple commands, in order of precedence
+
+1) Redirected input
+2) Piped input
+
+Otherwise for simple commands defined inside of a compound command:
+3) Redirected input from the nearest enclosing compound command
+4) Piped input from the nearest enclosing compound command
+
+Otherwise (for non-enclosed simple commands or no redirected or piped input in any enclosing compound command):
+5) Read from the terminal's readline method
+
+For the sake of simplicity, let's start by exposing standard input only in an element-wise fashion
+(e.g. line-by-line). So each command can have (something like) a readStdinChunk method (@MDJYEKL), 
+which will continue to spit out EOF objects when all of the input has been exhausted.
+
+Can we cancel out scriptOut? This seems to be an old thing that is no longer defined anywhere.
+
+»*/
+/*12/1/25«
+
+What commands use the default pipeIn pathway, without defining their own pipeIn?
+What *is* the default pathway, anyhow?
+
+Normally, if you just want to wait for all of the input at once (instead of streaming), you
+define pipeDone, which is called with all of the buffered input.
+
+»*/
+
+/*11/30/25: Let's get rid of _pipeIn, and just have a single pipeIn method (that shouldn't be overridden)«
+
+for simple AND compound commands. Then we should allow the command authors to dictate these things:
+1) What types of data they are expecting to flow in (text, Uint8Array's, or instances of class WidgetXYZ)
+	- So Com.pipeIn can check flags set from within the command author's extended class, and either
+	  silently discard, issue warnings, or whatever else in case the wrong data type flows through.
+2) How the data should flow in
+	- Buffer everything until the EOF is reached
+	- Define a certain "atom" of data (e.g. a line of text), allowing the data to be consumed one 
+	  "atomic unit" at a time
+
+There are no commands in here (sys/shell.js) that define pipeIn, but in coms/fs.js, there are:
+- less and vim call addLines on their respective screen-based modules
+- cat calls this.out(val)
+- grep calls this.doGrep(val.split("\n")) 
+- wc calls this.doWC(val.split("\n")) 
+
+Otherwise, the only thing that is done is to check flags, for example:
+	if (this.killed || this.noPipe) return;
+
+For compound commands, the piped input should by default be added to a buffer, the contents
+of which any simple command internal to the compound command can access. Some commands 
+(like grep) are "greedy" and want every bit of input until the EOF is reached, and some 
+(like read) just want the input that was added first. Just verified that the contents
+of a compound command's buffer ARE kept for internal compound commands, e.g.:
+
+~$ doemb(){ read LINE; echo "INPUT: $LINE"; }
+~$ echo $'This is the\ntime in the place\n\nin the thing that is in the there of the thing' | doemb 
+INPUT: This is the
+~$ doodemb(){ doemb; }
+~$ echo $'This is the\ntime in the place\n\nin the thing that is in the there of the thing' | doodemb 
+INPUT: This is the
+~$ doodemb(){ doemb; doemb; }
+~$ echo $'This is the\ntime in the place\n\nin the thing that is in the there of the thing' | doodemb 
+INPUT: This is the
+INPUT: time in the place
+
+
+I'm not sure if com_read @OEHRHFJR should be calling this.readLine method directly like this.
+The only other "major" command that seems to call this.readLine is com_cat, when: this.useTerm == true.
+
+»*/
 /*9/3/25: Let's clean up the logic of piping, so that derived instances DO NOT need to«
 defined a pipeIn method. Let's put a "private" _pipeIn method on class Com.
 
@@ -48,7 +135,7 @@ I'm also a little sketchy about how to handle Uint8Array's inside of pipelines. 
 the only command that seems to use them is com_wget (when sending output). In coms/fs.js,
 com_brep only wants Uint8Array's in its piped input. But since
 I just radically changed piping logic (so that commands don't really need to implement anything),
-I commented out com_brep's  prior pipeIn method (and replaced it with a pipeDone stub).
+I commented out com_brep's prior pipeIn method (and replaced it with a pipeDone stub).
 
 LET'S ALLOW FOR A this.binPipe flag that can be set in init, and that signals the pipeline
 to automatically translate all incoming data into binary data (e.g. Uint8Array).
@@ -189,6 +276,7 @@ const doLoopBreak = (val, com) => {
 	if (val.break === 1 || com.loopNum === 1) return true;
 	return false;
 };
+const DIE = mess => { throw new Error(mess); };
 //»
 
 //«Shell
@@ -959,6 +1047,7 @@ const add_to_env = (arr, env, opts)=>{//«
 //	let use;
 	let err = [];
 	let use = arr[0];
+//log(arr);
 	let assigns = {};
 	while (use) {
 		let which;
@@ -967,6 +1056,11 @@ const add_to_env = (arr, env, opts)=>{//«
 			if (arr[0]===" ") arr.shift();
 			use = arr[0];
 		};
+		if (use.toString().match(/^\s*#/)){
+cwarn(`add_to_env: SKIPPING COMMENT: ${use}`);
+next();
+continue;
+		}
 //log(use.toString());
 //		marr = this.var.assignRE.exec(use.toString());
 		marr = ASSIGN_RE.exec(use.toString());
@@ -1142,7 +1236,7 @@ allLibs: LOTW.libs,
 //this.allLibs = LOTW.libs;
 //»
 
-//Classes     (Com, CompoundCom, ErrCom, Stdin/Stdout, ScriptCom...)«
+//Classes     (BaseCommand, SimpleCommand, CompoundCom, ErrCom, Stdin/Stdout, ScriptCom...)«
 //ZJDEXWL
 const EnvReadLine = class{//«
 
@@ -1339,7 +1433,7 @@ if (node){
 else{
 	if (!await fsapi.writeFile(fullpath, val)) return `${fname}: Could not write to the file`;
 }
-
+return true;
 /*
 if (!node || op===">>"){
 	if (!await fsapi.writeFile(fullpath, val, {append: true})) return `${fname}: Could not write to the file`;
@@ -1365,24 +1459,186 @@ dup(){
 
 }//»
 //COMCLASS
-const Com = class {//«
-	#lines;
-	constructor(name, args, opts, env={}){//«
-		this.#lines = [];
+class BaseCommand {//«
+	#pipeInBuffer;
+	#redirInBuffer;
+	#redirOut;
+	#redirOutBuffer;
+	#subOutBuffer;
+	#haveEOF;
+	#awaitPipeInCb;
+	constructor(){
+	}
+	initPipeInBuffer(){
+		this.#haveEOF = false;
+		this.#pipeInBuffer = [];
+	}
+	initRedirInBuffer(buf){
+if (!isArr(buf)){
+log(buf);
+DIE(`Unknown value as arg to initRedirInBuffer (see above)`);
+}
+		this.#redirInBuffer = buf;
+	}
+	initRedirOutBuffer(arg){
+		this.#redirOut = arg;
+		this.#redirOutBuffer = [];
+		this.haveRedirOut = true;
+	}
+	initSubOutBuffer(arg){
+		this.#subOutBuffer = [];
+		this.haveSubOut = true;
+	}
+	writeOutRedir(){return this.#redirOut.write(this.term, this.#redirOutBuffer, this.env);}
+	out(val, opts={}){//«
+		if (this.shell.cancelled) return;
+		if (this.haveRedirOut){
+			if (isStr(val)) {
+				this.#redirOutBuffer.push(...val.split("\n"));
+			}
+			else if (isEOF(val)){
+				if (this.nextCom){
+					this.nextCom.pipeIn(val);
+				}
+			}
+			else{
+log(val);
+DIE(`Unknown value in the redirect output stream (above)`);
+			}
+		}
+		else if (this.nextCom){
+			this.nextCom.pipeIn(val);
+		}
+		else if(this.parentCom){
+//We are in a compound command's (i.e. our parent's) scope, at the end of a pipeline with no output redirects
+			this.parentCom.out(val);
+		}
+else if (this.subLines){
+//else if (this.haveSubOut){
+//log("SUBLINES", this.#subOutBuffer);
+//log("SUBLINES", this.subLines);
+	if (isStr(val)) {
+		this.subLines.push(...val.split("\n"));
+	}
+	else if (isEOF(val)){}
+	else{
+log(val);
+DIE(`Unknown value in the com sub output stream (above)`);
+	}
+}
+		else {
+			this.resp(val, opts);
+		}
+	}//»
+async readStdinChunk(){//«
+
+if (this.#redirInBuffer){
+	if (!this.#redirInBuffer.length) return EOF;
+	return this.#redirInBuffer.shift();
+}
+else if (this.#pipeInBuffer){
+	if (this.#pipeInBuffer.length){
+		return this.#pipeInBuffer.shift();
+	}
+	else if (this.#haveEOF){
+		return EOF;
+	}
+	else{
+		return new Promise((Y,N)=>{
+			this.#awaitPipeInCb = Y;
+		});
+	}
+}
+else if(this.parentCom){
+// We are in a compound command's (i.e. our parent's) scope, at the start of a pipeline with no input redirects
+	return this.parentCom.readStdinChunk();
+}
+else {
+
+	return await this.readLine();
+
+}
+
+}//»
+pipeIn(val){//«
+
+	let useval = null;
+	let have_cb = this.#awaitPipeInCb;
+	if (isEOF(val)) {
+		this.#haveEOF = true;
+		if (!have_cb) return;
+		useval = val;
+	}
+	else if (isStr(val)){
+		this.#pipeInBuffer.push(...val.split("\n"));
+		if (!have_cb) return;
+		useval = this.#pipeInBuffer.shift();
+	}
+	else{
+	cerr(`Unknown value in pipeIn (want String or EOF!)`);
+	log(val);
+	return;
+	}
+
+	if (have_cb){
+		this.#awaitPipeInCb = undefined;
+		have_cb(useval);
+	}
+
+}//»
+	async readLine(use_prompt){//«
+//XCJEKRNK
+		let ln = await this.term.readLine(use_prompt);
+		return ln;
+	}//»
+	resp(str, opts={}){//«
+		if (this.shell.cancelled) return;
+		const{term}=this;
+		if (this.inBackground){
+			if (opts.isErr){
+				console.error(str);
+			}
+			else{
+				console.log(str);
+			}
+			return;
+		}
+		opts.name = this.name;
+		term.response(str, opts);
+		term.scrollIntoView();
+		term.refresh();
+	}//»
+/*
+async #pipeBytesDone(){//«
+	let blob = new Blob(this.#pipeInBuffer);
+	let bytes = await util.toBytes(blob);
+	this.pipeDone(bytes);
+}//»
+*/
+}//»
+class SimpleCommand extends BaseCommand{//«
+//	#lines;
+	constructor(name, args, opts, env, parentCom){//«
+		super();
+		if (!env) env = {};
+//		this.#lines = [];
+//		this.#haveEOF = false;
 		this.isSimple = true;
 		this.name =name;
 		this.args=args;
 		this.opts=opts;
 		this.numErrors = 0;
 		this.noPipe = false;
+		this.parentCom = parentCom;
+//log(this.name, this.parentCommand);
 		for (let k in env) {
 			this[k]=env[k];
 		}
 //log(this.outRedir);
 //		if (this.outRedir&&this.outRedir.length){
-		if (this.outRedir){
-			this.redirLines = [];
-		}
+//		if (this.outRedir){
+//			this.redirLines = [];
+//		}
 		this.awaitEnd = new Promise((Y,N)=>{//«
 			this.end = (rv)=>{
 				Y(rv);
@@ -1465,7 +1721,7 @@ const Com = class {//«
 	}//»
 	get noStdin(){return(!(this.pipeFrom || this.stdin));}
 	get noArgs(){return(this.args.length===0);}
-	isTermOut(){return !(this.redirLines || this.envRedirLines || this.nextCom || this.envPipeInCb || this.envPipeOutLns || this.scriptOut || this.subLines);}
+	isTermOut(){return !(this.nextCom || this.scriptOut || this.subLines);}
 	expectArgs(num){//«
 		if (!isNum(num)) {
 			this.err(`invalid argument given to expectArgs (see console)`);
@@ -1495,91 +1751,6 @@ log(num);
 	eof(){this.out(EOF);}
 	init(){}
 	run(){this.wrn(`sh:\x20${this.name}:\x20the 'run' method has not been overriden!`);}
-	resp(str, opts={}){//«
-		if (this.shell.cancelled) return;
-		const{term}=this;
-if (this.inBackground){
-if (opts.isErr){
-	console.error(str);
-}
-else{
-	console.log(str);
-}
-return;
-}
-		opts.name = this.name;
-		term.response(str, opts);
-		term.scrollIntoView();
-		term.refresh();
-	}//»
-	out(val, opts={}){//«
-		if (this.shell.cancelled) return;
-		const{term}=this;
-		let redir_lns = this.redirLines || this.envRedirLines;
-//LPIRHSKF
-		if (!redir_lns && this.nextCom){
-			if (!this.nextCom.noPipe) this.nextCom._pipeIn(val);
-/*«
-			let next_com = this.nextCom;
-			if (next_com) {//LSKDJSG: Simple commands define this
-//			if (next_com && next_com.pipeIn) {//LSKDJSG: Simple commands define this
-//				if (!next_com.noPipe) next_com.pipeIn(val);
-				if (!next_com.noPipe) next_com._pipeIn(val);
-			}
-			else if (this.envPipeOutLns){//All compound commands in pipelines have this
-				this.envPipeOutLns(val);
-			}
-			else{
-cwarn("Dropping output");
-log(val);
-			}
-»*/
-			return;
-		}
-		else if(!redir_lns && this.envPipeInCb){
-			this.envPipeInCb(val);
-			return;
-		}
-		//WLKUIYDP
-		if (redir_lns) {//«
-		//KIUREUN
-			if (isEOF(val)) return;
-			if (val instanceof Uint8Array){
-				if (!redir_lns.length) {
-					redir_lns = val;
-				}
-				else {
-					let hold = redir_lns;
-//VEJZPMWU
-					redir_lns = new Uint8Array(hold.length + val.length);
-					redir_lns.set(hold, 0);
-					redir_lns.set(val, hold.length);
-				}
-				this.redirLines = redir_lns;
-				return;
-			}
-			if (!isStr(val)){
-				redir_lns._isWeird = true;
-			}
-			redir_lns.push(val);
-			return;
-		}//»
-		if (this.scriptOut) {
-			return this.scriptOut(val);
-		}
-		if (isEOF(val)) return;
-		//Save to subLines and call scriptOut
-		if (this.subLines){
-			if (val instanceof Uint8Array) val = `Uint8Array(${val.length})`;
-//			this.subLines.push(val);
-//YSHFKSOK
-			val = val.replace(/\x22/g, '\\"');
-			val = val.replace(/\x27/g, "\\'");
-			this.subLines.push(val.split(" ").join("\n"));
-			return;
-		}
-		this.resp(val, opts);
-	}//»
 	err(str, opts={}){//«
 		opts.isErr=true;
 		if (str.match(/^sh: /)) this.resp(str, opts);
@@ -1596,15 +1767,6 @@ log(val);
 	inf(str, opts={}){//«
 		opts.isInf=true;
 		this.resp(`${this.name}: ${str}`, opts);
-	}//»
-	async readLine(use_prompt){//«
-//XCJEKRNK
-		let ln;
-		if (this.envReadLine){
-			ln = await this.envReadLine.readLine();
-		}
-		else ln = await this.term.readLine(use_prompt);
-		return ln;
 	}//»
 	cancel(){//«
 		this.killed = true;
@@ -1679,45 +1841,16 @@ be wrapped when output onto the terminal
 		}
 		return {lines: lnarr, colors: cols};
 	}//»
-async #pipeBytesDone(){
-	let blob = new Blob(this.#lines);
-	let bytes = await util.toBytes(blob);
-	this.pipeDone(bytes);
 }
-_pipeIn(val){
-	if (isEOF(val)){
-		if (this.pipeDone) {
-//ZELMGSO
-/*
-let blob = new Blob(this.#lines);
-let bytes = await util.toBytes(blob);
-*/
-			if (this.binPipe){
-				this.#pipeBytesDone();
-			}
-			else this.pipeDone(this.#lines);
-		}
-		return;
-	}
-	if (this.pipeIn) this.pipeIn(val);
-	this.#lines.push(val);
-/*«
-    if (isStr(val)) this.#lines.push(val);
-    else if (isArr(val)) this.#lines.push(...val);
-    else{
-cwarn("WUTISTHIS", val);
-    }
-»*/
-}
-}//»
+//»
 const NoCom=class{//«
 	constructor(env){
 		for (let k in env) {
 			this[k]=env[k];
 		}
-		if (this.outRedir){
-			this.redirLines = [];
-		}
+//		if (this.outRedir){
+//			this.redirLines = [];
+//		}
 	}
 	init(){
 		this.awaitEnd=new Promise((Y,N)=>{
@@ -1732,7 +1865,7 @@ const NoCom=class{//«
 	}
 	cancel(){}
 }//»
-const ErrCom = class extends Com{//«
+class ErrCom extends SimpleCommand{//«
 	run(){
 		this.no(this.errorMessage);
 	}
@@ -1740,28 +1873,19 @@ const ErrCom = class extends Com{//«
 
 //«Compounds
 
-class CompoundCom{//«
+class CompoundCom extends BaseCommand{//«
 
 constructor(shell, opts){//«
+	super();
 	this.isCompound = true;
 	this.shell = shell;
+	this.term = shell.term;
 	this.opts=opts;
 	this.outRedir = opts.outRedir;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
 			if (this.nextCom) {
-				this.nextCom._pipeIn(EOF);
-/*
-9/3/25: I DON'T UNDERSTAND THIS LOGIC. IF THERE IS A NEXT COMMAND, THEN THE EOF SHOULD ALWAYS BE SENT THERE!
-I REALLY HAVE NO IDEA WHAT THIS envPipeOutLns STUFF IS ABOUT.
-
-				if (this.nextCom.pipeIn){
-					this.nextCom.pipeIn(EOF);
-				}
-				else if (this.envPipeOutLns){
-					this.envPipeOutLns(EOF);
-				}
-*/
+				this.nextCom.pipeIn(EOF);
 			}
 			Y(rv);
 			this.killed = true;
@@ -1774,68 +1898,43 @@ _init(){//«
 	for (let k in this.opts){
 		opts[k]=this.opts[k];
 	}
-	if (this.nextCom){
-		opts.envPipeInCb=(val)=>{
-//NDKSLRJL
-			if (isEOF(val)) return;
-			this.nextCom._pipeIn(val);
-		};
-/*«
-//See the comment in the constructor. I DON'T UNDERSTAND THIS LOGIC!?!
-		if (this.nextCom.pipeIn){
-			opts.envPipeInCb=(val)=>{
-//NDKSLRJL
-				if (isEOF(val)) return;
-				this.nextCom.pipeIn(val);
-			};
-		}
-		else if (this.envPipeOutLns){
-			opts.envPipeInCb=val=>{
-//Don't want compound commands passing through internal EOFs
-				if (isEOF(val)) return;
-				this.envPipeOutLns(val);
-			};
-		}
-		else {
-cwarn("Setting envPipeInCb to NOOP!");
-			opts.envPipeInCb = ()=>{};
-		}
-»*/
-	}
-	if (this.outRedir){
-		this.redirLines = [];
-		opts.envRedirLines = this.redirLines;
-	}
 	this.opts = opts;
 }//»
 init(){this._init();}
 cancel(){this.killed=true;}
-
+/*
+pipeIn(val){
+cwarn(`COMPOUND COM DROPPING PIPED INPUT`);
+log(val);
+}
+*/
 }//»
 
 class BraceGroupCom extends CompoundCom{//«
 
-constructor(shell, opts, list){//«
+constructor(shell, opts, list, parentCommand){//«
 	super(shell, opts);
 	this.list = list;
 	this.name="brace_group";
+this.parentCommand = parentCommand;
 }//»
 async run(){//«
 	if (this.isFunc){
 		this.opts.scriptArgs = this.args.slice();
 		this.opts.scriptName = "sh";
 	}
-	let rv = await this.shell.executeStatements(this.list, this.opts)
+	let rv = await this.shell.executeStatements(this.list, this.opts, this);
 	if (this.shell.cancelled) return;
 	this.end(rv);
 }//»
 
 }//»
 class SubshellCom extends CompoundCom{//«
-constructor(shell, opts, list){
+constructor(shell, opts, list, parentCommand){
 	super(shell, opts);
 	this.list = list;
 	this.name="subshell";
+this.parentCommand = parentCommand;
 }
 async run(){
 	if (this.isFunc){
@@ -1844,7 +1943,7 @@ async run(){
 	}
 	let opts = sdup(this.opts);
 	opts.env = sdup(this.opts.env);
-	let rv = await this.shell.executeStatements(this.list, opts)
+	let rv = await this.shell.executeStatements(this.list, opts, this);
 	if (this.isScript && isObj(rv) && rv.abortScript === true){
 		rv = E_ERR;
 	}
@@ -1855,19 +1954,20 @@ async run(){
 
 class WhileCom extends CompoundCom{//«
 
-constructor(shell, opts, cond, do_group){//«
+constructor(shell, opts, cond, do_group, parentCommand){//«
 	super(shell, opts);
 	if (this.opts.loopNum) this.opts.loopNum++;
 	else this.opts.loopNum = 1;
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name = "while";
+this.parentCommand = parentCommand;
 }//»
 async run(){//«
 	let rv;
 	while (true){
 		await sleep(0);
-		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
+		rv = await this.shell.executeStatements(dup(this.cond), this.opts, this);
 		if (this.shell.cancelled) return;
 		if (rv === E_SUC){
 //log("Keep going");
@@ -1880,7 +1980,7 @@ async run(){//«
 cerr("WHAT IS THIS RV");
 log(rv);
 		}
-		rv = await this.shell.executeStatements(dup(this.do_group), this.opts);
+		rv = await this.shell.executeStatements(dup(this.do_group), this.opts, this);
 		if (this.shell.cancelled) return;
 		if (isLoopCont(rv)){
 			if (doLoopCont(rv, this)){
@@ -1911,18 +2011,19 @@ log(rv);
 }//»
 class UntilCom extends CompoundCom{//«
 
-constructor(shell, opts, cond, do_group){//«
+constructor(shell, opts, cond, do_group, parentCommand){//«
 	super(shell, opts);
 	if (this.opts.loopNum) this.opts.loopNum++;
 	else this.opts.loopNum = 1;
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name="until";
+this.parentCommand = parentCommand;
 }//»
 async run(){//«
 	let rv;
 	while (true){
-		rv = await this.shell.executeStatements(dup(this.cond), this.opts);
+		rv = await this.shell.executeStatements(dup(this.cond), this.opts, this);
 		if (this.shell.cancelled) return;
 		await sleep(0);
 		if (Number.isFinite(rv)){
@@ -1934,7 +2035,7 @@ async run(){//«
 cerr("WHAT IS THIS RV");
 log(rv);
 		}
-		rv = await this.shell.executeStatements(dup(this.do_group), this.opts);
+		rv = await this.shell.executeStatements(dup(this.do_group), this.opts, this);
 		if (this.shell.cancelled) return;
 		if (isLoopCont(rv)){
 			if (doLoopCont(rv, this)){
@@ -1965,13 +2066,13 @@ log(rv);
 
 
 async run(){//«
-	let rv = await this.shell.executeStatements(dup(this.cond), this.opts)
+	let rv = await this.shell.executeStatements(dup(this.cond), this.opts, this);
 	if (this.shell.cancelled) return;
 	while (rv){
-		await this.shell.executeStatements(dup(this.do_group), this.opts)
+		await this.shell.executeStatements(dup(this.do_group), this.opts, this);
 		if (this.shell.cancelled) return;
 		await sleep(0);
-		rv = await this.shell.executeStatements(dup(this.cond), this.opts)
+		rv = await this.shell.executeStatements(dup(this.cond), this.opts, this);
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
@@ -1983,17 +2084,18 @@ async run(){//«
 }//»
 
 class IfCom extends CompoundCom{//«
-constructor(shell, opts, conds, conseqs, fallback){//«
+constructor(shell, opts, conds, conseqs, fallback, parentCommand){//«
 	super(shell, opts);
 	this.conds = conds;
 	this.conseqs = conseqs
 	this.fallback = fallback;
 	this.name = "if";
+this.parentCommand = parentCommand;
 }//»
 async run(){//«
 	const{conds, conseqs, opts}=this;
 	for (let i=0; i < conds.length; i++){
-		let rv = await this.shell.executeStatements(conds[i], opts);
+		let rv = await this.shell.executeStatements(conds[i], opts, this);
 		if (this.shell.cancelled) return;
 if (!Number.isFinite(rv)){
 cwarn("HERE IT IS");
@@ -2001,14 +2103,14 @@ log(rv);
 this.shell.fatal("Non-numerical return value");
 }
 		if (!rv){
-			rv = await this.shell.executeStatements(conseqs[i], opts)
+			rv = await this.shell.executeStatements(conseqs[i], opts, this);
 			if (this.shell.cancelled) return;
 			this.end(rv);
 			return;
 		}
 	}
 	if (this.fallback){
-		let rv = await this.shell.executeStatements(this.fallback, opts)
+		let rv = await this.shell.executeStatements(this.fallback, opts, this);
 		if (this.shell.cancelled) return;
 		return this.end(rv);
 	}
@@ -2017,7 +2119,7 @@ this.shell.fatal("Non-numerical return value");
 }//»
 class ForCom extends CompoundCom{//«
 
-constructor(shell, opts, name, in_list, do_group){//«
+constructor(shell, opts, name, in_list, do_group, parentCommand){//«
 	super(shell, opts);
 	if (this.opts.loopNum) this.opts.loopNum++;
 	else this.opts.loopNum = 1;
@@ -2025,6 +2127,7 @@ constructor(shell, opts, name, in_list, do_group){//«
 	this.in_list=in_list;
 	this.do_group=do_group;
 	this.name="for";
+this.parentCommand = parentCommand;
 }//»
 async init(){//«
 	this._init();
@@ -2039,7 +2142,7 @@ async run(){//«
 	for (let val of this.in_list){
 		await sleep(0);
 		env[nm] = val+"";
-		rv = await shell.executeStatements(dup(this.do_group), this.opts)
+		rv = await shell.executeStatements(dup(this.do_group), this.opts, this);
 		if (shell.cancelled) return;
 		if (isLoopCont(rv)){
 			if (doLoopCont(rv, this)){
@@ -2071,12 +2174,13 @@ async run(){//«
 }//»
 class FunctionCom extends CompoundCom{//«
 
-constructor(shell, opts, name, com){//«
+constructor(shell, opts, name, com, parentCommand){//«
 	super(shell, opts);
 	this.name=name;
 	this.com = com.compound_command.compound_list.term;
 	this.type = com.type;
 	this.redirs = com.redirs;
+this.parentCommand = parentCommand;
 }//»
 async init(){//«
 	this._init();
@@ -2111,11 +2215,12 @@ run(){//«
 
 }//»
 class CaseCom extends CompoundCom{//«
-constructor(shell, opts, word, list){//«
+constructor(shell, opts, word, list, parentCommand){//«
 super(shell, opts);
 this.word=word;
 this.list=list;
 this.name="case";
+this.parentCommand = parentCommand;
 }//»
 async init(){//«
 	this._init();
@@ -2161,7 +2266,7 @@ LOOP: for (let obj of this.list){
 	let item = obj.case_item;
 	let end = item.end;
 	if (did_match){
-		rv = await shell.executeStatements(item.compound_list, this.opts)
+		rv = await shell.executeStatements(item.compound_list, this.opts, this);
 		if(shell.cancelled) return;
 		if (end.isSemiAnd) continue LOOP;
 		break LOOP;
@@ -2193,7 +2298,7 @@ LOOP: for (let obj of this.list){
 		const re = new RegExp("^" + patstr + "$");
 		if (re.test(word)){
 			did_match = true;
-			rv = await this.shell.executeStatements(item.compound_list, this.opts)
+			rv = await this.shell.executeStatements(item.compound_list, this.opts, this);
 			if(shell.cancelled) return;
 			if (end.isSemiAnd) continue LOOP;
 			break LOOP;
@@ -2211,7 +2316,7 @@ else {
 //»
 
 //this.comClasses={Com,ScriptCom,NoCom,ErrCom};
-this.comClasses={Com,NoCom,ErrCom};
+this.comClasses={SimpleCommand,NoCom,ErrCom};
 
 //»
 
@@ -2341,6 +2446,8 @@ this.ok();
 //»
 */
 
+const Com = SimpleCommand;
+
 const com_devtest = class extends Com{
 init(){
 }
@@ -2349,6 +2456,19 @@ this.ok("DEVTEST");
 }
 }
 
+const com_pipe = class extends Com{//«
+	async run() {//«
+		let prepend = this.args.length ? this.args.join(" ") : "";
+		let rv;
+		while (true){
+			rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				return this.ok();
+			}
+			this.out(`${prepend}${rv}`);
+		}
+	}//»
+};//»
 const com_markdown = class extends Com{//«
 	#mod;
 	async init(){
@@ -2397,7 +2517,7 @@ this.openWin(lines.join("\n"));
 this.ok();
 }
 /*
-pipeIn(val){
+pipeIn(val){//Commented out
 	if (!isEOF(val)) this.openWin(val);
 	else this.ok();
 }
@@ -3028,7 +3148,7 @@ const com_parse = class extends Com{//«
 		this.ok();
 	}
 /*
-	pipeIn(val){
+	pipeIn(val){//Commented out
 		if (!isEOF(val)) this.tryParse(val);
 		else this.ok();
 	}
@@ -3056,7 +3176,7 @@ const com_stringify = class extends Com{//«
 		this.numErrors?this.no():this.ok();
 	}
 /*
-	pipeIn(val){
+	pipeIn(val){//Commented out
 		if (!isEOF(val)) this.tryStringify(val);
 		else {
 			this.numErrors?this.no():this.ok();
@@ -3282,7 +3402,6 @@ async run(){//«
 //log(stdin_lines);
 	const ENV=this.env;
 	let have_error = false;
-//	let use_env_readline = !!this.envReadLine;
 	const err=mess=>{
 		have_error = true;
 		this.err(mess);
@@ -3298,14 +3417,8 @@ async run(){//«
 		ln = stdin_lines.shift();
 	}
 	else{
-		ln = await this.readLine(use_prompt);
+		ln = await this.readLine(use_prompt); // OEHRHFJR
 	}
-/*
-	else if (this.envReadLine){
-		ln = await this.envReadLine.readLine();
-	}
-	else ln = await term.readLine(use_prompt);
-*/
 	if (isEOF(ln)){
 		this.no();
 		return;
@@ -3385,7 +3498,7 @@ pipeDone(lines){
 	this.doMath(lines.join(" "));
 }
 /*
-pipeIn(val){
+pipeIn(val){//Commented out
     if (!this.lines) return;
     if (isEOF(val)){
         this.out(val);
@@ -3437,6 +3550,7 @@ this.defCommands={//«
 //continue: com_continue,
 //break: com_break,
 //poker: com_poker,
+pipe: com_pipe,
 html: com_html,
 markdown: com_markdown,
 wat2wasm: com_wat2wasm,
@@ -7110,7 +7224,7 @@ cerr(e);
 	return gotcom;
 }//»
 
-makeCompoundCommand(com, opts){//«
+makeCompoundCommand(com, opts, parentCommand){//«
 	let typ = com.type;
 	let comp = com.compound_command;
 	if (typ === "if_clause") {//«
@@ -7131,21 +7245,21 @@ makeCompoundCommand(com, opts){//«
 			}
 			fallback = else_part.else_list.compound_list.term;
 		}
-		return new IfCom(this, opts, conditions, consequences, fallback);
+		return new IfCom(this, opts, conditions, consequences, fallback, parentCommand);
 	}//»
-	if (typ === "brace_group") return new BraceGroupCom(this, opts, comp.compound_list.term);
-	if (typ === "subshell") return new SubshellCom(this, opts, comp.compound_list.term);
-	if (typ === "for_clause") return new ForCom(this, opts, comp.name, comp.in_list, comp.do_group.compound_list.term);
-	if (typ === "case_clause") return new CaseCom(this, opts, comp.word, comp.list);
-	if (typ === "while_clause") return new WhileCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term);
-	if (typ === "until_clause") return new UntilCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term);
-	if (typ === "function_def") return new FunctionCom(this, opts, comp.name, comp.body.function_body.command);
+	if (typ === "brace_group") return new BraceGroupCom(this, opts, comp.compound_list.term, parentCommand);
+	if (typ === "subshell") return new SubshellCom(this, opts, comp.compound_list.term, parentCommand);
+	if (typ === "for_clause") return new ForCom(this, opts, comp.name, comp.in_list, comp.do_group.compound_list.term, parentCommand);
+	if (typ === "case_clause") return new CaseCom(this, opts, comp.word, comp.list, parentCommand);
+	if (typ === "while_clause") return new WhileCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term, parentCommand);
+	if (typ === "until_clause") return new UntilCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term, parentCommand);
+	if (typ === "function_def") return new FunctionCom(this, opts, comp.name, comp.body.function_body.command, parentCommand);
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
-async makeCommand({assigns=[], name, args=[]}, opts){//«
+async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	const{term}=this;
-	const {loopNum, envReadLine, envRedirLines, envPipeInCb, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {loopNum, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 	let rv
 	let use_env;
@@ -7159,7 +7273,6 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 	else use_env = env;
 	const com_env = {//«
 		loopNum,
-		envReadLine,
 		stdin,
 		stdinLns,
 		outRedir,
@@ -7169,8 +7282,6 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		env: use_env,
 		command_str: this.commandStr,
 		shell: this,
-		envPipeInCb,
-		envRedirLines,
 		scriptArgs,
 		scriptName,
 	}//»
@@ -7273,7 +7384,7 @@ async makeCommand({assigns=[], name, args=[]}, opts){//«
 		com_opts = rv[0];
 	}
 	try{//«new Com
-		comobj = new com(usecomword, arr, com_opts, com_env);
+		comobj = new com(usecomword, arr, com_opts, com_env, parentCommand);
 		comobj.scriptOut = scriptOut;
 		comobj.subLines = subLines;
 		return comobj;
@@ -7288,7 +7399,7 @@ cerr(e);
 //SKIOPRHJT
 }//»
 
-async makeScriptCom(com_ast, comopts){//«
+async makeScriptCom(com_ast, comopts, parentCommand){//«
 	const{term}=this;
 	const mkerr=(mess)=>{
 		return make_sh_err_com(comword, mess, com_env);
@@ -7330,7 +7441,7 @@ async makeScriptCom(com_ast, comopts){//«
 	return com;
 }//»
 
-async executePipeline(pipe, loglist, loglist_iter, opts, in_background){//«
+async executePipeline(pipe, loglist, loglist_iter, opts, parentCommand, in_background){//«
 	const{term}=this;
 	let lastcomcode;
 	let {stdin: optStdin, env}=opts;
@@ -7342,7 +7453,7 @@ async executePipeline(pipe, loglist, loglist_iter, opts, in_background){//«
 	let pipetype = pipe.type;
 	let pipeline = [];
 	let hasBang = pipe.hasBang;
-	let last_com;
+	let prev_com; // Renamed last_com -> prev_com?
 	for (let j=0; j < pipelist.length; j++) {//«
 		let com_ast = pipelist[j];
 		let com;
@@ -7359,22 +7470,25 @@ log(red);
 				this.fatal("Unknown token in com_ast.redirs!?!?! (see console)");
 			}
 		}
-		let stdin;
+//		let stdin;
 		let errmess;
-//log(in_redir);
+		let redir_in_arr;
 		if (in_redir){
 			let rv2 = await in_redir.setValue(this, term, opts);
-//log(rv2);
 			if (isStr(rv2)){
 				errmess = rv2;
 			}
 			else{
-				stdin = in_redir.value;
+//				stdin = in_redir.value;
+				redir_in_arr = in_redir.value.split("\n");
+//log(redir_in_arr);
+//log(stdin);
 			}
 		}
 //VOPDUKKD
-		let have_lines = opts.stdinLns;
+//		let have_lines = opts.stdinLns;
 		let comopts = sdup(opts);
+/*
 		if (isStr(stdin)) comopts.stdin = stdin;
 		else comopts.stdin = optStdin;
 		if (isStr(comopts.stdin)){
@@ -7382,28 +7496,21 @@ log(red);
 			else comopts.stdinLns = comopts.stdin.split("\n");
 		}
 		comopts.outRedir = out_redir;
+*/
+//log(out_redir);
 		comopts.inBackground = in_background;
-		if (last_com){//«
-//XWMNJUO
-			let env_readline = new EnvReadLine(term);
 
-//This *should* be ignored for everything that has next_com.pipeIn in its out method (@LSKDJSG)
-			last_com.envPipeOutLns = lns => {
-				env_readline.addLns(lns);
-			};
-			comopts.envReadLine = env_readline;
-		}//»
 		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){
-			com = await this.makeScriptCom(com_ast, comopts);
+			com = await this.makeScriptCom(com_ast, comopts, parentCommand);
 		}
 		else if (errmess){
 			com = make_sh_err_com(null, errmess, {term, shell: this});
 		}
 		else if (com_ast.compound_command){
-			com = await this.makeCompoundCommand(com_ast, comopts)
+			com = await this.makeCompoundCommand(com_ast, comopts, parentCommand)
 		}
 		else if (com_ast.simple_command){
-			com = await this.makeCommand(com_ast.simple_command, comopts)
+			com = await this.makeCommand(com_ast.simple_command, comopts, parentCommand);
 			if (com.breakStatementLoop === true) return com;
 		}
 		else{//«
@@ -7415,32 +7522,24 @@ log(com_ast);
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
 //FSHSKEOK
-		if (last_com){
-			last_com.nextCom = com;
-			last_com.pipeTo = true;
+		if (redir_in_arr){
+			com.initRedirInBuffer(redir_in_arr);
+		}
+		if (out_redir){
+			com.initRedirOutBuffer(out_redir);
+		}
+		if (prev_com){
+			com.initPipeInBuffer();
+			prev_com.nextCom = com;
+			prev_com.pipeTo = true;
 		}
 		if (j > 0) {
-//			if (!com.pipeIn && com.isSimple === true){
-//				this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
-//			}
 			com.pipeFrom = true;
-			com.prevCom = last_com;
-/*
-if (!com.pipeIn){
-	if (com.isCompound === true){
-//		this.fatal(`TODO: implement 'envReadLine' for compound command: '${com.name}'`);
-comopts.envReadLine = "Blarney stone in the YADDER YADDER YADDER MCSLADDER!?!?!?";
-//log(com);
-	}
-	else {
-		this.fatal(`Broken pipeline (no 'pipeIn' method on the receiving command: '${com.name}')`);
-	}
-}
-*/
+			com.prevCom = prev_com;
 		}
 		com.inBackground = in_background;
 		pipeline.push(com);
-		last_com = com;
+		prev_com = com;
 	}//»
 	this.pipeline = pipeline;
 
@@ -7472,11 +7571,13 @@ for (let com of pipeline){//«
 		}
 		lastcomcode = E_ERR;
 	}
-	if (!com.redirLines) continue;
+//	if (!com.redirLines) continue;
+	if (!com.haveRedirOut) continue;
 
 
 //	let rv = await com.outRedir.write(term, com.redirLines, env, ShellMod.var.allowRedirClobber)
-	let rv = await com.outRedir.write(term, com.redirLines, env)
+//	let rv = await com.outRedir.write(term, com.redirLines, env)
+	let rv = await com.writeOutRedir(term, env)
 //	if (this.cancelled) return;
 	if (this.cancelled) continue;
 	if (rv===true) continue;
@@ -7534,7 +7635,7 @@ we *ALWAYS* break from the logic list, so we return
 }
 //»
 
-async executeAndOr(andor_list, andor_sep, opts, in_background){//«
+async executeAndOr(andor_list, andor_sep, opts, parentCommand, in_background){//«
 //let in_background = opts.inBackground || andor_sep === "&";
 let loglist=[];
 let last = andor_list.pop();
@@ -7551,7 +7652,7 @@ andor_list.push(last);
 let lastcomcode;
 for (let i=0; i < loglist.length; i++){//«
 
-	let rv = await this.executePipeline(loglist[i], loglist, i, opts, in_background);
+	let rv = await this.executePipeline(loglist[i], loglist, i, opts, parentCommand, in_background);
 //continue;
 	if (this.cancelled) return;
 //	if (this.cancelled) continue;
@@ -7583,7 +7684,7 @@ cwarn("CONTINUE", i, rv.nextIter);
 return lastcomcode;
 
 }//»
-async executeStatements(statements, opts){//«
+async executeStatements(statements, opts, parentCommand){//«
 	const{term}=this;
 	let lastcomcode;
 	for (let i=0; i < statements.length-1; i+=2){
@@ -7594,11 +7695,11 @@ In bash, when the '&' is used immediately, like:
   $ if sleep 1 && false & then echo hi; else echo ho; fi
 this evaluates to true, and hi is output
 */
-			this.executeAndOr(statements[i].andor, statements[i+1], opts, true);
+			this.executeAndOr(statements[i].andor, statements[i+1], opts, parentCommand, true);
 			lastcomcode = E_SUC;
 		}
 		else{
-			lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, in_background);
+			lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, parentCommand, in_background);
 		}
 		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
 			return lastcomcode.code;
@@ -7736,4 +7837,3 @@ if (!globals.shell_command_options) {
 
 }
 //»
-
