@@ -49,10 +49,9 @@ const widgets = NS.api.widgets;
 const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //const {Com, ErrCom, make_error_com} = comClasses;
-const {Com} = ShellMod.comClasses;
+const {SimpleCommand} = ShellMod.comClasses;
 const{Desk}=LOTW;
 const{make_icon_if_new}=Desk;
-const ADMIN_COM = class extends Com{run(){this.no("must be in 'admin mode'!");}};
 //»
 
 //Var«
@@ -112,7 +111,7 @@ const get_file_lines_from_args = async(args, term, errcb)=>{//«
 //»
 
 //Commands«
-
+const Com = SimpleCommand;
 /*«
 const com_ = class extends Com{
 async init(){
@@ -121,6 +120,8 @@ async run(){
 }
 }
 »*/
+
+const ADMIN_COM = class extends Com{run(){this.no("must be in 'admin mode'!");}};
 
 const com_brep = class extends Com{//«
 /*«
@@ -245,7 +246,7 @@ this.doBrep();
 //this.no();
 }
 /*
-pipeIn(val){//«
+pipeIn(val){//Commented out«
 	if (this.noStdin) return;
 	if (isEOF(val)){
 		this.doBrep();
@@ -501,79 +502,32 @@ cancel(){//«
 }//»
 
 }//»
-
 const com_cat = class extends Com{//«
-
-/*«The algorithm for LOTW's 'cat'
-
-init:
-	1) Check for no means of input and exit
-	2) Block any piped input if either is true:
-		a) this.args.length > 0
-		b) this.stdin exists
-
-run:
-	1) if no args:
-		a) send any standard input to the output steam and exit
-		b) listen for piped input until EOF and exit
-	2) loop around all args, sending out anything that isn't an Error
-	3) exit with this.nok() (calls this.ok() if this.numErrors===0, else calls this.no())
-
-	Notes for this.nextArgAsText(): 
-		- this.numErrors is updated internally (in case the arg doesn't resolve to a file system node, etc.)
-		- It isn't an error for there *not* to be a next arg (null is returned when this.args is empty)
-
-»*/
-
-//	#useTerm = false;
-	init(){//«
-		if (this.noInputOrArgs({noErr: true})){
-			this.useTerm = true;
-		}
-		this.maybeSetNoPipe();
-	}//»
-	async run() {//«
-		if (this.useTerm)return this.doTermLoop();
-		const{stdin}=this;
-		if (!this.args.length){
-			if (isStr(stdin)){
-				this.out(stdin);
-				this.ok();
+    async run() {//«
+		if (this.args.length){
+			let txt;
+			while (txt = await this.nextArgAsText()){
+				if (!isErr(txt)) this.out(txt.join("\n"));
 			}
-			//else: we have piped input, and are waiting for an 'EOF' to exit
+			this.nok();
 			return;
 		}
-		let txt;
-		while (txt = await this.nextArgAsText()){
-			if (!isErr(txt)) this.out(txt.join("\n"));
-		}
-		this.nok();
-	}//»
-	pipeIn(val){this.out(val);}
-	pipeDone(){this.ok();}
-	async doTermLoop(){//«
-		while (true){
-			let ln = await this.readLine();
-			if (isEOF(ln)){
-				this.ok();
-				return;
-			}
-			this.out(ln);
-		}
-	}//»
-
-/*
-	cancel(){//«
-		this.ok();
-	}//»
-*/
-
+        let rv;
+        while (true){
+            rv = await this.readStdinChunk();
+            if (isEOF(rv)){
+                return this.ok();
+            }
+            this.out(rv);
+        }
+    }//»
 };//»
+
 const com_grep = class extends Com{//«
 //#re;
 
 async init(){//«
-
+return this.no("UPDATEMEPLEASE!!!");
 	let patstr = this.args.shift();
 	if (!patstr) {
 		this.no("no pattern given");
@@ -962,6 +916,7 @@ async run(){
 const com_wc = class extends Com{//«
 //#noPipe;
 async init(){
+return this.no("UPDATEMEPLEASE!!!");
 	if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
 //	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (this.args.length || this.stdin){
@@ -1093,7 +1048,7 @@ pipeDone(lines){
 	this.doDL();
 }
 /*«
-pipeIn(val){
+pipeIn(val){//Commented out
 	if (this.noPipe) return;
 	if (isEOF(val)){
 		this.out(val);
