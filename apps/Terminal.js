@@ -45,7 +45,7 @@ B. With no onreload method, the "standard" reloading of the window's associated 
 /*URKSPLK: In order to reload the terminal AND the shell with the same Alt+r keypress,«
 we have to call Win.reload({appOnly: true}), otherwise there'd be an infinite loop.
 
-The interesting part of passwordMode is @DYWUEORK, where there is a tineout in the toString
+The interesting part of passwordMode is @DYWUEORK, where there is a timeout in the toString
 method of the new String's, so that the output is the actual letter before the timeout
 and then a "*" after it. This mimics the way that cellfonez typically handle password
 inputs. Also of relevance is the bit @WZZKUDJK that takes the valueOf() of each individual
@@ -3352,16 +3352,7 @@ async handleEnter(opts={}){//«
 	await this.execute(str, opts);
 	this.sleeping = null;
 }//»
-handleReadlineEnter(){//«
-	let is_pass = this.passwordMode;
-	this.passwordMode = false;
-	if (this.actor){
-//HWURJIJE
-		this.readLineCb(this.readLineStr);
-		this.readLineCb = null;
-		this.readLineStartLine = null;
-		return;
-	}
+flushReadlineBuffer(is_pass){//«
 	const{lines}=this;
 	let rv = [];
 //This '1' ONLY correct when the line does not wrap
@@ -3377,6 +3368,19 @@ handleReadlineEnter(){//«
 		rv.isNL = true;
 	}
 	this.readLineCb(rv);
+}//»
+handleReadlineEnter(){//«
+	let is_pass = this.passwordMode;
+	this.passwordMode = false;
+	if (this.actor){
+//HWURJIJE
+		this.readLineCb(this.readLineStr);
+		this.readLineCb = null;
+		this.readLineStartLine = null;
+		return;
+	}
+
+	this.flushReadlineBuffer(is_pass);
 	this.readLineCb = null;
 	this.readLineStartLine = null;
 	this.sleeping = true;
@@ -3410,12 +3414,13 @@ handleKey(sym, code, mod, ispress, e){//«
 					this.getChCb(this.getChDefCh);
 					this.getChDefCh = undefined;
 				}
-				return;
 			}
+			return;
 		}//»
 		else if (this.readLineCb){//«
 //this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 			if (ispress || this.okReadlineSyms.includes(sym)){
+				this.numCtrlD = 0;
 				if (this.actor){
 //VEOMRUI
 					if (ispress) {
@@ -3435,7 +3440,30 @@ handleKey(sym, code, mod, ispress, e){//«
 //LOUORPR
 //else: let the 'ispress' characters/okReadlineSyms (DEL_, BACK_, LEFT_, RIGHT_) pass through...
 			}
+			else if (sym==="d_C") {//«
+/*Since this.readLineCb is the success callback of a Promise (see @XKLRYTJTK), we 
+need to use setTimeout to give any readLine loops the chance to reset itself, in order to await for
+the next line of input.
+
+The POSIX behaviour of Ctrl+d (seems to be) that it disallows backspacing before the point that it is done.
+But implementing this exact behaviour is probably more trouble than it is worth.
+*/
+				if (this.numCtrlD || (this.cy() === this.readLineStartLine && this.x === this.promptLen)) {
+					this.numCtrlD = 0;
+					this.flushReadlineBuffer();
+					setTimeout(()=>{
+						this.readLineCb && this.readLineCb(EOF);
+						this.readLineCb = null;
+						this.readLineStartLine = null;
+					}, 0);
+				}
+				else{
+					this.numCtrlD = 1;
+				}
+				return;
+			}//»
 			else if (sym==="ENTER_"){
+				this.numCtrlD = 0;
 				this.handleReadlineEnter();
 				return;
 			}
@@ -3443,6 +3471,7 @@ handleKey(sym, code, mod, ispress, e){//«
 				return;
 			}
 		}//»
+
 		else return;
 
 	}//»
@@ -3608,6 +3637,7 @@ onkeydown(e,sym,mod){//«
 			this.readLineStartLine = null;
 			this.doOverlay("Readline: cancelled");
 			this.curShell.cancel();
+			this.response("^C");
 			return;
 		}
 		this.handleKey(sym, code, mod, false, e);
@@ -3700,9 +3730,11 @@ cwarn(`Skipping: ${mod}`);
 async _onreload(){//«
 //SGPEJGKH
 //Just reload the shell (if working on a devtest command)
+//log(this.env);
 //	await this._reloadShell();
 
-	await this._reloadLibs(["net.fs"]);
+	await this._reloadLibs(["fs"]);
+//	await this._reloadLibs(["net.fs"]);
 //	await this._reloadLibs(RELOAD_LIBS);
 
 }//»
@@ -3920,5 +3952,4 @@ quitNewScreen(screen, opts={}){//«
 }; 
 
 //»
-
 
