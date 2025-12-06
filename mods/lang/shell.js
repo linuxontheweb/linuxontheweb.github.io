@@ -6,7 +6,7 @@ engine.
 @COMCLASS: The class that all commands must override is kept here.
 @BUILTINS: Shell builtins are kept here.
 
-Non-builtin commands are defined inside of the coms/ hierarchy. The simplest file
+Non-builtin commands are defined inside of the 'coms/' hierarchy. The simplest file
 that defines a command should look something like:
 
 //BEGIN
@@ -363,7 +363,7 @@ const fs_coms=[//«
 	"ln",
 	"vim",
 	"touch",
-	"brep",
+//	"brep",
 //	"mount",
 //	"unmount",
 ];//»
@@ -381,10 +381,10 @@ const test_coms = [//«
 "hang",
 "norun"
 ]//»
-//const preload_libs={fs: fs_coms, test: test_coms};
-const preload_libs={fs: fs_coms, esprima: ["esparse"]};
+//const preload_libs={fs: fs_coms, test: test_coms, esprima: ["esparse"]};
+const preload_libs={fs: fs_coms};
 //if (nodejs_mode) preload_libs.mail = mail_coms;
-if (dev_mode) preload_libs.mail = mail_coms;
+//if (dev_mode) preload_libs.mail = mail_coms;
 this.preloadLibs = preload_libs;
 
 //Parsing«
@@ -895,7 +895,7 @@ return E_ERR;
 };//»
 
 const make_sh_err_com = (name, mess, com_env)=>{//«
-	let com = new this.comClasses.ErrCom(name, null,null, com_env);
+	let com = new this.comClasses.ErrCom(name, [],null, com_env);
 //SPOIRUTM
 	if (name) com.errorMessage = `sh: ${name}: ${mess}`;
 	else com.errorMessage = `sh: ${mess}`;
@@ -1473,12 +1473,16 @@ class BaseCommand {//«
 		this.#haveEOF = false;
 		this.#pipeInBuffer = [];
 	}
+	get haveStdin(){
+		return this.pipeFrom || this.haveRedirIn;
+	}
 	initRedirInBuffer(buf){
 if (!isArr(buf)){
 log(buf);
 DIE(`Unknown value as arg to initRedirInBuffer (see above)`);
 }
 		this.#redirInBuffer = buf;
+		this.haveRedirIn = true;
 	}
 	initRedirOutBuffer(arg){
 		this.#redirOut = arg;
@@ -1511,21 +1515,25 @@ DIE(`Unknown value in the redirect output stream (above)`);
 		}
 		else if(this.parentCom){
 //We are in a compound command's (i.e. our parent's) scope, at the end of a pipeline with no output redirects
+if (isEOF(val)){
+//cwarn("Not sending EOF to parentCom!");
+return;
+}
 			this.parentCom.out(val);
 		}
-else if (this.subLines){
-//else if (this.haveSubOut){
-//log("SUBLINES", this.#subOutBuffer);
-//log("SUBLINES", this.subLines);
-	if (isStr(val)) {
-		this.subLines.push(...val.split("\n"));
-	}
-	else if (isEOF(val)){}
-	else{
-log(val);
-DIE(`Unknown value in the com sub output stream (above)`);
-	}
-}
+		else if (this.subLines){
+		//else if (this.haveSubOut){
+		//log("SUBLINES", this.#subOutBuffer);
+		//log("SUBLINES", this.subLines);
+			if (isStr(val)) {
+				this.subLines.push(...val.split("\n"));
+			}
+			else if (isEOF(val)){}
+			else{
+		log(val);
+		DIE(`Unknown value in the com sub output stream (above)`);
+			}
+		}
 		else {
 			this.resp(val, opts);
 		}
@@ -1623,9 +1631,11 @@ class SimpleCommand extends BaseCommand{//«
 		if (!env) env = {};
 //		this.#lines = [];
 //		this.#haveEOF = false;
+		
 		this.isSimple = true;
 		this.name =name;
 		this.args=args;
+		this.argsLen = args.length;
 		this.opts=opts;
 		this.numErrors = 0;
 		this.noPipe = false;
@@ -1720,6 +1730,7 @@ class SimpleCommand extends BaseCommand{//«
 		return str.split("\n");;
 	}//»
 	get noStdin(){return(!(this.pipeFrom || this.stdin));}
+	get useStdin(){ return this.argsLen === 0 && (this.pipeFrom || this.haveRedirIn); }
 	get noArgs(){return(this.args.length===0);}
 	isTermOut(){return !(this.nextCom || this.scriptOut || this.subLines);}
 	expectArgs(num){//«
@@ -2003,8 +2014,7 @@ log(rv);
 		}
 //		await sleep(0);
 	}
-//	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
-	if (this.nextCom) this.nextCom._pipeIn(EOF);
+	if (this.nextCom) this.nextCom.pipeIn(EOF);
 	this.end(rv);
 }//»
 
@@ -2059,8 +2069,7 @@ log(rv);
 		}
 		await sleep(0);
 	}
-//	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
-	if (this.nextCom) this.nextCom._pipeIn(EOF);
+	if (this.nextCom) this.nextCom.pipeIn(EOF);
 	this.end(rv);
 }//»
 
@@ -2076,8 +2085,7 @@ async run(){//«
 		if (this.shell.cancelled) return;
 		await sleep(0);
 	}
-//	if (this.nextCom && this.nextCom.pipeIn) this.nextCom.pipeIn(EOF);
-	if (this.nextCom) this.nextCom._pipeIn(EOF);
+	if (this.nextCom) this.nextCom.pipeIn(EOF);
 	this.end(rv);
 }//»
 
@@ -2469,190 +2477,51 @@ const com_pipe = class extends Com{//«
 		}
 	}//»
 };//»
-const com_markdown = class extends Com{//«
-	#mod;
-	async init(){
-		let modret = await util.getMod("util.showdown");
-		if (!modret) return this.no("No showdown module");
-		this.#mod = modret.getmod();
-	}
-	async run(){
-		const{args, term} = this;
-		let converter = new this.#mod.Converter();
-		let fname = args.shift();
-		if (!fname) return this.no("Need a file name!");
-		let str = await fname.toText(term);
-		if (!str) return this.no("File not found!");
-		let html = converter.makeHtml(str);
-		this.out(html);
-		this.ok();
-	}
-}//»
-const com_html = class extends Com{//«
+const com_read = class extends Com{//«
 init(){
+//log("HI READ", this);
 }
-async openWin(val){
-	let win = await Desk.api.openApp("util.HTML", {appArgs: {text: val}});
-	if (!win) return this.no(`util.HTML: app not found`);
-}
-async run(){
-	const {args, opts, stdin} = this;
-	if (stdin){
-		this.openWin(stdin);
-		this.ok();
-		return;
-	}
-	else if (this.args.length){
-		this.no("Only supporting stdin methods!");
-		return;
-	}
-	else{
-// Do this method (like in com_math) to wait for EOF before opening the window
-// this.lines=[];
-	}
-}
-pipeDone(lines){
-this.openWin(lines.join("\n"));
-//log(lines);
-this.ok();
-}
-/*
-pipeIn(val){//Commented out
-	if (!isEOF(val)) this.openWin(val);
-	else this.ok();
-}
-*/
-
-}//»
-
-const com_wat2wasm = class extends Com{//«
-
-async init(){//«
-	if (!window.WabtModule) {
-		if (!await util.makeScript("/mods/util/libwabt.js")) {
-			return this.no("Could not load 'libwabt'");
-		}
-		if (!window.WabtModule) return this.no("window.WabtModule does not exist!");
-	}
-	this.wabt = await window.WabtModule();
-}//»
-compile(text){//«
-	//log(typeof text);
-	let features = {};
-	let outputLog = '';
-	let outputBase64 = 'Error occured, base64 output is not available';
-
-	let binaryOutput;
-	let binaryBlobUrl, binaryBuffer;
-	let module;
-	try {
-		module = this.wabt.parseWat('test.wast', text, features);
-		module.resolveNames();
-		module.validate(features);
-		let binaryOutput = module.toBinary({log: true, write_debug_names:true});
-		outputLog = binaryOutput.log;
-		binaryBuffer = binaryOutput.buffer;
-// binaryBuffer is a Uint8Array, so we need to convert it to a string to use btoa
-// https://stackoverflow.com/questions/12710001/how-to-convert-uint8-array-to-base64-encoded-string
-
-//	outputBase64 = btoa(String.fromCharCode.apply(null, binaryBuffer));
-
-//	let blob = new Blob([binaryBuffer]);
-		this.out(binaryBuffer);
-//	log(blob);
-	//if (binaryBlobUrl) {
-	//	URL.revokeObjectURL(binaryBlobUrl);
-	//}
-	//binaryBlobUrl = URL.createObjectURL(blob);
-	//downloadLink.setAttribute('href', binaryBlobUrl);
-	//downloadEl.classList.remove('disabled');
-	} catch (e) {
-		outputLog += e.toString();
-		cerr(outputLog);
-	//downloadEl.classList.add('disabled');
-	} 
-	finally {
-		if (module) module.destroy();
-	//	outputEl.textContent = outputShowBase64 ? outputBase64 : outputLog;
-	}
-	//log(typeof text);
-}//»
 async run(){//«
-	const{args, term}=this;
-	//log();
-	//let rv = await term.readLine("? ", {passwordMode: true});
-	//let wabt = await WabtModule();
-
-	let fname = args.shift();
-	if (!fname) return this.no("No filename!");
-	let val = await fname.toText({cwd: term.cwd});
-	if (!val) return this.no(`${fname}: nothing returned`);
-	this.compile(val);
-	this.ok();
-}//»
-
-}//»
-const com_wget = class extends Com{//«
-/*How github names their files within repos, and how to fetch them from LOTW«
-
-If this is the github repo:
-https://github.com/mrdoob/three.js/
-
-The 'playground/' subdir of that repo is here:
-https://github.com/mrdoob/three.js/tree/dev/playground
-
-This is the 'playground/index.html' file:
-https://github.com/mrdoob/three.js/blob/dev/playground/index.html
-
-This is that same file in its raw form, but it is an invalid fetch:
-https://github.com/mrdoob/three.js/raw/refs/heads/dev/playground/index.html
-
-And this is the same file that is okay to fetch:
-https://raw.githubusercontent.com/mrdoob/three.js/refs/heads/dev/playground/index.html
-
-This gets the entire directory structure (but the output is sent to the console as Uint8Array, 
-rather than text, since there is no indication in the URL that the returned value is JSON):
-https://api.github.com/repos/mrdoob/three.js/git/trees/refs/heads/dev?recursive=true
-
-»*/
-static getOpts(){
-	return {l: {dl: 1, local: 1}, s: {l: 1}};
-}
-async run(){
-	const {args, opts} = this;
-	let patharg = args.shift();
-	if (!patharg) return this.no("missing URL");
-	if (args.length) return this.no("too many arguments");
-	let url;
-	if (opts.local || opts.l) url = `/_get?path=${encodeURIComponent(patharg)}`;
-	else url = patharg;
-//	if (!nodejs_mode || opts["local"]) url = patharg
-//	else url = `/_get?path=${encodeURIComponent(patharg)}`;
-	let rv;
-	try{
-		rv = await fetch(url)
-	}
-	catch(e){
-cerr(e);
-		this.no(`${e.message} (see console)`);
+//XDUITOYL
+	const {args, opts, term} = this;
+	const ENV=this.env;
+	let have_error = false;
+	const err=mess=>{
+		have_error = true;
+		this.err(mess);
+	};
+	let use_prompt = opts.prompt;
+	if (use_prompt && use_prompt.length > term.w - 3){
+		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
 		return;
 	}
-	if (!rv.ok){
-		this.no(`Response code: ${rv.status} (${rv.statusText})`);
-log(rv);
+	let ln = await this.readStdinChunk(use_prompt); // OEHRHFJR
+	if (isEOF(ln)){
+		this.no();
 		return;
 	}
-	let buf = await rv.arrayBuffer();
-	if (this.opts.dl){
-		let fname = (new URL(patharg)).pathname.split("/").pop();
-		if (!fname) fname = "WGET-OUT.bin"
-		util.download(new Blob([buf]), fname);
+	let vals = ln.trim().split(/ +/);
+	while (args.length){
+		let arg = args.shift();
+//		if (ShellMod.var.noSetEnvVars.includes(arg)) {
+		if (NO_SET_ENV_VARS.includes(arg)) {
+			err(`refusing to modify read-only variable: ${arg}`);
+			vals.shift();
+			continue;
+		}
+		let useval;
+		if (!args.length) {
+			if (vals.length) useval = vals.join(" ");
+		}
+		else useval = vals.shift();
+		if (!useval) useval = "";
+		ENV[arg] = useval;
 	}
-	else this.out(new Uint8Array(buf));
-	this.ok();
-}
+	have_error?this.no():this.ok();
+}//»
 
 }//»
+
 const com_loopctrl = class extends Com{//«
 //	static opts = true;
 	static getOpts(){
@@ -2807,64 +2676,6 @@ async run(){
 	this.end(rv);
 }
 }//»
-const com_workman = class extends Com{//«
-init(){}
-run(){//«
-
-const OK_COMS=["close","move","resize","minimize","none"];
-const OK_VALS=["1","0","true","false","yes","no","okay","nope"];
-const{args, no}=this;
-let type = args.shift();
-if (!type) return no("Need a 'type' arg!");
-if (!(type==="w"||type==="s")){
-	return no("The 'type' arg  must be [w]indow or work[s]pace!");
-}
-let num = args.shift();
-let say_num = num;
-if (!num){
-return no("Need a 'number' arg!");
-}
-if (!num.match(/^[0-9]+$/)){
-	return no(`Invalid number arg`);
-}
-let com = args.shift();
-if (!com) return no("Need a 'com' arg!");
-if (!OK_COMS.includes(com)){
-	return no(`${com}: invalid 'com' arg`);
-}
-let val = args.shift();
-if (!val) return no("Need a 'val' arg!");
-if (!OK_VALS.includes(val)){
-	return no(`${val}: invalid 'val' arg`);
-}
-if (val==="1"||val==="true"||val==="yes"||val==="okay") val = true;
-else val = false;
-com = "allow"+(com[0].toUpperCase() + com.slice(1));
-let say_type;
-if (type==="w"){//«
-
-let elem = document.getElementById(`win_${num}`);
-if (!elem) return no(`${num}: window not found`);
-let win = elem._winObj;
-win[com] = val;
-say_type="Window";
-}//»
-else{//«
-num = parseInt(num);
-let workspaces = Desk.workspaces;
-if (num < 1 || num > workspaces.length){
-	return no(`Need a workspace number 1->${workspaces.length}`);
-}
-let workspace = workspaces[num-1];
-if (!workspace) return no(`COULD NOT GET WORKSPACES[${num-1}]`);
-workspace[com] = val;
-say_type="Workspace";
-}//»
-
-this.ok(`${say_type}[${say_num}].${com} = ${val}`);
-
-}//»
-}//»
 const com_log = class extends Com{//«
 
 //#promise;
@@ -2890,33 +2701,14 @@ this.log.quit();
 this.ok();
 }
 }//»
-const com_bindwin = class extends Com{//«
-	run(){
-		const{args}=this;
-		let numstr = args.shift();
-		if (!numstr) return this.no(`expected a window id arg`);
-		if (!numstr.match(/[0-9]+/)) return this.no(`${numstr}: invalid numerical argument`);
-		let num = parseInt(numstr);
-		let elem = document.getElementById(`win_${num}`);
-		if (!elem) return this.no(`${numstr}: window not found`);
-		let win = elem._winObj;
-		if (!win) return this.no(`${numstr}: the window doesn't have an associated object!?!?`);
-		if (win.ownedBy) return this.no("Cannot bind 'owned' windows!");
-		let use_key = args.shift();
-		if (!(use_key && use_key.match(/^[1-9]$/))) return this.no(`expected a 'key' arg (1-9)`);
-		let desc = this.opts.desc || this.opts.d || win.appName;
-		globals.boundWins[use_key] = {win, desc};
-		win.bindNum = use_key;
-		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
-	}
-}//»
 const com_echo = class extends Com{//«
-	static getOpts(){
-		return {s: {n: 1}};
-	}
+//	static getOpts(){
+//		return {s: {n: 1}};
+//	}
 	async run(){
 		let nl = this.opts.n ? "":"\n";
-		let str = new String(this.args.join(" ")+nl);
+//		let str = new String(this.args.join(" ")+nl);
+		let str = new String(this.args.join(" "));
 		str.noChomp = true;
 		this.out(str);
 		this.ok();
@@ -3391,59 +3183,6 @@ const com_curcol = class extends Com{//«
 		}
 	}
 }//»
-const com_read = class extends Com{//«
-init(){
-//log("HI READ", this);
-}
-async run(){//«
-//XDUITOYL
-	const {args, opts, term, stdin, stdinLns: stdin_lines} = this;
-//cwarn("STDIN_LINES");
-//log(stdin_lines);
-	const ENV=this.env;
-	let have_error = false;
-	const err=mess=>{
-		have_error = true;
-		this.err(mess);
-	};
-	let use_prompt = opts.prompt;
-	if (use_prompt && use_prompt.length > term.w - 3){
-		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
-		return;
-	}
-	let ln;
-	if (stdin_lines){
-		if (!stdin_lines.length) return this.no();
-		ln = stdin_lines.shift();
-	}
-	else{
-		ln = await this.readLine(use_prompt); // OEHRHFJR
-	}
-	if (isEOF(ln)){
-		this.no();
-		return;
-	}
-	let vals = ln.trim().split(/ +/);
-	while (args.length){
-		let arg = args.shift();
-//		if (ShellMod.var.noSetEnvVars.includes(arg)) {
-		if (NO_SET_ENV_VARS.includes(arg)) {
-			err(`refusing to modify read-only variable: ${arg}`);
-			vals.shift();
-			continue;
-		}
-		let useval;
-		if (!args.length) {
-			if (vals.length) useval = vals.join(" ");
-		}
-		else useval = vals.shift();
-		if (!useval) useval = "";
-		ENV[arg] = useval;
-	}
-	have_error?this.no():this.ok();
-}//»
-
-}//»
 const com_math = class extends Com{//«
 //#lines;
 //#math;
@@ -3545,23 +3284,281 @@ async run(){
 }
 }//»
 
+/*Put these commands in their own libraries«
+const com_workman = class extends Com{//«
+init(){}
+run(){//«
+
+const OK_COMS=["close","move","resize","minimize","none"];
+const OK_VALS=["1","0","true","false","yes","no","okay","nope"];
+const{args, no}=this;
+let type = args.shift();
+if (!type) return no("Need a 'type' arg!");
+if (!(type==="w"||type==="s")){
+	return no("The 'type' arg  must be [w]indow or work[s]pace!");
+}
+let num = args.shift();
+let say_num = num;
+if (!num){
+return no("Need a 'number' arg!");
+}
+if (!num.match(/^[0-9]+$/)){
+	return no(`Invalid number arg`);
+}
+let com = args.shift();
+if (!com) return no("Need a 'com' arg!");
+if (!OK_COMS.includes(com)){
+	return no(`${com}: invalid 'com' arg`);
+}
+let val = args.shift();
+if (!val) return no("Need a 'val' arg!");
+if (!OK_VALS.includes(val)){
+	return no(`${val}: invalid 'val' arg`);
+}
+if (val==="1"||val==="true"||val==="yes"||val==="okay") val = true;
+else val = false;
+com = "allow"+(com[0].toUpperCase() + com.slice(1));
+let say_type;
+if (type==="w"){//«
+
+let elem = document.getElementById(`win_${num}`);
+if (!elem) return no(`${num}: window not found`);
+let win = elem._winObj;
+win[com] = val;
+say_type="Window";
+}//»
+else{//«
+num = parseInt(num);
+let workspaces = Desk.workspaces;
+if (num < 1 || num > workspaces.length){
+	return no(`Need a workspace number 1->${workspaces.length}`);
+}
+let workspace = workspaces[num-1];
+if (!workspace) return no(`COULD NOT GET WORKSPACES[${num-1}]`);
+workspace[com] = val;
+say_type="Workspace";
+}//»
+
+this.ok(`${say_type}[${say_num}].${com} = ${val}`);
+
+}//»
+}//»
+const com_bindwin = class extends Com{//«
+	run(){
+		const{args}=this;
+		let numstr = args.shift();
+		if (!numstr) return this.no(`expected a window id arg`);
+		if (!numstr.match(/[0-9]+/)) return this.no(`${numstr}: invalid numerical argument`);
+		let num = parseInt(numstr);
+		let elem = document.getElementById(`win_${num}`);
+		if (!elem) return this.no(`${numstr}: window not found`);
+		let win = elem._winObj;
+		if (!win) return this.no(`${numstr}: the window doesn't have an associated object!?!?`);
+		if (win.ownedBy) return this.no("Cannot bind 'owned' windows!");
+		let use_key = args.shift();
+		if (!(use_key && use_key.match(/^[1-9]$/))) return this.no(`expected a 'key' arg (1-9)`);
+		let desc = this.opts.desc || this.opts.d || win.appName;
+		globals.boundWins[use_key] = {win, desc};
+		win.bindNum = use_key;
+		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
+	}
+}//»
+
+const com_wat2wasm = class extends Com{//«
+
+async init(){//«
+	if (!window.WabtModule) {
+		if (!await util.makeScript("/mods/util/libwabt.js")) {
+			return this.no("Could not load 'libwabt'");
+		}
+		if (!window.WabtModule) return this.no("window.WabtModule does not exist!");
+	}
+	this.wabt = await window.WabtModule();
+}//»
+compile(text){//«
+	//log(typeof text);
+	let features = {};
+	let outputLog = '';
+	let outputBase64 = 'Error occured, base64 output is not available';
+
+	let binaryOutput;
+	let binaryBlobUrl, binaryBuffer;
+	let module;
+	try {
+		module = this.wabt.parseWat('test.wast', text, features);
+		module.resolveNames();
+		module.validate(features);
+		let binaryOutput = module.toBinary({log: true, write_debug_names:true});
+		outputLog = binaryOutput.log;
+		binaryBuffer = binaryOutput.buffer;
+// binaryBuffer is a Uint8Array, so we need to convert it to a string to use btoa
+// https://stackoverflow.com/questions/12710001/how-to-convert-uint8-array-to-base64-encoded-string
+
+//	outputBase64 = btoa(String.fromCharCode.apply(null, binaryBuffer));
+
+//	let blob = new Blob([binaryBuffer]);
+		this.out(binaryBuffer);
+//	log(blob);
+	//if (binaryBlobUrl) {
+	//	URL.revokeObjectURL(binaryBlobUrl);
+	//}
+	//binaryBlobUrl = URL.createObjectURL(blob);
+	//downloadLink.setAttribute('href', binaryBlobUrl);
+	//downloadEl.classList.remove('disabled');
+	} catch (e) {
+		outputLog += e.toString();
+		cerr(outputLog);
+	//downloadEl.classList.add('disabled');
+	} 
+	finally {
+		if (module) module.destroy();
+	//	outputEl.textContent = outputShowBase64 ? outputBase64 : outputLog;
+	}
+	//log(typeof text);
+}//»
+async run(){//«
+	const{args, term}=this;
+	//log();
+	//let rv = await term.readLine("? ", {passwordMode: true});
+	//let wabt = await WabtModule();
+
+	let fname = args.shift();
+	if (!fname) return this.no("No filename!");
+	let val = await fname.toText({cwd: term.cwd});
+	if (!val) return this.no(`${fname}: nothing returned`);
+	this.compile(val);
+	this.ok();
+}//»
+
+}//»
+
+const com_markdown = class extends Com{//«
+	#mod;
+	async init(){
+		let modret = await util.getMod("util.showdown");
+		if (!modret) return this.no("No showdown module");
+		this.#mod = modret.getmod();
+	}
+	async run(){
+		const{args, term} = this;
+		let converter = new this.#mod.Converter();
+		let fname = args.shift();
+		if (!fname) return this.no("Need a file name!");
+		let str = await fname.toText(term);
+		if (!str) return this.no("File not found!");
+		let html = converter.makeHtml(str);
+		this.out(html);
+		this.ok();
+	}
+}//»
+const com_html = class extends Com{//«
+init(){
+}
+async openWin(val){
+	let win = await Desk.api.openApp("util.HTML", {appArgs: {text: val}});
+	if (!win) return this.no(`util.HTML: app not found`);
+}
+async run(){
+	const {args, opts, stdin} = this;
+	if (stdin){
+		this.openWin(stdin);
+		this.ok();
+		return;
+	}
+	else if (this.args.length){
+		this.no("Only supporting stdin methods!");
+		return;
+	}
+	else{
+// Do this method (like in com_math) to wait for EOF before opening the window
+// this.lines=[];
+	}
+}
+pipeDone(lines){
+this.openWin(lines.join("\n"));
+//log(lines);
+this.ok();
+}
+//pipeIn(val){//Commented out
+//	if (!isEOF(val)) this.openWin(val);
+//	else this.ok();
+//}
+
+}//»
+
+const com_wget = class extends Com{//«
+//How github names their files within repos, and how to fetch them from LOTW«
+//
+//If this is the github repo:
+//https://github.com/mrdoob/three.js/
+//
+//The 'playground/' subdir of that repo is here:
+//https://github.com/mrdoob/three.js/tree/dev/playground
+//
+//This is the 'playground/index.html' file:
+//https://github.com/mrdoob/three.js/blob/dev/playground/index.html
+//
+//This is that same file in its raw form, but it is an invalid fetch:
+//https://github.com/mrdoob/three.js/raw/refs/heads/dev/playground/index.html
+//
+//And this is the same file that is okay to fetch:
+//https://raw.githubusercontent.com/mrdoob/three.js/refs/heads/dev/playground/index.html
+//
+//This gets the entire directory structure (but the output is sent to the console as Uint8Array, 
+//rather than text, since there is no indication in the URL that the returned value is JSON):
+//https://api.github.com/repos/mrdoob/three.js/git/trees/refs/heads/dev?recursive=true
+//
+//»
+static getOpts(){
+	return {l: {dl: 1, local: 1}, s: {l: 1}};
+}
+async run(){
+	const {args, opts} = this;
+	let patharg = args.shift();
+	if (!patharg) return this.no("missing URL");
+	if (args.length) return this.no("too many arguments");
+	let url;
+	if (opts.local || opts.l) url = `/_get?path=${encodeURIComponent(patharg)}`;
+	else url = patharg;
+//	if (!nodejs_mode || opts["local"]) url = patharg
+//	else url = `/_get?path=${encodeURIComponent(patharg)}`;
+	let rv;
+	try{
+		rv = await fetch(url)
+	}
+	catch(e){
+cerr(e);
+		this.no(`${e.message} (see console)`);
+		return;
+	}
+	if (!rv.ok){
+		this.no(`Response code: ${rv.status} (${rv.statusText})`);
+log(rv);
+		return;
+	}
+	let buf = await rv.arrayBuffer();
+	if (this.opts.dl){
+		let fname = (new URL(patharg)).pathname.split("/").pop();
+		if (!fname) fname = "WGET-OUT.bin"
+		util.download(new Blob([buf]), fname);
+	}
+	else this.out(new Uint8Array(buf));
+	this.ok();
+}
+
+}//»
+»*/
+
 this.defCommands={//«
 
-//continue: com_continue,
-//break: com_break,
-//poker: com_poker,
+
 pipe: com_pipe,
-html: com_html,
-markdown: com_markdown,
-wat2wasm: com_wat2wasm,
-wget: com_wget,
+
 continue: com_loopctrl,
 break: com_loopctrl,
 shift: com_shift,
 ":": com_colon,
 "[": com_brackettest,
-workman: com_workman,
-bindwin: com_bindwin,
 math: com_math,
 log: com_log,
 curcol: com_curcol, 
