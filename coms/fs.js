@@ -237,6 +237,7 @@ doBrep(){//«
 run(){
 	if (this.noStdin) this.doBrep();
 }
+/*
 pipeDone(bytes){
 //This should be a Uint8Array. Need to update Com._pipeIn.
 //log(bytes);
@@ -245,7 +246,6 @@ this.doBrep();
 //this.err("PLEASE IMPLEMENT THE CORRECT PIPING LOGIC!!!");
 //this.no();
 }
-/*
 pipeIn(val){//Commented out«
 	if (this.noStdin) return;
 	if (isEOF(val)){
@@ -285,8 +285,9 @@ async init(){//«
 	let arr;
 	let name;
 	if (!path) {
-		if (this.pipeFrom) {
+		if (this.haveStdin) {
 			arr=[];
+//			use_stdin = true;
 			name = "*stdin*";
 		}
 		else{
@@ -316,8 +317,19 @@ async init(){//«
 //	this.awaitCb = this.pager.init(arr, name, {opts, lineSelect: true});
 
 	this.awaitCb = this.pager.init(arr, name, {opts:this.opts});
+	this.#readStdin();
 }//»
-async run(){
+async #readStdin(){//«
+	if (!this.useStdin) return;
+	while (true){
+		let rv = await this.readStdinChunk();
+		if (isEOF(rv)){
+			break;
+		}
+		this.pager.addLines([rv]);
+	}
+}//»
+async run(){//«
 //	await this.awaitCb;
 	while (!await this.awaitCb){
 		let scr = document.getElementById(`script_mods.${DEF_PAGER_MOD_NAME}`);
@@ -329,14 +341,14 @@ cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
 		this.term.refresh();
 		await this.init();
 	}
-//Reset the terminal background rows
-//this.term.setBgRows();
 	this.ok();
-}
+}//»
+/*
 pipeIn(val){
 	if (this.killed) return;
 	this.pager.addLines(val);
 }
+*/
 
 }//»
 const com_vim = class extends Com{//«
@@ -489,11 +501,13 @@ async run(){//«
 	}
 	this.ok();
 }//»
+/*
 pipeIn(val){//«
 	if (this.killed) return;
 	if (this.noPipe) return;
 	this.editor.addLines(val);
 }//»
+*/
 cancel(){//«
 //This method is never invoked because vim eats up the ^C that *would* cancel it
 //this.killed = true;
@@ -522,12 +536,10 @@ const com_cat = class extends Com{//«
         }
     }//»
 };//»
-
 const com_grep = class extends Com{//«
 //#re;
 
 async init(){//«
-return this.no("UPDATEMEPLEASE!!!");
 	let patstr = this.args.shift();
 	if (!patstr) {
 		this.no("no pattern given");
@@ -541,7 +553,7 @@ return this.no("UPDATEMEPLEASE!!!");
 		this.no("invalid pattern: " + patstr);
 		return;
 	}
-	if (!this.args.length && !this.pipeFrom) this.no("no file args and not in a pipeline!");
+//	if (!this.args.length && !this.pipeFrom) this.no("no file args and not in a pipeline!");
 }//»
 async run(){//«
 	if (this.killed) return;
@@ -552,24 +564,35 @@ async run(){//«
 		have_error=true;
 		this.err(mess);
 	};
+	if (!args.length){
+		while (true){
+			let rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				break;
+			}
+			this.doGrep(rv);
+		}
+		this.ok();
+		return;
+	}
 	let rv = await get_file_lines_from_args(args, this.term, err);
 //	if (rv.err && rv.err.length) err(rv.err);
 	if (rv.out&&rv.out.length) this.doGrep(rv.out);
 	have_error?this.no():this.ok();	
 }//»
-pipeIn(val){//«
 /*
-	if (isEOF(val)){
-		this.out(val);
-		this.ok();
-		return;
-	}
-*/
+pipeIn(val){//«
+//	if (isEOF(val)){
+//		this.out(val);
+//		this.ok();
+//		return;
+//	}
 	this.doGrep(val.split("\n"));
 }//»
 pipeDone(){
 	this.ok();
 }
+*/
 doGrep(val){//«
 	const re = this.re;
 	if (!re) return;
@@ -601,6 +624,105 @@ doGrep(val){//«
 	}
 }//»
 
+}//»
+const com_wc = class extends Com{//«
+//#noPipe;
+async init(){
+//	if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
+//	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
+	if (this.args.length || this.stdin){
+		this.noPipe = true;
+	}
+	this.lines=0;
+	this.words=0;
+	this.chars=0;
+}
+doWC(val){
+	const {out}=this;
+	let lines = this.lines;
+	let words = this.words;
+	let chars = this.chars;
+	let arr;
+	if (isStr(val)) {
+		arr=[val];
+	}
+	else if (!isArr(val)){
+cwarn("Dropping", val);
+		return;
+	}
+	else arr = val;	
+//log(arr);
+	lines+=arr.length
+	for (let ln of arr){
+		chars+=ln.length;
+//log(`<${ln}>`);
+		ln = ln.replace(/^\s+/,"");
+		ln = ln.replace(/\s+$/,"");
+//		let word_arr = ln.split(/\x20+/);
+		let word_arr = ln.split(/\s+/);
+		if (word_arr.length===1 && word_arr[0]==="") continue;
+		words+=word_arr.length;
+	}
+	this.lines=lines;
+	this.words=words;
+	this.chars=chars;
+}
+sendCount(){
+	this.out(`${this.lines} ${this.words} ${this.chars+this.lines}`);
+}
+async run(){
+	if (this.killed) return;
+	let{args, out}=this;
+	if (this.noArgs){
+		while (true){
+			let rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				break;
+			}
+			this.doWC(rv);
+		}
+		this.sendCount();
+		this.ok();
+		return;
+	}
+/*
+	if (!args.length) {
+		if (this.stdin){
+			this.doWC(this.stdin);
+			this.sendCount();
+			this.ok();
+		}
+		return;
+	}
+*/
+	let have_error = false;
+	const err=mess=>{
+		if (!mess) return;
+		have_error=true;
+		this.err(mess);
+	};
+	let rv = await get_file_lines_from_args(args, this.term, err);
+//	if (rv.err && rv.err.length) err(rv.err);
+	if (rv.out&&rv.out.length) this.doWC(rv.out);
+	this.sendCount();
+	have_error?this.no():this.ok();	
+}
+/*«
+pipeIn(val){
+	if (this.killed || this.noPipe) return;
+//	if (isEOF(val)){
+//		this.out(val);
+//		this.sendCount();
+//		this.ok();
+//		return;
+//	}
+	this.doWC(val.split("\n"));
+}
+pipeDone(){
+	if (this.killed || this.noPipe) return;
+	this.sendCount();
+	this.ok();
+}»*/
 }//»
 const com_touch = class extends Com{//«
 
@@ -734,7 +856,7 @@ async run(){
 }
 
 }//»
-const com_rmdir = class extends Com{/*«*/
+const com_rmdir = class extends Com{//«
 static getOpts(){//«
 	return {
 		s:{
@@ -759,7 +881,7 @@ async run(){
 	have_error?this.no():this.ok();	
 }
 
-}/*»*/
+}//»
 const com_rm = class extends Com{//«
 
 async run(){
@@ -913,87 +1035,6 @@ async run(){
 }
 
 }//»
-const com_wc = class extends Com{//«
-//#noPipe;
-async init(){
-return this.no("UPDATEMEPLEASE!!!");
-	if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
-//	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
-	if (this.args.length || this.stdin){
-		this.noPipe = true;
-	}
-	this.lines=0;
-	this.words=0;
-	this.chars=0;
-}
-doWC(val){
-	const {out}=this;
-	let lines = this.lines;
-	let words = this.words;
-	let chars = this.chars;
-	let arr;
-	if (isStr(val)) arr=[val];
-	else if (!isArr(val)){
-cwarn("Dropping", val);
-		return;
-	}
-	else arr = val;	
-//log(arr);
-	lines+=arr.length
-	for (let ln of arr){
-		chars+=ln.length;
-		let word_arr = ln.split(/\x20+/);
-		if (word_arr.length===1 && word_arr[0]==="") continue;
-		words+=word_arr.length;
-	}
-	this.lines=lines;
-	this.words=words;
-	this.chars=chars;
-}
-sendCount(){
-	this.out(`${this.lines} ${this.words} ${this.chars+this.lines}`);
-}
-async run(){
-	if (this.killed) return;
-	let{args, out}=this;
-	if (!args.length) {
-		if (this.stdin){
-			this.doWC(this.stdin);
-			this.sendCount();
-			this.ok();
-		}
-		return;
-	}
-	let have_error = false;
-	const err=mess=>{
-		if (!mess) return;
-		have_error=true;
-		this.err(mess);
-	};
-	let rv = await get_file_lines_from_args(args, this.term, err);
-//	if (rv.err && rv.err.length) err(rv.err);
-	if (rv.out&&rv.out.length) this.doWC(rv.out);
-	this.sendCount();
-	have_error?this.no():this.ok();	
-}
-pipeIn(val){
-	if (this.killed || this.noPipe) return;
-/*
-	if (isEOF(val)){
-		this.out(val);
-		this.sendCount();
-		this.ok();
-		return;
-	}
-*/
-	this.doWC(val.split("\n"));
-}
-pipeDone(){
-	if (this.killed || this.noPipe) return;
-	this.sendCount();
-	this.ok();
-}
-}//»
 const com_dl = class extends Com{//«
 static getOpts(){
 	return {s:{n:3,},l:{name:2}};
@@ -1042,12 +1083,12 @@ async run(){
 	this.name = node.name;
 	this.doDL();
 }
+/*«
 pipeDone(lines){
 	if (this.noPipe) return;
 	this.lines = lines;
 	this.doDL();
 }
-/*«
 pipeIn(val){//Commented out
 	if (this.noPipe) return;
 	if (isEOF(val)){
@@ -1063,7 +1104,7 @@ cwarn("WUTISTHIS", val);
 }
 »*/
 }//»
-const com_blobs = class extends Com{/*«*/
+const com_blobs = class extends Com{//«
 async run(){
 	const{args, term}=this;
 	let out = [];
@@ -1119,8 +1160,8 @@ async run(){
 	if (out.length)  this.out(out.join("\n"));
 	this.ok();
 }
-}/*»*/
-const com_purge = class extends Com{/*«*/
+}//»
+const com_purge = class extends Com{//«
 
 async run(){
 	if (globals.read_only) return this.no("Read only");
@@ -1152,8 +1193,8 @@ async run(){
 	have_error?this.no():this.ok();	
 }
 
-}/*»*/
-const com_clearstorage = class extends Com{/*«*/
+}//»
+const com_clearstorage = class extends Com{//«
 async run(){
 	let {term, no}=this; 
 	if (globals.read_only) return no("Read only");
@@ -1164,7 +1205,7 @@ async run(){
 	Desk.clear_desk_icons();
 	this.ok("please refresh the page!");
 }
-}/*»*/
+}//»
 
 /*
 const com_unmount = async (args,opts, _) => {//«
@@ -1188,10 +1229,10 @@ const com_mount = async (args,opts, _) => {//«
 
 //»
 
-const coms = {/*«*/
+const coms = {//«
 
 _blobs: com_blobs,
-brep: com_brep,
+//brep: com_brep,
 wc: com_wc,
 grep: com_grep,
 dl: com_dl,
@@ -1207,16 +1248,16 @@ ln:com_ln,
 vim:com_vim,
 touch:com_touch,
 
-}/*»*/
+}//»
 
-if (admin_mode){/*«*/
+if (admin_mode){//«
 	coms._purge = com_purge;
 	coms._clearstorage = com_clearstorage;
 }
 else{
 	coms._purge = ADMIN_COM;
 	coms._clearstorage = ADMIN_COM;
-}/*»*/
+}//»
 
 //export const coms = {//«
 //_clearstorage: com_clearstorage,
