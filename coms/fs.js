@@ -604,7 +604,7 @@ doGrep(val){//«
 	}
 	else arr = val;	
 
-	let is_term = this.isTermOut();
+	let is_term = this.isTermOut;
 	let marr;
 	for (let ln of arr){
 		if (is_term) {
