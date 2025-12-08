@@ -175,6 +175,7 @@ let USE_ONRELOAD = true;
 
 //This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
 //let USE_ONRELOAD = false;
+
 //let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
@@ -2019,9 +2020,10 @@ async updateHistory(str){//«
 		await this.appendToHistory(str);
 	}
 }//»
-async initHistory(termBuffer){//«
-	if (termBuffer) {
-		this.history = termBuffer;
+async initHistory(history, historyNode){//«
+	if (history) {
+		this.history = history;
+		this.historyNode = historyNode;
 		return;
 	}
 	let arr = await this.getHistory();
@@ -2460,13 +2462,15 @@ async doCompletion(){//«
 		return this.doGetDirContents(use_dir, tok, tok0, arr_pos);
 	}
 	if (tokpos==1) {
-		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
+//log(this.funcs);.concat(Object.keys(this.funcs));
+//		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
+		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands).concat(Object.keys(this.funcs)), tok)
 	}
 	else {
-		if (tok0 == "help"){
-			contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
-		}
-		else if (tok0 == "lib" || tok0 == "import"){
+//		if (tok0 == "help"){
+//			contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
+//		}
+		if (tok0 == "lib" || tok0 == "import"){
 			contents = await this.getCommandArr(use_dir, await util.getList("/site/coms/"), tok)
 		}
 		else if (tok0 == "app" || tok0 == "appicon"){
@@ -2742,8 +2746,6 @@ responseEnd(opts={})  {//«
 //Why does (did) this line exist???
 //	if (this.isPager) return;
 
-//	this.#doContinue = false;
-
 	this.setPrompt();
 	this.scrollIntoView();
 	this.sleeping = null;
@@ -2909,25 +2911,13 @@ this.numCtrlD++;
 this.doOverlay(`Ctrl+d: ${this.numCtrlD}`);
 //cwarn("Calling do_ctrl_D!!! (nothing doing)");
 };//»
+
 doCtrlC(){//«
-	if (this.curShell) {
-		this.env['?'] = 0;
-		if (this.curShell.stdin) {
-			this.curShell.stdin(null, true);
-			delete this.curShell.stdin;
-		}
-	}
-	else {
-		this.handleKey(null,"^".charCodeAt(), null, true);
-		this.handleKey(null,"C".charCodeAt(), null, true);
-		this.rootState = null;
-		this.bufPos = 0;
-		this.commandHold = null;
-		this.env['?'] = 0;
-		this.responseEnd();
-	}
-}
-//»
+	this.bufPos = 0;
+	this.commandHold = null;
+	this.response("^C");
+	this.responseEnd();
+}//»
 handleLetterPress(char_arg, no_render){//«
 	const{lines, w} = this;
 	const end=()=>{
@@ -3387,6 +3377,13 @@ handleReadlineEnter(){//«
 	this.forceNewline();
 //log(this.curPromptLine);
 }//»
+cancelShell(){//«
+	this.curShell.cancel();
+	this.curShell = null;
+	this.sleeping = false;
+	this.response("^C");
+	this.responseEnd();
+}//»
 handleKey(sym, code, mod, ispress, e){//«
 	const{lines}=this;
 	if (this.sleeping) {
@@ -3395,11 +3392,7 @@ handleKey(sym, code, mod, ispress, e){//«
 	if (this.curShell){//«
 
 		if (sym==="c_C") {//«
-			this.curShell.cancel();
-			this.curShell = null;
-			this.sleeping = false;
-			this.response("^C");
-			this.responseEnd();
+			this.cancelShell();
 			return;
 		}//»
 		else if (this.getChCb){//«
@@ -3632,12 +3625,11 @@ onkeydown(e,sym,mod){//«
 	if (this.readLineCb){
 		if (sym=="c_C"){
 //RMLDURHTJ
-			this.readLineCb(EOF);
+//			this.readLineCb(EOF);
 			this.readLineCb = null;
 			this.readLineStartLine = null;
-			this.doOverlay("Readline: cancelled");
-			this.curShell.cancel();
-			this.response("^C");
+//			this.doOverlay("Readline: cancelled");
+			this.cancelShell();
 			return;
 		}
 		this.handleKey(sym, code, mod, false, e);
@@ -3731,9 +3723,9 @@ async _onreload(){//«
 //SGPEJGKH
 //Just reload the shell (if working on a devtest command)
 //log(this.env);
-//	await this._reloadShell();
+	await this._reloadShell();
 
-	await this._reloadLibs(["fs"]);
+//	await this._reloadLibs(["fs"]);
 //	await this._reloadLibs(["net.fs"]);
 //	await this._reloadLibs(RELOAD_LIBS);
 
@@ -3746,7 +3738,8 @@ onkill(if_dev_reload){//«
 	}
 
 	this.reInit={
-		termBuffer: this.history,
+		history: this.history,
+		historyNode: this.historyNode
 //		useOnDevReload: !!this.ondevreload
 	};
 
@@ -3774,13 +3767,13 @@ async onappinit(appargs={}){//«
 //QDPLMRT
 	if (USE_ONRELOAD) this.onreload = this._onreload;
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
-	let {termBuffer, addMessage, commandStr, histories} = reInit;
+	let {history, historyNode, addMessage, commandStr} = reInit;
 	if (appargs.noKbReload){
 		if (!addMessage) addMessage = "";
 		addMessage += "Keyboard reloading: disabled";
 		this.Win.noKbReload = appargs.noKbReload;
 	}
-	await this.initHistory(termBuffer);
+	await this.initHistory(history, historyNode);
 	await this.initLibs(addMessage);
 	this.didInit = true;
 	this.sleeping = false;
@@ -3953,3 +3946,26 @@ quitNewScreen(screen, opts={}){//«
 
 //»
 
+
+/*
+doCtrlC(){//«
+	if (this.curShell) {
+		this.env['?'] = 0;
+		if (this.curShell.stdin) {
+			this.curShell.stdin(null, true);
+			delete this.curShell.stdin;
+		}
+	}
+	else {
+		this.handleKey(null,"^".charCodeAt(), null, true);
+		this.handleKey(null,"C".charCodeAt(), null, true);
+		this.rootState = null;
+		this.bufPos = 0;
+		this.commandHold = null;
+		this.env['?'] = 0;
+		this.response("^C");
+		this.responseEnd();
+	}
+}
+//»
+*/
