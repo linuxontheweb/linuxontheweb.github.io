@@ -40,6 +40,14 @@ $ import path.to.mycoms
 /*«
 »*/
 
+/*12/7/25«
+@XLMJHU: This barfed when there were BQuote's/ComSub's tokens inside of functions, because the 'raw'
+properties never got copied over in the respective dup() methods (@WKLMUJK/@JDPLUI) of the given tokens.
+I guess we should add this same thing for all the other dup methods.
+
+@SLKMDUY, I just added the 'parentCommand' arg to the term.funcs functions, so that, e.g. functions
+defined inside of shell scripts will inherit the correct stdin/stdin methods.
+»*/
 /*12/3/25: MAJOR OVERHAUL TIME!«
 
 We are going to rename, refactor, and simplify everything as much as possible.
@@ -1467,7 +1475,8 @@ class BaseCommand {//«
 	#subOutBuffer;
 	#haveEOF;
 	#awaitPipeInCb;
-	constructor(){
+	constructor(parentCom){
+		this.parentCom = parentCom;
 	}
 	initPipeInBuffer(){
 		this.#haveEOF = false;
@@ -1475,6 +1484,9 @@ class BaseCommand {//«
 	}
 	get haveStdin(){
 		return this.pipeFrom || this.haveRedirIn;
+	}
+	get isTermOut(){
+		return !(this.haveRedirOut || this.nextCom || this.parentCom || this.subLines);
 	}
 	initRedirInBuffer(buf){
 if (!isArr(buf)){
@@ -1530,8 +1542,8 @@ return;
 			}
 			else if (isEOF(val)){}
 			else{
-		log(val);
-		DIE(`Unknown value in the com sub output stream (above)`);
+log(val);
+DIE(`Unknown value in the com sub output stream (above)`);
 			}
 		}
 		else {
@@ -1627,7 +1639,7 @@ async #pipeBytesDone(){//«
 class SimpleCommand extends BaseCommand{//«
 //	#lines;
 	constructor(name, args, opts, env, parentCom){//«
-		super();
+		super(parentCom);
 		if (!env) env = {};
 //		this.#lines = [];
 //		this.#haveEOF = false;
@@ -1639,7 +1651,7 @@ class SimpleCommand extends BaseCommand{//«
 		this.opts=opts;
 		this.numErrors = 0;
 		this.noPipe = false;
-		this.parentCom = parentCom;
+//		this.parentCom = parentCom;
 //log(this.name, this.parentCommand);
 		for (let k in env) {
 			this[k]=env[k];
@@ -1732,7 +1744,10 @@ class SimpleCommand extends BaseCommand{//«
 	get noStdin(){return(!(this.pipeFrom || this.stdin));}
 	get useStdin(){ return this.argsLen === 0 && (this.pipeFrom || this.haveRedirIn); }
 	get noArgs(){return(this.args.length===0);}
-	isTermOut(){return !(this.nextCom || this.scriptOut || this.subLines);}
+//	isTermOut(){
+//cwarn("isTermOut: Update this OLD logic!!!");
+//		return !(this.nextCom || this.scriptOut || this.subLines);
+//	}
 	expectArgs(num){//«
 		if (!isNum(num)) {
 			this.err(`invalid argument given to expectArgs (see console)`);
@@ -1886,8 +1901,8 @@ class ErrCom extends SimpleCommand{//«
 
 class CompoundCom extends BaseCommand{//«
 
-constructor(shell, opts){//«
-	super();
+constructor(shell, opts, parentCommand){//«
+	super(parentCommand);
 	this.isCompound = true;
 	this.shell = shell;
 	this.term = shell.term;
@@ -1923,11 +1938,11 @@ log(val);
 
 class BraceGroupCom extends CompoundCom{//«
 
-constructor(shell, opts, list, parentCommand){//«
-	super(shell, opts);
+constructor(shell, opts, list, parentCom){//«
+	super(shell, opts, parentCom);
 	this.list = list;
 	this.name="brace_group";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async run(){//«
 	if (this.isFunc){
@@ -1941,11 +1956,11 @@ async run(){//«
 
 }//»
 class SubshellCom extends CompoundCom{//«
-constructor(shell, opts, list, parentCommand){
-	super(shell, opts);
+constructor(shell, opts, list, parentCom){
+	super(shell, opts, parentCom);
 	this.list = list;
 	this.name="subshell";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }
 async run(){
 	if (this.isFunc){
@@ -1965,14 +1980,14 @@ async run(){
 
 class WhileCom extends CompoundCom{//«
 
-constructor(shell, opts, cond, do_group, parentCommand){//«
-	super(shell, opts);
+constructor(shell, opts, cond, do_group, parentCom){//«
+	super(shell, opts, parentCom);
 	if (this.opts.loopNum) this.opts.loopNum++;
 	else this.opts.loopNum = 1;
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name = "while";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async run(){//«
 	let rv;
@@ -2021,14 +2036,14 @@ log(rv);
 }//»
 class UntilCom extends CompoundCom{//«
 
-constructor(shell, opts, cond, do_group, parentCommand){//«
-	super(shell, opts);
+constructor(shell, opts, cond, do_group, parentCom){//«
+	super(shell, opts, parentCom);
 	if (this.opts.loopNum) this.opts.loopNum++;
 	else this.opts.loopNum = 1;
 	this.cond = cond;
 	this.do_group = do_group;
 	this.name="until";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async run(){//«
 	let rv;
@@ -2092,13 +2107,13 @@ async run(){//«
 }//»
 
 class IfCom extends CompoundCom{//«
-constructor(shell, opts, conds, conseqs, fallback, parentCommand){//«
-	super(shell, opts);
+constructor(shell, opts, conds, conseqs, fallback, parentCom){//«
+	super(shell, opts, parentCom);
 	this.conds = conds;
 	this.conseqs = conseqs
 	this.fallback = fallback;
 	this.name = "if";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async run(){//«
 	const{conds, conseqs, opts}=this;
@@ -2127,15 +2142,15 @@ this.shell.fatal("Non-numerical return value");
 }//»
 class ForCom extends CompoundCom{//«
 
-constructor(shell, opts, name, in_list, do_group, parentCommand){//«
-	super(shell, opts);
+constructor(shell, opts, name, in_list, do_group, parentCom){//«
+	super(shell, opts, parentCom);
 	if (this.opts.loopNum) this.opts.loopNum++;
 	else this.opts.loopNum = 1;
 	this.var_name=name;
 	this.in_list=in_list;
 	this.do_group=do_group;
 	this.name="for";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async init(){//«
 	this._init();
@@ -2182,13 +2197,13 @@ async run(){//«
 }//»
 class FunctionCom extends CompoundCom{//«
 
-constructor(shell, opts, name, com, parentCommand){//«
-	super(shell, opts);
+constructor(shell, opts, name, com, parentCom){//«
+	super(shell, opts, parentCom);
 	this.name=name;
 	this.com = com.compound_command.compound_list.term;
 	this.type = com.type;
 	this.redirs = com.redirs;
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async init(){//«
 	this._init();
@@ -2197,15 +2212,15 @@ async init(){//«
 	const funcs = this.shell.term.funcs;
 	let func;
 	if (typ==="brace_group"){
-		func = (shell, args, opts, com_env) => { 
-			let com = new BraceGroupCom(shell, opts, dup(this.com));
+		func = (shell, args, opts, com_env, parentCommand) => { 
+			let com = new BraceGroupCom(shell, opts, dup(this.com), parentCommand);
 			com.args = args;
 			return com;
 		}
 	}
 	else if (typ==="subshell"){
-		func = (shell, args, opts, com_env) => { 
-			let com = new SubshellCom(shell, opts, dup(this.com));
+		func = (shell, args, opts, com_env, parentCommand) => { 
+			let com = new SubshellCom(shell, opts, dup(this.com), parentCommand);
 			com.args = args;
 			return com;
 		}
@@ -2223,12 +2238,12 @@ run(){//«
 
 }//»
 class CaseCom extends CompoundCom{//«
-constructor(shell, opts, word, list, parentCommand){//«
-super(shell, opts);
+constructor(shell, opts, word, list, parentCom){//«
+super(shell, opts, parentCom);
 this.word=word;
 this.list=list;
 this.name="case";
-this.parentCommand = parentCommand;
+//this.parentCom = parentCommand;
 }//»
 async init(){//«
 	this._init();
@@ -2773,7 +2788,7 @@ async run(){//«
 	const err=(...args)=>{
 		this.err(...args);
 	};
-	let is_term = this.isTermOut();
+	let is_term = this.isTermOut;
 	let nargs = args.length;
 	let dir_was_last = false;
 	let all = this.optAll;
@@ -4068,12 +4083,14 @@ expand(shell, term, opts){
 	return shell.expandComsub(this, opts);
 }
 dup(){//«
+//log(this);
 	let bq = new BQuote(this.start, this.par, this.env);
 	let arr = bq.val;
 	for (let ent of this.val){
 		if (isStr(ent)) arr.push(ent);
 		else arr.push(ent.dup());
 	}
+	bq.raw = this.raw;//WKLMUJK
 	return bq;
 }//»
 toString(){
@@ -4125,6 +4142,7 @@ async expand(shell, term, com_opts, opts={}){//«
 */
 	let s;
 //if (this.isPlain||this.isSubstitute||this.isStrRep) s = this.toString();
+
 if (this.isSym){//«
 	s = this.val[0];
 	if (s==="0"){
@@ -4337,6 +4355,7 @@ dup(){//«
 		if (isStr(ent)) arr.push(ent);
 		else arr.push(ent.dup());
 	}
+	com.raw = this.raw;//JDPLUI
 	return com;
 }//»
 toString(){
@@ -5279,6 +5298,7 @@ this.throwUnexpectedToken("unexpected EOF reached");
 		else if (ch==="$" && next1 && (next1.match(/[1-9]/)||SPECIAL_SYMBOLS.includes(next1))){//«
 			let sub = new ParamSub(this.index);
 			sub.val=[next1];
+			next1.match(/[1-9]/) ? (sub.isNum = true) : (sub.isSym = true);
 			wordarr.push(sub);
 			this.index++;
 		}//»
@@ -6676,6 +6696,7 @@ async expandComsub(tok, opts){//«
 	const err=(mess)=>{
 		term.response(mess, {isErr: true});
 	};
+//XLMJHU [Fixed] NO tok.raw when the BQuote/ComSub is inside of a function 
 	let arr = tok.raw.split("");   //Should use the raw here!!!
 //	let arr = tok.val;
 	let s = '';
@@ -7256,7 +7277,8 @@ makeCompoundCommand(com, opts, parentCommand){//«
 
 async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	const{term}=this;
-	const {loopNum, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+//	const {loopNum, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
+	const {loopNum, scriptArgs, scriptName,  heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 	let rv
 	let use_env;
@@ -7270,15 +7292,15 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	else use_env = env;
 	const com_env = {//«
 		loopNum,
-		stdin,
-		stdinLns,
-		outRedir,
-		isSub: !!subLines,
-		scriptOut,
+//		stdin,
+//		stdinLns,
+//		outRedir,
+//		isSub: !!subLines,
 		term,
 		env: use_env,
 		command_str: this.commandStr,
 		shell: this,
+//		scriptOut,
 		scriptArgs,
 		scriptName,
 	}//»
@@ -7355,7 +7377,7 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 		let newopts = sdup(opts);
 		delete newopts.isInteractive;
 		newopts.isFunc = true;
-		let func = term.funcs[usecomword](this, arr, newopts, com_env);
+		let func = term.funcs[usecomword](this, arr, newopts, com_env, parentCommand);//<--- SLKMDUY
 		func.isFunc = true;
 		return func;
 	}//»
@@ -7382,8 +7404,8 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	}
 	try{//«new Com
 		comobj = new com(usecomword, arr, com_opts, com_env, parentCommand);
-		comobj.scriptOut = scriptOut;
-		comobj.subLines = subLines;
+//		comobj.scriptOut = scriptOut;
+//		comobj.subLines = subLines;
 		return comobj;
 	}
 	catch(e){
@@ -7834,3 +7856,4 @@ if (!globals.shell_command_options) {
 
 }
 //»
+
