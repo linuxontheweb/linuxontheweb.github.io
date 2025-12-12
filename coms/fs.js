@@ -49,7 +49,7 @@ const widgets = NS.api.widgets;
 const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //const {Com, ErrCom, make_error_com} = comClasses;
-const {SimpleCommand} = ShellMod.comClasses;
+const {Com} = ShellMod.comClasses;
 const{Desk}=LOTW;
 const{make_icon_if_new}=Desk;
 //»
@@ -62,7 +62,8 @@ const allow_write_locked = false;
 
 //Funcs«
 
-const get_file_lines_from_args = async(args, term, errcb)=>{//«
+const get_file_lines_from_args = async(args, cur_dir, errcb)=>{//«
+//const get_file_lines_from_args = async(args, term, errcb)=>{
 	let err = [];
 	let out = [];
 	const fullterr=(arg)=>{
@@ -71,7 +72,7 @@ const get_file_lines_from_args = async(args, term, errcb)=>{//«
 	};
 	let fullpath;
 	while (args.length) {
-		fullpath = normPath(args.shift(), term.cur_dir);
+		fullpath = normPath(args.shift(), cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
 			fullterr(`no such file or directory`);
@@ -111,7 +112,7 @@ const get_file_lines_from_args = async(args, term, errcb)=>{//«
 //»
 
 //Commands«
-const Com = SimpleCommand;
+//const Com = SimpleCommand;
 /*«
 const com_ = class extends Com{
 async init(){
@@ -180,7 +181,7 @@ async init(){//«
 	if (!f) {
 		return;
 	}
-	let node = await f.toNode(this.term);
+	let node = await f.toNode(this.env.cwd);
 	if (!node){
 		return no(`${f}: Not found`);
 	}
@@ -296,7 +297,7 @@ async init(){//«
 		}
 	}
 	else {
-		let fullpath = normPath(path, this.term.cur_dir);
+		let fullpath = normPath(path, this.env.cwd.cwd);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
 			return this.no(`${fullpath}: no such file or directory`);
@@ -383,7 +384,7 @@ async init(){//«
 	let use_mod_name;
 	if (opts.d) {
 		use_mod_name = "local.dev.vim";
-		let txt = await opts.d.toText(term);
+		let txt = await opts.d.toText(this.env.cwd);
 		if (!isStr(txt)) return this.no(`${opts.d}: file not found`);
 		let url = URL.createObjectURL(new Blob([`(function(){"use strict";${txt}})()`]));
 		let scr;
@@ -421,7 +422,7 @@ return {mess: "YIM ON THE YIM YIM YIM", type: 2};
 	let linkNode;
 	let symbols;
 	if (opts.symbols){//«
-		let rv = await opts.symbols.toText(term);
+		let rv = await opts.symbols.toText(this.env.cwd);
 		if (!rv) return this.no(`${opts.symbols}: symbol file not found`);
 		rv = rv.split("\n");
 		symbols=[];
@@ -439,7 +440,7 @@ return {mess: "YIM ON THE YIM YIM YIM", type: 2};
 		else val="";
 	}
 	else {
-		fullpath = normPath(path, term.cur_dir);
+		fullpath = normPath(path, this.env.cwd.cwd);
 		node = await fsapi.pathToNode(fullpath);
 		if (!node){
 			let badlink = await fsapi.pathToNode(fullpath, true);
@@ -516,26 +517,6 @@ cancel(){//«
 }//»
 
 }//»
-const com_cat = class extends Com{//«
-    async run() {//«
-		if (this.args.length){
-			let txt;
-			while (txt = await this.nextArgAsText()){
-				if (!isErr(txt)) this.out(txt.join("\n"));
-			}
-			this.nok();
-			return;
-		}
-        let rv;
-        while (true){
-            rv = await this.readStdinChunk();
-            if (isEOF(rv)){
-                return this.ok();
-            }
-            this.out(rv);
-        }
-    }//»
-};//»
 const com_grep = class extends Com{//«
 //#re;
 
@@ -575,7 +556,7 @@ async run(){//«
 		this.ok();
 		return;
 	}
-	let rv = await get_file_lines_from_args(args, this.term, err);
+	let rv = await get_file_lines_from_args(args, this.env.cwd.cwd, err);
 //	if (rv.err && rv.err.length) err(rv.err);
 	if (rv.out&&rv.out.length) this.doGrep(rv.out);
 	have_error?this.no():this.ok();	
@@ -701,7 +682,7 @@ async run(){
 		have_error=true;
 		this.err(mess);
 	};
-	let rv = await get_file_lines_from_args(args, this.term, err);
+	let rv = await get_file_lines_from_args(args, this.env.cwd.cwd, err);
 //	if (rv.err && rv.err.length) err(rv.err);
 	if (rv.out&&rv.out.length) this.doWC(rv.out);
 	this.sendCount();
@@ -740,7 +721,7 @@ async run(){
 	};
 	while (args.length) {
 		let path = args.shift();
-		let fullpath = normPath(path, term.cur_dir);
+		let fullpath = normPath(path, this.env.cwd.cwd);
 		let node = await pathToNode(fullpath);
 		if (node) {
 			continue; 
@@ -785,7 +766,7 @@ const com_mv = class extends Com{//«
 			have_error=true;
 			this.err(mess);
 		};
-		await fsapi.comMv(args, {if_cp: false, exports: {cberr: err, werr: err, cur_dir: term.cur_dir, termobj: term}});
+		await fsapi.comMv(args, {if_cp: false, exports: {cberr: err, werr: err, cur_dir: this.env.cwd.cwd, termobj: term}});
 		have_error?this.no():this.ok();	
 	}
 }//»
@@ -804,7 +785,7 @@ const com_cp = class extends Com{//«
 			have_error=true;
 			this.err(mess);
 		};
-		await fsapi.comMv(args, {if_cp: true, exports: {cberr: err, werr: err, cur_dir: term.cur_dir, termobj: term}});
+		await fsapi.comMv(args, {if_cp: true, exports: {cberr: err, werr: err, cur_dir: this.env.cwd.cwd, termobj: term}});
 		have_error?this.no():this.ok();	
 	}
 }//»
@@ -819,7 +800,7 @@ async run(){
 	}
 	while (args.length) {
 		let path = args.shift();
-		let fullpath = normPath(path, term.cur_dir);
+		let fullpath = normPath(path, this.env.cwd.cwd);
 		let node = await fsapi.pathToNode(fullpath);
 		if (node) {
 			err(`${fullpath}: the file or directory exists`);
@@ -875,7 +856,7 @@ async run(){
 		err("missing operand");
 	}
 	else {
-		await fsapi.doFsRm(args, err, {CWD: term.cur_dir, FULLDIRS: false, dirsOnly: true});
+		await fsapi.doFsRm(args, err, {CWD: this.env.cwd.cwd, FULLDIRS: false, dirsOnly: true});
 	}
 
 	have_error?this.no():this.ok();	
@@ -898,7 +879,7 @@ async run(){
 	}
 	else{
 		let okargs=[];
-		let cwd = term.cur_dir
+		let cwd = this.env.cwd.cwd
 		for (let path of args){
 			let fullpath = normPath(path, cwd);
 			let node = await fsapi.pathToNode(fullpath, true);
@@ -939,7 +920,7 @@ async run(){
 	let target = args.shift();
 	let path = args.shift();
 
-	let target_node = await fsapi.pathToNode(normPath(target, term.cur_dir));
+	let target_node = await fsapi.pathToNode(normPath(target, this.env.cwd.cwd));
 	if (!target_node) {
 		return err("the target does not exist");
 	}
@@ -959,7 +940,7 @@ async run(){
 		return err(`${target_node.par.fullpath}: permission denied`);
 	}
 
-	let fullpath = normPath(path, term.cur_dir);
+	let fullpath = normPath(path, this.env.cwd.cwd);
 	let node = await fsapi.pathToNode(fullpath, true);
 	if (node) {
 		return err(`${path}: already exists`);
@@ -1007,7 +988,7 @@ async run(){
 	let target = args.shift();
 	let path = args.shift();
 
-	let fullpath = normPath(path, this.term.cur_dir);
+	let fullpath = normPath(path, this.env.cwd.cwd);
 	let node = await fsapi.pathToNode(fullpath, true);
 	if (node) {
 		return err(`${path}: already exists`);
@@ -1026,7 +1007,7 @@ async run(){
 	if (!parnode.okWrite) {
 		return err(`${path}: permission denied`);
 	}
-	let newnode = await fsapi.makeLink(parnode, fname, target, normPath(target, this.term.cur_dir));
+	let newnode = await fsapi.makeLink(parnode, fname, target, normPath(target, this.env.cwd.cwd));
 	if (!newnode) {
 		return err(`${path}: the link could not be created`);
 	}
@@ -1069,7 +1050,7 @@ async run(){
 	const{args}=this;
 	if (this.killed || !args.length) return;
 	let path = args.shift();
-	let fullpath = normPath(path, this.term.cur_dir);
+	let fullpath = normPath(path, this.env.cwd.cwd);
 	let node = await fsapi.pathToNode(fullpath);
 	if (!node) {
 		this.no(`${fullpath}: the file could not be found`);
@@ -1109,7 +1090,7 @@ async run(){
 	const{args, term}=this;
 	let out = [];
 	let nargs = args.length;
-	let cur_dir = term.cur_dir;
+	let cur_dir = this.env.cwd.cwd;
 	if (nargs){
 		for (let arg of args){
 			if (nargs > 1) out.push(`${arg}:`);
@@ -1237,7 +1218,7 @@ wc: com_wc,
 grep: com_grep,
 dl: com_dl,
 less:com_less,
-cat:com_cat,
+//cat:com_cat,
 mkdir: com_mkdir,
 rmdir: com_rmdir,
 mv:com_mv,
