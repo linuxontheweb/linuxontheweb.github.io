@@ -1,71 +1,28 @@
 /*README«
 
-About the developer reload workflow in Terminal windows
+The main issue here is how to reload whatever code you happen to be working on.
 
-Normally, reloading an application window during development is a pretty trivial thing:
-the system simply replaces the old application javascript (fetched from under apps/) that
-is currently executing with the current version that exists on the server. But
-the Terminal application is different because it is a "meta" application that
-is used to load up various other bits of logic, whether these be simple shell commands
-or entire screen-based modules (like the vim editor). There may be an arbitrarily large number
-of JS files sitting on the backend that might potentially be used by the Terminal app, and 
-for any given development workflow, one or more of these might need to be refetched from the 
-server in order for the shell environment to become fully consistent. Upon dispatching a "reload" 
-event to a window (usually by pressing Alt+r), these conditions are accounted for:
+For this app module, the system's reload window (e.g. Alt+r) will do the trick.
+But if you are working on a screen-based module (like vim), the above shortcut will
+reload *that* instead of the terminal itself.
 
-A. If a window's associated 'app' object/instance defines an 'onreload' method, then it will be
-called by the system. Upon loading the Terminal @QDPLMRT, the flag 'USE_ONRELOAD' is checked
-(defined below), and if true, the Terminal._onreload method is set to Terminal.onreload.
+To reload the shell module instead, see @DYUHJTK.
+To reload a specific command library see @XOLMQPO (RELOAD_LIB must be set in your working environment).
 
-  1. For reloading modules that are *NOT* screen-based, we can see @SGPEJGKH that
-     Terminal._reloadShell may be called, as well as Terminal._reloadLibs (for reloading
-     command libraries under coms/). Inside of Terminal._reloadShell, a flag 
-     (RELOAD_TERM_ONRELOAD) is also checked in case that the Terminal application window 
-     should also be reloaded.
-  2. The workflow for reloading screen-based "apps" (actually, not true apps, but modules, like 
-     Vim, kept under mods/term/) is quite complex. First, Terminal.initNewScreen is called 
-     (@UWKLHDN) by the Vim.init method, which replaces the current Terminal.onreload method, 
-     with the one defined in the module. So pressing Ctrl+r will call this function instead. From 
-     there, a call is made to Vim's internal quit method, which calls Terminal.quitNewScreen (@ZNFIKJWL). 
-     This will then call a function defined in the Vim module (Vim.cb), which resolves a Promise that 
-     was returned by the call to Vim.init, which is called by the vim command's 'init' method 
-     (e.g. const com_vim = class extends Com{init(){...}}, which is a wholly different beast from 
-     the Vim module's screen editing logic). That command is needed by the shell, so that typing
-     something like "vim myfile.txt" into the command line will have the desired effect. 
-     The command is defined inside of the 'fs' command library (coms/fs.js). The vim command's 
-     'run' method then loops while the Promise resolves to true (which indicates reloading). When 
-     it resolves to non-true, the vim command stops reloading itself and returns control back to the 
-     Terminal's screen.
-
-B. With no onreload method, the "standard" reloading of the window's associated application javascript 
-   (under apps/) will take place.
-
+To "auto import" command libraries, define IMPORT_COM_LIBS in ~/.env, like so:
+IMPORT_COM_LIBS=fs,blah,path.to.mylib
 
 »*/
-/*URKSPLK: In order to reload the terminal AND the shell with the same Alt+r keypress,«
-we have to call Win.reload({appOnly: true}), otherwise there'd be an infinite loop.
+//Notes«
 
-The interesting part of passwordMode is @DYWUEORK, where there is a timeout in the toString
+/*The interesting part of passwordMode is @DYWUEORK, where there is a timeout in the toString «
 method of the new String's, so that the output is the actual letter before the timeout
 and then a "*" after it. This mimics the way that cellfonez typically handle password
 inputs. Also of relevance is the bit @WZZKUDJK that takes the valueOf() of each individual
 character, which is necessary for password mode chars to return the "real" string rather
 than, e.g. "********".
 » */
-/*10/6/25: Can we put 'IMPORT_COM_LIBS=<...>' into .env? «
 
-The environment logic is in initLibs @SXFHFMG.
-So from there we can look for IMPORT_COM_LIBS, and do auto-loading from there. But just underneath
-that point in initLibs, we have:
-
-if (dev_mode){
-	let rv = await this.ShellMod.util.doImports(ADD_COMS, cwarn);
-}
-
-So this gives us a nice pathway in which to change everything up from an ad-hoc,
-dev-centric workflow to a more systematic one.
-
-»*/
 /*5/6/25: Just put the shell into mods/lang/shell.js.«
 Now need to figure out how to deal with the onreload situation:
 1) In normal REPL mode, we might want to reload the terminal app (this file) or the shell
@@ -76,7 +33,6 @@ in order to reload it)
 *We deal with it much like the onescape situation (and the old ondevreload situation).
 
 »*/
-//Notes«
 /*4/3/25: Need to make sure that the verydumbhack @SAYEJSLSJ actually works for all
 permutations of command line history heredoc editing. So test this out with multiple
 heredocs.
@@ -163,20 +119,6 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 »*/
 //»
 
-const RELOAD_LIBS=[
-//"games.poker",
-//"games.cfr"
-];
-
-let RELOAD_TERM_ONRELOAD = false;
-
-//This means that the terminal app's onreload method is set to _onreload (to reload the shell)
-let USE_ONRELOAD = true;
-
-//This means that the terminal app window is reloaded by Ctrl+r (there is no onreload on the app)
-//let USE_ONRELOAD = false;
-
-//let NO_ONRELOAD = false;
 //Terminal Imports«
 const NS = LOTW;
 const util = LOTW.api.util;
@@ -329,15 +271,28 @@ this.statusBar = Win.statusBar;
 this.appClass="cli";
 this.isEditor = false;
 this.isPager = false;
+/*
 this.env={
 USER: globals.user.CURRENT_USER,
 HOME: globals.user.home_path
 };
+*/
+this.env={
+	vars:{
+		USER: globals.user.CURRENT_USER,
+		HOME: globals.user.home_path
+	},
+	funcs:{},
+	coms:{},
+	cwd: {
+		cwd: this.getHomedir()
+	}
+}
 //this.env['USER'] = globals.CURRENT_USER;
 //this.env = globals.TERM_ENV;
 this.ENV = this.env;
 //this.funcs = globals.TERM_FUNCS;
-this.funcs={};
+//this.funcs={};
 //Editor mode constants for the renderer (copy/pasted from vim.js)«
 /*
 this.modes= {
@@ -448,9 +403,9 @@ this.lineColors=[];
 this.currentCutStr="";
 this.history=[];
 
-this.env['USER'] = globals.user.CURRENT_USER;
-this.cur_dir = this.getHomedir();
-this.cwd = this.cur_dir;
+//this.env['USER'] = globals.user.CURRENT_USER;
+//this.cur_dir = this.getHomedir();
+//this.cwd = this.cur_dir;
 
 this.makeDOMElem();
 
@@ -571,9 +526,9 @@ main.onwheel=e=>{//«
 		}
 		let skip_factor = 10;
 /*
-		if (this.env.SCROLL_SKIP_FACTOR){
-			let got = this.env.SCROLL_SKIP_FACTOR.ppi();
-			if (!Number.isFinite(got)) cwarn(`Invalid SCROLL_SKIP_FACTOR: ${this.env.SCROLL_SKIP_FACTOR}`);
+		if (this.env.vars.SCROLL_SKIP_FACTOR){
+			let got = this.env.vars.SCROLL_SKIP_FACTOR.ppi();
+			if (!Number.isFinite(got)) cwarn(`Invalid SCROLL_SKIP_FACTOR: ${this.env.vars.SCROLL_SKIP_FACTOR}`);
 			else skip_factor = got;
 		}
 */
@@ -669,6 +624,72 @@ executeBackgroundCommand(s){//«
 //»
 //Util«
 
+async reloadLib(){//«
+	if (!dev_mode){
+cwarn("Not dev_mode");
+		return;
+	}
+	let lib = this.env.vars.RELOAD_LIB;
+	if (!lib) {
+		this.doOverlay(`RELOAD_LIB: not defined`);
+		return;
+	}
+	this.doOverlay(`Reload: ${lib}`);
+	await this.ShellMod.util.deleteComs([lib], this.env.coms);
+	await this.ShellMod.util.doImports([lib], this.env.coms, cerr);
+}//»
+async initLibs(addMessage){//«
+
+	let init_prompt = `LOTW shell`;
+	if (!Desk.isFake) init_prompt +=`\x20(${this.winid.replace("_","#")})`
+	if (admin_mode){
+		init_prompt+=`\nAdmin mode: true`;
+	}
+	if (addMessage) init_prompt = `${init_prompt}\n${addMessage}`;
+//SXFHFMG
+
+	let env_file_path = `${this.env.cwd.cwd}/.env`; 
+	let env_lines = await env_file_path.toLines();
+	if (env_lines) {
+		let rv = this.ShellMod.util.addToEnv(env_lines, this.env.vars, {if_export: true});
+		if (rv.length){
+			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
+		}
+		if (this.env.vars.IMPORT_COM_LIBS) {
+			let add_com_libs = this.env.vars.IMPORT_COM_LIBS.split(",");
+			if (add_com_libs){
+				let rv = await this.ShellMod.util.doImports(add_com_libs, this.env.coms, cwarn);
+				if (rv) init_prompt += "\nImported libs: "+rv;
+			}
+		}
+	}
+
+	this.response(init_prompt);
+
+}//»
+async reloadShell(){//«
+if (!dev_mode){
+cwarn("Not dev_mode");
+	return;
+}
+//globals.ShellMod = new 
+
+delete LOTW.mods["lang.shell"];
+delete globals.ShellMod;
+
+//delete globals.shell_commands;
+//delete globals.shell_command_options;
+
+delete this.ShellMod;
+delete this.Shell;
+this.doOverlay("Reload ShellMod...");
+await this.loadShell();
+this.doOverlay("Okay!");
+//URKSPLK
+//Add this global variable and uncomment this to reload the terminal also!
+//if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
+
+}//»
 async loadShell(){//«
 	if (!globals.ShellMod) {
 		if (!await util.loadMod("lang.shell")) {
@@ -676,10 +697,16 @@ async loadShell(){//«
 			return;
 		}
 		globals.ShellMod = new LOTW.mods["lang.shell"]();
-		globals.ShellMod.init();
+//		globals.ShellMod.init();
 	}
 	this.ShellMod = globals.ShellMod;
 	this.Shell = globals.ShellMod.Shell;
+
+	const coms = this.env.coms;
+	const builtins = this.ShellMod.builtins;
+	for (let k in builtins) {
+		coms[k] = builtins[k];
+	}
 }//»
 //MSFUNPEJ
 get termLines(){//«
@@ -1038,7 +1065,6 @@ getMaxLen(){//«
 cy(){//«
 	return this.y + this.scrollNum;
 }//»
-
 
 //»
 //Render«
@@ -2118,8 +2144,9 @@ async getCommandArr (dir, arr, pattern){//«
 //»
 getPromptStr(){//«
 	let str;
-	let user = this.env.USER;
-	str = this.cur_dir.replace(/^\/+/, "/");
+	let user = this.env.vars.USER;
+//	str = this.cur_dir.replace(/^\/+/, "/");
+	str = this.env.cwd.cwd.replace(/^\/+/, "/");
 	str = str+"$";
 	if ((new RegExp("^/home/"+user+"\\$$")).test(str)) str = "~$";
 	else if ((new RegExp("^/home/"+user+"/")).test(str)) str = str.replace(/^\/home\/[^\/]+\x2f/,"~/");
@@ -2418,7 +2445,7 @@ cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
 async doCompletion(){//«
 
 	let contents;
-	let use_dir = this.cur_dir;
+	let use_dir = this.env.cwd.cwd;
 	let arr_pos = this.getComPos();
 	let arr = this.getComArr();
 
@@ -2443,7 +2470,7 @@ async doCompletion(){//«
 	}
 	let got_path = null;
 	if (tok.match(/\x2f/)) {//«
-		tok = tok.replace(/^~\x2f/, "/home/"+this.env.USER+"/");
+		tok = tok.replace(/^~\x2f/, "/home/"+this.env.vars.USER+"/");
 		got_path = true;
 		let dir_arr = tok.split("/");
 		tok = dir_arr.pop();
@@ -2452,9 +2479,9 @@ async doCompletion(){//«
 		if (dir_arr.length == 1 && dir_arr[0] == "") new_dir_str = "/";
 		else {
 			dir_str = dir_arr.join("/");
-			let use_cur = this.cur_dir;
+			let use_cur = this.env.cwd.cwd;
 			if (dir_str.match(/^\x2f/)) use_cur = null;
-			new_dir_str = util.getFullPath(dir_str, this.cur_dir);
+			new_dir_str = util.getFullPath(dir_str, this.env.cwd.cwd);
 		}
 		use_dir = new_dir_str;
 	}//»
@@ -2462,9 +2489,9 @@ async doCompletion(){//«
 		return this.doGetDirContents(use_dir, tok, tok0, arr_pos);
 	}
 	if (tokpos==1) {
-//log(this.funcs);.concat(Object.keys(this.funcs));
 //		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
-		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands).concat(Object.keys(this.funcs)), tok)
+//		contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.builtins).concat(Object.keys(this.env.coms)).concat(Object.keys(this.env.funcs)), tok)
+		contents = await this.getCommandArr(use_dir, Object.keys(this.env.coms).concat(Object.keys(this.env.funcs)), tok)
 	}
 	else {
 //		if (tok0 == "help"){
@@ -2697,34 +2724,6 @@ fmtLinesSync(arr, startx){//«
 }
 //»
 
-async initLibs(addMessage){//«
-
-	let init_prompt = `LOTW shell`;
-	if (!Desk.isFake) init_prompt +=`\x20(${this.winid.replace("_","#")})`
-	if (admin_mode){
-		init_prompt+=`\nAdmin mode: true`;
-	}
-	if (addMessage) init_prompt = `${init_prompt}\n${addMessage}`;
-//SXFHFMG
-	let env_file_path = `${this.cur_dir}/.env`; 
-	let env_lines = await env_file_path.toLines();
-	if (env_lines) {
-		let rv = this.ShellMod.util.addToEnv(env_lines, this.env, {if_export: true});
-		if (rv.length){
-			init_prompt+=`\n${env_file_path}:\n`+rv.join("\n");
-		}
-		if (this.env.IMPORT_COM_LIBS) {
-			let add_com_libs = this.env.IMPORT_COM_LIBS.split(",");
-			if (add_com_libs){
-				let rv = await this.ShellMod.util.doImports(add_com_libs, cwarn);
-				if (rv) init_prompt += "\nImported libs: "+rv;
-			}
-		}
-	}
-
-	this.response(init_prompt);
-
-}//»
 responseComNames(arr) {//«
 	let arr_pos = this.getComPos();
 	let repeat_arr = this.getComArr();
@@ -2911,7 +2910,6 @@ this.numCtrlD++;
 this.doOverlay(`Ctrl+d: ${this.numCtrlD}`);
 //cwarn("Calling do_ctrl_D!!! (nothing doing)");
 };//»
-
 doCtrlC(){//«
 	this.bufPos = 0;
 	this.commandHold = null;
@@ -3554,47 +3552,13 @@ But implementing this exact behaviour is probably more trouble than it is worth.
 		case "s_CAS":
 			this.selectFromHistory(HISTORY_PATH_SPECIAL);
 			break;
-		case "r_CAS": {//«
-			if (!dev_mode){
-cwarn("Not dev_mode");
-				return;
-			}
-			//VMUIRPOIUYT
-			if (this.onreload) delete this.onreload;
-			else this.onreload = this._onreload;
-			this.doOverlay(`Reload terminal: ${!this.onreload}`);
+		case "r_CA"://DYUHJTK
+			this.reloadShell();
 			break;
-		}//»
+		case "r_CAS"://XOLMQPO 
+			this.reloadLib();
+			break;
 	}
-/*«
-	else if (sym == "HOME_"|| sym == "END_") this.handlePage(sym);
-	else if (sym == "p_CAS") this.togglePaste();
-	else if (sym == "TAB_") this.handleTab();
-	else if (sym == "BACK_")  this.handleBackspace();
-	else if (sym == "ENTER_") this.handleEnter();
-	else if (sym == "c_C") this.doCtrlC();
-	else if (sym == "k_C") this.doClearLine();
-	else if (sym == "y_C") this.insertCutStr();
-	else if (sym == "c_CAS") {
-		this.clear();
-		this.responseEnd();
-	}
-	else if (sym=="a_C") {//«
-		e.preventDefault();
-		this.seekLineStart();
-	}//»
-	else if (sym=="e_C") this.seekLineEnd();
-	else if (sym == "g_CAS") this.saveSpecialCommand();
-	else if (sym=="h_CAS") this.selectFromHistory(HISTORY_PATH);
-	
-	else if (sym=="s_CAS"){
-		this.selectFromHistory(HISTORY_PATH_SPECIAL);
-	}
-»*/
-///*
-//else if (sym=="d_CAS"){
-//}
-//*/
 }
 
 //»
@@ -3683,55 +3647,10 @@ onkeyup(e,sym){//«
 
 //»
 
-//System callbacks«
-
-async _reloadShell(){//«
-//globals.ShellMod = new 
-
-delete LOTW.mods["lang.shell"];
-delete globals.ShellMod;
-
-delete globals.shell_commands;
-delete globals.shell_command_options;
-
-delete this.ShellMod;
-delete this.Shell;
-this.doOverlay("Reload ShellMod...");
-await this.loadShell();
-this.doOverlay("Okay!");
-//URKSPLK
-//Uncomment this to reload the terminal also!
-if (RELOAD_TERM_ONRELOAD) await this.Win.reload({appOnly: true});
-//log(this.Win);
-
-}//»
-async _reloadLibs(arr){//«
-	for (let mod of arr){
-		if (!this.ShellMod.allLibs[mod]) {
-cwarn(`Skipping: ${mod}`);
-			continue;
-		}
-		this.doOverlay(`Delete: ${mod}`);
-
-//Reload command libraries
-		await this.ShellMod.util.deleteComs([mod]);
-		await this.ShellMod.util.doImports([mod], cerr);
-
-	}
-}//»
-async _onreload(){//«
-//SGPEJGKH
-//Just reload the shell (if working on a devtest command)
-//log(this.env);
-	await this._reloadShell();
-
-//	await this._reloadLibs(["fs"]);
-//	await this._reloadLibs(["net.fs"]);
-//	await this._reloadLibs(RELOAD_LIBS);
-
-}//»
+//System callbacks (onkill, onappinit, onreload, etc)«
 
 onkill(if_dev_reload){//«
+
 	if (this.curEditNode) this.curEditNode.unlockFile();
 	if (!if_dev_reload) {
 		return;
@@ -3747,8 +3666,8 @@ onkill(if_dev_reload){//«
 		this.reInit.commandStr = this.actor.command_str;
 	}
 //log(DEL_MODS);
-	this.ShellMod.util.deleteMods(DEL_MODS);
-	this.ShellMod.util.deleteComs(DEL_COMS);
+//	this.ShellMod.util.deleteMods(DEL_MODS);
+//	this.ShellMod.util.deleteComs(DEL_COMS);
 
 //	delete globals.shell_commands;
 //	delete globals.shell_command_options;
@@ -3763,9 +3682,7 @@ async onappinit(appargs={}){//«
 	if (!reInit) {
 		reInit = {};
 	}
-//	if (!NO_ONRELOAD) this.onreload = this._onreload;
 //QDPLMRT
-	if (USE_ONRELOAD) this.onreload = this._onreload;
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {history, historyNode, addMessage, commandStr} = reInit;
 	if (appargs.noKbReload){
@@ -3947,25 +3864,3 @@ quitNewScreen(screen, opts={}){//«
 //»
 
 
-/*
-doCtrlC(){//«
-	if (this.curShell) {
-		this.env['?'] = 0;
-		if (this.curShell.stdin) {
-			this.curShell.stdin(null, true);
-			delete this.curShell.stdin;
-		}
-	}
-	else {
-		this.handleKey(null,"^".charCodeAt(), null, true);
-		this.handleKey(null,"C".charCodeAt(), null, true);
-		this.rootState = null;
-		this.bufPos = 0;
-		this.commandHold = null;
-		this.env['?'] = 0;
-		this.response("^C");
-		this.responseEnd();
-	}
-}
-//»
-*/
