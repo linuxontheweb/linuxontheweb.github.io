@@ -3,7 +3,7 @@
 This file implements the Shell Command Language: tokenizer, parser (ast builder), and execution
 engine.
 
-@COMCLASS: The class that all commands must override is kept here.
+@SIMPLECOMMAND: The class that all commands must override is kept here.
 @BUILTINS: Shell builtins are kept here.
 
 Non-builtin commands are defined inside of the 'coms/' hierarchy. The simplest file
@@ -40,6 +40,80 @@ $ import path.to.mycoms
 /*«
 »*/
 
+/*FIXED BUG @MFLOUYTW???«
+We needed to perform tilde expansion here so that the following command works:
+$ ~/my_script.sh 
+»*/
+/*@XNDKSLDK: There is a 'term' argument passed to Word.expandSubs.«
+From there, it is then passed into these:
+DQuote.expand, BQuote.expand, ParamSub.expand, ComSub.expand, MathSub.expand
+I am thinking this is legacy code. For example, look at ParamSub.expand @KLSDHSKD
+The only direct usage of 'term' was a call to term.response that is now commented
+out. The env vars are taken from com_opts.env.vars. Otherwise, 'term' is
+passed along to expandSubs, for ParamSub's that have the 'isSubstitute' flag,
+e.g. echo ${MYDIR:-`ls /path/to/what`}
+»*/
+
+//Notes«
+//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
+
+/*12/9/25: Command library issues«
+Now importing into the current scope
+
+Got rid of (legacy) global command options. All options must be declared like:
+class com_mycom extends SimpleCommand{
+	static getOpts(){
+		return {
+			s:{a: 1, b: 3}, //Short options
+			l:{longopt1: 1, longopt2: 3} //Long options
+		}
+	}
+}
+
+l: long options
+s: short options
+
+1 means that the option does not have an argument
+2 means that the option *may* have an argument
+3 means that the option requires an argument
+
+Any argument for a short option requires a mediating space. Below, the '4' is the
+argument for the 'x' option.
+
+~$ mycommand -x 4 filename.js
+
+Long options may be given an argument like this:
+
+~$ dosomething --like-this="Right here" to_some.json
+»*/
+/*12/8/25: Shell environment stuff«
+Need different environments for:
+
+1) Current working directory
+2) Variables
+3) Functions
+
+I did a TON of niggly-piggly editing of this file, apps/Terminal.js and coms/fs.js (just for the cwd variable)
+in order to create/use an environment object to get passed around in the shell (and duplicated as needed), 
+that looks like:
+
+env: {
+	vars:{
+		VAR_1: "BLAH!!!",
+		VAR_2: "hueeyyy???",
+		//...
+	},
+	funcs:{
+		FUNC_1: function(){...},
+		FUNC_2: function(){...},
+		//...
+	},
+	cwd:{
+		cwd: "/full/path/to/current/working/directory"
+	}
+}
+
+»*/
 /*12/7/25«
 @XLMJHU: This barfed when there were BQuote's/ComSub's tokens inside of functions, because the 'raw'
 properties never got copied over in the respective dup() methods (@WKLMUJK/@JDPLUI) of the given tokens.
@@ -89,7 +163,6 @@ Normally, if you just want to wait for all of the input at once (instead of stre
 define pipeDone, which is called with all of the buffered input.
 
 »*/
-
 /*11/30/25: Let's get rid of _pipeIn, and just have a single pipeIn method (that shouldn't be overridden)«
 
 for simple AND compound commands. Then we should allow the command authors to dictate these things:
@@ -166,8 +239,6 @@ that has set 'this.binPipe = true'. We need to check for the this.binPipe flag @
 and then do a call to toBytes. The only real question is that whatever is coming into
 the pipe is a consistent type: strings or Uint8Arrays (or Blobs, etc).
 »*/
-//Notes«
-//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 /*CRITICAL BUG:«
 THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
 let val = await fname.toText(term);
@@ -341,59 +412,6 @@ export const mod = function() {
 //Var«
 
 const shellmod = this;
-this.allLibs = LOTW.libs;
-
-const mail_coms=[//«
-	"mkcontact",
-	"mail",
-	"curaddr",
-	"dblist",
-	"dbdrop",
-	"imapcon",
-	"imapdis",
-	"imapgetenvs"
-];//»
-const fs_coms=[//«
-	"_purge",
-	"_clearstorage",
-	"_blobs",
-	"wc",
-	"grep",
-	"dl",
-	"less",
-	"cat",
-	"mkdir",
-	"rmdir",
-	"mv",
-	"cp",
-	"rm",
-	"symln",
-	"ln",
-	"vim",
-	"touch",
-//	"brep",
-//	"mount",
-//	"unmount",
-];//»
-const test_coms = [//«
-"pipe",
-"deadpipe",
-"badret",
-"noret",
-"nullret",
-"badobj",
-"badarrobj",
-"oktypedarr",
-"badtypedarr",
-"weirdarr",
-"hang",
-"norun"
-]//»
-//const preload_libs={fs: fs_coms, test: test_coms, esprima: ["esparse"]};
-const preload_libs={fs: fs_coms};
-//if (nodejs_mode) preload_libs.mail = mail_coms;
-//if (dev_mode) preload_libs.mail = mail_coms;
-this.preloadLibs = preload_libs;
 
 //Parsing«
 
@@ -406,24 +424,6 @@ const OPERATOR_CHARS=[//«
 "(",
 ")",
 ];//»
-//const UNSUPPORTED_OPERATOR_CHARS=["(",")"];
-//const UNSUPPORTED_OPERATOR_CHARS=[];
-/*
-const UNSUPPORTED_DEV_OPERATOR_TOKS = [];
-const UNSUPPORTED_OPERATOR_TOKS=[//«
-	'&',
-//	'<',
-	';;',
-	';&',
-	'>&',
-	'>|',
-	'<&',
-//	'<<',
-	'<>',
-	'<<-',
-//	'<<<'
-];//»
-*/
 
 const OCTAL_CHARS=[ "0","1","2","3","4","5","6","7" ];
 const INVSUB="invalid/unsupported substitution";
@@ -1049,8 +1049,8 @@ args.splice(i, 1);
 	}
 	return [obj, err];
 }//»
-const add_to_env = (arr, env, opts)=>{//«
-	let {term, if_export} = opts;
+const add_to_env = (arr, env, opts={})=>{//«
+	let {if_export} = opts;
 	let marr;
 //	let use;
 	let err = [];
@@ -1091,34 +1091,37 @@ continue;
 //		env[which]=marr[3];
 		next();
 	}
-//	if (!arr.length && !if_export){
-//		env = term.ENV;
-//	}
 	for (let k in assigns){
 		env[k]=assigns[k];
 	}
 	return err;
 };//»
-const import_coms = async libname => {//«
+const add_coms_to_com_env=(imp_coms, com_env)=>{//«
+//	let builtins = this.builtins;
+	let all = Object.keys(imp_coms);
+	let ok_coms = [];
+	for (let com of all){
+//		if (typeof builtins[com] === "function" || typeof com_env[com] === "function") {
+		if (typeof com_env[com] === "function") {
+cwarn(`The command ${com} already exists!`);
+			continue;
+		}
+		com_env[com] = imp_coms[com];
+		ok_coms.push(com);
+	}
+	return ok_coms;
+};//»
+const import_coms = async (libname, coms) => {//«
 
 	let modpath = libname.replace(/\./g,"/");
 	let v = (Math.random()+"").slice(2,9);
 	let imp = await import(`/coms/${modpath}.js?v=${v}`);
 
-	let coms = imp.coms;
-	let sh_coms = globals.shell_commands;
-	let all = Object.keys(coms);
-	let ok_coms = [];
-	for (let com of all){
-		if (typeof sh_coms[com] === "function") {
-cwarn(`The command ${com} already exists!`);
-			continue;
-		}
-		sh_coms[com] = coms[com];
-		ok_coms.push(com);
-	}
-	this.allLibs[libname] = ok_coms;
-//do_overlay(`Added ${ok_coms.length} commands from '${libname}'`);
+	let ok_coms = add_coms_to_com_env(imp.coms, coms);
+
+//	this.allLibs[libname] = ok_coms;
+	LOTW.libs[libname] = ok_coms;
+/*«
 	let opts = imp.opts||{};
 	let sh_opts = globals.shell_command_options;
 	all = Object.keys(opts);
@@ -1129,20 +1132,24 @@ cwarn(`The option ${opt} already exists!`);
 		}
 		sh_opts[opt] = opts[opt];
 	}
-	NS.coms[libname] = {coms, opts, onkill: imp.onkill};
+//	NS.coms[libname] = {coms, opts, onkill: imp.onkill};
+»*/
+	NS.coms[libname] = {coms: imp.coms, onkill: imp.onkill};
 	return ok_coms.length;
 }//»
-const do_imports = async(arr, err_cb) => {//«
+const do_imports = async(arr, coms, err_cb) => {//«
 	if (!err_cb) err_cb = ()=>{};
-//	let did_num=[];
-//	let s='';
 	let out=[];
 	for (let name of arr){
-		if (this.allLibs[name]) {
+		let gotlib;
+//		if (this.allLibs[name]) {
+		if (gotlib = NS.coms[name]) {
+//Still need to add the commands to the 'coms' environment
+			add_coms_to_com_env(gotlib.coms, coms);
 			continue;
 		}   
 		try{
-			let num = await import_coms(name);
+			let num = await import_coms(name, coms);
 			out.push(`${name}(${num})`);
 log(`Imported ${num} from ${name}`);
 		}catch(e){
@@ -1153,13 +1160,12 @@ cerr(e);
 
 	return out.join(", ");
 };//»
-
-const delete_coms = arr => {//«
-	let sh_coms = globals.shell_commands;
-	let sh_opts = globals.shell_command_options;
+const delete_coms = (arr, com_env) => {//«
+//	let sh_coms = globals.shell_commands;
 	for (let libname of arr){
-if (!this.allLibs[libname]){
-//cwarn(`The command library: ${libname} is not loaded`);
+//if (!this.allLibs[libname]){
+if (!LOTW.libs[libname]){
+cwarn(`The command library: ${libname} is not loaded`);
 continue;
 }
 		let lib = NS.coms[libname];
@@ -1167,35 +1173,28 @@ continue;
 //cwarn(`The command library: ${libname} was in this.allLibs, but not in NS.coms!?!?!`);
 			continue;
 		}
-//log("KILL", lib.onkill);
 		lib.onkill && lib.onkill();
 		let coms = lib.coms;
 		let all = Object.keys(coms);
 		let num_deleted = 0;
 		for (let com of all){
 //CJIUKLEH
-			if (sh_coms[com] !== coms[com]){
+//			if (sh_coms[com] !== coms[com]){
+			if (com_env[com] !== coms[com]){
 //cwarn(`The command ${com} is not owned by lib: ${libname}!!`);
 				continue;
 			}
-//			delete sh_coms[com];
-			sh_coms[com] = libname;
+//			sh_coms[com] = libname;
+			delete com_env[com];
 			num_deleted++;
 		}
 log(`Deleted: ${num_deleted} commands from '${libname}'`);
-		let opts = lib.opts;
-		all = Object.keys(opts);
-		for (let opt of all){
-			if (sh_opts[opt] !== opts[opt]){
-//cwarn(`The option ${opt} is not owned by lib: ${libname}!!`);
-				continue;
-			}
-			delete sh_opts[opt];
-		}
-		delete this.allLibs[libname];
-		delete NS.coms[libname];
+//		delete this.allLibs[libname];
+		delete LOTW.libs[libname];
+		delete LOTW.coms[libname];
 	}
 };//»
+/*
 const delete_mods=(arr)=>{//«
 	for (let m of arr){
 		let scr = document.getElementById(`script_mods.${m}`);
@@ -1203,31 +1202,23 @@ const delete_mods=(arr)=>{//«
 			scr._del();
 		}
 		delete NS.mods[m];
-let coms = this.allLibs[m];
-for (let com of coms){
-delete globals.shell_commands[com];
-}
-delete this.allLibs[m];
+//let coms = this.allLibs[m];
+let coms = LOTW.libs[m];
+//for (let com of coms){
+//delete globals.shell_commands[com];
+//}
+//delete this.allLibs[m];
+delete LOTW.libs[m];
 
 	}
 }//»
+*/
 this.util={
 	deleteComs:delete_coms,
-	deleteMods:delete_mods,
+//	deleteMods:delete_mods,
 	addToEnv:add_to_env,
 	doImports:do_imports,
 };
-/*
-this.util={//«
-	evalShellExpr: eval_shell_expr,
-	make_sh_err_com: make_sh_error_com,
-	addToEnv:add_to_env,
-	importComs:import_coms,
-	doImports:do_imports,
-	deleteComs:delete_coms,
-	deleteMods:delete_mods,
-}//»
-*/
 //}
 //»
 
@@ -1246,47 +1237,6 @@ allLibs: LOTW.libs,
 
 //Classes     (BaseCommand, SimpleCommand, CompoundCom, ErrCom, Stdin/Stdout, ScriptCom...)«
 //ZJDEXWL
-const EnvReadLine = class{//«
-
-//#lines;
-//#cb;
-
-constructor(term){
-	this.lines = [];
-	this.term = term;
-}
-end(){this.killed=true;}
-addLn(ln){//«
-	if (this.cb) {
-		this.cb(ln);
-		this.cb = undefined;
-		return;
-	}
-	this.lines.push(ln);
-}//»
-addLns(lns){//«
-	if (isEOF(lns)) return this.addLn(lns);
-if (!isStr(lns)){
-cwarn("Skipping non-string/non-EOF", lns);
-return;
-}
-	let arr = lns.split("\n");
-	for (let ln of arr){
-		this.addLn(ln);
-	}
-}//»
-async readLine(){//«
-//SZKLIEPO
-//	this.term.forceNewline();
-	if (this.lines.length){
-		return this.lines.shift();
-	}
-	return new Promise((Y,N)=>{
-		this.cb = Y;
-	});
-}//»
-
-};//»
 
 class Stdin{//«
 
@@ -1298,9 +1248,7 @@ constructor(tok, arg){
 }
 
 async setValue(shell, term, opts={}){//«
-//async setValue(shell, term, env, scriptName, scriptArgs){
 const{env, scriptName, scriptArgs} = opts;
-
 if (this.tok.isHeredoc) {
 	this.value = this.tok.value
 	return true;
@@ -1316,7 +1264,7 @@ if (r_op==="<"){//«
 	arg.tildeExpansion();
 	arg.dsSQuoteExpansion();
 	let fname = arg.toString();
-	let node = await fname.toNode(term);
+	let node = await fname.toNode(env.cwd);
 	if (!node) {
 		return `${raw}: no such file or directory`;
 	}
@@ -1331,7 +1279,6 @@ if (r_op==="<"){//«
 	return true;
 }//»
 if (r_op==="<<<"){//«
-//	await this.arg.expandSubs(shell, term, env, scriptName, scriptArgs);
 //SYEORLDJ
 	let arr = [this.arg];
 	await shell.allExpansions(arr);
@@ -1361,8 +1308,8 @@ constructor(tok, file){
 	this.isRedir = true;
 }
 
-async write(term, arrarg, env){//«
-//async write(term, arrarg, env, ok_clobber){
+async write(arrarg, env){//«
+//async write(term, arrarg, env)
 
 let val;
 if (arrarg instanceof Uint8Array) val = arrarg;
@@ -1379,11 +1326,10 @@ const{tok, file: fname}=this;
 //const {op}=tok;//WRONG!!!
 //-----vvv
 const {val: op}=tok;
-
+//log(env);
 //This is instance of Word vvvvv
-// let fullpath = normPath(fname, term.cur_dir);//WRONG!!!
 //ZOPIRUTKS------------------vvvvvvvvvvv
-let fullpath = normPath(fname.toString(), term.cur_dir);
+let fullpath = normPath(fname.toString(), env.cwd.cwd);
 let node = await fsapi.pathToNode(fullpath);
 if (node) {//«
 	if (node.isDevice){
@@ -1431,7 +1377,6 @@ let typ = parnode.type;
 if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||USERS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
 	return `${fname}: invalid or unsupported path`;
 }
-//if (typ===FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 if (!parnode.okWrite) {
 	return `${fname}: Permission denied`;
 }
@@ -1442,23 +1387,6 @@ else{
 	if (!await fsapi.writeFile(fullpath, val)) return `${fname}: Could not write to the file`;
 }
 return true;
-/*
-if (!node || op===">>"){
-	if (!await fsapi.writeFile(fullpath, val, {append: true})) return `${fname}: Could not write to the file`;
-}
-else if (op === ">"){
-cwarn("CLOBBER: call setValue on node");
-//log(node);
-let rv = await node.setValue(val);
-log("RETURNED", rv);
-return true;
-}
-else{
-cwarn(`UNKNOWN REDIRECT OPERATOR: '${op}'`);
-return `Unknown redirect operator: '${op}'`;
-}
-return true;
-*/
 }//»
 
 dup(){
@@ -1466,7 +1394,7 @@ dup(){
 }
 
 }//»
-//COMCLASS
+
 class BaseCommand {//«
 	#pipeInBuffer;
 	#redirInBuffer;
@@ -1505,7 +1433,7 @@ DIE(`Unknown value as arg to initRedirInBuffer (see above)`);
 		this.#subOutBuffer = [];
 		this.haveSubOut = true;
 	}
-	writeOutRedir(){return this.#redirOut.write(this.term, this.#redirOutBuffer, this.env);}
+	writeOutRedir(){return this.#redirOut.write(this.#redirOutBuffer, this.env);}
 	out(val, opts={}){//«
 		if (this.shell.cancelled) return;
 		if (this.haveRedirOut){
@@ -1636,6 +1564,7 @@ async #pipeBytesDone(){//«
 }//»
 */
 }//»
+//SIMPLECOMMAND
 class SimpleCommand extends BaseCommand{//«
 //	#lines;
 	constructor(name, args, opts, env, parentCom){//«
@@ -1695,7 +1624,8 @@ class SimpleCommand extends BaseCommand{//«
 			else return null;
 		}
 		else{
-			node = await f.toNode(this.term);
+//			node = await f.toNode(this.term);
+			node = await f.toNode(this.env.cwd);
 			if (node) return node;
 			e = `${f}: not found`;
 		}
@@ -1907,6 +1837,7 @@ constructor(shell, opts, parentCommand){//«
 	this.shell = shell;
 	this.term = shell.term;
 	this.opts=opts;
+	this.subLines=opts.subLines;
 	this.outRedir = opts.outRedir;
 	this.awaitEnd = new Promise((Y,N)=>{
 		this.end = (rv)=>{
@@ -1968,7 +1899,14 @@ async run(){
 		this.opts.scriptName = "sh";
 	}
 	let opts = sdup(this.opts);
-	opts.env = sdup(this.opts.env);
+//	opts.env = sdup(this.opts.env);
+	opts.env = {
+		vars: sdup(this.opts.env.vars),
+		funcs: sdup(this.opts.env.funcs),
+		cwd: sdup(this.opts.env.cwd),
+		coms: sdup(this.opts.env.coms)
+	};
+//log(this.opts);
 	let rv = await this.shell.executeStatements(this.list, opts, this);
 	if (this.isScript && isObj(rv) && rv.abortScript === true){
 		rv = E_ERR;
@@ -2159,7 +2097,7 @@ async init(){//«
 }//»
 async run(){//«
 	const{shell}=this;
-	let env = this.opts.env;
+	let env = this.opts.env.vars;
 	let nm = this.var_name+"";
 	let rv;
 	for (let val of this.in_list){
@@ -2203,13 +2141,16 @@ constructor(shell, opts, name, com, parentCom){//«
 	this.com = com.compound_command.compound_list.term;
 	this.type = com.type;
 	this.redirs = com.redirs;
+//log(opts);
 //this.parentCom = parentCommand;
 }//»
 async init(){//«
 	this._init();
 	let typ = this.type;
 	let name = this.name
-	const funcs = this.shell.term.funcs;
+//	const funcs = this.shell.env.funcs;
+	const funcs = this.opts.env.funcs;
+//	const funcs = this.env.funcs;
 	let func;
 	if (typ==="brace_group"){
 		func = (shell, args, opts, com_env, parentCommand) => { 
@@ -2229,6 +2170,7 @@ async init(){//«
 		throw new Error(`MAKE WHAT TYPE OF FUNCTION (NOT BRACE OR SUBSHELL: <${typ}>)`);
 	}
 	funcs[name] = func;
+//log(funcs);
 }//»
 run(){//«
 //As commands themselves, function definitions don't do much of anything, e.g.:
@@ -2251,7 +2193,7 @@ async init(){//«
 //AKDMFLS
 //	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
 //AKDKRKSJ
-	await this.word.expandSubs(this.shell, this.shell.term);
+	await this.word.expandSubs(this.shell, {}, this.shell.term);
 	if(this.shell.cancelled) return;
 	this.word.quoteRemoval();
 	this.word = this.word.fields.join("")
@@ -2299,7 +2241,8 @@ LOOP: for (let obj of this.list){
 		wrd.tildeExpansion();
 //DJSLPEKS
 //		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
-		await wrd.expandSubs(shell, shell.term, this.opts);
+//		await wrd.expandSubs(shell, shell.term, this.opts);
+		await wrd.expandSubs(shell, this.opts, shell.term);
 		if(shell.cancelled) return;
 		wrd.quoteRemoval();
 		let arr = wrd.fields.join("").split("");
@@ -2339,7 +2282,7 @@ else {
 //»
 
 //this.comClasses={Com,ScriptCom,NoCom,ErrCom};
-this.comClasses={SimpleCommand,NoCom,ErrCom};
+this.comClasses={Com: SimpleCommand,NoCom,ErrCom};
 
 //»
 
@@ -2398,87 +2341,38 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 }
 }//»
-const com_devtest = class extends Com{//«
-init(){
-}
-run(){
-
-//Object.getOwnPropertyNames(LOTW.apps["dev.Poker"].prototype)
-//getters:
-//
-//curPlayer
-//curType
-//curPlayerNum
-//
-//keep:
-//
-//resetBetStates
-//startGame
-//playerAction
-//nextPlayer
-//nextPhase
-//automatedAction
-//newHand
-//endHand
-//initPlayers
-//initGameState
-//resetGameState
-//onappinit
-//onkeydown
-
-let getters=[
-"curPlayer",
-"curType",
-"curPlayerNum",
-];
-let keep = [
-"nextPlayer",
-"nextPhase",
-"newHand",
-"endHand",
-"initGameState",
-"initPlayers",
-"startGame",
-"onkill",
-"onappinit",
-"onkeydown",
-];
-let proto = LOTW.apps["dev.Poker"].prototype;
-let names = Object.getOwnPropertyNames(proto);
-let s = "class PokerApp {\n";
-for (let nm of names){
-	if (keep.includes(nm)){
-		s += (proto[nm]).toString().replace(/\/\/[\xab\xbb]/g, "")+"\n";
-	}
-	else{
-		if (getters.includes(nm)){
-			s += `get ${nm}(){}\n`;
-		}
-		else {
-			s += `${nm}(){}\n`;
-		}
-	}
-}
-s+="}";
-
-this.out(s);
-//log(s);
-this.ok();
-}
-}
-//»
 */
 
 const Com = SimpleCommand;
 
-const com_devtest = class extends Com{
+const com_devtest = class extends Com{//«
 init(){
 }
 async run(){
 this.ok("DEVTEST");
 }
-}
+}//»
 
+const com_cat = class extends Com{//«
+	async run() {//«
+		if (this.args.length){
+			let txt;
+			while (txt = await this.nextArgAsText()){
+				if (!isErr(txt)) this.out(txt.join("\n"));
+			}
+			this.nok();
+			return;
+		}
+		let rv;
+		while (true){
+			rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				return this.ok();
+			}
+			this.out(rv);
+		}
+	}//»
+};//»
 const com_pipe = class extends Com{//«
 	async run() {//«
 		let prepend = this.args.length ? this.args.join(" ") : "";
@@ -2493,6 +2387,9 @@ const com_pipe = class extends Com{//«
 	}//»
 };//»
 const com_read = class extends Com{//«
+static getOpts(){
+	return {l:{prompt:3}};
+}
 init(){
 //log("HI READ", this);
 }
@@ -2670,13 +2567,14 @@ const com_shift = class extends Com{//«
 	}
 }//»
 const com_brackettest = class extends Com{//«
+static getOpts(){
+	return true;
+}
 init(){
 	if (!this.args.length || this.args.pop() !=="]") return this.no("missing ']'");
 }
 async run(){
-//	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
-//cwarn(this.args);
-	let rv = await eval_shell_expr(this.args, this.term.cwd);
+	let rv = await eval_shell_expr(this.args, this.env.cwd.cwd);
 	if (isStr(rv)) return this.no(rv);
 //log(rv);
 	this.end(rv);
@@ -2685,8 +2583,7 @@ async run(){
 const com_test = class extends Com{//«
 init(){}
 async run(){
-//	let rv = await ShellMod.util.evalShellExpr(this.args, this.term.cwd);
-	let rv = await eval_shell_expr(this.args, this.term.cwd);
+	let rv = await eval_shell_expr(this.args, this.env.cwd.cwd);
 	if (isStr(rv)) return this.no(rv);
 	this.end(rv);
 }
@@ -2802,7 +2699,7 @@ async run(){//«
 		if (isStr(node_or_path)){
 			path = node_or_path;
 			wants_dir = node_or_path.match(/\x2f$/);
-			regpath = normPath(node_or_path, term.cur_dir);
+			regpath = normPath(node_or_path, this.env.cwd.cwd);
 			node = await fsapi.pathToNode(regpath, !wants_dir);
 		}
 		else {
@@ -2909,11 +2806,11 @@ async run(){//«
 }//»
 const com_env = class extends Com{//«
 run(){
-	let {term, args}=this; 
+	let {args}=this; 
 	if (args.length) {
 		return this.no("arguments are not supported");
 	}
-	let env = this.env;
+	let env = this.env.vars;
 	let keys = Object.keys(env);//let keys = env._keys;
 	let out = [];
 	for (let key of keys){
@@ -2923,74 +2820,6 @@ run(){
 	this.out(out.join("\n"));
 	this.ok();
 }
-}//»
-const com_parse = class extends Com{//«
-	async run(){
-		if (this.pipeFrom) return;
-		let f;
-		while (f = this.args.shift()){
-			let node = await f.toNode(this.term);
-			if (!node) {
-				this.err(`not found: ${f}`);
-				this.numErrors++;
-				continue;
-			}
-			this.tryParse(await node.text);
-		}
-		this.numErrors?this.no():this.ok();
-	}
-	tryParse(val){
-		try{
-			this.out(JSON.parse(val));
-			return true;
-		}
-		catch(e){
-			this.err(e.message);
-			this.numErrors++;
-			return false;
-		}
-	}
-	pipeDone(lines){
-		this.tryParse(lines.join(""));
-		this.ok();
-	}
-/*
-	pipeIn(val){//Commented out
-		if (!isEOF(val)) this.tryParse(val);
-		else this.ok();
-	}
-*/
-}//»
-const com_stringify = class extends Com{//«
-	init(){
-		if (!this.pipeFrom) return this.no("expecting piped input");
-	}
-	run(){
-	}
-	tryStringify(val){
-		try{
-			this.out(JSON.stringify(val));
-			return true;
-		}
-		catch(e){
-			this.err(e.message);
-			this.numErrors++;
-			return false;
-		}
-	}
-	pipeDone(lines){
-		this.tryStringify(lines.join(""));
-		this.numErrors?this.no():this.ok();
-	}
-/*
-	pipeIn(val){//Commented out
-		if (!isEOF(val)) this.tryStringify(val);
-		else {
-			this.numErrors?this.no():this.ok();
-			this.ok();
-		}
-	}
-*/
 }//»
 const com_clear = class extends Com{//«
 	run(){
@@ -3026,19 +2855,18 @@ init(){
 	}
 }
 async run(){
-	let {args, term} = this;
+	let {args} = this;
 	if (args.length > 1) return this.no("too many arguments");
 	let res;
 	let got_dir;
 	let saypath = args[0];
-	let regpath = normPath(saypath, term.cur_dir);
+	let regpath = normPath(saypath, this.env.cwd.cwd);
 	let ret = await fsapi.pathToNode(regpath);
 	if (!ret) return this.no(`${saypath}: no such file or directory`);
 	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: not a directory`);
 	got_dir = regpath;
 	if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
-	term.cur_dir = got_dir;
-	term.cwd = got_dir;
+	this.env.cwd.cwd = got_dir;
 	this.ok();
 }
 }
@@ -3046,23 +2874,9 @@ async run(){
 const com_app = class extends Com{//«
 
 async run(){
-	const{args, out, term}=this;
-//	let list = await util.getList("/site/apps/");
-/*
-	if (!args.length) {
-		if (!list){
-			return this.no("could not get the app list");
-		}
-		out(list.join("\n"));
-		return this.ok();
-	}
-*/
+	const{args}=this;
 	let have_error=false;
 	for (let appname of args){
-//		if (list && !list.includes(appname)) {
-//			this.err(`${appname}: not found`);
-//			continue;
-//		}
 		let win = await Desk.api.openApp(appname);
 		if (!win) this.err(`${appname}: not found`);
 	}
@@ -3087,7 +2901,7 @@ const com_hist = class extends Com{//«
 }//»
 const com_pwd = class extends Com{//«
 	run(){
-		this.out(this.term.cur_dir);
+		this.out(this.env.cwd.cwd);
 		this.ok();
 	}
 }//»
@@ -3106,7 +2920,8 @@ async run(){
 	if (this.killed) return;
 	let lib = this.args.shift();
 	let hold = lib;
-	let got = globals.ShellMod.allLibs[lib] || NS.coms[lib];
+//	let got = globals.ShellMod.allLibs[lib] || NS.coms[lib];
+	let got = LOTW.libs[lib] || NS.coms[lib];
 	if (got){
 		if (!isArr(got)) got = Object.keys(got);
 		this.out(got.join("\n"));
@@ -3134,14 +2949,14 @@ init(){
 	}
 }
 async run(){
-	const{term, err:_err}=this;
+	const{err:_err}=this;
 	let have_error = false;
 	const err=mess=>{
 		have_error = true;
 		_err(mess);
 	};
 	for (let path of this.args) {
-		let fullpath = normPath(path, term.cur_dir);
+		let fullpath = normPath(path, this.env.cwd.cwd);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
 			err(`${path}: no such file or directory`);
@@ -3173,8 +2988,7 @@ async run(){
 }//»
 const com_export = class extends Com{//«
 	run(){
-//		let rv = ShellMod.util.addToEnv(this.args, this.term.ENV, {if_export: true});
-		let rv = add_to_env(this.args, this.term.ENV, {if_export: true});
+		let rv = add_to_env(this.args, this.term.env.vars, {if_export: true});
 		if (rv.length){
 			this.err(rv.join("\n"));
 			this.no();
@@ -3186,11 +3000,11 @@ const com_curcol = class extends Com{//«
 	run(){
 		let which = this.args.shift();
 		if (which=="white"){
-			this.term.cur_white();
+			this.term.curWhite();
 			this.ok();
 		}
 		else if (which=="blue"){
-			this.term.cur_blue();
+			this.term.curBlue();
 			this.ok();
 		}
 		else{
@@ -3281,294 +3095,31 @@ async run(){
 
 }//»
 const com_import = class extends Com{//«
+static getOpts() {
+	return {s:{d:1},l:{delete: 1}};
+}
 async run(){
-	let {term, opts, args}=this;
+	let {opts, args}=this;
 	let have_error = false;
 	const err=(arg)=>{
 		this.err(arg);
 		have_error = true;
 	};
 	if (opts.delete || opts.d){
-		delete_coms(args);
+		delete_coms(args, this.env.coms);
 		this.ok();
 		return;
 	}
-	let rv = await do_imports(args, err);
+	let rv = await do_imports(args, this.env.coms, err);
 	if (rv) this.inf(`imported: ${rv}`);
 	have_error?this.no():this.ok();
 }
 }//»
 
-/*Put these commands in their own libraries«
-const com_workman = class extends Com{//«
-init(){}
-run(){//«
+this.builtins={//«
 
-const OK_COMS=["close","move","resize","minimize","none"];
-const OK_VALS=["1","0","true","false","yes","no","okay","nope"];
-const{args, no}=this;
-let type = args.shift();
-if (!type) return no("Need a 'type' arg!");
-if (!(type==="w"||type==="s")){
-	return no("The 'type' arg  must be [w]indow or work[s]pace!");
-}
-let num = args.shift();
-let say_num = num;
-if (!num){
-return no("Need a 'number' arg!");
-}
-if (!num.match(/^[0-9]+$/)){
-	return no(`Invalid number arg`);
-}
-let com = args.shift();
-if (!com) return no("Need a 'com' arg!");
-if (!OK_COMS.includes(com)){
-	return no(`${com}: invalid 'com' arg`);
-}
-let val = args.shift();
-if (!val) return no("Need a 'val' arg!");
-if (!OK_VALS.includes(val)){
-	return no(`${val}: invalid 'val' arg`);
-}
-if (val==="1"||val==="true"||val==="yes"||val==="okay") val = true;
-else val = false;
-com = "allow"+(com[0].toUpperCase() + com.slice(1));
-let say_type;
-if (type==="w"){//«
-
-let elem = document.getElementById(`win_${num}`);
-if (!elem) return no(`${num}: window not found`);
-let win = elem._winObj;
-win[com] = val;
-say_type="Window";
-}//»
-else{//«
-num = parseInt(num);
-let workspaces = Desk.workspaces;
-if (num < 1 || num > workspaces.length){
-	return no(`Need a workspace number 1->${workspaces.length}`);
-}
-let workspace = workspaces[num-1];
-if (!workspace) return no(`COULD NOT GET WORKSPACES[${num-1}]`);
-workspace[com] = val;
-say_type="Workspace";
-}//»
-
-this.ok(`${say_type}[${say_num}].${com} = ${val}`);
-
-}//»
-}//»
-const com_bindwin = class extends Com{//«
-	run(){
-		const{args}=this;
-		let numstr = args.shift();
-		if (!numstr) return this.no(`expected a window id arg`);
-		if (!numstr.match(/[0-9]+/)) return this.no(`${numstr}: invalid numerical argument`);
-		let num = parseInt(numstr);
-		let elem = document.getElementById(`win_${num}`);
-		if (!elem) return this.no(`${numstr}: window not found`);
-		let win = elem._winObj;
-		if (!win) return this.no(`${numstr}: the window doesn't have an associated object!?!?`);
-		if (win.ownedBy) return this.no("Cannot bind 'owned' windows!");
-		let use_key = args.shift();
-		if (!(use_key && use_key.match(/^[1-9]$/))) return this.no(`expected a 'key' arg (1-9)`);
-		let desc = this.opts.desc || this.opts.d || win.appName;
-		globals.boundWins[use_key] = {win, desc};
-		win.bindNum = use_key;
-		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
-	}
-}//»
-
-const com_wat2wasm = class extends Com{//«
-
-async init(){//«
-	if (!window.WabtModule) {
-		if (!await util.makeScript("/mods/util/libwabt.js")) {
-			return this.no("Could not load 'libwabt'");
-		}
-		if (!window.WabtModule) return this.no("window.WabtModule does not exist!");
-	}
-	this.wabt = await window.WabtModule();
-}//»
-compile(text){//«
-	//log(typeof text);
-	let features = {};
-	let outputLog = '';
-	let outputBase64 = 'Error occured, base64 output is not available';
-
-	let binaryOutput;
-	let binaryBlobUrl, binaryBuffer;
-	let module;
-	try {
-		module = this.wabt.parseWat('test.wast', text, features);
-		module.resolveNames();
-		module.validate(features);
-		let binaryOutput = module.toBinary({log: true, write_debug_names:true});
-		outputLog = binaryOutput.log;
-		binaryBuffer = binaryOutput.buffer;
-// binaryBuffer is a Uint8Array, so we need to convert it to a string to use btoa
-// https://stackoverflow.com/questions/12710001/how-to-convert-uint8-array-to-base64-encoded-string
-
-//	outputBase64 = btoa(String.fromCharCode.apply(null, binaryBuffer));
-
-//	let blob = new Blob([binaryBuffer]);
-		this.out(binaryBuffer);
-//	log(blob);
-	//if (binaryBlobUrl) {
-	//	URL.revokeObjectURL(binaryBlobUrl);
-	//}
-	//binaryBlobUrl = URL.createObjectURL(blob);
-	//downloadLink.setAttribute('href', binaryBlobUrl);
-	//downloadEl.classList.remove('disabled');
-	} catch (e) {
-		outputLog += e.toString();
-		cerr(outputLog);
-	//downloadEl.classList.add('disabled');
-	} 
-	finally {
-		if (module) module.destroy();
-	//	outputEl.textContent = outputShowBase64 ? outputBase64 : outputLog;
-	}
-	//log(typeof text);
-}//»
-async run(){//«
-	const{args, term}=this;
-	//log();
-	//let rv = await term.readLine("? ", {passwordMode: true});
-	//let wabt = await WabtModule();
-
-	let fname = args.shift();
-	if (!fname) return this.no("No filename!");
-	let val = await fname.toText({cwd: term.cwd});
-	if (!val) return this.no(`${fname}: nothing returned`);
-	this.compile(val);
-	this.ok();
-}//»
-
-}//»
-
-const com_markdown = class extends Com{//«
-	#mod;
-	async init(){
-		let modret = await util.getMod("util.showdown");
-		if (!modret) return this.no("No showdown module");
-		this.#mod = modret.getmod();
-	}
-	async run(){
-		const{args, term} = this;
-		let converter = new this.#mod.Converter();
-		let fname = args.shift();
-		if (!fname) return this.no("Need a file name!");
-		let str = await fname.toText(term);
-		if (!str) return this.no("File not found!");
-		let html = converter.makeHtml(str);
-		this.out(html);
-		this.ok();
-	}
-}//»
-const com_html = class extends Com{//«
-init(){
-}
-async openWin(val){
-	let win = await Desk.api.openApp("util.HTML", {appArgs: {text: val}});
-	if (!win) return this.no(`util.HTML: app not found`);
-}
-async run(){
-	const {args, opts, stdin} = this;
-	if (stdin){
-		this.openWin(stdin);
-		this.ok();
-		return;
-	}
-	else if (this.args.length){
-		this.no("Only supporting stdin methods!");
-		return;
-	}
-	else{
-// Do this method (like in com_math) to wait for EOF before opening the window
-// this.lines=[];
-	}
-}
-pipeDone(lines){
-this.openWin(lines.join("\n"));
-//log(lines);
-this.ok();
-}
-//pipeIn(val){//Commented out
-//	if (!isEOF(val)) this.openWin(val);
-//	else this.ok();
-//}
-
-}//»
-
-const com_wget = class extends Com{//«
-//How github names their files within repos, and how to fetch them from LOTW«
-//
-//If this is the github repo:
-//https://github.com/mrdoob/three.js/
-//
-//The 'playground/' subdir of that repo is here:
-//https://github.com/mrdoob/three.js/tree/dev/playground
-//
-//This is the 'playground/index.html' file:
-//https://github.com/mrdoob/three.js/blob/dev/playground/index.html
-//
-//This is that same file in its raw form, but it is an invalid fetch:
-//https://github.com/mrdoob/three.js/raw/refs/heads/dev/playground/index.html
-//
-//And this is the same file that is okay to fetch:
-//https://raw.githubusercontent.com/mrdoob/three.js/refs/heads/dev/playground/index.html
-//
-//This gets the entire directory structure (but the output is sent to the console as Uint8Array, 
-//rather than text, since there is no indication in the URL that the returned value is JSON):
-//https://api.github.com/repos/mrdoob/three.js/git/trees/refs/heads/dev?recursive=true
-//
-//»
-static getOpts(){
-	return {l: {dl: 1, local: 1}, s: {l: 1}};
-}
-async run(){
-	const {args, opts} = this;
-	let patharg = args.shift();
-	if (!patharg) return this.no("missing URL");
-	if (args.length) return this.no("too many arguments");
-	let url;
-	if (opts.local || opts.l) url = `/_get?path=${encodeURIComponent(patharg)}`;
-	else url = patharg;
-//	if (!nodejs_mode || opts["local"]) url = patharg
-//	else url = `/_get?path=${encodeURIComponent(patharg)}`;
-	let rv;
-	try{
-		rv = await fetch(url)
-	}
-	catch(e){
-cerr(e);
-		this.no(`${e.message} (see console)`);
-		return;
-	}
-	if (!rv.ok){
-		this.no(`Response code: ${rv.status} (${rv.statusText})`);
-log(rv);
-		return;
-	}
-	let buf = await rv.arrayBuffer();
-	if (this.opts.dl){
-		let fname = (new URL(patharg)).pathname.split("/").pop();
-		if (!fname) fname = "WGET-OUT.bin"
-		util.download(new Blob([buf]), fname);
-	}
-	else this.out(new Uint8Array(buf));
-	this.ok();
-}
-
-}//»
-»*/
-
-this.defCommands={//«
-
-
+cat: com_cat,
 pipe: com_pipe,
-
 continue: com_loopctrl,
 break: com_loopctrl,
 shift: com_shift,
@@ -3577,8 +3128,6 @@ shift: com_shift,
 math: com_math,
 log: com_log,
 curcol: com_curcol, 
-parse: com_parse,
-stringify: com_stringify,
 getch: com_getch,
 read: com_read,
 true: com_true,
@@ -3602,35 +3151,8 @@ open: com_open,
 msleep: com_msleep,
 test: com_test,
 };
-if (dev_mode) this.defCommands.devtest = com_devtest;
+if (dev_mode) this.builtins.devtest = com_devtest;
 //»
-this.defCommandOpts = {//«
-//const command_options = {
-
-/*«
-l: long options
-s: short options
-
-1 means that the option does not have an argument
-2 means that the option *may* have an argument
-3 means that the option requires an argument
-
-Any argument for a short option requires a mediating space. Below, the '4' is the
-argument for the 'x' option.
-
-~$ mycommand -x 4 filename.js
-
-Long options may be given an argument like this:
-
-~$ dosomething --like-this="Right here" to_some.json
-
-»*/
-	read:{l:{prompt:3}},
-	import:{s:{d:1},l:{delete: 1}},
-	bindwin:{s:{d:3},l:{desc: 3}},
-	test: true,
-	"[": true
-};//»
 
 }//»End: Builtin commands
 
@@ -3706,8 +3228,9 @@ const Newlines = class extends Sequence{//«
 }//»
 const Word = class extends Sequence{//«
 //XNDKSLDK
-
-async expandSubs(shell, term, opts={}){//«
+//                            vvvv<<<<< DOES THIS 'term' SERVE ANY GOOD PURPOSE?
+async expandSubs(shell, opts, term){//«
+//async expandSubs(shell, term, opts={}){
 //async expandSubs(shell, term, env, scriptName, scriptArgs){
 //const{env, scriptName, scriptArgs} = opts;
 /*«
@@ -4121,17 +3644,11 @@ const ShellNum = class extends Sequence{//«
 const ParamSub = class extends Sequence{//«
 
 //KLSDHSKD
-
 async expand(shell, term, com_opts, opts={}){//«
 
 //if opts.isMath, then we can substitute "0" for non-existent things
-	const{env,scriptName, scriptArgs}=com_opts;
-//cwarn("PARAM", scriptName, scriptArgs);
-//expand(shell, term, env, scriptName, scriptArgs){
-//log(this.val);
-
-//return "[SUBHERE]";
-//log(this.val);
+	const{env, scriptName, scriptArgs}=com_opts;
+const vars = env.vars;
 /*We can have:
 1) isSym: Single char (SPECIAL_SYMBOLS)
 2) isNum: ShellNum
@@ -4174,24 +3691,24 @@ log(this);
 	}
 	let marr;
 	if (s.match(/^[_a-zA-Z]/)){
-		if (opts.isMath) return env[s]||"0";
+		if (opts.isMath) return env.vars[s]||"0";
 if (this.isSubstitute){//«
 //log(this.subType, !!this.haveColon);
 
 let have_colon = !!this.haveColon;
 let subType = this.subType;
-let is_set = Object.keys(env).includes(s);
+let is_set = Object.keys(env.vars).includes(s);
 let is_null;
 
 let wrd = this.subWord;
-await wrd.expandSubs(shell, term, com_opts);
+await wrd.expandSubs(shell, com_opts, term);
 let newval =  new String(wrd.fields.join(" "));
 //EANFJLPM
 //newval.noSplitNLs=true;
 //log(newval);
 let subval;
 if (is_set){
-	subval = env[s];
+	subval = env.vars[s];
 	is_null = !subval;
 }
 if (is_set && !is_null){
@@ -4207,7 +3724,7 @@ if (subType==="?"){//«
 }//»
 else if (subType==="="){//«
 	if (!is_set || (is_null&&have_colon)) {
-		env[s]=newval;
+		env.vars[s]=newval;
 		return newval;
 	}
 	return "";
@@ -4229,14 +3746,15 @@ else{//«
 
 }//»
 else if (this.isStrRep){//«
-let val = env[s];
+let val = env.vars[s];
 if (!val) return "";
 
 let typ = this.repType;
 let wrd = this.repWord;
 if (!wrd) return val;
 //TZKOPKHD
-await wrd.expandSubs(shell, term, com_opts);
+await wrd.expandSubs(shell, com_opts, term);
+//await wrd.expandSubs(shell, term, com_opts);
 let str = wrd.fields.join(" ");
 str = str.replace(/[\x22\x27]/g,"");
 let patarr = str.split("");
@@ -4306,7 +3824,7 @@ return useval;
 else return val;
 
 }//»
-		return env[s]||"";
+		return env.vars[s]||"";
 	}
 cwarn("HERE IS THE WEIRD PARAM SUB...");
 log(s);
@@ -7107,12 +6625,11 @@ return tok;
 async getStdinLines(in_redir, haveSubLines){//«
 //const get_stdin_lines = async(in_redir, term, haveSubLines) => 
 //const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {
-const{term}=this;
 let stdin;
 let red = in_redir[0];
 let val = in_redir[1];
 if (red==="<"){
-	let node = await val.toNode(term);
+	let node = await val.toNode(this.env.cwd);
 	if (!node) {
 		return `${val}: no such file or directory`;
 	}
@@ -7175,7 +6692,8 @@ for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
 //		await tok.expandSubs(this, term, env, scriptName, scriptArgs);
-		await tok.expandSubs(this, term, shopts);
+//		await tok.expandSubs(this, term, shopts);
+		await tok.expandSubs(this, shopts, term);
 	}
 }//»
 for (let k=0; k < arr.length; k++){//field splitting«
@@ -7201,7 +6719,8 @@ for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
 
 let tok = arr[k];
 if (tok.isWord) {
-	let rv = await this.filepathExpansion(tok, term.cur_dir);
+//	let rv = await this.filepathExpansion(tok, term.cur_dir);
+	let rv = await this.filepathExpansion(tok, this.env.cwd.cwd);
 	if (isStr(rv)){
 		term.response(rv, {isErr: true});
 		continue;
@@ -7220,6 +6739,7 @@ for (let k=0; k < arr.length; k++){//quote removal«
 }//»
 return arr;
 }//»
+/*
 async tryImport(com, comword){//«
 //If we have a string rather than a function, do the command library importing routine.
 //The string is always the name of the library (rather than the command)
@@ -7228,20 +6748,24 @@ async tryImport(com, comword){//«
 //2) this is the first invocation of a command from one of those libraries.
 	try{
 //		await ShellMod.util.importComs(com);//com is the library name
-		await import_coms(com);//com is the library name
+//log(this.env.coms);
+		await import_coms(com, this.env.coms);//com is the library name
 		if (this.cancelled) return;
 	}catch(e){
 		if (this.cancelled) return;
 cerr(e);
 		return `sh: command library: '${com}' could not be loaded`;
 	}
-	let gotcom = shellmod.activeCommands[comword];
+//	let gotcom = shellmod.activeCommands[comword];
+	let gotcom = this.env.coms[comword];
+log(gotcom);
 	if (!(gotcom instanceof Function)){
+cerr(`sh: '${comword}' is invalid or missing in command library: '${com}'`);
 		return `sh: '${comword}' is invalid or missing in command library: '${com}'`;
 	}
 	return gotcom;
 }//»
-
+*/
 makeCompoundCommand(com, opts, parentCommand){//«
 	let typ = com.type;
 	let comp = com.compound_command;
@@ -7278,18 +6802,31 @@ makeCompoundCommand(com, opts, parentCommand){//«
 async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	const{term}=this;
 //	const {loopNum, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
-	const {loopNum, scriptArgs, scriptName,  heredocScanner, env, isInteractive}=opts;
+	const {loopNum, subLines, scriptArgs, scriptName,  heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 	let rv
-	let use_env;
+//	let use_env;
+	let use_vars, use_funcs, use_cwd, use_coms;
 	if (assigns.length) {
 		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
-		use_env = name?sdup(env):env;
-		rv = add_to_env(assigns, use_env, {term});
+//If the "command" is just a bunch of assignments, then it goes into the current/active environment.
+//Otherwise, commands get their own variable environments
+//		use_env = name?sdup(env):env;
+		use_vars = name?sdup(env.vars):env.vars;
+//		rv = add_to_env(assigns, use_vars, {term});
+		rv = add_to_env(assigns, use_vars);
 		if (rv.length) term.response(rv.join("\n"), {isErr: true});
+		use_funcs = name?sdup(env.funcs):env.funcs;
+		use_cwd = name?sdup(env.cwd):env.cwd;
+		use_coms = name?sdup(env.coms):env.coms;
 	}
-	else use_env = env;
+	else {
+		use_vars = env.vars;
+		use_funcs = env.funcs;
+		use_cwd = env.cwd;
+		use_coms = env.coms;
+	}
 	const com_env = {//«
 		loopNum,
 //		stdin,
@@ -7297,12 +6834,19 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 //		outRedir,
 //		isSub: !!subLines,
 		term,
-		env: use_env,
+		env:{
+			vars: use_vars,
+			funcs: use_funcs,
+			cwd: use_cwd,
+			coms: use_coms
+		},
+//		env: use_env,
 		command_str: this.commandStr,
 		shell: this,
 //		scriptOut,
 		scriptArgs,
 		scriptName,
+		subLines
 	}//»
 	if (!name) {
 		return new NoCom(com_env);
@@ -7364,20 +6908,22 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 		code.breakStatementLoop = true;
 		return code;
 	}//»
-//	let com = Shell.activeCommands[usecomword];
-	let com = shellmod.activeCommands[usecomword];
-//log(`COM: <${com}>`);
+//	let com = shellmod.activeCommands[usecomword] || use_coms[usecomword];
+//	let com = shellmod.builtins[usecomword] || use_coms[usecomword];
+	let com = use_coms[usecomword];
+/*
 	if (com && isStr(com)){//QKIUTOPLK«
 		com = await this.tryImport(com, usecomword);
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
 	}//»
-	if (term.funcs[usecomword]){//«
+*/
+	if (use_funcs[usecomword]){//«
 		com_env.isFunc = true;
 		let newopts = sdup(opts);
 		delete newopts.isInteractive;
 		newopts.isFunc = true;
-		let func = term.funcs[usecomword](this, arr, newopts, com_env, parentCommand);//<--- SLKMDUY
+		let func = use_funcs[usecomword](this, arr, newopts, com_env, parentCommand);//<--- SLKMDUY
 		func.isFunc = true;
 		return func;
 	}//»
@@ -7388,10 +6934,7 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 		return make_sh_err_com(comword, `command not found`, com_env);
 	}//»
 	let com_opts;
-//	let gotopts = com.opts || Shell.activeOptions[usecomword];
-//	let gotopts = (com.getOpts && com.getOpts()) || Shell.activeOptions[usecomword];
-	let gotopts = (com.getOpts && com.getOpts()) || shellmod.activeOptions[usecomword];
-//log(gotopts);
+	let gotopts = (com.getOpts && com.getOpts());
 //Parse the options and fail if there is an error message
 //OEORMSRU
 	if (gotopts === true) com_opts = {};
@@ -7421,13 +6964,17 @@ cerr(e);
 async makeScriptCom(com_ast, comopts, parentCommand){//«
 	const{term}=this;
 	const mkerr=(mess)=>{
-		return make_sh_err_com(comword, mess, com_env);
+//cerr(mess);
+		return make_sh_err_com(comword, mess, {term, shell: this});
+//		return make_sh_err_com(comword, mess, {term});
 	};
 	let com;
 	let simp_com = com_ast.simple_command;
+
+//MFLOUYTW
+	simp_com.name.tildeExpansion();
 	let comword = simp_com.name.toString();
-	let com_env = {term, shell: this};
-	let node = await fsapi.pathToNode(normPath(comword, term.cur_dir));
+	let node = await fsapi.pathToNode(normPath(comword, this.env.cwd.cwd));
 
 	if (!node) return mkerr(`file not found`);
 
@@ -7489,7 +7036,6 @@ log(red);
 				this.fatal("Unknown token in com_ast.redirs!?!?! (see console)");
 			}
 		}
-//		let stdin;
 		let errmess;
 		let redir_in_arr;
 		if (in_redir){
@@ -7498,25 +7044,11 @@ log(red);
 				errmess = rv2;
 			}
 			else{
-//				stdin = in_redir.value;
 				redir_in_arr = in_redir.value.split("\n");
-//log(redir_in_arr);
-//log(stdin);
 			}
 		}
 //VOPDUKKD
-//		let have_lines = opts.stdinLns;
 		let comopts = sdup(opts);
-/*
-		if (isStr(stdin)) comopts.stdin = stdin;
-		else comopts.stdin = optStdin;
-		if (isStr(comopts.stdin)){
-			if (have_lines) comopts.stdinLns = have_lines;
-			else comopts.stdinLns = comopts.stdin.split("\n");
-		}
-		comopts.outRedir = out_redir;
-*/
-//log(out_redir);
 		comopts.inBackground = in_background;
 
 		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){
@@ -7593,11 +7125,7 @@ for (let com of pipeline){//«
 //	if (!com.redirLines) continue;
 	if (!com.haveRedirOut) continue;
 
-
-//	let rv = await com.outRedir.write(term, com.redirLines, env, ShellMod.var.allowRedirClobber)
-//	let rv = await com.outRedir.write(term, com.redirLines, env)
-	let rv = await com.writeOutRedir(term, env)
-//	if (this.cancelled) return;
+	let rv = await com.writeOutRedir()
 	if (this.cancelled) continue;
 	if (rv===true) continue;
 	if (isStr(rv)) term.response(`sh: ${rv}`, {isErr: true});
@@ -7605,7 +7133,7 @@ for (let com of pipeline){//«
 cwarn("Unknown value returned from redir.write:");
 log(rv);
 
-//		return `unknown value returned from redir.write!!! (see console)`
+//return `unknown value returned from redir.write!!! (see console)`
 	}
 
 }//»
@@ -7704,7 +7232,6 @@ return lastcomcode;
 
 }//»
 async executeStatements(statements, opts, parentCommand){//«
-	const{term}=this;
 	let lastcomcode;
 	for (let i=0; i < statements.length-1; i+=2){
 		let in_background = opts.inBackground || statements[i+1] === "&";
@@ -7728,20 +7255,6 @@ this evaluates to true, and hi is output
 	return lastcomcode;
 }//»
 
-/*Old/Safe version
-async executeStatements(statements, opts){//«
-	const{term}=this;
-	let lastcomcode;
-	for (let i=0; i < statements.length-1; i+=2){
-		lastcomcode = await this.executeAndOr(statements[i].andor, statements[i+1], opts, opts.inBackground || statements[i+1] === "&");
-		if (isObj(lastcomcode) && lastcomcode.breakStatementLoop) {
-			return lastcomcode.code;
-		}
-		if (isLoopCont(lastcomcode)||isLoopBreak(lastcomcode)) return lastcomcode;
-	}
-	return lastcomcode;
-}//»
-*/
 
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
@@ -7780,7 +7293,6 @@ if (opts.retErrStr) return mess;
 if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
 term.response(mess,{isErr: true});
 	}
-//	term.response_end();
 
 }//»
 async execute(command_str, opts){//«
@@ -7812,48 +7324,6 @@ cancel(){//«
 this.Shell = Shell;
 
 //»
-
-//«init: preload libraries
-this.init=()=>{
-/*«"Preload Libs" are libraries of commands whose values for their key names 
-(on the shell_commands object) are strings (representing the command library
-that they "live" in) rather than functions. So, the value for the key, "vim"
-will be "fs", which points to the coms/fs.js file.  Upon finding this string
-@QKIUTOPLK, the import_coms function is used in order to replace the library
-name strings with the proper command functions.
-»*/
-
-let preloads = this.preloadLibs;
-
-for (let k in preloads){
-	this.allLibs[k] = preloads[k];
-}
-
-for (let k in preloads){
-	let arr = preloads[k];
-	for (let com of arr) {
-		if (this.defCommands[com]){
-cwarn(`The shell command: ${com} already exists (also defined in this.preloadLibs: ${k})`);
-			continue;
-		}
-		this.defCommands[com]=k;
-	}
-}
-
-//Shell.activeCommands = globals.shell_commands || this.defCommands;
-this.activeCommands = globals.shell_commands || this.defCommands;
-if (!globals.shell_commands) {
-	globals.shell_commands = this.defCommands;
-}
-
-//Shell.activeOptions = globals.shell_command_options || this.defCommandOpts;
-this.activeOptions = globals.shell_command_options || this.defCommandOpts;
-if (!globals.shell_command_options) {
-	globals.shell_command_options = this.defCommandOpts;
-}
-
-}//»
-
 }
 //»
 
