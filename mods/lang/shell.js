@@ -35,25 +35,79 @@ If it is kept in coms/path/to/mycoms.js, the command(s) can be loaded by:
 
 $ import path.to.mycoms
 
+
+Simple example command«
+
+//All command subclasses should be named com_<commandname>
+//Then export them as <commandname>
+
+class com_mycom extends Com { 
+
+static getOpts(){
+//Option values
+//1: no arguments
+//2: optional arguments
+//3: required argument
+	return {
+		"long": {"longa": 1, "longb": 2, "longc": 3},
+		"short": {"a": 1, "b": 2, "c": 3}
+	}
+}
+async init(){
+//Initialiation: option validation or resource loading may go here
+}
+async run(){
+	const{args, opts} = this;
+
+// args: e.g. [ "arg1", "arg2", ... , "argn" ]
+// opts: e.g. {a: true, longb: "hello world", c: 42}
+
+this.wrn("Warnings are printed to the terminal in yellow");
+this.inf("Info messages are printed in blue");
+this.err("Errors are printed in red");
+this.suc("This is printed in green"); 
+
+this.out("This gets sent to pipes, command substitutions or stdout");
+
+//	The following methods end the command by internally resolving a promise
+//	this.end(123);//Allows for arbitrary error codes to be returned
+
+//	The following are convenience functions which can be called with an optional string to be printed to the terminal
+	this.ok();//This returns a success code and any string arg printed to the terminal in green
+//	this.no();//This returns the standard error code (1) and any string is printed in red
+//	this.nok();//This calls this.ok() or this.no() depending on whether this.numErrors > 0
+
+}
+}»
+
 »*/
 
 /*«
 »*/
 
 /*FIXED BUG @MFLOUYTW???«
+
 We needed to perform tilde expansion here so that the following command works:
 $ ~/my_script.sh 
-»*/
-/*@XNDKSLDK: There is a 'term' argument passed to Word.expandSubs.«
-From there, it is then passed into these:
-DQuote.expand, BQuote.expand, ParamSub.expand, ComSub.expand, MathSub.expand
-I am thinking this is legacy code. For example, look at ParamSub.expand @KLSDHSKD
-The only direct usage of 'term' was a call to term.response that is now commented
-out. The env vars are taken from com_opts.env.vars. Otherwise, 'term' is
-passed along to expandSubs, for ParamSub's that have the 'isSubstitute' flag,
-e.g. echo ${MYDIR:-`ls /path/to/what`}
+
+@TWEJKDLJ: This is how we did it for Stdin.setValue (also used dsSQuoteExpansion)
 »*/
 
+/*12/13/25: No more '.Term' (really with lower 't') field in the shell«
+It has been replace with the private '.#term' @QMCPOYHJ
+But individual commands still have access to their own '.Term' fields.
+»*/
+/*12/12/25: « try/catch issues
+@TRYHERE (x5): We need to do try/catch in certain places like these when we hit upon a fatal
+excepetion during scanning/parsing, which we report as an error in red type on the terminal
+screen (and continue the terminal REPL), but when there are bugs in the underlying Javascript, 
+these need to halt the execution of the shell and display a nice ugly ReferenceErroor 
+(or somesuch) on the Javascript console. 
+
+
+@WMFHJRK: OKAY TO THROW A SHELL ERROR HERE???
+
+»*/
 //Notes«
 //Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 
@@ -119,7 +173,7 @@ env: {
 properties never got copied over in the respective dup() methods (@WKLMUJK/@JDPLUI) of the given tokens.
 I guess we should add this same thing for all the other dup methods.
 
-@SLKMDUY, I just added the 'parentCommand' arg to the term.funcs functions, so that, e.g. functions
+@SLKMDUY, I just added the 'parentCommand' arg to the Term.funcs functions, so that, e.g. functions
 defined inside of shell scripts will inherit the correct stdin/stdin methods.
 »*/
 /*12/3/25: MAJOR OVERHAUL TIME!«
@@ -241,14 +295,14 @@ the pipe is a consistent type: strings or Uint8Arrays (or Blobs, etc).
 »*/
 /*CRITICAL BUG:«
 THIS RETURNS THE TEXT IN THE FORM OF A LINES ARRAY BECAUSE OF THIS IN  fs.js: 
-let val = await fname.toText(term);
+let val = await fname.toText(Term);
 _.toText = async function(opts = {}) {
 	let node = await this.toNode(opts);
 	if (!node) return;
 	if (!node.isFile) return;
 	let txt = await node.text;
 
-//	if (opts.lines) return txt.split("\n");//<-- When term is used as the "opts", there is a lines member in it!
+//	if (opts.lines) return txt.split("\n");//<-- When Term is used as the "opts", there is a lines member in it!
 
 	if (opts.lines === true) return txt.split("\n");
 
@@ -356,6 +410,9 @@ const doLoopBreak = (val, com) => {
 	return false;
 };
 const DIE = mess => { throw new Error(mess); };
+
+class ShellError extends Error{}
+
 //»
 
 //«Shell
@@ -401,12 +458,8 @@ How about a background output console?
 »*/
 //»
 
-/*ShellMod: This function/"namespace" is our way to bundle *everything* «
-that is relevant to the thing called the "shell" (as opposed to the thing called 
-the "terminal") into a singular thing. We want to do this in a totally 
-methodical/non-destrutive kind of way, so we can be very assured of the fact that 
-everything always works as ever.»*/
-//let parserId = 1;
+/*ShellMod: This function/"namespace" is our way to bundle everything«
+that is relevant to the thing called the "Shell Command Language"»*/
 export const mod = function() {
 
 //Var«
@@ -699,6 +752,7 @@ If 3:
 If more than 3:
   - complain: "too many arguments"
 »*/
+
 
 const maybe_neg=(which)=>{//«
 	if (!is_neg){
@@ -1100,15 +1154,20 @@ const add_coms_to_com_env=(imp_coms, com_env)=>{//«
 //	let builtins = this.builtins;
 	let all = Object.keys(imp_coms);
 	let ok_coms = [];
+	let num_exists = 0;
 	for (let com of all){
 //		if (typeof builtins[com] === "function" || typeof com_env[com] === "function") {
 		if (typeof com_env[com] === "function") {
-cwarn(`The command ${com} already exists!`);
+//cwarn(`The command ${com} already exists!`);
+			num_exists++;
 			continue;
 		}
 		com_env[com] = imp_coms[com];
 		ok_coms.push(com);
 	}
+if (num_exists){
+cwarn(`${num_exists} commands already exist!`);
+}
 	return ok_coms;
 };//»
 const import_coms = async (libname, coms) => {//«
@@ -1247,7 +1306,7 @@ constructor(tok, arg){
 	this.isRedir = true;
 }
 
-async setValue(shell, term, opts={}){//«
+async setValue(shell, opts={}){//«
 const{env, scriptName, scriptArgs} = opts;
 if (this.tok.isHeredoc) {
 	this.value = this.tok.value
@@ -1261,6 +1320,7 @@ if (r_op==="<"){//«
 	if (!arg.isSimple){
 		return `expected a 'simple' file redirection (have '${raw}')`;
 	}
+//TWEJKDLJ
 	arg.tildeExpansion();
 	arg.dsSQuoteExpansion();
 	let fname = arg.toString();
@@ -1309,7 +1369,6 @@ constructor(tok, file){
 }
 
 async write(arrarg, env){//«
-//async write(term, arrarg, env)
 
 let val;
 if (arrarg instanceof Uint8Array) val = arrarg;
@@ -1478,7 +1537,7 @@ DIE(`Unknown value in the com sub output stream (above)`);
 			this.resp(val, opts);
 		}
 	}//»
-async readStdinChunk(){//«
+async readStdinChunk(use_prompt){//«
 
 if (this.#redirInBuffer){
 	if (!this.#redirInBuffer.length) return EOF;
@@ -1499,11 +1558,11 @@ else if (this.#pipeInBuffer){
 }
 else if(this.parentCom){
 // We are in a compound command's (i.e. our parent's) scope, at the start of a pipeline with no input redirects
-	return this.parentCom.readStdinChunk();
+	return this.parentCom.readStdinChunk(use_prompt);
 }
 else {
 
-	return await this.readLine();
+	return await this.readLine(use_prompt);
 
 }
 
@@ -1536,25 +1595,22 @@ pipeIn(val){//«
 }//»
 	async readLine(use_prompt){//«
 //XCJEKRNK
-		let ln = await this.term.readLine(use_prompt);
+		let ln = await this.shell.readLine(use_prompt);
 		return ln;
 	}//»
-	resp(str, opts={}){//«
+	resp(val, opts={}){//«
 		if (this.shell.cancelled) return;
-		const{term}=this;
 		if (this.inBackground){
 			if (opts.isErr){
-				console.error(str);
+				console.error(val);
 			}
 			else{
-				console.log(str);
+				console.log(val);
 			}
 			return;
 		}
 		opts.name = this.name;
-		term.response(str, opts);
-		term.scrollIntoView();
-		term.refresh();
+		this.shell.response(val, opts);
 	}//»
 /*
 async #pipeBytesDone(){//«
@@ -1566,13 +1622,9 @@ async #pipeBytesDone(){//«
 }//»
 //SIMPLECOMMAND
 class SimpleCommand extends BaseCommand{//«
-//	#lines;
 	constructor(name, args, opts, env, parentCom){//«
 		super(parentCom);
 		if (!env) env = {};
-//		this.#lines = [];
-//		this.#haveEOF = false;
-		
 		this.isSimple = true;
 		this.name =name;
 		this.args=args;
@@ -1580,16 +1632,9 @@ class SimpleCommand extends BaseCommand{//«
 		this.opts=opts;
 		this.numErrors = 0;
 		this.noPipe = false;
-//		this.parentCom = parentCom;
-//log(this.name, this.parentCommand);
 		for (let k in env) {
 			this[k]=env[k];
 		}
-//log(this.outRedir);
-//		if (this.outRedir&&this.outRedir.length){
-//		if (this.outRedir){
-//			this.redirLines = [];
-//		}
 		this.awaitEnd = new Promise((Y,N)=>{//«
 			this.end = (rv)=>{
 				Y(rv);
@@ -1624,7 +1669,6 @@ class SimpleCommand extends BaseCommand{//«
 			else return null;
 		}
 		else{
-//			node = await f.toNode(this.term);
 			node = await f.toNode(this.env.cwd);
 			if (node) return node;
 			e = `${f}: not found`;
@@ -1804,9 +1848,6 @@ const NoCom=class{//«
 		for (let k in env) {
 			this[k]=env[k];
 		}
-//		if (this.outRedir){
-//			this.redirLines = [];
-//		}
 	}
 	init(){
 		this.awaitEnd=new Promise((Y,N)=>{
@@ -1835,7 +1876,6 @@ constructor(shell, opts, parentCommand){//«
 	super(parentCommand);
 	this.isCompound = true;
 	this.shell = shell;
-	this.term = shell.term;
 	this.opts=opts;
 	this.subLines=opts.subLines;
 	this.outRedir = opts.outRedir;
@@ -2138,7 +2178,7 @@ class FunctionCom extends CompoundCom{//«
 constructor(shell, opts, name, com, parentCom){//«
 	super(shell, opts, parentCom);
 	this.name=name;
-	this.com = com.compound_command.compound_list.term;
+	this.com = com.compound_command.compound_list.trm;
 	this.type = com.type;
 	this.redirs = com.redirs;
 //log(opts);
@@ -2191,9 +2231,8 @@ async init(){//«
 	this._init();
 	this.word.tildeExpansion();
 //AKDMFLS
-//	this.word.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
 //AKDKRKSJ
-	await this.word.expandSubs(this.shell, {}, this.shell.term);
+	await this.word.expandSubs(this.shell, {});
 	if(this.shell.cancelled) return;
 	this.word.quoteRemoval();
 	this.word = this.word.fields.join("")
@@ -2208,7 +2247,7 @@ expansions to do:
 2) Param
 	let rv = tok.parameterExpansion(env, scriptName, scriptArgs);
 3) Com Sub/Math
-	await tok.expandSubs(this, term);
+	await tok.expandSubs(this);
 4) Quote Removal
 	tok.quoteRemoval();
 
@@ -2240,9 +2279,7 @@ LOOP: for (let obj of this.list){
 	for (let wrd of pat_list){
 		wrd.tildeExpansion();
 //DJSLPEKS
-//		wrd.parameterExpansion(this.opts.env, this.opts.scriptName, this.opts.scriptArgs);
-//		await wrd.expandSubs(shell, shell.term, this.opts);
-		await wrd.expandSubs(shell, this.opts, shell.term);
+		await wrd.expandSubs(shell, this.opts);
 		if(shell.cancelled) return;
 		wrd.quoteRemoval();
 		let arr = wrd.fields.join("").split("");
@@ -2281,7 +2318,6 @@ else {
 
 //»
 
-//this.comClasses={Com,ScriptCom,NoCom,ErrCom};
 this.comClasses={Com: SimpleCommand,NoCom,ErrCom};
 
 //»
@@ -2298,50 +2334,6 @@ run(){
 »*/
 
 //BUILTINS
-/*
-continue's and break's *ALWAYS* break the "circuitry" of the logic lists.
-*/
-/*
-const com_devtest = class extends Com{//«
-
-static getOpts(){
-//Option values
-//1: no arguments
-//2: optional arguments
-//3: required argument
-	return {
-		"long": {"longa": 1, "longb": 2, "longc": 3},
-		"short": {"a": 1, "b": 2, "c": 3}
-	}
-}
-async init(){
-//Initialiation: option validation or resource loading may go here
-}
-async run(){
-	const{args, opts, term} = this;
-
-// args: e.g. [ "arg1", "arg2", ... , "argn" ]
-// opts: e.g. {a: true, longb: "hello world", c: 42}
-// term: a handle to the terminal object with many members
-
-this.wrn("Warnings are printed to the terminal in yellow");
-this.inf("Info messages are printed in blue");
-this.err("Errors are printed in red");
-this.suc("This is printed in green"); 
-
-this.out("This gets sent to pipes, command substitutions or stdout");
-
-//	The following methods end the command by internally resolving a promise
-//	this.end(123);//Allows for arbitrary error codes to be returned
-
-//	The following are convenience functions which can be called with an optional string to be printed to the terminal
-	this.ok();//This returns a success code and any string arg printed to the terminal in green
-//	this.no();//This returns the standard error code (1) and any string is printed in red
-//	this.nok();//This calls this.ok() or this.no() depending on whether this.numErrors > 0
-
-}
-}//»
-*/
 
 const Com = SimpleCommand;
 
@@ -2349,7 +2341,12 @@ const com_devtest = class extends Com{//«
 init(){
 }
 async run(){
-this.ok("DEVTEST");
+let read = await navigator.clipboard.read();
+let blob = await read[0].getType('text/plain');
+let str = await util.blobToStr(blob);
+log(str);
+this.ok();
+//this.ok("DEVTEST");
 }
 }//»
 
@@ -2390,21 +2387,19 @@ const com_read = class extends Com{//«
 static getOpts(){
 	return {l:{prompt:3}};
 }
-init(){
-//log("HI READ", this);
-}
 async run(){//«
 //XDUITOYL
-	const {args, opts, term} = this;
-	const ENV=this.env;
+	const {args, opts} = this;
+	const var_env=this.env.vars;
 	let have_error = false;
 	const err=mess=>{
 		have_error = true;
 		this.err(mess);
 	};
+	const term_wid = this.shell.screenW;
 	let use_prompt = opts.prompt;
-	if (use_prompt && use_prompt.length > term.w - 3){
-		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term.w - 4})`);
+	if (use_prompt && use_prompt.length > term_wid - 3){
+		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term_wid - 4})`);
 		return;
 	}
 	let ln = await this.readStdinChunk(use_prompt); // OEHRHFJR
@@ -2427,7 +2422,7 @@ async run(){//«
 		}
 		else useval = vals.shift();
 		if (!useval) useval = "";
-		ENV[arg] = useval;
+		var_env[arg] = useval;
 	}
 	have_error?this.no():this.ok();
 }//»
@@ -2588,31 +2583,6 @@ async run(){
 	this.end(rv);
 }
 }//»
-const com_log = class extends Com{//«
-
-//#promise;
-//static grabsScreen = true;
-async init(){//«
-	if (this.term.actor) {
-		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
-	}
-	if (!await util.loadMod("term.log")) {
-		this.no("could not load the 'log' module");
-		return;
-	}
-	let log = new NS.mods["term.log"](this.term);
-	this.log = log;
-	this.promise = log.init({opts: this.opts, command_str: this.command_str});
-}//»
-async run(){//«
-	await this.promise;
-	this.ok();
-}//»
-cancel(){
-this.log.quit();
-this.ok();
-}
-}//»
 const com_echo = class extends Com{//«
 //	static getOpts(){
 //		return {s: {n: 1}};
@@ -2678,7 +2648,7 @@ init(){//«
 }//»
 async run(){//«
 //	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
-	const{pipeTo, isSub, term, args, opts} = this;
+	const{pipeTo, isSub, args, opts} = this;
 	const out=(...args)=>{
 		this.out(...args);
 	};
@@ -2783,7 +2753,7 @@ async run(){//«
 			let colors = [];
 			for (let nm of dir_arr) name_lens.push(nm.length);
 			let ret = [];
-			term.fmtLs(dir_arr, name_lens, ret, types, colors);
+			this.term.fmtLs(dir_arr, name_lens, ret, types, colors);
 			if (!ret.length) out("");
 			else {
 				if (colors.length) out(ret.join("\n"), {colors, didFmt: true});
@@ -2823,7 +2793,7 @@ run(){
 }//»
 const com_clear = class extends Com{//«
 	run(){
-		this.term.clear();
+		this.shell.clearScreen();
 		this.ok();
 	}
 }//»
@@ -2851,7 +2821,7 @@ const com_false = class extends Com{//«
 const com_cd = class extends Com{//«
 init(){
 	if (!this.args.length) {
-		this.args.push(this.term.getHomedir());
+		this.args.push(this.shell.homeDir);
 	}
 }
 async run(){
@@ -2895,7 +2865,7 @@ const com_msleep = class extends Com{//«
 }//»
 const com_hist = class extends Com{//«
 	async run(){
-		this.out((await this.term.getHistory()).join("\n"));
+		this.out(this.shell.history);
 		this.ok();
 	}
 }//»
@@ -2978,7 +2948,7 @@ const com_getch = class extends Com{//«
 
 async run(){
 	if (this.args.length) return this.no("not expecting arguments");
-	let ch = await this.term.getch("");
+	let ch = await this.shell.getCh("");
 	if (!ch) return this.no("no character returned");
 	this.suc(`Got: ${ch} (code: ${ch.charCodeAt()})`);
 	this.out(ch);
@@ -2988,28 +2958,12 @@ async run(){
 }//»
 const com_export = class extends Com{//«
 	run(){
-		let rv = add_to_env(this.args, this.term.env.vars, {if_export: true});
+		let rv = this.shell.exportToTerm(this.args);
 		if (rv.length){
 			this.err(rv.join("\n"));
 			this.no();
 		}
 		else this.ok();
-	}
-}//»
-const com_curcol = class extends Com{//«
-	run(){
-		let which = this.args.shift();
-		if (which=="white"){
-			this.term.curWhite();
-			this.ok();
-		}
-		else if (which=="blue"){
-			this.term.curBlue();
-			this.ok();
-		}
-		else{
-			this.no(`missing or invalid arg`);
-		}
 	}
 }//»
 const com_math = class extends Com{//«
@@ -3116,6 +3070,7 @@ async run(){
 }
 }//»
 
+
 this.builtins={//«
 
 cat: com_cat,
@@ -3126,8 +3081,6 @@ shift: com_shift,
 ":": com_colon,
 "[": com_brackettest,
 math: com_math,
-log: com_log,
-curcol: com_curcol, 
 getch: com_getch,
 read: com_read,
 true: com_true,
@@ -3176,7 +3129,8 @@ const ErrorHandler = class {
 		}
 	};//»
 	constructError(msg, column) {//«
-		var error = new Error(msg);
+//		var error = new Error(msg);
+		var error = new ShellError(msg);
 		try {
 			throw error;
 		}
@@ -3227,12 +3181,7 @@ const Newlines = class extends Sequence{//«
 	toString(){ return "newline"; }
 }//»
 const Word = class extends Sequence{//«
-//XNDKSLDK
-//                            vvvv<<<<< DOES THIS 'term' SERVE ANY GOOD PURPOSE?
-async expandSubs(shell, opts, term){//«
-//async expandSubs(shell, term, opts={}){
-//async expandSubs(shell, term, env, scriptName, scriptArgs){
-//const{env, scriptName, scriptArgs} = opts;
+async expandSubs(shell, opts={}){//«
 /*«
 Here we need a concept of "fields".
 
@@ -3251,20 +3200,10 @@ for (let ent of this.val){
 
 	if (ent instanceof BQuote || ent instanceof ComSub|| ent instanceof ParamSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
-//		let rv = await ent.expand(shell, term, env, scriptName, scriptArgs);
-		let rv = await ent.expand(shell, term, opts);
+		let rv = await ent.expand(shell, opts);
 		if (rv) {
-//			let arr = rv.split("\n");
 			let arr;
 //YRTHSJLS
-/*
-			if (rv.noSplitNLs){
-				arr = rv.split(/[\x20\t]+/);
-			}
-			else{
-				arr = rv.split(/[\x20\n\t]+/);
-			}
-*/
 			arr = rv.split(/[\x20\n\t]+/);
 			if (arr.length) {
 				curfield+=arr.shift();
@@ -3277,51 +3216,40 @@ for (let ent of this.val){
 			}
 		}
 	}//»
-	else if (ent instanceof MathSub){//«
+	else if (ent instanceof MathSub){
 //resolve and start or append to curfield, since this can only return 1 (possibly empty) value
-//		curfield += await ent.expand(shell, term, env, scriptName, scriptArgs);
-		curfield += await ent.expand(shell, term, opts);
-	}//»
-	else if (ent instanceof DQuote){//«
-//		curfield += '"'+await ent.expand(shell, term, env, scriptName, scriptArgs)+'"';
-		curfield += '"'+await ent.expand(shell, term, opts)+'"';
-	}//»
+		curfield += await ent.expand(shell, opts);
+	}
+	else if (ent instanceof DQuote){
+		curfield += '"'+await ent.expand(shell, opts)+'"';
+	}
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
-//		curfield += "'"+ent.toString()+"'";
 		curfield += `'${ent.toString()}'`;
 	}
 	else{
 //JDHFKGK
 //This might me a '\"' that gets turned into '"', which gets removed by quote removal
-if (ent instanceof String && ent.escaped && (ent=="'"||ent=='"')){
-curfield += `\\${ent}`;
-}
-else curfield += ent.toString();
+		if (ent instanceof String && ent.escaped && (ent=="'"||ent=='"')){
+			curfield += `\\${ent}`;
+		}
+		else curfield += ent.toString();
 	}
-
 }
 
 if (curfield) fields.push(curfield);
-//if (!fields.length) fields.push("");
-//log(fields);
 this.fields = fields;
 }//»
-
 quoteRemoval(){//«
-
 	let s='';
 	let qtyp;
 	let arr = this.val;
-//log(arr);
 	for (let l=0; l < arr.length; l++){
 		let c = arr[l];
-///*
 		if (qtyp !== "'" && c==="\\" && (arr[l+1]==="'"||arr[l+1]==='"')){
-s+=arr[l+1];
-l++;
-continue;
+			s+=arr[l+1];
+			l++;
+			continue;
 		}
-//*/
 		if (c==='"'||c==="'") {
 			if (c===qtyp){
 				qtyp=null;
@@ -3336,7 +3264,6 @@ continue;
 	}
 //WUSLRJT
 	this.val = [...s];
-
 }//»
 tildeExpansion(){//«
 	const {val} = this;
@@ -3404,14 +3331,7 @@ dup(){//«
 	}
 	return word;
 }//»
-toString(){//«
-//We actually need to do field splitting instead of doing this...
-//log("TOSTRING!!!", this.val.join(""));
-//log(this.fields);
-//If only 0 or 1 fields, there will be no newlines
-//if (this.fields) return this.fields.join("\n");
-return this.val.join("");
-}//»
+toString(){return this.val.join("");}
 get isChars(){//«
 	let chars = this.val;
 	for (let ch of chars) {
@@ -3565,20 +3485,17 @@ dup(){//«
 	}
 	return dq;
 }//»
-async expand(shell, term, opts={}){//This returns a string (with possible embedded newlines)«
+async expand(shell, opts={}){//This returns a string (with possible embedded newlines)«
 let out = [];
 let curword="";
 let vals = this.val;
 for (let ent of vals){
-
-//log("ENT",ent);
 	if (ent.expand){//This cannot be another DQuote
 		if (curword){
 			out.push(curword);
 			curword="";
 		}
-//		out.push(await ent.expand(shell, term, env, scriptName, scriptArgs));
-		out.push(await ent.expand(shell, term, opts));
+		out.push(await ent.expand(shell, opts));
 	}
 	else if (!isStr(ent)){
 cwarn("HERE IS ENT!!!!");
@@ -3602,7 +3519,7 @@ toString(){
 
 const BQuote = class extends Sequence{//«
 //Collect everything in a string...
-expand(shell, term, opts){
+expand(shell, opts){
 	return shell.expandComsub(this, opts);
 }
 dup(){//«
@@ -3644,7 +3561,7 @@ const ShellNum = class extends Sequence{//«
 const ParamSub = class extends Sequence{//«
 
 //KLSDHSKD
-async expand(shell, term, com_opts, opts={}){//«
+async expand(shell, com_opts, opts={}){//«
 
 //if opts.isMath, then we can substitute "0" for non-existent things
 	const{env, scriptName, scriptArgs}=com_opts;
@@ -3701,11 +3618,9 @@ let is_set = Object.keys(env.vars).includes(s);
 let is_null;
 
 let wrd = this.subWord;
-await wrd.expandSubs(shell, com_opts, term);
+await wrd.expandSubs(shell, com_opts);
 let newval =  new String(wrd.fields.join(" "));
 //EANFJLPM
-//newval.noSplitNLs=true;
-//log(newval);
 let subval;
 if (is_set){
 	subval = env.vars[s];
@@ -3718,7 +3633,8 @@ if (is_set && !is_null){
 
 if (subType==="?"){//«
 	if (!is_set || (is_null&&have_colon)){
-		throw new Error(`sh: ${s}: ${newval}`);
+//		throw new Error(`sh: ${s}: ${newval}`);
+		throw new ShellError(`sh: ${s}: ${newval}`);
 	}
 	return "";
 }//»
@@ -3742,7 +3658,6 @@ else if (subType==="+"){//«
 else{//«
 	throw new Error(`!!! SHOULD NOT GET HERE SJDBFBS !!!`);
 }//»
-//term.response(`sh: not doing the parameter substitution (${s})`, {isWrn: true});
 
 }//»
 else if (this.isStrRep){//«
@@ -3753,8 +3668,7 @@ let typ = this.repType;
 let wrd = this.repWord;
 if (!wrd) return val;
 //TZKOPKHD
-await wrd.expandSubs(shell, com_opts, term);
-//await wrd.expandSubs(shell, term, com_opts);
+await wrd.expandSubs(shell, com_opts);
 let str = wrd.fields.join(" ");
 str = str.replace(/[\x22\x27]/g,"");
 let patarr = str.split("");
@@ -3802,10 +3716,9 @@ try{
 //log(`^${usepat}`);
 //	re = new RegExp(`^${usepat}`);
 	re = new RegExp(patstr);
-log(re);
 }
 catch(e){
-term.response(`sh: invalid regex detected`, {isWrn: true});
+cwarn(`invalid regex detected: "${patstr}"`);
 return val;
 }
 let marr = re.exec(useval);
@@ -3828,7 +3741,8 @@ else return val;
 	}
 cwarn("HERE IS THE WEIRD PARAM SUB...");
 log(s);
-throw new Error(`sh: bad substitution: $\{${s}\}`);
+//throw new Error(`sh: bad substitution: $\{${s}\}`);
+throw new ShellError(`sh: bad substitution: $\{${s}\}`);
 //throw new Error("WHAT KIND OF PARAM SUB IS THIS???");
 }//»
 dup(){//«
@@ -3863,7 +3777,7 @@ toString(){
 
 }//»
 const ComSub = class extends Sequence{//«
-expand(shell, term, opts){
+expand(shell, opts){
 	return shell.expandComsub(this, opts);
 }
 dup(){//«
@@ -3882,20 +3796,16 @@ toString(){
 }//»
 const MathSub = class extends Sequence{//«
 
-async expand(shell, term, opts={}){//«
-//Need to turn everything into a string that gets sent through math.eval()
-//	const err = term.resperr;
-const err=mess=>{
-term.response(mess, {isErr: true});
-};
+async expand(shell, opts={}){//«
+//WMFHJRK
 	if (!await util.loadMod("util.math")) {
-		err("could not load the math module");
-		return "";
+//cerr("could not load the math module");
+throw new ShellError("could not load the math module");
 	}
 	let s='';
 	let vals = this.val;
 	for (let ent of vals){
-		if (ent.expand) s+=await ent.expand(shell, term, opts, {isMath: true});
+		if (ent.expand) s+=await ent.expand(shell, opts, {isMath: true});
 		else s+=ent.toString();
 	}
 
@@ -3904,7 +3814,8 @@ term.response(mess, {isErr: true});
 		return math.eval(s)+"";
 	}
 	catch(e){
-		err(`math expansion: ${e.message}`);
+//		err(`math expansion: ${e.message}`);
+cerr(e);
 		return "";
 	}
 }//»
@@ -3984,7 +3895,7 @@ const Scanner = class {
 constructor(code, opts={}, handler) {//«
 	this.isInteractive = opts.isInteractive||false;
 	this.env = opts.env;
-	this.term = opts.term;
+	this.shell = opts.shell;
 	this.source = code;
 	this.errorHandler = handler;
 	this.length = code.length;
@@ -4006,8 +3917,7 @@ async more(no_nl){//«
 	let nl;
 	if (no_nl) nl="";
 	else nl="\n";
-//	let rv = nl+(await this.term.readLine("> "));
-	let rv = await this.term.readLine("> ");
+	let rv = await this.shell.readLine("> ");
 	if (isEOF(rv)){
 		return false;
 	}
@@ -4096,14 +4006,11 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 
 //If we are in double quotes, need to check for backquotes
 	let check_bq = which==='"';
-//let check_subs
-//	let out=[];
 
 	let start;
 	if (cont_quote) start = use_start;
 	else start = this.index;
 
-//	let src = this.source;
 	let len = this.source.length;
 	let is_ds_single = which === "$";
 	let is_single;
@@ -4139,9 +4046,9 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 	let rv;
 	let next;
 	while(ch && ch !== end_quote){
-		if (ch==="`" && in_backquote){//«
+		if (ch==="`" && in_backquote){
 			return `command substitution: unexpected EOF while looking for matching '${which}'`;
-		}//»
+		}
 		if (check_subs&&ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")) {//«
 			this.index=cur;
 			if (this.source[cur+2]==="("){
@@ -4149,13 +4056,11 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 				if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			}
 			else if (this.source[cur+1]==="{"){
-//				rv = await this.scanSub(quote, {isParam: true, inBQ: is_bq||in_backquote});
 				rv = await this.scanParamSub({inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated parameter substitution`);
 				this.index--;
 			}
 			else{
-//				rv = await this.scanComSub(quote, null, is_bq||in_backquote);
 				rv = await this.scanSub(quote, {isComSub: true, inBQ: is_bq||in_backquote});
 				if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			}
@@ -4188,24 +4093,13 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 		else if (!is_hard_single && ch==="\\"){//«
 			cur++;
 			ch = this.source[cur];
-//log("HICH", ch);
-/*
-if (this.isInteractive){
-log("GET MOAR...");
-}
-else{
-cwarn("SKIP OIMPET");
-}
-*/
 			if (!ch) this.throwUnexpectedToken("unsupported line continuation (2)");
 			let c = ch;
 			ch = new String(c);
 			ch.escaped = true;
 			if (is_ds_single||is_dq)ch.toString=()=>{
-//log("TOSTRING!!!");
 				return "\\"+c;
 			};
-//log(ch);
 			//else is_bq: the character is in "free space" (no backslashes show up)
 			out.push(ch);
 		}//»
@@ -4218,7 +4112,7 @@ cwarn("SKIP OIMPET");
 			cur = this.index;
 		}//»
 		else if (is_bq && ch==="$" && this.source[cur+1]==="'"){//«
-			this.index=cur;//DPORUTIH  ARGHHHHHHH!?!?!?!?!?
+			this.index=cur;//DPORUTIH
 			rv = await this.scanQuote(quote, "$", true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -4236,19 +4130,16 @@ cwarn("SKIP OIMPET");
 		if (this.eol()){
 			quote.val = out;
 			if (!await this.more()){
-				throw new Error("EOF");
+//				throw new Error("EOF");
+				throw new ShellError("EOF");
 			}
 			return await this.scanQuote(par, which, in_backquote, quote, start);
 		}
 		return null;
 	}
 //ZOHJKL
-//	quote.raw = this.source.slice(start+1, this.index);
 	quote.raw = this.source.slice(start+1, this.index).join("");
-//	word.raw = this.source.slice(start, this.index).join("");
-if (!out.length) out.push("");
-//log(out);
-//log(out);
+	if (!out.length) out.push("");
 	return quote;
 }//»
 scanName(no_adv){//«
@@ -4309,7 +4200,6 @@ if (!cont_sub) {
 }
 let cur = this.index;
 let ch = this.source[cur];
-//if (!ch) return null;
 let have_space = false;
 while(ch){
 
@@ -4336,7 +4226,6 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 		if (is_comsub) say_ch=")";
 		else if (is_math) say_ch="))";
 		else if (is_param) say_ch = "}";
-//		return `unexpected EOF while looking for matching '${is_math?"))":")"}'`;
 		return `command substitution: unexpected EOF while looking for matching '${say_ch}'`;
 	}
 	this.index=cur;
@@ -4350,7 +4239,6 @@ else if (ch==="'"||ch==='"'||ch==='`'){//«
 else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 	if (this.source[cur+2]==="("){
 		this.index=cur;
-//		let rv = await this.scanComSub(sub, true, in_backquote);
 		let rv = await this.scanSub(sub, {isMath: true, inBQ: in_backquote});
 		if (rv===null) return `unterminated math expansion`;
 		if (isStr(rv)) return rv;
@@ -4367,9 +4255,6 @@ else if (ch==="$"&&(this.source[cur+1]==="("||this.source[cur+1]==="{")){//«
 	}
 	else{
 		this.index=cur;
-////async scanComSub(par, is_math, in_backquote, cont_sub){
-//		let rv = await this.scanComSub(sub, false, in_backquote);
-//		let rv = await this.scanSub(sub, {isComSub: true, inBQ: true});
 		let rv = await this.scanSub(sub, {isComSub: true, inBQ: in_backquote});
 		if (rv===null) return `unterminated command substitution`;
 		if (isStr(rv)) return rv;
@@ -4383,8 +4268,6 @@ else if (ch==="$" && this.source[cur+1] && this.source[cur+1].match(/[_a-zA-Z]/)
 	let sub = new ParamSub(cur);
 	sub.subName = await this.scanName();
 	sub.val[0] = sub.subName;
-//	sub.subName = sub.val[0];
-//	sub.val[0]
 	out.push(sub);
 	cur = this.index;
 }//»
@@ -4395,9 +4278,7 @@ else if (ch==="$" && this.source[cur+1] && (this.source[cur+1].match(/[1-9]/)||S
 	this.index++;
 }//»
 else if (is_math && ch.match(/[_a-zA-Z]/)){//«
-/*
-For math subs, we automatically create a param out of anything that looks like a name
-*/
+//For math subs, we automatically create a param out of anything that looks like a name
 	this.index=cur;
 	let sub = new ParamSub(cur);
 	sub.subName = await this.scanName(true);
@@ -4407,8 +4288,6 @@ For math subs, we automatically create a param out of anything that looks like a
 
 }//»
 else if (is_param && ch==="}"){//«
-//if ()
-//log(start, cur);
 //WYFOSKFL
 	this.index = cur;
 	return sub;
@@ -4416,7 +4295,6 @@ else if (is_param && ch==="}"){//«
 else if (paren_depth === 0 && is_comsub && ch===")"){//«
 	this.index = cur;
 //XMDJKT
-//	sub.raw = this.source.slice(start+2, this.index);
 	sub.raw = this.source.slice(start+2, this.index).join("");
 	return sub;
 }//»
@@ -4454,7 +4332,6 @@ this.index = cur;
 if (this.eol()){
 	sub.val = out;
 	await this.more();
-//	return await this.scanComSub(par, is_math, in_backquote, sub);
 	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBQ: in_backquote, contSub: sub, parenDepth: paren_depth});
 }
 
@@ -4464,8 +4341,6 @@ return null;
 
 }//»
 scanOperator(){//«
-
-//	let this.source = this.source;
 	let start = this.index;
 	let str = this.source[start];
 	let obj={};
@@ -4553,9 +4428,6 @@ scanOperator(){//«
 	if (this.index === start) {
 		this.throwUnexpectedToken(`Unexpected token ${str}`);
 	}
-//	let check_unsupported_toks = globals.dev_mode ? UNSUPPORTED_DEV_OPERATOR_TOKS : UNSUPPORTED_OPERATOR_TOKS;
-//	if (check_unsupported_toks.includes(str)) this.throwUnexpectedToken(`unsupported operator '${str}'`);
-
 	obj.val=str;
 	obj.isOp = true;
 	obj.toString=()=>{
@@ -4582,8 +4454,6 @@ scanOperator(){//«
 		}
 	}
 	return obj;
-//	if (str.match(/[<>]/)) return {type:"r_op", r_op:str, val: str, isOp: true};
-//	return {type:"c_op", c_op:str, start, val: str, isOp: true};
 
 }//»
 async scanParamSub(opts={}){//«
@@ -4593,7 +4463,6 @@ const bad=(which)=>{
 
 let in_backquote = opts.inBQ;
 let sub = new ParamSub(this.index);
-//let val = [];
 this.index+=2;
 let next = this.source[this.index];
 //UDHLPFMSK
@@ -4606,7 +4475,6 @@ if (next.match(/[0-9]/)){//Sequence of numbers ${6} or ${647} or even ${0045}«
 	sub.val.push(num);
 	sub.isNum = true;
 	this.expect("}", BADSUB);
-//this.index--;
 	return sub;
 }//»
 else if (SPECIAL_SYMBOLS.includes(next)){//Can only be this symbol«
@@ -4617,7 +4485,6 @@ else if (SPECIAL_SYMBOLS.includes(next)){//Can only be this symbol«
 	return sub;
 }//»
 else if (!next.match(/[_a-zA-Z]/)) {
-//log(next, in_backquote);
 if (next==="`" && in_backquote){
 this.throwUnexpectedToken("command substitution: unexpected EOF while looking for matching '}'");
 return;
@@ -4631,16 +4498,12 @@ return;
 //3) /##?/
 //Then scan for a word that is delimited by "}" (fail on any other delimiter)
 //»
-//sub.val = this.scanRE(/[_0-9a-zA-Z]/);
-//log("WUT");
 let name = this.scanName(true);
 sub.subName = name;
 sub.val.push(name);
 this.index++;
-//log(sub.val);
 
 if (this.check("}")) {
-//log(sub.val);
 	sub.isPlain = true;
 	return sub;//"Normal" sub like: ${FOOD_HERE_HAR}
 }
@@ -4650,14 +4513,12 @@ let have_colon = this.check(":");
 if (have_colon) sub.val.push(":");
 let gotop;
 if (gotop = this.checkRE(/[-=+?]/)) {//Substitution«
-//log("HI");
 	sub.haveColon = have_colon;
 	sub.isSubstitute = true;
 	sub.subType = gotop;
 	sub.val.push(gotop);
 	if (this.check("}")){}//This CAN be a null string
 	else{//Need to get a Word that is terminated by only: "}"
-//log("SCAN A WORD!!!");
 		let word = await this.scanWord({isParam: true, inBQ: in_backquote});
 		sub.subWord = word;
 		sub.val.push(word);
@@ -4704,17 +4565,12 @@ return sub;
 }//»
 async scanWord(opts={}){//«
 /*
-
 Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
 can either be in free space or just after "`", "$(" or "$((" that are in free space,
 or in double quotes or in themselves ("`" must be escaped to be "inside of" itself).
-
 */
 
 	let start = this.index;
-//	let src = this.source;
-//	let str='';
-//	let src;
 	let rv;
 	let start_line_number = this.lineNumber;
 	let start_line_start = this.lineStart;
@@ -4723,9 +4579,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 	let is_plain_chars = true;
 	let is_param = opts.isParam;
 	let in_backquote = opts.inBQ;
-// Simple means there are only plain chars, escapes, '...', $'...' and 
-// "..." with no embedded substitutions
-//	let is_simple = true;
 	while (!this.eof()) {
 		let ch = this.source[this.index];
 		let next1 = this.source[this.index+1];
@@ -4759,17 +4612,12 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			is_plain_chars = false;
 //WJKMDNFK
 			ch = new String(next1);
-//if (ch==="'"||ch==='"') ch.toString=function(){
-//return `\\${ch}`;
-//};
-//log(ch);
 			ch.escaped = true;
 			this.index++;
 			wordarr.push(ch);
 		}//»
 		else if (ch==="$" && next1 === "(" && next2==="("){//«
 			is_plain_chars = false;
-//			rv = await this.scanComSub(word, true);
 			rv = await this.scanSub(word, {isMath: true, inBQ: in_backquote});
 			if (rv===null) this.throwUnexpectedToken(`unterminated math expression`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -4777,7 +4625,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		}//»
 		else if (ch==="$" && next1 === "("){//«
 			is_plain_chars = false;
-//			rv = await this.scanComSub(word);
 			rv = await this.scanSub(word, {isComSub: true, inBQ: in_backquote});
 			if (rv===null) this.throwUnexpectedToken(`unterminated command substitution`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
@@ -4791,9 +4638,9 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		}//»
 		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){//«
 			is_plain_chars = false;
-if (ch==="`" && in_backquote){
-this.throwUnexpectedToken("unexpected EOF reached");
-}
+			if (ch==="`" && in_backquote){
+				this.throwUnexpectedToken("unexpected EOF reached");
+			}
 			rv = await this.scanQuote(word, ch, in_backquote);
 			if (rv===null) {
 				if (ch=="'"){
@@ -4868,9 +4715,10 @@ this.throwUnexpectedToken("unexpected EOF reached");
 				case "}": word.isRBrace=true;break;
 				case "in": word.isIn=true;break;
 				default: 
-	cwarn("What is the word below, not RESERVED_WORDS!!!");
-	log(wrd);
-					this.fatal(`WUTTHEHELLISTHISWORD --->${wrd} <---- ^&*^$#&^&*$ (see console)`);
+cwarn("What is the word below, not RESERVED_WORDS!!!");
+log(wrd);
+//					this.fatal(`WUTTHEHELLISTHISWORD --->${wrd} <---- ^&*^$#&^&*$ (see console)`);
+					throw new Error(`WUTTHEHELLISTHISWORD --->${wrd} <---- ^&*^$#&^&*$ (see console)`);
 
 				}
 			}
@@ -4879,19 +4727,15 @@ this.throwUnexpectedToken("unexpected EOF reached");
 			}
 		}//»
 		else{
-	//is_plain_chars == false
 			word.isCommandStart = true;
 		}
 	}
 	word.raw = this.source.slice(start, this.index).join("");
-//log(raw);
 	return word;
 }//»
 scanNewlines(par, env, heredoc_flag){//«
 
 	let start = this.index;
-//	let this.source = this.source;
-//	let str="";
 	let val = [];
 	let iter=0;
 	let start_line_number = this.lineNumber;
@@ -4905,7 +4749,6 @@ scanNewlines(par, env, heredoc_flag){//«
 	this.lineNumber+=iter;
 
 	let newlines = new Newlines(start, par, env);
-//	newlines.isNLs = true;
 	newlines.newlines = iter;
 	return newlines;
 
@@ -4917,11 +4760,9 @@ spliceSource(len){//«
 }//»
 scanNextLineNot(delim){//«
 	if (this.eof()) {
-//cwarn("GOTEOF", this.isInteractive);
 		return false;
 	}
 	let cur = this.index;
-//	let this.source = this.source;
 	let ln='';
 	let ch = this.source[cur];
 	while(ch!=="\n"){
@@ -4934,10 +4775,7 @@ scanNextLineNot(delim){//«
 	if (ln===delim) {
 		return true;
 	}
-//log(this.isInteractive);
-//	if (this.eof()) return false;
 	if (!this.isInteractive && this.eof()) return false;
-//log("HI", this.eof(), ln);
 	return ln;
 }//»
 async lex(heredoc_flag){//«
@@ -4960,10 +4798,8 @@ let ch = this.source[this.index];
 if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
 
 if (OPERATOR_CHARS.includes(ch)) {
-//	if (UNSUPPORTED_OPERATOR_CHARS.includes(ch)) this.throwUnexpectedToken(`unsupported token: '${ch}'`);
 	return this.scanOperator();
 }
-//return await this.scanWord(null, this.env);
 return await this.scanWord();
 
 }//»
@@ -4975,16 +4811,16 @@ const Parser = class {
 
 constructor(code, opts={}) {//«
 //WHKSFLGG
+
 	this.mainParser = opts.mainParser || this;
-//	this.id = parserId++;
 	this.env = opts.env;
-	this.term = opts.term;
+//	this.Term = opts.Term;
+	this.shell = opts.shell;
 	this.isInteractive = opts.isInteractive;
 	this.isContinue = opts.isContinue;
 	this.heredocScanner = opts.heredocScanner;
 	this.errorHandler = new ErrorHandler();
 	this.scanner = new Scanner(code, opts, this.errorHandler);
-//	this.isInteractive = opts.isInteractive;
 	this.lookahead = {//«
 		type: EOF_Type,
 		value: '',
@@ -4997,16 +4833,11 @@ constructor(code, opts={}) {//«
 	this.tokNum = 0;
 	this.numToks = 0;
 	this.tokens = [];
-/*
-Since this is async (because we might need to get more lines from 'await term.readLine()'),
-then we need to do 'await this.scanNextTok()' **outside** of the constructor, since there is
-NO async/await in constructors.
-*/
-//	this.scanNextTok();
 }//»
 
 fatal(mess){//«
-throw new Error(mess);
+//throw new Error(mess);
+throw new ShellError(mess);
 }//»
 eol(){//«
 	return (
@@ -5023,6 +4854,7 @@ end(){//«
 //SLKIURUJ
 	return(this.tokNum===this.numToks);
 }//»
+/*
 dumpTokens(){//«
 
 let toks = this.tokens;
@@ -5030,8 +4862,7 @@ let tok = toks[this.tokNum];
 
 while(tok){
 	if (isNLs(tok)){
-cwarn("NL");
-	//	tok = toks.shift();
+//cwarn("NL");
 		this.tokNum++;
 		while (isNLs(toks[this.tokNum])) {
 			this.tokNum++;
@@ -5055,6 +4886,7 @@ cwarn("NL");
 }
 
 }//»
+*/
 skipNewlines(){//«
 	let toks = this.tokens;
 	if (!isNLs(toks[this.tokNum])) return false;
@@ -5108,9 +4940,7 @@ async scanNextTok(heredoc_flag) {//«
 	this.lookahead = next;
 	return token;
 };//»
-
 eatBang(){//«
-//log(this.tokens);
 	let tok = this.tokens[this.tokNum];
 	if (tok.isWord && tok.val.length===1 && tok.val[0]==="!"){
 		this.tokNum++;
@@ -5152,8 +4982,7 @@ getNextNonNewlinesTok(){//«
 }//»
 async getNonEmptyLineFromTerminal(){//«
 	let rv;
-//	while ((rv = await this.term.readLine("> ")).match(/^[\x20\t]*(#.+)?$/)){}
-	while (rv = await this.term.readLine("> ")){
+	while (rv = await this.shell.readLine("> ")){
 		if (isEOF(rv)) return rv;
 		if (rv.match(/^[\x20\t]*(#.+)?$/)) continue
 		return rv;
@@ -5187,7 +5016,6 @@ async parseList(seq_arg){//«
 	seq.push(andor);
 	let next = this.curTok();
 	let next1 = this.curTok(1);
-//	if (!(next && next.isSepOp && this.isCommandStart(this.curTok(1)))) return {list: seq};
 	if (!(next && next.isSepOp && next1 && next1.isCommandStart)) return {list: seq};
 	seq.push(next.val);
 	this.tokNum++;
@@ -5208,10 +5036,11 @@ shouldn't we insert a NEWLINE at the end???
 	let use_sep;
 
 	if (!next){
-		if (this.eos()) this.unexpeof();
+		if (this.eos()) this.unexpeof(); //End-of-Script
 		else {
 log(this.tokens);
-			this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
+//			this.fatal("NO NEXT TOK AND NOT EOS!?!?!");
+			throw new Error("NO NEXT TOK AND NOT EOS!?!?!");
 		}
 	}
 	if (next.isSepOp) {
@@ -5222,89 +5051,76 @@ log(this.tokens);
 		use_sep = ";";
 	}
 	else {
-		return {term: seq};
+		return {trm: seq};
 	}
 	this.skipNewlines();
 	next = this.curTok();
 	if (!next){
 		if (this.eos()) this.unexpeof();
-		else if (!this.isInteractive) this.fatal("!NEXT && !isInteractive!?!?!?");
+		else if (!this.isInteractive) {
+log(this.tokens);
+			throw new Error("!NEXT && !isInteractive!?!?!?");
+		}
 		await this.getMoreTokensFromTerminal();
 		next = this.curTok();
 	}
 	if (!next.isCommandStart){
-//	if (!this.isCommandStart(next)){
 		this.tokNum = tok_num_hold;
-		return {term: seq};
+		return {trm: seq};
 	}
 	seq.push(use_sep);
 	return this.parseTerm(seq);
 }//»
 async parseCompoundList(opts={}){//«
-	let err = this.fatal;
 	this.skipNewlines();
 	if (this.isInteractive){
 		if (this.eol()){
-//Get more token...
 			await this.getMoreTokensFromTerminal();
 		}
 	}
 	else if (this.eos()){
-		err(`syntax error: unexpected end of file`);
+		this.fatal(`syntax error: unexpected end of file`);
 	}
 
-	let term = await this.parseTerm();
+	let trm = await this.parseTerm();
 	let next = this.curTok();
 	if (!next) {
-		term.term.push(";");
-		return {compound_list: term}
+		trm.trm.push(";");
+		return {compound_list: trm}
 	}
 	if (next.isSepOp){
-		term.term.push(next.val);
+		trm.trm.push(next.val);
 		this.tokNum++;
 	}
 	else if (isNLs(next)){
-		term.term.push(";");
+		trm.trm.push(";");
 	}
 	else if (opts.isSubshell && next.isSubEnd){
-		term.term.push(";");
+		trm.trm.push(";");
 	}
 	else if (opts.isBraceGroup && next.isRBrace){
-		term.term.push(";");
+		trm.trm.push(";");
 	}
 	else if (opts.isCase && next.isCaseItemEnd){
-		term.term.push(";");
+		trm.trm.push(";");
 	}
 	else{
 		this.unexp(next);
 	}
 	this.skipNewlines();
-	return {compound_list: term};
+	return {compound_list: trm};
 }//»
 
 async parseFuncBody(){//«
-//let comp_com = await this.parseCommand(true);
 let comp_com = await this.parseCompoundCommand();
-//if (comp_com===false){
-//	let tok = this.curTok();
-//	this.unexp(tok);
-//}
-/*Even though the spec says that a function_body is a compound_command [redirect_list],
-we are already doing eatRedirects inside of parseCompoundCommand since all compound
-commands take redirect lists.
-*/
-//let redirs = this.eatRedirects();
-//Then get the bunch of redirections after it
 return {function_body: {command: comp_com}};
 }//»
 async parseFuncDef(){//«
-//log("PARSEFUNCDEF!?!?!?");
 	let err=this.fatal;
 	let fname = this.curTok();
 	if (!(fname && fname.isWord)) err("function name token not found");
 	this.tokNum++;
 	let lparen = this.curTok();
-//log("LPAREN", lparen);
 	if (!(lparen && lparen.isSubStart)) err("'(' token not found");
 	this.tokNum++;
 	let rparen = this.curTok();
@@ -5312,7 +5128,6 @@ async parseFuncDef(){//«
 		this.unexp("newline");
 	}
 	if (!rparen.isSubEnd) this.unexp(rparen);
-//log("RPAREN", lparen);
 	this.tokNum++;
 	this.skipNewlines();
 	let tok = this.curTok();
@@ -5328,7 +5143,6 @@ async parseFuncDef(){//«
 }//»
 
 async parseDoGroup(){//«
-
 	let err = this.fatal;
 	let tok = this.curTok();
 	if (!(tok&&tok.isDo)){
@@ -5341,7 +5155,6 @@ async parseDoGroup(){//«
 		err(`'done' token not found!`);
 	}
 	this.tokNum++;
-//	return {do_group: list};
 	return list;
 }//»
 
@@ -5459,8 +5272,7 @@ if (!tok){
 let compound_list;
 if (tok.isCommandStart){
 //This one can end with a ";;" or ";&"
-	compound_list = (await this.parseCompoundList({isCase: true})).compound_list.term;
-//log(compound_list.compound_list);
+	compound_list = (await this.parseCompoundList({isCase: true})).compound_list.trm;
 }
 tok = this.curTok();
 if (!tok){
@@ -5546,7 +5358,6 @@ The exit status of case shall be zero if no patterns are matched. Otherwise, the
 
 »*/
 
-
 	let err = this.fatal;
 	let tok = this.curTok();
 	if (!(tok&&tok.isCase)){
@@ -5600,19 +5411,11 @@ async parseUntilClause(){//«
 	let list = await this.parseCompoundList();
 	tok = this.curTok();
 	if (!tok) this.unexpeof();
-/*«
-	if (!tok){
-		if (!this.isInteractive) this.unexpeof();
-		await this.getMoreTokensFromTerminal();
-		tok = this.curTok();
-	}
-*»*/
 	if (!tok.isDo){
 		this.unexp(tok);
 	}
 	let do_group = await this.parseDoGroup();
 	return {type: "until_clause", compound_command: {condition: list, do_group}};
-//*/
 }//»
 async parseWhileClause(){//«
 	let err = this.fatal;
@@ -5624,20 +5427,11 @@ async parseWhileClause(){//«
 	let list = await this.parseCompoundList();
 	tok = this.curTok();
 	if (!tok) this.unexpeof();
-/*«
-	if (!tok){
-		if (!this.isInteractive) this.unexpeof();
-		await this.getMoreTokensFromTerminal();
-		tok = this.curTok();
-	}
-»*/
 	if (!tok.isDo){
 		this.unexp(tok);
 	}
 	let do_group = await this.parseDoGroup();
-//type: "", 
 	return {type: "while_clause", compound_command: {condition: list, do_group}};
-//*/
 }//»
 async parseForClause(){//«
 
@@ -5763,7 +5557,6 @@ if (!(tok&&tok.isIf)){
 }
 this.tokNum++;
 
-//Is there a this.getMoreTokensFromTerminal in here???
 let if_list = await this.parseCompoundList();
 tok = this.curTok();
 if (!(tok && tok.isThen)){
@@ -5779,7 +5572,6 @@ if (!(tok && (tok.isFi || tok.isElse || tok.isElif))){
 let else_part;
 if (!tok.isFi){
 	else_part = await this.parseElsePart();
-//log(else_part);
 	tok = this.curTok();
 	if (!tok){
 		err(`unexpected EOF while looking for "fi"`);
@@ -5788,9 +5580,7 @@ if (!tok.isFi){
 		this.unexp(tok);
 	}
 }
-//curTok *MUST* be "fi"!?!?
 this.tokNum++;
-//return {if_clause: {if_list, then_list, else_part}};
 return {type: "if_clause", compound_command: {if_list, then_list, else_part}};
 
 }//»
@@ -5808,7 +5598,6 @@ async parseSimpleCommand(){//«
 
 let err = this.fatal;
 let toks = this.tokens;
-//let have_comword;
 let name;
 let tok = toks[this.tokNum];
 let assigns = [];
@@ -5840,8 +5629,6 @@ while(tok){
 }
 if (!name) return {redirs, simple_command: {assigns}};
 return {redirs, simple_command: {assigns, name, args}};
-//if (!name) return {simple_command: {assigns, redirs}};
-//return {simple_command: {assigns, redirs, name, args}};
 
 }//»
 async parseCompoundCommand(){//«
@@ -5875,8 +5662,8 @@ else if (tok.isResStart){//«
 			com = await this.parseCaseClause();
 			break;
 		default:
-			this.fatal(`unknown reserved 'start' word: ${wrd} &^*^$#*& HKHJKH`);
-//			this.unexp(tok);
+//			this.fatal(`unknown reserved 'start' word: ${wrd} &^*^$#*& HKHJKH`);
+			throw new Error(`unknown reserved 'start' word: ${wrd} &^*^$#*& HKHJKH`);
 	}
 }//»
 else{//«
@@ -5893,9 +5680,6 @@ async parseCommand(force_compound){//«
 let toks = this.tokens;
 let err = this.fatal;
 let tok = this.curTok();
-//log("PARSECOM", force_compound, tok.toString());
-//log("parseCommand");
-//log(tok);
 if (tok.isWord) {//«
 	let wrd;
 	if (tok.isRes) {
@@ -5911,14 +5695,12 @@ if (tok.isWord) {//«
 //Want to ensure a certain level of "simplicity" to function names, i.e. they have
 //no substitutions or newlines (maybe disallow $'...')
 		if (force_compound) return false;
-//log("FUNCDEF");
 		return this.parseFuncDef();// blah(  or foo  (
 	}
 	if (force_compound) return false;
 	return this.parseSimpleCommand();
 }//»
 else if(tok.isOp||tok.isRedir){//«
-//	if (tok.isSubStart) return this.parseSubshell();
 	if (tok.isSubStart) return this.parseCompoundCommand();
 	if (tok.isRedir){
 		if (force_compound) return false;
@@ -5929,7 +5711,7 @@ else if(tok.isOp||tok.isRedir){//«
 else{//«
 cwarn("WUD IS THIS BELOW!?!?!?!");
 log(tok);
-err("WHAT IS THIS NOT NEWLINE OR WORD OR OPERATOR?????????");
+throw new Error("WHAT IS THIS NOT NEWLINE OR WORD OR OPERATOR?????????");
 }//»
 
 }//»
@@ -5954,9 +5736,6 @@ async parsePipeSequence(seq_arg){//«
 	else if (this.eos()){
 		err(`syntax error: unexpected end of file`);
 	}
-//	else if (!this.isInteractive){//Bad: script or command substitution has ended...
-//		err(`syntax error: unexpected end of file`);
-//	}
 //	else: We are interactive and have more tokens on this line
 	return await this.parsePipeSequence(seq);
 }//»
@@ -5988,7 +5767,6 @@ async parseAndOr(seq_arg){//«
 			this.skipNewlines();
 		}
 	}
-//	else if (!this.isInteractive){//Bad: script or command substitution has ended...
 	else if (this.eos()){//Bad: script or command substitution has ended...
 		err(`syntax error: unexpected end of file`);
 	}
@@ -6040,13 +5818,14 @@ async parseContinueStr(str){//«
 
 let parser = new Parser(str.split(""), {
 	mainParser: this,
-	term: this.term,
+//	Term: this.Term,
 	heredocScanner: this.heredocScanner,
 	env: this.env,
 	isInteractive: true,
 	isContinue: true,
 });
 let newtoks, comstr_out;
+//TRYHERE
 try {
 	let errmess;
 	await parser.scanNextTok();
@@ -6055,8 +5834,12 @@ try {
 	return newtoks;
 }
 catch(e){
-cerr(e);
-	return e.message;
+	if (e instanceof ShellError) {
+		return e.message;
+	}
+	else{
+		throw e;
+	}
 }
 
 }//»
@@ -6109,7 +5892,7 @@ async tokenize(){//«
 				}
 				else{
 cwarn("Whis this non-NLs or r_op or c_op????");
-					log(next);
+log(next);
 					throw new Error("WUUTTTTTTTTT IZZZZZZZZZ THISSSSSSSSS JKFD^&*$% (see console)");
 				}
 			}//»
@@ -6133,9 +5916,9 @@ cwarn("Whis this non-NLs or r_op or c_op????");
 		for (let i=0; i < heredocs.length; i++){
 			let heredoc = heredocs[i];
 			let rv = await this.heredocScanner(heredoc.delim);
-if (rv===EOF){
-this.fatal("aborted");
-}
+			if (rv===EOF){
+				this.fatal("aborted");
+			}
 			if (heredoc.tok.partial) {
 				heredoc.tok.value = heredoc.tok.partial + rv.join("\n");
 			}
@@ -6201,22 +5984,19 @@ this.fatal("aborted");
 //»
 //Shell«
 class Shell {
-
-constructor(term){//«
-	this.term = term;
-	this.env = term.env;
+#term;
+constructor(termarg){//«
+//QMCPOYHJ
+	this.#term = termarg;//this.term = term;
+	this.env = this.#term.env;
 	this.cancelled = false;
 }//»
 
-fatal(mess){throw new Error(mess);}
+//fatal(mess){throw new Error(mess);}
+fatal(mess){throw new ShellError(mess);}
 async expandComsub(tok, opts){//«
-	const{term}=this;
-	const err=(mess)=>{
-		term.response(mess, {isErr: true});
-	};
 //XLMJHU [Fixed] NO tok.raw when the BQuote/ComSub is inside of a function 
 	let arr = tok.raw.split("");   //Should use the raw here!!!
-//	let arr = tok.val;
 	let s = '';
 	let len = arr.length;
 	for (let i=0; i < len; i++){
@@ -6231,7 +6011,6 @@ async expandComsub(tok, opts){//«
 		}
 		else{
 //PZUELFJ
-//log(ch);
 			s+=ch;
 		}
 	}
@@ -6239,22 +6018,27 @@ async expandComsub(tok, opts){//«
 		return "";
 	}
 	let sub_lines = [];
+//TRYHERE
 	try{
-//log(this.parser);
 		let rv = await this.execute(s, {
 //XMSKSLEO
 			mainParser: this.parser.mainParser,
 			subLines: sub_lines,
 			env: sdup(this.env),
 			shell: this,
-			term: this.term
+//			Term: this.Term
+			term: this.#term
 		});
 		return sub_lines.join("\n");
 	}
 	catch(e){
-cerr(e);
-		err(e.message);
-		return "";
+		if (e instanceof ShellError) {
+			this.error(e.message);
+			return "";
+		}
+		else{
+			throw e;
+		}
 	}
 }//»
 
@@ -6517,7 +6301,7 @@ for (let i=0; i < dirs.length; i++){
 //													  v----REMOVE THIS SPACE
 //		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
 		try{ 
-log(`^${nm}$`);
+//log(`^${nm}$`);
 
 			let re = new RegExp(`^${nm}$`);
 			for (let key of keys){
@@ -6623,8 +6407,6 @@ return tok;
 };//»
 
 async getStdinLines(in_redir, haveSubLines){//«
-//const get_stdin_lines = async(in_redir, term, haveSubLines) => 
-//const get_stdin_lines = async(in_redir, term, heredocScanner, haveSubLines) => {
 let stdin;
 let red = in_redir[0];
 let val = in_redir[1];
@@ -6663,7 +6445,6 @@ return stdin;
 async allExpansions(arr, shopts={}, opts={}){//«
 //log(arr[1].val[0]);
 const{env,scriptName,scriptArgs} = shopts;
-const{term}=this;
 const{isAssign}=opts;
 for (let k=0; k < arr.length; k++){//«
 	let tok = arr[k];
@@ -6691,9 +6472,7 @@ for (let k=0; k < arr.length; k++){//tilde«
 for (let k=0; k < arr.length; k++){//command sub«
 	let tok = arr[k];
 	if (tok.isWord) {
-//		await tok.expandSubs(this, term, env, scriptName, scriptArgs);
-//		await tok.expandSubs(this, term, shopts);
-		await tok.expandSubs(this, shopts, term);
+		await tok.expandSubs(this, shopts);
 	}
 }//»
 for (let k=0; k < arr.length; k++){//field splitting«
@@ -6719,12 +6498,7 @@ for (let k=0; k < arr.length; k++){//filepath expansion/glob patterns«
 
 let tok = arr[k];
 if (tok.isWord) {
-//	let rv = await this.filepathExpansion(tok, term.cur_dir);
 	let rv = await this.filepathExpansion(tok, this.env.cwd.cwd);
-	if (isStr(rv)){
-		term.response(rv, {isErr: true});
-		continue;
-	}
 	if (rv !== tok){
 		arr.splice(k, 1, ...rv);
 	}
@@ -6772,8 +6546,8 @@ makeCompoundCommand(com, opts, parentCommand){//«
 	if (typ === "if_clause") {//«
 		let if_list = comp.if_list;
 		let then_list = comp.then_list;
-		let conditions = [if_list.compound_list.term];
-		let consequences = [then_list.compound_list.term];
+		let conditions = [if_list.compound_list.trm];
+		let consequences = [then_list.compound_list.trm];
 		let fallback;
 		let else_part = comp.else_part;
 		if (else_part){
@@ -6781,42 +6555,40 @@ makeCompoundCommand(com, opts, parentCommand){//«
 			if (elif_seq){
 				while (elif_seq.length){
 					let elif = elif_seq.shift();
-					conditions.push(elif.elif.compound_list.term);
-					consequences.push(elif.then.compound_list.term);
+					conditions.push(elif.elif.compound_list.trm);
+					consequences.push(elif.then.compound_list.trm);
 				}
 			}
-			fallback = else_part.else_list.compound_list.term;
+			fallback = else_part.else_list.compound_list.trm;
 		}
 		return new IfCom(this, opts, conditions, consequences, fallback, parentCommand);
 	}//»
-	if (typ === "brace_group") return new BraceGroupCom(this, opts, comp.compound_list.term, parentCommand);
-	if (typ === "subshell") return new SubshellCom(this, opts, comp.compound_list.term, parentCommand);
-	if (typ === "for_clause") return new ForCom(this, opts, comp.name, comp.in_list, comp.do_group.compound_list.term, parentCommand);
+	if (typ === "brace_group") return new BraceGroupCom(this, opts, comp.compound_list.trm, parentCommand);
+	if (typ === "subshell") return new SubshellCom(this, opts, comp.compound_list.trm, parentCommand);
+	if (typ === "for_clause") return new ForCom(this, opts, comp.name, comp.in_list, comp.do_group.compound_list.trm, parentCommand);
 	if (typ === "case_clause") return new CaseCom(this, opts, comp.word, comp.list, parentCommand);
-	if (typ === "while_clause") return new WhileCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term, parentCommand);
-	if (typ === "until_clause") return new UntilCom(this, opts, comp.condition.compound_list.term, comp.do_group.compound_list.term, parentCommand);
+	if (typ === "while_clause") return new WhileCom(this, opts, comp.condition.compound_list.trm, comp.do_group.compound_list.trm, parentCommand);
+	if (typ === "until_clause") return new UntilCom(this, opts, comp.condition.compound_list.trm, comp.do_group.compound_list.trm, parentCommand);
 	if (typ === "function_def") return new FunctionCom(this, opts, comp.name, comp.body.function_body.command, parentCommand);
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
 
 async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
-	const{term}=this;
 //	const {loopNum, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	const {loopNum, subLines, scriptArgs, scriptName,  heredocScanner, env, isInteractive}=opts;
 	let comobj, usecomword;
 	let rv
-//	let use_env;
 	let use_vars, use_funcs, use_cwd, use_coms;
 	if (assigns.length) {
 		rv = await this.allExpansions(assigns, opts, {isAssign: true});
 		if (isStr(rv)) return `sh: ${rv}`;
-//If the "command" is just a bunch of assignments, then it goes into the current/active environment.
+//If the "command" is just a bunch of assignments (we have no 'name' here), then it goes into the current/active environment.
 //Otherwise, commands get their own variable environments
-//		use_env = name?sdup(env):env;
 		use_vars = name?sdup(env.vars):env.vars;
-//		rv = add_to_env(assigns, use_vars, {term});
 		rv = add_to_env(assigns, use_vars);
-		if (rv.length) term.response(rv.join("\n"), {isErr: true});
+		if (rv.length) {
+			this.error(rv.join("\n"));
+		}
 		use_funcs = name?sdup(env.funcs):env.funcs;
 		use_cwd = name?sdup(env.cwd):env.cwd;
 		use_coms = name?sdup(env.coms):env.coms;
@@ -6829,21 +6601,16 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	}
 	const com_env = {//«
 		loopNum,
-//		stdin,
-//		stdinLns,
-//		outRedir,
-//		isSub: !!subLines,
-		term,
+//		Term: this.Term,
+		term: this.#term,
 		env:{
 			vars: use_vars,
 			funcs: use_funcs,
 			cwd: use_cwd,
 			coms: use_coms
 		},
-//		env: use_env,
 		command_str: this.commandStr,
 		shell: this,
-//		scriptOut,
 		scriptArgs,
 		scriptName,
 		subLines
@@ -6871,10 +6638,8 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 		return new NoCom(com_env);
 	}
 	if (ALIASES[comword]){//«
-//	if (ShellMod.var.aliases[comword]){
 //Replace with an alias if we can
 //This should allow aliases that expand with options...
-//		let alias = ShellMod.var.aliases[comword];
 		let alias = ALIASES[comword];
 		let ar = alias.split(/\x20+/);
 		alias = ar.shift();
@@ -6890,17 +6655,19 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 			return make_sh_err_com(comword, "can only `return' from a function", com_env);
 		}
 		if (usecomword=="exit" && opts.isInteractive){
-			term.response("sh: not exiting the toplevel shell", {isWrn: true});
+			this.warn("sh: not exiting the toplevel shell");
 			code = E_ERR;
 		}
 		else {		
 			let numstr = arr.shift();
 			if (numstr && !arr.length){
-				if (!numstr.match(/^-?[0-9]+$/)) term.response(`sh: ${usecomword}: numeric argument required`, {isErr: true});
+				if (!numstr.match(/^-?[0-9]+$/)) {
+					this.error(`sh: ${usecomword}: numeric argument required`, {isErr: true});
+				}
 				else code = parseInt(numstr);
 			}
 			else if (arr.length) {
-				term.response(`sh: ${usecomword}: too many arguments`, {isErr: true});
+				this.error(`sh: ${usecomword}: too many arguments`, {isErr: true});
 			}
 			if (!Number.isFinite(code)) code = E_ERR;
 		}
@@ -6908,16 +6675,7 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 		code.breakStatementLoop = true;
 		return code;
 	}//»
-//	let com = shellmod.activeCommands[usecomword] || use_coms[usecomword];
-//	let com = shellmod.builtins[usecomword] || use_coms[usecomword];
 	let com = use_coms[usecomword];
-/*
-	if (com && isStr(com)){//QKIUTOPLK«
-		com = await this.tryImport(com, usecomword);
-		if (this.cancelled) return;
-		if (isStr(com)) return com;
-	}//»
-*/
 	if (use_funcs[usecomword]){//«
 		com_env.isFunc = true;
 		let newopts = sdup(opts);
@@ -6945,28 +6703,36 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 		}
 		com_opts = rv[0];
 	}
+//TRYHERE
 	try{//«new Com
 		comobj = new com(usecomword, arr, com_opts, com_env, parentCommand);
-//		comobj.scriptOut = scriptOut;
-//		comobj.subLines = subLines;
 		return comobj;
 	}
+/*
 	catch(e){
 cerr(e);
+		return make_sh_err_com(usecomword, e.message, com_env);
+	}//»
+*/
+catch(e){
 //VKJEOKJ
 //As of 11/26/24 This should be a 'com is not a constructor' error for commands
 //that have not migrated to the new 'class extends Com{...}' format
+if (e instanceof ShellError) {
+cerr(e);
 		return make_sh_err_com(usecomword, e.message, com_env);
-	}//»
+}
+else{
+	throw e;
+}
+}
+
 //SKIOPRHJT
 }//»
 
 async makeScriptCom(com_ast, comopts, parentCommand){//«
-	const{term}=this;
 	const mkerr=(mess)=>{
-//cerr(mess);
-		return make_sh_err_com(comword, mess, {term, shell: this});
-//		return make_sh_err_com(comword, mess, {term});
+		return make_sh_err_com(comword, mess, {shell: this});
 	};
 	let com;
 	let simp_com = com_ast.simple_command;
@@ -7002,16 +6768,14 @@ async makeScriptCom(com_ast, comopts, parentCommand){//«
 	comopts.scriptArgs = simp_com.args;
 //SAKROAP
 	delete comopts.isInteractive;
-	com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {term: rv}}}, comopts)
+	com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {trm: rv}}}, comopts)
 	com.isScript = true;
 	return com;
 }//»
 
 async executePipeline(pipe, loglist, loglist_iter, opts, parentCommand, in_background){//«
-	const{term}=this;
 	let lastcomcode;
 	let {stdin: optStdin, env}=opts;
-//	let in_background = false;
 	let pipelist = pipe.pipe;
 	if (!pipelist){
 		return `sh: pipeline list not found!`;
@@ -7039,7 +6803,7 @@ log(red);
 		let errmess;
 		let redir_in_arr;
 		if (in_redir){
-			let rv2 = await in_redir.setValue(this, term, opts);
+			let rv2 = await in_redir.setValue(this, opts);
 			if (isStr(rv2)){
 				errmess = rv2;
 			}
@@ -7050,12 +6814,11 @@ log(red);
 //VOPDUKKD
 		let comopts = sdup(opts);
 		comopts.inBackground = in_background;
-
 		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){
 			com = await this.makeScriptCom(com_ast, comopts, parentCommand);
 		}
 		else if (errmess){
-			com = make_sh_err_com(null, errmess, {term, shell: this});
+			com = make_sh_err_com(null, errmess, {shell: this});
 		}
 		else if (com_ast.compound_command){
 			com = await this.makeCompoundCommand(com_ast, comopts, parentCommand)
@@ -7067,7 +6830,7 @@ log(red);
 		else{//«
 cwarn("Here is the command");
 log(com_ast);
-			this.fatal("What type of command is this (not 'simple' or 'compound'!!! (see console))");
+			throw new Error("What type of command is this (not 'simple' or 'compound'!!!");
 		}//»
 
 		if (this.cancelled) return;
@@ -7101,17 +6864,15 @@ for (let com of pipeline){//«
 for (let com of pipeline){//«
 	if (!com.killed) com.run();//CWJKOI
 	else{
-log(`Not running (was killed): ${com.name}`);	
+//log(`Not running (was killed): ${com.name}`);	
 	}
 }//»
 for (let com of pipeline){//«
 	lastcomcode = await com.awaitEnd;
 //XJPMNYSHK
 	if (this.cancelled) {
-//		return;
 		continue;
 	}
-//log(lastcomcode);
 	if (!(isNum(lastcomcode))) {
 		if (isLoopCont(lastcomcode)){
 			return {code: lastcomcode, breakLoop: true};
@@ -7122,18 +6883,17 @@ for (let com of pipeline){//«
 		}
 		lastcomcode = E_ERR;
 	}
-//	if (!com.redirLines) continue;
 	if (!com.haveRedirOut) continue;
 
 	let rv = await com.writeOutRedir()
 	if (this.cancelled) continue;
 	if (rv===true) continue;
-	if (isStr(rv)) term.response(`sh: ${rv}`, {isErr: true});
+	if (isStr(rv)) {
+		this.error(`sh: ${rv}`, {isErr: true});
+	}
 	else {
 cwarn("Unknown value returned from redir.write:");
 log(rv);
-
-//return `unknown value returned from redir.write!!! (see console)`
 	}
 
 }//»
@@ -7166,12 +6926,9 @@ we *ALWAYS* break from the logic list, so we return
 		if (pipetype=="&&"){
 			for (let j=loglist_iter+1; j < loglist.length; j++){
 				if (loglist[j].type=="||"){
-//					i=j;
-//					continue LOGLIST_LOOP;
 					return {code: lastcomcode, nextIter: j, continueLoop: true};
 				}
 			}
-//			break LOGLIST_LOOP;
 			return {code: lastcomcode, breakLoop: true};
 		}
 //		else:
@@ -7183,7 +6940,6 @@ we *ALWAYS* break from the logic list, so we return
 //»
 
 async executeAndOr(andor_list, andor_sep, opts, parentCommand, in_background){//«
-//let in_background = opts.inBackground || andor_sep === "&";
 let loglist=[];
 let last = andor_list.pop();
 for (let i=0; i < andor_list.length-1; i+=2){
@@ -7200,9 +6956,7 @@ let lastcomcode;
 for (let i=0; i < loglist.length; i++){//«
 
 	let rv = await this.executePipeline(loglist[i], loglist, i, opts, parentCommand, in_background);
-//continue;
 	if (this.cancelled) return;
-//	if (this.cancelled) continue;
 	if (isStr(rv)) return rv;
 	if (Number.isFinite(rv)){
 		lastcomcode = rv;
@@ -7211,7 +6965,7 @@ for (let i=0; i < loglist.length; i++){//«
 	if (!isObj(rv)){
 cwarn("Here is the value");
 log(rv);
-this.fatal("Unknown value returned from executePipeline!");
+throw new Error("Unknown value returned from executePipeline!");
 	}
 	if (rv.breakStatementLoop){
 //Must return the whole object
@@ -7222,7 +6976,7 @@ this.fatal("Unknown value returned from executePipeline!");
 	}
 	if (rv.continueLoop){
 		lastcomcode = rv.code;
-cwarn("CONTINUE", i, rv.nextIter);
+//cwarn("CONTINUE", i, rv.nextIter);
 		i = rv.nextIter;
 	}
 	
@@ -7258,9 +7012,9 @@ this evaluates to true, and hi is output
 
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
-	const{term}=this;
 	let parser = new Parser(command_str.split(""), opts);
 	this.parser = parser;
+//TRYHERE
 	try{
 
 		let errmess;
@@ -7284,32 +7038,40 @@ return;
 	}
 	catch(e){
 //LSPOEIRK
-
-this.term.addToHistoryBuffer(this.parser.scanner.source.join(""));
-let mess = e.message;
-if (mess === "EOF") return;
-cerr(e);
-if (opts.retErrStr) return mess;
-if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
-term.response(mess,{isErr: true});
+		if (e instanceof ShellError) {
+			this.#term.addToHistoryBuffer(this.parser.scanner.source.join(""));
+			let mess = e.message;
+			if (mess === "EOF") return;
+			cerr(e);
+			if (opts.retErrStr) return mess;
+			if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
+			this.error(mess,{isErr: true});
+		}
+		else{
+			throw e;
+		}
 	}
-
 }//»
 async execute(command_str, opts){//«
-//	const{term}=this;
 	let statements = await this.compile(command_str, opts);
 	if (!statements) return;
+//TRYHERE
 try{
 	let rv = await this.executeStatements(statements, opts);
 	return rv;
 }
 catch(e){
-cerr(e);
-let mess = e.message;
-if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
-this.term.response(mess,{isErr: true});
+	if (e instanceof ShellError) {
+//		cerr(e);
+		let mess = e.message;
+		if (!mess.match(/^sh:/)) mess = `sh: ${mess}`;
+		this.error(mess,{isErr: true});
+	}
+	else{
+
+		throw e;
+	}
 }
-//	return 
 }//»
 cancel(){//«
 	this.cancelled = true;
@@ -7319,11 +7081,93 @@ cancel(){//«
 		com.cancel && com.cancel();
 	}
 }//»
-
+error(mess){
+	this.#term.response(mess, {isErr: true});
+}
+warn(mess){
+	this.#term.response(mess, {isWrn: true});
+}
+response(val, opts){
+	this.#term.response(val, opts);
+	this.#term.scrollIntoView();
+	this.#term.refresh();
+}
+async readLine(use_prompt){
+	let ln = await this.#term.readLine(use_prompt);
+	return ln;
+}
+get screenW(){
+	return this.#term.w;
+}
+get homeDir(){
+	return this.#term.getHomedir();
+}
+get history(){
+	return this.#term.history.join("\n");
+}
+clearScreen(){
+	this.#term.clear();
+}
+getCh(arg) {
+	return this.#term.getch(arg);
+}
+exportToTerm(args){
+	return add_to_env(args, this.#term.env.vars, {if_export: true});
+}
 };
 this.Shell = Shell;
 
 //»
 }
 //»
+
+
+
+
+
+/*Put these commands elsewhere«
+//Terminal-based object logging/introspection utility
+const com_log = class extends Com{//«
+async init(){//«
+const _term = this.Term;//Change!
+	if (_term.actor) {
+		return this.no(`the screen is already grabbed by: '${_term.actor.comName}'`);
+	}
+	if (!await util.loadMod("Term.log")) {//Change!
+		this.no("could not load the 'log' module");
+		return;
+	}
+	let log = new NS.mods["Term.log"](_term);//Change!
+	this.log = log;
+	this.promise = log.init({opts: this.opts, command_str: this.command_str});
+}//»
+async run(){//«
+//Need to update this to how vim/less do: `while(!await this.awaitcb){...}`, in order to allow for a seamless Alt+r developer workflow
+	await this.promise;
+	this.ok();
+}//»
+cancel(){
+this.log.quit();
+this.ok();
+}
+}//»
+
+//Change terminal's cursor color (put in a gui-centric lib)
+const com_curcol = class extends Com{//«
+	run(){
+		let which = this.args.shift();
+		if (which=="white"){
+			this.Term.curWhite();
+			this.ok();
+		}
+		else if (which=="blue"){
+			this.Term.curBlue();
+			this.ok();
+		}
+		else{
+			this.no(`missing or invalid arg`);
+		}
+	}
+}//»
+»*/
 
