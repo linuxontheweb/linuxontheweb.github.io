@@ -13,6 +13,10 @@ To "auto import" command libraries, define IMPORT_COM_LIBS in ~/.env, like so:
 IMPORT_COM_LIBS=fs,blah,path.to.mylib
 
 »*/
+/*12/13/25: Just got rid of the old "textarea" method of doing copy/paste to/from the terminal screen.
+See all the navigator.clipboard invocations (readText, writeText)
+*/
+
 //Notes«
 
 /*The interesting part of passwordMode is @DYWUEORK, where there is a timeout in the toString «
@@ -491,20 +495,6 @@ statdiv._h="100%";
 statdiv._pos="absolute";
 statdiv._loc(0,0);
 //»
-let textarea = make('textarea');//«
-textarea.id = `textarea_${this.Win.id}`;
-textarea._noinput = true;
-textarea.width = 1;
-textarea.height = 1;
-textarea.style.opacity = 0;
-textarea.focus();
-//»
-let areadiv = make('div');//«
-areadiv._pos="absolute";
-areadiv._loc(0,0);
-areadiv._z=-1;
-areadiv.appendChild(textarea);
-//»
 
 //let overlay;«
 
@@ -548,9 +538,7 @@ main.onwheel=e=>{//«
 	}
 };//»
 main.onscroll=e=>{e.preventDefault();this.scrollMiddle();};
-main.onclick=()=>{
-	textarea&&textarea.focus();
-}
+
 overdiv.onmousemove = e=>{//«
 	e.stopPropagation();
 	if (Desk) Desk.mousemove(e);
@@ -560,24 +548,16 @@ overdiv.onmousemove = e=>{//«
 wrapdiv.appendChild(bgdiv);
 wrapdiv.appendChild(tabdiv);
 main.appendChild(wrapdiv);
-main.appendChild(areadiv);
 
 this.tabSize = parseInt(tabdiv.style.tabSize);
-this.textarea = textarea; 
-this.areadiv = areadiv;
 this.tabdiv = tabdiv;
 this.bgdiv = bgdiv;
 this.wrapdiv = wrapdiv;
-//this.overlay = overlay;
 this.statdiv = statdiv;
 
 this.Win.mkOverlay();
 this.doOverlay = (str) => {
 	this.Win.doOverlay(str);
-};
-//textarea.onpaste = this.onPaste;
-textarea.onpaste=(e)=>{
-	this.onPaste(e);
 };
 
 }//»
@@ -585,9 +565,7 @@ textarea.onpaste=(e)=>{
 //Execute«
 
 async execute(str, opts={}){//«
-
 	const shell = new this.Shell(this);
-
 	this.curShell = shell;
 	str = str.replace(/\x7f/g, "");
 	await this.curShell.execute(str, {
@@ -597,16 +575,10 @@ async execute(str, opts={}){//«
 		shell: this.curShell,
 		heredocScanner:eof=>{return this.heredocScanner(eof);},
 	});
-	if (this.curShell.cancelled) {
-		this.responseEnd();
-		return;
-	}
 	let save_str;
-//cwarn("EXE",this.curShell.parser.mainParser.id, this.curShell.parser.mainParser.finalComStr);
 //GADLFJGMG
-	if (this.curShell.parser.mainParser.finalComStr) save_str = this.curShell.parser.mainParser.finalComStr.replace(/\n/g, "\t");
-//log(this.curShell.parser);
-	this.responseEnd();
+	if (shell.parser.mainParser.finalComStr) save_str = shell.parser.mainParser.finalComStr.replace(/\n/g, "\t");
+	if (!shell.cancelled) this.responseEnd();
 	if (opts.noSave) return;
 	await this.updateHistory(save_str);
 }//»
@@ -716,19 +688,6 @@ get termLines(){//«
 get termLineColors(){//«
 	if (this.holdTerminalScreen) return this.holdTerminalScreen.lineColors;
 	return this.lineColors;
-}//»
-
-onPaste(e){//«
-//	if (pager) return;
-	let{textarea} = this;
-	textarea.value="";
-	setTimeout(()=>{
-		let val = textarea.value;
-		if (!(val&&val.length)) return;
-		if (this.isEditor) this.actor.check_paste(val);
-		else this.doPaste();
-	}
-	,25);
 }//»
 setFontSize(){//«
 	let gotfs = localStorage.Terminal_fs;
@@ -858,37 +817,6 @@ cwarn("No history lines from", path);
 //*/
 //»
 
-togglePaste(){//«
-	let{textarea, areadiv}=this;
-	if (textarea){
-		textarea._del();
-		this.textarea = null;	
-		this.doOverlay("Pasting is off");
-		return;
-	}
-	textarea = make('textarea');
-	textarea._noinput = true;
-	textarea.width = 1;
-	textarea.height = 1;
-	textarea.style.opacity = 0;
-//	textarea.onpaste = onpaste;
-	areadiv.appendChild(textarea);
-	textarea.focus();
-	this.textarea = textarea;
-	this.doOverlay("Pasting is on");
-//	textarea.onpaste = this.onPaste;
-	textarea.onpaste=(e)=>{
-		this.onPaste(e);
-	};
-}
-//»
-
-doPaste(){//«
-	let val = this.textarea.value;
-	if (val && val.length) this.handleInsert(val);
-	this.textarea.value="";
-};
-//»
 checkScrolling(){//«
 	if (this.isScrolling){
 		this.scrollNum = this.scrollNumHold;
@@ -929,12 +857,7 @@ scrollMiddle(){//«
 	let y2 = main.scrollTop;
 }
 //»
-focusOrCopy(){//«
-	let sel = window.getSelection();
-	if (sel.isCollapsed)this.textarea&&this.textarea.focus();
-	else this.doClipboardCopy();
-}
-//»
+
 
 getHomedir(){//«
 	if (this.rootState) return "/";
@@ -978,53 +901,18 @@ extractPromptFromStr(str){//«
 	return str;
 }
 //»
-copyText(str, mess){//«
-	const{textarea}=this;
-	const SCISSORS_ICON = "\u2702";
-	if (!textarea) return;
-	if (!mess) mess = SCISSORS_ICON;
-	textarea.focus();
-	textarea.value = str;
-	textarea.select();
-	document.execCommand("copy")
-	this.doOverlay(mess);
-}
-//»
-doCopyBuffer()  {//«
-	this.copyText(this.getBuffer(true), "Copied: entire buffer");
+async doCopyBuffer()  {//«
+	await navigator.clipboard.writeText(this.getBuffer(true));
+	this.doOverlay("Copied: entire buffer");
 }//»
-
-doClipboardCopy(if_buffer, strarg){//«
-	const{textarea}=this;
-	if (!textarea) return;
-const do_copy=str=>{//«
-    if (!str) return;
-    str = str.replace(/^[\/a-zA-Z]*[$#] /,"");
-    let copySource = make("pre");
-    copySource.textContent = str;
-    copySource.style.cssText = "-webkit-user-select: text;position: absolute;top: -99px";
-    document.body.appendChild(copySource);
-    let selection = document.getSelection();
-    let anchorNode = selection.anchorNode;
-    let anchorOffset = selection.anchorOffset;
-    let focusNode = selection.focusNode;
-    let focusOffset = selection.focusOffset;
-    selection.selectAllChildren(copySource);
-
-    document.execCommand("copy")
-    if (selection.extend) {
-        selection.collapse(anchorNode, anchorOffset);
-        selection.extend(focusNode, focusOffset)
-    }
-    copySource._del();
-}//»
+async doClipboardCopy(strarg){//«
+//async doClipboardCopy(if_buffer, strarg){
 	let str;
 	if (strarg) str = strarg;
-	else if (if_buffer) str = this.getBuffer(true);
-	else str = getSelection().toString()
+//	else if (if_buffer) str = this.getBuffer(true);
+	else str = window.getSelection().toString()
 	if (this.cleanCopiedStringMode) {
 		str = str.replace(/\n/g,"");
-//		str = extract_prompt_from_str(str);
 		str = this.extractPromptFromStr(str);
 	}
 	else {
@@ -1032,20 +920,23 @@ const do_copy=str=>{//«
 	}
 
 	if (this.paragraphSelectMode) {
-//cwarn("PARAMODE!");
-//		str = str.split("\n").join("");
 		str = linesToParas(str, {toStr: true});
-//log(str);
 	}
-	do_copy(str);
-	this.textarea.focus();
+
+	await navigator.clipboard.writeText(str);
 	this.doOverlay(`Copied: ${str.slice(0,9)}...`);
 }
 //»
-doClipboardPaste(){//«
-	if (!this.textarea) return;
-	this.textarea.value = "";
-	document.execCommand("paste")
+focusOrCopy(){//«
+	let sel = window.getSelection();
+	if (!sel.isCollapsed) this.doClipboardCopy();
+}//»
+async doClipboardPaste(){//«
+//SLDKFHDS
+	let val = await navigator.clipboard.readText();
+	if (!val.length) return;
+	if (this.isEditor) this.actor.check_paste(val);
+	else this.handleInsert(val); 
 }
 //»
 setNewFs(val){//«
@@ -2894,7 +2785,7 @@ termAlwaysEats(sym, e){//«
 		return true;
 	}
 	else if (sym=="a_CA") {
-		 this.doCopyBuffer();
+		this.doCopyBuffer();
 		return true;
 	}
 	else if (sym=="p_CA"){
@@ -3705,7 +3596,6 @@ async onappinit(appargs={}){//«
 }//»
 
 onescape(){//«
-	this.textarea.focus();
 	if (this.checkScrolling()) return true;
 	if (this.statusBar.innerText){
 		this.statusBar.innerText = "";
@@ -3715,20 +3605,17 @@ onescape(){//«
 }//»
 onsave(){//«
 	const{actor}=this;
-//	if (editor) editor.save();
 	if (actor && actor.save) actor.save();
 }
 //»
 
 onfocus(){//«
 	this.isFocused=true;
-	this.textarea.focus();
 	this.render();
 }
 //»
 onblur(){//«
 	this.isFocused=false;
-	this.textarea.blur();
 	this.render();
 }
 //»
@@ -3776,7 +3663,8 @@ xScrollTerminal(opts={}){//«
 this.render();
 }
 //»
-clipboardCopy(s){this.doClipboardCopy(null,s);}
+//clipboardCopy(s){this.doClipboardCopy(null,s);}
+clipboardCopy(s){this.doClipboardCopy(s);}
 setLines(linesarg, colorsarg){//«
 	this.lines = linesarg;
 	this.lineColors = colorsarg;
