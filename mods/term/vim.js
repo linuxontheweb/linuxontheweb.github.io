@@ -1,5 +1,58 @@
-/*8/9/25:
+//(()=>{"use strict";const MODNAME="term.vim";//Comment this whole line OUT!
+
+/*12/19/25: Just need to upload this to the site in order to start working on local commands.
+First, the outer wrapper function needs to be commented out, then the comments of the
+two lines under @FSWOUXNM need to be reversed. Then when the rest of the system has caught
+up to reverting back to this non-module-based method, then the comments can be reversed
+back to how they are right now.
+
 */
+/*12/18/25: Developing commands internally with vim«
+
+I want to iterate on the note (below) from 12/24/25 @SMERUTJ so that the file I
+am working on is interpreted as a command library, and the commands can get
+exported into some Terminal's shell as "dev.<comname>" (let's reserve
+"dev.WHATEVER") for only commands that go through this vim-based workflow.  The
+relevant workflow begins @SDHRYWOEL1, upon hitting the r_CA hotkey.  So instead
+of dealing in the LOTW.apps namespace, we want to use (something like)
+LOTW.coms["local.<base_filename>"].
+
+Then by way of another terminal's API, I want to be able to automatically
+load/reload the library in its com_env and send a CLI string into it.
+
+Now there is a very crude little workflow there (@SDHRYWOEL2) to use Ctrl+Alr+r to initialize
+a "slave terminal" (accessible as reload_win.app).
+
+Then Alt+r will load/reload that terminal's command environment with the command
+libary we are editing in vim, such that each new command is accessible as dev.<modname>.<comname>.
+
+Then ":x <command_goes_here>" will save <command_goes_here> into 
+the global variable 'cur_background_command', so that 
+the Ctrl+Alt+x shortcut @KSJTUSHF calls reload_win.app.autoTypeCommand(cur_background_command).
+
+Sample file contents:
+
+<FILE BEGIN>
+const {Com}=LOTW.globals.ShellMod.comClasses; 
+class com_mycom extends Com{ 
+	static getOpts(){return {q:{1}};}
+	run(){ 
+		this.ok("HI"); 
+	} 
+}; 
+const coms={ 
+	mycom: com_mycom 
+}; 
+LOTW.coms["local.<base_file_name>"]={coms}; 
+<FILE END>
+
+If the file is named "newcoms.js" (or vim is invoked with --dev-name=newcoms),
+then after reloading with Alt+,r reload_win.app will have the command, 'dev.newcoms.mycom' 
+in its command environment, and then running this in vim:
+:x dev.newcoms.mycom -q blah hoo fooey
+...will send the command string "dev.newcoms.mycom -q blah hoo fooey" to that 
+controlled terminal.
+»*/
 /*8/6/25:«
 
 Now I am in LOTW, hacking on my vim with my vim!!!
@@ -158,7 +211,7 @@ that are "exported" via globals.refs.<SOME_NS>. We currently flatten out all the
 namespaces of globals.refs onto cur_refs (which potentially overwrites
 references with the same name that are "exported" by other apps/mods/coms/etc).
 »*/
-/*12/25/24: Just found out that you do r_CA in order to begin to create«
+/*12/25/24: SMERUTJ: Just found out that you do r_CA in order to begin to create«
 an application while editing your file, which should at least have this:
 
 LOTW.apps["local.<AppNameHere>"] = function(Win){
@@ -195,7 +248,7 @@ to check for syntax errors (via test_js), using window.onerror.
 
 »*/
 //12/24/24: I want to send backgrounded commands to the terminal here.«
-let DEF_BACKGROUND_COMMAND = "./hoom.sh";
+let DEF_BACKGROUND_COMMAND = 'echo "REPLACE THIS WITH A BETTER COMMAND!"';
 //»
 /*12/17/24: Yesterday I created the 'goto_matching_brace' functionality«
 that attempts to find the matching "}","]" or ")" when a "{", "[", or "("
@@ -283,6 +336,7 @@ keyup with that key while the browser window is in focus).
 
 »*/
 //»
+
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -333,13 +387,13 @@ const NUM=(v)=>Number.isFinite(v);
 
 //»
 
-//Vim«
-
-//export const mod = function(Term) {«
+//FSWOUXNM (reverse these)
+//LOTW.mods[MODNAME] = function(Term) {
 export const mod = function(Term) {
+
 //LOTW.mods["local.dev.vim"] = function(Term) {
 
-//»
+//Vim«
 
 //Imports«
 this.comName="vim";
@@ -407,7 +461,7 @@ let splice_hold;
 let is_root = false;
 
 let app_cb;
-
+let reload_script;
 let reload_win;
 let hold_overrides;
 
@@ -1386,7 +1440,9 @@ const test_js=()=>{//«
 	let str = `()=>{\n${get_edit_str()}\n}`;;
 	scr.src = URL.createObjectURL(new Blob([str]));
 };//»
+/*
 const toggle_reload_win=async()=>{//«
+//SDHRYWOEL1
 if (!use_devreload){
 stat_warn("ondevreload was not enabled!");
 return;
@@ -1425,22 +1481,87 @@ cerr("The reload_win was not in topwin.childWins!?!?!");
 	reload_win.ownedBy = topwin;
 	topwin.childWins.push(reload_win);
 };//»
-const reload_dev_win=async()=>{//«
-//Want to be able to pass in a command line flag to delete the local app/mod
-//that we are editing in this file.
-	if (!reload_win) {
-stat_warn(`No "reload window" was found! (use Ctrl+Alt+r)`);
+*/
+const send_command_to_reload_win=()=>{//«
+	if (!reload_win){
 		return;
 	}
-	if (!reload_win._data_url){
-cwarn("NO RELOAD_WIN._DATA_URL!!?");
+	if (!cur_background_command) cur_background_command = DEF_BACKGROUND_COMMAND;
+cwarn("UNCOMMENT THE LINE BELOW WHEN Terminal.js IS UPDATED");
+//	reload_win.app.autoTypeCommand(cur_background_command);
+
+//When the above line is uncommented, delete everything below...
+	let term_app = reload_win.app;
+	if (term_app.sleeping || term_app.curShell){
+cwarn(`Skipping: '${cur_background_command}'`);
+		return;
 	}
-	else{
-		URL.revokeObjectURL(reload_win._data_url);
+	for (let c of cur_background_command) term_app.handleLetterPress(c);
+	term_app.handleEnter({noSave: true});
+};//»
+const toggle_reload_win=async()=>{//«
+if (!use_devreload){
+stat_warn("ondevreload was not enabled!");
+return;
+}
+//SDHRYWOEL2
+	if (reload_win){
+		let ind = topwin.childWins.indexOf(reload_win);
+		if (ind < 0){
+cerr("The reload_win was not in topwin.childWins!?!?!");
+		}
+		else{
+			topwin.childWins.splice(ind, 1);
+		}
+		delete reload_win.ownedBy;
+		reload_win.close();
+		reload_win = null;
+		stat("'reload_win' deleted");
+		return;
 	}
-	stat("Reloading...");
-	let rv = await reload_win.reload({noShow: true, dataUrl: URL.createObjectURL(new Blob([`(function(){"use strict";${get_edit_str()}})()`]))});
-	stat("Done!");
+
+	reload_win = await Desk.api.openApp("Terminal", {force: true});
+	if (!reload_win){
+		stat_err("Could not get the window");
+		return;
+	}
+
+	reload_win.ownedBy = topwin;
+	topwin.childWins.push(reload_win);
+};//»
+const reload_dev_win=async()=>{//«
+	if (!reload_win) {
+		stat_warn(`No "reload window" was found! (use Ctrl+Alt+r)`);
+		return;
+	}
+	let devname = this.comOpts["dev-name"] || (edit_fobj && edit_fobj.baseName);
+	if (!devname){
+		stat_warn("No 'dev name' found!");
+		return;
+	}
+	if (reload_script) reload_script._del();
+	reload_script = document.createElement('script');
+	reload_script.onload=()=>{
+		let gotlib = LOTW.coms[`local.${devname}`];
+		if (!gotlib){
+			return stat_err(`LOTW.coms[local.${devname}]: not found!`);
+		}
+		let gotcoms = gotlib.coms;
+		let com_env = reload_win.app.env.coms;
+		let num = 0;
+		for (let comname in gotcoms){
+			let gotcom = gotcoms[comname];
+			com_env[`dev.${comname}`] = gotcom;
+			num++;
+		}
+		stat_ok(`Loaded ${num} commands`);
+	};
+	reload_script.onerror=(e)=>{
+cerr(e);
+	};
+	let str = `function(){"use strict";${get_edit_str()}}`;
+	reload_script.src = URL.createObjectURL(new Blob([`(${str})()`]));
+	document.head.appendChild(reload_script);
 }//»
 const ondevreload=()=>{//«
 	return reload_dev_win();
@@ -1950,8 +2071,9 @@ if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
 		}
 		else if (marr = com.match(/^x +(.*)$/)){
 			cur_background_command = marr[1];
-			Term.execute_background_command(cur_background_command);
-			render();
+//			Term.executeBackgroundCommand(cur_background_command);
+//			render();
+stat_ok("Saved to cur_background_command");
 			return;
 		}
 		else if (marr = com.match(/^tab +(.*)$/)){
@@ -6434,11 +6556,7 @@ u_CA: ()=>{do_changecase(true);},
 //Non-editing (No Action needed below)
 
 //KSJTUSHF
-x_CA:()=>{
-	if (!cur_background_command) cur_background_command = DEF_BACKGROUND_COMMAND;
-//	if (!cur_background_command) return stat_err("No command (please use :x)");
-	Term.execute_background_command(cur_background_command);
-},
+x_CA: send_command_to_reload_win,
 /*
 w_CAS:()=>{//«
 //get_all_words();
@@ -6862,6 +6980,10 @@ cwarn("Using ondevreload");
 //hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, ondevreload: use_reload});
 hold_screen_state = Term.initNewScreen(vim, appclass, lines, line_colors, num_stat_lines, {onescape, onreload: ()=>{
 //cwarn("HI VIM RELOAD!!!");
+if (reload_win && use_devreload){
+ondevreload();
+return;
+}
 quit(true);
 }});
 this.fname = edit_fname;
@@ -6905,11 +7027,15 @@ return;
 
 };//»
 this.quit = quit;
+
+
+//»
+
 //}; End vim mod«
 }
 //»
 
-//»
+//})();//Comment this whole line OUT!
 
 
 
