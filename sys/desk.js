@@ -7581,7 +7581,7 @@ const get_desk_context=()=>{//«
 		menu.shift();
 		menu.shift();
 	}
-	let apps_arr = globals.APPLICATIONS_MENU;
+	let apps_arr = APPLICATIONS_MENU;
 	let apps_menu = [];
 	menu.unshift('Applications', apps_menu);
 	for (let i=0; i < apps_arr.length; i+=2){
