@@ -38,8 +38,9 @@ let outbuf = buf.getChannelData(0);
 let last=0;
 for (let i = 0; i < noise_buf_sz; i++) {
 	let rand = Math.random() * 2 - 1;
-//	outbuf[i] = (last + (0.02 * rand)) / 1.02;
-	outbuf[i] = (last + (0.01 * rand)) / 1.01;
+//	outbuf[i] = (last + (0.04 * rand)) / 1.04;
+	outbuf[i] = (last + (0.025* rand)) / 1.025;
+//	outbuf[i] = (last + (0.01 * rand)) / 1.01;
 	last = outbuf[i];
 	outbuf[i] *= 3.5; // (roughly) compensate for gain
 }
