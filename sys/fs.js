@@ -1942,7 +1942,7 @@ cwarn("writeFile was called on an existing file!?!?!");
 //	if (root_dirs.includes(rootdir)||path.match(/\/dev\/shm/)){
 		let node = await saveFsByPath(path, val, opts);
 //		if (!(exists || opts.noMakeIcon)) {
-		if (!opts.noMakeIcon) {
+		if (node && !opts.noMakeIcon) {
 			NS.Desk.move_icon_by_path(null, path, node.appName, {node});
 		}
 		return node;
