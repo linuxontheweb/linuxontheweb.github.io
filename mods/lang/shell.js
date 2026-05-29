@@ -1397,8 +1397,10 @@ const{tok, file: fname}=this;
 const {val: op}=tok;
 //log(env);
 //This is instance of Word vvvvv
+fname.tildeExpansion();
 //ZOPIRUTKS------------------vvvvvvvvvvv
 let fullpath = normPath(fname.toString(), env.cwd.cwd);
+//log("FULL", fullpath);
 let node = await fsapi.pathToNode(fullpath);
 if (node) {//«
 	if (node.isDevice){
