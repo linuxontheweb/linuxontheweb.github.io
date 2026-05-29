@@ -49,7 +49,8 @@ if (e.altKey) mod_str += "A";
 if (e.shiftKey) mod_str += "S";
 let kstr = KC[e.keyCode] + "_" + mod_str;
 if (ALWAYS_PREVENT.includes(kstr)) e.preventDefault();
-if (kstr == "ESC_") return APP.onescape();
+//log(APP);
+if (kstr == "ESC_") return APP.actor.onescape();
 APP.onkeydown(e, kstr, mod_str);
 
 };//»
