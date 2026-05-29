@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="template.WebAudio";
+
 //Imports«
 import { util, api as capi } from "util";
 import {globals} from "config";
@@ -6,7 +8,7 @@ const {NS} = globals;
 const {fs} = NS.api;
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -161,7 +163,7 @@ this.onkill=()=>{//«
 	midi && midi.rm_cb(midi_cb);
 };//»
 this.onkeydown=(e,k)=>{//«
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 	}
 	else if (k=="m_"){
 		if (midi) return;
@@ -171,10 +173,11 @@ this.onkeydown=(e,k)=>{//«
 	}
 };//»
 this.onkeyup=(e,k)=>{
-if (k=="SPACE_"){
+if (k=="\x20_"){
 }
 };
 
 //»
 
 }
+})();

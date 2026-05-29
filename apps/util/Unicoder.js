@@ -1,10 +1,12 @@
+(()=>{"use strict";const APPNAME="util.Unicoder";
+
 //import { util, api as capi } from "util";
 //import { globals } from "config";
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{mkdv, mksp,mk,strNum, isArr, isStr, isNum, isObj, make, KC, kc, log, jlog, cwarn, cerr}=util;
 
-export const app = function(Win, Desk) {//«
+LOTW.apps[APPNAME] = function(Win, Desk) {//«
 //log(Win);
 const CATEGORIES = [//«
 
@@ -726,3 +728,5 @@ main_div._h= Main.clientHeight;
 
 
 }//»
+
+})();

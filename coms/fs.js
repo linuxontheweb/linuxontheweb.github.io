@@ -1,8 +1,91 @@
-/*9/3/25: Have been doing a major update to piping logic in shell.js. The derived commands«
-should define pipeIn methods for streaming purposes, and pipeDone methods in order to
-receive every all at once in a JS array, after the EOF has been received.
-com_brep uses a highly non-trivial piping logic using Uint8Array's.
+(()=>{"use strict";const LIBNAME="fs";
+
+/*5/26/26: After playing around with an "automation_mode" in vim, «
+I'm thinking it is better to devote another command (vimtest) for automated test
+suites performed on vim. So instead of seeing vim performing acts of
+"self-control" in a live Terminal session, I instead want to load the vim
+module (via vimtest, below) and pass it a fake Terminal object. This way, since
+there is no terminal attached to vim, there is no chance of the automation
+suite being "interfered with" by live users, and I don't need to mess with
+vim's internal logic (an 'automation_mode' flag, etc.) in order to ensure this.
+We will call all the key handler events directly from the vimtest command. The
+most we should need/want to do in vim, itself, is expose certain functions to
+the outside world, e.g. in order to validate the consistency of
+undo_all/redo_all. The stuff I did from earlier this morning along these lines
+is in ~/zzhold/AUTOVIM.js.
+
+Invoke it like this:
+
+$ vimtest <command_file> [<opt_init_file>]
+
+... where command file is filled with commands (mostly keydown/keypress
+events), parsed something like in AUTOVIM.js, and opt_init_file is the file (if
+any) that vim will be automatically editing.
+
+I am thinking that it might actually be *important* to not have any clue about what
+is happening internally, as opposed to how, earlier this morning, I was wanting
+to effect a certain visually inspectable outcome. So we will be psychologically
+"freed up" to generate and send out a lot of random key sequences, which can
+then be validated by various commands. In the event that we attain invalid
+results, we can narrow down to the offending section, by iteratively cutting
+the range of key strokes in half to see if there are issues with the first or
+second half. Then we can continue this "cutting in half" form of approximation
+again. We'll actually do this on a line-by-line basis, and then do the same
+thing on the commands contained in the offending line itself.
+
+To test this testing mode, we should insert some kind of randomization in vim
+that makes a mistake. So, to make a mistake 1% of the time, we can invoke vim
+something like:
+
+$ vim --mistake=0.01
+
+... in order to artificially create a mismatch between the Actions that are
+saved (one-off issues w/x and y coordinates, etc.) and what the user actually
+intended. This "random mistake" mode will then put a comment onto the Action
+about how it intentionally screwed up, and so the job of the testing suite will
+be to find the offending Action. In this "test-the-testing-mode" mode it is
+important to attach this comment in order to verify the mistake. When there are
+actual programming mistakes in the vim logic, it is a self-documenting mistake,
+such that the state of the program during the execution of the action is the
+only "verification" that is needed.
+
+To reiterate: it doesn't *really* matter whether there is a mistake in a) the
+values that are saved by a particular Action or b) in the logic of an editing
+function (that Actions enable the undo'ing/redo'ing of). Rather, the fact
+that there is a *mismatch* between the two is what truly matters.
+
+There is a very small chance that, in our "testing-the-testing-mode" mode, we
+could (purposefully) make an "error" in recording an Action that in fact
+corrects an error-condition in vim's logic. This happy mistake shouldn't really
+be of any consequence: we didn't know about anys errors prior to testing (or we
+would have fixed them) , and we will simply *continue* not to know about them.
+We'll just need to keep on testing in order to (finally) discover them.
+
 »*/
+
+/*5/23/26 Bug (fixed!?)//«
+
+JUST GOT A FATAL ERROR from com_grep. The terminal said:
+"The output array and colors array are not equal length!"
+
+This was caused by an issue in shell.js: Com.fmtColLn.
+
+In grep, when multiple files are specified on the command line,
+we are supposed to prepend the results with the name of the file.
+
+In get_file_lines_from_args (@RIHGJD), since we are returning a 
+return object anyway, we can also return some kind of a map
+between line numbers and file names.
+»*/
+/*9/3/25: Have been doing a major update to piping logic in shell.js. //«
+
+The derived commands should define pipeIn methods for streaming purposes, and
+pipeDone methods in order to receive every all at once in a JS array, after the
+EOF has been received.  com_brep uses a highly non-trivial piping logic using
+Uint8Array's.
+
+»*/
+
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -61,18 +144,27 @@ const allow_write_locked = false;
 //»
 
 //Funcs«
-
+//RIHGJD
 const get_file_lines_from_args = async(args, cur_dir, errcb)=>{//«
 //const get_file_lines_from_args = async(args, term, errcb)=>{
 	let err = [];
 	let out = [];
+	let name_map = [];
+	let ln_map = [];
 	const fullterr=(arg)=>{
 		if (errcb) errcb(`${fullpath}: ${arg}`);
 		else err.push(`${fullpath}: ${arg}`);
 	};
 	let fullpath;
-	while (args.length) {
-		fullpath = normPath(args.shift(), cur_dir);
+//  let file_num  = args.length;
+let files = args.slice().reverse();
+let file_num = -1;
+let line_num = 0;
+	while (files.length) {
+//	while (args.length) {
+file_num++;
+		fullpath = normPath(files.pop(), cur_dir);
+//		fullpath = normPath(args.shift(), cur_dir);
 		let node = await fsapi.pathToNode(fullpath);
 		if (!node) {
 			fullterr(`no such file or directory`);
@@ -93,23 +185,338 @@ const get_file_lines_from_args = async(args, cur_dir, errcb)=>{//«
 		}
 		else{
 			fullterr(`invalid type: '${typ}'`);
-//cwarn(`Skipping: ${fullpath} (type=${typ})`);
 			continue;
 		}
 
-//		let val = await node.text;
 		let val = await node.getValue({text: true});
 		if (!isStr(val)) {
 			fullterr("An unexpected value was returned");
 			continue;
 		}
 		let arr = val.split("\n");
-		for (let ln of arr) out.push(ln);
+		let ln_iter = 1;
+		for (let ln of arr) {
+			name_map[line_num] = file_num;
+			ln_map[line_num] = ln_iter;
+			out.push(ln);
+			line_num++;
+			ln_iter++;
+		}
 	}
-	return {err, out};
+	return {err, out, name_map, ln_map};
 };//»
 
 //»
+
+const com_vimtest = class extends Com{//«
+#escHandler;
+
+static getOpts(){//«
+	return {
+		s:{},
+		l:{}
+	}
+}//»
+async init() {//«
+
+let NOOP = ()=>{};
+let faketerm = {//«
+	env:{
+		cwd: {
+			cwd: this.term.env.cwd.cwd
+		}
+	},
+	clipboardCopy: NOOP,
+	quitNewScreen: ()=>{
+		this.editor.cb();
+	},
+	initNewScreen: (a1,a2,a3,a4, arg)=>{
+		this.#escHandler = arg.onescape;
+	},
+	setLines: NOOP,
+	resetXScroll: NOOP, 
+	doOverlay: NOOP, 
+	getDirContents: this.term.getDirContents,
+	w: 80,
+	h: 25,
+};//»
+if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
+	this.no("could not load the editor module");
+	return;
+}
+this.editor = new NS.mods[DEF_EDITOR_MOD_NAME](faketerm);
+
+let fullpath;
+let node, typ;
+let command_str = "vim";
+let opts = {};
+
+this.awaitCb = this.editor.init("", fullpath, {
+	node,
+	type: typ,
+	command_str,
+	opts,
+});
+
+}//»
+async run(){//«
+
+const {editor} = this;
+
+//Key helpers«
+const keydown=(sym, num=0)=>{//«
+	if (!num) return editor.onkeydown(0, sym);
+	for (let i=0; i < num; i++){
+		editor.onkeydown(0, sym);
+	}
+};//»
+const d = keydown;
+const ent = (num=0) => { keydown("ENTER_", num); }
+const entC = (num=0) => { keydown("ENTER_C", num); }
+const bk = (num=0) => { keydown("BACK_", num); }
+const up = (num=0) => { keydown("UP_", num); }
+const dn = (num=0) => { keydown("DOWN_", num); }
+const lft = (num=0) => { keydown("LEFT_", num); }
+const rgt = (num=0) => { keydown("RIGHT_", num); }
+const esc = (num=0) =>{//«
+	if (!num) return this.#escHandler();
+	for (let i=0; i < num; i++) this.#escHandler();
+};//»
+const quit = (if_force) => {//«
+	esc(6);
+	editor.onkeypress(0, ":");
+	editor.onkeypress(0, "q");
+	if (if_force) editor.onkeypress(0, "!");
+	editor.onkeydown(0, "ENTER_");
+};//»
+
+//»
+
+this.inf("Running vim...");
+let comstr = "iThis is the thing in the time of the place!!!";
+let comarr = comstr.split("");
+for (let com of comarr){
+	editor.onkeypress(0, com);
+}
+ent(5);
+comstr = "RAMBULLICARRR ON THE ON THE ON THE ON THE ONTHEONTHE";
+comarr = comstr.split("");
+for (let com of comarr){
+	editor.onkeypress(0, com);
+}
+bk(9);
+comstr = "wwwwwwwwwwwwwww";
+comarr = comstr.split("");
+for (let com of comarr){
+	editor.onkeypress(0, com);
+}
+
+esc();
+log(this.editor.lines);
+d("u_CAS");
+log(this.editor.lines);
+d("r_CAS");
+log(this.editor.lines);
+quit(true);
+
+await this.awaitCb;
+
+//log(this.editor.lines);
+
+this.ok("OK");
+
+}//»
+cancel(){//«
+this.editor.cb();
+}//»
+
+}//»
+
+const com_vim = class extends Com{//«
+static getOpts(){//«
+	return {
+		s:{
+			r: 1,//use ondevreload
+			d: 3,//Use development file for the vim module
+		},
+		l: {
+			pipeok: 1,
+			parsel: 1,
+			nosave: 1,
+			one: 1,
+			insert: 1,
+			enterquit: 1,
+			"convert-markers": 1,
+			"reload-win": 3,
+			symbols: 3,
+			"force-stdout": 1,
+			"dev-name": 3,
+			refs: 3,
+			"use-dev-reload": 1,
+			termdev: 1,
+		}
+	};
+}//»
+async init(){//«
+	if (this.term.actor) {
+		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
+	}
+	let {args, opts, command_str, term}=this;
+	let use_mod_name;
+	if (opts.d) {//«
+// Use a local file (in LOTW's own sandbox) for the vim module's text
+		use_mod_name = "local.dev.vim";
+		let txt = await opts.d.toText(this.env.cwd);
+		if (!isStr(txt)) return this.no(`${opts.d}: file not found`);
+		let url = URL.createObjectURL(new Blob([`(function(){"use strict";${txt}})()`]));
+		let scr;
+		try {
+			scr = await util.makeScript(url);
+		}
+		catch(e){
+cerr(e);
+			this.no(e.message);
+			return;
+		}
+	}//»
+	else if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {//«
+// Offline?
+		this.no("could not load the editor module");
+		return;
+	}//»
+	else use_mod_name = DEF_EDITOR_MOD_NAME;
+	
+	this.editor = new NS.mods[use_mod_name](this.term);
+
+// DON'T SHIFT IT OFF THE PATH BECAUSE WE MIGHT CALL init() AGAIN (@WJGHDMG)//«
+// WHILE LOCALLY EDITING/RELOADING VIM W/ THE Alt+r HOTKEY!!!
+//	let path = args.shift(); //NO!!!!!//»
+
+	let path = args[0];
+	let val;
+	let node;
+	let parnode;
+	let fullpath;
+	let typ;
+	let symbols;
+	if (opts.symbols){//«
+		let rv = await opts.symbols.toText(this.env.cwd);
+		if (!rv) return this.no(`${opts.symbols}: symbol file not found`);
+		rv = rv.split("\n");
+		symbols=[];
+		for (let ln of rv){
+			let s = ln.trim();
+			if (s.match(/^\w/)) symbols.push(s);
+		}
+	}//»
+	if (opts.refs){
+		if (!globals.refs[opts.refs]) return this.no(`${opts.refs}: not found in globals.refs`);
+	}
+	if (!path) {
+		if (this.stdin) val = this.stdin;
+		else val="";
+	}
+	else {//«
+		fullpath = normPath(path, this.env.cwd.cwd);
+		node = await fsapi.pathToNode(fullpath);
+		if (!node){//«
+			let badlink = await fsapi.pathToNode(fullpath, true);
+			if (badlink){
+/*« While it might seem strange to allow the editing of a "bad link", 
+that is how Linux works: as long as the parent directory of the symlink is
+writable, then a new file, using the last path part in symlink, will be created.
+
+In Linux:
+
+$ ln -s path/to/some/file.txt mylink
+
+As long as "path/to/some" is a valid/writable directory, then 
+when invoking:
+
+$ vim mylink
+
+... a file named "file.txt" will be created there upon saving it in vim.
+
+But if it can't be written, then "real" vim will allow you to pretend like you
+are editing a file like normal, and when you try to save it, it gives you the
+error: "Can't open linked file for writing".
+
+The LOTW system won't even let you pretend to edit a file that
+can't be written: the error comes on the command line, and the vim
+screen never shows.
+
+»*/
+				fullpath = badlink.link;
+			}
+			let arr = fullpath.split("/");
+			let nm = arr.pop();
+			let path = arr.join("/");
+			parnode = await fsapi.pathToNode(path);
+			if (!parnode) return this.no(`${path}: no such directory`);
+			if (!parnode.okWrite) return this.no(`${fullpath}: permission denied`);
+			val = "";
+			typ = parnode.root.type;
+		}//»
+		else {//«
+			if (node.writeLocked()) return this.no(`${path}: is locked by another application`);
+			if (node.appName === FOLDER_APP) return this.no(`${fullpath}: is a directory`);
+			val = await node.getValue({text:true});
+			if (!isStr(val)){
+cwarn("Here are the contents...");
+log(val);
+				return this.no(`${path}: could not get the contents (see console)`);
+			}
+			typ = node.root.type;
+		}//»
+		if (!opts.pipeok) this.noPipe = true;
+	}//»
+	this.awaitCb = this.editor.init(val, fullpath, {
+		node,
+		type: typ,
+		command_str,
+		opts,
+		symbols,
+	});
+}//»
+
+async run(){//«
+//If this is true, we do a clean exit
+//Otherwise, we need to dev reload
+	while (!await this.awaitCb){
+		let scr = document.getElementById(`script_mods.${DEF_EDITOR_MOD_NAME}`);
+		if (scr) scr._del();
+		else{
+//cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
+		}
+		delete NS.mods[DEF_EDITOR_MOD_NAME];
+		this.term.refresh();
+//WJGHDMG
+		await this.init();
+	}
+	if (this.pipeTo || this.opts["force-stdout"]){
+		this.out(this.editor.get_lines({str: true}).join("\n"));
+	}
+	else if (this.redirLines){
+		let lns = this.editor.get_lines({str: true});
+		this.redirLines.push(...lns);
+	}
+	this.ok();
+}//»
+cancel(){//«
+//This method is never invoked because vim eats up the ^C that *would* cancel it
+//this.killed = true;
+//this.editor.quit();
+//this.ok();
+}//»
+/*
+pipeIn(val){//«
+	if (this.killed) return;
+	if (this.noPipe) return;
+	this.editor.addLines(val);
+}//»
+*/
+
+}//»
 
 //Commands«
 //const Com = SimpleCommand;
@@ -307,6 +714,9 @@ async init(){//«
 		}
 		let val = await node.getValue({text:true});
 		if (val) arr = val.split("\n");
+		else if (val === null){
+			return this.no(`${fullpath}: could not get the contents`);
+		}
 		else arr = [];
 		name = node.name;
 	}
@@ -331,12 +741,11 @@ async #readStdin(){//«
 	}
 }//»
 async run(){//«
-//	await this.awaitCb;
 	while (!await this.awaitCb){
 		let scr = document.getElementById(`script_mods.${DEF_PAGER_MOD_NAME}`);
 		if (scr) scr._del();
 		else{
-cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
+cwarn(`LESS SCRIPT NOT FOUND!?!?!`);
 		}
 		delete NS.mods[DEF_PAGER_MOD_NAME];
 		this.term.refresh();
@@ -344,182 +753,14 @@ cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
 	}
 	this.ok();
 }//»
-/*
-pipeIn(val){
-	if (this.killed) return;
-	this.pager.addLines(val);
-}
-*/
 
 }//»
-const com_vim = class extends Com{//«
-static getOpts(){//«
-	return {
-		s:{
-			r: 1,//use ondevreload
-			d: 3,//Use development file for the vim module
-		},
-		l: {
-			pipeok: 1,
-			parsel: 1,
-			nosave: 1,
-			one: 1,
-			insert: 1,
-			enterquit: 1,
-			"convert-markers": 1,
-			"reload-win": 3,
-			symbols: 3,
-			"force-stdout": 1,
-			"dev-name": 3,
-			refs: 3,
-			"use-dev-reload": 1
-		}
-	};
-}//»
-async init(){//«
-	if (this.term.actor) {
-		return this.no(`the screen is already grabbed by: '${this.term.actor.comName}'`);
-	}
-	let {args, opts, command_str, term}=this;
-	let use_mod_name;
-	if (opts.d) {
-		use_mod_name = "local.dev.vim";
-		let txt = await opts.d.toText(this.env.cwd);
-		if (!isStr(txt)) return this.no(`${opts.d}: file not found`);
-		let url = URL.createObjectURL(new Blob([`(function(){"use strict";${txt}})()`]));
-		let scr;
-		try {
-			scr = await util.makeScript(url);
-		}
-		catch(e){
-cerr(e);
-			this.no(e.message);
-			return;
-		}
-	}
-	else if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
-		this.no("could not load the pager module");
-		return;
-	}
-	else{
-		use_mod_name = DEF_EDITOR_MOD_NAME;
-	}
-	this.editor = new NS.mods[use_mod_name](this.term);
-/*
-this.editor.saveFunc = async(val)=>{
-//log("SAVING...", val);
-return {mess: "YIM ON THE YIM YIM YIM", type: 2};
-};
-*/
-//DON'T SHIFT IT OFF BECAUSE WE MIGHT CALL IT WHILE RELOADING!!!
-//	let path = args.shift();
-	let path = args[0];
-	let val;
-	let node;
-	let parnode;
-	let fullpath;
-	let typ;
-	let linkNode;
-	let symbols;
-	if (opts.symbols){//«
-		let rv = await opts.symbols.toText(this.env.cwd);
-		if (!rv) return this.no(`${opts.symbols}: symbol file not found`);
-		rv = rv.split("\n");
-		symbols=[];
-		for (let ln of rv){
-			let s = ln.trim();
-			if (s.match(/^\w/)) symbols.push(s);
-		}
-	}//»
-	if (opts.refs){
-		if (!globals.refs[opts.refs]) return this.no(`${opts.refs}: not found in globals.refs`);
-	}
-	if (!path) {
-//		if (this.stdin) val = this.stdin.join("\n");
-		if (this.stdin) val = this.stdin;
-		else val="";
-	}
-	else {
-		fullpath = normPath(path, this.env.cwd.cwd);
-		node = await fsapi.pathToNode(fullpath);
-		if (!node){
-			let badlink = await fsapi.pathToNode(fullpath, true);
-			if (badlink){
-				linkNode = badlink;
-				fullpath = badlink.link;
-			}
-			let arr = fullpath.split("/");
-			let nm = arr.pop();
-			let path = arr.join("/");
-			parnode = await fsapi.pathToNode(path);
-			if (!parnode) return this.no(`${path}: no such directory`);
-//			if (!await fsapi.checkDirPerm(path)) return this.no(`${fullpath}: permission denied`);
-			if (!parnode.okWrite) return this.no(`${fullpath}: permission denied`);
-			val = "";
-			typ = parnode.root.type;
-		}
-		else {
-			if (node.writeLocked()) return this.no(`${path}: is locked by another application`);
-			if (node.appName === FOLDER_APP) return this.no(`${fullpath}: is a directory`);
-			val = await node.getValue({text:true});
-			if (!isStr(val)){
-cwarn("Here are the contents...");
-log(val);
-				return this.no(`${path}: could not get the contents (see console)`);
-			}
-			typ = node.root.type;
-		}
-		if (!opts.pipeok) this.noPipe = true;
-	}
-	this.awaitCb = this.editor.init(val, fullpath, {
-		node,
-		type: typ,
-		command_str,
-		opts,
-		symbols,
-	});
-}//»
 
-async run(){//«
-//If this is true, we do a clean exit
-//Otherwise, we need to dev reload
-	while (!await this.awaitCb){
-		let scr = document.getElementById(`script_mods.${DEF_EDITOR_MOD_NAME}`);
-		if (scr) scr._del();
-		else{
-//cwarn(`VIM SCRIPT NOT FOUND!?!?!`);
-		}
-		delete NS.mods[DEF_EDITOR_MOD_NAME];
-		this.term.refresh();
-		await this.init();
-	}
-	if (this.pipeTo || this.opts["force-stdout"]){
-		this.out(this.editor.get_lines({str: true}).join("\n"));
-	}
-	else if (this.redirLines){
-		let lns = this.editor.get_lines({str: true});
-		this.redirLines.push(...lns);
-	}
-	this.ok();
-}//»
-/*
-pipeIn(val){//«
-	if (this.killed) return;
-	if (this.noPipe) return;
-	this.editor.addLines(val);
-}//»
-*/
-cancel(){//«
-//This method is never invoked because vim eats up the ^C that *would* cancel it
-//this.killed = true;
-//this.editor.quit();
-//this.ok();
-}//»
-
-}//»
 const com_grep = class extends Com{//«
 //#re;
-
+static getOpts(){
+return {s: {n: 1}};
+}
 async init(){//«
 	let patstr = this.args.shift();
 	if (!patstr) {
@@ -557,24 +798,10 @@ async run(){//«
 		return;
 	}
 	let rv = await get_file_lines_from_args(args, this.env.cwd.cwd, err);
-//	if (rv.err && rv.err.length) err(rv.err);
-	if (rv.out&&rv.out.length) this.doGrep(rv.out);
+	if (rv.out&&rv.out.length) this.doGrep(rv.out, rv.name_map, rv.ln_map);
 	have_error?this.no():this.ok();	
 }//»
-/*
-pipeIn(val){//«
-//	if (isEOF(val)){
-//		this.out(val);
-//		this.ok();
-//		return;
-//	}
-	this.doGrep(val.split("\n"));
-}//»
-pipeDone(){
-	this.ok();
-}
-*/
-doGrep(val){//«
+doGrep(val, name_map=[], ln_map = []){//«
 	const re = this.re;
 	if (!re) return;
 	let arr;
@@ -587,21 +814,46 @@ doGrep(val){//«
 
 	let is_term = this.isTermOut;
 	let marr;
+	let iter = 0;
+	const files = this.args;
+	let use_lnnums = this.opts.n;
 	for (let ln of arr){
+		let prepend;
+		if (Number.isFinite(name_map[iter])) {
+			if (use_lnnums){
+				prepend = `${files[name_map[iter]]}:${ln_map[iter]}`;
+			}
+			else {
+				prepend = `${files[name_map[iter]]}`;
+			}
+		}
+		else prepend = "";
+
 		if (is_term) {
 			if (marr = re.exec(ln)) {
-				if (!marr[0].length) this.out(ln);//This apparently matched an empty string
+				if (!marr[0].length) this.out(`${prepend}:${ln}`);//This apparently matched an empty string
 				else{
-					let obj = this.fmtColLn(ln, marr.index, marr[0].length, "#f99");
+					let ln_str;
+					let obj;
+					if (prepend) {
+						ln_str = `${prepend}:${ln}`;
+						obj = this.fmtColLn(ln_str, marr.index+prepend.length+1, marr[0].length, "#f99");
+					}
+					else {
+						ln_str = ln;
+						obj = this.fmtColLn(ln_str, marr.index, marr[0].length, "#f99");
+					}
 					this.out(obj.lines.join("\n"), {colors: obj.colors, didFmt: true});
 				}
 			}
 		}
 		else{
 			if (re.test(ln)) {
-				this.out(ln);
+				if (prepend) this.out(`${prepend}:${ln}`);
+				else this.out(ln);
 			}
 		}
+		iter++;
 	}
 }//»
 
@@ -1060,7 +1312,7 @@ async run(){
 		this.no(`${fullpath}: not a regular file`);
 		return;
 	}
-	this.buffer = await node.buffer;
+	this.buffer = await node.bytes;
 	this.name = node.name;
 	this.doDL();
 }
@@ -1218,7 +1470,6 @@ wc: com_wc,
 grep: com_grep,
 dl: com_dl,
 less:com_less,
-//cat:com_cat,
 mkdir: com_mkdir,
 rmdir: com_rmdir,
 mv:com_mv,
@@ -1227,6 +1478,7 @@ rm:com_rm,
 symln:com_symln,
 ln:com_ln,
 vim:com_vim,
+vimtest: com_vimtest,
 touch:com_touch,
 
 }//»
@@ -1240,10 +1492,7 @@ else{
 	coms._clearstorage = ADMIN_COM;
 }//»
 
-//export const coms = {//«
-//_clearstorage: com_clearstorage,
-//mount: com_mount,
-//unmount: com_unmount,
-//}//»
+LOTW.coms[LIBNAME] = {coms};
 
-export {coms};
+})();
+

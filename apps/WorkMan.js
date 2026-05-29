@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="WorkMan";
+
 /*Here lies a small little "window manager," invokable via "Ctrl+Alt+0",«
 which will allow us to make quick/dirty rearrangements to the windows
 kept in globals.boundWins (created via the 'bindwin' command).
@@ -23,7 +25,7 @@ const{log, cwarn, cerr, isnum, make, mkdv} = LOTW.api.util;
 const{boundWins}=globals;
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 const DEF_FLEX_DIR = "row";
@@ -182,3 +184,4 @@ else if (k==="ENTER_"){//«
 //»
 
 }
+})();

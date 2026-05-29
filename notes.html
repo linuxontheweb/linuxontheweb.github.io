@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>
+LOTW Notes
+</title>
+<link rel="icon" href="/www/favicon.ico">
+<style>
+body{
+	font-size: 21px;
+}
+</style>
+</head>
+<body>
+<h2>Notes for Linux on the Web</h2>
+<hr>
+<p>
+<b>12/19/25</b>
+
+Yesterday I worked out a rough draft for a local command library development
+system that works [almost] completely via hotkeys in LOTW's vim. The gist of
+that solution had already been worked out to enable the local development of
+windowed applications, but I've been realizing that, for the forseeable future,
+LOTW's command-line interface will be, as Beck once famously said, "Where it's
+at". So that code was simply transformed from dealing with applications to
+dealing with commands.
+
+<p>
+
+The first order of business will then be to work out commands that enable the
+stuff I was talking about on 12/17, and especially being able to
+add/modify/delete the contents of the online repo so they can be synced with
+the (local) development branch. This is the first step in making LOTW a
+self-bootstrapping system, so that no sort of "real" Linux -- with "real" bash
+or vim -- needs to be locally installed.  Everything should be able to "just
+work", while on a friend's computer or even using a computer on display in Best
+Buy: the only thing you will need to do is type in your Personal Access Token
+from github so that the fetch requests may have the appropriate 'Authorization'
+header. I hope to be able to test this out within the next handful of days.
+
+
+<hr>
+<p>
+<b>12/17/25</b>
+First note!
+<p>
+
+LOTW is on the threshhold of becoming a fully self-boostrapping system, so that
+no "real" development environment needs to exist in order to further improve
+it. The main reasons for this are two-fold, namely that LOTW has "nice enough",
+perfectly web-native versions of: 1) the (POSIX) Shell Command Language and 2)
+the vim editor.  These versions are "nice enough", not because they are
+perfect, but because they work well enough to make working on them -- editing
+and using various CLI tools upon their source files -- from within the LOTW
+interface a fairly pleasant experience.
+
+<p>
+
+First, I want to create two additional "branches": a development branch and a
+testing branch. 
+
+<p>
+
+The development branch will be just like the standard branch, except there will
+be a (top-level) "/devel" subtree that starts out as a clone of the github
+repo. The subtree itself will not be directly modifiable by standard CLI file
+system manipulation tools (e.g. echo hello &gt; newfile.txt, touch newfile.txt,
+rm vim.js, mkdir newdir, rmdir apps/, etc), but the files themselves will be
+modifiable by the editor.  The URL for this branch should be something like:
+https://linuxontheweb.github.io/dev/desk.
+
+<p>
+
+The testing branch might perhaps be loaded up in an iframe element that takes
+up the full space of an LOTW application window (although there is no reason
+not to just access it from another browser tab).  It will use (something like)
+the following for its script URLs:
+filesystem:https://linuxontheweb.github.io/temporary/test/mods-lang-shell.js.
+So, in the "outer" development system, one might be editing the file,
+/devel/mods/lang/shell.js, and after editing it, one might want to reload it in
+the "inner" (iframed) system with a keyboard shortcut, and possibly invoke some
+suite of tests with another shortcut (or maybe do both things at once with the
+same shortcut).  The URL for this branch should be something like:
+https://linuxontheweb.github.io/test/desk.
+
+<p>
+
+So it is important to understand that in terms of the public-facing code, there
+is only one branch. The developer branch will use this code for its system, and
+will be able to create a local copy (clone) of it for development purposes.
+This local copy is what the testing branch will use for its own system's code.
+Then once the tests have passed muster, there should be other tools that allow
+this new code to be saved back to the public repo.
+
+<p>
+
+Most of the CLI tools within LOTW that interact with the online github repo
+will need to provide a header that looks like "Authorization: Bearer
+&lt;YOUR-TOKEN&gt;" header during any fetch requests to api.github.com. I have
+already verified that there are no CORS issues when making fetch requests to
+api.github.com, but I have yet to verify that my Personal Authorization Token
+works in order to do fetch requests that require any sort of authentication.
+I might just test that out tomorrow. If I can't get it to work, I might need
+to rethink certain parts of the workflow that I'm working out here.
+
+<p>
+
+Then I want to look into using service workers so that the relevant server-side
+files may be locally cached, allowing the public github.io site to load up even
+when there are no available network connections. This idea of "no available
+network connections" should generally be thought of as a feature rather than a
+bug. I want LOTW to be used as a way to shift the paradigm of network
+connectivity to a "less is more" sort of mindset. The way I see it, computer
+systems intended for personal use should generally complain when they
+<i>are</i> connected to the internet (as opposed to when they <i>aren't</i>).
+
+<hr>
+
+</body>
+</html>
+

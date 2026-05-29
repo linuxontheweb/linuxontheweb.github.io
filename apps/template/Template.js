@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="template.Template";
+
 //Imports«
 //import { util, api as capi } from "util";
 //import {globals} from "config";
@@ -5,7 +7,7 @@ const{globals}=LOTW:
 const{ log, cwarn, cerr, isnum, make, mkdv} = LOTW.api.util;
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -28,3 +30,4 @@ this.onkeydown=(e,k)=>{//«
 };//»
 
 }
+})();

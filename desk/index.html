@@ -21,11 +21,7 @@ Desktop
 	}
 }
 </script>
-<script src="/sys/config.js" type="module"></script>
-<script src="/sys/util.js" type="module"></script>
-<script src="/sys/fs.js" type="module"></script>
 <!--<script id="shell_script" src="/sys/shell.js" type="module"></script>-->
-<script src="/sys/desk.js" type="module"></script>
 <!--<script src="/mods/util/nn/tf.es2017.min.js"></script>-->
 <!--<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest"></script>-->
 </head>
@@ -37,6 +33,13 @@ please check the javascript console of your web browser for any error
 messages!
 </h3>
 
+<!--We can directly give it 'filesystem:' URLs!!!
+<script src="filesystem:http://localhost:8000/temporary/blobs/109"></script>
+-->
+<script src="/sys/config.js"></script>
+<script src="/sys/util.js"></script>
+<script src="/sys/fs.js"></script>
+<script src="/sys/desk.js"></script>
 </body>
 </html>
 

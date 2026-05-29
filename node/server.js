@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 //const WebSocketServer = require('ws').WebSocketServer;
-const fsprom = require('node:fs/promises');
+//const fsprom = require('node:fs/promises');
 const https = require('https');
 const http = require('http');
 
@@ -252,7 +252,7 @@ const handler = async(req, res) => {//«
 //»
 
 if (meth === "GET") {
-
+/*
 	if (args.start && args.end) {//«
 		let si = parseInt(args.start);
 		let ei = parseInt(args.end);
@@ -269,17 +269,18 @@ if (meth === "GET") {
 			no(res, "Bad range");
 		}
 	}//»
-	else {//«
-		let txt;
-		try {
-			txt = fs.readFileSync(path);
-		}catch(e){
-			no(res, "Not found");
-			return;
-		}
-		ok(res, mime);
-		res.end(txt);
-	}//»
+*/
+//	else {//«
+	let txt;
+	try {
+		txt = fs.readFileSync(path);
+	}catch(e){
+		no(res, "Not found");
+		return;
+	}
+	ok(res, mime);
+	res.end(txt);
+//	}//»
 
 }
 else{

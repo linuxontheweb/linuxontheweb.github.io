@@ -1,12 +1,12 @@
+(()=>{"use strict";const APPNAME="Music";
+
 //Imports«
-import { util, api as capi } from "util";
-import {globals} from "config";
-const{ log, cwarn, cerr, isnum} = util;
-const {NS} = globals;
-const {fs} = NS.api;
+//import { util, api as capi } from "util";
+//import {globals} from "config";
+const{ log, cwarn, cerr, isnum} = LOTW.api.util;
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -207,7 +207,7 @@ this.onkill=()=>{//«
 	midi && midi.rm_cb(midi_cb);
 };//»
 this.onkeydown=(e,k)=>{//«
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 chord_mode = !chord_mode;
 log(`chord_mode: ${chord_mode}`);
 	}
@@ -219,7 +219,7 @@ log(`chord_mode: ${chord_mode}`);
 };//»
 this.onkeyup=(e,k)=>{//«
 
-if (k=="SPACE_"){
+if (k=="\x20_"){
 
 }
 
@@ -243,3 +243,4 @@ log("IN", str);
 //»
 
 }
+})();

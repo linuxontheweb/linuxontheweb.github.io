@@ -1,3 +1,4 @@
+(()=>{"use strict";const MODNAME="games.NESEmulator";
 
 //YTEOPNBSKB <--dr_mario.nes Causes this error!
 //import { util, api as capi } from "util";
@@ -6,8 +7,8 @@
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv, lowToHigh} = util;
-export const mod = function(Core) {
-
+//export const mod = function(Core) {
+LOTW.mods[MODNAME] = function() {
 
 let num_frames;
 //var globals = Core.globals;
@@ -7263,4 +7264,4 @@ this.init = function(appobj, buf, canvas, gain, cb){
 
 
 }
-
+})();

@@ -1,10 +1,13 @@
+(()=>{"use strict";const MODNAME="util.pretty";
+
 /*
 ! function(t, e) {
 	"object" == typeof exports && "object" == typeof module ? module.exports = e() : "function" == typeof define && define.amd ? define("beautifier", [], e) : "object" == typeof exports ? exports.beautifier = e() : t.beautifier = e()
 }(
 "undefined" != typeof self ? self : "undefined" != typeof windows ? window : "undefined" != typeof global ? global : this,
 */
-export const mod = function(){
+//export const mod = function(){
+LOTW.mods[MODNAME] = function() {
 let pretty = function() {
 	return function(t) {
 		var e = {};
@@ -1205,4 +1208,7 @@ this.getmod = _=>{
 }
 
 }
+
+
+})();
 

@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="template.Basic";
 
 //Imports«
 import { util, api as capi } from "util";
@@ -9,7 +10,7 @@ const {fs} = NS.api;
 
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -29,14 +30,15 @@ this.onappinit=async()=>{//«
 this.onkill=()=>{//«
 };//»
 this.onkeydown=(e,k)=>{//«
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 	}
 };//»
 this.onkeyup=(e,k)=>{
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 	}
 };
 
 //»
 
 }
+})();

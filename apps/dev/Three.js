@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="dev.Three";
 
 //Imports«
 //import { util, api as capi } from "util";
@@ -13,7 +14,7 @@ const{make, log, jlog, cwarn, cerr}=util;
 
 //»
 
-export const app = function(Win) {
+LOTW.apps[APPNAME] = function(Win) {
 
 //Var«
 
@@ -196,10 +197,11 @@ addCube();
 	}
 };//»
 this.onkeyup=(e,k)=>{
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 	}
 };
 
 //»
 
 }
+})();

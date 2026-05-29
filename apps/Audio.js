@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="Audio";
 /*
 
 woym
@@ -66,7 +67,7 @@ const{isArr, isStr, isNum, isObj, make, log, jlog, cwarn, cerr}=api.util;
 
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -186,3 +187,4 @@ this.onkeyup=(e,k)=>{//«
 
 }
 
+})();

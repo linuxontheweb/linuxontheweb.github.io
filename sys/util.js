@@ -7,8 +7,9 @@ System-wide utility functions are defined here. Of particular interest to devlop
   These functions are typically async, and will need to await on a Promise.
 
 »*/
-import { globals } from "config";
-
+(()=>{"use strict";
+//import { globals } from "config";
+const globals = LOTW.globals;
 const {//«
 //	DEF_APP,
 	NS,
@@ -121,7 +122,7 @@ const getMod = async(which, opts = {}) => {//«
 		if (if_static || if_global) return (mods[which]);
 		else return new mods[which]();
 	} 
-	let ret = await load_mod(which, opts);
+	let ret = await load_mod(which, "mods", opts);
 	if (!ret) return;
 	if (if_global) {
 		mods[which] = which;
@@ -136,7 +137,41 @@ const getMod = async(which, opts = {}) => {//«
 	return new mods[which]();
 
 };//»
-const loadMod = (name, opts) => {return load_mod(name, opts);};
+//const loadMod = (name, opts) => {return load_mod(name, opts);};
+const loadMod = (name, opts) => {
+	if (LOTW.mods[name]) return true;
+	return load_mod(name, "mods", opts);
+};
+const loadApp = (name, opts) => {
+	if (LOTW.apps[name]) return true;
+	return load_mod(name, "apps", opts);
+};
+const loadComs = (name, opts) => {
+	if (LOTW.coms[name]) return true;
+	return load_mod(name, "coms", opts);
+};
+
+const load_mod = (modname, type, opts={}) => {//«
+	return new Promise((Y,N)=>{
+		let path = modname.replace(/\./g, "/");
+		let modpath = `/${type}/${path}.js`;
+		if (globals.dev_mode){
+			let v = (Math.random()+"").slice(2,9);
+			modpath+=`?v=${v}`;
+		}
+		let scr = document.createElement('script');
+		scr.id=`script_${type}.${modname}`;
+		scr.src = modpath;
+		scr.onload=()=>{
+			Y(true);
+		};
+		scr.onerror=e=>{
+			cerr(e);
+			Y();
+		};
+		document.head.appendChild(scr);
+	});
+};//»
 
 const makeScript=(path, opts)=>{return new Promise((Y,N)=>{make_script(path,Y,N,opts);});};
 const fsUrl = (path) => {//«
@@ -152,6 +187,7 @@ const locUrl = (port, path) => {//«
 	return base + "/?path=/" + encodeURIComponent(path);
 };
 //»
+/*
 const load_mod = async(modname, opts = {})=>{//«
 return new Promise((cb,N)=>{
 	let force = opts.FORCE;
@@ -187,6 +223,7 @@ return new Promise((cb,N)=>{
 });
 };
 //»
+*/
 const make_script = (path, load, err, opts={}) => {//«
 	let scr = make('script');
 	if (opts.id) scr.id = opts.id;
@@ -439,198 +476,23 @@ const mkOverlay=(opts={})=>{//«
 	return overlay;
 };//»
 
-export const util = (()=>{//«
+LOTW.api.util = (()=>{//«
+//export const util = (()=>{
 
 return {
-
-GetPoint: class {//«
-
-constructor(baseDiv) {//«
-	this.baseDiv = baseDiv;
-	this.activeSector = baseDiv;
-	this.crosshair = null;
-	this.crosshairX = 0;
-	this.crosshairY = 0;
-	this.sectors = new Map();
-	this.overlays = new Map();
-	this.quadrantKeys = { s: 'M', w: 'N', e: 'NE', d: 'E', c: 'SE', x: 'S', z: 'SW', a: 'W', q: 'NW' };
-	this.quadrantLines = null;
-	this.initCrosshair();
-	this.initQuadrantLines();
-}//»
-initCrosshair() {//«
-	if (this.crosshair) this.crosshair.remove();
-	this.crosshair = mkdv();
-	this.crosshair.style.position = 'absolute';
-	this.crosshair.style.width = '100%';
-	this.crosshair.style.height = '100%';
-	this.crosshair.style.pointerEvents = 'none';
-
-	const vAxis = mkdv();
-	vAxis.style.position = 'absolute';
-	vAxis.style.width = '1px';
-	vAxis.style.height = '100%';
-//	vAxis.style.backgroundColor = 'red';
-	vAxis.style.backgroundColor = 'rgba(255,0,0,0.5)';
-	vAxis.style.left = '50%';
-
-	const hAxis = mkdv();
-	hAxis.style.position = 'absolute';
-	hAxis.style.width = '100%';
-	hAxis.style.height = '1px';
-//	hAxis.style.backgroundColor = 'red';
-	hAxis.style.backgroundColor = 'rgba(255,0,0,0.5)';
-	hAxis.style.top = '50%';
-
-	this.crosshair.appendChild(vAxis);
-	this.crosshair.appendChild(hAxis);
-	this.activeSector.appendChild(this.crosshair);
-	this.crosshairX = this.activeSector.offsetWidth / 2;
-	this.crosshairY = this.activeSector.offsetHeight / 2;
-	this.updateCrosshair();
-}//»
-initQuadrantLines() {//«
-	if (this.quadrantLines) this.quadrantLines.remove();
-	this.quadrantLines = mkdv();
-	this.quadrantLines.style.position = 'absolute';
-	this.quadrantLines.style.width = '100%';
-	this.quadrantLines.style.height = '100%';
-	this.quadrantLines.style.pointerEvents = 'none';
-
-	const width = this.activeSector.offsetWidth / 3;
-	const height = this.activeSector.offsetHeight / 3;
-
-	const vLine1 = mkdv();
-	vLine1.style.position = 'absolute';
-	vLine1.style.width = '1px';
-	vLine1.style.height = '100%';
-	vLine1.style.backgroundColor = 'rgba(128,128,128,0.3)';
-	vLine1.style.left = `${width}px`;
-
-	const vLine2 = mkdv();
-	vLine2.style.position = 'absolute';
-	vLine2.style.width = '1px';
-	vLine2.style.height = '100%';
-	vLine2.style.backgroundColor = 'rgba(128,128,128,0.3)';
-	vLine2.style.left = `${2 * width}px`;
-
-	const hLine1 = mkdv();
-	hLine1.style.position = 'absolute';
-	hLine1.style.width = '100%';
-	hLine1.style.height = '1px';
-	hLine1.style.backgroundColor = 'rgba(128,128,128,0.3)';
-	hLine1.style.top = `${height}px`;
-
-	const hLine2 = mkdv();
-	hLine2.style.position = 'absolute';
-	hLine2.style.width = '100%';
-	hLine2.style.height = '1px';
-	hLine2.style.backgroundColor = 'rgba(128,128,128,0.3)';
-	hLine2.style.top = `${2 * height}px`;
-
-	this.quadrantLines.appendChild(vLine1);
-	this.quadrantLines.appendChild(vLine2);
-	this.quadrantLines.appendChild(hLine1);
-	this.quadrantLines.appendChild(hLine2);
-	this.activeSector.appendChild(this.quadrantLines);
-}//»
-updateCrosshair() {//«
-	const vAxis = this.crosshair.children[0];
-	const hAxis = this.crosshair.children[1];
-	vAxis.style.left = `${this.crosshairX}px`;
-	hAxis.style.top = `${this.crosshairY}px`;
-}//»
-onKey(key) {//«
-	if (!(key in this.quadrantKeys)) return;
-	const quadrant = this.quadrantKeys[key];
-	const sectorRect = this.activeSector.getBoundingClientRect();
-	const width = sectorRect.width / 3;
-	const height = sectorRect.height / 3;
-	const offsets = {
-		N: { x: width, y: 0 },
-		NE: { x: 2 * width, y: 0 },
-		E: { x: 2 * width, y: height },
-		SE: { x: 2 * width, y: 2 * height },
-		S: { x: width, y: 2 * height },
-		SW: { x: 0, y: 2 * height },
-		W: { x: 0, y: height },
-		NW: { x: 0, y: 0 },
-		M: { x: width, y: height }
-	};
-
-	const newSector = mkdv();
-	newSector.style.position = 'absolute';
-	newSector.style.width = `${width}px`;
-	newSector.style.height = `${height}px`;
-	newSector.style.left = `${offsets[quadrant].x}px`;
-	newSector.style.top = `${offsets[quadrant].y}px`;
-	this.activeSector.appendChild(newSector);
-	this.sectors.set(newSector, this.activeSector);
-
-	for (const q in offsets) {
-		if (q !== quadrant) {
-			const overlay = mkdv();
-			overlay.style.position = 'absolute';
-			overlay.style.width = `${width}px`;
-			overlay.style.height = `${height}px`;
-			overlay.style.left = `${offsets[q].x}px`;
-			overlay.style.top = `${offsets[q].y}px`;
-			overlay.style.backgroundColor = 'rgba(0,0,0,0.5)';
-			this.activeSector.appendChild(overlay);
-			this.overlays.set(newSector, (this.overlays.get(newSector) || []).concat(overlay));
-		}
+fetch: async(url, arg={})=>{//«
+	let rv;
+	try{
+		rv = await fetch(url, arg);
+		log(rv);
+		if (rv.ok) return rv;
+		let mess=`(Response Code: ${rv.status})`
+		if (rv.statusText) mess=`${rv.statusText} ${mess}`;
+		return new Error(mess);
 	}
-
-	this.activeSector = newSector;
-	this.initCrosshair();
-	this.initQuadrantLines();
-}//»
-onUp() {//«
-	const step = this.activeSector.offsetHeight * 0.05;
-	this.crosshairY = Math.max(0, this.crosshairY - step);
-	this.updateCrosshair();
-}//»
-onDown() {//«
-	const step = this.activeSector.offsetHeight * 0.05;
-	this.crosshairY = Math.min(this.activeSector.offsetHeight, this.crosshairY + step);
-	this.updateCrosshair();
-}//»
-onLeft() {//«
-	const step = this.activeSector.offsetWidth * 0.05;
-	this.crosshairX = Math.max(0, this.crosshairX - step);
-	this.updateCrosshair();
-}//»
-onRight() {//«
-	const step = this.activeSector.offsetWidth * 0.05;
-	this.crosshairX = Math.min(this.activeSector.offsetWidth, this.crosshairX + step);
-	this.updateCrosshair();
-}//»
-onEscape() {//«
-	if (this.activeSector === this.baseDiv) return false;
-	const parentSector = this.sectors.get(this.activeSector);
-	(this.overlays.get(this.activeSector) || []).forEach(overlay => overlay.remove());
-	this.overlays.delete(this.activeSector);
-	this.activeSector.remove();
-	this.sectors.delete(this.activeSector);
-	this.activeSector = parentSector;
-	this.initCrosshair();
-	this.initQuadrantLines();
-	return true;
-}//»
-onSelect(isAbsolute) {//«
-	const rect = this.crosshair.getBoundingClientRect();
-	const point = {
-		x: rect.left + this.crosshairX,
-		y: rect.top + this.crosshairY
-	};
-	if (!isAbsolute) {
-		const baseRect = this.baseDiv.getBoundingClientRect();
-		point.x -= baseRect.left;
-		point.y -= baseRect.top;
+	catch(e){
+		return e;
 	}
-	return point;
-}//»
-
 },//»
 mkOverlay,
 consoleLog,
@@ -672,7 +534,9 @@ linesToParas,
 //detectSwipe,
 sharedStart,
 getMod,
+loadApp,
 loadMod,
+loadComs,
 makeScript,
 fsUrl,
 locUrl,
@@ -859,9 +723,9 @@ cwarn("NO detectSwipe");
 }
 
 })();
-NS.api.util = util;
+//NS.api.util = util;
 //»
-NS.api.util = util;
+//NS.api.util = util;
 
 //System-wide prototypes«
 
@@ -1035,4 +899,5 @@ _.add=function(...args){for(let kid of args)this.appendChild(kid);}
 _.del = function() {if (this.parentNode) this.parentNode.removeChild(this);}
 
 //»
+})();
 

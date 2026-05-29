@@ -5,7 +5,7 @@ const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{isArr,isStr,isEOF,log,jlog,cwarn,cerr, sleep}=util;
 const{ShellMod}=globals;
-const {Com} = ShellMod.comClasses;
+const {SimpleCommand: Com} = ShellMod.comClasses;
 const{Desk}=LOTW;
 
 //»
@@ -67,7 +67,7 @@ const com_norun=class extends Com{init(){this.ok(`Hi,this is from the init phase
 
 const coms = {//«
 
-pipe: com_pipe,
+//pipe: com_pipe,
 deadpipe: com_deadpipe,
 badret: com_badret,
 noret: com_noret,

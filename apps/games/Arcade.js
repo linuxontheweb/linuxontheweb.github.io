@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="games.Arcade";
 
 //import { util, api as capi } from "util";
 //import {globals} from "config";
@@ -33,9 +34,8 @@ Arrows
 15 //RIGHT
 
 */
-
 //export const app = function(arg) {
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 let EW_THRESH = 0.05;
 let NS_THRESH = 0.25;
 
@@ -583,7 +583,7 @@ this.onkeydown = function(e,sym) {//«
 	var marr;
 
 //log(e);
-	if (sym=="SPACE_A") {
+	if (sym=="\x20_A") {
 		running = !running;
 		if (running) {
 			emulator.run();
@@ -605,7 +605,7 @@ this.onkeydown = function(e,sym) {//«
 		emulator.toggleSilentMode();
 	}
 	else if (kb_map && (marr=sym.match(/^(.+)_$/)) && kb_map[marr[1]]) {
-//if (sym==="SPACE_") e.preventDefault();
+//if (sym==="\x20_") e.preventDefault();
 //		let but = str_to_but[kb_map[marr[1]]];
 //log(marr[1]);
 		let but = kb_map[marr[1]];
@@ -673,3 +673,4 @@ let stat_memory=()=>{let MB = 1024*1024;
 memory_interval = setInterval(stat_memory, 250);
 »*/
 
+})();

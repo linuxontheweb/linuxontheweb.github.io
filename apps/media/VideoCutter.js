@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="media.VideoCutter";
+
 /*9/16/25: How about a "redraw ruler" command for when things seem to get stuck?«
 I am current editing a ~22 min long video, and there are times where not all the
 preview images are drawn. I'm just trying to understand why the rendering of
@@ -290,7 +292,7 @@ const {fs, widgets: wdg} = NS.api;
 
 //»
 
-export const app = function(Win, Desk) {//«
+LOTW.apps[APPNAME] = function(Win, Desk) {//«
 
 //Var«
 
@@ -2490,7 +2492,7 @@ this.onkeydown=(e,k)=>{//«
 	else if (k=="s_C"){
 		try_save();
 	}
-	else if (k=="SPACE_"){
+	else if (k=="\x20_"){
 		e.preventDefault();
 		toggle_play();
 	}
@@ -2603,3 +2605,4 @@ Main.addEventListener('mouseup',clear_drag);
 Main.addEventListener('mouseleave',clear_drag);
 */
 
+})();

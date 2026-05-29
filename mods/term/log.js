@@ -1,3 +1,6 @@
+/*5/13/26: This will need to be updated to the new "self-rendering"
+methods that are used by vim/less.
+*/
 /*12/18/24: Each item in the log at least has a 'v'alue, and possibly an 'i'teration 
 (a sequence number based on a single log invocation) and a 'n'ame. If there is a
 name, we want to use up to MAX_NAME_CHARS in the side menu, and put the whole thing

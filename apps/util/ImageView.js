@@ -1,9 +1,11 @@
+(()=>{"use strict";const APPNAME="util.ImageView";
+
 //import { util, api as capi } from "util";
 //import { globals } from "config";
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -147,3 +149,4 @@ setTimeout(()=>{
 //»
 
 }
+})();

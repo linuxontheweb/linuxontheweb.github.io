@@ -1,3 +1,8 @@
+(()=>{"use strict";const LIBNAME="games.poker";
+/*4/22/26: Let's just write and think about all the game theory stuff we know, that we can
+have fun putting into this system.
+
+*/
 /*7/11/25: Getting back into an LOTW workflow with poker logic«
 
 How in the HELL can you backwards traverse without all chance nodes being actual
@@ -1473,7 +1478,9 @@ const coms = {//«
 	genhands: com_genhands
 }//»
 
-export {coms};
+//export {coms};
+LOTW.coms[LIBNAME] = {coms};
+})();
 
 
 

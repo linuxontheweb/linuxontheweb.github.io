@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="dev.Grok";
 
 /*7/12/25: Let's do a Ctrl+C to copy the current section to the clipboard.
 */
@@ -50,7 +51,7 @@ const ACT_BG_COL = "#070710";
 
 const{log,cwarn,cerr, make,mkdv,mk,mksp, toStr, clipCopy}=LOTW.api.util;
 
-export const app = class {
+LOTW.apps[APPNAME] = class {
 
 	constructor(Win){//«
 		this.Win = Win;
@@ -532,9 +533,10 @@ log(rv);
 			this.prevSize+=5;
 			this.setPrevDivs();
 		}//»
-		else if (k==="SPACE_CAS") this.getPoint();
+		else if (k===" _CAS") this.getPoint();
 		
 	}//»
 
 }
 
+})();

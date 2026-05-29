@@ -1,0 +1,47 @@
+<html>
+<head>
+<title>
+Notes
+</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/www/favicon.ico">
+<link href="/www/blog.css" rel="stylesheet">
+</head>
+<body>
+<h1>
+Notes
+</h1>
+
+<h2>4/22/26</h2>
+
+<p>
+There has been an overhaul in the app/module/command library loading logic so that
+the new/standard module syntax (import/export) is no longer used, and so, in order
+to use strict syntax, we needed to the following schema:
+</p>
+<pre>
+(()=>{"use strict"; const APPNAME="path.to.AppName";
+
+LOTW.apps[APPNAME] = class{
+//App logic here
+}
+
+})();
+</pre>
+<p>
+There might still be some old/legacy stuff hanging around (old modules or command libraries)
+that need to be updated to this schema.
+</p>
+
+<p>
+Now I just want to take things very slow and easy while playing around with ways to implement
+the logic for game theory: mostly CFR type stuff in order to automate poker games.
+</p>
+
+<br><br>
+
+</body>
+
+</html>
+
+

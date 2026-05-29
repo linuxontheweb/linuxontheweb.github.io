@@ -1,65 +1,44 @@
 /*README«
 
-This modules implements the LOTW graphical user interface.
+This module implements the LOTW graphical user interface.
 
 Keyboard shortcuts are defined here:
 
-@SHORTCUTS1: All shortcuts that are "intercepted" by the desktop, before being fed into the
-current window (if any)
+@SHORTCUTS1: All shortcuts that are "intercepted" by the desktop, before being
+fed into the current window (if any)
 
-@SHORTCUTS2: If there is no current window, the desktop may use any "orphaned" shortcuts.
+@SHORTCUTS2: If there is no current window, the desktop may use any "orphaned"
+shortcuts.
 
-There are many other places in the dokeydown function that determine how the keyboard
-controls the interface, but modifying those areas should be done by experts only.
+There are many other places in the dokeydown function that determine how the
+keyboard controls the interface, but modifying those areas should be done by
+experts only.
 
-(Note: In vim, place your cursor over anything that looks like '@XXXXXXXX' (like @SHORTCUTSN above) 
-and press "*" in order to jump to the relevant point in the code.)
+(Note: In vim, place your cursor over anything that looks like '@XXXXXXXX'
+(like @SHORTCUTS1 above) and press "*" in order to jump to the relevant point
+in the code.)
 
 »*/
-//10/10/25: Something like: '$ cat --binary /path/to/sloom.jpg > /style/desk/bgimg'
-/*util.GetPoint: New generic keyboard-driven graphical point/pixel selector«
-With the return value (a point: {x,y}), we can do document.elementsFromPoint(x,y)
-and pinpoint the element we want without resorting to needing (wanting) the mouse.
-Usage in app:
 
-const get_point=async()=>{
-	let rv = await this.Win.selectPoint({isRelative: true});
-log(rv);
-};
-onkeydown(e,k){
-    if (k=="SPACE_"){
-        get_point();
-    }
-}
-
-The quadrant select keys are:
-Center: s
-Then, from North (going clockwise on the qwerty keyboard):
-w (N), e, d, c, x (S), z, a, q
-
-The enter key fulfills the selectPoint promise with a  {x, y} point, while
-escape fulfills it with null.
-
-Also, we could make it an automated window feature, e.g. invoked from 
-a system-level hotkey which simply stores the lastSelectedPoint
-onto the Window object. This is what select_point_from_window() does,
-but we are currently commenting that out @FWIKNGH.
-
-We should generalize it for the specific colors (grid crosshairs) we 
-want for our background.
+/*5/28/26: BUG: When turning off a folder's cursor, and doing «
+the Home key, then turning it back on, the damn thing doesn't know
+how to change rows, downwards.
 »*/
-/*Keep it simple: If an app defines onreload, just call *that* instead of doing the«
-system default @HGLAURJF. This is for applications that have their own internal 
-development workflows. The point is that we want to keep the r_A hotkey as universal
-as possible (i.e., no r_CA/r_CAS/ORWHATEVER hacks).
+/*12/15/25: I recently organized the variables on globals «
+(in sys/config.js) so they wouldn't all be in a huge, flat data structure, and
+here is a place where I didn't properly update it to the new value (which was
+already imported at the top of the file). See @WOLUITHN for an example bug
+that was introduced by this.
 »*/
+
+//«(()=>{"use strict";
+   (()=>{"use strict";
+//»
 
 //Imports«
 
 const NS = LOTW;
 const {globals} = NS;
-
-//import {FS as fsmod} from "fs";
 
 //«
 const{
@@ -154,10 +133,10 @@ const {//«
 	extToApp,
 	getAppIcon,
 //	detectClick,
+	loadApp,
 	fsUrl,
 	isFin,
 	makeScript,
-	GetPoint,	
 	mkOverlay
 } = NS.api.util;//»
 
@@ -169,7 +148,6 @@ class ContextMenu {//«
 
 constructor(Desk, elem, loc, prevelem){//«
 
-//this.bgCo
 this.Desk = Desk;
 this.loc = loc;
 this.prevelem = prevelem;
@@ -639,7 +617,8 @@ const popup = (str, opts={}) => {//«
 		WIN: opts.win,
 		CB: opts.cb,
 		WIDE: opts.wide,
-		OKTXT: opts.oktxt
+		OKTXT: opts.oktxt,
+		CANCEL: opts.cancel
 	});
 }//»
 const popkey = (str, cb, opts={}) => {//«
@@ -774,19 +753,19 @@ const mkpopup_imgdiv = (type, use_img, if_big_img) => {//«
 	}
 	return imgdiv
 }//»
-const do_links = elm=>{//«
+const do_links = elm => {//«
 	let lns = Array.from(elm.getElementsByTagName("a"));
 	for (let ln of lns){
 		let win;
 		ln.onclick=e=>{
 			e.preventDefault();
-			e.stopPropagation();
+//			e.stopPropagation();
 			if (win&&!win.closed){
 				win.focus();
 				return;
 			}
 			win = window.open(ln.href, ln.href,`width=${window.outerWidth-100},height=${window.outerHeight-100}`)
-		};      
+		};
 		ln.onmousedown=(e)=>{
 			e.preventDefault();
 			e.stopPropagation();
@@ -833,7 +812,8 @@ const mkpopup_tdiv = (str, opts={}) => {//«
 			tdiv._w = winw() - (20 + 134);
 			tdiv._h = winh() - (35 + 79);
 		}
-	} else {
+	} 
+	else {
 		tdiv._overy="auto";
 		tdiv._w = opts.WIDTH - 134;
 		tdiv._h = 75;
@@ -1410,8 +1390,8 @@ const{pathToNode}=fsapi;
 let dev_mode;
 let admin_mode;
 let debug_localstorage=false;
-//let show_desktop_during_win_cycle = true;
-let show_desktop_during_win_cycle = false;
+let show_desktop_during_win_cycle = true;
+//let show_desktop_during_win_cycle = false;
 let win_cycle_wins_hidden = false;
 //let folders_open_in_same_window = false;
 let folders_open_in_same_window = true;
@@ -1447,25 +1427,26 @@ let num_workspaces = 9;
 let overlay_timer;
 let num_minimized_wins=0;
 let nowindow_pos;
-let num_tiled_wins;
-let MAX_TILED_WINS_FOR_RESIZING=4;
 let win_num = 0;
-let icon_num = 0;
-let VERNUM=1;
 let OVERLAY_MS = 1500;
 let SWITCHER_OFF_DELAY_MS = OVERLAY_MS;
 let WIN_TRANS_SECS="0.25s";
 let TASKBAR_TRANS_SECS = 0.125;
 
-let MS_BETWEEN_BIG_FOLDER_BATCHES = 0;
-let BIG_FOLDER_BATCH_SIZE = 1000;
-let MAX_FILE_SIZE = 1024*1024;
 let SHOW_TASKBAR_DELAY_MS = 400;
 let num_win_cycles = 0;
 const RS_TIMEOUT = 300;
 let rs_timer = null;
 let taskbar_timer;
 let alt_tab_presses = 1;
+
+//let icon_num = 0;
+//let num_tiled_wins;
+//let VERNUM=1;
+//let MS_BETWEEN_BIG_FOLDER_BATCHES = 0;
+//let BIG_FOLDER_BATCH_SIZE = 1000;
+//let MAX_FILE_SIZE = 1024*1024;
+//let MAX_TILED_WINS_FOR_RESIZING=4;
 
 //»
 //DOM Elements/Objects/Arrays«
@@ -1513,14 +1494,15 @@ const READ_ONLY_TEXT = "\xa1\xa0Read\xa0Only\xa0!";
 const ADMIN_MODE_TEXT = "\xa1\xa0Admin\xa0Mode\xa0!";
 const RE_SP_PL = / +/,
 	RE_SP_G = / /g;
+
 //»
 //JS Objects«
 //let desk_menu;
 const api={};
 Desk.api=api;
 //let win_overflow={t:0,b:1,l:1,r:1};
+let win_overflow={top:0,bottom:1,left:0,right:0};
 //let win_overflow={top:0,bottom:0,left:0,right:0};
-let win_overflow={top:0,bottom:0,left:0,right:0};
 
 //»
 //Style/CSS Values«
@@ -1536,6 +1518,9 @@ align-items:center;
 border:2px solid transparent;
 text-align:center;
 `;
+
+let DEF_LABEL_MAX_HGT = 17;
+let SHOW_LABEL_MAX_HGT = 100;
 
 let DEF_NEW_WIN_X = 15;
 let DEF_NEW_WIN_Y = 15;
@@ -1696,10 +1681,19 @@ Object.defineProperty(this,"WINS",{get:()=>windows});
 //Menu«
 
 const open_home_folder=()=>{open_file_by_path(globals.user.home_path);};
-const open_terminal = () => {
+const open_terminal = (if_dev) => {
 	open_app(TERMINAL_APP, {force: true});
 };
 const open_help=()=>{open_app("Help");}
+const make_popup_link = href =>{//«
+	let sp = make("span");
+	let a = make('a');
+	a.href = href;
+	a.innerHTML="Direct link (opens in new window)";
+	sp._add(a);
+	sp.onclick = () => {Desk.CPR && Desk.CPR.ok_button.click();};
+	return sp;
+};//»
 
 const DESK_CONTEXT_MENU=[
 	"New",[
@@ -1717,10 +1711,14 @@ const DESK_CONTEXT_MENU=[
 		}
 	],
 	"Import...", () => {
+//WHDJFKG
 		let inp = make('input');
 		inp.type="file";
-		inp.oninput=function(e){ save_dropped_files(inp.files, desk); }
-		popup(inp, {title: "Inport a file..."});
+		inp.onclick = ()=>{Desk.CPR && Desk.CPR.ok_button.click();};
+		inp.oninput=function(e){ 
+			save_dropped_files(inp.files, desk); 
+		}
+		popup(inp, {oktxt: "CANCEL", title: "Inport a file..."});
 	},
 	"Explorer::Alt+e",open_home_folder,
 	"Terminal::Alt+t", open_terminal,
@@ -1728,10 +1726,12 @@ const DESK_CONTEXT_MENU=[
 	"Help", open_help,
 	"Links",[
 		"Github\xa0Repo",()=>{
-			popok('<a href="https://github.com/linuxontheweb/linuxontheweb.github.io">Direct link</a> (opens in new window)',{title:"LOTW Github repo"});
+			let sp = make_popup_link("https://github.com/linuxontheweb/linuxontheweb.github.io");
+			popup(sp ,{oktxt: "CANCEL", title:"LOTW Github repo"});
 		},
 		"Chatroom",()=>{
-			popok('<a href="https://app.gitter.im/#/room/#linuxontheweb_community:gitter.im">Direct link</a> (opens in new window)',{title:"LOTW Chatroom"});
+			let sp = make_popup_link("https://app.gitter.im/#/room/#linuxontheweb_community:gitter.im");
+			popup(sp ,{oktxt: "CANCEL", title:"LOTW Chatroom"});
 		}
 	]
 //"XMark\xa0Test __XMARK__",()=>{log(12345)},
@@ -1743,8 +1743,16 @@ const DESK_CONTEXT_MENU=[
 //Desktop«
 
 const fit_desktop = ()=>{//«
+
 	let _h = winh(true)+1;
 	let _w = winw()+1;
+
+// For any windows whose left or top edges are offscreen, get them to "peek out" by 50px
+	for (let w of get_active_windows()){
+		if (w.x > _w) w.x = _w - 50;
+		if (w.y > _h) w.y = _h - 50;
+	}
+
 	let str = `${_w} ${_h}`;
 	desk._w= _w;
 	desk._h = _h;
@@ -1917,6 +1925,7 @@ return;
 				let dx = x + elm.offsetWidth - winw();
 				if (dx > 0 && !win_overflow.right) {
 					x -= dx;
+//					if (x < 0) x = 0;
 					DDX+=dx;
 				}
 			}
@@ -1925,7 +1934,10 @@ return;
 			} 
 			else {
 				let dy = y + elm.offsetHeight - winh();
-				if (dy > 0 && !win_overflow.bottom) y -= dy;
+				if (dy > 0 && !win_overflow.bottom) {
+					y -= dy;
+					if (y < 0) y = 0;
+				}
 			}
 			elm._loc(x, y);
 			if (CDW.moveDiv) CDW.moveDiv.update();
@@ -2098,12 +2110,12 @@ drag_timeout = setTimeout(()=>{
 		}
 		icon_array_off(2);
 		if (e.button===0) DDIE = e;
-//		desk.area.focus();
 		CDICN = null;
 	};//»
 	desk.onclick = e => {//«
 		taskbar.switcherOff();
 		if (!windows_showing) toggle_show_windows();
+		if (workspace.layoutMode) toggle_layout_mode();
 		if (desk.dblclick) delete desk.dblclick;
 	};//»
 	desk.ondblclick = e => {//«
@@ -2165,7 +2177,7 @@ drag_timeout = setTimeout(()=>{
 	desk.ondragover = async e => {//«
 //log("desk over");
 	};//»
-
+desk.onfocus=e=>{desk.blur();};
 };
 //»
 const make_desktop = () => {//«
@@ -2317,22 +2329,19 @@ return;
 		}//»
 	}//»
 	if (CWIN.isLayout || CWIN.isMinimized || CWIN.killed) return;
-	if (CWIN.pointSelectMode===true){
-		e.preventDefault();
-		CWIN.handlePointSelect(kstr);
+	if (CWIN.isBusy) {
 		return;
 	}
-
 	if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
 }//»
 keyUp(e){//«
 	if (!CWIN) return;
-	if (CWIN.pointSelectMode===true) return;
+	if (CWIN.isBusy) return;
 	if (CWIN.app.onkeyup) CWIN.app.onkeyup(e, evt2Sym(e));
 }//»
 keyPress(e){//«
 	if (!CWIN) return;
-	if (CWIN.pointSelectMode===true) return;
+	if (CWIN.isBusy) return;
 	let code = e.charCode;
 	if (code >= 32 && code <= 126 && CWIN.app.onkeypress) CWIN.app.onkeypress(e);
 }//»
@@ -2422,9 +2431,9 @@ api.switchToWorkspace = switch_to_workspace;
 
 class Window {//«
 
-//#rect;
+#isBusy;
 constructor(arg){//«
-
+	this.#isBusy = false;
 	this.allowClose = true;
 	this.allowMove = true;
 	this.allowResize = true;
@@ -2495,10 +2504,19 @@ resize(){//«
 	this.statusBar.resize();
 	this.app.onresize();
 	if (this.moveDiv) this.moveDiv.update();
-	if (this.pointSelectMode===true) this.pointSelectResize();
+	if (this.isFolder && CWIN === this) {
+//	if (this.isFolder){
+		let cur = this.cursor;
+		let icn = this.Main.lasticon;
+		if (!icn) return;
+		icn.iconElem.scrollIntoViewIfNeeded();
+		cur.curElem._loc(icn.iconElem.offsetLeft+globals.css.CUR_FOLDER_XOFF, icn.iconElem.offsetTop+globals.css.CUR_FOLDER_XOFF);
+		check_html_of_cursor_icon(icn.iconElem);
+	}
 }//»
 sbcr(){this._rect=this.winElem.getBoundingClientRect();}
 gbcr(){return this._rect;}
+toggleBusy(){this.#isBusy = !this.isBusy;}
 checkProp(which){//«
 	let workspace = workspaces[this.workspaceNum];
 	if (workspace.allowNone){
@@ -2722,7 +2740,7 @@ makeDOMElem(arg){//«
 	min.innerText="\u{2b07}"; //Solid down arrow
 	min.style.lineHeight="135%";
 	min.title="Minimize";
-	min.onclick=()=>{
+	const min_click = (if_instant) => {
 		if (!this.checkProp("Minimize")) return;
 		if (this.isFullscreen) {
 			if (this!==CWIN) {
@@ -2733,7 +2751,13 @@ cwarn("this!==CWIN ????");
 		}
 		if (this.isMinimized) return;
 		if (ICONS.length && ICONS[0].parWin==this) icon_array_off();
-		taskbar.addwin(this);
+		taskbar.addwin(this, if_instant);
+	}
+	min._autoMin=()=>{
+		min_click(true);
+	};
+	min.onclick=()=>{
+		min_click();
 	};
 //»
 //Button event listeners«
@@ -2887,6 +2911,8 @@ addDOMListeners(){//«
 		main.onmousedown=e=>{//«
 			e.stopPropagation();
 			icon_array_off(20);
+//YRKSHMG
+//			if (CUR.ison()) toggle_cursor();
 			if (e.clientX < win.offsetLeft + main.clientWidth + winx() && e.clientY < win.offsetTop + main.clientHeight + this.titleBar._h + winy()) {
 				this.on();
 				WDIE = e;
@@ -3103,7 +3129,6 @@ setWinArgs(args){//«
 				switch_win_to_workspace(this, current_workspace_num);
 				for (let chwin of this.childWins){
 					switch_win_to_workspace(chwin, i);
-//					chwin.on();
 					chwin.winElem._dis="block";
 				}
 			}
@@ -3115,6 +3140,9 @@ setWinArgs(args){//«
 				desk.lastcurpos = CUR.getpos();
 			}
 			this.main.focus();
+			if (document.activeElement !== this.main){
+				setTimeout(()=>{this.main.focus();}, 50);
+			}
 			CUR.iconDiv = this.main.iconDiv;
 			CUR.main = this.main;
 			this.main._add(CUR.curElem);
@@ -3150,6 +3178,7 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 	//»
 	off(){//«
 		if (this.isFolder) {
+			CUR.todesk();
 			delete this.cursor;
 			this.cursor = null;
 		}
@@ -3212,19 +3241,22 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		if (win._x < 0) {
 			if (!win_overflow.left) win._x= 0;
 			else if (win._x + w < 0) win._x += 2 * win_move_inc;
-		} else if (win._x + w > winw()) {
+		} 
+		else if (win._x + w > winw()) {
 			if (!win_overflow.right) win._x= winw() - w;
 			else if (win._x > winw()) win._x -= 2 * win_move_inc;
 		}
 		if (win._y < miny) {
 			if (!win_overflow.top) win._y= miny;
 			else if (win._y + h < 0) win._y += 2 * win_move_inc;
-		} else if (win._y > miny && win._y + h > winh()) {
+		} 
+		else if (win._y > miny && win._y + h > winh()) {
 			if (!win_overflow.bottom) {
 				let usey = winh() - h;
 				if (usey < miny) usey = miny;
 				win._y= usey;
-			} else if (win._y > winh()) win._y -= 2 * win_move_inc;
+			} 
+			else if (win._y > winh()) win._y -= 2 * win_move_inc;
 		}
 	}//»
 	checkSize(){//«
@@ -3358,6 +3390,7 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		}
 	};//»
 	minimize(){this.minButton.click();};
+	iconsOff(){if (this.isFolder) icon_array_off();}
 	doClose(){//«
 		if (!this.checkProp("Close")) return;
 		if (this.isMinimized) this.unminimize(true);
@@ -3583,17 +3616,22 @@ ICONS = OK;
 		return ret;
 	};//»
 async reload(opts={}){//«
-	if (this.pointSelectMode) this.stopPointSelect();
-
+	if (this.isFolder) icon_array_off();
 	let {app, appName, main} = this;
 	if (this.killed){
 		poperr("This window has been killed");
 		return;
 	}
-//	if (app.actor && app.actor.ondevreload) return app.actor.ondevreload();
-//	if (app.ondevreload) return await app.ondevreload();
-//HGLAURJF
-	if (!opts.appOnly && app.onreload) return await app.onreload();
+// opts.appOnly forces a reload the application window itself, regardless
+// of the existence of any onreload methods
+	if (!opts.appOnly) {
+/*An app's "actor" is any submode that usually grabs the entire window area,
+like vim or less in the terminal.
+*/
+		if (app.actor && app.actor.onreload) return await app.actor.onreload();
+// If an app has any ideas of what the system's reload hotkey should do....
+		if (app.onreload) return await app.onreload();
+	}
 	if (appName.match(/^local\./)&&!opts.dataUrl){
 		return popup("'local' (development) applications cannot be independently reloaded!");
 	}
@@ -3608,9 +3646,8 @@ cwarn(`No script found for app: ${appName}`);
 	}
 	delete LOTW.apps[appName];
 	if (app.onkill) await app.onkill(true);
-//	app.onkill&&app.onkill(true);
 	let arg = this.arg;
-	arg.appArgs = {reInit: app.reInit};
+	arg.appArgs = {reInit: opts.reInit || app.reInit};
 	arg.noShow = opts.noShow;
 	arg.dataUrl = opts.dataUrl;
 	main.innerHTML="";
@@ -3635,7 +3672,7 @@ return new Promise((Y,N)=>{
 	let str, marr;
 	let script_path;
 //»
-	const barferror = e => {//«
+	const DIE = e => {//«
 //		this.killed = true;
 		mainwin._pad= 10;
 		mainwin._bgcol= "#000";
@@ -3648,7 +3685,7 @@ return new Promise((Y,N)=>{
 		if (!no_show) this.on();
 		cb(this);
 	};//»
-	this._fatal = barferror;
+	this._fatal = DIE;
 	const loadit = async() => {//«
 		this.setDefs();
 		if (!no_show) {
@@ -3656,6 +3693,7 @@ return new Promise((Y,N)=>{
 			this.statusBar.resize();
 			this.on();
 		}
+		if (workspace.layoutMode) this.setLayout(true);
 		if (winapp===FOLDER_APP) this.app.onappinit(arg.fullPath, arg.prevPaths);
 		else if (arg.appArgs) this.app.onappinit(arg.appArgs);
 		cb(this);
@@ -3667,21 +3705,24 @@ cwarn(`Using app: '${winapp}'`);
 				this.app = new NS.apps[winapp](this, Desk);
 			}
 			else {
-				const { app } = await import(script_path);
-				NS.apps[winapp] = app;
+//				const { app } = await import(script_path);
+				if (!await loadApp(winapp)) DIE("Load Failed #1");
+				let app = LOTW.apps[winapp];
+			 	if (!app) DIE("Load failed #2");
+//				NS.apps[winapp] = app;
 				this.app = new app(this, Desk);
 			}
 			this.app.arg = arg;
 			loadit();
 		} catch (e) {
-			barferror(e);
+			DIE(e);
 		}
 	};//»
 	const make_it = async () => {//«
 		let scr = make('script');
 		scr.onload = load_cb;
 		scr.onerror = e => {
-			barferror(e);
+			DIE(e);
 		};
 		if (data_url) script_path = data_url;
 		else {
@@ -3715,82 +3756,6 @@ cwarn(`Using app: '${winapp}'`);
 
 }//»
 
-selectPoint(opts={}){/* « */
-return new Promise((Y,N)=>{
-
-//const baseDiv = document.getElementById('baseDiv');
-//const getPoint = new GetPoint(baseDiv);
-//Put the keys into dokeydown just before feeding into the app window.
-//Do not call keypress or keyup if pointSelectMode == true
-
-const{main}=this;
-let div = mkdv();
-div._pos="absolute";
-div._w = main.clientWidth;
-div._h = main.clientHeight;
-div._x=0;
-log(main.scrollTop);
-div._y=main.scrollTop;
-div._z=9999999;
-main._add(div);
-this.pointSelectResize=()=>{
-	div._w = main.clientWidth;
-	div._h = main.clientHeight;
-};
-this.pointSelect = new GetPoint(div);
-this.pointSelectMode = true;
-this.pointSelectDiv = div;
-this.pointSelectCb=Y;
-this.pointSelectOpts=opts;
-
-});
-
-}/* » */
-handlePointSelect(kstr){/* « */
-
-const getPoint = this.pointSelect;
-switch (kstr){
-case 'w_': case 'e_': case 'd_': case 'c_': case 'x_': case 'z_': case 'a_': case 'q_': case 's_':
-getPoint.onKey(event.key);
-break;
-case 'UP_':
-getPoint.onUp();
-break;
-case 'DOWN_':
-getPoint.onDown();
-break;
-case 'LEFT_':
-getPoint.onLeft();
-break;
-case 'RIGHT_':
-getPoint.onRight();
-break;
-case 'ENTER_':
-this.pointSelectCb(getPoint.onSelect(!this.pointSelectOpts.isRelative));
-this.stopPointSelect();
-break;
-
-//case 'ESC_':
-//handled @BSHDKFLG
-//This returns false if we are at the top level, so we can just cancel this mode
-//by calling CWIN.stopPointSelect() in our escape handler
-//getPoint.onEscape();
-//break;
-}
-}/* » */
-stopPointSelect(){/* « */
-	this.pointSelectCb(null);
-
-	this.pointSelectMode = false;
-	this.pointSelectDiv._del();
-	delete this.pointSelectResize;
-	delete this.pointSelectDiv;
-	delete this.pointSelect;
-	delete this.pointSelectCb;
-	delete this.pointSelectOpts;
-
-
-}/* » */
 mkOverlay(){//«
 	this.overlay = mkOverlay({id: this.id});
 	this.maxOverlayLength=42;
@@ -3813,9 +3778,11 @@ doOverlay(strarg){//«
 	}, 1500);
 }
 //»
+
 //»
 
 //«Properties
+get isBusy(){return this.#isBusy;}
 set bort(val){this.winElem.style.borderTop = val;}
 set borb(val){this.winElem.style.borderBottom = val;}
 set borl(val){this.winElem.style.borderLeft = val;}
@@ -3824,36 +3791,33 @@ set bor(val){this.winElem.style.border = val;}
 get rect(){return this._rect;}
 get x(){return parseInt(this.winElem.style.left);}
 get y(){return parseInt(this.winElem.style.top);}
-
-set x(val){
+set x(val){//«
 	if(Number.isFinite)val=`${val}px`;
 	this.winElem.style.left=val;
 	this._rect=this.winElem.getBoundingClientRect();
-}
-set y(val){
+}//»
+set y(val){//«
 	if(Number.isFinite)val=`${val}px`;
 	this.winElem.style.top=val;
 	this._rect=this.winElem.getBoundingClientRect();
-}
-
-set l(val){
+}//»
+set l(val){//«
 	let diff = this._rect.left - parseInt(val);
 	this.Main._w += diff;
 	this.winElem._x = val;
 	this._rect=this.winElem.getBoundingClientRect();
-}
-
+}//»
 get w(){return this._rect.width;}
 get h(){return this._rect.height;}
-set w(val){
+set w(val){//«
 	let per;
 	if (per = getStrPer(val)){
 		this.Main._w = winw() * per;
 	}
 	else this.Main._w += parseInt(val) - this._rect.width;
 	this._rect=this.winElem.getBoundingClientRect();
-}
-set h(val){
+}//»
+set h(val){//«
 //Chrome size
 	let per;
 	if (per = getStrPer(val)){
@@ -3862,19 +3826,17 @@ set h(val){
 	}
 	else this.Main._h += parseInt(val) - this._rect.height;
 	this._rect=this.winElem.getBoundingClientRect();
-}
-
+}//»
 get r(){return this._rect.right;}
-set r(val){
+set r(val){//«
 	this.Main._w += parseInt(val) - this._rect.right;
 	this._rect=this.winElem.getBoundingClientRect();
-}
+}//»
 get b(){return this._rect.bottom;}
-set b(val){
+set b(val){//«
 	this.Main._h += parseInt(val) - this.gbcr().bottom;
 	this._rect=this.winElem.getBoundingClientRect();
-}
-
+}//»
 get fullpath(){//«
 	if (!this.name) {
 //cwarn("This window has no name!!!");
@@ -3889,6 +3851,7 @@ set title(arg){//«
 	this.nameSpan.innerText = arg;
 	if (this.isMinimized) this.minTitle.innerText = arg
 }//»
+
 //»
 
 }//»
@@ -3941,10 +3904,6 @@ const get_active_windows = () => {//«
 	let wins = [];
 	for (let i = 0; i < windows.length; i++) {
 		let w = windows[i];
-//		if (w.killed) {
-//			windows.splice(i, 1);
-//			i--;
-//		} else if (!w.isMinimized) wins.push(w);
 		if (!w.isMinimized) wins.push(w);
 	}
 	return wins;
@@ -3963,6 +3922,12 @@ const clear_drag_resize_win=()=>{//«
 		CDW = null;
 	}
 };//»
+const minimize_all_windows=()=>{//«
+	let wins = get_active_windows();
+	for (let w of wins){
+		if (!w.isMinimized) w.minButton._autoMin();
+	}
+};//»
 // const tile_windows ???
 const toggle_show_windows = (if_no_current) => {//«
 	let wins = get_active_windows();
@@ -3976,10 +3941,8 @@ const toggle_show_windows = (if_no_current) => {//«
 		}
 		CWIN && CWIN.off();
 		CWIN = null;
-		CUR.todesk();
-//if (workspace.tilingMode)tiling_underlay.off();
-
-	} else {
+	} 
+	else {
 		windows_showing = true;
 		CWIN && CWIN.off();
 		for (let i = 0; i < wins.length; i++) {
@@ -3995,10 +3958,7 @@ const toggle_show_windows = (if_no_current) => {//«
 			}
 		}
 		if (!CWIN && !if_no_current) top_win_on();
-//if (workspace.tilingMode) tiling_underlay.on();
-
 	}
-//	Desk.update_windows_showing();
 	return true;
 }//»
 const toggle_layout_mode = () => {//«
@@ -4302,7 +4262,8 @@ log(usewin.ownedBy);
 	return false;
 };//»
 const check_win_is_dirty=(winarg)=>{//«
-if (winarg.app && winarg.app.is_dirty){
+//if (winarg.app && winarg.app.is_dirty){
+if (winarg.app && winarg.app.isDirty){
 popup("The window is 'dirty'!");
 return true;
 }
@@ -4319,19 +4280,6 @@ const get_all_windows=()=>{//«
 		wins.push(...wspace.windows);
 	}
 	return wins;
-};//»
-
-const select_point_from_window=async()=>{//«
-if (!CWIN){
-cwarn("WHAT THE HELLLLL NO CWINNNNN!?!?!?");
-return;
-}
-let rv = await CWIN.selectPoint();
-if (rv) {
-	rv.time = new Date().getTime();
-	CWIN.lastSelectedPoint = rv;
-log(rv);
-}
 };//»
 
 //»
@@ -4507,7 +4455,6 @@ const placeInIconSlot = (icn, opts={}) => {//«
 
 //If you want the overflowing icon names to be left justified rather than centered, uncomment below.
 //if (icn.label.clientHeight > 20) icn.label._ta = "left";
-
 		if (!pos) {
 //			let s = localStorage[FS_PREF+":"+icn.fullpath()];
 			let s = localStorage[FS_PREF+":"+icn.fullpath];
@@ -4517,7 +4464,7 @@ const placeInIconSlot = (icn, opts={}) => {//«
 				let row = parseInt(parr[1]);
 				let i = col + (row * DESK_GRID_W);
 				let dosave = false;
-				if (isNaN(i)||arr[i]){
+				if (isNaN(i)|| i < 0 || arr[i]){
 					i=0;
 					dosave=true;
 					for (let j = i+1; ;j++){
@@ -4671,8 +4618,16 @@ setLabelName(){//«
 	if (s.length > MAX_ICON_NAME_LEN) s = s.slice(0, MAX_ICON_NAME_LEN)+"...";
 	this.nameSpan.innerText = s.replace(/-/g, "\u{2011}");
 };//»
-showLabelName(){this.label._over="";}
-hideLabelName(){this.label._over="hidden";}
+showLabelName(){//«
+	this.label._over="";
+	if (!this.isOn) this.label._tcol="#fff";;
+	this.iconElem._z = MIN_WIN_Z - 1;
+}//»
+hideLabelName(){//«
+	this.label._over="hidden";
+	if (!this.isOn) this.label._tcol="";;
+	this.iconElem._z = ICON_Z;
+}//»
 addDOMListeners(){//«
 
 let {wrapper, iconElem: iconelm, ref, node} = this;
@@ -4901,7 +4856,7 @@ makeDOMElem(){//«
 	this.iconElem = d;
 	d.iconElem = d;
 	d.icon = this;
-	d.innerHTML=`<span class="iconw" style="text-align:center;min-width:48px;border:1px dotted #aaa;display:inline-block;position:relative;overflow:hidden;"></span><div class="iconl" style="max-height:17px;text-align:center;overflow-wrap:break-word;width:90px;font-size:16px;background-color:#000;padding:1.5px;"><div class="iconn" style="background-color:#000;"></div></div>`;
+	d.innerHTML=`<span class="iconw" style="text-align:center;min-width:48px;border:1px dotted #aaa;display:inline-block;position:relative;overflow:hidden;"></span><div class="iconl" style="max-height:${DEF_LABEL_MAX_HGT}px;text-align:center;overflow-wrap:break-word;width:90px;font-size:16px;background-color:#000;padding:1.5px;"><div class="iconn" style="background-color:#000;"></div></div>`;
 
 	let wrapper = d.childNodes[0];
 	this.wrapper = wrapper;
@@ -4909,9 +4864,12 @@ makeDOMElem(){//«
 	wrapper.iconElem=d;
 
 	let label = d.childNodes[1];
+//	label._bgcol = "#000";
+//log(label);
 	label._over="hidden";
 	label.iconElem = d;
 	label.title = name;
+//	label._z = 100;
 	this.label = label;
 	this.nameSpan = label.childNodes[0];
 
@@ -5118,12 +5076,13 @@ off(do_vacate){//«
 //	icn.iconElem._bor= "2px solid transparent";
 	this.wrapper._bor="";
 	this.iconElem._bgcol="";
-	this.label._bgcol="";
+	this.label._bgcol="#000";
 	this.label._tcol="";
-	this.nameSpan._bgcol="";
+	this.nameSpan._bgcol="#000";
 	this.isOn=false;
 	if (this.parWin!==desk) {
-		if (ICONS.length===1) this.parWin.app.stat(ICONS[0].fullname);
+//		if (ICONS.length===1) this.parWin.app.stat(ICONS[0].fullname);
+		if (ICONS.length===1) {}
 		else this.parWin.app.stat(`${ICONS.length} selected`);
 	}
 }//»
@@ -5144,8 +5103,7 @@ on(do_add){//«
 	}
 	else {
 		iconelm._bgcol= FOLDER_ICON_BG;
-		if (ICONS.length===1) this.parWin.app.stat(this.fullname);
-		else this.parWin.app.stat(`${ICONS.length} selected`);
+		this.parWin.app.stat(`${ICONS.length} selected`);
 	}
 	this.isOn = true;
 }//»
@@ -5199,6 +5157,7 @@ api.Icon = Icon;
 //»
 
 //XKNFIUHJ
+
 const toggle_icon_display = () => {//«
 	if (!dev_mode) return;
 	SHOW_ICONS = !SHOW_ICONS;
@@ -5458,6 +5417,7 @@ return;
 
 for (let icn of ICONS) {//Sanity check«
 //	icon_off(icn);
+//log(icn.label);
 	icn.off();
 	let usename = icn.name;
 	if (icn.ext) usename += "." + icn.ext;
@@ -6076,6 +6036,8 @@ const select_first_visible_folder_icon=(win)=>{//«
 	else if (el.iconElem) icn = el.iconElem;
 	if (isFin(icn.col)&&isFin(icn.row)) CUR.setpos(icn.col, icn.row, icn);
 	else CUR.setpos(0,0,icn);
+	check_html_of_cursor_icon(icn);
+
 };//»
 
 const get_desk_icons=()=>{//«
@@ -6123,18 +6085,13 @@ const save_icon_editing = async() => {//«
 	};//»
 	const doend=async newname => {//«
 		let oldpath = `${parpath}/${holdname}`;
-		let oldname;
 		let oldext;
 		let newnameext;
 		let newpath;
 		if (CEDICN._namearea) CEDICN._namearea._del();
 		if (CEDICN.appName !== FOLDER_APP) {
 			let nameext = getNameExt(holdname);
- 			oldname = nameext[0];
 			oldext = nameext[1];
-		}
-		else{
-			oldname = holdname;
 		}
 
 		if (newname){
@@ -6142,8 +6099,6 @@ const save_icon_editing = async() => {//«
 			if (oldext) newnameext=`${newname}.${oldext}`;
 			newpath = `${parpath}/${newnameext}`;
 		}
-
-//		CEDICN.setLabelName();
 		CEDICN.dblclick = null;
 		if (CEDICN._savetext||CEDICN._savetext==="") {
 			let rv = await fsapi.writeFile(newpath, CEDICN._savetext, {noMakeIcon: true });
@@ -6157,7 +6112,8 @@ const save_icon_editing = async() => {//«
 			CEDICN.setWindowName();
 			CEDICN.updateDOMElement();
 		}
-
+		else CEDICN.setLabelName();
+		
 		if (CEDICN._editcb) {
 			CEDICN._editcb(CEDICN);
 			CEDICN._editcb = null;
@@ -6195,12 +6151,12 @@ const save_icon_editing = async() => {//«
 	
 	let srcpath = `${parpath}/${holdname}`;
 	let destpath = `${parpath}/${checkit}`;
-//cwarn(`${srcpath} -> ${destpath}`);
 	if (!(!await check_name_exists(checkit, CEDICN.parWin) || (ifnew && (srcpath == destpath)))) {
 		popup(`The name "${checkit}" is already taken... reverting to "${holdname}"`);
 		CEDICN._namearea.value = val;
 		if (ifnew) CEDICN.isnew = true;
 		save_icon_editing();
+//		doend();//No! You need to call save_icon_editing again.
 		return;
 	}
 	if (ifnew){//«
@@ -6556,6 +6512,15 @@ throw new Error("WHAT THE IN THE EVERLIVING CRAP IS THIS?????");
 	else idiv.insertBefore(icn.iconElem, kids[0]);
 	icn.parWin = win;
 };//»
+const check_html_of_cursor_icon = icn =>{//«
+	if (!icn.innerHTML){
+		setTimeout(()=>{
+			if (CUR.geticon() !== icn.icon) return;
+			icn.icon.showLabelName();
+		}, 100);
+	}
+	else icn.icon.showLabelName();
+};//»
 
 //»
 //Taskbar«
@@ -6777,7 +6742,7 @@ toggleExpertMode(){//«
 	}
 	show_overlay(`Expert mode is ${taskbar_expert_mode?"on":"off"}`);
 }//»
-addwin(w){//«
+addwin(w, if_instant){//«
 	const dounmin=(if_instant)=>{//«
 		w.winElem._dis="";
 		let rect = d._gbcr();
@@ -6819,6 +6784,7 @@ addwin(w){//«
 	const{minWinBarElem: mwb} = this;
 	let max_wid = "300px";
 
+if (!if_instant){
 	let rect = w.winElem._gbcr();
 	let t = mkdv();
 	t._pos="fixed";
@@ -6839,8 +6805,8 @@ addwin(w){//«
 		t._loc(x, winh());
 		t._w=wid;
 	});
-
 	desk._add(t);
+}
 
 	w.winElem._dis="none";
 	w.isMinimized=true;
@@ -6849,7 +6815,7 @@ addwin(w){//«
 	w.winElem._z= MIN_WIN_Z;
 	let d = mkdv();
 	d.style.flexShrink=1;
-	d._op=0;
+	d._op = if_instant ? 1 : 0;
 	d.style.flexBasis=max_wid;
 	d._padt=d._padb=1;
 	d._padl=d._padr=5;
@@ -7116,7 +7082,6 @@ cerr(e.message);
 	return open_app(which, {winArgs: icn.winArgs, appArgs: obj.args, icon: icn});
 }//»
 const open_file_by_path = async(patharg, opt={}) => {//«
-//const open_file_by_path = async(patharg, cb, opt={}) => {
 	const err = (str) => {
 		poperr(str);
 	};
@@ -7213,6 +7178,32 @@ this.isdesk=()=>{return (curElem.parentNode===desk);};
 this.xoff=()=>{return (curElem.parentNode===desk)?desk_grid_start_x:folder_grid_start_x;};
 this.yoff=()=>{return (curElem.parentNode===desk)?desk_grid_start_y:folder_grid_start_y;};
 this.getpos=()=>{return {X:(curElem._x-CUR.xoff())/IGSX, Y:(curElem._y-CUR.yoff())/IGSY};};
+this.geticon = (fromwhere) => {//«
+	let icn;
+	if (!this.ison()) return null;
+	let rect = curElem.getBoundingClientRect();
+	let elems = document.elementsFromPoint((rect.left+rect.right)/2,(rect.top+rect.bottom)/2);
+	let e0=elems[0];
+	if (e0===CUR||e0===CG) e0=elems[1];
+	if(!e0) return null;
+//FBVDGHJ
+	if (e0.iconElem) icn = e0.iconElem.icon;
+	else if (e0.className=="icon") icn = e0.icon;
+	else if(e0.parentNode&&e0.parentNode.className=="icon") icn = e0.parentNode.icon;
+	if (icn){
+		if (fromwhere && icn.iconElem.parentNode !== fromwhere) return;
+		return icn;
+	}
+	let e1=elems[1];
+	if(!e1) return null;
+	if (e1.className=="icon") icn = e1.icon;
+	else if(e1.parentNode&&e1.parentNode.className=="icon") icn = e1.parentNode.icon;
+	if (icn){
+		if (fromwhere && icn.iconElem.parentNode !== fromwhere) return;
+		return icn;
+	}
+	return null;
+};//»
 this.on=(is_tog)=>{//«
 	if (is_tog) cur_showing = true;
 	else if (!cur_showing) return;
@@ -7222,19 +7213,19 @@ this.on=(is_tog)=>{//«
 		let pos = desk.lastcurpos;
 		if (pos) return this.setpos(pos.X, pos.Y, null, is_tog);
 	}
-	this.set(4);
 	curElem.scrollIntoViewIfNeeded();
+	this.set(4);
 };//»
 this.off=(is_tog)=>{//«
 
 	if (is_tog) cur_showing = false;
 	else if (cur_showing) return;
-	if (this.isdesk()){
-		let icn = this.geticon(desk);
-		if (icn) icn.hideLabelName();
-	}
+	let icn = this.geticon();
+	if (icn) icn.hideLabelName();
 	curElem._op=0;
 	curElem._dis="none";
+
+//	if (!this.isdesk()) delete this.main.lasticon;
 
 };//»
 this.setpos=(X,Y,icn, is_tog)=>{//«
@@ -7266,7 +7257,7 @@ this.set = (which)=>{//«
 		let got = this.main.lasticon;
 		if (got && got.parWin == this.main.top) {
 			curElem._loc(got.iconElem.offsetLeft+CUR_FOLDER_XOFF,got.iconElem.offsetTop+CUR_FOLDER_YOFF);
-			if (CWIN) CWIN.app.stat(got.fullname);
+			check_html_of_cursor_icon(got.iconElem);
 		}
 		else {
 			this.main.scrollTop=0;
@@ -7274,7 +7265,9 @@ this.set = (which)=>{//«
 			curElem._y=CUR_FOLDER_YOFF;
 			setTimeout(()=>{
 				let got = this.geticon();
-				if (got&&CWIN) CWIN.app.stat(got.fullname);
+				if (got&&CWIN) {
+					got.showLabelName();
+				}
 			},50);
 		}
 	}
@@ -7296,6 +7289,8 @@ this.todesk=()=>{//«
 		this.vizCheck();
 		return this.on();
 	}
+	let got = this.geticon();
+	if (got) got.hideLabelName();
 	desk._add(curElem);
 	let pos = desk.lastcurpos;
 	if (pos) this.setpos(pos.X, pos.Y);
@@ -7307,7 +7302,8 @@ this.right=(if_ctrl)=>{//«
 	if (if_ctrl) this.select(true);
 	if (this.isdesk()){
 		if (!SHOW_ICONS) return;
-		if (desk_grid_start_x+(IGSX*(_x+2)) < winw()) _x++;
+//		if (desk_grid_start_x+(IGSX*(_x+2)) < winw()) _x++;
+		if (desk_grid_start_x+(IGSX*(_x+2)) < desk.scrollWidth) _x++;
 		else {
 			if (this.yoff()+(IGSY*(_y+2)) < winh()) {
 				_x=0;
@@ -7326,7 +7322,10 @@ this.right=(if_ctrl)=>{//«
 		if (!num) return;
 		next = this.iconDiv.childNodes[0];
 	}
-	else next = icn.iconElem.nextSibling;
+	else { 
+		icn.hideLabelName();
+		next = icn.iconElem.nextSibling;
+	}
 	if (!next) {
 		delete this.main.lasticon;
 		this.set();
@@ -7336,13 +7335,73 @@ this.right=(if_ctrl)=>{//«
 	let ypos = next.offsetTop;
 	this.main.lasticon = next.icon;
 	curElem._loc(xpos+CUR_FOLDER_XOFF,ypos+CUR_FOLDER_YOFF);
-	if (CWIN) {
-		if (!(next.icon&&next.icon.fullname)){
-			setTimeout(()=>{
-				if (next.icon) CWIN.app.stat(next.icon.fullname);
-			},10);
+//CIWORJDL
+	check_html_of_cursor_icon(next);
+/*«
+	if (!next.icon.iconElem.innerHTML){
+		setTimeout(()=>{
+			if (this.geticon() !== next.icon) return;
+			next.icon.showLabelName();
+		}, 100);
+	}
+	else {
+		next.icon.showLabelName();
+	}
+»*/
+};//»
+this.down=if_ctrl=>{//«
+	let {X:_x,Y:_y}=this.getpos();
+	if (if_ctrl) this.select(true);
+	if (this.isdesk()) {
+		if (!SHOW_ICONS) return;
+//CRYTIKGN
+		if (desk_grid_start_y+(IGSY*(_y+1.5)) < desk.scrollHeight) {
+			_y++;
 		}
-		else if (next.icon) CWIN.app.stat(next.icon.fullname);
+		else{
+			_y=0;
+			if (_x==DESK_GRID_W) _x=0;
+		}
+		this.setpos(_x,_y);
+		return;
+	}
+	let icn = this.geticon();
+	if (!icn) {
+		this.right();
+		return;
+	}
+
+	if (curElem._y + curElem._h + 10 > this.main.scrollHeight) return;
+
+	icn.hideLabelName();
+	const doit=()=>{//«
+		let rect = icn.iconElem._gbcr();
+		let elem = document.elementFromPoint(5+rect.left, 5+IGSY+rect.top);
+		if (!elem) {
+			return;
+		}
+		if ((elem.className==="icon"||elem.className=="emptyicon") && elem.parentNode===icn.iconElem.parentNode){
+			curElem._loc(elem.offsetLeft+CUR_FOLDER_XOFF, elem.offsetTop+CUR_FOLDER_YOFF);
+			curElem.scrollIntoViewIfNeeded();
+			this.main.lasticon = elem.icon;
+			check_html_of_cursor_icon(elem);
+/*«
+			if (!elem.icon.iconElem.innerHTML){
+				setTimeout(()=>{
+					if (this.geticon() !== elem.icon) {
+						return;
+					}
+					elem.icon.showLabelName();
+				}, 100);
+			}
+			else elem.icon.showLabelName();
+»*/
+			return true;
+		}
+	};//»
+	if (!doit()) {
+		this.main.scrollTop+=IGSY;
+		doit();
 	}
 };//»
 this.left=(if_ctrl)=>{//«
@@ -7370,7 +7429,10 @@ this.left=(if_ctrl)=>{//«
 		if (!num) return;
 		prev = this.iconDiv.childNodes[num-1];
 	}
-	else prev = icn.iconElem.previousSibling;
+	else {
+		icn.hideLabelName();
+		prev = icn.iconElem.previousSibling;
+	}
 	if (!prev) {
 		num = this.iconDiv.childNodes.length;
 		if (num){
@@ -7385,7 +7447,7 @@ this.left=(if_ctrl)=>{//«
 	let ypos = prev.offsetTop;
 	this.main.lasticon = prev.icon;
 	curElem._loc(xpos+CUR_FOLDER_XOFF,ypos+CUR_FOLDER_YOFF);
-	if (CWIN&&prev.icon) CWIN.app.stat(prev.icon.fullname);
+	prev.icon.showLabelName();
 };//»
 this.up=if_ctrl=>{//«
 	if (if_ctrl) this.select(true);
@@ -7394,19 +7456,20 @@ this.up=if_ctrl=>{//«
 		if (!SHOW_ICONS) return;
 		_y--;
 		if (_y<0) {
-			_y = Math.floor((winh()-this.yoff())/IGSY)-1;
+			_y = Math.floor((desk.scrollHeight-this.yoff())/IGSY)-1;
 			if (_x<0) _x = DESK_GRID_W-1;
 		}
 		this.setpos(_x,_y);
 		return;
 	}
 	let icn = this.geticon();
-
 	if (!icn) {
 		this.left();
 		return;
 	}
-	const doit=()=>{
+	if (curElem._y <= CUR_FOLDER_YOFF) return;
+	icn.hideLabelName();
+	const doit=()=>{//«
 		let rect = icn.iconElem._gbcr();
 		let elem = document.elementFromPoint(5+rect.left, rect.top-10);
 		if (!elem) return;
@@ -7415,57 +7478,12 @@ this.up=if_ctrl=>{//«
 			curElem._loc(elem.offsetLeft+CUR_FOLDER_XOFF, elem.offsetTop+CUR_FOLDER_YOFF);
 			curElem.scrollIntoViewIfNeeded();
 			this.main.lasticon = elem.icon;
-			if (CWIN&&elem.icon) CWIN.app.stat(elem.icon.fullname);
+			elem.icon.showLabelName();
 			return true;
 		}
-	}
+	};//»
 	if (!doit()) {
 		this.main.scrollTop-=IGSY;
-		doit();
-	}
-};//»
-this.down=if_ctrl=>{//«
-	let {X:_x,Y:_y}=this.getpos();
-	if (if_ctrl) this.select(true);
-	if (this.isdesk()) {
-		if (!SHOW_ICONS) return;
-		if (desk_grid_start_y+(IGSY*(_y+1.5)) < winh()) {
-			_y++;
-		}
-		else{
-			_y=0;
-//			_x++;
-			if (_x==DESK_GRID_W) _x=0;
-		}
-		this.setpos(_x,_y);
-		return;
-	}
-	let icn = this.geticon();
-	if (!icn) {
-		this.right();
-		return;
-	}
-	const doit=()=>{
-		let rect = icn.iconElem._gbcr();
-		let elem = document.elementFromPoint(5+rect.left, 5+IGSY+rect.top);
-		if (!elem) return;
-		if ((elem.className==="icon"||elem.className=="emptyicon") && elem.parentNode===icn.iconElem.parentNode){
-			curElem._loc(elem.offsetLeft+CUR_FOLDER_XOFF, elem.offsetTop+CUR_FOLDER_YOFF);
-			curElem.scrollIntoViewIfNeeded();
-			this.main.lasticon = elem.icon;
-			if (CWIN) {
-				if (!(elem.icon&&elem.icon.fullname)){
-					setTimeout(()=>{
-						if (elem.icon) CWIN.app.stat(elem.icon.fullname);
-					},10);
-				}
-				else if (elem.icon) CWIN.app.stat(elem.icon.fullname);
-			}
-			return true;
-		}
-	};
-	if (!doit()) {
-		this.main.scrollTop+=IGSY;
 		doit();
 	}
 };//»
@@ -7476,32 +7494,6 @@ this.move=(which, if_ctrl)=>{//«
 	else if (which==="U") this.up(if_ctrl);
 	else if (which==="D") this.down(if_ctrl);
 	if (!this.isdesk()) curElem.scrollIntoViewIfNeeded();
-};//»
-this.geticon = (fromwhere) => {//«
-	let icn;
-	if (!this.ison()) return null;
-	let rect = curElem.getBoundingClientRect();
-	let elems = document.elementsFromPoint((rect.left+rect.right)/2,(rect.top+rect.bottom)/2);
-	let e0=elems[0];
-	if (e0===CUR||e0===CG) e0=elems[1];
-	if(!e0) return null;
-//FBVDGHJ
-	if (e0.iconElem) icn = e0.iconElem.icon;
-	else if (e0.className=="icon") icn = e0.icon;
-	else if(e0.parentNode&&e0.parentNode.className=="icon") icn = e0.parentNode.icon;
-	if (icn){
-		if (fromwhere && icn.iconElem.parentNode !== fromwhere) return;
-		return icn;
-	}
-	let e1=elems[1];
-	if(!e1) return null;
-	if (e1.className=="icon") icn = e1.icon;
-	else if(e1.parentNode&&e1.parentNode.className=="icon") icn = e1.parentNode.icon;
-	if (icn){
-		if (fromwhere && icn.iconElem.parentNode !== fromwhere) return;
-		return icn;
-	}
-	return null;
 };//»
 this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 	if (this.isdesk() && !SHOW_ICONS) return;
@@ -7581,6 +7573,8 @@ const get_desk_context=()=>{//«
 		menu.shift();
 		menu.shift();
 	}
+//WOLUITHN
+//	let apps_arr = globals.APPLICATIONS_MENU; //!!!UH-OHHHH!!! (Nothing there anymore)
 	let apps_arr = APPLICATIONS_MENU;
 	let apps_menu = [];
 	menu.unshift('Applications', apps_menu);
@@ -7742,6 +7736,7 @@ window.onblur=(e)=>{//«
 	}
 };//»
 window.onfocus=(e)=>{//«
+//	if (document.activeElement === desk) desk.blur();
 	for (let w of get_all_windows()){
 		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
 	}
@@ -7828,7 +7823,16 @@ const winh = (if_no_taskbar) => {//«
 	return window.innerHeight - taskbar.taskbarElem.getBoundingClientRect().height;
 }
 this.winh = winh;//»
-const get_desk_grid=()=>{DESK_GRID_W=Math.floor((winw()-desk_grid_start_x)/IGSX);DESK_GRID_H=Math.floor((winh()-desk_grid_start_y)/IGSY);};
+const get_desk_grid=()=>{//«
+	if (desk.scrollWidth && desk.scrollHeight){
+		DESK_GRID_W=Math.floor((desk.scrollWidth-desk_grid_start_x)/IGSX);
+		DESK_GRID_H=Math.floor((desk.scrollHeight-desk_grid_start_y)/IGSY);
+	}
+	else{
+		DESK_GRID_W=Math.floor((winw()-desk_grid_start_x)/IGSX);
+		DESK_GRID_H=Math.floor((winh()-desk_grid_start_y)/IGSY);
+	}
+};//»
 const toggle_cursor = () => {//«
 	if (cur_showing) CUR.off(true);
 	else CUR.on(true);
@@ -7856,7 +7860,11 @@ const make_popup = arg=>{return _make_popup(arg);};
 //»
 //Keyboard«
 
+const ARROW_KEY_SYMS = ["LEFT_","RIGHT_","UP_","DOWN_", ];
+const PAGING_KEY_SYMS = ["PGDOWN_","PGUP_","HOME_","END_",];
+
 const handle_ESC = (if_alt) => {//«
+//	if (document.activeElement === desk) desk.blur();
 	window.getSelection().removeAllRanges();
 	body.style.cursor = "default";
 	desk.style.cursor = "default";
@@ -7871,8 +7879,10 @@ const handle_ESC = (if_alt) => {//«
 	CG.off();
 	if (taskbar.switcherIsOn()) return taskbar.switcherOff();
 	if (ICONS.length) return icon_array_off(17);
-	if (windows.layout_mode) return toggle_layout_mode();
-	if (windows_showing) toggle_show_windows();
+	if (workspace.layoutMode) return toggle_layout_mode();
+	if (windows_showing) return toggle_show_windows();
+	for (let icn of get_desk_icons()) icn.hideLabelName();
+
 };//»
 
 //«Detect if all keys are up
@@ -7887,9 +7897,9 @@ return 0;
 };
 api.allKeysUp=all_keys_up;
 //»
+
 const dokeydown = function(e) {//«
 	KEYS_PRESSED[e.key] = true;
-	const p = ()=>{e.preventDefault();};
 const check_input = ()=>{//«
 	if (cwin && !text_inactive) return true;
 	return false;
@@ -7956,7 +7966,7 @@ const check_input = ()=>{//«
 		s:'D',
 		d:'R'
 	};//»
-	const CUR_KSYMS=["LEFT_","RIGHT_","UP_","DOWN_","LEFT_C","RIGHT_C","UP_C","DOWN_C","ENTER_","ENTER_A","ENTER_CA","ENTER_C","SPACE_"];
+	const CUR_KSYMS=["LEFT_","RIGHT_","UP_","DOWN_","LEFT_C","RIGHT_C","UP_C","DOWN_C","ENTER_","ENTER_A","ENTER_CA","ENTER_C","\x20_"];
 //Var«
 	let marr;
 	let cwin = CWIN;
@@ -8002,7 +8012,10 @@ const check_input = ()=>{//«
 	if (text_inactive && notext_prevdef[kstr]) {
 		e.preventDefault();
 	}
-
+//	if ((CUR.ison() || CWIN) && ARROW_KEY_SYMS.includes(kstr)){
+	if ((CUR.ison() || (CWIN && !CWIN.isFolder)) && ARROW_KEY_SYMS.includes(kstr)){
+		e.preventDefault();
+	}
 //»
 
 //If there is a system prompt, it takes precedence over everything below.
@@ -8044,8 +8057,8 @@ or when there is an active context menu.
 		}
 	}//»
 //Direction keys to navigate the current context menu
-	else if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {//«
-//log(typeof desk_menu.keyHandler);
+	else if (ARROW_KEY_SYMS.includes(kstr)) {//«
+//	else if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {
 		if (Desk.deskMenu) {
 			return Desk.deskMenu.keyHandler(e, kstr);
 		}
@@ -8071,17 +8084,14 @@ or when there is an active context menu.
 			cwin.context_menu.kill();
 			return 
 		}
-//BSHDKFLG
-		if (cwin.pointSelectMode) {
-			if (cwin.pointSelect.onEscape()) {
-cwarn("CAUGHT pointSelect ESCAPE");
-				return;
-			}
-cwarn("ABORT pointSelect");
-			cwin.stopPointSelect(true);
-			return;
+		if (!cwin.isMinimized && cobj){
+/*
+An "actor" is currently just used for full-screen applications 
+that are running in a terminal window, like vim or less.
+*/
+			if (cobj.actor && cobj.actor.onescape && cobj.actor.onescape()) return;
+			if (cobj.onescape && cobj.onescape()) return;
 		}
-		if (!cwin.isMinimized && cobj && cobj.onescape && cobj.onescape()) return;
 		if (cwin.appName==FOLDER_APP && ICONS.length){
 			icon_array_off(12);
 			return;
@@ -8090,7 +8100,8 @@ cwarn("ABORT pointSelect");
 		return;
 	}//»
 //A "soft escape", use on a window means its escape handler is not called
-	else if (kstr==="ESC_A"&&cwin){//«
+	else if (kstr==="\x60_C"&&cwin){//«
+//	else if (kstr==="ESC_A"&&cwin){
 //This is really just useful for folders that need to keep their
 //active icon arrays still active so that icons can be moved to the
 //desktop via the keyboard.
@@ -8101,19 +8112,25 @@ cwarn("ABORT pointSelect");
 
 //Issues with arrow keys (like moving the text carat and highlighting the text)
 //«
+
 	if (cwin) {
 		if (!text_inactive) {
 			if (code >= 37 && code <= 40 && (mod_str == "S" || mod_str == "CS")) e.preventDefault();
 		}
-	} else {
-		if (code >= 33 && code <= 40 && text_inactive) e.preventDefault();
 	} 
+	else {
+		if (code >= 33 && code <= 40 && text_inactive) {
+//			e.preventDefault();
+		}
+	} 
+
+
 //»
 
 //Open context menu of selected icon, desktop or current window
 
 //Desktop and folder specific functions dealing with icons or the icon cursor:
-	if (!cwin || cwin.appName==FOLDER_APP){//«
+	if (!cwin || (cwin.appName==FOLDER_APP && !cwin.isBusy)){//«
 		if (kstr == "c_A" || kstr == "c_CA") {//«
 			let curicon;
 			if (CUR.ison()) curicon = CUR.geticon();
@@ -8137,6 +8154,7 @@ cwarn("There was an unattached icon in ICONS!");
 				set_context_menu({X:0,Y:(taskbar_hidden?0:taskbar.taskbarElem.clientHeight+3)},{BREL:true});
 				return;
 			}
+
 			else if (cobj && cobj.get_context) {
 				if (!(cobj.overrides && cobj.overrides["c_A"])) {
 					if (cwin.isLayout) return;
@@ -8154,22 +8172,27 @@ cwarn("There was an unattached icon in ICONS!");
 			if (check_input()) return;
 			return toggle_cursor();
 		}
-		if (cwin&&(kstr==="PGDOWN_"||kstr==="PGUP_"||kstr==="HOME_"||kstr==="END_")){//«
+		if (cwin&&(PAGING_KEY_SYMS.includes(kstr))){//«
+			if (!CUR.ison()) {
+				if (document.activeElement !== cwin.Main){
+cwarn("document.activeElement !== cwin.Main !?!?!");
+				}
+				return;
+			}
 			let mn = cwin.main;
+			let icn = CUR.geticon();
+			if (icn) icn.hideLabelName();
 			if (kstr==="PGDOWN_") mn.scrollTop+=mn.clientHeight;
 			else if (kstr==="PGUP_") mn.scrollTop-=mn.clientHeight;
 			else if (kstr==="HOME_") mn.scrollTop=0;
 			else mn.scrollTop=mn.scrollHeight;
-			mn.onscroll=e=>{
-				if (CUR.ison()) {
-					select_first_visible_folder_icon(cwin);
-				}
-			};
+			select_first_visible_folder_icon(cwin);
 			return;
 		}//»
 		else if (CUR.ison()&&CUR_KSYMS.includes(kstr)) {//«
-			if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {
-				e.preventDefault();
+			if (ARROW_KEY_SYMS.includes(kstr)) {
+//			if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {
+//				e.preventDefault();
 				CUR.move(kstr[0]);
 				return 
 			}
@@ -8182,7 +8205,7 @@ cwarn("There was an unattached icon in ICONS!");
 			else if (kstr=="ENTER_C") return CUR.select(null,null,{ctrlKey:true});
 			else if (kstr=="ENTER_A") return CUR.select(null,true);
 			else if (kstr=="ENTER_CA") return CUR.select(null,true, {ctrlKey:true});
-			else if (kstr=="SPACE_") {
+			else if (kstr=="\x20_") {
 				if (check_input()) return;
 				e.preventDefault();
 				CUR.select(true);
@@ -8234,7 +8257,8 @@ cwarn("There was an unattached icon in ICONS!");
 //SHORTCUTS1
 	switch(kstr){
 		case "`_A": return window_cycle();
-		case "d_A": return (e.preventDefault(), toggle_show_windows());
+//		case "d_A": return (e.preventDefault(), toggle_show_windows());
+		case "d_A": return (e.preventDefault(), minimize_all_windows());
 		case "t_A": return open_terminal();
 		case "e_A": return (e.preventDefault(), open_home_folder());
 		case "0_AS": return open_app("WorkMan");
@@ -8246,12 +8270,6 @@ cwarn("There was an unattached icon in ICONS!");
 		case "i_CAS": return toggle_icon_display();
 //		case "t_CAS": return tile_windows();
 		case "l_CA": return toggle_layout_mode();
-//		case "SPACE_CAS":
-//if (cwin) {
-//FWIKNGH
-//	select_point_from_window();
-//	return;
-//}
 	}
 //»
 
@@ -8280,6 +8298,9 @@ cwarn("There was an unattached icon in ICONS!");
 
 	}//»
 	else if (kstr=="r_") return reload_desk_icons_cb();
+	else{
+	}
+
 //»
 
 };
@@ -8294,10 +8315,6 @@ const dokeypress = function(e) {//«
 	}
 	let w = CWIN;
 	if (!w || w.moveDiv || w.isMinimized || w.popup || w.killed) return;
-//	if (code >= 32 && code <= 126 && w.app.onkeypress) w.app.onkeypress(e.key, e, code, "");
-//if (w.killed){
-//return;
-//}
 	workspace.keyPress(e);
 };
 //»
@@ -8405,7 +8422,6 @@ const dokeyup = function(e) {//«
 //»
 
 //»
-
 
 /*Hold«
 const tile_windows = () => {//«
@@ -8712,3 +8728,6 @@ return arr;
 };//»
 »*/
 
+//«})();
+   })();
+//»

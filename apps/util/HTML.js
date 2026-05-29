@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="util.HTML";
 
 
 //import { util, api as capi } from "util";
@@ -6,7 +7,7 @@ const util = LOTW.api.util;
 const globals = LOTW.globals;
 
 //export const app = function(arg) {
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Imports«
 
@@ -83,3 +84,4 @@ this.onblur=()=>{//«
 
 }
 
+})();

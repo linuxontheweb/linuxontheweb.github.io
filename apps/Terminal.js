@@ -1,23 +1,34 @@
+(()=>{"use strict";const APPNAME="Terminal";
+
 /*README«
 
-The main issue here is how to reload whatever code you happen to be working on.
+The main issue here is how to reload whatever code you happen to be
+working on.
 
-For this app module, the system's reload window (e.g. Alt+r) will do the trick.
-But if you are working on a screen-based module (like vim), the above shortcut will
-reload *that* instead of the terminal itself.
+For this app module, the system's reload window (e.g. Alt+r) will do the
+trick.  But if you are working on a screen-based module (like vim), the
+above shortcut will reload *that* instead of the terminal itself.
 
-To reload the shell module instead, see @DYUHJTK.
-To reload a specific command library see @XOLMQPO (RELOAD_LIB must be set in your working environment).
+To reload the shell module instead, see @DYUHJTK.  To reload a specific
+command library see @XOLMQPO (RELOAD_LIB must be set in your working
+environment).
 
-To "auto import" command libraries, define IMPORT_COM_LIBS in ~/.env, like so:
-IMPORT_COM_LIBS=fs,blah,path.to.mylib
+To "auto import" command libraries, define IMPORT_COM_LIBS in ~/.env,
+like so: IMPORT_COM_LIBS=fs,blah,path.to.mylib
 
 »*/
+//Notes«
+/*12/14/25: Readline issues
+Pressing Ctrl+d when a line is being typed during the command...
+$ pipe BLAH
+
+@UNSHFLKYU, for some reason the output is placed before the line that was typed.
+I changed it to handleReadlineEnter, and that issue was fixed.
+
+*/
 /*12/13/25: Just got rid of the old "textarea" method of doing copy/paste to/from the terminal screen.
 See all the navigator.clipboard invocations (readText, writeText)
 */
-
-//Notes«
 
 /*The interesting part of passwordMode is @DYWUEORK, where there is a timeout in the toString «
 method of the new String's, so that the output is the actual letter before the timeout
@@ -199,8 +210,10 @@ DOWN
 DEL
 */
 
+/*
 
 const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
+
 const {
 	COMMAND_MODE,
 	INSERT_MODE,
@@ -215,7 +228,7 @@ const {
 	COMPLETE_MODE,
 	REF_MODE
 } = VIM_MODES;
-
+*/
 const fsapi = fsMod.api;
 const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
@@ -253,7 +266,8 @@ if (dev_mode){
 
 //Terminal«
 
-export const app = class {
+//export const app = class {
+LOTW.apps[APPNAME] = class {
 
 //Private Vars«
 
@@ -272,9 +286,9 @@ this.main = Win.main;
 this.mainWin = Win.main;
 this.Desk = Win.Desk;
 this.statusBar = Win.statusBar;
-this.appClass="cli";
-this.isEditor = false;
-this.isPager = false;
+//this.appClass="cli";
+//this.isEditor = false;
+//this.isPager = false;
 /*
 this.env={
 USER: globals.user.CURRENT_USER,
@@ -375,7 +389,7 @@ this.numCtrlD = 0;
 this.cleanCopiedStringMode=false;
 this.doExtractPrompt = true;
 this.maxOverlayLength=42;
-this.terminalIsLocked=false;
+//this.terminalIsLocked=false;
 
 //vim row folds
 this.rowFoldColor = "rgb(160,160,255)";
@@ -386,16 +400,16 @@ this.curBG="#00f";
 this.curFG="#fff";
 this.curBGBlurred = "#444";
 //this.overlayOp="0.66";
-this.tCol = "#e3e3e3";
+this.tColor = "#e3e3e3";
+this.hexModeTColor = "#d3f3d3";
 this.highlightActorBg = false;
 this.actorHighlightColor="#101010";
-
 this.noPromptMode=false;
 this.comScrollMode=false;
 
 this.bufPos=0;
 this.curPromptLine=0;
-this.numStatLines=0;
+//this.numStatLines=0;
 this.scrollNum=0;
 this.minFs=8;
 this.defFs=24;
@@ -417,7 +431,10 @@ this.setFontSize();
 this.resize({isInit: true});
 
 }//»
-
+get isDirty(){//«
+if (this.actor) return this.actor.isDirty;
+return false;
+}//»
 //«DOM
 makeDOMElem(){//«
 
@@ -438,7 +455,7 @@ wrapdiv._bgcol=this.bgCol;
 wrapdiv._pos="absolute";
 wrapdiv._loc(0,0);
 
-wrapdiv._tcol = this.tCol;
+wrapdiv._tcol = this.tColor;
 wrapdiv._fw = this.fw;
 wrapdiv._ff = this.ff;
 wrapdiv.style.whiteSpace = "pre";
@@ -488,14 +505,14 @@ bgdiv._w="100%";
 bgdiv._h="100%";
 bgdiv._pos="absolute";
 bgdiv._loc(0,0);
-
+/*
 let statdiv = make('div');//«
 statdiv._w="100%";
 statdiv._h="100%";
 statdiv._pos="absolute";
 statdiv._loc(0,0);
 //»
-
+*/
 //let overlay;«
 
 //const overlay = mkOverlay({id: this.winid});
@@ -504,6 +521,8 @@ statdiv._loc(0,0);
 
 //Listeners«
 main.onwheel=e=>{//«
+	e.preventDefault();
+	e.stopPropagation();
 	if (!this.sleeping){
 		let dy = e.deltaY;
 		if (!this.isScrolling){
@@ -511,23 +530,10 @@ main.onwheel=e=>{//«
 			if (dy > 0) return;
 			this.scrollNumHold = this.scrollNum;
 			this.isScrolling = true;
-//			wheel_iter = 0;
-			this.wheelIter=0;
 		}
-		let skip_factor = 10;
-/*
-		if (this.env.vars.SCROLL_SKIP_FACTOR){
-			let got = this.env.vars.SCROLL_SKIP_FACTOR.ppi();
-			if (!Number.isFinite(got)) cwarn(`Invalid SCROLL_SKIP_FACTOR: ${this.env.vars.SCROLL_SKIP_FACTOR}`);
-			else skip_factor = got;
-		}
-*/
-		this.wheelIter++;
-//		wheel_iter++;
-		if (this.wheelIter%skip_factor) return;
-		if (dy < 0) dy = Math.ceil(4*dy);
-		else dy = Math.floor(4*dy);
-		if (!dy) return;
+		if (dy < 0) dy = -1;
+		else if (dy > 0) dy = 1;
+		else return;
 		this.scrollNum += dy;
 		if (this.scrollNum < 0) this.scrollNum = 0;
 		else if (this.scrollNum >= this.scrollNumHold) {
@@ -537,8 +543,11 @@ main.onwheel=e=>{//«
 		this.render();
 	}
 };//»
-main.onscroll=e=>{e.preventDefault();this.scrollMiddle();};
-
+main.onscroll=e=>{//«
+	e.preventDefault();
+	e.stopPropagation();
+	this.scrollMiddle();
+};//»
 overdiv.onmousemove = e=>{//«
 	e.stopPropagation();
 	if (Desk) Desk.mousemove(e);
@@ -553,7 +562,7 @@ this.tabSize = parseInt(tabdiv.style.tabSize);
 this.tabdiv = tabdiv;
 this.bgdiv = bgdiv;
 this.wrapdiv = wrapdiv;
-this.statdiv = statdiv;
+//this.statdiv = statdiv;
 
 this.Win.mkOverlay();
 this.doOverlay = (str) => {
@@ -592,7 +601,14 @@ executeBackgroundCommand(s){//«
 	shell.execute(s,{env});
 
 }//»
-
+autoTypeCommand(str){
+if (this.sleeping || this.curShell){
+cwarn(`Skipping: '${str}'`);
+return;
+}
+	for (let c of str) this.handleLetterPress(c);
+	this.handleEnter({noSave: true});
+}
 //»
 //Util«
 
@@ -702,23 +718,10 @@ setFontSize(){//«
 	else this.grFs = this.defFs;
 	this.wrapdiv._fs = this.grFs;
 }//»
-
-tryKill(){//«
-	if (this.isEditor) {
-		this.actor.stat_message="Really close the window? [Y/n]";
-		this.render();
-		this.actor.set_ask_close_cb();
-	}
-	else{
-cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
-	}
-}
-//»
 forceNewline(){//«
 	const{lines}=this;
 	if (lines[lines.length-1]&&lines[lines.length-1].length){
 		this.lineBreak();
-//		this.curPromptLine = this.y+this.scrollNum-1;
 		this.curPromptLine = this.y+this.scrollNum;
 	}
 	this.x=0;
@@ -935,7 +938,12 @@ async doClipboardPaste(){//«
 //SLDKFHDS
 	let val = await navigator.clipboard.readText();
 	if (!val.length) return;
-	if (this.isEditor) this.actor.check_paste(val);
+	if (this.actor) {
+		if (this.actor.isEditor) this.actor.checkPaste(val);
+else{
+cwarn("THE ACTOR CANNOT HANDLE PASTING!!!");
+}
+	}
 	else this.handleInsert(val); 
 }
 //»
@@ -961,213 +969,59 @@ cy(){//«
 //Render«
 
 render(opts={}){//«
-
-	const{tabdiv, actor}=this;
+if (this.actor){
+this.actor.render && this.actor.render();
+return;
+}
 //Var«
-
-//	let actor = editor||pager;
-//	const{actor}=this;
-	let stat_x;
-	if (actor) {
-		stat_x = actor.stat_x;
-		this.x=actor.x;
-		this.y=actor.y;
-		this.scrollNum = actor.scroll_num;
-		if (!stat_x) stat_x = this.x;
-	}
-	let seltop;
-	let selbot;
-	let selleft;
-	let selright;
-	let selmark;
-	let stat_input_type;
-	let stat_com_arr;
-	let stat_message, stat_message_type;
 	let num_lines;
-	let ry;
-	let mode;
-	let symbol;
-	let line_select_mode;
-
-//WKKYTUHJ
-	if (actor) ({stat_input_type,stat_com_arr,stat_message,stat_message_type, line_select_mode}=actor);
-	if (!stat_input_type) stat_input_type="";
-
-	if (this.isEditor) ({mode,symbol,seltop,selbot,selleft,selright,selmark,opts,num_lines,ry}=actor);
 	if (!(this.nCols&&this.nRows)) return;
-//	let visual_line_mode = (mode===this.modes.visLine) || line_select_mode;
-	let visual_line_mode = (mode===VIS_LINE_MODE) || line_select_mode;
-	if (line_select_mode) seltop = selbot = this.scrollNum+this.y;
-	
-//	if (mode===this.modes.ref||mode===this.modes.symbol||mode===this.modes.complete){
-	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE){
-		visual_line_mode = true;
-		seltop = selbot = this.y+this.scrollNum;
-	}
-//	let visual_block_mode = mode===this.modes.visBlock;
-	let visual_block_mode = mode===VIS_BLOCK_MODE;
-//	let visual_mark_mode = mode===this.modes.visMark;
-	let visual_mark_mode = mode===VIS_MARK_MODE;
-	let visual_mode = visual_line_mode || visual_mark_mode || visual_block_mode;
-	let docursor = false;
-	if (opts.noCursor){}
-	else if (!(this.terminalIsLocked||this.isPager||stat_input_type||this.isScrolling)) docursor = true;
+
+//	let docursor = false;
+//	if (opts.noCursor){}
+//	else if (!(this.terminalIsLocked||this.isScrolling)) docursor = true;
+//	else if (!this.isScrolling) docursor = true;
+
+	let docursor = !(opts.noCursor || this.isScrolling);
+
 	let usescroll = this.scrollNum;
 	let scry=usescroll;
 	let slicefrom = scry;
 	let sliceto = scry + this.nRows;
 	let uselines=[];
 	let is_str = false;
-//	let x_scroll = 0;
-//	let usex = this.x-x_scroll;
 	let usex = this.x;
 	let outarr = [];
-	let donum;
 //»
-	let push_empty_line = !(this.isEditor||this.isPager);
-	for (let i=slicefrom; i < sliceto; i++) {//«
+	for (let i=slicefrom; i < sliceto; i++) {
 		let ln = this.lines[i];
-//		if (ln&&ln.length){
-		if (ln){
-			uselines.push(ln.slice());
-			continue;
-		}
-		if (push_empty_line){
-			uselines.push([""]);
-			continue;
-		}
-		let noline = ['<span style="color: #6c97c4;">~</span>'];
-		noline._noline = true;
-		uselines.push(noline);
-	}//»
-	let len = uselines.length;//«
-	if (len + this.numStatLines != this.h) donum = this.h - this.numStatLines;
-	else donum = len;//»
-//log(donum);
-
-//	if (docursor&&i==this.y&&this.isEditor&&mode!==LINE_WRAP_MODE) {
-	let slice_from = 0;
-	let slice_to;
-/*
-
-Simple hack to keep the cursor (non-jarringly) at the end of the right edge of
-the screen when it would otherwise be off screen.
-
-*/
-	if (docursor&&this.isEditor&&mode!==LINE_WRAP_MODE) {
-/*
-		let ln = uselines[this.y];
-		let marr = ln.match(/^(\t+)/);
-		if (marr){
-			let n_tabs = marr[1].length;
-//log(n_tabs);
-//			let rem_chars = usex - n_tabs;
-//			x_wid = n_tabs*this.tabWid + rem_chars*this.cellWid;
-		}
-*/
-		let diff = usex - this.w + 1;
-		let no_colors = false;
-		if (diff > 0){
-			slice_from = diff;
-			usex-=slice_from;
-			slice_to = diff + this.w;
-			no_colors = true;
-		}
-//		this.setXScroll(arr.slice(0, usex).join(""), usex);
+		if (ln) uselines.push(ln.slice());
+		else uselines.push([""]);
 	}
+	let len = uselines.length;
+	let donum = len;
 	for (let i = 0; i < donum; i++) {//«
-
-		let arr = uselines[i];
-		let is_folded = arr[0]=="\xd7";
-//		if (slice_from) arr = arr.slice(slice_from, slice_to);
-		if (!is_folded && slice_from) arr = arr.slice(slice_from, slice_to);
-		else {
-			arr = arr.slice(0, this.w);
-//if (is_folded) log(arr);
-//log();
-		}
-//DOCURSOR
+		let arr = uselines[i].slice(0, this.w);
 		let ind;
 		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
 		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
 		while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
-
 		if (!arr||(arr.length==1&&arr[0]=="")) arr = [" "];
-		let gotit = arr.indexOf(null);
-		if (gotit > -1) arr[gotit] = " ";
+
 		let curnum = i+usescroll;
 		let colobj = this.lineColors[curnum];
-
-		if (visual_mode&&seltop<=curnum&&selbot>=curnum){//«
-
-			if (visual_line_mode) {//«
-				let ln_min1 = arr.length-1;
-				if (ln_min1 == -1) ln_min1=0;
-				arr[0] = '<span style="background-color:#aaa;color:#000;">'+(arr[0]||" ");
-				arr[ln_min1] = (arr[ln_min1]||" ")+'</span>';
-			}//»
-			else if (visual_mark_mode){//«
-				let useleft, useright;
-				if (seltop==curnum && selbot==curnum){
-					useleft = selleft;
-					useright = selright;
-				}
-				else if (curnum > seltop && curnum < selbot){
-					useleft = 0;
-					useright = arr.length-1;
-				}
-				else if (seltop===curnum){
-					useright = arr.length-1;
-					useleft = (curnum==this.cy())?this.x:selmark;
-				}
-				else if (selbot===curnum){
-					useleft = 0;
-					useright = (curnum==this.cy())?this.x:selmark;
-				}
-				else{
-throw new Error("WUTUTUTU");
-				}
-//				useleft -= x_scroll;
-//				useright -= x_scroll;
-				if (useleft < 0) useleft = 0;
-				if (useright < 0) useright = 0;
-				let str = '<span style="color:#000;background-color:#aaa;">'+(arr[useleft]||" ");
-				arr[useleft]=str;
-				if (useright == -1) useright = 0;
-				if (arr[useright]) arr[useright] = arr[useright]+"</span>";
-				else arr[useright] = "</span>";
-			}//»
-			else {//visual_block_mode«
-				let str;
-				if (arr[selleft]) str = '<span style="color:#000;background-color:#aaa;">'+(arr[selleft]||"");
-				else str = " ";
-				arr[selleft]=str;
-				if (arr[selright]) arr[selright] = arr[selright]+"</span>";
-				else arr[selright] = "</span>";
-			}//»
-
-		}//»
-		else if (is_folded){//Folded row«
-//		else if (arr[0]=="\xd7"){
-//This marker is reserved as the first character for folded rows
-			if (tabdiv._x) arr=[];
-			else {
-				arr[0]=`<span style="color:${this.rowFoldColor};">${arr[0]}`
-				arr[arr.length-1]=`${arr[arr.length-1]}</span>`;
-			}
-		}//»
-		else if (colobj){//«
-//		else if (colobj){
+		if (colobj){//«
 			let nums = Object.keys(colobj);
+//log(nums);
 			for (let numstr of nums) {
 				if (numstr.match(/^_/)) continue;
-//				let num1 = parseInt(numstr)-x_scroll;
 				let num1 = parseInt(numstr);
 				let obj = colobj[numstr];
-if (obj[0] < 1){
-cwarn("GOT INVALID colobj", obj);
-continue;
-}
+				if (obj[0] < 1){
+cwarn(`GOT INVALID colobj numstr(${numstr}) curnum(${curnum})`);
+//log(arr.join(""));
+					continue;
+				}
 				let num2 = num1 + obj[0]-1;
 				let col = obj[1];
 				let bgcol = obj[2];
@@ -1178,16 +1032,10 @@ continue;
 				arr[num1] = str;
 				if (arr[num2]) arr[num2] = arr[num2]+"</span>";
 				else arr[num2] = "</span>";
-//log(2, arr);
-if (num2 > this.w) {
-//console.log("LONGLINE");
-	break;
-}
+				if (num2 > this.w) break;
 			}
 		}//»
-
 		if (docursor&&i==this.y) {//«
-//		if (!(this.isPager||stat_input_type||this.isScrolling)) {
 			let usebg;
 			if (!this.isFocused) usebg = this.curBGBlurred;
 			else usebg = this.curBG;
@@ -1206,158 +1054,15 @@ if (num2 > this.w) {
 			let sty = `background-color:${usebg};color:${this.curFG}`;
 			arr[usex] = pre+`<span id="${this.cursorId}" style="${sty}">${usech}</span>`;
 		}//»
-
-		let s = arr.join("");
-		if (actor && !arr._noline && this.highlightActorBg) outarr.push(`<span style="background-color:${this.actorHighlightColor};">${s}</span>`);
-		else outarr.push(s);
+//		outarr.push(arr.join(""));
+		outarr.push(arr.join("").replace(/\t/g, " "));
 
 	}//»
-
-	if (actor) {//Status line«
-		let usestr;
-		if (stat_input_type) {//«
-			let arr,ind;
-			if (!stat_com_arr.slice) arr = [];
-			else arr = stat_com_arr.slice();
-			while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
-			while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
-			while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
-			if (stat_input_type=="s/") arr.push("/");
-			if (!arr[stat_x]) arr[stat_x] = " ";
-			let arrstr=arr.join("");
-			arr[stat_x] = `<span style="background-color:${this.curBG};color:${this.curFG}">${arr[stat_x]}</span>`;
-			if (visual_mode&&stat_input_type===":") {
-//			if (visual_line_mode&&stat_input_type===":") {
-//				usestr = `${stat_input_type}'&lt;,'&gt;${arr.join("")}`;
-				usestr = `:'&lt;,'&gt;${arr.join("")}`;
-			}
-			else {
-				usestr = stat_input_type + arr.join("");
-			}
-		}//»
-		else if (this.isEditor) {//«
-			let mess="", messtype, messln=0;
-			if (stat_message) {//«
-				mess = stat_message;
-				messln = mess.length;
-				mess = mess.replace(/&/g,"&amp;");
-				mess = mess.replace(/</g,"&lt;");
-
-				let typ = stat_message_type;
-				let bgcol=null;
-				let tcol="#000";
-				if (typ==STAT_OK) {
-					bgcol="#070";
-					tcol="#fff";
-				}
-				else if (typ==STAT_WARN) bgcol="#dd6";
-				else if (typ==STAT_ERR) {
-					bgcol="#900";
-					tcol="#fff";
-				}
-				if (bgcol) mess = `<span style="color:${tcol};background-color:${bgcol}">${mess}</span>`;
-
-//				editor.stat_message=null;
-				actor.stat_message=null;
-				actor.stat_message_type=null;
-			}//»
-			else {//«
-//				if (mode === this.modes.insert) mess = "-- INSERT --";
-				if (mode === INSERT_MODE) mess = "-- INSERT --";
-//				else if (mode === this.modes.replace) mess = "-- REPLACE --";
-				else if (mode === REPLACE_MODE) mess = "-- REPLACE --";
-//				else if (mode == this.modes.symbol) {
-				else if (mode === SYMBOL_MODE) {
-					if (symbol) mess = `-- SYMBOL: ${symbol} --`;
-					else mess = "-- SYMBOL --";
-				}
-//				else if (mode == this.modes.ref) {
-				else if (mode === REF_MODE) {
-					if (symbol) mess = `-- REF: ${symbol} --`;
-					else mess = "-- REF --";
-				}
-//				else if (mode === this.modes.complete) {
-				else if (mode === COMPLETE_MODE) {
-					mess = `-- COMPLETE: ${symbol} --`;
-				}
-				else if (visual_line_mode) mess = "-- VISUAL LINE --";
-				else if (visual_mark_mode) mess = "-- VISUAL --";
-				else if (visual_block_mode) mess = "-- VISUAL BLOCK --";
-//				else if (mode === this.modes.file) mess = "-- FILE --";
-				else if (mode === FILE_MODE) mess = "-- FILE --";
-//				else if (mode === this.modes.cutBuffer) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
-				else if (mode === CUT_BUFFER_MODE) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
-//				else if (mode === this.modes.lineWrap) mess = "-- LINE WRAP --";
-				else if (mode === LINE_WRAP_MODE) mess = "-- LINE WRAP --";
-				messln = mess.length;
-			}//»
-			let per;
-			let t,b;
-			if (this.scrollNum==0) t = true;
-			if (!this.lines[sliceto-1]) b=true;
-			if (t&&b) per = "All";
-			else if (t) per="Top";
-			else if (b) per = "Bot";
-			else {
-				if (Number.isFinite(ry)) {
-					per = Math.floor(100*ry/num_lines)+"%";
-				}
-				else {
-					let val = Math.floor(100*(this.scrollNum/(num_lines-1)));
-					per = (val)+"%";
-				}
-			}
-			let perln = per.length;
-			let perx = this.w-5;
-			if (perln > 4) per = "?%";
-			per = "\x20".repeat(4-perln)+per;
-			let lncol;
-//			if (mode===this.modes.lineWrap){
-			if (mode===LINE_WRAP_MODE){
-				lncol = (actor.line_wrap_y+1)+","+(actor.line_wrap_x+1);
-			}
-			else{
-				lncol = (ry+1)+","+(this.x+1);
-			}
-			let lncolln = lncol.length;
-			let lncolx = this.w - 18;
-			let diff = lncolx - messln;
-			if (diff <= 0) diff = 1;
-			let diff2 = (perx - lncolx - lncolln);
-			if (diff2 <= 0) diff2 = 1;
-			let spaces = "\x20".repeat(diff) + lncol + "\x20".repeat(diff2)+per;
-			let str = mess + spaces;
-			usestr = `<span>${str}</span>`;
-
-		}//»
-		else if (stat_message){//«
-			usestr = stat_message;
-			usestr = usestr.replace(/&/g,"&amp;");
-			usestr = usestr.replace(/</g,"&lt;");
-			stat_message = null;
-		}//»
-		else if(this.isPager){//«
-			let per = Math.floor(100*(usescroll+donum)/this.lines.length);
-			if (per > 100) per = 100;
-			let usename = (actor.fname+" ")||"";
-			usestr = `${usename}${per}% of ${this.lines.length} lines (press q to quit)`;
-			if (!stat_input_type) usestr = '<span style=background-color:#aaa;color:#000>'+usestr+'</span>'
-		}//»
-		this.updateStatLines([usestr]);
-		if (actor.multilineSels){
-			let sels = actor.multilineSels;
-			let stys = this.bgRowStyles;
-			for (let i=0; i < donum; i++){
-				stys[i].backgroundColor=sels[i+scry]?"#555":"";
-			}
-		}
-	}//»
-
 	if (this.minHeight && this.h < this.minHeight){
-		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
+		this.tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
 	}
 	else {
-		tabdiv.innerHTML = outarr.join("\n");
+		this.tabdiv.innerHTML = outarr.join("\n");
 	}
 }//»
 resetXScroll(){//«
@@ -1422,6 +1127,8 @@ There are embedded tabs here, so we have to do this the hard way
 }//»
 
 refresh(opts){this.render(opts);}
+
+/*
 generateStatHtml(){//«
 	const{statdiv}=this;
 	this.statSpans = [];
@@ -1456,7 +1163,7 @@ cerr("What is the array size different from the numStatLines????");
 	for (let i=0; i < this.numStatLines; i++) this.statSpans[i].innerHTML = arr[i];
 }
 //»
-
+*/
 //»
 //Cursor/Curses«
 
@@ -1539,10 +1246,12 @@ scrollIntoView(opts={}){//«
 	if (!this.h) return;
 	const{lines}=this;
 	const doscroll=()=>{//«
-		if (lines.length-this.scrollNum+this.numStatLines <= this.h) return false;
+//		if (lines.length-this.scrollNum+this.numStatLines <= this.h) return false;
+		if (lines.length-this.scrollNum<= this.h) return false;
 		else {
 			if (this.y>=this.h) {
-				this.scrollNum=lines.length-this.h+this.numStatLines;
+//				this.scrollNum=lines.length-this.h+this.numStatLines;
+				this.scrollNum=lines.length-this.h;
 				this.y=this.h-1;
 			}
 			else {
@@ -1615,7 +1324,9 @@ resize(opts={}) {//«
 	this.setBgRows();
 	this.scrollIntoView();
 	this.scrollMiddle();
-	if (this.numStatLines) this.generateStatHtml();
+
+//	if (this.numStatLines) this.generateStatHtml();
+
 	if (actor){
 		if (actor.resize) actor.resize(this.w,this.h);
 		return;
@@ -2403,132 +2114,94 @@ async doCompletion(){//«
 //»
 //Response/Format«
 
+
 fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
+if (arr.length == 0) return;
+const VALS = arr;
+const NUM = VALS.length;
 
-/*_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
-here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
-efficiently) is an outstanding issue...*/
-	const{w}=this;
-//	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
-	let pad = this.lsPadding;
-//	if (!start_from) start_from=0;
-	if (col_arg == 1) {//«
-		for (let i=0; i < arr.length; i++) {
-			if (w >= arr[i].length) ret.push(arr[i]);
-			else {
-				let iter = 0;
-				while (true) {
-					let str = arr[i].substr(iter, iter+w);
-					if (!str) break;
-					ret.push(str);
-					iter += w;
-				}
-			}
-		}
-		return;
-	}//»
-	const min_col_wid=(col_num, use_cols)=>{//«
-		let max_len = 0;
-		let got_len;
-		let use_pad = pad;
-		for (let i=col_num; i < num ; i+=use_cols) {
-			if (i+1 == use_cols) use_pad = 0;
-			got_len = lens[i]+use_pad;
-			if (got_len > max_len) max_len = got_len;
-		}
-		return max_len;
-	};//»
-	let num = arr.length;
-	let col_wids = [];
-	let col_pos = [0];
-	let max_cols = col_arg;
-	if (!max_cols) {
+let max_wids;
+let max_wids_hold;
+let num_rows;
+let num_rows_hold;
 
-//SURMPLRK
-//Just need to find the number of entries that would fit on the first row.
-//The next rows (if there are any) cannot possibly raise the max_cols value.
-//If it changes, the next rows can only make max_cols go down.
-//It is absolutely insane to assume to that each file name is 1 character long!!! (This makes max_cols ridiculously big, e.g. 80/3 => 26.666666)
-//                    v---------------------------------------^^^^^^^^^^^^^^^^
-//		let min_wid = 1 + pad;
-//		max_cols = Math.floor(w/min_wid);
-//		if (arr.length < max_cols) max_cols = arr.length;
-
-//Updated to this:
-		let tot_len = 0;
-		for (let i=0; i < arr.length; i++){
-			tot_len += arr[i].length;
-			if (tot_len > w) {
-				max_cols = i;
-				if (!max_cols) {
-//This means that the first name is too big, and so we will only have a 1 column listing
-					max_cols = 1;
-				}
-				break;
-			}
-			tot_len+=this.lsPadding;
+const get_num_cols = (entries, num_cols, TERM_WID)=> {//«
+	num_rows_hold = num_rows;
+	num_rows = Math.floor(entries.length/num_cols);
+	let rem = entries.length-(num_rows*num_cols);
+	if (rem) num_rows++;
+	max_wids_hold = max_wids;
+	max_wids=[];
+	for (let i=0; i < num_cols; i++){
+		let slice = entries.slice(i*num_rows, i*num_rows + num_rows);
+		if (slice.length) {
+			max_wids[i] = slice.reduce((a1,a2)=>a2>a1?a2:a1);
 		}
-		if (!max_cols) {
-//We never broke out of the loop, so we can put the entire listing on one line,
-//meaning that there are as many columns as there are directory entries.
-			max_cols = arr.length;
+	}
+	let total_wid = max_wids.reduce((a,b)=>a+b) + 2*(num_cols-1);
+	if (total_wid >= TERM_WID) {
+		if (num_cols > 1) {
+			num_cols--;
+			max_wids = max_wids_hold;
+			num_rows = num_rows_hold;
 		}
-//End update
+		return num_cols;
+	}
+	else if (num_cols === entries.length) return num_cols;
+	return get_num_cols(entries, num_cols+1, TERM_WID);
+}//»
 
+let cols = get_num_cols(lens, 1, this.w);
+let rows = num_rows;
+let out = [];
+let col_xpos;
+if (color_ret) {
+	col_xpos = [];
+	for (let i=0; i < cols; i++){
+		let xpos;
+		if (i==0) xpos = 0;
+		else {
+			xpos = max_wids.slice(0, i).reduce((a,b)=>a+b);
+			xpos += i*2;
+		}
+		col_xpos[i] = xpos;
+	}
+}
+for (let i=0; i < NUM; i++){
+    let row = i%rows;
+    let col = Math.floor(i/rows);
+    if (!out[row]) out[row] = [];
+	let have_slash;
+	let what = VALS[i];
+	if (what) have_slash = what.match(/\/$/);
+	if (rows == 1 || col < cols){
+		let diff = max_wids[col] - what.length;
+		if (diff>0) what = what + " ".repeat(diff);
 	}
 
-	let num_rows = Math.floor(num/max_cols);
-	let num_cols = max_cols;
-	let rem = num%num_cols;
-	let tot_wid = 0;
-	let min_wid;
-	for (let i=0; i < max_cols; i++) {
-		min_wid = min_col_wid(i, num_cols);
-		tot_wid += min_wid;
-		if (tot_wid > w) {
-			this.fmtLs(arr, lens, ret, types, color_ret, (num_cols - 1));
-			return;
+	let typ;
+	if (types) typ = types[i];
+	let color;
+	if (typ==DIR_TYPE) color="#909fff";
+	else if (typ==LINK_TYPE) color="#0cc";
+	else if (typ==BAD_LINK_TYPE) color="#f00";
+	else if (typ==IDB_DATA_TYPE) color="#cc0";
+
+    out[row][col] = what;
+	if (color_ret) {
+		if (!color_ret[row]) color_ret[row] = {};
+		if (color) {
+			color_ret[row][col_xpos[col]] = [have_slash?lens[i]-1:lens[i], color];
 		}
-		col_wids.push(min_wid);
-		col_pos.push(tot_wid);
 	}
-	col_pos.pop();
-	let matrix = [];
-	let row_num;
-	let col_num;
-	let cur_row = -1;
-	let xpos;
-	for (let i=0; i < num; i++) {
-		let typ;
-		if (types) typ = types[i];
-		let color;
-		if (typ==DIR_TYPE) color="#909fff";
-		else if (typ==LINK_TYPE) color="#0cc";
-		else if (typ==BAD_LINK_TYPE) color="#f00";
-		else if (typ==IDB_DATA_TYPE) color="#cc0";
-		col_num = Math.floor(i%num_cols);
-		row_num = Math.floor(i/num_cols);
-		if (row_num != cur_row) {
-			matrix.push([]);
-			xpos=0;
-		}
-		let nm = arr[i];
-		let str = nm + " ".rep(col_wids[col_num] - nm.length);
-		matrix[row_num][col_num] = str;
-		if (color_ret) {
-			let use_row_num = row_num;
-			if (!color_ret[use_row_num]) color_ret[use_row_num] = {};
-			let uselen = nm.length;
-			if (arr[i].match(/\/$/)) uselen--;
-			if (color) color_ret[use_row_num][xpos] = [uselen, color];
-		}
-		xpos += str.length;
-		cur_row = row_num;
-	}
-	for (let i=0; i < matrix.length; i++) ret.push(matrix[i].join(""));
-	return;
+}
+
+for (let ln of out){
+	ret.push(ln.join("  "));
+}
 }
 //»
+
 fmt2(str, type, maxlen){//«
 //This does soft-wrapping (introduces line breaks at spaces before 'w' chars)
     if (type) str = type + ": " + str;
@@ -2681,12 +2354,14 @@ log(out);
 	}
 
 	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;
+let did_chomp = false;
 	if (out == "" && out.isNL){
 		out=" \n ";
 	}
 	else if (!out.noChomp && out.match(/\n$/)){
 cwarn("Chomping ending NEWLINE!!!");
 		out = out.replace(/\n$/,"");
+did_chomp = true;
 	}
 	out = out.split("\n");
 /*«
@@ -2713,18 +2388,24 @@ return;
 			throw e;
 		}
 		if (colors.length !== out.length){
+if (did_chomp && (colors.length === out.length + 1)){
+}
+else {
 log("response lines",out);
 log("response colors",colors);
-			let e = new Error(`The output array and colors array are not equal length!`);
-			this.Win._fatal(e);
-			throw e;
+
+	let e = new Error(`The output array and colors array are not equal length!`);
+	this.Win._fatal(e);
+	throw e;
+}
 		}
 
 	}
 	else colors = [];
 
 	if (lines.length && (noBr || !lines[lines.length-1].length)) {
-		let gotln = lines.pop();
+//		let gotln = lines.pop();
+		lines.pop();
 	}
 	let len = out.length;
 	let curnum = lines.length;
@@ -3232,9 +2913,14 @@ async handleEnter(opts={}){//«
 	this.sleeping = null;
 }//»
 flushReadlineBuffer(is_pass){//«
+//	if (this.actor && isStr(this.readLineStr)){
+	if (isStr(this.readLineStr)){
+		this.readLineCb(this.readLineStr);
+		this.readLineStr="";
+		return;
+	}
 	const{lines}=this;
 	let rv = [];
-//This '1' ONLY correct when the line does not wrap
 	let from = this.readLineStartLine;
 	let a;
 	for (let i=from; i < lines.length; i++) {
@@ -3264,7 +2950,6 @@ handleReadlineEnter(){//«
 	this.readLineStartLine = null;
 	this.sleeping = true;
 	this.forceNewline();
-//log(this.curPromptLine);
 }//»
 cancelShell(){//«
 	this.curShell.cancel();
@@ -3314,8 +2999,6 @@ handleKey(sym, code, mod, ispress, e){//«
 					}
 					return;
 				}
-//				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.curPromptLine+1) return;
-//				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.#readLinePromptLen && this.y+this.scrollNum == this.readLineStartLine) {
 				if ((sym==="LEFT_" || sym=="BACK_") && this.x==this.promptLen && this.y+this.scrollNum == this.readLineStartLine) {
 					return;
 				}
@@ -3330,14 +3013,23 @@ the next line of input.
 The POSIX behaviour of Ctrl+d (seems to be) that it disallows backspacing before the point that it is done.
 But implementing this exact behaviour is probably more trouble than it is worth.
 */
-				if (this.numCtrlD || (this.cy() === this.readLineStartLine && this.x === this.promptLen)) {
+				if (this.numCtrlD || 
+						(this.actor && this.readLineStr === "") ||
+						(this.cy() === this.readLineStartLine && this.x === this.promptLen)) {
+//UNSHFLKYU
 					this.numCtrlD = 0;
-					this.flushReadlineBuffer();
+//					this.flushReadlineBuffer();
+					this.handleReadlineEnter();
 					setTimeout(()=>{
-						this.readLineCb && this.readLineCb(EOF);
-						this.readLineCb = null;
-						this.readLineStartLine = null;
+						if (this.readLineCb){
+							this.readLineCb && this.readLineCb(EOF);
+							this.readLineCb = null;
+							this.readLineStartLine = null;
+							this.readLineStr = null;
+							if (this.actor) this.doOverlay("Readline cancelled");
+						}
 					}, 0);
+
 				}
 				else{
 					this.numCtrlD = 1;
@@ -3400,9 +3092,9 @@ But implementing this exact behaviour is probably more trouble than it is worth.
 		case "END_":
 			this.handlePage(sym)
 			break;
-		case "p_CAS":
-			this.togglePaste();
-			break;
+//		case "p_CAS":
+//			this.togglePaste();
+//			break;
 		case "TAB_": 
 			this.handleTab();
 			break;
@@ -3461,7 +3153,7 @@ onkeydown(e,sym,mod){//«
 	}
 	if (this.isScrolling){//«
 		if (sym.match(/^[A-Z]+_$/)){//This means it is something like UP_ or DOWN_
-			if (sym==="SPACE_") return;
+//			if (sym==="\x20_") return;
 		}
 		else return;
 		this.scrollNum = this.scrollNumHold;
@@ -3479,12 +3171,16 @@ onkeydown(e,sym,mod){//«
 	if (e&&sym=="o_C") e.preventDefault();
 	if (this.readLineCb){
 		if (sym=="c_C"){
-//RMLDURHTJ
-//			this.readLineCb(EOF);
+			if (this.actor){
+				this.readLineCb(EOF);
+				this.doOverlay("Readline cancelled");
+			}
+			else {
+				this.cancelShell();
+			}
 			this.readLineCb = null;
 			this.readLineStartLine = null;
-//			this.doOverlay("Readline: cancelled");
-			this.cancelShell();
+			this.readLineStr = null;
 			return;
 		}
 		this.handleKey(sym, code, mod, false, e);
@@ -3549,10 +3245,10 @@ onkill(if_dev_reload){//«
 
 	this.reInit={
 		history: this.history,
-		historyNode: this.historyNode
+		historyNode: this.historyNode,
+		cwd: this.env.cwd.cwd
 //		useOnDevReload: !!this.ondevreload
 	};
-
 	if (this.actor) {
 		this.reInit.commandStr = this.actor.command_str;
 	}
@@ -3575,7 +3271,7 @@ async onappinit(appargs={}){//«
 	}
 //QDPLMRT
 //	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
-	let {history, historyNode, addMessage, commandStr} = reInit;
+	let {history, historyNode, addMessage, commandStr, cwd} = reInit;
 	if (appargs.noKbReload){
 		if (!addMessage) addMessage = "";
 		addMessage += "Keyboard reloading: disabled";
@@ -3586,6 +3282,7 @@ async onappinit(appargs={}){//«
 	this.didInit = true;
 	this.sleeping = false;
 	this.isFocused = true;
+	if (cwd) this.env.cwd.cwd = cwd;
 	this.setPrompt();
 	this.render();
 //	this.onfocus();
@@ -3596,6 +3293,7 @@ async onappinit(appargs={}){//«
 }//»
 
 onescape(){//«
+//	if (this.actor && this.actor.onescape) return this.actor.onescape();
 	if (this.checkScrolling()) return true;
 	if (this.statusBar.innerText){
 		this.statusBar.innerText = "";
@@ -3663,27 +3361,45 @@ xScrollTerminal(opts={}){//«
 this.render();
 }
 //»
-//clipboardCopy(s){this.doClipboardCopy(null,s);}
 clipboardCopy(s){this.doClipboardCopy(s);}
+
+
+
+//»
+
+}; 
+
+//»
+
+//«OLD
+/*
+tryKill(){//«
+	if (this.isEditor) {
+		this.actor.stat_message="Really close the window? [Y/n]";
+		this.render();
+		this.actor.set_ask_close_cb();
+	}
+	else{
+cwarn("TRY_KILL CALLED BUT this.isEditor == false!");
+	}
+}//»
 setLines(linesarg, colorsarg){//«
 	this.lines = linesarg;
 	this.lineColors = colorsarg;
 }//»
-initNewScreen(actor_arg, classarg, new_lines, new_colors, n_stat_lines, funcs={}){//«
+initNewScreen(actor_arg, classarg, new_lines, new_colors, funcs={}){//«
 //UWKLHDN
 	const{actor}=this;
 	let escape_fn = funcs.onescape;
 	let reload_fn = funcs.onreload;
-//	let screen = {actor, appclass, this.lines, this.lineColors, x, y, this.scrollNum, this.numStatLines, onescape: termobj.onescape};
 	let screen = {
 		actor: this.actor,
-		appcClass: this.appClass,
+		appClass: this.appClass,
 		lines: this.lines,
 		lineColors: this.lineColors,
 		x: this.x,
 		y: this.y,
 		scrollNum: this.scrollNum,
-		numStatLines: this.numStatLines,
 		funcs: {
 			onescape: this.onescape,
 			onreload: this.onreload
@@ -3706,12 +3422,7 @@ this.doOverlay("Default onreload called");
 	this.lines = new_lines;
 	this.lineColors = new_colors;
 	this.scrollNum=this.x=this.y=0;
-	this.numStatLines=n_stat_lines;
-	if (this.numStatLines) {
-		this.wrapdiv.appendChild(this.statdiv);
-		this.wrapdiv.appendChild(this.tabdiv);
-		this.generateStatHtml();
-	}
+
 	return screen;
 }//»
 quitNewScreen(screen, opts={}){//«
@@ -3727,28 +3438,527 @@ quitNewScreen(screen, opts={}){//«
 	this.x=screen.x;
 	this.y=screen.y;
 	this.scrollNum = screen.scrollNum;
-	this.numStatLines = screen.numStatLines;
+//	this.numStatLines = screen.numStatLines;
 
 	this.isEditor = this.appClass == "editor";
 	this.isPager = this.appClass == "pager";
 	if (!screen.funcs) screen.funcs = {};
 	this.onescape = screen.funcs.onescape;
 	this.onreload = screen.funcs.onreload;
-	
-	if (!this.numStatLines){
-		this.statdiv._del();
-	}
 	this.tabdiv._x = 0;
+
 	if (old_actor&&old_actor.cb) {
-//		old_actor.cb(screen);
 		old_actor.cb(!opts.reload);
 	}
 }//»
+render(opts={}){//«
 
+	const{tabdiv, actor}=this;
+//Var«
+
+	let stat_x;
+	if (actor) {
+		stat_x = actor.stat_x;
+		this.x=actor.x;
+		this.y=actor.y;
+		this.scrollNum = actor.scroll_num;
+		if (!stat_x) stat_x = this.x;
+	}
+	let seltop;
+	let selbot;
+	let selleft;
+	let selright;
+	let selmark;
+	let stat_input_type;
+	let stat_com_arr;
+	let stat_message, stat_message_type;
+	let num_lines;
+	let ry;
+	let mode;
+	let symbol;
+	let line_select_mode;
+	let hex_ln_mark;
+	if (actor) ({stat_input_type,stat_com_arr,stat_message,stat_message_type, line_select_mode}=actor);
+	if (!stat_input_type) stat_input_type="";
+
+	if (this.isEditor) ({mode,symbol,seltop,selbot,selleft,selright,selmark,opts,num_lines,ry,hex_ln_mark}=actor);
+	if (!(this.nCols&&this.nRows)) return;
+
+	let visual_line_mode = (mode===VIS_LINE_MODE) || line_select_mode;
+	if (line_select_mode) seltop = selbot = this.scrollNum+this.y;
+	
+	if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE){
+		visual_line_mode = true;
+		seltop = selbot = this.y+this.scrollNum;
+	}
+	let visual_block_mode = mode===VIS_BLOCK_MODE;
+	let visual_mark_mode = mode===VIS_MARK_MODE;
+	let visual_mode = visual_line_mode || visual_mark_mode || visual_block_mode;
+	let docursor = false;
+	if (opts.noCursor){}
+	else if (!(this.terminalIsLocked||this.isPager||stat_input_type||this.isScrolling)) docursor = true;
+	let usescroll = this.scrollNum;
+	let scry=usescroll;
+	let slicefrom = scry;
+	let sliceto = scry + this.nRows;
+	let uselines=[];
+	let is_str = false;
+	let usex = this.x;
+	let outarr = [];
+	let donum;
+//»
+	let push_empty_line = !(this.isEditor||this.isPager);
+	for (let i=slicefrom; i < sliceto; i++) {//«
+		let ln = this.lines[i];
+		if (ln){
+			uselines.push(ln.slice());
+			continue;
+		}
+		if (push_empty_line){
+			uselines.push([""]);
+			continue;
+		}
+		let noline = ['<span style="color: #6c97c4;">~</span>'];
+		noline._noline = true;
+		uselines.push(noline);
+	}//»
+	let len = uselines.length;//«
+	if (len + this.numStatLines != this.h) donum = this.h - this.numStatLines;
+	else donum = len;//»
+
+	let slice_from = 0;
+	let slice_to;
+
+	if (docursor&&this.isEditor&&mode!==LINE_WRAP_MODE) {//Keep the cursor (non-jarringly) at the end of the right edge of the screen when it would otherwise be off screen.
+		let diff = usex - this.w + 1;
+		let no_colors = false;
+		if (diff > 0){
+			slice_from = diff;
+if (slice_from && (visual_mark_mode || visual_block_mode)) {
+selleft -= slice_from;
+selright -= slice_from;
+}
+			usex-=slice_from;
+			slice_to = diff + this.w;
+			no_colors = true;
+		}
+	}
+	for (let i = 0; i < donum; i++) {//«
+
+		let arr = uselines[i];
+		let is_folded = arr[0]=="\xd7";
+		if (!is_folded && slice_from) arr = arr.slice(slice_from, slice_to);
+		else {
+			arr = arr.slice(0, this.w);
+		}
+		let ind;
+		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
+		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
+		while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
+
+		if (!arr||(arr.length==1&&arr[0]=="")) arr = [" "];
+		let gotit = arr.indexOf(null);
+		if (gotit > -1) arr[gotit] = " ";
+		let curnum = i+usescroll;
+		let colobj = this.lineColors[curnum];
+		if (visual_mode&&seltop<=curnum&&selbot>=curnum){//«
+
+			if (visual_line_mode) {//«
+				let ln_min1 = arr.length-1;
+				if (ln_min1 == -1) ln_min1=0;
+				arr[0] = '<span style="background-color:#aaa;color:#000;">'+(arr[0]||" ");
+				arr[ln_min1] = (arr[ln_min1]||" ")+'</span>';
+			}//»
+			else if (visual_mark_mode){//«
+				let useleft, useright;
+				if (seltop==curnum && selbot==curnum){
+					useleft = selleft;
+					useright = selright;
+				}
+				else if (curnum > seltop && curnum < selbot){
+					useleft = 0;
+					useright = arr.length-1;
+				}
+				else if (seltop===curnum){
+					useright = arr.length-1;
+					useleft = (curnum==this.cy())?this.x:selmark;
+				}
+				else if (selbot===curnum){
+					useleft = 0;
+					useright = (curnum==this.cy())?this.x:selmark;
+				}
+				else{
+throw new Error("Weird condition detected in visual mark mode involving curnum (current line number), seltop (selection top) and selbot (selection bottom)!");
+				}
+//if (slice_from) {
+//useleft -= slice_from;
+//useright -= slice_from;
+//}
+				if (useleft < 0) useleft = 0;
+				if (useright < 0) useright = 0;
+				let str = '<span style="color:#000;background-color:#aaa;">'+(arr[useleft]||" ");
+				arr[useleft]=str;
+				if (useright == -1) useright = 0;
+				if (arr[useright]) arr[useright] = arr[useright]+"</span>";
+				else arr[useright] = "</span>";
+			}//»
+			else {//visual_block_mode«
+				let str;
+				if (arr[selleft]) str = '<span style="color:#000;background-color:#aaa;">'+(arr[selleft]||"");
+				else str = " ";
+				arr[selleft]=str;
+				if (arr[selright]) arr[selright] = arr[selright]+"</span>";
+				else arr[selright] = "</span>";
+			}//»
+
+		}//»
+		else if (is_folded){//Folded row«
+//This marker is reserved as the first character for folded rows
+			if (tabdiv._x) arr=[];
+			else {
+				arr[0]=`<span style="color:${this.rowFoldColor};">${arr[0]}`
+				arr[arr.length-1]=`${arr[arr.length-1]}</span>`;
+			}
+		}//»
+		else if (colobj){//«
+			let nums = Object.keys(colobj);
+			for (let numstr of nums) {
+				if (numstr.match(/^_/)) continue;
+				let num1 = parseInt(numstr);
+				let obj = colobj[numstr];
+				if (obj[0] < 1){
+cwarn("GOT INVALID colobj", obj);
+					continue;
+				}
+				let num2 = num1 + obj[0]-1;
+				let col = obj[1];
+				let bgcol = obj[2];
+				let str = '<span style="color:'+col+";";
+				if (bgcol) str += "background-color:"+bgcol+";"
+				if (!arr[num1]) str += '"> ';
+				else str += '">'+arr[num1];
+				arr[num1] = str;
+				if (arr[num2]) arr[num2] = arr[num2]+"</span>";
+				else arr[num2] = "</span>";
+				if (num2 > this.w) break;
+
+			}
+		}//»
+		else if (hex_ln_mark && arr[0]===hex_ln_mark){
+//If this was sliced, we have lost the first char
+			arr[0]=`<span style="color:${this.hexModeTColor};">${arr[0]}`
+			arr[arr.length-1]=`${arr[arr.length-1]}</span>`;
+		}
+
+		if (docursor&&i==this.y) {//«
+			let usebg;
+			if (!this.isFocused) usebg = this.curBGBlurred;
+			else usebg = this.curBG;
+			if (!arr[usex]||arr[usex]=="\x00") arr[usex]=" ";
+			else if (arr[usex]=="\n") arr[usex] = " <br>";
+			let ch = arr[usex]||" ";
+			let pre="";
+			let usech;
+			if (ch.match(/^</)&&!ch.match(/>$/)){
+				let arr = ch.split(">");
+				usech = arr.pop();
+				pre = arr[0]+">";
+			}
+			else usech = ch;
+			if (!usech.length) usech = " ";
+			let sty = `background-color:${usebg};color:${this.curFG}`;
+			arr[usex] = pre+`<span id="${this.cursorId}" style="${sty}">${usech}</span>`;
+		}//»
+
+		let s = arr.join("");
+		if (actor && !arr._noline && this.highlightActorBg) outarr.push(`<span style="background-color:${this.actorHighlightColor};">${s}</span>`);
+		else outarr.push(s);
+
+	}//»
+
+	if (actor) {//Status line«
+		let usestr;
+		if (stat_input_type) {//«
+			let arr,ind;
+			if (!stat_com_arr.slice) arr = [];
+			else arr = stat_com_arr.slice();
+			while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
+			while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
+			while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
+			if (stat_input_type=="s/") arr.push("/");
+			if (!arr[stat_x]) arr[stat_x] = " ";
+			let arrstr=arr.join("");
+			arr[stat_x] = `<span style="background-color:${this.curBG};color:${this.curFG}">${arr[stat_x]}</span>`;
+			if (visual_mode&&stat_input_type===":") {
+//			if (visual_line_mode&&stat_input_type===":") {
+//				usestr = `${stat_input_type}'&lt;,'&gt;${arr.join("")}`;
+				usestr = `:'&lt;,'&gt;${arr.join("")}`;
+			}
+			else {
+				usestr = stat_input_type + arr.join("");
+			}
+		}//»
+		else if (this.isEditor) {//«
+			let mess="", messtype, messln=0;
+			if (stat_message) {//«
+				mess = stat_message;
+				messln = mess.length;
+				mess = mess.replace(/&/g,"&amp;");
+				mess = mess.replace(/</g,"&lt;");
+
+				let typ = stat_message_type;
+				let bgcol=null;
+				let tcol="#000";
+				if (typ==STAT_OK) {
+					bgcol="#070";
+					tcol="#fff";
+				}
+				else if (typ==STAT_WARN) bgcol="#dd6";
+				else if (typ==STAT_ERR) {
+					bgcol="#900";
+					tcol="#fff";
+				}
+				if (bgcol) mess = `<span style="color:${tcol};background-color:${bgcol}">${mess}</span>`;
+
+//				editor.stat_message=null;
+				actor.stat_message=null;
+				actor.stat_message_type=null;
+			}//»
+			else {//«
+//				if (mode === this.modes.insert) mess = "-- INSERT --";
+				if (mode === INSERT_MODE) {
+//Are we on a hex line?
+if (actor.isHexLine) mess = "-- HEX INSERT --";
+else mess = "-- INSERT --";
+				}
+//				else if (mode === this.modes.replace) mess = "-- REPLACE --";
+				else if (mode === REPLACE_MODE) {
+if (actor.isHexLine) mess = "-- HEX REPLACE --";
+else mess = "-- REPLACE --";
+}
+//				else if (mode == this.modes.symbol) {
+				else if (mode === SYMBOL_MODE) {
+					if (symbol) mess = `-- SYMBOL: ${symbol} --`;
+					else mess = "-- SYMBOL --";
+				}
+//				else if (mode == this.modes.ref) {
+				else if (mode === REF_MODE) {
+					if (symbol) mess = `-- REF: ${symbol} --`;
+					else mess = "-- REF --";
+				}
+//				else if (mode === this.modes.complete) {
+				else if (mode === COMPLETE_MODE) {
+					mess = `-- COMPLETE: ${symbol} --`;
+				}
+				else if (visual_line_mode) mess = "-- VISUAL LINE --";
+				else if (visual_mark_mode) mess = "-- VISUAL --";
+				else if (visual_block_mode) mess = "-- VISUAL BLOCK --";
+//				else if (mode === this.modes.file) mess = "-- FILE --";
+				else if (mode === FILE_MODE) mess = "-- FILE --";
+//				else if (mode === this.modes.cutBuffer) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
+				else if (mode === CUT_BUFFER_MODE) mess = `-- CUT BUFFER: ${actor.cur_cut_buffer+1}/${actor.num_cut_buffers} --`;
+//				else if (mode === this.modes.lineWrap) mess = "-- LINE WRAP --";
+				else if (mode === LINE_WRAP_MODE) mess = "-- LINE WRAP --";
+				messln = mess.length;
+			}//»
+			let per;
+			let t,b;
+			if (this.scrollNum==0) t = true;
+			if (!this.lines[sliceto-1]) b=true;
+			if (t&&b) per = "All";
+			else if (t) per="Top";
+			else if (b) per = "Bot";
+			else {
+				if (Number.isFinite(ry)) {
+					per = Math.floor(100*ry/num_lines)+"%";
+				}
+				else {
+					let val = Math.floor(100*(this.scrollNum/(num_lines-1)));
+					per = (val)+"%";
+				}
+			}
+			let perln = per.length;
+			let perx = this.w-5;
+			if (perln > 4) per = "?%";
+			per = "\x20".repeat(4-perln)+per;
+			let lncol;
+//			if (mode===this.modes.lineWrap){
+			if (mode===LINE_WRAP_MODE){
+				lncol = (actor.line_wrap_y+1)+","+(actor.line_wrap_x+1);
+			}
+			else{
+				lncol = (ry+1)+","+(this.x+1);
+			}
+			let lncolln = lncol.length;
+			let lncolx = this.w - 18;
+			let diff = lncolx - messln;
+			if (diff <= 0) diff = 1;
+			let diff2 = (perx - lncolx - lncolln);
+			if (diff2 <= 0) diff2 = 1;
+			let spaces = "\x20".repeat(diff) + lncol + "\x20".repeat(diff2)+per;
+			let str = mess + spaces;
+			usestr = `<span>${str}</span>`;
+
+		}//»
+		else if (stat_message){//«
+			usestr = stat_message;
+			usestr = usestr.replace(/&/g,"&amp;");
+			usestr = usestr.replace(/</g,"&lt;");
+			stat_message = null;
+		}//»
+		else if(this.isPager){//«
+			let per = Math.floor(100*(usescroll+donum)/this.lines.length);
+			if (per > 100) per = 100;
+			let usename = (actor.fname+" ")||"";
+			usestr = `${usename}${per}% of ${this.lines.length} lines (press q to quit)`;
+			if (!stat_input_type) usestr = '<span style=background-color:#aaa;color:#000>'+usestr+'</span>'
+		}//»
+		this.updateStatLines([usestr]);
+//PSNRHDK
+		if (actor.multilineSels){
+			let sels = actor.multilineSels;
+			let stys = this.bgRowStyles;
+			for (let i=0; i < donum; i++){
+				stys[i].backgroundColor=sels[i+scry]?"#555":"";
+			}
+		}
+
+	}//»
+
+	if (this.minHeight && this.h < this.minHeight){
+		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
+	}
+	else {
+		tabdiv.innerHTML = outarr.join("\n");
+	}
+}//»
+fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
+
+//_TODO_: In Linux, the ls command lists out (alphabetically sorted) by columns, but 
+//here we are doing a row-wise listing! Doing this in a column-wise fashion (cleanly and 
+//efficiently) is an outstanding issue...
+	const{w}=this;
+//	const{dirType, linkType, badLinkType, idbDataType}=ShellMod.var;
+	let pad = this.lsPadding;
+//	if (!start_from) start_from=0;
+	if (col_arg == 1) {//«
+		for (let i=0; i < arr.length; i++) {
+			if (w >= arr[i].length) ret.push(arr[i]);
+			else {
+				let iter = 0;
+				while (true) {
+					let str = arr[i].substr(iter, iter+w);
+					if (!str) break;
+					ret.push(str);
+					iter += w;
+				}
+			}
+		}
+		return;
+	}//»
+	const min_col_wid=(col_num, use_cols)=>{//«
+		let max_len = 0;
+		let got_len;
+		let use_pad = pad;
+		for (let i=col_num; i < num ; i+=use_cols) {
+			if (i+1 == use_cols) use_pad = 0;
+			got_len = lens[i]+use_pad;
+			if (got_len > max_len) max_len = got_len;
+		}
+		return max_len;
+	};//»
+	let num = arr.length;
+	let col_wids = [];
+	let col_pos = [0];
+	let max_cols = col_arg;
+	if (!max_cols) {
+
+//SURMPLRK
+//Just need to find the number of entries that would fit on the first row.
+//The next rows (if there are any) cannot possibly raise the max_cols value.
+//If it changes, the next rows can only make max_cols go down.
+//It is absolutely insane to assume to that each file name is 1 character long!!! (This makes max_cols ridiculously big, e.g. 80/3 => 26.666666)
+//                    v---------------------------------------^^^^^^^^^^^^^^^^
+//		let min_wid = 1 + pad;
+//		max_cols = Math.floor(w/min_wid);
+//		if (arr.length < max_cols) max_cols = arr.length;
+
+//Updated to this:
+		let tot_len = 0;
+		for (let i=0; i < arr.length; i++){
+			tot_len += arr[i].length;
+			if (tot_len > w) {
+				max_cols = i;
+				if (!max_cols) {
+//This means that the first name is too big, and so we will only have a 1 column listing
+					max_cols = 1;
+				}
+				break;
+			}
+			tot_len+=this.lsPadding;
+		}
+		if (!max_cols) {
+//We never broke out of the loop, so we can put the entire listing on one line,
+//meaning that there are as many columns as there are directory entries.
+			max_cols = arr.length;
+		}
+//End update
+
+	}
+
+	let num_rows = Math.floor(num/max_cols);
+	let num_cols = max_cols;
+	let rem = num%num_cols;
+	let tot_wid = 0;
+	let min_wid;
+	for (let i=0; i < max_cols; i++) {
+		min_wid = min_col_wid(i, num_cols);
+		tot_wid += min_wid;
+		if (tot_wid > w) {
+			this.fmtLs(arr, lens, ret, types, color_ret, (num_cols - 1));
+			return;
+		}
+		col_wids.push(min_wid);
+		col_pos.push(tot_wid);
+	}
+	col_pos.pop();
+	let matrix = [];
+	let row_num;
+	let col_num;
+	let cur_row = -1;
+	let xpos;
+	for (let i=0; i < num; i++) {
+		let typ;
+		if (types) typ = types[i];
+		let color;
+		if (typ==DIR_TYPE) color="#909fff";
+		else if (typ==LINK_TYPE) color="#0cc";
+		else if (typ==BAD_LINK_TYPE) color="#f00";
+		else if (typ==IDB_DATA_TYPE) color="#cc0";
+		col_num = Math.floor(i%num_cols);
+		row_num = Math.floor(i/num_cols);
+		if (row_num != cur_row) {
+			matrix.push([]);
+			xpos=0;
+		}
+		let nm = arr[i];
+		let str = nm + " ".rep(col_wids[col_num] - nm.length);
+		matrix[row_num][col_num] = str;
+		if (color_ret) {
+			let use_row_num = row_num;
+			if (!color_ret[use_row_num]) color_ret[use_row_num] = {};
+			let uselen = nm.length;
+			if (arr[i].match(/\/$/)) uselen--;
+			if (color) color_ret[use_row_num][xpos] = [uselen, color];
+		}
+		xpos += str.length;
+		cur_row = row_num;
+	}
+	for (let i=0; i < matrix.length; i++) ret.push(matrix[i].join(""));
+	return;
+}
+//»
+*/
 //»
 
-}; 
-
-//»
-
-
+})();

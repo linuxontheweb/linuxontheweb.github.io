@@ -1,3 +1,4 @@
+(()=>{"use strict";const LIBNAME="games.cfr";
 /*Notes«
 ull: unsigned long long
 7/28/25: @TDLYMX Nothing was actually getting updated by IS.#next because «
@@ -254,13 +255,13 @@ class Node {//«
 //		let avgStrategy = new Array(NUM_ACTIONS);
 		let avgStrategy = [];
 		let normalizingSum = 0;
-		for (let a = 0; a < NUM_ACTIONS; a++) {
-			normalizingSum += strategySum[a];
-		}
-		for (let a = 0; a < NUM_ACTIONS; a++) {
-			if (normalizingSum > 0) avgStrategy[a] = strategySum[a] / normalizingSum;
-			else avgStrategy[a] = 1.0 / NUM_ACTIONS;
-		}
+for (let a = 0; a < NUM_ACTIONS; a++) {
+	normalizingSum += strategySum[a];
+}
+for (let a = 0; a < NUM_ACTIONS; a++) {
+	if (normalizingSum > 0) avgStrategy[a] = strategySum[a] / normalizingSum;
+	else avgStrategy[a] = 1.0 / NUM_ACTIONS;
+}
 		return avgStrategy;
 	}//»
 
@@ -3373,7 +3374,9 @@ const coms = {//«
 	train: com_train,
 }//»
 
-export {coms};
+//export {coms};
+LOTW.coms[LIBNAME] = {coms};
+})();
 
 
 

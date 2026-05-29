@@ -1,3 +1,4 @@
+(()=>{"use strict";const MODNAME="util.wasm";
 //import { util, api as capi } from "util";
 //import {globals} from "config";
 
@@ -5,8 +6,8 @@ const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv} = util;
 
-export const mod = function(Core) {
-
+//export const mod = function(Core) {
+LOTW.mods[MODNAME] = function() {
 //Imports«
 
 //»
@@ -271,4 +272,5 @@ run();
 globals.wasm = this;
 
 }
+})();
 

@@ -3,12 +3,12 @@
 const NS = LOTW;
 const {globals} = NS;
 const{FS_PREF,fsMod: fs,KC,ALWAYS_PREVENT}=globals;
-const {log, cwarn, cerr, gbid, make, mkdv, evt2Sym, mkOverlay, center} = LOTW.api.util;
+const {log, cwarn, cerr, gbid, make, mkdv, evt2Sym, mkOverlay, center, loadApp} = LOTW.api.util;
 //»
 
 //Var«
 
-const TERM_PATH = "/apps/Terminal.js";
+const TERM_PATH = "Terminal";
 
 let APP;
 let WIN;
@@ -146,26 +146,13 @@ doOverlay(strarg){//«
 	}, 1500);
 }
 //»
-loadApp(){//«
-
-return new Promise((Y,N)=>{//«
-let scr = make('script');
-scr.type="module";
-scr.onload = async() => {//«
-	const { app } = await import(TERM_PATH);
+async loadApp(){//«
+	await loadApp(TERM_PATH);
+	let app = LOTW.apps[TERM_PATH];
 	APP = new app(this);
 	NS.Terminal = APP;
 	APP.onappinit();
-	Y(true);
-};//»
-scr.onerror=(e)=>{//«
-cerr(e);
-Y();
-};//»
-scr.src= TERM_PATH;
-document.head._add(scr);
-});//»
-
+	return true;
 }//»
 resize(){//«
 	this.main._w=window.innerWidth;
@@ -195,4 +182,29 @@ check_for_other_systems();
 })();
 
 //»
+/*
+async loadApp(){//«
 
+return new Promise((Y,N)=>{//«
+let scr = make('script');
+//scr.type="module";
+scr.onload = async() => {//«
+//	const { app } = await import(TERM_PATH);
+await loadApp(TERM_PATH);
+let app = LOTW.apps[TERM_PATH];
+	APP = new app(this);
+	NS.Terminal = APP;
+	APP.onappinit();
+	Y(true);
+};//»
+scr.onerror=(e)=>{//«
+cerr(e);
+Y();
+};//»
+scr.src= TERM_PATH;
+document.head._add(scr);
+
+});//»
+
+}//»
+*/

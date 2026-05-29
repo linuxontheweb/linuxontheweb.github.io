@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="media.2Cameras";
 
 //Imports«
 import { util, api as capi } from "util";
@@ -15,7 +16,7 @@ const IDS = [
 	'bf66766eda9ce70ca2c470849827a78447de64260c23aef78429aa76d2551253'//1
 ];
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -150,7 +151,7 @@ this.onkill=()=>{//«
 //log(ws);
 };//»
 this.onkeydown=(e,k)=>{//«
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 	}
 	else if (k=="d_"){
 		enumerate_devices();
@@ -162,3 +163,5 @@ this.onkeydown=(e,k)=>{//«
 }
 
 
+
+})();

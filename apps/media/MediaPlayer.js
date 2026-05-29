@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="media.MediaPlayer";
+
 //@GJSKEOMFKS <--- CHANGE IT TO if (isMobile){...}
 //Imports«
 //import { util, api as capi } from "util";
@@ -15,7 +17,7 @@ const {poperr}=widgets;
 
 //»
 
-export const app = function(Win, Desk) {//«
+LOTW.apps[APPNAME] = function(Win, Desk) {//«
 
 const Video=function(vid, node){//«
 //	this.node = node;
@@ -669,7 +671,7 @@ this.onkeydown = function(e,sym) {//«
 
 	if (!vid) return;
 
-	if (sym=="SPACE_") {
+	if (sym=="\x20_") {
 		e.preventDefault();
 		if (vid.paused) {
 //			vid.play();
@@ -761,3 +763,4 @@ const resize=()=>{//«
 }
 this.resize=resize;//»
 */
+})();

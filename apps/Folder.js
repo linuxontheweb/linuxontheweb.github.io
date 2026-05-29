@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="Folder";
 /*Issues«
 
 Halloween 2023: Don't know if these have been resolved because I don't really understand
@@ -32,7 +33,8 @@ const {fs}=NS.api;
 
 //»
 
-export const app = function(Win) {
+LOTW.apps[APPNAME] = function(Win) {
+
 
 //Var«
 
@@ -86,12 +88,14 @@ Main.iconDiv = icondv;
 let num_div = mkdv();
 let cur_div = mkdv();
 let cur_sp = mksp();
-let MAX_WID = 100;
+//let MAX_WID = 300;
+let MAX_WID_DIFF = 150;
+cur_div.style.maxWidth = `${Main.clientWidth - MAX_WID_DIFF}px`;
+cur_div._over = "hidden";
 cur_div._add(cur_sp);
-//cur_div.style.maxWidth = `${MAX_WID}px`;
-//cur_div._over="hidden";
 let mess_div = mkdv();
 statbar._w = "100%";
+//statbar._w = Main.clientWidth;
 statbar._dis="flex";
 statbar.style.justifyContent="space-between";
 statbar._add(mess_div);
@@ -169,6 +173,7 @@ const go_back = async()=>{//«
 		this.prevPaths = prev_paths;
 	}
 	else prev_paths.unshift(Win.fullpath);
+Win.iconsOff();
 	if (Win.icon){
 		delete Win.icon.win;
 		delete Win.icon;
@@ -185,6 +190,7 @@ cwarn("Cannot go forward with goto_path ===", goto_path);
 		return;
 	}
 	if (!prev_paths.length) prev_paths = undefined;
+	Win.iconsOff();
 	if (Win.icon){
 		delete Win.icon.win;
 		delete Win.icon;
@@ -354,6 +360,7 @@ tab_order = [inp, savebut, canbut];
 };//»
 
 const reload = async(newpath)=>{//«
+//	Win.iconsOff();
 	if (is_loading) return;
 	prev_paths = this.prevPaths;
 	if (newpath) {
@@ -503,16 +510,9 @@ else if (s=="s_"||s=="s_C") do_save();
 this.onkill = () => {//«
 	icondv._del();
 }//»
-this.onresize = () => {//«
-
-	let cur = Win.cursor;
-	if (!cur) return;
-	let icn = Main.lasticon;
-	if (!icn) return;
-	icn.iconElem.scrollIntoViewIfNeeded();
-	cur.curElem._loc(icn.iconElem.offsetLeft+globals.css.CUR_FOLDER_XOFF, icn.iconElem.offsetTop+globals.css.CUR_FOLDER_XOFF);
-
-}//»
+this.onresize = () => {
+	cur_div.style.maxWidth = `${Main.clientWidth - MAX_WID_DIFF}px`;
+}
 this.onappinit=(arg, prevpaths)=>{//«
 	Win.makeScrollable();
 	prev_paths = prevpaths;
@@ -529,3 +529,4 @@ this.stat=stat_cur;
 }
 
 
+})();

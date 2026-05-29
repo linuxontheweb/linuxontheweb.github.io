@@ -1,3 +1,5 @@
+(()=>{"use strict";const LIBNAME="extra";
+
 /*EVERYTHING HERE NEEDS TO BE UPDATED TO THE NEW STYLE LIKE IN COM_WALT (no more term_error)
 
 e.g: 
@@ -37,7 +39,6 @@ const {normPath}=util;
 const {pathToNode}=fsapi;
 const {ShellMod} = globals;
 const {Com} = ShellMod.comClasses;
-//log(Com);
 //const{log, jlog, cwarn, cerr}=util;
 //»
 
@@ -748,7 +749,7 @@ return write_to_redir(term, blob, redir)
 
 };//»
 */
-export const coms = {//«
+const coms = {//«
 //	webmcat: com_webmcat,
 //	remux: com_remux,
 	record: com_record,
@@ -756,4 +757,7 @@ export const coms = {//«
 //	walt: com_walt,
 };//»
 
+LOTW.coms[LIBNAME] = {coms};
+
+})();
 

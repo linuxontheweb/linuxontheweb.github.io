@@ -1,4 +1,5 @@
-export const app = class {
+(()=>{"use strict";const APPNAME="YourApp";
+LOTW.apps[APPNAME] = class {
 	constructor(Win){
 		this.Win = Win;
 	}
@@ -22,3 +23,4 @@ console.log(`Got: ${e.key}`);
 	}
 }
 
+})();

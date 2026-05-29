@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="BinView";
+
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 //import { util, api as capi } from "util";
@@ -9,7 +11,7 @@ const{popin}=globals.api.widgets;
 
 //log(popin);
 
-export const app = function(Win) {
+LOTW.apps[APPNAME] = function(Win) {
 
 //Var«
 
@@ -430,7 +432,7 @@ this.onkeydown=(e,k)=>{//«
         scroll_num = lines.length-h;
         render();
     }
-	else if (k=="SPACE_"){
+	else if (k=="\x20_"){
 		text_mode = !text_mode;
 		render();
 	}
@@ -458,3 +460,4 @@ this.onkeydown=(e,k)=>{//«
 
 }
 
+})();

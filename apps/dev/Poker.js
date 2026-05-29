@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="dev.Poker";
 /*
 The total reported in the showdown doesn't include the river bets?
 */
@@ -73,6 +74,7 @@ const NUM_FINAL_CARDS = 2;
 */
 const TABLE_WID = 800;
 const TABLE_HGT = 400;
+const ASPECT = TABLE_WID/TABLE_HGT;
 
 const BET_RING_WID = 600;
 const BET_RING_HGT = 250;
@@ -82,7 +84,7 @@ const POT_RING_HGT = 145
 
 //»
 
-export const app = class {
+LOTW.apps[APPNAME] = class {
 
 constructor(Win){//«
 
@@ -91,7 +93,7 @@ this.Win = Win;
 this.Main = Win.Main;
 this.statBar = this.Win.statusBar;
 this.makeDOM();
-
+this.curScale = 1;
 }//»
 
 makeDOM(){//«
@@ -114,22 +116,34 @@ this.potRadY = this.potRingHgt/2;
 
 const{id, Main} = this;
 
+//let wrapperId = `${id}_wrapper`;
+
 let potId = `${id}_pot`;
 let ctrlId = `${id}_controls`;
-let statCl = `${id}_status`;
 let butCl = `${id}_button`;
 let tableId = `${id}_poker-table`;
 let commCardsId = `${id}_community-cards`;
 let betRingId = `${id}_bet-ring`;
 let potRingId = `${id}_pot-ring`;
 
+let wrapper = mk('div');
+wrapper._w="100%";
+wrapper._h="100%";
+wrapper._bgcol="#200904"; 
+wrapper._dis="flex";
+wrapper.style.justifyContent="center";
+wrapper.style.alignItems="center";
+wrapper._pad="";
+//wrapper._over="hidden";
 //CSS«
+/*
 Main._bgcol="#200904"; 
 Main._dis="flex";
 Main.style.justifyContent="center";
 Main.style.alignItems="center";
 Main._pad="";
 Main._over="hidden";
+*/
 const styleElem = mk('style');
 styleElem.innerHTML=`
 #${tableId} { 
@@ -192,20 +206,20 @@ styleElem.innerHTML=`
 //	top: 55%;
 //	left: 50%; 
 //	transform: translate(-50%, -50%); 
-	font-size: 28px;
+	font-size: 22px;
 	font-weight: bold;
 	color: #eee;
 //	border: 1px dotted #ccc;
 //	border-radius: 3px; 
 }
 #${ctrlId} button { 
-	padding: 10px 20px; 
+	padding: 5px 10px; 
 	background: #202050; 
 	color: #fff; 
 	border: none; 
 	border-radius: 5px; 
 	cursor: pointer; 
-	font-size: 18px; 
+	font-size: 15px; 
 }
 .${id}_bet { 
 	color: #fff;
@@ -289,16 +303,7 @@ styleElem.innerHTML=`
 document.head.appendChild(styleElem);
 
 //HTML«
-Main.innerHTML = `
-<div id="${ctrlId}" style="display: none;">
-<div class="${statCl}"></div>
-<div>
-<button class="${butCl}">Fold</button>
-<button class="${butCl}">Call</button>
-<button class="${butCl}">Raise</button>
-<button class="${butCl}">All-In</button>
-</div>
-</div>
+wrapper.innerHTML = `
 <div id="${tableId}">
 <div id="${commCardsId}"></div>
 </div>
@@ -306,15 +311,33 @@ Main.innerHTML = `
 <div id="${potRingId}"></div>
 <div id="${potId}"></div>
 `;
+let ctrldiv = mk('div');
+ctrldiv.id=ctrlId;
+ctrldiv._dis="none";
+ctrldiv._op = 0.75;
+ctrldiv.innerHTML=`
+<div>
+<button class="${butCl}">Fold</button>
+<button class="${butCl}">Call</button>
+<button class="${butCl}">Raise</button>
+<button class="${butCl}">All-In</button>
+</div>
+`;
+let potdiv = mk('div');
+//potdiv._op = 0.75;
+potdiv.id=potId;
+Main._add(wrapper);
+Main._add(potdiv);
+Main._add(ctrldiv);
+this.potElem = potdiv;
+this.controlsElem = ctrldiv;
+this.wrapperElem = wrapper;
 this.tableElem = document.getElementById(tableId);
-this.controlsElem = document.getElementById(ctrlId);
 this.betRingElem = document.getElementById(betRingId);
 this.potRingElem = document.getElementById(potRingId);
-this.potElem = document.getElementById(potId);
 this.commCardsElem = document.getElementById(commCardsId);
-
+//log(this.controlsElem);
 //»
-
 this.styleElem = styleElem;
 
 }//»
@@ -384,11 +407,12 @@ updatePlayerDisplay(){//«
 			playerDiv.classList.toggle('current', i === this.gameState.currentPlayer && player.inHand && !player.allIn);
 			const cardsDiv = playerDiv.querySelector(`.${id}_cards`);
 			if (!player.inHand) {
-				cardsDiv.innerHTML=`<span class="${id}_card ${id}_folded-card">&nbsp;</span><span class="${id}_card ${id}_folded-card">&nbsp;</span>`;
+cardsDiv.innerHTML=`<span class="${id}_card ${id}_folded-card">&nbsp;</span><span class="${id}_card ${id}_folded-card">&nbsp;</span>`;
 			}
 			else {
-				cardsDiv.innerHTML = player.hand.map(card => `<span class="${id}_card ${card.suit === '♥' || card.suit === '♦' ? 'red' : 'black'}">${card.rank}${card.suit}</span>`).join('');
+cardsDiv.innerHTML = player.hand.map(card => `<span class="${id}_card ${card.suit === '♥' || card.suit === '♦' ? 'red' : 'black'}">${card.rank}${card.suit}</span>`).join('');
 			}
+//log(cardsDiv);
 			playerDiv.innerHTML = `Player ${i + 1}<br>${player.chips}${player.allIn ? ' (All-In)' : ''}<div class="${id}_cards">${cardsDiv.innerHTML}</div>`;
 		}
 	});
@@ -471,30 +495,6 @@ dealHands(){//«
 			if (player.inHand) player.hand.push(this.dealCard());
 		}
 	}
-}//»
-eval2(c1, c2){//«
-	let score, text;
-	let r1 = RANKS.indexOf(c1.rank);
-	let r2 = RANKS.indexOf(c2.rank);
-	if (r1 === r2) {
-		score = 1000 + r1;
-		text = `Pair of ${c1.rank}s`;
-	}
-	else {
-		let lo, hi;
-		if (r1 > r2){
-			hi = r1;
-			lo = r2;
-			text = `${c1.rank}${c2.rank}`;
-		}
-		else{
-			hi = r2;
-			lo = r1;
-			text = `${c2.rank}${c1.rank}`;
-		}
-		score = 10 * hi + lo;
-	}
-	return { score, text };
 }//»
 eval5(hand, readable, score_only){//«
 readable = true;
@@ -803,6 +803,198 @@ return {
 };
 
 }//»
+eval2(c1, c2){//«
+	let score, text;
+	let r1 = RANKS.indexOf(c1.rank);
+	let r2 = RANKS.indexOf(c2.rank);
+	if (r1 === r2) {
+		score = 1000 + r1;
+		text = `Pair of ${c1.rank}s`;
+	}
+	else {
+		let lo, hi;
+		if (r1 > r2){
+			hi = r1;
+			lo = r2;
+			text = `${c1.rank}${c2.rank}`;
+		}
+		else{
+			hi = r2;
+			lo = r1;
+			text = `${c2.rank}${c1.rank}`;
+		}
+		score = 10 * hi + lo;
+	}
+	return { score, text };
+}//»
+_eval7(cards){//«
+
+const kStraightFlush = 775892;
+const kQuads = 775723;
+const kFullhouse = 775554;
+const kFlush = 404261;
+const kStraight = 404248;
+const kTrips = 402051;
+const k2Pair = 399854;
+const kPair = 371293;
+
+const ranks=new Uint8Array(7);
+const suits=new Uint8Array(7);
+const rank_counts=new Uint8Array(13);
+const suit_counts=new Uint8Array(4);
+
+let r; 
+let flush_suit, straight_rank;
+let trip_rank, pair_rank, pair2_rank;
+let h1, h2, h3, h4, h5;
+flush_suit = straight_rank = trip_rank = pair_rank = pair2_rank = -1;
+
+for (let i=0; i < 7; i++){
+
+	let c = cards[i];
+
+	let r = Math.floor(c/4);
+	ranks[i] = r;
+	rank_counts[r]++;
+
+	let s = c%4;
+	suits[i] = s; 
+	suit_counts[s]++;
+}
+
+for (let s=0; s < 4; s++){//Detect flush
+	if (suit_counts[s] >= 5){
+		flush_suit = s;
+		break;
+	}
+}
+
+r = 12;
+while (r >= 3){ //Detect straights
+
+	let r1 = r;
+	let end = r-4;
+	if (end > -1){
+		while(r1>=end && r1>-1 && rank_counts[r1]>0) --r1;
+	}
+	else{
+		if(rank_counts[3]>0 && rank_counts[2]>0 && rank_counts[1]>0 && 
+						rank_counts[0]>0 && rank_counts[12]>0) r1 = -2;
+	}
+
+	if (r1 == end-1){ // Straight
+		if(flush_suit >= 0){ // Flush
+			let num=0;
+			for (let i=0; i < 7; i++){
+				if (suits[i]===flush_suit && (
+					(ranks[i] >= end && ranks[i]<=r) || 
+					(end == -1 && ranks[i]==12)
+				   )) num++;
+			}
+			if (num >= 5){
+				return kStraightFlush + r;
+			}
+			r--; //Maybe there is a lower straight flush
+		}
+		else{
+			straight_rank = r;
+			break;
+		}
+	}
+	else{
+		r = r1-1;
+	}
+}
+
+for (r=12; r >= 0; r--){
+	let ct = rank_counts[r];
+	if (ct==4){
+		h1=-1;
+		for (let i=0; i < 7; i++){
+			let ri = ranks[i];
+			if (ri != r && ri > h1) h1=ri;
+		}
+		return kQuads + 13*r + h1;
+	}
+	else if (ct==3){
+		if (trip_rank == -1) trip_rank = r;
+		else if (pair_rank == -1) pair_rank = r;
+	}
+	else if (ct==2){
+		if (pair_rank == -1) pair_rank = r;
+		else if (pair2_rank == -1) pair2_rank = r;
+	}
+}
+if (trip_rank >= 0 && pair_rank >= 0){
+	return kFullhouse + trip_rank * 13 + pair_rank;
+}
+if (flush_suit >= 0){
+	h1=h2=h3=h4=h5=-1; 
+	for (let i=0; i < 7; i++){
+		if(suits[i]===flush_suit){
+			let ri = ranks[i];
+			if (ri > h1){h5=h4;h4=h3;h3=h2;h2=h1;h1=ri;}
+			else if (ri > h2){h5=h4;h4=h3;h3=h2;h2=ri;}
+			else if (ri > h3){h5=h4;h4=h3;h3=ri;}
+			else if (ri > h4){h5=h4;h4=ri;}
+			else if (ri > h5){h5=ri;}
+		}
+	}
+	return kFlush + h1 * 28561 + h2 * 2197 + h3 * 169 + h4 * 13 + h5;
+}
+if (straight_rank >= 0) return kStraight + straight_rank;
+if (trip_rank >= 0){
+	h1=h2=-1; 
+	for (let i=0; i < 7; i++){
+		let ri = ranks[i];
+		if(ri != trip_rank){
+			if (ri > h1){h2=h1;h1=ri;}
+			else if (ri > h2){h2=ri;}
+		}
+	}
+	return kTrips + trip_rank * 169 + h1 * 13 + h2;
+}
+if (pair_rank >= 0 && pair2_rank >= 0){
+	h1=-1;
+	for (let i=0; i < 7; i++){
+		let ri = ranks[i];
+		if (ri != pair_rank && ri != pair2_rank && ri > h1) h1=ri;
+	}
+	return k2Pair + pair_rank * 169 + pair2_rank * 13 + h1;
+
+}
+if (pair_rank >= 0){
+	h1=h2=h3=-1; 
+	for (let i=0; i < 7; i++){
+		let ri = ranks[i];
+		if(ri != pair_rank){
+			if (ri > h1){h3=h2;h2=h1;h1=ri;}
+			else if (ri > h2){h3=h2;h2=ri;}
+			else if (ri > h3){h3=ri;}
+		}
+	}
+	return kPair + pair_rank * 2197 + h1 * 169 + h2 * 13 + h3;
+}
+
+h1=h2=h3=h4=h5=-1; 
+for (let i=0; i < 7; i++){
+	let ri = ranks[i];
+	if (ri > h1){h5=h4;h4=h3;h3=h2;h2=h1;h1=ri;}
+	else if (ri > h2){h5=h4;h4=h3;h3=h2;h2=ri;}
+	else if (ri > h3){h5=h4;h4=h3;h3=ri;}
+	else if (ri > h4){h5=h4;h4=ri;}
+	else if (ri > h5){h5=ri;}
+}
+return h1 * 28561 + h2 * 2197 + h3 * 169 + h4 * 13 + h5;
+
+/*
+for (let i=0; i < 7; i++){
+let ri = ranks[i];
+if(){
+}
+}
+*/
+}//»
 eval7(a){//«
 const{eval5} = this;
 //We always have 7 cards here
@@ -1029,6 +1221,10 @@ playerAction(action) {//«
 	}
 
 	const bigBlindIndex = (this.gameState.dealer + 2) % this.gameState.players.length;
+//To be precise, we should also check for gameState.phase == 'preflop'
+//  const isBigBlind = gameState.phase == 'preflop' && 
+//					this.gameState.currentPlayer === bigBlindIndex;
+//Not sure if this introduces any bugs in the logic (don't think it does)
 	const isBigBlind = this.gameState.currentPlayer === bigBlindIndex;
 
 	if (action === 'raise') {
@@ -1176,30 +1372,66 @@ nextPlayer() {//«
 	const { gameState } = this;
 	let activePlayers = gameState.players.filter(p => p.inHand && !p.allIn).length;
 	let playersInHand = gameState.players.filter(p => p.inHand).length;
-	let bigBlindIndex = (gameState.dealer + 2) % gameState.players.length;
+//	let bigBlindIndex = (gameState.dealer + 2) % gameState.players.length;
 
 	if (playersInHand <= 1) {
 		this.endHand();
 		return;
 	}
 
-	let betsEqual = gameState.players.every(p => !p.inHand || p.allIn || (p.bet >= 0 && p.bet === gameState.currentBet));
+/*Important: resetBetStates() sets each player's current bet to -1,
+so 'p.bet=0' here means that a player has really acted (i.e. checked 
+in first position)
+*/
+	let betsEqual = gameState.players.every(p => !p.inHand || p.allIn || 
+						(p.bet >= 0 && p.bet === gameState.currentBet));
 
-	if (betsEqual && (gameState.phase !== 'preflop' || gameState.bigBlindActed)) {
+// Why not test for 'activePlayers <= 1' along with betsEqual?
+// Otherwise, we seem to (unnecessarily) be going around the loop of
+// players (while loop below), in order to get back to the 
+// startPlayer before doing the same test for activePlayers
+//      vvvvvvvvvvvvvvvvvv------- HERE!!!
+	if (activePlayers <= 1 || 
+	    (betsEqual && (gameState.phase !== 'preflop' || 
+									gameState.bigBlindActed)) ) {
+
+//WUEGDB
+//	if (betsEqual && (gameState.phase !== 'preflop' || 
+//									gameState.bigBlindActed)) {
+
 		if (gameState.phase !== 'river') {
 			this.nextPhase();
-		} else {
+		} 
+		else {
 			this.endHand();
 		}
 		return;
 	}
 
 	this.incCurPlayer();
+
 	let startPlayer = gameState.currentPlayer;
-	while (!gameState.players[gameState.currentPlayer].inHand || gameState.players[gameState.currentPlayer].allIn) {
+	while (!gameState.players[gameState.currentPlayer].inHand || 
+					gameState.players[gameState.currentPlayer].allIn) {
 		this.incCurPlayer();
+if (gameState.currentPlayer === startPlayer) {
+	throw new Error("I THOUGHT THIS CASE WAS IMPOSSIBLE");
+}
+/*«
+
 		if (gameState.currentPlayer === startPlayer) {
-			if (betsEqual || activePlayers <= 1) {
+
+//Not sure if we should ever get here or not, because completing
+//the circuit around the table should always mean: 'activePlayers <= 1'
+
+
+			if (betsEqual) {
+
+// What's the sense of this test for activePlayers here rather than above?
+// If this introduces any bugs, need to uncomment this and @WUEGDB above 
+//          NOT HERE!!! -----vvvvvvvvvvvvvvvvvv
+//			if (betsEqual || activePlayers <= 1) {
+
 				if (gameState.phase !== 'river') {
 					this.nextPhase();
 				} else {
@@ -1207,8 +1439,14 @@ nextPlayer() {//«
 				}
 				return;
 			}
+//Back at startPlayer, but bets are not equal here, so 
+//prompt for action below
+//But is this even possible???
 		}
+»*/
 	}
+
+//if betsEqual, must be preflop && !bigBlindActed
 
 	this.stat(`Player ${gameState.currentPlayer + 1}'s turn`);
 
@@ -1401,7 +1639,6 @@ startGame() {//«
 		this.controlsElem.style.display = 'flex';
 	}
 }//»
-
 onkill(){//«
 	this.styleElem.remove();
 	this.reInit = this.appArg
@@ -1410,15 +1647,25 @@ onappinit(arg={}){//«
 
 arg = arg.reInit || arg;
 this.appArg = arg;
-this.playerTypes = arg.playerTypes || ["live", "live"];
+this.playerTypes = arg.playerTypes || ["live", "bill","bob","jack"];
 this.numPlayers = this.playerTypes.length;
 this.initGameState();
 this.initPlayers();
+
 this.startGame();
 
 }//»
 onkeydown(e, k){//«
-
+if (k=="-_"){
+this.curScale*=0.90;
+this.wrapperElem.style.transform = `scale(${this.curScale})`;
+return;
+}
+if (k=="=_S"){
+this.curScale*=1.1;
+this.wrapperElem.style.transform = `scale(${this.curScale})`;
+return;
+}
 if (k==="ENTER_"){
 	if (this.gameState.phase==="ended"){
 		this.newHand();
@@ -1436,3 +1683,4 @@ if (this.controlsElem.style.display !== "none" && this.curType === 'live') {
 
 
 
+})();

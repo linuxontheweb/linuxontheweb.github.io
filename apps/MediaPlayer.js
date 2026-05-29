@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="MediaPlayer";
+
 /*Just using this as a looper, e.g. to take a nice White/Brown noise media file and
 reset the currentTime to zero when the ontimeupdate event shows it to be within 
 'end_secs_before_loop' seconds of the end. Otherwise, merely setting the loop 
@@ -18,7 +20,7 @@ const{isarr, isstr, isnum, isobj, make, log, jlog, cwarn, cerr}=util;
 
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -86,7 +88,7 @@ this.onkill=()=>{//«
 	this.reInit = {url};
 };//»
 this.onkeydown=(e,k)=>{//«
-	if (k=="SPACE_"){//«
+	if (k=="\x20_"){//«
 		if (vid.paused) vid.play();
 		else vid.pause();
 	}//»
@@ -106,3 +108,4 @@ this.onresize=()=>{set_vid_dim();};
 
 }
 
+})();

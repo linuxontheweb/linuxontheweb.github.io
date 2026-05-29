@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="media.Camera";
 
 //Imports«
 import { util, api as capi } from "util";
@@ -12,7 +13,7 @@ const {fs, widgets: wdg} = NS.api;
 //let USE_DEVICE = "9bf05e13e1ab9416e22e9c2055b8b3e537569da12ebd9f2d9f6247c73977a0c1";
 let USE_DEVICE = false;
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -163,7 +164,7 @@ this.onkill=()=>{//«
 };//»
 this.onkeydown=(e,k)=>{//«
 	if (is_waiting) return;
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 		e.preventDefault();
 		take_picture();
 	}
@@ -173,3 +174,4 @@ this.onkeydown=(e,k)=>{//«
 };//»
 
 }
+})();

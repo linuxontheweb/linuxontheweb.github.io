@@ -68,7 +68,7 @@ MOST RECENT:
 					}
 				},
 				"nodes": {
-					".indexOn": ["parId", "path"],
+					".indexOn": ["parId", "path", "blobId"],
 					".read": "auth != null",
 					"$nodeId": {
 						".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
@@ -124,6 +124,11 @@ MOST RECENT:
 Also: Let's await on update.
 »*/
 
+/*10/20/25: NEED TO RESET THE SCHEMA: Just added 'blobId' to indexOn for /LOTW/$ghid/node«
+This way we can see if there are ever 0 nodes attached to a given blob, in case we
+want to keep the blobs around for any reason, regardless of whether they are linked
+to any nodes.
+»*/
 /*10/17/25: Need to export a try_get_kid sort of function so that path_to_node in sys/fs.js«
 can do the same type of path resolution mechanism as for FS_TYPE nodes.
 

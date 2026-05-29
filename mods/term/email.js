@@ -1,4 +1,6 @@
-
+/*5/13/26: This will need to be updated to the new "self-rendering"
+methods that are used by vim/less.
+*/
 /*«
 
 Put a database in here and call db.close inside of quit() @DLKUITPEU

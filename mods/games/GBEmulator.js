@@ -1,9 +1,12 @@
+(()=>{"use strict";const MODNAME="games.GBEmulator";
+
 //import { util, api as capi } from "util";
 //import {globals} from "config";
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{ log, jlog, cwarn, cerr, isStr, isNum, make, mk, mkdv} = util;
-export const mod = function(Core) {
+//export const mod = function(Core) {
+LOTW.mods[MODNAME] = function() {
 
 let silent_mode = false;
 //var globals = Core.globals;
@@ -313,4 +316,5 @@ this.init = function(appobj, bytes, canvas, gain, cb, wasm){
 }
 
 }
+})();
 

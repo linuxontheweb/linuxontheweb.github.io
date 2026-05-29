@@ -1,3 +1,4 @@
+(()=>{"use strict";const APPNAME="dev.GetPoint";
 
 //Imports«
 
@@ -5,7 +6,7 @@ const{isarr, isstr, isnum, isobj, make, log, jlog, cwarn, cerr}=LOTW.api.util;
 
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Var«
 
@@ -29,15 +30,16 @@ Win.main.innerHTML="<h1>Har, things, places, lor, lor, lor<h1>";
 this.onkill=()=>{//«
 };//»
 this.onkeydown=(e,k)=>{//«
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 		get_point();
 	}
 };//»
 this.onkeyup=(e,k)=>{
-	if (k=="SPACE_"){
+	if (k=="\x20_"){
 	}
 };
 
 //»
 
 }
+})();

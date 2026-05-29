@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="hw.MidiCtl";
+
 //Imports«
 const NS = window._OS_;
 const {globals} = NS;
@@ -50,7 +52,7 @@ _knob.div = d;
 
 };//»
 
-export const app = function(Win){
+LOTW.apps[APPNAME] = function(Win){
 
 //Var«
 
@@ -201,7 +203,7 @@ if (k==="LEFT_"){
 else if (k==="RIGHT_"){
 	next_knob_on();
 }
-else if (k=="SPACE_"){
+else if (k=="\x20_"){
 curknob.toggle_status();
 }
 };//»
@@ -209,3 +211,4 @@ curknob.toggle_status();
 }
 
 
+})();

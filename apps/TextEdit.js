@@ -1,3 +1,5 @@
+(()=>{"use strict";const APPNAME="TextEdit";
+
 //Imports«
 
 //import { util, api as capi } from "util";
@@ -13,7 +15,7 @@ const fsapi=NS.api.fs;
 
 //»
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 //Imports«
 
@@ -253,3 +255,4 @@ this.get_context = ()=>{//«
 }
 
 
+})();

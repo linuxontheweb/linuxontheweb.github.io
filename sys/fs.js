@@ -16,7 +16,32 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
+/*12/14/25
 
+Added try/catch block @XMNYTGH for this fetch statment in getBlob
+(type===MOUNT_TYPE), and returned null. Then I added a check for null in
+coms/fs.js: com_less, which caused the less command to report an error, rather
+than (successfully) show an empty buffer. We should probably add this same
+check for null to other commands (like vim) and other applications (like
+TextEdit) and possibly parts of the system. Also for the fetch in
+try_make_site_dir. So this is turning into a pattern...
+
+*/
+/*10/20/25: Need to reimagine the "add_lock_funcs" concept @GSIEKFO, probably by«
+adding these methods to the nodes themselves. I guess the lockFile/unlockFile 
+functions were being used before the FSNode concept was originally introduced.
+As they currently exist, there are going to be blobId collisions between files
+of type: FS_TYPE and USERS_TYPE. 
+
+Does the concept of locking a file (for editing) even apply to IDB_DATA_TYPE files?
+We were previously calling add_lock_funcs on them in mk_dir_kid (@WLOTUYJG). But
+I'm pretty sure there's no good reason for these to be sent to the entire *text* editing
+workflow.
+
+Just added the locking/unlocking functions to FileNode and NetFileNode. The only
+issues is with locking nodes (with blobId=0) in NetFileNode @EKSHRKG.
+
+»*/
 /*10/19/25: LOTS OF CHANGES! «
 
 The notes below are from earlier in the day. I got rid of all invocations of checkDirPerm
@@ -187,6 +212,9 @@ We are giving a console warning if the type fields do not match upon updating.
 
 */
 //»
+
+(()=>{"use strict";
+
 
 //Imports«
 
@@ -649,6 +677,15 @@ writeLocked(){return false;}
 
 }//»
 
+class DevNode extends FSNode{//«
+
+constructor(name, par, data){
+	super(name, par, data);
+	this.isDevice = true;
+	this.appName = "Device";
+}
+
+}//»
 class DirNode extends FSNode{//«
 
 constructor(name, par, data){//«
@@ -662,7 +699,7 @@ setName(val){//«
 }//»
 //SIEMGKG
 get okWrite(){//«
-cwarn(`OKWRITE: ${this.fullpath}`);
+//cwarn(`OKWRITE: ${this.fullpath}`);
 	let obj = this;
 	while (obj.treeroot !== true) {
 		if (obj.readonly){
@@ -680,6 +717,14 @@ cerr("Unknown obj.perm field:", obj);
 		obj = obj.par;
 	}
 	return false;
+}//»
+rmMoveLock(lockarg){//«
+	for (let i=0; i < locks.length; i++){
+		if (locks[i]===lockarg){
+			locks.splice(i, 1);
+			break;
+		}
+	}
 }//»
 
 }//»
@@ -772,8 +817,10 @@ class FileNode extends FSNode{//«
 constructor(name, par, data){//«
 	super(name, par, data);
 	this.isFile = true;
+	this.lock = {};
 }//»
-writeLocked(){return LOCKED_BLOBS[this.blobId];}
+//writeLocked(){return LOCKED_BLOBS[this.blobId];}
+writeLocked(){return LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];}
 okGet(){//«
 	if (this.type==MOUNT_TYPE||this.type==SHM_TYPE) return true;
 	let bid = this.blobId;
@@ -823,6 +870,29 @@ cerr("Could not getRealBlobId()!?!?!?");
 	this.size = rv.size;
 	return rv;
 }//»
+unlockFile(){//«
+	delete LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];
+//	delete LOCKED_BLOBS[this.blobId];
+	let par = this.par;
+	while (par){
+		if (par.type) break;
+		par.rmMoveLock(this.lock);
+		par = par.par;
+	}
+}//»
+async lockFile(){//«
+	if (this.blobId === NULL_BLOB_FS_TYPE){
+		await this.getRealBlobId();
+	}
+//	LOCKED_BLOBS[this.blobId] = this.blobId;
+	LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`] = true;
+	let par = this.par;
+	while (par){
+		if (par.type) break;
+		par.moveLocks.push(this.lock);
+		par = par.par;
+	}
+}//»
 get entry(){//«
 	return new Promise(async(Y,N)=>{
 		if (this._entry) return Y(this._entry);
@@ -863,21 +933,13 @@ get _file(){//«
 }//»
 
 }//»
-class DevNode extends FSNode{//«
-
-constructor(name, par, data){
-	super(name, par, data);
-	this.isDevice = true;
-	this.appName = "Device";
-}
-
-}//»
 //TWKMJORH
 class NetFileNode extends FSNode{//«
 
 constructor(name, par, data){//«
 	super(name, par, data);
 	this.isFile = true;
+	this.lock = {};
 }//»
 async #_getVal(opts){//«
 let arr = this.fullpath.split("/");
@@ -895,12 +957,48 @@ if (isErr(rv)){
 else return rv;
 }//»
 getValue(opts){return this.#_getVal(opts);}
+unlockFile(){//«
+	if (this.blobId === 0){
+cwarn(`NetFileNode.unlockFile: HAVE BLOBID=0, deleting this.isLocked`);
+delete this.isLocked;
+return;
+	}
+	delete LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`];
+	let par = this.par;
+	while (par){
+		if (par.type) break;
+		par.rmMoveLock(this.lock);
+		par = par.par;
+	}
+}//»
+lockFile(){//«
+//EKSHRKG
+	if (this.blobId === 0){
+cwarn(`NetFileNode.lockFile: HAVE BLOBID=0, setting this.isLocked=true`);
+this.isLocked = true;
+return;
+	}
+	LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`] = true;
+	let par = this.par;
+	while (par){
+		if (par.type) break;
+		par.moveLocks.push(this.lock);
+		par = par.par;
+	}
+}//»
 
 async setValue(val, opts){//«
 
-let rv = await globals.funcs["netfs.fbSetBlob"](this.appData.id, this.id, this.blobId, val, opts);
-//if (isNum(rv) && rv >= 0){
-if (rv && isNum(rv.size) && rv.size >= 0){
+	let rv = await globals.funcs["netfs.fbSetBlob"](this.appData.id, this.id, this.blobId, val, opts);
+	//if (isNum(rv) && rv >= 0){
+	if (rv && isNum(rv.size) && rv.size >= 0 && isNum(rv.blobId)){
+	if (this.blobId === 0 && rv.blobId > 0) {
+cwarn(`Just "upgraded" the blobId (0->${rv.blobId}). Check locked: ${this.isLocked}...`);
+		if (this.isLocked) {
+			delete this.isLocked;
+			this.lockFile();
+		}
+	}
 	this.blobId = rv.blobId;
 	this.size = rv.size;
 	return true;
@@ -919,6 +1017,10 @@ log(rv);
 }//»
 get bytes(){return this.#_getVal();}
 get text(){return this.#_getVal({forceText: true});}
+writeLocked(){
+//	return LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`];
+	return (this.isLocked || LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`]);
+}
 
 }//»
 
@@ -1721,7 +1823,14 @@ const getBlob = async(node, opts={})=>{//«
 //		if (Number.isFinite(opts.from) && Number.isFinite(opts.to)){
 //			url+=`?start=${opts.from}&end=${opts.to}`;
 //		}
-		let rv = await fetch(url);
+		let rv;
+//XMNYTGH
+		try{
+			rv = await fetch(url);
+		}
+		catch(e){
+			return null;
+		}
 		if (!rv.ok){
 			return;
 		}
@@ -2153,7 +2262,14 @@ const mount_dir=(list, par)=>{//«
 };//»
 const try_make_site_dir=async()=>{//«
 //	mount_tree("site", MOUNT_TYPE);
-	let rv = await fetch(`/list.json`);
+	let rv;
+	try {
+		rv = await fetch(`/list.json`);
+	}
+	catch(e){
+cwarn("Could not get list.json for /site");
+return;
+	}
 	if (!rv.ok){
 		cwarn("Could not get list.json for /site");
 		return;
@@ -2248,21 +2364,22 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 		kidsobj['.'] = kid;
 		kid.kids = kidsobj;
 		kid.moveLocks=[];
-		set_rm_move_lock(kid);
+//		set_rm_move_lock(kid);
 	}
 	else if (isLink) {
 		kid.appName=LINK_APP;
 	}
 	else if (isData){
 //		kid.isData = true;
-		add_lock_funcs(kid);
+//WLOTUYJG
+//		add_lock_funcs(kid);
 	}
 	else {
 //		kid.isFile = true;
 		kid.ext = util.getNameExt(name)[1];
 		let app = util.extToApp(name);
 		kid.appName = app;
-		add_lock_funcs(kid);
+//		add_lock_funcs(kid);
 		kid.size = opts.size;
 	}	
 	
@@ -2394,7 +2511,7 @@ consult the "documentation" for the `users` command.
 */
 //cwarn("POPULATE /users with vals...");
 //log(opts.vals);
-return populate_users_dirobj(dirobj, opts);
+				return populate_remote_users_dirobj(dirobj, opts);
 			}
 			else{
 cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
@@ -2402,9 +2519,7 @@ log(dirobj);
 			}
 		}
 		else if (dirobj.type == USERS_TYPE){
-/*We need a handle 
-*/
-			return populate_user_dirobj(dirobj, opts);
+			return populate_remote_user_dirobj(dirobj, opts);
 		}
 		else{
 cwarn("Got dirobj.sys = false");
@@ -2467,7 +2582,7 @@ parobj.done=true;
 return kids;
 
 }//»
-const populate_users_dirobj = (parobj, opts) => {//«
+const populate_remote_users_dirobj = (parobj, opts) => {//«
 	let kids = parobj.kids;
 	let arr = opts.vals;
 //	let login = globals.auth.github.login;
@@ -2488,7 +2603,7 @@ const populate_users_dirobj = (parobj, opts) => {//«
 	parobj.done = true;
 	return kids;
 };//»
-const populate_user_dirobj = async(parobj, opts) => {//«
+const populate_remote_user_dirobj = async(parobj, opts) => {//«
 
 let kids = parobj.kids;
 //let id = parobj.appData
@@ -2549,7 +2664,7 @@ return kids;
 //created each time that the local repo is synced to github. This old method
 //requires a dynamic backend (Node.js).
 
-const populate_rem_dirobj = async(patharg, cb, dirobj, opts = {}) => {//«
+const Populate_rem_dirobj = async(patharg, cb, dirobj, opts = {}) => {//«
 	let holdpath = patharg;
 	let parts = patharg.split("/");
 	parts.shift();
@@ -2610,7 +2725,7 @@ log(text);
 		}
 		else tm  = parseInt(mtime);
 		if (isNaN(tm)) {
-cwarn(`populate_rem_dirobj(): skipping entry: ${k} (bad "mtime"=${mtime})`);
+cwarn(`Populate_rem_dirobj(): skipping entry: ${k} (bad "mtime"=${mtime})`);
 			continue;
 		}
 		let use_year_before_time = Date.now() / 1000 - (86400 * MAX_DAYS);
@@ -2968,7 +3083,8 @@ cerr(rv.message)
     return false;
 }//»
 
-const add_lock_funcs=kid=>{//«
+/*GSIEKFO
+const add_lock_funcs = kid => {//«
 	let lock = {};
 	kid.unlockFile =()=>{
 		delete LOCKED_BLOBS[kid.blobId];
@@ -2992,7 +3108,7 @@ const add_lock_funcs=kid=>{//«
 		}
 	};
 };//»
-const set_rm_move_lock =obj=>{//«
+const set_rm_move_lock = obj => {//«
 	let locks = obj.moveLocks;
 	obj.rmMoveLock=lockarg=>{
 		for (let i=0; i < locks.length; i++){
@@ -3003,7 +3119,7 @@ const set_rm_move_lock =obj=>{//«
 		}
 	}
 };//»
-
+*/
 const get_time_str_from_file = file =>{//«
 	let now = Date.now();
 	let use_year_before_time = now - (1000 * 86400 * MAX_DAYS);
@@ -3174,7 +3290,7 @@ globals.api.fs=this.api;
 //»
 
 
-
+})();
 
 
 

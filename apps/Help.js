@@ -1,10 +1,12 @@
+(()=>{"use strict";const APPNAME="Help";
+
 //import { util, api as capi } from "util";
 //import { globals } from "config";
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{log,cwarn,cerr, make}=util;
 
-export const app = function(Win, Desk) {
+LOTW.apps[APPNAME] = function(Win, Desk) {
 
 const HELP_URL = '/www/docs/help.html';
 
@@ -45,3 +47,4 @@ this.onappinit = init;
 
 }
 
+})();

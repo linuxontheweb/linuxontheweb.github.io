@@ -81,10 +81,14 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 }»
 
 »*/
-
 /*«
 »*/
-
+/*5/23/26: Weird issue w/ line coloring @UBDJKSFD. First of all, to
+get changes there to take effect, it is not enough to reload this
+module (the shell) with r_CA. If you are running a command in a
+command library (like 'fs'), you also need to reload the command
+library itself with r_CAS.
+*/
 /*FIXED BUG @MFLOUYTW???«
 
 We needed to perform tilde expansion here so that the following command works:
@@ -93,6 +97,13 @@ $ ~/my_script.sh
 @TWEJKDLJ: This is how we did it for Stdin.setValue (also used dsSQuoteExpansion)
 »*/
 
+/*12/15/25: util.fetch: New way of doing fetch (@SLPOFIUTY), so that try/catch isn't needed, «
+and everything that is not an 'ok' response is returned as an Error.
+So everything that gets a file node or file contents (to) should first check for isErr(rv)
+on the returned value, the message of which can then be "nicely" reported to the end user.
+Up to now, there has been no rhyme/reason with how these kinds of errors are reported to the
+initial call point.
+»*/
 /*12/13/25: No more '.Term' (really with lower 't') field in the shell«
 It has been replace with the private '.#term' @QMCPOYHJ
 But individual commands still have access to their own '.Term' fields.
@@ -322,6 +333,8 @@ refreshing the shell and the terminal at the same time...
 
 //»
 
+(()=>{"use strict";const MODNAME="lang.shell";
+
 //Imports«
 
 const NS = LOTW;
@@ -389,6 +402,7 @@ const NO_SET_ENV_VARS = ["USER"];
 const ALIASES = {
     c: "clear",
     la: "ls -a",
+//    ll: "ls -l",
 };
 const BADSUB = "bad substitution";
 
@@ -460,7 +474,7 @@ How about a background output console?
 
 /*ShellMod: This function/"namespace" is our way to bundle everything«
 that is relevant to the thing called the "Shell Command Language"»*/
-export const mod = function() {
+LOTW.mods[MODNAME] = function() {
 
 //Var«
 
@@ -1162,6 +1176,10 @@ const add_coms_to_com_env=(imp_coms, com_env)=>{//«
 			num_exists++;
 			continue;
 		}
+		if (com.match(/^dev\./i)){
+cwarn(`Commands starting with 'dev.' are reserved for internal development use (Got: '${com}')`);
+continue;
+		}
 		com_env[com] = imp_coms[com];
 		ok_coms.push(com);
 	}
@@ -1171,28 +1189,14 @@ cwarn(`${num_exists} commands already exist!`);
 	return ok_coms;
 };//»
 const import_coms = async (libname, coms) => {//«
-
 	let modpath = libname.replace(/\./g,"/");
 	let v = (Math.random()+"").slice(2,9);
-	let imp = await import(`/coms/${modpath}.js?v=${v}`);
-
+//	let imp = await import(`/coms/${modpath}.js?v=${v}`);
+	if (!await util.loadComs(libname)) DIE("Import Failed #1");
+	let imp = LOTW.coms[libname];
+	if (!imp) DIE("Import failed #2");
 	let ok_coms = add_coms_to_com_env(imp.coms, coms);
-
-//	this.allLibs[libname] = ok_coms;
 	LOTW.libs[libname] = ok_coms;
-/*«
-	let opts = imp.opts||{};
-	let sh_opts = globals.shell_command_options;
-	all = Object.keys(opts);
-	for (let opt of all){
-		if (sh_opts[opt]){
-cwarn(`The option ${opt} already exists!`);
-			continue;
-		}
-		sh_opts[opt] = opts[opt];
-	}
-//	NS.coms[libname] = {coms, opts, onkill: imp.onkill};
-»*/
 	NS.coms[libname] = {coms: imp.coms, onkill: imp.onkill};
 	return ok_coms.length;
 }//»
@@ -1201,7 +1205,6 @@ const do_imports = async(arr, coms, err_cb) => {//«
 	let out=[];
 	for (let name of arr){
 		let gotlib;
-//		if (this.allLibs[name]) {
 		if (gotlib = NS.coms[name]) {
 //Still need to add the commands to the 'coms' environment
 			add_coms_to_com_env(gotlib.coms, coms);
@@ -1210,7 +1213,7 @@ const do_imports = async(arr, coms, err_cb) => {//«
 		try{
 			let num = await import_coms(name, coms);
 			out.push(`${name}(${num})`);
-log(`Imported ${num} from ${name}`);
+//log(`Imported ${num} from ${name}`);
 		}catch(e){
 			err_cb(`${name}: error importing the module`);
 cerr(e);
@@ -1231,6 +1234,13 @@ continue;
 		if (!lib){
 //cwarn(`The command library: ${libname} was in this.allLibs, but not in NS.coms!?!?!`);
 			continue;
+		}
+		let scr = document.getElementById(`script_coms.${libname}`);
+		if (scr){
+			scr._del();
+		}
+		else{
+cwarn(`SCRIPT ID 'script_coms.${libname}' NOT FOUND`);
 		}
 		lib.onkill && lib.onkill();
 		let coms = lib.coms;
@@ -1793,47 +1803,57 @@ log(val);
 	}//»
 //XVEOIP
 	fmtColLn(ln, ind, len, col){//«
+
 /*This takes as arguments:
 1) An unformatted line, which may take up many lines upon being output to the terminal
 2) An index into the line where the color value begins
 3) The length (number of chars) that the color spans
 4) The color to use
 
-This is used by grep to indicate the matched substring of a line that might possibly
-be wrapped when output onto the terminal
+This is used by grep to indicate the matched substring of a line that
+might possibly be wrapped when output onto the terminal
+
 */
+
 		let to_ind = ind+len;
 		let lnarr = this.term.fmt(ln);
 		let cols=[];
 		let did_chars = 0;
 		let got_start;
 		let got_end;
-//		let use_col = "#f99";
 		for (let i=0; i < lnarr.length; i++){
 			let ln = lnarr[i];
 			let lnlen = ln.length;
-			if (!got_start) {
+			if (!got_start) {//«
 				if (ind >= did_chars && ind < did_chars+lnlen){
 					got_start = true;
 					let from = ind-did_chars;
 					if (to_ind < did_chars+lnlen){
 						got_end = true;
-						cols.push({[from]: [len, col]});
+						if (len==0) cols.push({});
+						else cols.push({[from]: [len, col]});
 					}
 					else{
-						cols.push({[from]: [to_ind-from, col]});
+						let gotlen = to_ind - from;
+						if (gotlen == 0) cols.push({});
+						else cols.push({[from]: [gotlen, col]});
 					}
 				}
-			}
-			else if (!got_end){
+				else cols.push({});
+			}//»
+			else if (!got_end){//«
 				if (to_ind < did_chars+lnlen){
 					got_end = true;
-					cols.push({0: [to_ind-did_chars, col]});
+					let gotlen = to_ind - did_chars;
+//UBDJKSFD
+					if (gotlen=== 0) cols.push({});
+					else cols.push({0: [gotlen, col]});
 				}
 				else{
-					cols.push({0: [lnlen, col]});
+					if (lnlen == 0) cols.push({});
+					else cols.push({0: [lnlen, col]});
 				}
-			}
+			}//»
 			else{
 				cols.push({});
 			}
@@ -2341,12 +2361,96 @@ const com_devtest = class extends Com{//«
 init(){
 }
 async run(){
-let read = await navigator.clipboard.read();
-let blob = await read[0].getType('text/plain');
-let str = await util.blobToStr(blob);
-log(str);
-this.ok();
-//this.ok("DEVTEST");
+this.ok("DEVTEST");
+}
+}//»
+const com_gh = class extends Com{//«
+init(){
+}
+async run(){
+/*
+
+For creating/updating a file:
+
+curl -L \
+  -X PUT \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer <YOUR-TOKEN>" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  https://api.github.com/api/v3/repos/linuxontheweb/linuxontheweb.github.io/contents/FILE.txt \
+  -d '{"message":"Commit this!","content":"<BASE64_STRING>"}'
+
+Try adding the 'committer' object if needed:
+  -d '{...,"committer":{"name":"<NAME>","email":"<EMAIL>"},...}'
+
+For updating contents add the 'sha' field:
+-d '{...,"sha":"<SHA1_SUM_OF_CURRENT_CONTENTS>",...}'
+
+
+method (-X PUT)
+headers (-H: Accept, Authorization, X-GitHub-Api-Version)
+body (-d: JSON string)
+
+let headers  = {
+	"Accept":"application/vnd.github+json",
+	"Authorization": "Bearer <YOUR-TOKEN>",
+	"X-GitHub-Api-Version": "2022-11-28"
+};
+
+let body={
+	message: "Hidee hardoo huudee hoom",
+	content: "<BASE64_STRING>"
+};
+if (is_update){
+	body.sha = "<SHA1_SUM_OF_CURRENT_CONTENTS>";
+}
+if (add_committer){
+	body.committer = {
+		name: "<SAHM_NAME>",
+		email: "<SAHM_EMAIL>"
+	}
+}
+let options = {
+	method: "PUT",
+	headers,
+	body: JSON.stringify(body)
+}
+
+let base_url = https://api.github.com/api/v3/repos/linuxontheweb/linuxontheweb.github.io/contents"
+let file_path = "/path/to/newfile.txt"
+let url = `${base_url}${file_path}`;
+let rv = await fetch(url, options);
+
+
+For deleting a file:
+
+let body={
+	message: "Delete em oimpttteee yoimpteee",
+	sha: "<SHA1_SUM_OF_CURRENT_CONTENTS>"
+};
+let options = {
+	method: "DELETE",
+	headers,
+	body: JSON.stringify(body)
+};
+let rv = await fetch(url, options);
+
+*/
+
+this.ok("DOGH");
+}
+}//»
+const com_get = class extends Com{//«
+init(){
+}
+async run(){
+let url = this.args.shift();
+if (!url) return this.no("NEEDURL!!!");
+let rv = await util.fetch(url);//SLPOFIUTY
+if (isErr(rv)) return this.no(`Error: ${rv.message}`);
+let txt = await rv.text();
+this.out(txt);
+this.ok("OK");
 }
 }//»
 
@@ -3072,7 +3176,7 @@ async run(){
 
 
 this.builtins={//«
-
+gh: com_gh,
 cat: com_cat,
 pipe: com_pipe,
 continue: com_loopctrl,
@@ -3103,6 +3207,7 @@ appicon: com_appicon,
 open: com_open,
 msleep: com_msleep,
 test: com_test,
+get: com_get
 };
 if (dev_mode) this.builtins.devtest = com_devtest;
 //»
@@ -7012,6 +7117,7 @@ this evaluates to true, and hi is output
 
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
+this.commandStr = command_str;
 	let parser = new Parser(command_str.split(""), opts);
 	this.parser = parser;
 //TRYHERE
@@ -7121,8 +7227,7 @@ this.Shell = Shell;
 }
 //»
 
-
-
+})();
 
 
 /*Put these commands elsewhere«

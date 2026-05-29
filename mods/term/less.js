@@ -1,24 +1,25 @@
+(()=>{"use strict";const MODNAME="term.less";
+
 //Imports«
 const util = LOTW.api.util;
 const globals = LOTW.globals;
 const{strNum, isArr, isStr, isBool, log, jlog, cwarn, cerr, isEOF}=util;
 //»
 
-export const mod = function(termobj) {
-
+LOTW.mods[MODNAME] = function(Term) {
 //Var«
-
 const {//«
 //	wrapLine,
 //	onescape,
 	topwin,
 //	modequit,
 //	quit_new_screen,
-	h
-} = termobj;//»
+	h,
+	tabdiv
+} = Term;//»
 this.comName = "less";
 const less = this;
-let appclass="pager";
+let app_cb;
 let hold_screen_state;
 
 let ALLOWED_EXTRA_SPACES = 15;
@@ -41,6 +42,157 @@ let scroll_search_dir;
 let scroll_fname;
 let scroll_lines_checked;
 
+const UPDOWN = {
+UP_:1,
+DOWN_:1,
+PGUP_:1,
+PGDOWN_:1,
+HOME_:1,
+END_:1
+}
+//»
+
+const render=()=>{//«
+	let slice_from_y = scroll_num;
+	let slice_to_y = scroll_num + Term.nRows;
+	let outarr = [];
+	let usex = x;
+	let usescroll = scroll_num;
+	let uselines=[];
+	for (let i=slice_from_y; i < slice_to_y; i++) {//«
+		let ln = lines[i];
+		if (ln){
+			uselines.push(ln.slice());
+			continue;
+		}
+		let noline = ['<span style="color: #6c97c4;">~</span>'];
+		noline._noline = true;
+		uselines.push(noline);
+	}//»
+//	let len = uselines.length;//«
+//	if (len + Term.numStatLines != Term.h) donum = Term.h - Term.numStatLines;
+//	else donum = len;//»
+	let donum = uselines.length - num_stat_lines;
+	for (let i = 0; i < donum; i++) {//«
+		let arr = uselines[i];
+		arr = arr.slice(0, Term.w);
+		let ind;
+		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
+		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
+		while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
+
+		if (!arr||(arr.length==1&&arr[0]=="")) arr = [" "];
+//		let gotit = arr.indexOf(null);
+//		if (gotit > -1) arr[gotit] = " ";
+		let curnum = i+usescroll;
+/*
+*/
+		let colobj = line_colors[curnum];
+		if (colobj){//«
+			let nums = Object.keys(colobj);
+			for (let numstr of nums) {
+				if (numstr.match(/^_/)) continue;
+				let num1 = parseInt(numstr);
+				let obj = colobj[numstr];
+				if (obj[0] < 1){
+cwarn("GOT INVALID colobj", obj);
+					continue;
+				}
+				let num2 = num1 + obj[0]-1;
+				let col = obj[1];
+				let bgcol = obj[2];
+				let str = '<span style="color:'+col+";";
+				if (bgcol) str += "background-color:"+bgcol+";"
+				if (!arr[num1]) str += '"> ';
+				else str += '">'+arr[num1];
+				arr[num1] = str;
+				if (arr[num2]) arr[num2] = arr[num2]+"</span>";
+				else arr[num2] = "</span>";
+				if (num2 > Term.w) break;
+
+			}
+		}//»
+/*
+		if (i==y) {//«
+			let usebg;
+			if (!Term.isFocused) usebg = Term.curBGBlurred;
+			else usebg = Term.curBG;
+			if (!arr[usex]||arr[usex]=="\x00") arr[usex]=" ";
+			else if (arr[usex]=="\n") arr[usex] = " <br>";
+			let ch = arr[usex]||" ";
+			let pre="";
+			let usech;
+			if (ch.match(/^</)&&!ch.match(/>$/)){
+				let arr = ch.split(">");
+				usech = arr.pop();
+				pre = arr[0]+">";
+			}
+			else usech = ch;
+			if (!usech.length) usech = " ";
+			let sty = `background-color:${usebg};color:${Term.curFG}`;
+			arr[usex] = pre+`<span id="${Term.cursorId}" style="${sty}">${usech}</span>`;
+		}//»
+*/
+		let s = arr.join("");
+		outarr.push(s);
+
+	}//»
+
+	let{stat_input_type}=this;
+
+	let stat_str;
+	if (stat_message){//«
+		stat_str = stat_message;
+		stat_str = stat_str.replace(/&/g,"&amp;");
+		stat_str = stat_str.replace(/</g,"&lt;");
+		stat_message = null;
+	}//»
+	else if (stat_input_type) {//«
+		let stat_x = this.x;
+		let arr,ind;
+		if (!stat_com_arr.slice) arr = [];
+		else arr = stat_com_arr.slice();
+		while((ind=arr.indexOf("&"))>-1) arr[ind] = "&amp;";
+		while((ind=arr.indexOf("<"))>-1) arr[ind] = "&lt;";
+		while((ind=arr.indexOf(">"))>-1) arr[ind] = "&gt;";
+		if (stat_input_type=="s/") arr.push("/");
+		if (!arr[stat_x]) arr[stat_x] = " ";
+		let arrstr=arr.join("");
+		arr[stat_x] = `<span style="background-color:${Term.curBG};color:${this.curFG}">${arr[stat_x]}</span>`;
+		stat_str = stat_input_type + arr.join("");
+	}//»
+	else{//«
+		let per = Math.floor(100*(usescroll+donum)/lines.length);
+		if (per > 100) per = 100;
+		let usename = (this.fname+" ")||"";
+		stat_str = `${usename}${per}% of ${lines.length} lines (press q to quit)`;
+//		if (!stat_input_type) stat_str = '<span style=background-color:#aaa;color:#000>'+stat_str+'</span>'
+		stat_str = '<span style=background-color:#aaa;color:#000>'+stat_str+'</span>'
+	}//»
+	outarr.push(stat_str);
+//PSNRHDK
+/*
+	if (this.multilineSels){
+		let sels = this.multilineSels;
+		let stys = Term.bgRowStyles;
+		for (let i=0; i < donum; i++){
+			stys[i].backgroundColor=sels[i+scry]?"#555":"";
+		}
+	}
+*/
+//	Term.updateStatLines([stat_str]);
+/*
+	if (this.minHeight && this.h < this.minHeight){
+		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
+	}
+	else {
+		tabdiv.innerHTML = outarr.join("\n");
+	}
+*/
+	tabdiv.innerHTML = outarr.join("\n");
+
+};
+this.render = render;
 //»
 
 //Funcs«
@@ -52,14 +204,11 @@ const okint = val=>{//«
     }
     return false;
 };//»        
-const quit=(if_reload)=>{
-	termobj.quitNewScreen(hold_screen_state, {reload: if_reload});
-//	less.cb&&less.cb();
-};
-const render = () => {//«
-	termobj.refresh();
+const quit=(if_reload)=>{//«
+	delete Term.actor;
+	app_cb(!if_reload);
+	Term.render();
 };//»
-
 const do_scroll_search=(if_start)=>{//«
 	var strlen = scroll_search_str.length;
 	if (scroll_search_dir==":"){//«
@@ -114,8 +263,8 @@ const do_scroll_search=(if_start)=>{//«
 					scroll_num = num-1;
 					y=0;
 				}
-				else if (num >= scroll_num+termobj.h){
-					scroll_num = num-termobj.h+1;
+				else if (num >= scroll_num+Term.h){
+					scroll_num = num-Term.h+1;
 					y = num - scroll_num-1;
 				}
 				else y=num-1-scroll_num;
@@ -147,14 +296,14 @@ cerr(e);
 return;
 	}
 
-	function gotmatch(num) {
+	const gotmatch=(num)=>{
 		if (line_colors[num]) return true;
 		let line_str = lines[num].join("");
 //		return (new RegExp(scroll_search_str)).test(line_str);
 		return (new RegExp(usestr)).test(line_str);
 	}
 
-	var i=y+scroll_num;
+	let i=y+scroll_num;
 	let donum = 0;
 	let did_get_match = false;
 	if (scroll_search_dir=="?") {//«
@@ -198,7 +347,7 @@ return;
 		return;
 	}//»
 
-	for (let j=0;j<termobj.h;j++) {//«
+	for (let j=0;j<Term.h;j++) {//«
 		let num = i+j;
 
 		if (!lines[num]) break;;
@@ -218,9 +367,9 @@ return;
 	render();
 }//»
 
-const wrap_lines=arr=>{
+const wrap_lines=arr=>{//«
 	for (let ln of arr){
-		let wraparr = termobj.wrapLine(ln).split("\n");
+		let wraparr = Term.wrapLine(ln).split("\n");
 		let len = wraparr.length;
 		let lenmin1 = len-1;
 		for (let i = 0; i < len; i++) {
@@ -230,11 +379,12 @@ const wrap_lines=arr=>{
 			lines.push(a);
 		}
 	}
-};
+};//»
 //»
 //Obj/CB«
 
-const onescape=()=>{//«
+this.onreload=()=>{quit(true);};
+this.onescape=()=>{//«
 	let got=false;
 	if (line_colors.length){
 		got=true;
@@ -248,7 +398,10 @@ const onescape=()=>{//«
 	return got;
 };//»
 this.onkeydown=(e, sym, code)=>{//«
-
+	if (e && UPDOWN[sym]){
+		e.preventDefault();
+		e.stopPropagation();
+	}
 	if (this.stat_input_type) {//«
 		if (sym=="ENTER_") {//«
 			scroll_search_dir = this.stat_input_type;
@@ -304,21 +457,21 @@ this.onkeydown=(e, sym, code)=>{//«
 		else return;
 		render();
 	}//»
-	else if (sym=="SPACE_"){
+	else if (sym=="\x20_"){//«
 		const{multilineSels: sels} = this;
 		let n = y+scroll_num;
 		if (sels && isBool(sels[n])){
 			sels[n]=!sels[n];
 			render();
 		}
-	}
+	}//»
 	else if (sym=="DOWN_") {//«
 //log(y+scroll_num);
-		if (line_select_mode && y+num_stat_lines < termobj.h-1){
+		if (line_select_mode && y+num_stat_lines < Term.h-1){
 			if (y+scroll_num === lines.length-1) return;
 			y++;
 		}
-		else if (scroll_num+termobj.h-num_stat_lines < lines.length) {
+		else if (scroll_num+Term.h-num_stat_lines < lines.length) {
 			scroll_num++;
 //			y++;
 		}
@@ -332,9 +485,9 @@ this.onkeydown=(e, sym, code)=>{//«
 			return;
 		}
 		let donum;
-		if (scroll_num - termobj.h > 0) {
-			donum = termobj.h;
-			scroll_num -= termobj.h-1;
+		if (scroll_num - Term.h > 0) {
+			donum = Term.h;
+			scroll_num -= Term.h-1;
 		}
 		else scroll_num = 0;
 //		y=0;
@@ -342,7 +495,7 @@ this.onkeydown=(e, sym, code)=>{//«
 	}//»
 	else if (sym=="PGDOWN_") {//«
 		e.preventDefault();
-		let donum = termobj.h-1;
+		let donum = Term.h-1;
 //		if (scroll_num + donum-num_stat_lines >= lines.length) {
 		if (scroll_num + donum >= lines.length) {
 //log("!!!");
@@ -351,8 +504,8 @@ this.onkeydown=(e, sym, code)=>{//«
 			return;
 		}
 		scroll_num += donum;
-		if (scroll_num + termobj.h-num_stat_lines > lines.length) {
-			scroll_num = lines.length - termobj.h + num_stat_lines;
+		if (scroll_num + Term.h-num_stat_lines > lines.length) {
+			scroll_num = lines.length - Term.h + num_stat_lines;
 			if (scroll_num < 0) scroll_num = 0;
 		}
 		else{
@@ -367,10 +520,10 @@ this.onkeydown=(e, sym, code)=>{//«
 		render();
 	}//»
 	else if (sym=="END_") {//«
-		if (scroll_num + termobj.h - num_stat_lines >= lines.length) {
+		if (scroll_num + Term.h - num_stat_lines >= lines.length) {
 			return;
 		}
-		scroll_num = lines.length - termobj.h + num_stat_lines;
+		scroll_num = lines.length - Term.h + num_stat_lines;
 		y = lines.length-1-scroll_num;
 		if (scroll_num < 0) scroll_num = 0;
 //		y=0;
@@ -444,7 +597,7 @@ If we have no continues and no lines are greater than w, then we don't need to a
 do anything;
 */
 	line_colors.splice(0,line_colors.length)
-	const{w,h}=termobj;
+	const{w,h}=Term;
 	let arr=[];
 	let curln = null;
 	let have_continue;
@@ -479,6 +632,7 @@ do anything;
 	render();
 }//»
 this.init = (linesarg, fname, o={})=>{//«
+
 let {opts}=o;
 this.command_str = o.command_str;
 this.parSel = opts.parsel;
@@ -497,42 +651,18 @@ return new Promise((Y,N)=>{
 		scroll_num = 0;
 		y=0;
 		scroll_fname = fname;
-		less.cb = Y;
+//		less.cb = Y;
+		app_cb = Y;
 		less.fname = fname;
 		num_stat_lines = 1;
 	}
-/*«
-	if (type=="man") {
-		fmt_man_roff(linesarg, ret=>{
-			if (if_dump){
-				cb(ret);
-			}
-			else {
-//				termobj.hold_lines();
-				set_lines(true);
-			    termobj.init_pager_mode(less, num_stat_lines);
-				render();
-			}
-		}, o);
-	}
-	if (type=="termdump"){
-		let arr = linesarg.split("\n");
-		raw_lines=[];
-		for (let i = 0; i < arr.length; i++) raw_lines[i] = arr[i].split("");
-		arr = fmt_man_termdump(linesarg.split("\n"));
-		fmt_lines=[];
-		for (let i = 0; i < arr.length; i++) fmt_lines[i] = arr[i].split("");
-		lines = raw_lines;
-		less.fname = `${filename} -raw-`;
-		set_lines(true);
-		termobj.init_pager_mode(less, num_stat_lines);
-		render();
-	}
-»*/
+
+//Man-page initialization (@WHFKDLG) was here
+
 	less.fname = filename;
 	lines=[];
 	wrap_lines(linesarg);
-	hold_screen_state = termobj.initNewScreen(less, appclass, lines, line_colors, num_stat_lines, {onescape, onreload:()=>{quit(true);}});
+	Term.actor = less;
 	render();
 });
 
@@ -555,17 +685,36 @@ return;
 
 }
 
-
-
-
-
-
-
-
-
-
-
 /*Unused: man pages formatting«
+
+//WHFKDLG
+if (type=="man") {//«
+	fmt_man_roff(linesarg, ret=>{
+		if (if_dump){
+			cb(ret);
+		}
+		else {
+//			Term.hold_lines();
+			set_lines(true);
+			Term.init_pager_mode(less, num_stat_lines);
+			render();
+		}
+	}, o);
+}
+if (type=="termdump"){
+	let arr = linesarg.split("\n");
+	raw_lines=[];
+	for (let i = 0; i < arr.length; i++) raw_lines[i] = arr[i].split("");
+	arr = fmt_man_termdump(linesarg.split("\n"));
+	fmt_lines=[];
+	for (let i = 0; i < arr.length; i++) fmt_lines[i] = arr[i].split("");
+	lines = raw_lines;
+	less.fname = `${filename} -raw-`;
+	set_lines(true);
+	Term.init_pager_mode(less, num_stat_lines);
+	render();
+}
+//»
 
 const justify = (arg,len,start)=>{//«
 	let out;
@@ -670,7 +819,7 @@ for (let ln of lns){
 		}
 		else if (!splen){
 			if (par){
-				let usew = termobj.w-cur_sp_len-10;
+				let usew = Term.w-cur_sp_len-10;
 				if (usew > 80) usew = 80;
 				let rv = justify(par.join(" "), usew, "\xa0".rep(cur_sp_len));
 				all = all.concat(rv);
@@ -895,8 +1044,8 @@ function fmt_man_roff(linesarg,cb, opts) {//«
 			return;
 		}
 
-		if (iter < termobj.h || if_get_lines) doline();
-		else if (iter%termobj.h) doline();
+		if (iter < Term.h || if_get_lines) doline();
+		else if (iter%Term.h) doline();
 		else setTimeout(doline,0);
 
 	}//»
@@ -905,4 +1054,4 @@ function fmt_man_roff(linesarg,cb, opts) {//«
 
 »*/
 
-
+})();
