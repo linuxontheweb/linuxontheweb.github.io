@@ -30,7 +30,8 @@ NS.Desk={
 	isFake: true,
 	make_icon_if_new: NOOP,
 	move_icon_by_path: NOOP,
-	update_folder_statuses: NOOP
+	update_folder_statuses: NOOP,
+	cleanup_deleted_wins_and_icons: NOOP
 };
 //»
 const add_listeners=()=>{//«
