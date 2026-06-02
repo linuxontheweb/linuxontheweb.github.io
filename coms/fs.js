@@ -1,5 +1,12 @@
 (()=>{"use strict";const LIBNAME="fs";
-
+/*5/29/26: Timing issues w/ vimtest. The undo/redo feature checks
+that actions have the same time in order to do them in batches.
+Now, when I am automating these in loops, Actions are bound to have
+the same times, even though they NEVER would have in real world
+conditions. So I need to somehow force different times in order
+to simulate this correctly, or just introduce a delay (which
+would make it all very slow).
+*/
 /*5/26/26: After playing around with an "automation_mode" in vim, «
 I'm thinking it is better to devote another command (vimtest) for automated test
 suites performed on vim. So instead of seeing vim performing acts of
@@ -208,62 +215,87 @@ file_num++;
 
 //»
 
-const com_vimtest = class extends Com{//«
-#escHandler;
+class com_vimtest extends Com{//«
 
+//Private«
+#editor;
+#awaitCb;
+#baseFile;
+#fatalErr;
+#keysFile;
+#doNum;
+#killed;
+//»
 static getOpts(){//«
 	return {
-		s:{},
-		l:{}
+		s:{
+			n: 3, // How many iters?
+			f: 1, // Force terminal output
+		},
+		l:{
+		}
 	}
 }//»
 async init() {//«
+//$ vimtest [<opt_init_file>]
 
-let NOOP = ()=>{};
-let faketerm = {//«
-	env:{
-		cwd: {
-			cwd: this.term.env.cwd.cwd
-		}
-	},
-	clipboardCopy: NOOP,
-	quitNewScreen: ()=>{
-		this.editor.cb();
-	},
-	initNewScreen: (a1,a2,a3,a4, arg)=>{
-		this.#escHandler = arg.onescape;
-	},
-	setLines: NOOP,
-	resetXScroll: NOOP, 
-	doOverlay: NOOP, 
-	getDirContents: this.term.getDirContents,
-	w: 80,
-	h: 25,
-};//»
+/*
+
+Just algorithmic creation of all our vimmish (and not-so-vimmish, for good
+measure) keystrokes, with just a little awareness of modality thrown in the
+mix. We can trivially enable replaying entire vim sessions w/ all the 
+internal config variables, later.
+
+*/
+
 if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 	this.no("could not load the editor module");
 	return;
 }
-this.editor = new NS.mods[DEF_EDITOR_MOD_NAME](faketerm);
 
-let fullpath;
-let node, typ;
-let command_str = "vim";
-let opts = {};
-
-this.awaitCb = this.editor.init("", fullpath, {
-	node,
-	type: typ,
-	command_str,
-	opts,
-});
 
 }//»
-async run(){//«
+validate(){//«
 
-const {editor} = this;
+const editor = this.#editor;
+let final_str = editor.curStr;
+try{
+	editor.onkeydown(0, "u_CAS");
+	this.#fatalErr = editor.fatalErr;
+/*
+	if (editor.curStr !== editor.initStr){
+		this.#fatalErr = editor.fatalErr || new Error("BADUNDO");
+	}
+*/
+}
+catch(e){
+cerr(e);
+	this.#fatalErr = editor.fatalErr || e;
+}
+if (!this.#fatalErr) {
+try{
+	editor.onkeydown(0, "r_CAS");
+	this.#fatalErr = editor.fatalErr;
+/*
+	if (editor.curStr !== final_str){
+		this.#fatalErr = editor.fatalErr || new Error("BADREDO");
+	}
+*/
+}
+catch(e){
+cerr(e);
+	this.#fatalErr = editor.fatalErr || e;
+}
+}
+
+}//»
+sendComs(coms){//«
+
+const editor = this.#editor;
+//const {editor} = this;
 
 //Key helpers«
+
 const keydown=(sym, num=0)=>{//«
 	if (!num) return editor.onkeydown(0, sym);
 	for (let i=0; i < num; i++){
@@ -279,60 +311,383 @@ const dn = (num=0) => { keydown("DOWN_", num); }
 const lft = (num=0) => { keydown("LEFT_", num); }
 const rgt = (num=0) => { keydown("RIGHT_", num); }
 const esc = (num=0) =>{//«
-	if (!num) return this.#escHandler();
-	for (let i=0; i < num; i++) this.#escHandler();
+	if (!num) return editor.onescape();
+	for (let i=0; i < num; i++) editor.onescape();
 };//»
-const quit = (if_force) => {//«
-	esc(6);
-	editor.onkeypress(0, ":");
-	editor.onkeypress(0, "q");
-	if (if_force) editor.onkeypress(0, "!");
-	editor.onkeydown(0, "ENTER_");
+const quit = (if_force) => {editor.quit();};
+const ascii = (val, num=0)=> {//«
+	let sym;
+	if (val.match(/[A-Z]/)) sym = `${val.toLowerCase()}_S`;
+	else sym = `${val}_`;
+	if (!num) return editor.onkeydown({key: val}, sym);
+	for (let i=0; i < num; i++) editor.onkeydown({key: val}, sym);
 };//»
+const ascii_str = str =>{for (let ch of str) ascii(ch);};
 
 //»
-
-this.inf("Running vim...");
-let comstr = "iThis is the thing in the time of the place!!!";
-let comarr = comstr.split("");
-for (let com of comarr){
-	editor.onkeypress(0, com);
+for (let com of coms){
+	if (com==="ESC_") editor.onescape();
+	else if (com==="\\x20") ascii(" ");
+	else if (com.length == 1){
+		ascii(com);
+	}
+	else editor.onkeydown(0, com);
 }
-ent(5);
-comstr = "RAMBULLICARRR ON THE ON THE ON THE ON THE ONTHEONTHE";
-comarr = comstr.split("");
-for (let com of comarr){
-	editor.onkeypress(0, com);
-}
-bk(9);
-comstr = "wwwwwwwwwwwwwww";
-comarr = comstr.split("");
-for (let com of comarr){
-	editor.onkeypress(0, com);
-}
-
-esc();
-log(this.editor.lines);
-d("u_CAS");
-log(this.editor.lines);
-d("r_CAS");
-log(this.editor.lines);
-quit(true);
-
-await this.awaitCb;
-
-//log(this.editor.lines);
-
-this.ok("OK");
 
 }//»
+genKeys(){//«
+
+/*«
+
+//s_C 
+//s_CS 
+//x_C 
+
+//r_CA 
+//._CAS 
+//j_CA 
+//i_CA 
+
+//x_CA 
+//c_CAS 
+//t_CAS 
+//u_CAS 
+//r_CAS 
+»*/
+
+	const editor = this.#editor;
+//const {editor} = this;
+
+const EDIT_SYMS=[//«
+"TAB_",
+"TAB_S",
+"TAB_C",
+"TAB_CS",
+"DEL_",
+"BACK_",
+"ENTER_",
+"ENTER_C",
+"LEFT_",
+"LEFT_C",
+"RIGHT_",
+"RIGHT_C",
+"UP_",
+"DOWN_",
+"PGUP_",
+//"PGUP_S",
+"PGDOWN_",
+//"PGDOWN_S",
+"HOME_",
+"END_",
+];//»
+const HOTKEY_FUNCS = [//«
+//"j_C",
+//"p_A",
+//"j_CAS",
+"r_C",
+"e_C",
+"a_C",
+"d_C",
+"y_C",
+"u_C",
+"h_A",
+"o_A",
+"c_A",
+"l_C",
+"l_A",
+"u_CA",
+"p_C",
+"v_C",
+//"v_CAS",
+"m_CAS",
+"o_CAS",
+"q_C",
+"o_C",
+];//»
+	let sent = [];
+	let num_edit_syms = EDIT_SYMS.length;
+	let num_hotkey_funcs = HOTKEY_FUNCS.length;
+	for (let i=0; i < this.#doNum; i++){//«
+		if (!(i%13)){
+			let which = HOTKEY_FUNCS[Math.floor(Math.random() * num_hotkey_funcs)];
+			sent[i] = which;
+		}
+		else if (!(i%12)){
+			let which = EDIT_SYMS[Math.floor(Math.random() * num_edit_syms)];
+			sent[i] = which;
+		}
+		else if (!(i%11)){
+			let which = ["i", "I", "a", "A"][Math.floor(Math.random() * 4)];
+			sent[i] = which;
+		}
+		else if (!(i%10)){
+			sent[i] = "ESC_";
+		}
+		else if (!(i%5)){
+			sent[i] = "ENTER_";
+		}
+		else {
+			let ch;
+			if (!(Math.floor(Math.random() * 13) % 13)){
+				ch = "\x20";
+			}
+			else {
+				let num = 32 + Math.floor(Math.random() * 95);
+				ch = String.fromCharCode(num);
+			}
+			if (ch == "\x20") sent[i] = "\\x20";
+			else sent[i] = ch;
+		}
+	}//»
+	return sent;
+}//»
+initEditor(){//«
+
+let NOOP = ()=>{};
+let faketerm = {//«
+	env:{
+		cwd: {
+			cwd: this.term.env.cwd.cwd
+		}
+	},
+	clipboardCopy: NOOP,
+	render: NOOP,
+	doOverlay: NOOP, 
+	getDirContents: this.term.getDirContents,
+	w: 80,
+	h: 25,
+};//»
+
+this.#editor = new NS.mods[DEF_EDITOR_MOD_NAME](faketerm);
+this.#editor.autoMode = true;
+let fullpath;
+let node, typ;
+let command_str = "vim";
+
+this.#awaitCb = this.#editor.init(this.#baseFile, fullpath, {
+	node,
+	type: typ,
+	command_str,
+	opts: this.opts,
+});
+
+}//»
+async runComs(coms){//«
+	this.sendComs(coms); 
+	this.validate();
+	this.#editor.quit();
+	await this.#awaitCb;
+}//»
+async runAlgo(coms, if_final){//«
+
+const MAX_ITER = 1000;
+
+let prev_coms;
+let iter = -1;
+let last_fatal_coms = [];
+
+let final_loc;
+if (if_final) final_loc = 0;
+
+const do_loop = async () => {//«
+let since_fatal = 0;
+
+while (true) {
+
+if (if_final && final_loc >= coms.length) return last_fatal_coms;
+
+if (this.#killed) return [];
+iter++;
+this.#fatalErr = null;
+this.initEditor();
+//log(coms);
+await this.runComs(coms);
+
+if (this.#fatalErr) {
+	since_fatal = 0;
+	last_fatal_coms = coms;
+	if (if_final) {
+// No need to increment because there will now be a new command at
+// final_loc.
+		prev_coms = coms;
+		coms = coms.slice(0, final_loc).concat(coms.slice(final_loc+1));
+//log(`iter 1: ${iter} | #coms: ${coms.length} | from: ${final_loc}`);
+		continue;
+	}
+}
+else {
+	if (if_final) {
+// The command we just tested (or the non-existence, thereof) is essential
+// for the error, so just move the iterator up by one.
+		final_loc++;
+//log(`iter 2: ${iter} | #coms: ${coms.length} | from: ${final_loc}`);
+		if (prev_coms) coms = prev_coms;
+		coms = coms.slice(0, final_loc).concat(coms.slice(final_loc+1));
+		continue;
+	}
+	if (!prev_coms) return [];
+	since_fatal++;
+	coms = prev_coms;
+}
+if (iter > MAX_ITER || coms.length < 8 || (since_fatal >= coms.length)) return coms;
+prev_coms = coms;
+let do_num;
+
+//« Do how many?
+if (if_final){
+	do_num = 1;
+}
+else if (coms.length > 5000) {
+	do_num = Math.floor(coms.length / 4);
+}
+else if (coms.length > 2500) {
+	do_num = Math.floor(coms.length / 6);
+}
+else if (coms.length > 1250) {
+	do_num = Math.floor(coms.length / 9);
+}
+else if (coms.length > 625) {
+	do_num = Math.floor(coms.length / 12);
+}
+else if (coms.length > 312) {
+	do_num = Math.floor(coms.length / 15);
+}
+else {
+	do_num = Math.floor(coms.length / 18);
+}
+do_num -= since_fatal;
+if (do_num < 1) do_num = 1;
+//»
+
+let up_to = coms.length - do_num;
+let use_loc = Math.floor(Math.random() * up_to);
+coms = coms.slice(0, use_loc).concat(coms.slice(use_loc+do_num));
+
+log(`iter: ${iter} | #coms: ${coms.length} | num: ${do_num} | from: ${use_loc}`);
+
+}
+
+return last_fatal_coms;
+
+};//»
+
+coms = await do_loop();
+
+return coms;
+
+}//»
+async run(){//«
+
+const DEF_ITERS = 1000;
+
+let {args, opts, env}=this;
+if (opts.n){
+	let n = opts.n.ppi();
+	if (isNaN(n)) return this.no(`${opts.n}: invalid number specification`);
+	this.#doNum = n;
+}
+else this.#doNum = DEF_ITERS;
+
+
+let keys_file = args.shift();//«
+
+if (keys_file){
+	if (keys_file === "-"){
+		let got = [];
+//log("???");
+		while (true){
+			let rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				break;
+			}
+			if (rv.iSNL === true) continue;
+			got.push(rv);
+		}
+		keys_file = got.join(" ");
+	}
+	else {
+		keys_file = await keys_file.toText(this.env.cwd);
+		if (!keys_file){
+			return this.no(`Keys file: ${this.opts.keys}: not found`);
+		}
+	}
+this.#keysFile = keys_file;
+}//»
+
+let val = "";
+if (args.length) {//«
+	let base_file = args.shift();
+	val = await base_file.toText(env.cwd);
+	if (val){
+		this.inf(`Using base file: '${base_file}' (${val.length} chars)`);
+	}
+	else{
+		return this.no(`Base file: ${base_file}: not found`);
+	}
+}//»
+this.#baseFile = val;
+
+//« 
+if (this.#keysFile) {
+	let coms = this.#keysFile.split(" ");
+	let in_len = coms.length;
+	if (coms.length > 100){
+		coms = await this.runAlgo(coms);
+	}
+	else{
+		coms = await this.runAlgo(coms, true);
+	}
+
+	if (in_len == coms.length){
+		this.ok(`No change (still ${in_len} commands)`);
+	}
+	else {
+		this.out(coms.join(" "));
+//		this.ok(`${coms.length} commands (-${in_len - coms.length})`);
+		this.ok(`${coms.length} commands (was ${in_len})`);
+	}
+}
+else {
+	let coms = await this.runAlgo(this.genKeys());
+	this.out(coms.join(" "));
+	this.ok(`${coms.length} commands`);
+
+}
+//»
+
+}//»
+/*
+done(out, num_used){//«
+
+if (out) {//«
+	let rem = [];
+	let unused = this.#editor.unusedKeydowns;
+	let iter = 0;
+	for (let i=0; i < out.length; i++){
+		if (i===unused[iter]) iter++;
+		else rem.push(out[i]);
+	}
+	if (this.opts.f || !this.isTermOut) {
+		this.out(rem.join(" "));
+	}
+	num_used = rem.length;
+}//»
+
+if (this.#fatalErr){
+	this.no(`Failed: ${this.#fatalErr.message}`);
+}
+else this.ok(`OK (${num_used} used)`);
+
+}//»
+*/
 cancel(){//«
-this.editor.cb();
+//this.editor.cb();
+this.#killed = true;
 }//»
 
 }//»
 
-const com_vim = class extends Com{//«
+class com_vim extends Com{//«
 static getOpts(){//«
 	return {
 		s:{
@@ -859,10 +1214,7 @@ doGrep(val, name_map=[], ln_map = []){//«
 
 }//»
 const com_wc = class extends Com{//«
-//#noPipe;
 async init(){
-//	if (!this.args.length && !this.pipeFrom && !this.stdin) this.no("no args, no stdin, and not in a pipeline");
-//	if (!this.args.length && !this.pipeFrom) return this.no("no file args and not in a pipeline!");
 	if (this.args.length || this.stdin){
 		this.noPipe = true;
 	}
@@ -871,7 +1223,6 @@ async init(){
 	this.chars=0;
 }
 doWC(val){
-	const {out}=this;
 	let lines = this.lines;
 	let words = this.words;
 	let chars = this.chars;
@@ -884,14 +1235,11 @@ cwarn("Dropping", val);
 		return;
 	}
 	else arr = val;	
-//log(arr);
 	lines+=arr.length
 	for (let ln of arr){
 		chars+=ln.length;
-//log(`<${ln}>`);
 		ln = ln.replace(/^\s+/,"");
 		ln = ln.replace(/\s+$/,"");
-//		let word_arr = ln.split(/\x20+/);
 		let word_arr = ln.split(/\s+/);
 		if (word_arr.length===1 && word_arr[0]==="") continue;
 		words+=word_arr.length;
@@ -918,16 +1266,6 @@ async run(){
 		this.ok();
 		return;
 	}
-/*
-	if (!args.length) {
-		if (this.stdin){
-			this.doWC(this.stdin);
-			this.sendCount();
-			this.ok();
-		}
-		return;
-	}
-*/
 	let have_error = false;
 	const err=mess=>{
 		if (!mess) return;
@@ -935,28 +1273,101 @@ async run(){
 		this.err(mess);
 	};
 	let rv = await get_file_lines_from_args(args, this.env.cwd.cwd, err);
-//	if (rv.err && rv.err.length) err(rv.err);
 	if (rv.out&&rv.out.length) this.doWC(rv.out);
 	this.sendCount();
 	have_error?this.no():this.ok();	
 }
-/*«
-pipeIn(val){
-	if (this.killed || this.noPipe) return;
-//	if (isEOF(val)){
-//		this.out(val);
-//		this.sendCount();
-//		this.ok();
-//		return;
-//	}
-	this.doWC(val.split("\n"));
-}
-pipeDone(){
-	if (this.killed || this.noPipe) return;
-	this.sendCount();
-	this.ok();
-}»*/
 }//»
+
+const com_cut = class extends Com{//«
+#from;
+#to;
+static getOpts(){//«
+//Whitespace-separated words
+	return{
+		s:{
+			w: 1
+		},
+		l:{
+			words: 1
+		}
+	};
+}//»
+async init(){//«
+	if (this.args.length || this.stdin){
+		this.noPipe = true;
+	}
+	const {args} = this;
+	let from = args.shift();
+	let to = args.shift();
+	if (!(from && to)) return this.no("Need 'from' and 'to' args first!");
+	from = from.ppi();
+	if (isNaN(from)) return this.no(`from: must be a positive integer!`);
+	this.#from=from - 1;// 1-based
+	if (to=="-") this.#to="-";
+	else {
+		to = to.ppi();
+		if (isNaN(to)) return this.no("to: must be a positive integer or '-'!");
+		if (to <= from) return this.no("to: must be '-' or greater than from!");
+		this.#to = to;
+	}
+}//»
+doCut(val){//«
+	let is_words = this.opts.words || this.opts.w
+	let from = this.#from;
+	let to = this.#to;
+	let to_end = this.#to === "-";
+	let arr;
+	if (isStr(val)) {
+		arr=[val];
+	}
+	else if (!isArr(val)){
+cwarn("Dropping", val);
+		return;
+	}
+	else arr = val;	
+
+	for (let ln of arr){
+		if (is_words) {
+			ln = ln.replace(/^\s+/,"");
+			ln = ln.replace(/\s+$/,"");
+			let word_arr = ln.split(/\s+/);
+			if (to_end) word_arr = word_arr.slice(from);
+			else word_arr = word_arr.slice(from, to);
+			this.out(word_arr.join(" "));
+		}
+		else {
+			if (to_end) this.out(ln.slice(from));
+			else this.out(ln.slice(from, to));
+		}
+	}
+}//»
+async run(){//«
+	if (this.killed) return;
+	let{args, out}=this;
+	if (this.noArgs) {
+		while (true){
+			let rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				break;
+			}
+			this.doCut(rv);
+		}
+		this.ok();
+		return;
+	}
+	let have_error = false;
+	const err=mess=>{
+		if (!mess) return;
+		have_error=true;
+		this.err(mess);
+	};
+	let rv = await get_file_lines_from_args(args, this.env.cwd.cwd, err);
+	if (rv.out&&rv.out.length) this.doCut(rv.out);
+	have_error?this.no():this.ok();	
+}//»
+}//»
+
 const com_touch = class extends Com{//«
 
 init(){
@@ -1467,6 +1878,7 @@ const coms = {//«
 _blobs: com_blobs,
 //brep: com_brep,
 wc: com_wc,
+cut: com_cut,
 grep: com_grep,
 dl: com_dl,
 less:com_less,

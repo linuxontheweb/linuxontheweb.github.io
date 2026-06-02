@@ -2308,8 +2308,11 @@ return;
 		}//»
 		if ((kstr=="c_A"||kstr=="c_CA")&&CWIN.appName!==FOLDER_APP) {
 			if (CWIN.isLayout) return;
-			CWIN.contextMenuOn();
-			return;
+			if (CWIN.appName=="Terminal" && cobj.actor){}
+			else {
+				CWIN.contextMenuOn();
+				return;
+			}
 		}
 		if (!(is_full||is_max)) {//«
 			if (kstr.match(/^(RIGHT|LEFT|UP|DOWN)_S$/)) {

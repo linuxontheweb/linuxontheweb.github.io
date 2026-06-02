@@ -1812,18 +1812,18 @@ const getBlob = async(node, opts={})=>{//«
 	let istext = opts.text;
 	let id = node.id;
 	let file;
+	let rv;
 //This is guaranteed to be something in /site/
 	if (node.type===MOUNT_TYPE){
 		let arr = node.fullpath.split("/");
 		arr.shift();
 		arr.shift();
-//		if (arr[0]===PROJECT_ROOT_MOUNT_NAME) arr.shift();
 		let url = `/${arr.join("/")}`;
 //Not doing dynamic backend stuff
 //		if (Number.isFinite(opts.from) && Number.isFinite(opts.to)){
 //			url+=`?start=${opts.from}&end=${opts.to}`;
 //		}
-		let rv;
+		rv;
 //XMNYTGH
 		try{
 			rv = await fetch(url);
@@ -1874,7 +1874,10 @@ cwarn("The data should already be on the node! (node.data)");
 	if (opts.start) start = parseInt(opts.start);
 	let end;
 	if (opts.end) end = parseInt(opts.end);
-	return await get_data_from_fs_file(file, fmt, start, end);
+	rv = await get_data_from_fs_file(file, fmt, start, end);
+	if (rv && fmt==="text" && !opts.noChomp) rv = rv.replace(/\n$/, "");
+	return rv;
+//	return await get_data_from_fs_file(file, fmt, start, end);
 
 };//»
 const get_data_from_fs_file=(file,format,start,end)=>{//«
@@ -3205,6 +3208,8 @@ _.toText = async function(opts = {}) {
 	if (!node) return;
 	if (!node.isFile) return;
 	let txt = await node.text;
+// Remove the final newlines, unless explicitly requested
+	if (txt && !opts.noChomp) txt = txt.replace(/\n$/, "");
 	if (opts.lines === true) return txt.split("\n");
 	return txt;
 };

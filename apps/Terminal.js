@@ -1884,7 +1884,15 @@ async getDirContents(dir, pattern, opts={}){//«
 		let match_arr = [];
 		if (!if_keep_ast) pattern = pattern.replace(/\*/g, "[a-zA-Z_]*");
 		pattern = pattern.replace(/\xa0/g, " ");
-		let re = new RegExp("^" + pattern.replace(/\./g,"\\."));
+		let re; 
+try {
+	re = new RegExp("^" + pattern.replace(/\./g,"\\."));
+}
+catch(e){
+cwarn("CAUGHT!");
+log(e);
+return match_arr;
+}
 		for (let i=0; i < keys.length; i++) {
 			let key = keys[i];
 			if (key=="."||key=="..") continue;
@@ -2363,7 +2371,6 @@ cwarn("Chomping ending NEWLINE!!!");
 		out = out.replace(/\n$/,"");
 did_chomp = true;
 	}
-	out = out.split("\n");
 /*«
 	else if (!out) return;
 	else if (!isArr(out)){
@@ -2379,6 +2386,9 @@ return;
 	else if (isSuc) use_color = "#7f7";
 	else if (isWrn) use_color = "#ff7";
 	else if (isInf) use_color = "#bbf";
+	else this.env.vars._LAST_ = out;
+
+	out = out.split("\n");
 
 	if (colors) {
 //The two fatal results are major bugs, and should be treated "calamitously"
@@ -3113,6 +3123,10 @@ But implementing this exact behaviour is probably more trouble than it is worth.
 		case "y_C": 
 			this.insertCutStr();
 			break;
+		case "c_CAS": 
+//log("LAST TO CLIPBOARD");
+this.doClipboardCopy(this.env.vars._LAST_);
+			break;
 /*
 		case "c_CAS": 
 			this.clear();
@@ -3294,6 +3308,10 @@ async onappinit(appargs={}){//«
 
 onescape(){//«
 //	if (this.actor && this.actor.onescape) return this.actor.onescape();
+if (!document.getSelection().isCollapsed){
+window.getSelection().removeAllRanges();
+return true;
+}
 	if (this.checkScrolling()) return true;
 	if (this.statusBar.innerText){
 		this.statusBar.innerText = "";
@@ -3314,7 +3332,8 @@ onfocus(){//«
 //»
 onblur(){//«
 	this.isFocused=false;
-	this.render();
+	if (this.actor) this.actor.render();
+	else this.render();
 }
 //»
 

@@ -1,5 +1,11 @@
 (()=>{"use strict";const MODNAME="term.vim";
-
+/*ANOTHER ISSUE W/COMPLETE_MODE, that SEEMED to be the same
+as @ODBFKEJ and @CDOKWNFG, per those issues with mode_hold 
+in FILE_MODE. But this one only showed up because mode_hold,
+in COMPLETE_MODE WAS a local variable, but we thought
+that it was a mistake to put: 'let mode_hold. But I was getting
+issues, and then changed it back, and it started working again.
+*/
 /* NON-STANDARD VIM MODES «
 
 LINE_WRAP_MODE (Alt+l): Since there is no option to 'set wrap' here, the default
@@ -63,7 +69,45 @@ will automatically insert the string "Life is like a box of chocolates" into
 your main buffer.
 
 »*/
+/*Errors
+WHFKGKT
+DNPLJGU
+SKFMGKEJ
+ERNJTPL
+XMNRJMR
+WPLKMBGH (INFINITE LOOP TRIGGERED!!!)
+*/
+/*YEKTGJEM: WHEN DO WE EVER CLEAR OUT CUR_SEARCH??? «
 
+NO!!! ONLY NEW SEARCHES OVERRIDE THE PREVIOUS ONE!!!
+
+@DSJRKFH: WHAT DO WE DO ABOUT ADVANCING THE CURSOR IN REPLACE 
+MODE. ISN'T IT REALLY JUST LIKE INSERT MODE?
+
+@SHFIRKG: A lot of bugs happen here because we are not testing
+for whether we are in an editing mode or not...
+
+@ZJMGKHD: I've had to hunt down this bug twice! I originally had it
+like:
+
+print_chars(ln,{ins:!opts.adv});
+
+But then when I changed it for a previous bug to:
+
+print_chars(ln,{ins: opts.adv});
+
+... it worked. But then THAT turned out to be a bug that I needed to
+turn it back to how I originally had it.
+»*/
+/*5/29/26: TEST BUGS «
+
+WHAT IF NO LINES[Y+SCROLL_NUM]??? (FIXED?)
+@WNKRLKGL
+@SNDHDJG
+@XBCJFLERN
+
+BUG @QJEJRKTM !!!!
+»*/
 /*5/28/26: BUGS BUGS W/THIS.MODE_HOLD AND ALT_SCREEN_ESCAPE_HANDLER!!!!«
 How to replicate the error @SJFMGKG???
 
@@ -78,10 +122,10 @@ ESCAPE IT, IT KEPT ME IN THAT WEIRD KIND OF LIMBO!?!?!?
 Its because when you escape off of your visual selection mode,
 while inside of file mode, then it brings back your original buffer...
 
-WE HAVE this.mode_hold DEFINED, SO WE NEED TO CHECK FOR ONESCAPE!!!
+WE HAVE mode_hold DEFINED, SO WE NEED TO CHECK FOR ONESCAPE!!!
 
 @ODBFKEJ is where we "normally" escaped back into FILE_MODE after successfully
-yanking lines. And now we did a check for this.mode_hold in onescape,
+yanking lines. And now we did a check for mode_hold in onescape,
 @CDOKWNFG, just before calling alt_screen_escape_handler().  
 
 BY CALLING ALT_SCREEN_ESCAPE_HANDLER WHILE STILL HAVING THIS.MODE_HOLD DEFINED
@@ -563,7 +607,7 @@ attribute, when mode_hold === FILE_MODE;
 
 Perhaps we should have:
 const vis_line_edit_ok=()=>{
-	if (this.mode === VIS_LINE_MODE && this.mode_hold !== FILE_MODE) return true;
+	if (mode === VIS_LINE_MODE && mode_hold !== FILE_MODE) return true;
 	return false;
 };
 »*/
@@ -664,10 +708,14 @@ const never_render= !tabdiv;
 //Var«
 
 const vim = this;
+let killed;
+let mode, mode_hold, stat_input_type;
 
 let appclass = "editor";
 let hold_screen_state;
 let actions=[];
+let act_iter=0;
+
 let undos=[];
 
 let fold_mode = true;
@@ -716,13 +764,14 @@ let reload_script;
 let reload_win;
 let hold_overrides;
 
+//let yank_buffer = [[]];
 let yank_buffer;
+/*«
 yank_buffer=[
 ["2", "3", "4"],
 ["2", "3", "4"]
 ];
 yank_buffer._type="M";
-/*«
 let yank_buffer = [
 	["A", "A", "A", "A", "A", "A",],
 	["B", "B", "B", "B", "B", "B",],
@@ -852,21 +901,56 @@ let SYMBOL_WORDS;
 
 //»
 
+
 const render = (opts={}, which) => {//«
+if (killed) return;
+/*
+if (y+scroll_num >= lines.length){//«
+	x=0;
+	scroll_num = 0;
+	y=0;
+	set_ry();
+}//»
+else if (y+scroll_num < 0){
+return THROW(`Y: ${y} SCROLL_NUM: ${scroll_num}, (${y+scroll_num})`);
+}
+*/
+//else {//«
+{
+	let ln = curarr();//let ln = curln(true);
+	if (ln._fold) {
+		x=0;
+	}
+	else {
+		let len = ln.length;
+		let usex;
+		if (last_updown) usex = scroll_hold_x;
+		else usex = x;
+
+		if (usex <= 0) {
+			x=0;
+		}
+		else if (mode == INSERT_MODE || mode == REPLACE_MODE) {
+			if (usex > len) x = len;
+		}
+		else if (usex >= len) {
+			x = len-1;
+			if (x < 0) x = 0;
+		}
+		else x = usex;
+	}
+}
+//}//»
 
 	if (no_render || never_render) return;
+
 	if (SYNTAX===JS_SYNTAX)	js_syntax_screen();
-if (x < 0){
-cerr(`WHY IS x(${x}) < 0? `);
-x=0;
-}
 	maybe_scroll();
-//	const {w} = Term;
 
 	let outarr = [];
 	let usex = x;
 	let usescroll = scroll_num;
-	const{mode, stat_input_type} = this;
+//	const{mode, stat_input_type} = this;
 
 	let visual_line_mode;	
 	if (mode===VIS_LINE_MODE || mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE){
@@ -1145,11 +1229,22 @@ cwarn("GOT INVALID colobj", obj);
 	tabdiv.innerHTML = outarr.join("\n");
 
 };
-//this.render = render;
+this.render = render;
 //»
 
 //Util«
-const THROW=s=>{throw new Error(s);};
+
+const THROW = s => {
+let err;
+if (s instanceof Error) err = s;
+else err = new Error(s);
+if (never_render){
+killed = err;
+//cerr(err);
+quit();
+}
+else throw err;
+};
 
 const line_wrap_x = () => {//«
 	let _cy = y+scroll_num;
@@ -1158,7 +1253,7 @@ const line_wrap_x = () => {//«
 };//»
 
 const warn_if_fold_visual=()=>{//«
-	if (fold_mode && (this.mode===VIS_BLOCK_MODE || this.mode === VIS_MARK_MODE)){
+	if (fold_mode && (mode===VIS_BLOCK_MODE || mode === VIS_MARK_MODE)){
 		stat_warn("Paging keys not available in this mode");
 		return true;
 	}
@@ -1190,7 +1285,7 @@ if (s) cwarn(`${s}: ${sha1}`);
 else cwarn(sha1);
 //log(str);
 };//»
-const is_command_or_edit_mode=()=>{return COMMAND_OR_EDIT_MODES.includes(this.mode);};
+const is_command_or_edit_mode=()=>{return COMMAND_OR_EDIT_MODES.includes(mode);};
 
 const write_to_host=async()=>{//«
 if (!dev_mode){
@@ -1222,7 +1317,7 @@ seltop and selbot.
 
 */
 //	if (!(visual_mode||visual_block_mode)) return;
-	if (!(this.mode===VIS_MARK_MODE||this.mode===VIS_BLOCK_MODE)) return;
+	if (!(mode===VIS_MARK_MODE||mode===VIS_BLOCK_MODE)) return;
 	let ln = curarr();
 	if (x==edit_sel_mark) selleft=selright=x;
 	else if (x < edit_sel_mark){
@@ -1283,11 +1378,13 @@ cwarn("CAUGHT THIS DUMB BUG, NOW HAVE RY", ry);
 return;
 }
 »*/
-log(`cy: ${_cy}, y: ${y}, scroll_num: ${scroll_num}`);
-cwarn(`_cy === lens.length: ${_cy === lens.length}`);
-log(lens);
+//log(`cy: ${_cy}, y: ${y}, scroll_num: ${scroll_num}, lens.length: ${lens.length}`);
+//cwarn(`_cy === lens.length: ${_cy === lens.length}`);
+//log(lens);
 //EDPOPLKIUK
-		throw new Error("WHAT IS RY DOING BEING UNDEFINED???????");
+//cerr("RY IS UNDEFINED");
+//		throw new Error("WHAT IS RY DOING BEING UNDEFINED???????");
+return THROW("ABORTING (RY IS UNDEFINED)");
 	}
 };//»
 const set_line_lens = ()=>{//«
@@ -1295,7 +1392,7 @@ const set_line_lens = ()=>{//«
 		num_lines = lines.length;
 		return;
 	}
-	num_lines = 0;
+	num_lines = 1;
 	if (!lines.length){
 		lens=[0];
 		ry = 0;
@@ -1314,6 +1411,7 @@ const set_line_lens = ()=>{//«
 	}
 //CKJEPOIL
 	num_lines = start;
+	if (!num_lines) num_lines = 1;
 	set_ry();
 };//»
 const dup = (arr) =>{//«
@@ -1332,9 +1430,10 @@ const reset_display=()=>{//«
 //		alt_screen_escape_handler = null;
 //	}
 	stat_cb = null;
-//	this.stat_input_type = null;
+//	stat_input_type = null;
 	x=0;y=0;scroll_num=0;
-	this.mode = COMMAND_MODE;
+	mode = COMMAND_MODE;
+	mode_hold = undefined;
 	set_ry();
 	stat_warn("Display reset");
 //	render({},107);
@@ -1342,6 +1441,7 @@ const reset_display=()=>{//«
 const scr_h = ()=>{return Term.h - num_stat_lines;};
 const at_screen_bottom = () => {return y === Term.h - num_stat_lines - 1;};
 const at_file_end = ()=>{return y+scroll_num === lines.length - 1;};
+/*
 const timestr=(stamp)=>{//«
 	let msdiff = (new Date).getTime() - stamp;
 	let secsago = Math.floor(msdiff/1000);
@@ -1350,6 +1450,12 @@ const timestr=(stamp)=>{//«
 	let str = ((new Date(stamp))+"").split(" ")[4];
 	if (daysago) str = `${str} (${daysago} days ago)`;
 	return str;
+};//»
+*/
+const timestr=(stamp)=>{//«
+return "";
+//return `${act_iter-stamp} steps ago`;
+//	return str;
 };//»
 const try_clipboard_copy=()=>{//«
 //This lets you use Ctrl+v to copy vim's yank_buffer SOMEWHERE ELSE ON YOUR COMPUTER
@@ -1366,7 +1472,7 @@ const echo_file_path=()=>{//«
 const try_dopretty=async()=>{//«
 	if (pretty) return do_pretty();
 //	if (!(is_normal_mode(true)||visual_line_mode)) {
-	if (!(is_normal_mode(true)||this.mode === VIS_LINE_MODE)) {
+	if (!(is_normal_mode(true)||mode === VIS_LINE_MODE)) {
 		stat_warn("Pretty printing requires normal, insert or visual lines!");
 		return;
 	}
@@ -1388,8 +1494,8 @@ const set_stat_ok=(mess)=>{stat_message=mess;stat_message_type=STAT_OK;};
 const set_stat_warn=(mess)=>{stat_message=mess;stat_message_type=STAT_WARN;};
 const set_stat_err=(mess)=>{stat_message=mess;stat_message_type=STAT_ERR;};
 const cancel=()=>{stat_render("Cancelled");};
-const quit= (if_reload) => {//«
-	delete this.command_str;
+const quit = (if_reload) => {//«
+	command_str =  undefined;
 //	Term.is_dirty = false;
 //	Term.is_editing = false;
 	Term.overrides = hold_overrides;
@@ -1418,29 +1524,31 @@ this.quit = quit;
 //»
 const warn_stdin=()=>{stat_warn(`stdin: ${stdin_lines.length} lines`);};
 this.onescape=()=>{//«
+keydown_iter++;
 if (!document.getSelection().isCollapsed){
 window.getSelection().removeAllRanges();
 return true;
 }
 	if (stat_cb){
-		if (this.mode===CUT_BUFFER_MODE) alt_screen_escape_handler();
+		if (mode===CUT_BUFFER_MODE) alt_screen_escape_handler();
 		else {
 			stat_cb = null;
 			render();
 		}
 		return true;
 	}
-	if (this.stat_input_type){
+	if (stat_input_type){
 		is_saving = false;
-		this.stat_input_type = null;
+		stat_input_type = undefined;
 		render();
 		return true;
 	}
 	if (alt_screen_escape_handler){
 //CDOKWNFG
-		if (this.mode_hold){
-			this.mode = this.mode_hold;
-			delete this.mode_hold;
+		if (mode_hold){
+			mode = mode_hold;
+//			delete mode_hold;
+mode_hold = undefined;
 			render();
 			return true;
 		}
@@ -1448,15 +1556,20 @@ return true;
 		alt_screen_escape_handler = null;
 		return true;
 	}
-	if (this.mode===INSERT_MODE||this.mode===REPLACE_MODE){
-		this.mode = COMMAND_MODE;
-		if (x>0&&x===(curarr().length)) x--;
+	if (mode===INSERT_MODE||mode===REPLACE_MODE){
+		mode = COMMAND_MODE;
+//log("???", x, curarr().length );
+		if (x>0&&x===curarr().length) {
+
+			x--;
+//log("!!!", x, curarr().length );
+		}
 		if (stdin_lines) warn_stdin();
 		else render();
 		return true;
 	}
 	if (is_vis_mode()){
-		this.mode = COMMAND_MODE;
+		mode = COMMAND_MODE;
 		if (stdin_lines) warn_stdin();
 		else render();
 		return true;
@@ -1492,17 +1605,18 @@ const stat_err=mess=>{stat_message=mess;stat_message_type=STAT_ERR;render({},15)
 const stat_render=(mess)=>{stat_message=mess;stat_message_type=STAT_NONE;render({},16);};
 const stat = stat_render;
 const is_vis_mode=()=>{//«
-	let m = this.mode;
+	let m = mode;
 	return (m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE);
 };//»
 const is_normal_mode = edit_ok => {//«
-	if (this.stat_input_type) return false;
-	let m = this.mode;
-	if (edit_ok) return (m===INSERT_MODE || m === COMMAND_MODE);
+	if (stat_input_type) return false;
+	let m = mode;
+	if (edit_ok) return (m===INSERT_MODE || m===REPLACE_MODE || m === COMMAND_MODE);
 	return m === COMMAND_MODE;
 };//»
-const is_edit_mode = () => {return (this.mode == INSERT_MODE || this.mode == REPLACE_MODE);};
+const is_edit_mode = () => {return (mode == INSERT_MODE || mode == REPLACE_MODE);};
 const maybe_quit=()=>{//«
+if (this.autoMode) return;
 	if (!dirty_flag) return quit();
 	if (OK_DIRTY_QUIT) return quit();
 
@@ -1538,11 +1652,34 @@ const curfold=(addy=0)=>{//«
 const curch = (addx) => {//«
 	let _cy = y+scroll_num;
 	let ln = lines[_cy];
+/*XMNRJMR
+TypeError: Cannot read properties of undefined (reading '-2')
+    at curch (vim.js?v=6692513:1634:11)
+    at Object.seek_prev_word [as LEFT_C] (vim.js?v=6692513:3724:13)
+    at LOTW.mods.<computed>.onkeydown (vim.js?v=6692513:7826:23)
+
+
+TypeError: Cannot read properties of undefined (reading '0')
+    at curch (vim.js?v=2017610:1641:22)
+    at del_ch (vim.js?v=2017610:6966:7)
+    at do_undo (vim.js?v=2017610:5243:6)
+    at do_undo_prepend (vim.js?v=2017610:5046:3)
+
+    at curch (vim.js?v=2017610:1641:22)
+    at Object.goto_matching_brace [as '] (vim.js?v=2017610:4452:10)
+
+
+    at curch (vim.js?v=2017610:1642:11)
+    at Object.seek_prev_word [as b] (vim.js?v=2017610:3732:13)
+
+
+    at Object.seek_prev_word [as LEFT_C] (vim.js?v=9436458:3748:13)
+*/
 	if (!addx) return ln[x];
 	return ln[x+addx];
 }//»
 const set_sel_end = () => {//«
-	let m = this.mode;
+	let m = mode;
 //	if (!(visual_line_mode||visual_mode||visual_block_mode)) return;
 	if (!(m===VIS_LINE_MODE || m===VIS_MARK_MODE || m===VIS_BLOCK_MODE)) return;
 	if (cy() == edit_sel_start) seltop=selbot=cy();
@@ -1566,7 +1703,7 @@ const set_edit_mode = (ch)=>{//«
 		x++;
 	}
 	else if (ch == "I") seek_line_start();
-	this.mode = INSERT_MODE;
+	mode = INSERT_MODE;
 	render();
 };//»
 const set_tab_size_cb=()=>{//«
@@ -1596,11 +1733,17 @@ const open_folds_in_line_range = (nlines) => {//«
 	let _cy = y+scroll_num;
 	for (let i=0; i <= nlines; i++){
 		let ln = lines[i+_cy];
+//log(i+_cy);
+//log(ln);
 		if (!ln) {
 if (i+_cy === lines.length) return;
-log(lines);
-THROW(`No line found: in lines[${i+_cy}] (i=${i}, cy=${_cy})`);
+//log(lines);
+//SKFMGKEJ
+return THROW(`No line found: in lines[${i+_cy}] (i=${i}, cy=${_cy})`);
 		}
+
+//log(ln);
+
 		if (ln._fold){
 			open_fold(ln._fold, {noInnerFolds: false});
 		}
@@ -1623,19 +1766,31 @@ const toggle_if_folded=(opts)=>{//«
 const create_open_fold=()=>{//«
 	let _ry = cy();
 	print_chars(`//${OPEN_FOLD_CHAR}`,{ins: true});
+//	print_chars(`//1`,{ins: true});
 	render();
 }//»
 const create_closed_fold=()=>{//«
 	print_chars(`//${END_FOLD_CHAR}`,{ins: true});
+//	print_chars(`//2`,{ins: true});
 	render();
 }//»
 const have_open_fold_marker=(ln)=>{//«
+/*WHFKGKT
+Cannot read properties of undefined (reading 'indexOf')
+    at have_open_fold_marker (vim.js?v=2837382:1710:12)
+    at have_fold_marker (vim.js?v=2837382:1715:38)
+    at insert_fold (vim.js?v=2837382:6336:29)
+    at handle_visual_key (vim.js?v=2837382:7342:4)
+    at handle_press (vim.js?v=2837382:7245:3)
+*/
 	return ln.indexOf(OPEN_FOLD_CHAR) > -1;
 };//»
 const have_end_fold_marker=(ln)=>{//«
 	return ln.indexOf(END_FOLD_CHAR) > -1;
 };//»
-const have_fold_marker=(ln)=>{return have_open_fold_marker(ln)||have_end_fold_marker(ln);};
+const have_fold_marker=(ln)=>{
+	return have_open_fold_marker(ln)||have_end_fold_marker(ln);
+};
 const open_all_folds = (if_keep_y) => {//«
 	let hold_y = ry;
 	for (let ln of lines) {
@@ -1681,6 +1836,7 @@ const await_g_command=()=>{//«
 			y = 0;
 			scroll_num = 0;
 			x = 0;
+			set_ry();
 		}
 		else if (c=="M") {
 			x = Math.floor(curarr().length/2);
@@ -1695,7 +1851,11 @@ const await_g_command=()=>{//«
 const await_mark_command=()=>{//«
 	stat_cb=c=>{
 		stat_cb=null;
-		MARKS[c]=ry;
+if (c.length == 1) {
+	MARKS[c]=ry;
+}
+//log(c);
+//log(MARKS);
 		render({},40);
 	};
 	stat("mark");
@@ -1703,13 +1863,15 @@ const await_mark_command=()=>{//«
 const await_jump_command=()=>{//«
 	stat_cb=c=>{
 		stat_cb=null;
+if (c.length == 1) {
 		let num = MARKS[c];
 		if (Number.isFinite(num)) {
 			if (num >= num_lines) num = num_lines-1;
 			scroll_to(num, {doRender: true});
 		}
 		else stat(`'${c}': Mark not set`);
-//		render();
+}
+else render();
 	};
 	stat("goto");
 }//»
@@ -1753,7 +1915,11 @@ return;
 		if (!useOffset) delete fold._x_offset;
 		else x = fold._x_offset;
 	}
+
 	uselines.splice(idx, 1, ...fold);
+if (!uselines.length){
+cerr("HOWWWWW CAN THERE BE NO USELINES.LENGTH????");
+}
 	delete uselines[idx]._fold;
 
 	set_line_lens();
@@ -2196,6 +2362,7 @@ const try_save_as=(opts={})=>{//«
 	try_save(true);	
 };//»
 const edit_save = async(if_nostat, com_opts={})=>{//«
+if (this.autoMode) return;
 	let write_err = "";
 	const write_cb_func = async(node)=>{//«
 //	const write_cb_func = async(ret)=>{
@@ -2246,6 +2413,7 @@ quit();
 	}
 	let val = arr[0];
 	let numlines = arr[1];
+	if (val && !val.match(/\n$/)) val = val + "\n";
 	if (this.saveFunc){
 /*
 This is largely for applications that internally call vim in order to set a field
@@ -2254,6 +2422,7 @@ on an FSNode of type = IDB_DATA_TYPE. When this function exists, there should
 Meaning that this should always be a simple "Save" call rather than any kind of
 "Save As" call.
 */
+
 		let rv = await this.saveFunc(val);
 		stat_message = rv.mess;
 		stat_message_type = rv.type||STAT_NONE;
@@ -2415,7 +2584,7 @@ stat_warn(`${fname}: file exists! Overwrite? [y/N]`);
 
 const do_history_arrow=sym=>{//«
 	let hist;
-	let sim = this.stat_input_type;
+	let sim = stat_input_type;
 	if (sim==":") hist = this.command_history;
 	else if (sim=="?"||sim=="/") hist = this.search_history;
 	if (!hist) return;
@@ -2443,7 +2612,7 @@ const init_stat_input = which => {//«
 	num_completion_tabs = 0;
 	stat_com_arr=[];
 	stat_x=0;
-	this.stat_input_type = which;
+	stat_input_type = which;
 	render({},67);
 };//»
 
@@ -2491,8 +2660,117 @@ const get_cur_word = (x_is_max, if_stat)=>{//«
 		use_x = x;
 	}
 	if (!ln.length || ln._fold) return {word: null};
+//log(ln);
+//log(use_x);
 	let ch = ln[use_x];
-	if (!ch.match(/\w/)) return {word: null};
+	if (!ch || !ch.match(/\w/)) return {word: null};
+/*« QJEJRKTM
+With this, am getting : TypeError: Cannot read properties of undefined 
+(reading 'match'), because use_x == 5 && ln.length == 4.
+The '#' character below is what causes this
+
+i
+y
+c
+w
+3
+ENTER_
+x
+q
+]
+z
+ESC_
+I
+H
+i
+(
+ENTER_
+ 
+^
+g
+M
+ESC_
+?
+i
+^
+2
+ENTER_
+[
+A
+;
+Y
+ESC_
+r
+G
+a
+z
+ENTER_
+H
+4
+b
+=
+ESC_
+-
+H
+?
+I
+ENTER_
+~
+X
+C
+q
+ESC_
+;
+Y
+L
+z
+i
+7
+v
+C
+o
+ESC_
+Q
+q
+v
+S
+ENTER_
+A
+l
+L
+E
+ESC_
+#
+l
+e
+y
+ENTER_
+X
+A
+F
+p
+ESC_
+6
+*
+f
+M
+ENTER_
+C
+P
+i
+.
+ESC_
+/
+$
+i
+\
+ENTER_
++
+`
+:
+I
+»*/
+//	if (!ch.match(/\w/)) return {word: null};
 	let _x = use_x;
 	let arr;
 	if (x_is_max) arr=[];
@@ -2596,8 +2874,8 @@ const handle_tab_path_completion = async(if_ctrl, gotpath, stat_com_pref)=>{//«
 };//»
 const handle_edit_input_enter = async()=> {//«
 
-	let inp_type = this.stat_input_type;
-	this.stat_input_type = null;
+	let inp_type = stat_input_type;
+	stat_input_type = undefined;
 	let com = stat_com_arr.join("").trim();
 
 	if (inp_type==SAVE_AS_MODE) save_as(com);
@@ -2608,7 +2886,7 @@ const handle_edit_input_enter = async()=> {//«
 		let marr;
 //SPOLUITJ
 if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
-	if (this.mode===VIS_LINE_MODE && marr[1]){
+	if (mode===VIS_LINE_MODE && marr[1]){
 		stat_err("'%': Invalid range modifier in visual line mode");
 		return;
 	}
@@ -2638,7 +2916,7 @@ stat_ok("Saved to cur_background_command");
 			stat_err("Error: invalid tab size");
 			return;
 		}
-		else if (this.mode===VIS_LINE_MODE){
+		else if (mode===VIS_LINE_MODE){
 //			stat_err("Invalid command in visual line mode");
 			stat_err("Unknown command: " + com);
 			return;
@@ -2692,7 +2970,13 @@ stat_ok("Saved to cur_background_command");
 		else stat_err("Unknown command: " + com);
 	}//»
 	else if (inp_type=="|"){//«
-		let n = parseInt(com)-1;
+		let got = com.ppi();
+		if (isNaN(got)){
+			render();
+			return;
+		}
+//		let n = parseInt(com)-1;
+		let n=got-1;
 		let ln = curarr();//let ln = curln(true);
 		if (ln._fold){
 stat_warn("Please unfold the line!");
@@ -2729,31 +3013,39 @@ return;
 
 const init_auto_visual_line_mode=()=>{//«
 	if (!is_normal_mode()) return;
-	this.mode = VIS_LINE_MODE;
+	mode = VIS_LINE_MODE;
+
+	edit_sel_start = seltop = selbot = cy();
 	for (let _y = cy(); _y >= 0; _y--){
+//log("_y", _y);
 		let ln = lines[_y];
 		if (ln._fold) continue;
+
 		if (ln.join("").match(/^[\s\t]*$/)){
+//			if (isNaN(seltop)) edit_sel_start = seltop = _y;
 			break;
 		}
-		edit_sel_start=seltop = _y;
+		edit_sel_start = seltop = _y;
+//log("TOP", seltop);
 	}
 	for (let _y = cy(1); _y < lines.length; _y++){
 		let ln = lines[_y];
 		if (ln._fold) continue;
 		if (ln.join("").match(/^[\s\t]*$/)){
+//			if (isNaN(selbot)) selbot = _y;
 			break;
 		}
 		selbot = _y;
 	}
 	x=0;
+//log(seltop);
 	scroll_to(realy(seltop), {noSetSel: true});
 //	scroll_to(real_seltop(), {noSetSel: true});
 	render();
 }//»
 const init_visual_line_mode=()=>{//«
 	if (!is_normal_mode()) return;
-	this.mode = VIS_LINE_MODE;
+	mode = VIS_LINE_MODE;
 	edit_sel_start=seltop=selbot=cy();
 	render({},96);
 };//»
@@ -2762,7 +3054,7 @@ const init_visual_marker_mode = () =>{//«
 	if (fold_mode){
 		if (have_fold()) return stat_warn("Fold detected. Not starting visual marker mode.");
 	}
-	this.mode = VIS_MARK_MODE;
+	mode = VIS_MARK_MODE;
 	cur_pos = mark_pos = {x, y: cy()};
 	edit_sel_start=seltop=selbot=cy();
 	edit_sel_mark=selleft=selright=x;
@@ -2771,7 +3063,7 @@ const init_visual_marker_mode = () =>{//«
 const init_visual_block_mode=()=>{//«
 	if (!is_normal_mode()) return;
 	if (have_fold()) return stat_warn("Fold detected. Not starting visual mode.");
-	this.mode=VIS_BLOCK_MODE;
+	mode=VIS_BLOCK_MODE;
 	edit_sel_start=seltop=selbot=cy();
 	edit_sel_mark=selleft=selright=x;
 	render({},101);
@@ -2829,6 +3121,7 @@ functions outside of this scope.
 */
 	hold_lines = lines;
 	lines = cut_buffers[0];
+	num_lines = lines.length;
 //	Term.setLines(lines, []);
 	alt_screen_escape_handler = no_render => {//«
 		stat_cb = null;
@@ -2839,12 +3132,13 @@ functions outside of this scope.
 		set_ry();
 		fold_mode = hold_fold;
 		lines = hold_lines;
+		num_lines = lines.length;
 		hold_lines = null;
 //		Term.setLines(lines, line_colors);
-		this.mode = COMMAND_MODE;
+		mode = COMMAND_MODE;
 		if (!no_render) render();
 	};//»
-	this.mode = CUT_BUFFER_MODE;
+	mode = CUT_BUFFER_MODE;
 	render();
 };//»
 
@@ -2882,6 +3176,7 @@ const update_symbols = () => {//«
 	for (let ln of uselines){
 		lines.push([...ln]);
 	}
+	if (!lines.length) lines=[[]];
 	y=scroll_num=0;
 	set_ry();
 //	Term.setLines(lines, []);
@@ -2889,7 +3184,10 @@ const update_symbols = () => {//«
 	render();
 };//»
 const handle_symbol_ch=ch=>{//«
-	if (!ch.match(/\w/)) return;
+	if (!ch.match(/\w/)) {
+		unused_keydowns.push(keydown_iter);
+		return;
+	}
 	symbol+=ch;
 	update_symbols();
 	render();
@@ -2915,6 +3213,7 @@ let cur_refs;
 
 const init_symbol_mode = (opts={})=>{//«
 //SMKJFHSO
+//cwarn("SYMBOL");
 	let ln = curarr();//let ln = curln(true);
 	if (ln._fold) {
 		stat_warn("Fold detected");
@@ -2927,11 +3226,11 @@ const init_symbol_mode = (opts={})=>{//«
 		cur_refs = globals.refs[this.comOpts.refs];
 		if (!cur_refs) stat_err(`${this.comOpts.refs}: not found in globals.refs!?!?`);
 		SYMBOLS = Object.keys(cur_refs).sort();
-		this.mode = REF_MODE;
+		mode = REF_MODE;
 	}//»
 	else{//«
 		get_all_words();
-		this.mode = SYMBOL_MODE;
+		mode = SYMBOL_MODE;
 		if (symbols){
 			SYMBOLS = ALLWORDS.concat(symbols).sort();
 		}
@@ -2951,21 +3250,35 @@ const init_symbol_mode = (opts={})=>{//«
 	for (let w of SYMBOLS){
 		if (w.length) lines.push([...w]);
 	}
+	if (!lines.length) lines=[[]];
 //	Term.setLines(lines, []);
 //XKLORPT
 	num_lines = lines.length;
 	enter_cb = () => {//«
-		if (this.mode===SYMBOL_MODE) {
-			let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
+		if (mode===SYMBOL_MODE) {//«
+//WNKRLKGL
+			let ln;
+			if (lines[y+scroll_num]){
+				ln = lines[y+scroll_num].join("").split(/\s+/)[0];
+			}
+
 			enter_cb = null;
 			alt_screen_escape_handler(true);
 			if (ln&&ln.length) {
+// ZJMGKHD
+//				print_chars(ln,{ins: opts.adv});
+// WHAT IS GOING ON HERE?????
 				print_chars(ln,{ins:!opts.adv});
+//				adjust_cursor();
 			}
 			render();
-		}
-		else if (this.mode===REF_MODE){
-			let nm = lines[y+scroll_num].join("").split(/\s+/)[0];
+		}//»
+		else if (mode===REF_MODE){//«
+//SNDHDJG
+			let nm;
+			if (lines[y+scroll_num]){
+				nm = lines[y+scroll_num].join("").split(/\s+/)[0];
+			}
 			enter_cb = null;
 			alt_screen_escape_handler(true);
 			let got = cur_refs[nm];
@@ -2981,14 +3294,14 @@ const init_symbol_mode = (opts={})=>{//«
 			}
 			do_paste((`${nm} = `+out.join("\n")), {before: opts.before});
 			stat(`Using ref: '${nm}'`);
-		}
+		}//»
 	};//»
 	alt_screen_escape_handler = no_render => {//«
 		alt_screen_escape_handler = null;
 		x=hx;
 		y=hy;
-		fold_mode = hold_fold;
 		scroll_num = hscr;
+		fold_mode = hold_fold;
 		lines = hold_lines;
 		hold_lines = null;
 		line_colors = hold_colors;
@@ -2996,7 +3309,9 @@ const init_symbol_mode = (opts={})=>{//«
 //		set_ry();
 //MDKIUTHS
 		set_line_lens();
-		this.mode = COMMAND_MODE;
+		mode = COMMAND_MODE;
+//log(x, curarr().length);
+//log(x, curarr().length);
 		if (!no_render) render();
 	};//»
 	render();
@@ -3017,6 +3332,7 @@ const init_complete_mode=async(opts={})=>{//«
 /*
 What is the current word?
 */
+//cwarn("COMPLETE");
 	let use_x;
 	if (opts.stat)use_x = stat_x;
 	else use_x = x;
@@ -3049,29 +3365,35 @@ What is the current word?
 	hold_lines = lines;
 	let hold_colors = line_colors;
 	let hx=x,hy=y,hscr=scroll_num;
-	let sit_hold = this.stat_input_type;
+	let sit_hold = stat_input_type;
 	let stat_x_hold = stat_x;
-	let mode_hold = this.mode;
-	this.mode = COMPLETE_MODE;
-	delete this.stat_input_type;
+	let mode_hold = mode;
+//	mode_hold = mode;
+	mode = COMPLETE_MODE;
+	stat_input_type = undefined;
 	x=y=scroll_num=0;
 	fold_mode = false;
-	lines = [];
 	symbol = wrd;
 	symbol_len = wrd.length;
+	lines = [];
 	for (let w of matches){
 		if (w.length) lines.push([...w]);
 	}
+	if (!lines.length) lines=[[]];
 //	Term.setLines(lines, []);
 	num_lines = lines.length;
 	enter_cb = () => {//«
-		let ln = lines[y+scroll_num].join("").split(/\s+/)[0];
+let ln;
+//XBCJFLERN
+if (lines[y+scroll_num]){
+	ln = lines[y+scroll_num].join("").split(/\s+/)[0];
+}
 		enter_cb = null;
 		alt_screen_escape_handler(true);
 		if (ln&&ln.length) try_print(ln)
 	};//»
 	alt_screen_escape_handler = no_render => {//«
-		this.stat_input_type = sit_hold;
+		stat_input_type = sit_hold;
 		stat_x = stat_x_hold;
 		alt_screen_escape_handler = null;
 		symbol_len = undefined;
@@ -3085,7 +3407,7 @@ What is the current word?
 //		Term.setLines(lines, line_colors);
 //		set_ry();
 		set_line_lens();
-		this.mode = mode_hold;
+		mode = mode_hold;
 		if (!no_render) render();
 	};//»
 	render();
@@ -3120,7 +3442,7 @@ alt_screen_escape_handler = no_render => {//«
 	hold_lines = null;
 	line_colors = hold_colors;
 	set_line_lens();
-	this.mode = COMMAND_MODE;
+	mode = COMMAND_MODE;
 	if (!no_render) render();
 };//»
 
@@ -3128,10 +3450,11 @@ if (fold_mode) lines = get_folded_lines(arr);
 else {
 	lines = [];
 	for(let ln of arr) lines.push(ln.split(""));
+	if (!lines.length) lines=[[]];
 }
 //Term.setLines(lines, []);
 set_line_lens();
-this.mode = FILE_MODE;
+mode = FILE_MODE;
 render();
 
 };//»
@@ -3143,8 +3466,8 @@ const handle_file_ch=ch=>{//«
 const handle_file_keydown=(sym)=>{//«
 
 const init_line_mode = () => {//«
-	this.mode_hold = FILE_MODE;
-	this.mode = VIS_LINE_MODE;
+	mode_hold = FILE_MODE;
+	mode = VIS_LINE_MODE;
 	edit_sel_start=seltop=selbot=cy();
 	render({},96);
 };//»
@@ -3152,8 +3475,8 @@ const init_marker_mode = () => {//«
 	if (fold_mode){
 		if (have_fold()) return stat_warn("Fold detected. Not starting visual mode.");
 	}
-	this.mode_hold = FILE_MODE;
-	this.mode = VIS_MARK_MODE;
+	mode_hold = FILE_MODE;
+	mode = VIS_MARK_MODE;
 	cur_pos = mark_pos = {x, y: cy()};
 	edit_sel_start=seltop=selbot=cy();
 	edit_sel_mark=selleft=selright=x;
@@ -3161,9 +3484,9 @@ const init_marker_mode = () => {//«
 };//»
 const init_block_mode = () => {//«
 	if (have_fold()) return stat_warn("Fold detected. Not starting visual mode.");
-	this.mode_hold = FILE_MODE;
-//	this.mode_hold = mode_hold;
-	this.mode=VIS_BLOCK_MODE;
+	mode_hold = FILE_MODE;
+//	mode_hold = mode_hold;
+	mode=VIS_BLOCK_MODE;
 	edit_sel_start=seltop=selbot=cy();
 	edit_sel_mark=selleft=selright=x;
 	render({},101);
@@ -3177,6 +3500,7 @@ const init_block_mode = () => {//«
 	else if (sym==="v") init_marker_mode();
 //	else if (sym==="v_S") init_line_mode();
 	else if (sym==="V") init_line_mode();
+	else unused_keydowns.push(keydown_iter);
 
 };//»
 
@@ -3234,11 +3558,11 @@ const init_line_wrap_mode=()=>{//«
 //		set_ry();
 //		Term.setLines(lines, line_colors);
 		set_line_lens();
-		this.mode = COMMAND_MODE;
+		mode = COMMAND_MODE;
 		render();
 //		scroll_screen_to_cursor();
 	};//»
-	this.mode = LINE_WRAP_MODE;
+	mode = LINE_WRAP_MODE;
 	render();
 };//»
 const handle_linewrap_key=(sym)=>{//«
@@ -3264,7 +3588,8 @@ if (sym==="\x20_C"){//«
 			}
 			render();
 		}
-		actions.push(new Action(line_wrap_x(), line_wrap_y, " ", Date.now(), {adv: true}));
+//		actions.push(new Action(line_wrap_x(), line_wrap_y, " ", Date.now(), {adv: true}));
+		actions.push(new Action(line_wrap_x(), line_wrap_y, " ", act_iter++, {adv: true}));
 		num_line_wrap_actions++;
 	}
 	return;
@@ -3277,7 +3602,8 @@ if (sym=="TAB_") {
 if (sym.length==1){//«
 	let ln = curarr();
 	ln.splice(x, 0, sym);
-	actions.push(new Action(line_wrap_x(), line_wrap_y, origsym, Date.now(), {adv: true}));
+//	actions.push(new Action(line_wrap_x(), line_wrap_y, origsym, Date.now(), {adv: true}));
+	actions.push(new Action(line_wrap_x(), line_wrap_y, origsym, act_iter++, {adv: true}));
 	num_line_wrap_actions++;
 	if (ln.length > w){
 		let ch = ln.pop();
@@ -3312,6 +3638,7 @@ if (sym=="BACK_"){//«
 }//»
 else if (sym=="DEL_"){}
 else{
+	unused_keydowns.push(keydown_iter);
 	cerr(`WHAT SYM IN LINEWRAP MODE: ${sym}`);
 	return;
 }
@@ -3328,7 +3655,8 @@ else{
 	adv=false;
 	add1=0;
 }
-actions.push(new Action(line_wrap_x()+add1, line_wrap_y, have_ch, Date.now(), { adv, neg: true} ));
+//actions.push(new Action(line_wrap_x()+add1, line_wrap_y, have_ch, Date.now(), { adv, neg: true} ));
+actions.push(new Action(line_wrap_x()+add1, line_wrap_y, have_ch, act_iter++, { adv, neg: true} ));
 num_line_wrap_actions++;
 
 let _cy = cy();
@@ -3355,6 +3683,7 @@ else if (ln.length === w-1){//«
 // HOW COULD THIS CASE MEAN WE NEED TO DO ANYTHING OTHER THAN POPPING
 				lines.pop(); //lines.splice(i+1, 1);// NOOOOOOO!!!!!!!!!
 			}
+			if (!lines.length) lines = [[]];
 		}
 	}
 }//»
@@ -3369,14 +3698,22 @@ render();
 //»
 //Move/Scroll«
 
-const cur_to=(yarg)=>{//«
+const cur_to = (yarg) => {//«
+return;
 	y=yarg;
-
 	while (!lines[y+scroll_num]) y--;
 	if (y < 0) y = 0;
+x=0;
+//	if (x > 0 && x >= curarr().length){
+//		x = curarr().length - 1;
+//	}
+//	adjust_cursor();
+	set_ry();
+//log(x);
 	render();
 };//»
 const valign_cursor=(toy)=>{//«
+return;
 	if (y+scroll_num<toy) {
 		y += scroll_num;
 		scroll_num = 0;
@@ -3418,21 +3755,6 @@ intobs.observe(cur);
 };//»
 */
 
-const adjust_cursor=()=>{//«
-	let ln = curarr();//let ln = curln(true);
-	if (ln._fold) {
-		x=0;
-		return;
-	}
-	let usex;
-
-	if (last_updown) usex = scroll_hold_x;
-	else usex = x;
-
-	if (usex > ln.length) x = ln.length;
-	else x = usex;
-}//»
-
 const check_del_fold_offset=()=>{//«
 	let ln = curarr();
 	if (ln._fold) {
@@ -3441,14 +3763,14 @@ const check_del_fold_offset=()=>{//«
 	}
 };//»
 const check_visual_up = () =>{//«
-	if (((this.mode===VIS_BLOCK_MODE || this.mode === VIS_MARK_MODE)) && fold_mode && cy() > 0){
+	if (((mode===VIS_BLOCK_MODE || mode === VIS_MARK_MODE)) && fold_mode && cy() > 0){
 		if (have_fold(-1)) return stat_warn("Fold detected");
 	}
 	return true;
 };//»
 const check_visual_motion=if_down=>{//«
 //	if ((visual_mode||visual_block_mode) && fold_mode && ((if_down && cy() < lines.length-1)||(!if_down && cy()>0))){
-	if ((this.mode===VIS_BLOCK_MODE || this.mode === VIS_MARK_MODE) && fold_mode && ((if_down && cy() < lines.length-1)||(!if_down && cy()>0))){
+	if ((mode===VIS_BLOCK_MODE || mode === VIS_MARK_MODE) && fold_mode && ((if_down && cy() < lines.length-1)||(!if_down && cy()>0))){
 		let add_1;
 		if (if_down) add_1=1;
 		else add_1 = -1;
@@ -3465,7 +3787,7 @@ const seek_line_start=()=>{//«
 const seek_line_end = ()=>{//«
 	toggle_if_folded();
 	x = curlen();
-	if (this.mode!==INSERT_MODE && x > 0) {
+	if (mode!==INSERT_MODE && x > 0) {
 		x--;
 	}
 	set_sel_end();
@@ -3478,7 +3800,7 @@ const seek_prev_word=()=>{//«
 		let ch2 = curch(i-1);
 		if (!ch1){
 			if (ch2&&ch2.match(/\w/)){
-				if (this.mode !== LINE_WRAP_MODE) break;
+				if (mode !== LINE_WRAP_MODE) break;
 			}
 		}
 		else if (!ch2) {
@@ -3525,7 +3847,7 @@ const seek_next_word = (if_from_continue) => {//«
 	for (let i=1;;i++) {
 		let ch1 = curch(i-1);
 		if (ch1&&if_from_continue && ch1.match(/\w/)) {
-			if (this.mode !== LINE_WRAP_MODE) {
+			if (mode !== LINE_WRAP_MODE) {
 				addi--;
 				break;
 			}
@@ -3571,7 +3893,7 @@ const seek_end_word = () => {//«
 		for (let i=0;;i++) {
 			let ch1 = curch(i);
 			if (ch1&&if_from_continue && ch1.match(/\W/)) {
-				if (this.mode !== LINE_WRAP_MODE) {
+				if (mode !== LINE_WRAP_MODE) {
 					addi--;
 					break;
 				}
@@ -3684,6 +4006,9 @@ const scroll_up = (n, opts={} )=>{//«
 			y = maxy;
 		}
 	}
+if (y + scroll_num < 0){
+return THROW("SCRUP < 0???");
+}
 	set_ry();
 	if (!noSetSel) set_sel_end();
 	if (!noRender) render();
@@ -3699,13 +4024,18 @@ const maybe_scrdown_one = () => {//«
 const scroll_down = (n, opts={}) => {//«
 	let {moveCur}=opts;
 	scroll_num += n;
+//log("DOWN IN", y, scroll_num);
 	if (moveCur) {
 		y-=n;
 		if (y < 0) y=0;
 	}
-	while (!lines[scroll_num]) scroll_num--;
+	while (!lines[scroll_num] && scroll_num > 0) scroll_num--;
 	while (!lines[y+scroll_num] && y > 0) y--;
-	adjust_cursor();
+//log("DOWN OUT", y, scroll_num);
+if (y + scroll_num < 0){
+return THROW("SCRDOWN < 0???");
+}
+//	adjust_cursor();
 	set_sel_end();
 	set_ry();
 	render({},60);
@@ -3721,7 +4051,7 @@ const check_ry=()=>{//«
 		}
 		else{
 render();
-THROW(`ry(${ry+1}) !== num(${num+1})`);
+return THROW(`ry(${ry+1}) !== num(${num+1})`);
 		}
 	}//»
 	else if (_cy === llen) {//«
@@ -3730,23 +4060,26 @@ THROW(`ry(${ry+1}) !== num(${num+1})`);
 			set_line_lens();
 			if (ry !== num){
 render();
-THROW(`ry(${ry+1}) !== num(${num+1})`);
+return THROW(`ry(${ry+1}) !== num(${num+1})`);
 			}
 		}
 		else{//«
+/*
 log("UNDOS");
 log(undos);
 log("ACTIONS");
 log(actions);
 log("CUR_UNDO");
 log(cur_undo);
+*/
 render();
-THROW(`!!! cy (${_cy}) === lines.length (${llen}) (no fileChomp) !!!`);
+
+return THROW(`!!! cy (${_cy}) === lines.length (${llen}) (no fileChomp) !!!`);
 		}//»
 	}//»
 	else{//«
 render();
-THROW(`!!! cy (${_cy}) > lines.length (${llen}) !!!`);
+return THROW(`!!! cy (${_cy}) > lines.length (${llen}) !!!`);
 	}//»
 }//»
 	no_render = true;
@@ -3790,6 +4123,7 @@ else{
 			if (ln._fold && openFoldHits) {
 				open_fold(ln._fold, {noInnerFolds: !allowInnerFolds});
 			}
+//			adjust_cursor();
 			check_ry();
 			no_render = false;
 			if (doRender) render();
@@ -3828,7 +4162,7 @@ we are jumping to doesn't require scrolling to fit on the screen...
 		y=0;
 		if (!opts.noSetSel) set_sel_end();
 	}
-
+//	adjust_cursor();
 	check_ry();//This caused a THROW 
 	no_render = false;
 	if (doRender) render();
@@ -3837,7 +4171,7 @@ we are jumping to doesn't require scrolling to fit on the screen...
 
 const do_home=()=>{//«
 	y = scroll_num = 0;
-	adjust_cursor();
+//	adjust_cursor();
 	set_sel_end();
 	set_ry();
 	render({},55);
@@ -3850,7 +4184,7 @@ const home=()=>{//«
 const do_end=()=>{//«
 	scroll_num = lines.length-1;
 	y=0;
-	adjust_cursor();
+//	adjust_cursor();
 	set_sel_end();
 	set_ry();
 	render({},56);
@@ -3868,7 +4202,7 @@ const do_pgup=()=>{//«
 			y = 0;
 			set_ry();//<---!!!!!!!!!!!!!!!!!!! THIS WASN'T HERE BEFORE !!!!!!!!!!!!!!!
 
-			adjust_cursor();
+//			adjust_cursor();
 			set_sel_end();
 			render({},57);
 		}
@@ -3878,7 +4212,12 @@ const do_pgup=()=>{//«
 		scroll_num -= h;
 	}
 	else scroll_num = 0;
-	adjust_cursor();
+
+	if (y + scroll_num < 0){
+		y=0;
+		scroll_num = 0;
+	}
+//	adjust_cursor();
 	set_sel_end();
 	set_ry();
 	render({},58);
@@ -3905,7 +4244,7 @@ const up_one_line=(if_seek_end)=>{//«
 	let usex = scroll_hold_x;
 	if (if_seek_end) x = ln.length;
 	else if (usex >= ln.length) {
-		if (this.mode===INSERT_MODE) x = ln.length;
+		if (mode===INSERT_MODE) x = ln.length;
 		else if (ln.length) {
 			x = ln.length-1;
 		}
@@ -3941,7 +4280,7 @@ const do_down = ()=>{//«
 	let usex = scroll_hold_x;
 	if (check_if_folded()) x=0;
 	else if (usex >= ln.length) {
-		if (this.mode===INSERT_MODE) x = ln.length;
+		if (mode===INSERT_MODE) x = ln.length;
 		else if (ln.length) x = ln.length-1;
 		else x=0;
 	}
@@ -3960,7 +4299,7 @@ const left = () => {//«
 		x--;
 	}
 	else if (cy() > 0){
-		if (this.mode === LINE_WRAP_MODE){
+		if (mode === LINE_WRAP_MODE){
 			up();
 			x = curarr().length-1;
 		}
@@ -3971,14 +4310,14 @@ const left = () => {//«
 
 const right = ()=>{//«
 	toggle_if_folded();
-	if (this.mode===INSERT_MODE){
+	if (mode===INSERT_MODE){
 		if (curch(1)||curch()) {
 			x++;
 			render({},54);
 		}
 	}
 	else if (!curch(1)) {
-		if (this.mode === LINE_WRAP_MODE){
+		if (mode === LINE_WRAP_MODE){
 			if (cy() < lines.length-1) {
 				down();
 				x=0;
@@ -4033,8 +4372,16 @@ else {
 	if (!lnstr) return;
 	if (escape_regex_metachars) word = escape_metachars(word);
 	let rv; 
+try {
 	if (if_exact) rv = (new RegExp("\\b"+word+"\\b")).exec(lnstr);
 	else rv = (new RegExp(word)).exec(lnstr);
+}
+catch(e){
+//cwarn("CAUGHT!");
+//log(e.message);
+stat_err(`${e.message}`);
+return null;
+}
 	if (!rv) return null;
 	if (reverse){
 		return {index: xoff - rv.index - word.length - 1};
@@ -4085,9 +4432,13 @@ const find_word = (word, opts={})=>{//«
 			return;
 		}
 	}
+
+// YEKTGJEM
+// WHEN DO WE CLEAR THIS OUT???
 	cur_search = {word, exact, reverse, noAdv, endY};
+
 	let hold_scroll = scroll_num;
-	y = y+scroll_num;
+//	y = y + scroll_num;
 	if (!noAdv) x++;
 	scroll_num = 0;
 	let start_ry = ry;
@@ -4098,7 +4449,12 @@ const find_word = (word, opts={})=>{//«
 	let got_match = false;
 	while (true) {//«
 		iter++;
-		if (iter >= 1000000){
+		if (iter >= 100000){
+/*WPLKMBGH
+    at find_word (vim.js?v=2017610:4373:7)
+    at resume_search (vim.js?v=2017610:4276:3)
+    at Object.n (vim.js?v=2017610:7543:9)
+*/
 throw new Error("INFLOOP WUT WUT HARHARHAR");
 		}
 		let ln = lines[y];
@@ -4151,13 +4507,8 @@ throw new Error("INFLOOP WUT WUT HARHARHAR");
 			break;
 		}
 	}//»
-//	let goto_line = ry;
-//log(ry);
 	scroll_num = hold_scroll;
-//	y = 0;
 	scroll_to(ry);
-//	scroll_num = y;
-//	y=0;
 	set_line_lens();
 	let mess;
 	if (exact) mess=`<${word}>`
@@ -4165,6 +4516,14 @@ throw new Error("INFLOOP WUT WUT HARHARHAR");
 	else mess=`"${word}"`
 	if (!got_match) mess = `${mess} (no matches)`;
 	else if (did_wrap) mess = `${mess} (wrapped)`;
+	let len = curarr().length;
+	if (x > 0 && len > 0 && x >= len){
+//	if (x > 0 && x >= len){
+		x = len - 1;
+	}
+//log(len);
+//	adjust_cursor();
+//log(x, len);
 	if (is_vis_mode()) set_sel_end();
 	stat(mess);
 
@@ -4298,7 +4657,7 @@ const get_confirmation = (lno, ind, len, out)=>{//«
 			else if (ch=="y") Y(true);
 		};
 //		visual_block_mode = true;
-		this.mode=VIS_BLOCK_MODE;
+		mode=VIS_BLOCK_MODE;
 		edit_sel_start=seltop=selbot=lno;
 //		x=selleft;
 		selleft=ind;
@@ -4307,7 +4666,7 @@ const get_confirmation = (lno, ind, len, out)=>{//«
 //		render({noCursor:true}, 68);
 		render();
 //		visual_block_mode = false;
-		this.mode=COMMAND_MODE;
+		mode=COMMAND_MODE;
 	});
 };//»
 const search_and_replace = async(arr, opts={})=>{//«
@@ -4321,14 +4680,15 @@ const search_and_replace = async(arr, opts={})=>{//«
 // using the time that this function was called rather than the time
 // that the confirmation was done.
 
-	let time = Date.now();
+//	let time = Date.now();
+let time = act_iter++;
 	let do_num_lines;
 	let x_mark = 0;
 	let perm_x_mark = 0;
 	let last_slice_to;
 	let hold_slice_to;
 	let slice_to;
-	let mode = this.mode;
+//	let mode = mode;
 	let num_replaced = 0;
 
 //»
@@ -4543,7 +4903,7 @@ return stat_warn("No newline deletions w/ markers!");
 			}//»
 			else{//«
 log(rv);
-THROW("What is the return value from get_confirmation?");
+return THROW("What is the return value from get_confirmation?");
 			}//»
 
 		}//»
@@ -4667,7 +5027,7 @@ hold_slice_to issues?
 		scroll_to(ry+1);
 	}//»
 
-	this.mode=COMMAND_MODE;
+	mode=COMMAND_MODE;
 	set_ry();
 	stat(`Replaced: ${num_replaced}`);
 
@@ -4677,7 +5037,8 @@ hold_slice_to issues?
 //Undo/Redo«
 
 const redo_end = (tm)=>{//«
-	stat_message = `Redo change from: ${timestr(tm)}`;
+if (killed) return;
+//	stat_message = `Redo change from: ${timestr(tm)}`;
 	real_line_colors=[];
 	set_ry();
 	if (x>0 && x===curarr().length) x--;
@@ -4686,7 +5047,8 @@ const redo_end = (tm)=>{//«
 	return true;
 };//»
 const undo_end = (tm)=>{//«
-	stat_message = `Undo change from: ${timestr(tm)}`;
+//	stat_message = `Undo change from: ${timestr(tm)}`;
+if (killed) return;
 	set_ry();
 	real_line_colors=[];
 	if (x>0 && x===curarr().length) {
@@ -4698,15 +5060,29 @@ const undo_end = (tm)=>{//«
 
 const do_redo_prepend = chg => {//«
 
-	let {neg, selTop, selBot, fileChomp, isLines, isViz, isBlockInsert} = chg.opts;
+//	let yhold = y;
 
-	let scroll_num_hold = scroll_num;
-	let yhold = y;
+	let {neg, selTop, selBot, fileChomp, isLines, isViz, isBlockInsert} = chg.opts;
+//	if (ry !== chg.y) {
+//		scroll_to(chg.y, {openFoldHits: true});
+//		if (ry !== chg.y) return THROW(`Could NOT scroll_to chg.y=${chg.y} (ry=${ry})`);
+//	}
+	if (ry !== selTop) {
+		scroll_to(selTop, {openFoldHits: true});
+		if (ry !== selTop) return THROW(`Could NOT scroll_to selTop=${selTop} (ry=${ry})`);
+	}
+
+//	let scroll_num_hold = scroll_num;
 	open_folds_in_line_range(selBot - selTop);
+//render();
+//return;
 	let u = chg;
 	let tm = chg.time;
+	let iter=0;
 	while (tm === u.time){
+iter++;
 		let diff = ry - u.y;
+//log(diff);
 /*
 		if (diff == 1) {
 			y--;
@@ -4717,38 +5093,52 @@ const do_redo_prepend = chg => {//«
 			ry++;
 		}
 		else if (diff){
-THROW(`WHAT IS THIS DIFF IN REDO PREPENDSPACE 2222: ${diff}`);
+cwarn("ITERS", iter);
+return THROW(`WHAT IS THIS DIFF IN REDO PREPEND: ${diff} (y: ${y} scrnum: ${scroll_num} iter: ${iter})`);
 		}
 */
 //log(diff);
 y-=diff;
-ry-=diff;
+set_ry();
+//ry-=diff;
+//maybe_scroll();
 		if (u !== chg) undos.pop();
 		actions.push(u);
 		do_redo(u);
 		u = undos[undos.length-1];
 		if (!(u&&u.opts.prependSpace)) break;
 	}
-	scroll_num = scroll_num_hold;
-	y=yhold;
+//	scroll_num = scroll_num_hold;
+//	y=yhold;
 	redo_end(tm);
 
 };//»
 const do_undo_prepend=(chg)=>{//«
+//	let yhold = y;
 	let {selTop, selBot} = chg.opts;
+/*
+	if (ry !== chg.y) {
+		scroll_to(chg.y, {openFoldHits: true});
+		if (ry !== chg.y) return THROW(`Could NOT scroll_to chg.y=${chg.y} (ry=${ry})`);
+	}
+*/
 	if (ry !== selTop) {
 		scroll_to(selTop, {openFoldHits: true});
-		if (ry !== selTop) THROW(`Could NOT scroll_to ${usey}`);
+		if (ry !== selTop) return THROW(`Could NOT scroll_to selTop=${selTop} (ry=${ry})`);
 	}
 
-	let scroll_num_hold = scroll_num;
-	let yhold = y;
+//	let scroll_num_hold = scroll_num;
+//y = selTop;
+//let donum = selBot - selTop;
+//cwarn("OPEN", donum, ry);
 	open_folds_in_line_range(selBot - selTop);
-	scroll_to(chg.y);
 	let a = chg;
 	let tm = chg.time;
+let iter=0;
 	while (tm === a.time){//«
+//iter++;
 		let diff = ry - a.y;
+//log(diff);
 /*
 		if (diff == 1) {
 			y--;
@@ -4759,19 +5149,23 @@ const do_undo_prepend=(chg)=>{//«
 			ry++;
 		}
 		else if (diff){
-THROW(`WHAT IS THIS DIFF IN UNDO PREPENDSPACE 1111: ${diff}`);
+cwarn("ITERS", iter);
+return THROW(`WHAT IS THIS DIFF IN UNDO PREPEND: ${diff} (y: ${y} scrnum: ${scroll_num})`);
+//THROW(`WHAT IS THIS DIFF IN UNDO PREPENDSPACE 1111: ${diff}`);
 		}
 */
 		y-=diff;
-		ry-=diff;
+		set_ry();
+//		ry-=diff;
+//		maybe_scroll();
 		if (a !== chg) actions.pop();
 		undos.push(a);
 		do_undo(a);
 		a = actions[actions.length-1];
 		if (!(a&&a.opts.prependSpace)) break;
 	}//»
-	y = yhold;
-	scroll_num = scroll_num_hold;
+//	y = yhold;
+//	scroll_num = scroll_num_hold;
 	undo_end(tm);
 
 };//»
@@ -4779,7 +5173,13 @@ THROW(`WHAT IS THIS DIFF IN UNDO PREPENDSPACE 1111: ${diff}`);
 const do_redo = (chg) => {//«
 	let ch = chg.ch;
 	let len = ch.length;
-	let {neg, ins, adv, isBlock, opts, keepFirst, fileChomp} = chg.opts;
+	let {isViz, neg, ins, adv, isBlock, opts, keepFirst, fileChomp} = chg.opts;
+	if (chg.y!==ry) {
+		scroll_to(chg.y, {openFoldHits: true});
+	}
+	if (isViz) {
+		open_folds_in_line_range(chg.ch.length);
+	}
 	x = chg.x;
 	if (isStr(ch)) {
 		if (ch=="\n"){//«
@@ -4833,9 +5233,11 @@ const do_redo = (chg) => {//«
 						else if (i===to){
 							let rem = lines.splice(_y+i, 1)[0].slice(tolen);
 							lines[_y+i-1]=lines[_y+i-1].concat(rem);
+							if (!lines.length) lines = [[]];
 						}
 						else{
 							lines.splice(_y+i, 1);
+							if (!lines.length) lines = [[]];
 							i--;
 							to--;
 						}
@@ -4854,10 +5256,12 @@ const do_redo = (chg) => {//«
 				lines[y+scroll_num] = [];
 				if (len > 1) {
 					lines.splice(y+scroll_num+1, len-1);
+					if (!lines.length) lines = [[]];
 				}
 			}
 			else {
 				lines.splice(y+scroll_num, len);
+				if (!lines.length) lines = [[]];
 				if (y+scroll_num === lines.length){
 					y--;
 				}
@@ -4911,6 +5315,7 @@ const do_redo = (chg) => {//«
 				if (fold_mode) arr = get_folded_lines(ch);
 				else arr = dup(ch);
 				lines.splice(y+scroll_num, keepFirst ? 1 : 0, ...arr);
+				if (!lines.length) lines = [[]];
 			}//»
 		}//»
 		set_line_lens();
@@ -5017,6 +5422,7 @@ const do_undo = (chg)=>{//«
 				else arr = dup(ch);
 //				lines.splice(y+scroll_num, keepFirst ? 1 : 0, ...arr);
 				lines.splice(y+scroll_num+add1, keepFirst?1:0, ...arr);
+				if (!lines.length) lines = [[]];
 			}//»
 		}//»
 		else{//«
@@ -5049,6 +5455,7 @@ const do_undo = (chg)=>{//«
 						}
 						else if (i===to){
 let rem = lines.splice(_y, 1)[0];
+if (!lines.length) lines = [[]];
 //log("REM",rem);
 if (rem){
 	lines[_y-1] = lines[_y-1].concat(rem.slice(ch[to].length));
@@ -5070,6 +5477,7 @@ PROBLEM @RYBFJFI!?!?!
 						}
 						else{
 							lines.splice(_y, 1);
+							if (!lines.length) lines = [[]];
 						}
 					}
 				}
@@ -5078,15 +5486,23 @@ PROBLEM @RYBFJFI!?!?!
 				lines[y+scroll_num] = [];
 				if (ch.length > 1){
 					lines.splice(y+scroll_num+1, ch.length-1);
+					if (!lines.length) lines = [[]];
 				}
 			}
 			else {
 				let got = lines.splice(y+scroll_num, ch.length);
+				if (!lines.length) lines = [[]];
 				if (fileChomp) {
 					y--;
 				}
 			}
 		}//»
+
+		if (y+scroll_num === lines.length && fileChomp) {
+cwarn("HIHIHIHIHI!?!?!");
+			lines.push([]);
+		}			
+
 		set_line_lens();
 	}
 }//»
@@ -5108,16 +5524,8 @@ let {neg, fileChomp, isLines, isViz, isBlockInsert} = chg.opts;
 if (isLines && !neg) openFoldHits = false;
 else openFoldHits = true;
 x = chg.x;
+//log(chg.y, ry);
 
-
-if (chg.y !== ry){//«
-	scroll_to(chg.y, {openFoldHits, fileChomp});
-	if (chg.y !== ry){
-log(fileChomp, chg.y, ry);
-log(lines);
-THROW(`Could NOT scroll_to ${chg.y}`);
-	}
-}//»
 
 //QLKMNYUHY
 if (isViz) open_folds_in_line_range(ch.length);
@@ -5202,7 +5610,10 @@ const undo = async (o={}) => {//«
 		validate_initial_str();
 		return false;
 	}//»
-	if (chg.opts.prependSpace) return do_undo_prepend(chg);
+	if (chg.opts.prependSpace) {
+		try {do_undo_prepend(chg);}catch(e){THROW(e);}
+		return;
+	}
 	cur_undo = chg;
 	let tm = chg.time;
 	let ch = chg.ch;
@@ -5223,7 +5634,8 @@ const undo = async (o={}) => {//«
 
 					actions.pop();
 					undos.push(a);
-					do_undo(a);
+//					do_undo(a);
+					try {do_undo(a);}catch(e){return THROW(e);}
 					a = actions[actions.length-1];
 					if (!a) break;
 					c = a.ch;
@@ -5235,7 +5647,8 @@ const undo = async (o={}) => {//«
 													!check_if_folded(-1))){
 					actions.pop();
 					undos.push(a);
-					do_undo(a);
+//					do_undo(a);
+					try {do_undo(a);}catch(e){return THROW(e);}
 					a = actions[actions.length-1];
 					if (!a) break;
 					c = a.ch;
@@ -5248,7 +5661,8 @@ const undo = async (o={}) => {//«
 								&& (a.x == x || a.x == x-1 || a.x == x+1))) {
 				actions.pop();
 				undos.push(a);
-				do_undo(a);
+//				do_undo(a);
+				try {do_undo(a);}catch(e){return THROW(e);}
 				a = actions[actions.length-1];
 				if (!a) break;
 				c = a.ch;
@@ -5259,13 +5673,14 @@ const undo = async (o={}) => {//«
 		while (a.time===tm){
 			actions.pop();
 			undos.push(a);
-			do_undo(a);
+//			do_undo(a);
+			try {do_undo(a);}catch(e){return THROW(e);}
 			a = actions[actions.length-1];
 			if (!a) break;
 		}
 	}//»
 else{
-THROW("UNKNOWN CHANGE TYPE: EXPECTED A SINGLE CHAR OR A LINES ARRAY!!!");
+return THROW("UNKNOWN CHANGE TYPE: EXPECTED A SINGLE CHAR OR A LINES ARRAY!!!");
 }
 
 	return undo_end(tm);
@@ -5273,21 +5688,22 @@ THROW("UNKNOWN CHANGE TYPE: EXPECTED A SINGLE CHAR OR A LINES ARRAY!!!");
 
 };//»
 
-let undo_redo_all_mode = false;
 const undo_all=async()=>{//«
 	if (!is_command_or_edit_mode()) return;
-	undo_redo_all_mode = true;
-	while (actions.length) undo();
-	undo_redo_all_mode = false;
+	while (actions.length) {
+		if (killed) return;
+		undo();
+	}
 	reinit_folds();
 	stat("Initial state");
-	validate_initial_str();
+//	validate_initial_str();
 };//»
 const redo_all=async()=>{//«
 	if (!is_command_or_edit_mode()) return;
-	undo_redo_all_mode = true;
-	while (undos.length) redo();
-	undo_redo_all_mode = false;
+	while (undos.length) {
+		if (killed) return;
+		redo();
+	}
 	stat("Current state");
 };//»
 
@@ -5578,11 +5994,12 @@ const syntax_multiline_comments=()=>{//«
 //Simple/Helpers«
 
 const yank_file=()=>{//«
-//	visual_line_mode = true;
-	this.mode = VIS_LINE_MODE;
+	mode = VIS_LINE_MODE;
 	seltop=0;
 	selbot=lines.length-1;
 	delete_lines({copy:true});
+//	adjust_cursor();
+//log(x, cy());
 	stat("Yanked file");
 };//»
 
@@ -5640,7 +6057,7 @@ const insert_comment=()=>{//«
 			set_ry();
 			syntax_multiline_comments();
 		}//»
-		this.mode=INSERT_MODE;
+		mode=INSERT_MODE;
 		render({},39);
 	};
 	stat("cm");
@@ -5711,8 +6128,8 @@ const delete_mode = (yank) => {//«
 
 const del = () => {//«
 	if (check_if_folded(cy())) return;
-	if (this.mode!==INSERT_MODE) return;
-	if (this.mode===VIS_LINE_MODE) delete_first_space();
+	if (mode!==INSERT_MODE) return;
+	if (mode===VIS_LINE_MODE) delete_first_space();
 	else {
 		del_ch();
 		do_syntax_timeout();
@@ -5728,7 +6145,40 @@ const open_all_sel_folds = (opts={})=>{//«
 	let y_is_bot = selbot === cy();
 
 	for (let i=seltop; i <= selbot; i++) {
+/*DNPLJGU«
+
+vim.js?v=2017610:6046 Uncaught (in promise) TypeError: 
+					Cannot read properties of undefined (reading '_fold')
+    at open_all_sel_folds (vim.js?v=2017610:6046:10)
+    at delete_lines (vim.js?v=2017610:6817:14)
+    at Object.do_justify [as j_C] (vim.js?v=2017610:6671:2)
+
+
+ at open_all_sel_folds (vim.js?v=2837382:5996:10)
+    at delete_lines (vim.js?v=2837382:6760:14)
+    at do_justify (vim.js?v=2837382:6621:2)
+    at Object.j_CAS (vim.js?v=2837382:7601:1)
+
+    at open_all_sel_folds (vim.js?v=2017610:6046:10)
+    at delete_lines (vim.js?v=2017610:6817:14)
+    at delete_line (vim.js?v=2017610:6867:2)
+    at Object.handle_ch_del [as x] (vim.js?v=2017610:6948:3)
+    at handle_press (vim.js?v=2017610:7304:49)
+
+    at open_all_sel_folds (vim.js?v=2017610:6046:10)
+    at delete_lines (vim.js?v=2017610:6817:14)
+    at do_pretty (vim.js?v=2017610:6609:2)
+    at Object.try_dopretty [as p_A] (vim.js?v=2017610:1463:2)
+
+    at open_all_sel_folds (vim.js?v=2017610:6046:10)
+    at insert_line_comments (vim.js?v=2017610:6339:2)
+    at handle_visual_key (vim.js?v=2017610:7402:21)
+    at handle_press (vim.js?v=2017610:7302:3)
+»*/
 		let ln = lines[i];
+if (!ln){
+return THROW(`NO LINE: SELTOP(${seltop}) SELBOT(${selbot})`);
+}
 		if (ln._fold) {
 			let len = ln._foldlen;
 			open_fold(ln._fold, {noInnerFolds: true});
@@ -5744,12 +6194,12 @@ const open_all_sel_folds = (opts={})=>{//«
 		if (have_ch === null){
 			have_ch = ln[usex];
 			if (!(have_ch == " " || have_ch == "\t")){
-cwarn("no valid whitespace char found");
+//cwarn("no valid whitespace char found");
 return;
 			}
 		}
 		else if (ln[usex]!==have_ch){
-cwarn("char not the same");
+//cwarn("char not the same");
 return;
 		}
 	}
@@ -5759,9 +6209,10 @@ return;
 
 const prepend_space=(ch)=>{//«
 	let usex;
-	if (this.mode===VIS_BLOCK_MODE) usex = selleft;
+	if (mode===VIS_BLOCK_MODE) usex = selleft;
 	else usex = 0;
-	let tm = Date.now();
+//	let tm = Date.now();
+let tm = act_iter++;
 	let real_seltop = realy(seltop);
 	let real_selbot = realy(selbot);
 	open_all_sel_folds();
@@ -5771,7 +6222,7 @@ const prepend_space=(ch)=>{//«
 		ln.splice(usex,0,ch);
 		actions.push(new Action(usex, real_seltop+iter, ch, tm, {prependSpace: true, selTop: real_seltop, selBot: real_selbot}));
 	}
-	if (this.mode===VIS_BLOCK_MODE) {
+	if (mode===VIS_BLOCK_MODE) {
 		selleft++;
 		selright++;
 		x++;
@@ -5782,12 +6233,13 @@ const prepend_space=(ch)=>{//«
 };//»
 const delete_first_space=()=>{//«
 	let usex;
-	if (this.mode===VIS_BLOCK_MODE) {
+	if (mode===VIS_BLOCK_MODE) {
 		if (selleft === 0) return;
 		usex = selleft-1;
 	}
 	else usex = 0;
-	let tm = Date.now();
+//	let tm = Date.now();
+	let tm = act_iter++;
 	let real_seltop = lens[seltop];
 	let real_selbot = lens[selbot];
 	let use_ch = open_all_sel_folds({checkVisual: true, usex});
@@ -5797,7 +6249,7 @@ const delete_first_space=()=>{//«
 		lines[i].splice(usex, 1);
 		actions.push(new Action(usex, real_seltop+iter, use_ch, tm, {prependSpace: true, selTop: real_seltop, selBot: real_selbot, neg: true}));
 	}
-	if (this.mode===VIS_BLOCK_MODE) {
+	if (mode===VIS_BLOCK_MODE) {
 		selleft--;
 		selright--;
 		x--;
@@ -5809,12 +6261,12 @@ const delete_first_space=()=>{//«
 const try_empty_line_del=()=>{//«
 	if (!curlen()){//if (!curln(true).length){
 //		edit_insert=true;
-		this.mode = INSERT_MODE;
+		mode = INSERT_MODE;
 		no_render=true;
 		down();
 		do_backspace();
 //		edit_insert=false;
-		this.mode = COMMAND_MODE;
+		mode = COMMAND_MODE;
 		no_render=false;
 		render({},49);
 	}
@@ -5876,7 +6328,7 @@ const do_paste = (val, opts={}) => {//«
 	if (!lns[0]) lns.shift();
 	if (!lns[lns.length-1]) lns.pop();
 	if (!lns.length) return;
-	if (this.stat_input_type){
+	if (stat_input_type){
 		for (let ch of lns[0]) handle_press(ch);
 	}
 	else {
@@ -5891,7 +6343,7 @@ const handle_paste = async (which, opts = {}) => {//«
 
 let {keepFirst, doFold} = opts;
 if (!yank_buffer) return;
-if (this.stat_input_type){
+if (stat_input_type){
 	let s = yank_buffer[0];
 	stat_com_arr.splice(x, 0, ...s);
 	x=0;
@@ -5906,7 +6358,11 @@ let hold_x = x;
 let hold_ry = ry;
 let yb = yank_buffer;
 let typ = yb._type;
-let time = opts.time || Date.now();
+if (!typ) {
+	return;
+}
+//let time = opts.time || Date.now();
+let time = opts.time || act_iter++;
 let to = yb.length-1;
 let fileChomp;
 if (typ=="B"){//Block«
@@ -5940,7 +6396,7 @@ if (typ=="B"){//Block«
 		ln.splice(x, 0, ...buf);
 		y++;
 		if (i < to && !lines[cy()]){
-THROW(`i(${i} < to(${to}) && !lines[cy()])`);
+return THROW(`i(${i} < to(${to}) && !lines[cy()])`);
 		}
 	}
 	y=_y;
@@ -6001,6 +6457,7 @@ else if (typ==="L"){//Line«
 		lines.splice(y+scroll_num, keepFirst ? 1 : 0, ...lns);
 	}
 	else lines.splice(y+scroll_num, keepFirst ? 1 : 0, ...dup(yank_buffer));
+	if (!lines.length) lines = [[]];
 }//»
 else {
 log(yank_buffer);
@@ -6011,7 +6468,7 @@ if (ind > -1) cut_buffers.splice(ind, 1);
 
 scroll_num = _scrh;
 y = _y;
-adjust_cursor();
+//adjust_cursor();
 set_line_lens();
 real_line_colors=[];
 if (!opts.noRender) render();
@@ -6020,25 +6477,31 @@ if (!opts.noRender) render();
 
 const insert_line_comments=()=>{//«
 	open_all_sel_folds();
-	let time = Date.now();
+//	let time = Date.now();
+	let time = act_iter++;
 	scroll_to(real_seltop(), {noSetSel: true});
 	let diff = selbot - seltop;
 	let _y = y;
 	for (let i=0; i <= diff; i++){
 		x=0;
 		print_chars("//",{time, ins: true});
+
+//If we are at the bottom, set_ry() blows up...
+if (!lines[y+scroll_num+1]) break;
 		y++;
 		set_ry();
+
 	}
 	y=_y;
 	set_ry();
 	x=0;
-	this.mode = COMMAND_MODE;
+	mode = COMMAND_MODE;
 	render();
 };//»
 const insert_multiline_comment=()=>{//«
 	open_all_sel_folds();
-	let time = Date.now();
+//	let time = Date.now();
+	let time = act_iter++;
 	if (seltop === selbot) return;
 	let _y = ry;
 	scroll_to(real_seltop(), {noSetSel: true});
@@ -6052,7 +6515,7 @@ const insert_multiline_comment=()=>{//«
 	x++;
 	print_ch("/", {time});
 	scroll_to(_y);
-//	this.mode = COMMAND_MODE;
+//	mode = COMMAND_MODE;
 	render();
 };//»
 const insert_fold = (opts={}) => {//«
@@ -6060,11 +6523,20 @@ const insert_fold = (opts={}) => {//«
 	open_all_sel_folds();
 	let ln1 = lines[seltop];
 	let ln2 = lines[selbot];
+if (!ln1){
+cerr(`NO LINE @SELTOP: ${seltop}`);
+return THROW("ABORTING");
+}
+if (!ln2){
+cerr(`NO LINE @SELBOT: ${selbot}`);
+return THROW("ABORTING");
+}
 	if (have_fold_marker(ln1)||have_fold_marker(ln2)) {
 		stat("Fold marker detected");
 		return;
 	}
-	let time = Date.now();
+//	let time = Date.now();
+	let time = act_iter++;
 	scroll_to(real_seltop(), {noSetSel: true});
 	let ln1len = ln1.length;
 	let ln2len = ln2.length;
@@ -6096,18 +6568,22 @@ const insert_fold = (opts={}) => {//«
 		x = ln2len-1;
 		print_chars(`//${END_FOLD_CHAR}`, {time});
 	}
-	this.mode = COMMAND_MODE;
+	mode = COMMAND_MODE;
 	render();
 };//»
 
 const do_something_to_lines = (opts={}) => {//«
 //const do_trim_lines = (opts={}) => {
 	let {trim, regspace}=opts;
-	y = seltop - scroll_num;
-	set_ry();
 	open_all_sel_folds();
-	let time = Date.now();
+	scroll_to(seltop);
+//	let time = Date.now();
+	let time = act_iter++;
 	delete_lines({time, keepFirst: true, keepMode: true});
+if (!yank_buffer) {
+	render();
+	return;
+}
 	let to = yank_buffer.length;
 	let arr = [];
 	for (let i=0; i < to; i++){
@@ -6119,6 +6595,7 @@ const do_something_to_lines = (opts={}) => {//«
 		if (trim)arr.push([...ln.join("").trim()]);
 		else if (regspace)arr.push([...ln.join("").regstr()]);
 	}
+//log(arr);
 	yank_buffer = arr;
 	yank_buffer._type="L";
 	handle_paste("P", {time, keepFirst: true});
@@ -6126,11 +6603,12 @@ const do_something_to_lines = (opts={}) => {//«
 }//»
 const do_pad_lines = (opts={}) => {//«
 	let {padBlankLines} = opts;
-	y = seltop - scroll_num;
-	set_ry();
 	open_all_sel_folds();
-	let time = Date.now();
+	scroll_to(seltop);
+//	let time = Date.now();
+	let time = act_iter++;
 	delete_lines({time, keepFirst: true, keepMode: true});
+if (!yank_buffer) return;
 	let to = yank_buffer.length;
 	let arr = [];
 	for (let i=0; i < to; i++){
@@ -6155,8 +6633,8 @@ const do_pad_lines = (opts={}) => {//«
 }//»
 const do_changecase=(if_lower)=>{//«
 	if (!is_vis_mode()) return;
-	let m = this.mode;
-	this.mode = VIS_LINE_MODE;
+	let m = mode;
+	mode = VIS_LINE_MODE;
 	let typ;
 	let lft, rgt;
 	let x1, x2;
@@ -6185,8 +6663,10 @@ const do_changecase=(if_lower)=>{//«
 		rgt = selright;
 	}
 //»
-	let time = Date.now();
+//	let time = Date.now();
+	let time = act_iter++;
 	delete_lines({time, keepFirst: true});
+if (!yank_buffer) return;
 	let arr=[];
 /*«These are the exact same algorithms, except that one calls toLowerCase 
 while the other calls toUpperCase. I wanted to do 2 big outer tests rather than several
@@ -6274,11 +6754,13 @@ replace all of the toLowerCase's with toUpperCase's (or vice versa).
 const do_pretty=()=>{//«
 	if (is_normal_mode(true)){
 		seltop=selbot=cy();
-		this.mode = VIS_LINE_MODE;
+		mode = VIS_LINE_MODE;
 	}
-	if (this.mode!==VIS_LINE_MODE) return;
-	let time = Date.now();
+	if (mode!==VIS_LINE_MODE) return;
+//	let time = Date.now();
+	let time = act_iter++;
 	delete_lines({time, keepFirst: true});
+if (!yank_buffer) return;
 	let s='';
 	for (let ln of yank_buffer) s+=ln.join("")+"\n";
 	let ar = pretty(s,{indent_with_tabs:1}).split("\n");
@@ -6335,11 +6817,13 @@ const fmt=(str,opts={})=>{//«
 	let holdy = y;
 	if (is_normal_mode(true)){
 		seltop=selbot=cy();
-		this.mode = VIS_LINE_MODE;
+		mode = VIS_LINE_MODE;
 	}
-	if (this.mode !== VIS_LINE_MODE) return;
-	let time = Date.now();
+	if (mode !== VIS_LINE_MODE) return;
+//	let time = Date.now();
+	let time = act_iter++;
 	delete_lines({time, keepFirst: true});
+if (!yank_buffer) return;
 	let s='';
 	for (let ln of yank_buffer) s+=ln.join("")+" ";
 	let ar = fmt(s,{maxlen:WRAP_LENGTH,nopad:true}).split("\n");
@@ -6351,13 +6835,16 @@ const fmt=(str,opts={})=>{//«
 const do_line_wrap=async()=>{//«
 
 //WUIOPHMDL
-	if (this.mode !== VIS_LINE_MODE || this.mode_hold === FILE_MODE) return;
+	if (mode !== VIS_LINE_MODE || mode_hold === FILE_MODE) return;
 
-	let time = Date.now();
+//	let time = Date.now();
+	let time = act_iter++;
 	delete_lines({time, keepFirst: true});
+if (!yank_buffer) return;
 	let s='';
 	for (let ln of yank_buffer) s+=ln.join("");
 	s = s.replace(/[\x20\t]*([-:{};=+><(),])[\x20\t]*/g,"$1");
+	if (!s) return;
 	let chars = [...s];
 	yank_buffer = [chars];
 	yank_buffer._type="L";
@@ -6369,7 +6856,8 @@ const do_line_wrap=async()=>{//«
 };//»
 const do_delete_lines = (from, to, opts={})=>{//«
 	let{copy, time, keepFirst}=opts;
-	let tm = time || Date.now();
+//	let tm = time || Date.now();
+	let tm = time || act_iter++;
 	let diff = to-from+1;
 
 //If we are deleting the entire file, we need to keep one line
@@ -6389,18 +6877,29 @@ const do_delete_lines = (from, to, opts={})=>{//«
 		let fileChomp = false;
 		if (keepFirst && diff == 1){
 			yank_buffer = [lines[from].slice()];
+//log(yank_buffer);
 			lines[from] = [];
 		}
 		else if (keepFirst){
+/*ERNJTPL
+vim.jsUncaught (in promise) TypeError: Cannot read properties of undefined (reading 'slice')
+    at do_delete_lines (vim.js?v=6692513:6718:31)
+    at delete_lines (vim.js?v=6692513:6805:3)
+    at do_justify (vim.js?v=6692513:6663:2)
+    at Object.j_CAS (vim.js?v=6692513:7643:1)
+*/	
 			yank_buffer = [lines[from].slice()];
 			lines[from] = [];
 			yank_buffer.push(...dup(lines.splice(from+1, diff-1)));
+			if (!lines.length) lines = [[]];
 		}
 		else {
 			yank_buffer = dup(lines.splice(from, diff));
+			if (!lines.length) lines = [[]];
 			if (cy()===lines.length){
 				y--;
 				fileChomp = true;
+				set_ry();
 			}
 		}
 		if (yank_buffer.flat().length) cut_buffers.unshift(yank_buffer);
@@ -6428,12 +6927,14 @@ const do_delete_marker = (y1, x1, y2, x2, opts={})=>{//«
 					out.push(ln.splice(0, x2+1));
 					lines[i-1]=lines[i-1].concat(ln);
 					lines.splice(i, 1);
+					if (!lines.length) lines = [[]];
 				}
 			}
 			else{
 				if (copy) out.push(ln.slice());
 				else {
 					out.push(...lines.splice(i, 1));
+					if (!lines.length) lines = [[]];
 					i--;
 					y2--;
 				}
@@ -6445,7 +6946,8 @@ const do_delete_marker = (y1, x1, y2, x2, opts={})=>{//«
 		if (y1 !== y2) {
 			set_line_lens();
 		}
-		actions.push(new Action(x1, realy(y1), out, Date.now(), {ins: true, neg: true, isViz: true}));
+//		actions.push(new Action(x1, realy(y1), out, Date.now(), {ins: true, neg: true, isViz: true}));
+		actions.push(new Action(x1, realy(y1), out, act_iter++, {ins: true, neg: true, isViz: true}));
 		if (yank_buffer.flat().length) cut_buffers.unshift(yank_buffer);
 		x=x1;
 	}
@@ -6453,7 +6955,8 @@ const do_delete_marker = (y1, x1, y2, x2, opts={})=>{//«
 const do_delete_block=async(top,bot,left,right,opts={})=>{//«
 	let {copy, time, toUpper}=opts;
 	yank_buffer=[];
-	let tm = time||(new Date).getTime();
+//	let tm = time||(new Date).getTime();
+	let tm = time||act_iter++;
 
 	for (let i=top; i <= bot; i++) {
 		let ln = lines[i];
@@ -6471,40 +6974,41 @@ const do_delete_block=async(top,bot,left,right,opts={})=>{//«
 const delete_lines = async(opts={}) =>{//«
 	let {copy, time}=opts;
 //KOPLIERT
-	if (!copy && this.mode_hold === FILE_MODE) return;
+	if (!copy && mode_hold === FILE_MODE) return;
 	let _scrh = scroll_num;
-	if (this.mode===VIS_LINE_MODE){//«
+	if (mode===VIS_LINE_MODE){//«
 		if (!copy) open_all_sel_folds();
-		y = seltop - scroll_num;
-		set_ry();
+		scroll_to(seltop);
+		if (seltop===selbot && !curarr().length){}
+else {
 		do_delete_lines(seltop, selbot, opts);
 		yank_buffer._type = "L";//Line"
+}
 	}//»
-	else if (this.mode===VIS_BLOCK_MODE){//«
-
-
+	else if (mode===VIS_BLOCK_MODE){//«
 		open_all_sel_folds();
-		y = seltop - scroll_num;
+		scroll_to(seltop);
 		set_ry();
 		do_delete_block(seltop, selbot, selleft, selright, opts);
 		yank_buffer._type = "B";//Block
 	}//»
-	else if (this.mode===VIS_MARK_MODE){//«
+	else if (mode===VIS_MARK_MODE){//«
 		open_all_sel_folds();
 		set_sel_mark();
 		let [x1, y1, x2, y2] = get_marker_coords();
-		y = seltop - scroll_num;
+		scroll_to(seltop);
 		x = x1;
 		do_delete_marker(y1, x1, y2, x2, opts);
 		yank_buffer._type = "M";//Marker
 	}//»
 
 //ODBFKEJ
-	if (this.mode_hold === FILE_MODE) {
-		this.mode = FILE_MODE;
-		delete this.mode_hold;
+	if (mode_hold === FILE_MODE) {
+		mode = FILE_MODE;
+//		delete mode_hold;
+		mode_hold = undefined;
 	}
-	else if (!opts.keepMode) this.mode=COMMAND_MODE;
+	else if (!opts.keepMode) mode=COMMAND_MODE;
 	set_line_lens();
 	real_line_colors=[];
 	if (x>0 && x===curarr().length) x--;
@@ -6522,43 +7026,48 @@ const delete_stdin_lines = (opts={}) =>{//«
 	}
 };//»
 const delete_line = (yarg, opts = {}) => {//«
-	this.mode=VIS_LINE_MODE;
+	mode=VIS_LINE_MODE;
 	let usey = yarg || cy();
 	seltop=selbot=usey;
 	delete_lines(opts);
+//	adjust_cursor();
 };//»
-
+/*
 const delete_to_end=()=>{//«
-	if (this.mode !== COMMAND_MODE) return;
+	if (mode !== COMMAND_MODE) return;
 	let ln = curarr();//let ln = curln(true);
 	if (x===ln.length) return;
 	yank_buffer = [ln.splice(x)];
 	yank_buffer._type = "M";
-	actions.push(new Action(x, ry, yank_buffer, Date.now(), {neg: true, ins: true}));
+//	actions.push(new Action(x, ry, yank_buffer, Date.now(), {neg: true, ins: true}));
+	actions.push(new Action(x, ry, yank_buffer, act_iter++, {neg: true, ins: true}));
 	if (x > 0) x--;
 	render();
 };//»
 const delete_to_top=()=>{//«
-	if (this.mode !== COMMAND_MODE) return;
+	if (mode !== COMMAND_MODE) return;
 	if (cy()==0) return;
-	this.mode = VIS_LINE_MODE;
+	mode = VIS_LINE_MODE;
 	seltop = 0;
 	selbot = cy();
 	delete_lines();
-	this.mode = COMMAND_MODE;
+//	adjust_cursor();
+	mode = COMMAND_MODE;
 };//»
 const delete_to_bottom=()=>{//«
-	if (this.mode !== COMMAND_MODE) return;
+	if (mode !== COMMAND_MODE) return;
 	let llen_min1 = lines.length-1;
 	if (cy()==llen_min1) {
 		if (!curarr()._fold) return;
 	}
-	this.mode = VIS_LINE_MODE;
+	mode = VIS_LINE_MODE;
 	seltop = cy();
 	selbot = llen_min1;
 	delete_lines();
-	this.mode = COMMAND_MODE;
+//	adjust_cursor();
+	mode = COMMAND_MODE;
 };//»
+*/
 const delete_word = (opts={})=>{//«
 
 	let wrd;
@@ -6600,6 +7109,7 @@ const handle_ch_del = ()=>{//«
 	let ln = curarr();
 	if (ln._fold) return;
 	if (!ln.length) {
+		if (cy()==0) return;
 		delete_line();
 		return;
 	}
@@ -6624,25 +7134,24 @@ const del_ch = (opts={}) =>{//«
 			return;
 		}
 		if (x == ln.length && !at_file_end()){
-//log("DOIT????");
 			down();
 			x=0;
 			do_backspace(opts);
 		}
-//		if (curch(1)) do_null_del();
-//log("WELLLLL");
 		return;
 	}
 	real_line_colors[ry]=undefined;
 	let have_ch = ln[x];
 	let {noAct, time} = opts;
-    let tm = time || (new Date).getTime();
+//  let tm = time || (new Date).getTime();
+    let tm = time || act_iter++;
 
 	let at_line_end = x===ln.length-1;
 	let ch = ln.splice(x, 1)[0];
     if (!noAct) {
 		actions.push(new Action(x, ry, ch, tm, {neg: true} ));
 	}
+if (at_line_end) left();
 //	if (at_line_end) left();
 	dirty_flag = true;
 //	Term.is_dirty = true;
@@ -6652,15 +7161,13 @@ const del_ch = (opts={}) =>{//«
 const print_chars = (s, opts={}) =>{//«
 	let {ins}=opts;
 	let arr=s.split("");
-//	if (!(ins||edit_insert)) x++;
-	if (!(ins||this.mode===INSERT_MODE)) x++;
-	if (!opts.time) opts.time = Date.now();
+	if (!(ins||mode===INSERT_MODE)) x++;
+	if (!opts.time) opts.time = act_iter++;
 	for(let ch of arr){
 		print_ch(ch, opts);
 		x++;
 	}
-//	if (!edit_insert) x--;
-	if (this.mode!==INSERT_MODE) x--;
+	if (mode!==INSERT_MODE) x--;
 };//»
 
 const do_syntax_timeout=()=>{//«
@@ -6687,8 +7194,10 @@ return;
 		ln = curarr();
 	}
 
-    let tm = time || (new Date).getTime();
+//    let tm = time || (new Date).getTime();
+    let tm = time || act_iter++;
     if (!noAct) {
+//log(x);
 		actions.push(new Action(x, ry, ch, tm, {adv: true}));
 	}
 	ln.splice(x, 0, ch);
@@ -6706,18 +7215,45 @@ return;
 }//»
 
 const replace_char = (ch, opts={})=>{//«
-	let time = Date.now();
+//	let time = Date.now();
+	let time = act_iter++;
 	let at_line_end = x === (curlen() - 1);
-	let gotch = del_ch({time});
-	if (at_line_end) x++;
+	let past_line_end = x === curlen();
+	let gotch;
+if (x==0 && !curarr().length){
+//cwarn("EMPTY LINE!!!");
+}
+//else {
+else if (!past_line_end){
+	gotch = del_ch({time});
+//log(`<${gotch}>`);
+}
+
+// WHAT DO I DO HERE ???
+// DSJRKFH
+	let did_inc = false;
+	if (at_line_end) {
+		x++;
+//cwarn("AT END");
+did_inc = true;
+//cwarn("UHHHH OHHHHHH!!!");
+//log("IN", x);
+//log("OUT", x);
+//log(opts.fromHandler);
+	}
 	if (opts.toUpper && gotch && gotch.toUpperCase) ch = gotch.toUpperCase();
 	if (ch==="\n") return enter({time});
 	print_ch(ch,{time});
 	if (opts.fromHandler) {
+//if (!did_inc)
+//if (!did_inc) x++;
 		x++;
 		render();
 		do_syntax_timeout();
 	}
+//	else if (at_line_end){
+//		x++;
+//	}
 };//»
 const replace_one_char = () => {//«
 	let ln = curarr();//let ln = curln(true);
@@ -6744,7 +7280,7 @@ replace_char("\n");
 
 const tab = (opts={}) => {//«
 	let {shift, ctrl}=opts;
-	let m = this.mode;
+	let m = mode;
 	if (m===COMMAND_MODE||ctrl){
 		init_complete_mode();
 	}
@@ -6758,7 +7294,8 @@ const tab = (opts={}) => {//«
 
 const do_enter = (opts={}) =>{//«
 	let {noAct, time, num, data}=opts;
-    let tm = time || (new Date).getTime();
+//    let tm = time || (new Date).getTime();
+    let tm = time || act_iter++;
 	let arr = curarr();//let arr = curln(true);
 	let start = arr.splice(0,x);
 	if (arr._multi) start._multi = true;
@@ -6840,20 +7377,21 @@ const newline = (which) =>{//«
 	}
 	else {
 		x=0;
-		this.mode = INSERT_MODE;
+		mode = INSERT_MODE;
 		enter({fromNewline: true});
 		y--;
 		set_ry();//THE CASE OF THE DEADLY ***NOT*** SETTING OF RY
 //FGJKUYTEPOI
 	}
-	this.mode = INSERT_MODE;
+	mode = INSERT_MODE;
 	render();
 }//»
 const nobreak_enter = (opts={}) => {opts.noBreak=true;enter(opts);};
 
 const do_backspace = (opts={})=>{//«
 	let {noAct, time, noRender, data} = opts;
-    let tm = time || (new Date).getTime();
+//    let tm = time || (new Date).getTime();
+    let tm = time || act_iter++;
 	let have_ch;
 	if (fold_mode){//«
 		let fold;
@@ -6889,11 +7427,13 @@ const do_backspace = (opts={})=>{//«
 		let n = y + scroll_num;
 		if (!thisln.length){
 			lines.splice(n, 1);
+			if (!lines.length) lines = [[]];
 			x=0;
 		}
 		else {
 			lines[n] = thisln.concat(nextln);
 			lines.splice(n+1, 1);
+			if (!lines.length) lines = [[]];
 			x = thisln.length;
 		}
 		set_line_lens();
@@ -6908,7 +7448,7 @@ const do_backspace = (opts={})=>{//«
 };//»
 const backspace = () => {//«
 	if (is_normal_mode()) return try_empty_line_del();
-	if (this.mode!==INSERT_MODE) return;
+	if (mode!==INSERT_MODE) return;
 	do_backspace();
 	do_syntax_timeout();
 }//»
@@ -6919,20 +7459,25 @@ const backspace = () => {//«
 const handle_press = ch =>{//«
 	let mess;
 	last_updown = false;
-	let mode = this.mode;
+//	let mode = mode;
 	if (stat_cb) return stat_cb(ch);
 
-	if (this.stat_input_type) handle_stat_char(ch);
+	if (stat_input_type) handle_stat_char(ch);
 	else if (mode===INSERT_MODE) {
 		print_ch(ch,{fromHandler: true});
 	}
 	else if (mode===REPLACE_MODE) {
 		replace_char(ch, {fromHandler: true});
 	}
-	else if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) handle_symbol_ch(ch);
+	else if (mode===REF_MODE||mode===SYMBOL_MODE||mode===COMPLETE_MODE) {
+		handle_symbol_ch(ch);
+	}
 	else if (mode===FILE_MODE) handle_file_ch(ch);
-	else if (mode===VIS_LINE_MODE||mode===VIS_MARK_MODE||mode===VIS_BLOCK_MODE) handle_visual_key(ch);
+	else if (mode===VIS_LINE_MODE||mode===VIS_MARK_MODE||mode===VIS_BLOCK_MODE) {
+		handle_visual_key(ch);
+	}
 	else if (KEY_CHAR_FUNCS[ch]) KEY_CHAR_FUNCS[ch]();
+	else unused_keydowns.push(keydown_iter);
 	
 };//»
 const handle_stat_char=ch=>{//«
@@ -6945,9 +7490,9 @@ const handle_stat_char=ch=>{//«
 	stat_x++;
 	render({},90);
 };//»
-const handle_stat_input_keydown=(sym)=>{//«
+const handle_stat_input_keydown = (sym) => {//«
 	if (sym=="TAB_"||sym=="TAB_C") {
-		let sit = this.stat_input_type;
+		let sit = stat_input_type;
 		if (PATH_COMPLETER_MODES.includes(sit)) {
 //		if (sit===SAVE_AS_MODE) {
 			handle_tab_path_completion(sym==="TAB_C", stat_com_arr.join("").trim(), "");
@@ -6978,18 +7523,25 @@ const handle_stat_input_keydown=(sym)=>{//«
 // Needed to add "is_saving = false" so this file could be saved (without 
 // refusing to save and giving the warning: is_saving=true).
 			is_saving = false;
-			this.stat_input_type = "";
+			stat_input_type = "";
 		}
 	}//»
 	else if(sym=="DEL_"){if(stat_com_arr.length)stat_com_arr.splice(stat_x,1);}
-	else if(sym=="a_C"){if(stat_x==0)return;stat_x=0;}
-	else if(sym=="e_C"){if(stat_x==stat_com_arr.length)return;stat_x=stat_com_arr.length;}
+	else if(sym=="a_C"){
+		if(stat_x==0)return;
+//		stat_x=0;
+	}
+	else if(sym=="e_C"){
+		if(stat_x==stat_com_arr.length) return;
+//		stat_x=stat_com_arr.length;
+	}
 	else if (sym=="UP_"||sym=="DOWN_") do_history_arrow(sym);
 	else{
 		let func = KEY_DOWN_FUNCS[sym];
 		if (func === init_complete_mode){
 			init_complete_mode({stat: true});
 		}
+		else unused_keydowns.push(keydown_iter);
 	}
 //	else if (KEY_DOWN_FUNCS[sym])
 	render({},98);
@@ -7003,7 +7555,7 @@ const handle_stat_cb_keydown=(sym)=>{//«
 const handle_visual_key=ch=>{//«
 	let s;
 	let mess;
-	let m = this.mode;
+	let m = mode;
 	if (ch==":"||ch=="?"||ch=="/") init_stat_input(ch);
 	else if (ch=="n") resume_search(false);
 	else if (ch=="x"||ch=="y") {
@@ -7026,6 +7578,7 @@ const handle_visual_key=ch=>{//«
 		else if (ch=="p") do_pad_lines({padBlankLines: true});
 		else if (ch=="t") do_something_to_lines({trim: true});
 		else if (ch=="r") do_something_to_lines({regspace: true});
+		else unused_keydowns.push(keydown_iter);
 	}//»
 	else if (m===VIS_MARK_MODE){//«
 		if (ch=="|"){
@@ -7035,7 +7588,7 @@ const handle_visual_key=ch=>{//«
 			if (seltop!==selbot) return;
 			let str = curarr().slice(selleft, selright+1);
 			if (!str.length) return;
-			this.mode=COMMAND_MODE;
+			mode=COMMAND_MODE;
 			find_word(str.join(""), {exact: false, reverse: ch==="#"});
 		}
 		else if (ch=="w"){
@@ -7045,12 +7598,15 @@ const handle_visual_key=ch=>{//«
 		else if (ch=="b"){
 			seek_prev_word();
 		}
+		else unused_keydowns.push(keydown_iter);
 	}//»
 	else if (m===VIS_BLOCK_MODE) {
 		if (ch==" ") {
 			prepend_space(" ");
 		}
+		else unused_keydowns.push(keydown_iter);
 	}
+	else unused_keydowns.push(keydown_iter);
 
 };//»
 
@@ -7074,6 +7630,7 @@ const KEY_CHAR_FUNCS={//«
 	j: down,
 	k: up,
 	G: end,
+/*
 	H:()=>{cur_to(0)},
 	M:()=>{
 		let scrh = scr_h();
@@ -7088,7 +7645,7 @@ const KEY_CHAR_FUNCS={//«
 		cur_to(usey);
 //		cur_to(Term.h-1-num_stat_lines);
 	},
-
+*/
 	w: seek_next_word,
 	e: seek_end_word,
 
@@ -7101,9 +7658,10 @@ const KEY_CHAR_FUNCS={//«
 	o: ()=>{newline("o")},
 	p: ()=>{handle_paste("p", {doFold: true})},//After
 	P: ()=>{handle_paste("P", {doFold: true})},//Before
-	D: delete_to_end,
-	T: delete_to_top,
-	B: delete_to_bottom,
+
+//	D: delete_to_end,
+//	T: delete_to_top,
+//	B: delete_to_bottom,
 
 	C: try_clipboard_copy,
 
@@ -7140,7 +7698,7 @@ const KEY_CHAR_FUNCS={//«
 
 	r: replace_one_char,
 	R:()=>{
-		this.mode = REPLACE_MODE;
+		mode = REPLACE_MODE;
 		render();
 	},
 	y: ()=>{delete_mode(true)},
@@ -7153,7 +7711,7 @@ const KEY_CHAR_FUNCS={//«
 	":": ()=>{ init_stat_input(":") },
 	"|": ()=>{ init_stat_input("|") },
 
-	Y: yank_file,
+//	Y: yank_file,
 	f: echo_file_path,
 
 //Find
@@ -7201,8 +7759,8 @@ const KEY_DOWN_FUNCS={//«
 r_C:()=>{
 //	e.preventDefault();
 	if (!is_normal_mode(true)) return;
-	if (this.mode == INSERT_MODE){
-		cwarn("CTRL_R INSERT");
+	if (mode == INSERT_MODE){
+//		cwarn("CTRL_R INSERT");
 	}
 	else redo();
 
@@ -7278,7 +7836,7 @@ do_justify();
 m_CAS: toggle_regex_escape_mode,
 
 //Display
-o_CAS: reset_display,
+//o_CAS: reset_display,
 q_C: syntax_multiline_comments,
 
 //Scroll
@@ -7294,8 +7852,8 @@ x_C: maybe_quit,
 
 //Dev
 
-r_CA:toggle_reload_win,
-"._CAS":set_tab_size_cb,
+r_CA: toggle_reload_win,
+"._CAS": set_tab_size_cb,
 j_CA: test_js,
 i_CA: write_to_host,
 u_CAS:()=>{
@@ -7385,6 +7943,7 @@ const UPDOWN_FUNCS={//«
 const LINE_WRAP_SYMS=["DEL_","BACK_","TAB_", "ENTER_", "\x20_C"];
 
 this.onkeyup=(e, sym)=>{//«
+//keydown_iter++;
 	if (sym==="TAB_") {
 		if (reload_win && reload_win._z_hold){
 			reload_win.winElem.style.zIndex = reload_win._z_hold;
@@ -7395,7 +7954,8 @@ this.onkeyup=(e, sym)=>{//«
 
 /*
 this.onkeypress=(e, sym, code)=>{//«
-	let mode = this.mode;
+keydown_iter++;
+	let mode = mode;
 		if (code < 32 || code > 126) return;
 		if (mode===LINE_WRAP_MODE){
 			handle_linewrap_key(sym);
@@ -7405,10 +7965,16 @@ this.onkeypress=(e, sym, code)=>{//«
 };//»
 */
 
+let keydown_iter=-1;
+let unused_keydowns = [];
 this.onkeydown=async(e, sym, code)=>{//«
+//if (this.autoMode) return;
+if (killed) return;
+keydown_iter++;
+
 	if (sym.match(/^_[CAS]+$/)) return;
 	num_escapes=0;
-	let mode = this.mode;
+//	let mode = mode;
 	if (e && PREV_DEF_SYMS.includes(sym)) e.preventDefault();
 	if (sym.match(/^[\x20-\x7f]_S?$/)) {
 		if (mode===LINE_WRAP_MODE){
@@ -7420,9 +7986,9 @@ this.onkeydown=async(e, sym, code)=>{//«
 	if (stat_cb) {//«
 //		if (sym.match(/^._S?$/)) return;
 		stat_cb(sym);
-		return 
+		return;
 	}//»
-	if (this.stat_input_type) return handle_stat_input_keydown(sym);
+	if (stat_input_type) return handle_stat_input_keydown(sym);
 	if (sym=="ENTER_") {//«
 		if (mode===COMMAND_MODE) return toggle_cur_fold({useOffset: true});
 	}//»
@@ -7453,6 +8019,9 @@ this.onkeydown=async(e, sym, code)=>{//«
 		if (LINE_WRAP_SYMS.includes(sym)){
 			handle_linewrap_key(sym);
 		}
+		else{
+			unused_keydowns.push(keydown_iter);
+		}
 	}
 	else if (KEY_DOWN_EDIT_FUNCS[sym]){//«
 		if (mode === INSERT_MODE) {
@@ -7465,20 +8034,26 @@ this.onkeydown=async(e, sym, code)=>{//«
 			else if (sym === "ENTER_") {
 				enter();
 			}
+			else unused_keydowns.push(keydown_iter);
 		}
 		else if (mode === VIS_LINE_MODE || mode === VIS_BLOCK_MODE) {
 			if (sym==="BACK_") delete_first_space(); 
 			else if (sym==="TAB_") prepend_space("\t");
+			else unused_keydowns.push(keydown_iter);
 		}
 		else if (sym==="TAB_") {
 			if (reload_win&&!reload_win._z_hold){
 				reload_win._z_hold = reload_win.winElem.style.zIndex;
 				reload_win.winElem._z = topwin.winElem.style.zIndex+1;
 			}
+			else unused_keydowns.push(keydown_iter);
 		}
 	}//»
 	else if (KEY_DOWN_FUNCS[sym]) {
 		KEY_DOWN_FUNCS[sym]();	
+	}
+	else{
+		unused_keydowns.push(keydown_iter);
 	}
 }//»
 
@@ -7488,16 +8063,16 @@ this.onkeydown=async(e, sym, code)=>{//«
 
 this.save=try_save;
 //this.check_paste = val => {
-this.checkPaste = val => {
-//	if (this.mode===COMMAND_MODE) this.mode=INSERT_MODE;
-//	if (this.mode===COMMAND_MODE || this.mode === INSERT_MODE || this.stat_input_type) {
-	if (this.mode === INSERT_MODE || this.stat_input_type) {
+this.checkPaste = val => {//«
+//	if (mode===COMMAND_MODE) mode=INSERT_MODE;
+//	if (mode===COMMAND_MODE || mode === INSERT_MODE || stat_input_type) {
+	if (mode === INSERT_MODE || stat_input_type) {
 		do_paste(val);
 	}
 	else{
 		stat_warn("Not pasting!");
 	}
-};
+};//»
 this.set_allow_paste_cb = () => {//«
 	stat_cb = ch=>{
 		stat_cb = null;
@@ -7520,6 +8095,21 @@ let all = get_edit_lines({str: true});
 return all;
 }});
 Object.defineProperty(this,"isDirty",{get:()=>{return dirty_flag;}});
+Object.defineProperty(this,"unusedKeydowns",{get:()=>{return unused_keydowns;}});
+Object.defineProperty(this,"initStr",{get:()=>{return initial_str;}});
+Object.defineProperty(this,"curStr",{get:()=>{return get_edit_save_arr()[0];}});
+Object.defineProperty(this,"isEditing",{get:()=>{
+	return mode === INSERT_MODE || mode === REPLACE_MODE;
+}
+});
+Object.defineProperty(this, "getAllSyms",{get:()=>{
+for (let k in KEY_DOWN_FUNCS){
+log(k);
+}
+}});
+Object.defineProperty(this,"fatalErr",{get:()=>{return killed;}});
+
+
 //»
 
 //»
@@ -7565,7 +8155,7 @@ edit_fullpath = patharg;
 edit_ftype = o.type;
 dirty_flag = false;
 Term.actor = vim;
-this.mode = COMMAND_MODE;
+mode = COMMAND_MODE;
 this.isEditor = true;
 
 if (patharg) {
@@ -7599,6 +8189,8 @@ cwarn("Using ondevreload");
 this.fname = edit_fname;
 
 syntax_multiline_comments();
+//cwarn(lines.length);
+//log(JSON.stringify(lines));
 
 if (opts.insert) set_edit_mode("i");
 else if (!edit_fname) {

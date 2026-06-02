@@ -6424,7 +6424,8 @@ for (let i=0; i < dirs.length; i++){
 			}
 		}
 		catch(e){
-cerr(e);
+cwarn("CAUGHT!");
+log(e.message);
 			continue;
 		}
 	}
