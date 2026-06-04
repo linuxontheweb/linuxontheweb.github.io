@@ -1,12 +1,12 @@
 (()=>{"use strict";const LIBNAME="fs";
-/*5/29/26: Timing issues w/ vimtest. The undo/redo feature checks
+/*5/29/26: Timing issues w/ vimtest. The undo/redo feature checks«
 that actions have the same time in order to do them in batches.
 Now, when I am automating these in loops, Actions are bound to have
 the same times, even though they NEVER would have in real world
 conditions. So I need to somehow force different times in order
 to simulate this correctly, or just introduce a delay (which
 would make it all very slow).
-*/
+»*/
 /*5/26/26: After playing around with an "automation_mode" in vim, «
 I'm thinking it is better to devote another command (vimtest) for automated test
 suites performed on vim. So instead of seeing vim performing acts of
@@ -225,6 +225,7 @@ class com_vimtest extends Com{//«
 #keysFile;
 #doNum;
 #killed;
+#prettyMod;
 //»
 static getOpts(){//«
 	return {
@@ -233,6 +234,7 @@ static getOpts(){//«
 			f: 1, // Force terminal output
 		},
 		l:{
+			once: 1 // No loops, just run commands and validate the undo/redo
 		}
 	}
 }//»
@@ -253,20 +255,31 @@ if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
 	return;
 }
 
+this.#prettyMod = (await util.getMod("util.pretty")).getmod().js;
+//this.#prettyMod = await util.getMod("util.pretty").getmod().js;
 
 }//»
 validate(){//«
 
 const editor = this.#editor;
+editor.onescape();
+editor.onescape();
+editor.onescape();
+editor.onescape();
+editor.onescape();
+editor.onescape();
+editor.onescape();
+
+this.#fatalErr = editor.fatalErr;
+if (this.#fatalErr) return;
+
 let final_str = editor.curStr;
 try{
 	editor.onkeydown(0, "u_CAS");
 	this.#fatalErr = editor.fatalErr;
-/*
 	if (editor.curStr !== editor.initStr){
 		this.#fatalErr = editor.fatalErr || new Error("BADUNDO");
 	}
-*/
 }
 catch(e){
 cerr(e);
@@ -276,11 +289,9 @@ if (!this.#fatalErr) {
 try{
 	editor.onkeydown(0, "r_CAS");
 	this.#fatalErr = editor.fatalErr;
-/*
 	if (editor.curStr !== final_str){
 		this.#fatalErr = editor.fatalErr || new Error("BADREDO");
 	}
-*/
 }
 catch(e){
 cerr(e);
@@ -381,24 +392,29 @@ const EDIT_SYMS=[//«
 "END_",
 ];//»
 const HOTKEY_FUNCS = [//«
-//"j_C",
-//"p_A",
-//"j_CAS",
+"j_CAS",//auto select the lines and justify
+"v_CAS",//init auto visual line mode
+
+//"u_CA",//changecase: put into Visual+U
+
+"p_A",//prettify
+"j_C",//justify selected lines,
+"l_C",//wrap onto on line
+
+
+"d_C",//scroll_down by half screen
+"y_C",//scroll up one line
+"u_C",//scroll up by half screen
+
 "r_C",
 "e_C",
 "a_C",
-"d_C",
-"y_C",
-"u_C",
 "h_A",
 "o_A",
 "c_A",
-"l_C",
 "l_A",
-"u_CA",
 "p_C",
 "v_C",
-//"v_CAS",
 "m_CAS",
 "o_CAS",
 "q_C",
@@ -443,6 +459,9 @@ const HOTKEY_FUNCS = [//«
 }//»
 initEditor(){//«
 
+let TERM_W = 10;
+let TERM_H = 10;
+
 let NOOP = ()=>{};
 let faketerm = {//«
 	env:{
@@ -454,21 +473,24 @@ let faketerm = {//«
 	render: NOOP,
 	doOverlay: NOOP, 
 	getDirContents: this.term.getDirContents,
-	w: 80,
-	h: 25,
+	w: TERM_W,
+	h: TERM_H,
 };//»
-
+//log(faketerm);
 this.#editor = new NS.mods[DEF_EDITOR_MOD_NAME](faketerm);
 this.#editor.autoMode = true;
 let fullpath;
 let node, typ;
 let command_str = "vim";
 
+
 this.#awaitCb = this.#editor.init(this.#baseFile, fullpath, {
 	node,
 	type: typ,
 	command_str,
 	opts: this.opts,
+}, {
+	pretty: this.#prettyMod
 });
 
 }//»
@@ -500,18 +522,14 @@ if (this.#killed) return [];
 iter++;
 this.#fatalErr = null;
 this.initEditor();
-//log(coms);
 await this.runComs(coms);
 
 if (this.#fatalErr) {
 	since_fatal = 0;
 	last_fatal_coms = coms;
 	if (if_final) {
-// No need to increment because there will now be a new command at
-// final_loc.
 		prev_coms = coms;
 		coms = coms.slice(0, final_loc).concat(coms.slice(final_loc+1));
-//log(`iter 1: ${iter} | #coms: ${coms.length} | from: ${final_loc}`);
 		continue;
 	}
 }
@@ -520,13 +538,22 @@ else {
 // The command we just tested (or the non-existence, thereof) is essential
 // for the error, so just move the iterator up by one.
 		final_loc++;
-//log(`iter 2: ${iter} | #coms: ${coms.length} | from: ${final_loc}`);
 		if (prev_coms) coms = prev_coms;
 		coms = coms.slice(0, final_loc).concat(coms.slice(final_loc+1));
 		continue;
 	}
 	if (!prev_coms) return [];
-	since_fatal++;
+// since_fatal++; // This is too slow for larger keydown/command arrays
+// For n commands, go up by
+// n
+// 100: 1
+// 1000: 1
+// 10000: 10
+// 100000: 100
+// 1000000: 1000
+	let fac = Math.floor(coms.length/1000);
+	if (fac < 1) fac = 1;
+	since_fatal += fac;
 	coms = prev_coms;
 }
 if (iter > MAX_ITER || coms.length < 8 || (since_fatal >= coms.length)) return coms;
@@ -573,6 +600,13 @@ return last_fatal_coms;
 
 coms = await do_loop();
 
+if (coms.length && !if_final) {
+//log("FIRST", coms.length);
+	return await this.runAlgo(coms, true);
+}
+
+//log("FINAL", coms.length);
+
 return coms;
 
 }//»
@@ -594,7 +628,6 @@ let keys_file = args.shift();//«
 if (keys_file){
 	if (keys_file === "-"){
 		let got = [];
-//log("???");
 		while (true){
 			let rv = await this.readStdinChunk();
 			if (isEOF(rv)){
@@ -606,9 +639,10 @@ if (keys_file){
 		keys_file = got.join(" ");
 	}
 	else {
+let hold = keys_file;
 		keys_file = await keys_file.toText(this.env.cwd);
 		if (!keys_file){
-			return this.no(`Keys file: ${this.opts.keys}: not found`);
+			return this.no(`Keys file: ${hold}: not found`);
 		}
 	}
 this.#keysFile = keys_file;
@@ -631,14 +665,23 @@ this.#baseFile = val;
 if (this.#keysFile) {
 	let coms = this.#keysFile.split(" ");
 	let in_len = coms.length;
-	if (coms.length > 100){
+	if (opts.once){
+		this.initEditor();
+		coms = await this.runComs(coms);
+	}
+	else if (coms.length > 100){
 		coms = await this.runAlgo(coms);
 	}
 	else{
 		coms = await this.runAlgo(coms, true);
 	}
-
-	if (in_len == coms.length){
+if (this.#fatalErr){
+this.err(this.#fatalErr.message);
+}
+	if (!coms){
+		this.ok();
+	}
+	else if (in_len == coms.length){
 		this.ok(`No change (still ${in_len} commands)`);
 	}
 	else {
@@ -649,6 +692,9 @@ if (this.#keysFile) {
 }
 else {
 	let coms = await this.runAlgo(this.genKeys());
+if (this.#fatalErr){
+this.err(this.#fatalErr.message);
+}
 	this.out(coms.join(" "));
 	this.ok(`${coms.length} commands`);
 
@@ -688,6 +734,7 @@ this.#killed = true;
 }//»
 
 class com_vim extends Com{//«
+#prettyMod;
 static getOpts(){//«
 	return {
 		s:{
@@ -742,6 +789,7 @@ cerr(e);
 	else use_mod_name = DEF_EDITOR_MOD_NAME;
 	
 	this.editor = new NS.mods[use_mod_name](this.term);
+	this.#prettyMod = (await util.getMod("util.pretty")).getmod().js;
 
 // DON'T SHIFT IT OFF THE PATH BECAUSE WE MIGHT CALL init() AGAIN (@WJGHDMG)//«
 // WHILE LOCALLY EDITING/RELOADING VIM W/ THE Alt+r HOTKEY!!!
@@ -831,6 +879,8 @@ log(val);
 		command_str,
 		opts,
 		symbols,
+	}, {
+		pretty: this.#prettyMod
 	});
 }//»
 

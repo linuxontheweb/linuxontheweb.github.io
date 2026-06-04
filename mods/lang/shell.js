@@ -81,14 +81,24 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 }»
 
 »*/
-/*«
-»*/
+/*6/2/26: Issue w/ pattern matching for filepath expansion @EUDJGLHJ «
+ACTUALLY @XMJFGRTU.
+
+else if (qtyp){
+	if ([".", "*","?","[","]"].includes(ch)) patstr+="\\";
+	patstr+=ch;//WHY ADD ANYTHING IN QUOTES IN A PATTERN MATCHING STRING???
+}
+
+HERE IS THE FIX (Needed to escape the parentheses):
+	if ([".", "*","?","[","]","(",")"].includes(ch)) patstr+="\\";
+
+*/
 /*5/23/26: Weird issue w/ line coloring @UBDJKSFD. First of all, to
 get changes there to take effect, it is not enough to reload this
 module (the shell) with r_CA. If you are running a command in a
 command library (like 'fs'), you also need to reload the command
 library itself with r_CAS.
-*/
+»*/
 /*FIXED BUG @MFLOUYTW???«
 
 We needed to perform tilde expansion here so that the following command works:
@@ -6443,12 +6453,14 @@ if (!parr_len) return new_paths;
 return await do_dirs(new_paths, parr);
 
 };//»
-//const filepath_expansion=async(tok, cur_dir)=>{
 let arr = tok.val;
 //EPRORMSIS
+/*
+//EUDJGLHJ
+Why am I not checking for: 
+	if (arr[0] == '"' || arr[0] == "'") return;
+*/
 if (!(arr.includes("*")||arr.includes("?")||arr.includes("["))) return tok;
-//log(tok);
-//log(arr);
 let patstr='';
 let parr;
 let qtyp;
@@ -6468,7 +6480,8 @@ if (ch==="'"||ch==='"'){
 }
 else if (qtyp){
 //XMJFGRTU
-	if ([".", "*","?","[","]"].includes(ch)) patstr+="\\";
+//	if ([".", "*","?","[","]"].includes(ch)) patstr+="\\";
+	if ([".", "*","?","[","]", "(", ")"].includes(ch)) patstr+="\\";
 	patstr+=ch;
 }
 else if (ch==="."){
@@ -6489,7 +6502,7 @@ else {
 }
 
 }//»
-
+//log(`<${patstr}>`);
 if (patstr){
 	path_arr.push(patstr);
 }

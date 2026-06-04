@@ -944,7 +944,7 @@ else{
 cwarn("THE ACTOR CANNOT HANDLE PASTING!!!");
 }
 	}
-	else this.handleInsert(val); 
+	else this.handleInsert(val.replace(/\s$/, "")); 
 }
 //»
 setNewFs(val){//«
@@ -1889,8 +1889,8 @@ try {
 	re = new RegExp("^" + pattern.replace(/\./g,"\\."));
 }
 catch(e){
-cwarn("CAUGHT!");
-log(e);
+//cwarn("CAUGHT!");
+//log(e);
 return match_arr;
 }
 		for (let i=0; i < keys.length; i++) {
