@@ -18,7 +18,17 @@ if the list is horizontal and (UP/DOWN) if it is vertical.
 Want a hotkey to switch the orientation of the window list. How about "/".
 
 »*/
+/*6/10/26: This can be extended to allow for simple meta tags for the given 
+windows, to be displayed by the render method, in order to tell *what* the
+purpose of the given windows are, rather than the generic app name, e.g.
+"Terminal". We can use the app or bindwin command to add the meta information,
+and we can also put it into '.app' files, so it automatically goes onto the
+windows.
 
+Actually now: the desc|d option in bindwin is what is used for the description
+here.
+
+*/
 //Imports«
 const{globals}=LOTW;
 const{log, cwarn, cerr, isnum, make, mkdv} = LOTW.api.util;
@@ -48,8 +58,10 @@ if (win_div) win_div._del();
 cur_win = null;
 win_divs = [];
 win_div = mkdv();
+Main._add(win_div);
 win_div.style.cssText=`
 display: flex;
+flex-wrap: wrap;
 flex-direction: ${FLEX_DIR};
 `;
 for (let i=1; i <= 9; i++){
@@ -58,27 +70,43 @@ for (let i=1; i <= 9; i++){
 	let dv = mkdv();
 dv.style.cssText=`
 text-align: center;
-flex-grow: 1;
+flex-grow: 0;
+flex-basis: 100px;
 border: 1px dotted gray;
 margin: 3px;
 `;
 	let mess;
+	let num_span_id = `${Win.id}_num_${i}`;
+//log(num_span_id);
 	if (!obj) {
-		mess="&nbsp;&nbsp;&nbsp;&nbsp;";
-		dv.innerHTML=`<span style="font-size: 21px;"><i>${n}</i></span><br>${mess}`;
+		mess="<i>[None]</i>";
+		dv.innerHTML=`<span style="font-size: 21px;"><i><span id="${num_span_id}">${n}</span></i></span><br>${mess}`;
 	}
 	else {
-		mess = obj.desc;
-		dv.innerHTML=`<span style="font-size: 21px;"><b>${n}</b></span><br>${mess}`;
+		let s = `<span style="font-size: 21px;"><b><span id="${num_span_id}">${n}</span></b></span><br><b>${obj.app}</b>`;
+		if (obj.desc) s+=`<br>${obj.desc}`;
+		dv.innerHTML= s;
 	}
 	win_div._add(dv);
+//log(num_span);
 	dv._obj
+	let numsp = document.getElementById(num_span_id);
 	if (obj) {
 		dv._obj = obj;
-		win_divs[i] = {elem: dv, obj, iter: i};
+		win_divs[i-1] = {elem: dv, obj, iter: i, numsp};
 	}
+	else{
+		win_divs[i-1] = {elem: dv, iter: i, numsp: numsp};
+	}
+	dv._numsp = numsp;
 }
-Main._add(win_div);
+//log(win_divs);
+};//»
+const render_nums = ()=>{//«
+	let arr = Array.from(win_div.childNodes);
+	for (let i=0; i < arr.length; i++){
+		arr[i]._numsp.innerHTML = `${i+1}`;
+	}
 };//»
 const move_div=(incr)=>{//«
 if (!cur_win) return;
@@ -101,7 +129,8 @@ else{//«
 		win_div.appendChild(cur_win.elem);
 	}
 }//»
-};/*»*/
+render_nums();
+};//»
 
 //»
 
@@ -140,8 +169,8 @@ render();
 }//»
 else if (marr = k.match(/^([1-9])_$/)){//«
 if (cur_win) return;
-let got_win = win_divs[parseInt(marr[1])];
-if (!got_win) return;
+let got_win = win_divs[parseInt(marr[1])-1];
+if (!got_win.obj) return;
 cur_win = got_win;
 got_win.elem._bgcol="#330";
 }//»

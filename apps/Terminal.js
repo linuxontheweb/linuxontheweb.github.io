@@ -1,5 +1,35 @@
 (()=>{"use strict";const APPNAME="Terminal";
+/*6/10/26: How to enable printing again on the same line?«
 
+This is like updating a status line.
+If we (initially) enforce this as a pure "1-liner", then we get rid of
+a host of issues related to wrapping and scrolling.
+
+I'm thinking @DBJGIRJH, we just force a lines.pop() on the successive
+updates with a response flag, like isUpdate, which I just replaced noBr
+with (which did not seem to have any users).
+
+We should probably slice the message to Term.w, and send out a didFmt flag.
+
+The only possible issue is that, for some reason, other output has been
+printed to the screen that we would be overwriting.
+
+this.inf(" ");
+for (let i=0; i < NUM_ITERS; i++){
+	let mess = `This is message number: ${i}...`; 
+	mess = mess.slice(0, this.shell.screenW);
+	this.inf(mess, {didFmt: true, isUpdate: true});
+}
+
+HOWEVER: THIS DOESN'T RENDER ANYTHING IN A FAST LOOP (EVEN IF RENDER
+IS CALLED) WHICH MAKES THE CONSOLE.LOG OPTION BETTER IN THAT CASE.
+
+If all we *really* want to do is be update every *so often* (based on an
+increment of time line ~500ms), rather than every cycle, then this can
+be used in combination with checking elapsed time, followed by 
+await util.sleep(0)...
+
+»*/
 /*README«
 
 The main issue here is how to reload whatever code you happen to be
@@ -30,13 +60,12 @@ I changed it to handleReadlineEnter, and that issue was fixed.
 See all the navigator.clipboard invocations (readText, writeText)
 */
 
-/*The interesting part of passwordMode is @DYWUEORK, where there is a timeout in the toString «
-method of the new String's, so that the output is the actual letter before the timeout
-and then a "*" after it. This mimics the way that cellfonez typically handle password
-inputs. Also of relevance is the bit @WZZKUDJK that takes the valueOf() of each individual
-character, which is necessary for password mode chars to return the "real" string rather
-than, e.g. "********".
-» */
+/*The interesting part of passwordMode is @DYWUEORK, where there is a timeout«
+in the toString method of the new String's, so that the output is the actual letter before the
+timeout and then a "*" after it. This mimics the way that cellfonez typically
+handle password inputs. Also of relevance is the bit @WZZKUDJK that takes the
+valueOf() of each individual character, which is necessary for password mode
+chars to return the "real" string rather than, e.g. "********".  » */
 
 /*5/6/25: Just put the shell into mods/lang/shell.js.«
 Now need to figure out how to deal with the onreload situation:
@@ -80,9 +109,9 @@ In Term.handleEnter @VSHEUROJ: Just added forceNewline (instead of the lower lev
 which internally updates curPromptLine (which is important for when we are starting a heredoc).
 We want to update curPromptLine *AFTER EVERY ENTER*.
 
-@KSDJJSAKJR: Just went ahead and directly set promptLen. Should probably just get rid
-of ALL readLinePromptLen's, since we want to simplify the idea of what/where a "prompt line"
-is.
+@KSDJJSAKJR: Just went ahead and directly set promptLen. Should probably just
+get rid of ALL readLinePromptLen's, since we want to simplify the idea of
+what/where a "prompt line" is.
 
 Now we are having problems keeping track of where we are in terms of being in the
 top/interactive level (including in sub parsers that need to do line continuations),
@@ -286,49 +315,19 @@ this.main = Win.main;
 this.mainWin = Win.main;
 this.Desk = Win.Desk;
 this.statusBar = Win.statusBar;
-//this.appClass="cli";
-//this.isEditor = false;
-//this.isPager = false;
-/*
-this.env={
-USER: globals.user.CURRENT_USER,
-HOME: globals.user.home_path
-};
-*/
 this.env={
 	vars:{
 		USER: globals.user.CURRENT_USER,
-		HOME: globals.user.home_path
+		HOME: globals.user.home_path,
+		PWD: this.getHomedir(),
 	},
 	funcs:{},
 	coms:{},
 	cwd: {
 		cwd: this.getHomedir()
 	}
-}
-//this.env['USER'] = globals.CURRENT_USER;
-//this.env = globals.TERM_ENV;
-this.ENV = this.env;
-//this.funcs = globals.TERM_FUNCS;
-//this.funcs={};
-//Editor mode constants for the renderer (copy/pasted from vim.js)«
-/*
-this.modes= {
-	command:1,
-	insert:2,
-	replace:3,
-	visLine:4,
-	visMark:5,
-	visBlock:6,
-	cutBuffer:7,
-	lineWrap:8,
-	symbol: 9,
-	file: 10,
-	complete: 11,
-	ref: 12
 };
-*/
-//»
+this.ENV = this.env;
 
 //let this.paragraphSelectMode = true; //Toggle with Ctrl+Alt+p«
 /*
@@ -369,47 +368,30 @@ this.cursorId = `cursor_${this.winid}`;
 this.numId = this.winid.split("_")[1];
 
 this.tabSize=4;
-this.minTermWid = 15;
+this.minTermWid = 10;
 this.minHistStrLen = 8;
 this.maxTabSize = 256;
 this.comCompleters = ["help", "app", "appicon", "lib", "import"];
-//this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "LEFT_C", "RIGHT_", "RIGHT_C", "a_C", "e_C"];
-/*
-this.stat={
-	none: 0,
-	ok: 1,
-	warning: 2,
-	error: 3
-};
-*/
 this.x=0;
 this.y=0;
 this.numCtrlD = 0;
 this.cleanCopiedStringMode=false;
 this.doExtractPrompt = true;
 this.maxOverlayLength=42;
-//this.terminalIsLocked=false;
 
-//vim row folds
-this.rowFoldColor = "rgb(160,160,255)";
 this.bgCol="#080808";
 this.ff = "monospace";
 this.fw="500";
 this.curBG="#00f";
 this.curFG="#fff";
 this.curBGBlurred = "#444";
-//this.overlayOp="0.66";
 this.tColor = "#e3e3e3";
-this.hexModeTColor = "#d3f3d3";
-this.highlightActorBg = false;
-this.actorHighlightColor="#101010";
 this.noPromptMode=false;
 this.comScrollMode=false;
 
 this.bufPos=0;
 this.curPromptLine=0;
-//this.numStatLines=0;
 this.scrollNum=0;
 this.minFs=8;
 this.defFs=24;
@@ -420,10 +402,6 @@ this.lines=[];
 this.lineColors=[];
 this.currentCutStr="";
 this.history=[];
-
-//this.env['USER'] = globals.user.CURRENT_USER;
-//this.cur_dir = this.getHomedir();
-//this.cwd = this.cur_dir;
 
 this.makeDOMElem();
 
@@ -758,18 +736,13 @@ async readLine(promptarg, opts={}){//«
 	if (!this.actor) {
 		this.forceNewline();
 		if (promptarg){
-//			this.#readLinePromptLen = promptarg.length;
 			this.promptLen = promptarg.length;
 			for (let ch of promptarg) this.handleLetterPress(ch);
 		}
-//		else this.#readLinePromptLen = 0;
 		else this.promptLen = 0;
-//KSDJJSAKJR
-//		this.promptLen = this.#readLinePromptLen;
-//		this.x = this.#readLinePromptLen;
 		this.x = this.promptLen;
 	}
-	this.readLineStartLine = this.cy();//WMNYTUE
+	this.readLineStartLine = this.cy();
 	this.passwordMode = opts.passwordMode;
 	return new Promise((Y,N)=>{
 //XKLRYTJTK
@@ -1775,7 +1748,9 @@ setPrompt() {//«
 	}
 	else {
 		len_min1 = this.lines.length-1;
-		if (!this.lines[len_min1][0]) this.lines[len_min1] = lnarr;
+		let last = this.lines[len_min1];
+//		if (!this.lines[len_min1][0]) this.lines[len_min1] = lnarr;
+		if (last._isBreak || !last.length) this.lines[len_min1] = lnarr;
 		else {
 			this.lines.push(lnarr);
 			len_min1++;
@@ -2337,94 +2312,106 @@ here, so we need to make sure we are putting the message into the appropriate
 lines array (otherwise, the message gets printed onto the actor's screen.
 */
 
-	const{termLines: lines, termLineColors: line_colors}=this;
+	const{ termLines: lines, termLineColors: line_colors }= this;
 	let readline_lines;
 	if (Number.isFinite(this.readLineStartLine)) {
 		readline_lines = [];
-		while (lines.length > this.readLineStartLine) readline_lines.unshift(lines.pop());
+/*6/9/26: Not sure when there is ever an occasion for this. It seems
+to mean that there is a response output while someone is typing out a 
+readline line (that might have wrapped). The user could not have pressed
+enter yet because that would wipe out this.readLineStartLine.
+*/
+		while (lines.length > this.readLineStartLine) {
+			readline_lines.unshift(lines.pop());
+		}
 	}
 
 	if (!isStr(out)) {
-//cwarn("Here is the non-string object");
-//This is not a bug since it is perfectly "okay" (I think) to pass aribtrary objects
-//*through* a pipeline... but not out the end of it.
-if (out.toString instanceof Function){
-	if (out instanceof Uint8Array) out = `Uint8Array(${out.length})`;
-	else out = out.toString();
-}
-else {
-log(out);
-		let str = `non-String object found in output stream (see console)`;
-		if (opts.name) str = `${opts.name}: ${str}`;
-		out = `sh: ${str}`;
-		opts = {isWrn: true};
-}
-	}
+// cwarn("Here is the non-string object");
 
-	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr} = opts;
-let did_chomp = false;
+// This is not a bug since it is perfectly "okay" (I think) to pass aribtrary
+// objects *through* a pipeline... but not out the end of it.
+
+		if (out.toString instanceof Function){
+			if (out instanceof Uint8Array) out = `Uint8Array(${out.length})`;
+			else out = out.toString();
+		}
+		else {
+log(out);
+			let str = `non-String object found in output stream (see console)`;
+			if (opts.name) str = `${opts.name}: ${str}`;
+			out = `sh: ${str}`;
+			opts = {isWrn: true};
+		}
+	}
+	let {didFmt, colors, pretty, isErr, isSuc, isWrn, isInf, noBr, isUpdate, isBreak} = opts;
+	let did_chomp = false;
 	if (out == "" && out.isNL){
 		out=" \n ";
 	}
 	else if (!out.noChomp && out.match(/\n$/)){
-cwarn("Chomping ending NEWLINE!!!");
+//cwarn("Chomping ending NEWLINE!!!");
 		out = out.replace(/\n$/,"");
-did_chomp = true;
+		did_chomp = true;
 	}
-/*«
-	else if (!out) return;
-	else if (!isArr(out)){
-log("STDOUT");
-log(out);
-return;
-	}
-	else if (out instanceof Uint8Array) out = [`Uint8Array(${out.length})`];
-»*/
 //WOPIUTHSDKL
 	let use_color;
 	if (isErr) use_color = "#f99";
 	else if (isSuc) use_color = "#7f7";
 	else if (isWrn) use_color = "#ff7";
 	else if (isInf) use_color = "#bbf";
-	else this.env.vars._LAST_ = out;
+	else if (out) this.env.vars._LAST_ = out;
 
 	out = out.split("\n");
 
-	if (colors) {
-//The two fatal results are major bugs, and should be treated "calamitously"
+	if (colors) {//«
+// The two fatal results are major bugs, and should be treated "calamitously"
 		if (!didFmt){
 			let e = new Error(`A colors array was provided, but the output lines have not been formatted!`);
 			this.Win._fatal(e);
 			throw e;
 		}
 		if (colors.length !== out.length){
-if (did_chomp && (colors.length === out.length + 1)){
-}
-else {
+			if (did_chomp && (colors.length === out.length + 1)){
+			}
+			else {
 log("response lines",out);
 log("response colors",colors);
-
-	let e = new Error(`The output array and colors array are not equal length!`);
-	this.Win._fatal(e);
-	throw e;
-}
+				let e = new Error(`The output array and colors array are not equal length!`);
+				this.Win._fatal(e);
+				throw e;
+			}
 		}
-
-	}
+	}//»
 	else colors = [];
 
-	if (lines.length && (noBr || !lines[lines.length-1].length)) {
-//		let gotln = lines.pop();
+//DBJGIRJH
+//	if (lines.length && (noBr || !lines[lines.length-1].length)) {
+//if (isErr){
+//}
+	let last = lines[lines.length-1];
+//log(last);
+	if (lines.length && (isUpdate || last._isBreak || !last.length)) {
 		lines.pop();
 	}
 	let len = out.length;
 	let curnum = lines.length;
+	if (isBreak){
+//log("HI!!!");
+		let arr = [" "];
+		arr._isBreak = true;
+		lines[curnum] = arr;
+		return;
+	}
 	for (let i=0; i < len; i++){
 		let ln = out[i];
 		let col = colors[i];
 		if (didFmt){
 			lines[curnum] = ln.split("");
-			line_colors[curnum] = col;
+//			line_colors[curnum] = col;
+//log(col, use_color);
+			if (col) line_colors[curnum] = col;
+			else if (use_color) line_colors[curnum] = {0: [ln.length, use_color]};
 			curnum++;
 			continue;
 		}
@@ -2440,7 +2427,7 @@ log("response colors",colors);
 	}
 	if (readline_lines){
 		lines.push(...readline_lines);
-		this.readLineStartLine = curnum;//QCKLURYH
+		this.readLineStartLine = curnum;
 		this.scrollIntoView();
 	}
 }
@@ -2995,7 +2982,6 @@ handleKey(sym, code, mod, ispress, e){//«
 			return;
 		}//»
 		else if (this.readLineCb){//«
-//this.okReadlineSyms = ["DEL_","BACK_","LEFT_", "RIGHT_"];
 			if (ispress || this.okReadlineSyms.includes(sym)){
 				this.numCtrlD = 0;
 				if (this.actor){
@@ -3028,7 +3014,6 @@ But implementing this exact behaviour is probably more trouble than it is worth.
 						(this.cy() === this.readLineStartLine && this.x === this.promptLen)) {
 //UNSHFLKYU
 					this.numCtrlD = 0;
-//					this.flushReadlineBuffer();
 					this.handleReadlineEnter();
 					setTimeout(()=>{
 						if (this.readLineCb){

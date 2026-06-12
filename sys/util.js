@@ -138,16 +138,16 @@ const getMod = async(which, opts = {}) => {//«
 
 };//»
 //const loadMod = (name, opts) => {return load_mod(name, opts);};
-const loadMod = (name, opts) => {
-	if (LOTW.mods[name]) return true;
+const loadMod = (name, opts={}) => {
+	if (!opts.force && LOTW.mods[name]) return true;
 	return load_mod(name, "mods", opts);
 };
-const loadApp = (name, opts) => {
-	if (LOTW.apps[name]) return true;
+const loadApp = (name, opts={}) => {
+	if (!opts.force && LOTW.apps[name]) return true;
 	return load_mod(name, "apps", opts);
 };
-const loadComs = (name, opts) => {
-	if (LOTW.coms[name]) return true;
+const loadComs = (name, opts={}) => {
+	if (!opts.force && LOTW.coms[name]) return true;
 	return load_mod(name, "coms", opts);
 };
 

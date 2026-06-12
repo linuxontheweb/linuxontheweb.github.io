@@ -1,3 +1,4 @@
+(()=>{"use strict";const MODNAME="lang.shell";
 /*README«
 
 This file implements the Shell Command Language: tokenizer, parser (ast builder), and execution
@@ -81,6 +82,51 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 }»
 
 »*/
+/*6/11/26 Introducing have_unquoted_meta_char in filepathExpansion:«
+If we don't see unquoted versions of "*", "?", or "[" in the pattern
+string, then just return the token, without sending it into the
+pattern matching step in do_dirs.
+»*/
+/*6/10/26: VERY INTERESTING UPDATE TO THE 6/2/26 ISSUE «
+When the final RegEx ended with a '|', e.g.:
+/^Blah random \* stuff here|$/
+...then it matches everything in the current directory for filepath expansion,
+so I needed to ALSO include the '|' character in the array @XMJFGRTU.
+»*/
+/*6/9/26: Need to do all $-type and ``-type expansions in heredocs.«
+
+How to tokenize:a JUST TO A SIMPLE TOKENIZATION STEP, EXCEPT NEED
+TO KEEP THE SPACES AND NEWLINES AROUND! THEN, WE JUST TURN ALL OPERATORS
+
+SO THIS CONCEPT OF KEEPING ALL WHITESPACE AROUND IS THE ONLY MODIFICATION
+WE *REALLY* NEED TO DO TO THE STANDARD TOKENIZATION.
+
+At the top level, the tokenizer discards \x20.
+
+In Parser.scanNextTok (@NFMSHFKG), we call scanner.scanComments,
+which removes whitespace (and strips comments). We need to skip
+that step, when tokenizing a heredoc. Then, in this.scanner.lex,
+we need a whitespace token type.
+
+Before Scanner.scanWord (@EJRKSNRM), is where we can call
+Scanner.scanSpaces.
+
+
+6/7/26
+
+$PWD
+${PWD}
+$(ls)
+$(1+2+2)
+`date`
+
+@SRLGNZUT determines whether the heredoc is escaped
+
+@DNGZXER (Shell.executePipeline) is (probably) where we should do the
+expansions. It is better to do them in the execution step, rather than 
+the tokenization step.
+
+»*/
 /*6/2/26: Issue w/ pattern matching for filepath expansion @EUDJGLHJ «
 ACTUALLY @XMJFGRTU.
 
@@ -99,6 +145,10 @@ module (the shell) with r_CA. If you are running a command in a
 command library (like 'fs'), you also need to reload the command
 library itself with r_CAS.
 »*/
+
+//Notes«
+//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
+
 /*FIXED BUG @MFLOUYTW???«
 
 We needed to perform tilde expansion here so that the following command works:
@@ -106,7 +156,6 @@ $ ~/my_script.sh
 
 @TWEJKDLJ: This is how we did it for Stdin.setValue (also used dsSQuoteExpansion)
 »*/
-
 /*12/15/25: util.fetch: New way of doing fetch (@SLPOFIUTY), so that try/catch isn't needed, «
 and everything that is not an 'ok' response is returned as an Error.
 So everything that gets a file node or file contents (to) should first check for isErr(rv)
@@ -129,9 +178,6 @@ these need to halt the execution of the shell and display a nice ugly ReferenceE
 @WMFHJRK: OKAY TO THROW A SHELL ERROR HERE???
 
 »*/
-//Notes«
-//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
-
 /*12/9/25: Command library issues«
 Now importing into the current scope
 
@@ -342,8 +388,6 @@ refreshing the shell and the terminal at the same time...
 »*/
 
 //»
-
-(()=>{"use strict";const MODNAME="lang.shell";
 
 //Imports«
 
@@ -1327,9 +1371,13 @@ constructor(tok, arg){
 }
 
 async setValue(shell, opts={}){//«
+
 const{env, scriptName, scriptArgs} = opts;
+
 if (this.tok.isHeredoc) {
 	this.value = this.tok.value
+	this.isHeredoc = true;
+	this.escaped = this.tok.escaped;
 	return true;
 }
 const{tok, arg}=this;
@@ -1543,9 +1591,9 @@ return;
 			this.parentCom.out(val);
 		}
 		else if (this.subLines){
-		//else if (this.haveSubOut){
-		//log("SUBLINES", this.#subOutBuffer);
-		//log("SUBLINES", this.subLines);
+//else if (this.haveSubOut){
+//log("SUBLINES", this.#subOutBuffer);
+//log("SUBLINES", this.subLines);
 			if (isStr(val)) {
 				this.subLines.push(...val.split("\n"));
 			}
@@ -1559,7 +1607,7 @@ DIE(`Unknown value in the com sub output stream (above)`);
 			this.resp(val, opts);
 		}
 	}//»
-async readStdinChunk(use_prompt){//«
+async readStdinChunk(use_prompt, opts){//«
 
 if (this.#redirInBuffer){
 	if (!this.#redirInBuffer.length) return EOF;
@@ -1580,12 +1628,10 @@ else if (this.#pipeInBuffer){
 }
 else if(this.parentCom){
 // We are in a compound command's (i.e. our parent's) scope, at the start of a pipeline with no input redirects
-	return this.parentCom.readStdinChunk(use_prompt);
+	return this.parentCom.readStdinChunk(use_prompt, opts);
 }
 else {
-
-	return await this.readLine(use_prompt);
-
+	return await this.readLine(use_prompt, opts);
 }
 
 }//»
@@ -1615,9 +1661,9 @@ pipeIn(val){//«
 	}
 
 }//»
-	async readLine(use_prompt){//«
+	async readLine(use_prompt, opts){//«
 //XCJEKRNK
-		let ln = await this.shell.readLine(use_prompt);
+		let ln = await this.shell.readLine(use_prompt, opts);
 		return ln;
 	}//»
 	resp(val, opts={}){//«
@@ -1788,7 +1834,9 @@ log(num);
 	}//»
 	inf(str, opts={}){//«
 		opts.isInf=true;
-		this.resp(`${this.name}: ${str}`, opts);
+		if (!opts.noAddName) str = `${this.name}: ${str}`;
+		this.resp(str, opts);
+//		this.resp(`${this.name}: ${str}`, opts);
 	}//»
 	cancel(){//«
 		this.killed = true;
@@ -2373,6 +2421,15 @@ const com_devtest = class extends Com{//«
 init(){
 }
 async run(){
+const {shell} = this;
+/*
+this.inf(" ");
+for (let i=0; i < 30; i++){
+let mess = `This is message number: ${i}...`;
+mess = mess.slice(0, shell.screenW);
+this.inf(mess, {didFmt: true, isUpdate: true});
+}
+*/
 this.ok("DEVTEST");
 }
 }//»
@@ -2477,6 +2534,24 @@ const com_cat = class extends Com{//«
 			return;
 		}
 		let rv;
+
+// Preserves newlines in heredocs
+		let arr = [];
+		while (true){
+			rv = await this.readStdinChunk();
+			if (isEOF(rv)){
+				break;
+			}
+			arr.push(rv);
+		}
+		this.out(arr.join("\n"));
+		this.ok();
+
+/* 
+
+// This prints/echoes immediately to the terminal when invoked without args,
+// but the newlines in heredocs are stripped.
+
 		while (true){
 			rv = await this.readStdinChunk();
 			if (isEOF(rv)){
@@ -2484,6 +2559,8 @@ const com_cat = class extends Com{//«
 			}
 			this.out(rv);
 		}
+*/
+
 	}//»
 };//»
 const com_pipe = class extends Com{//«
@@ -2501,7 +2578,12 @@ const com_pipe = class extends Com{//«
 };//»
 const com_read = class extends Com{//«
 static getOpts(){
-	return {l:{prompt:3}};
+	return {
+		l:{
+			prompt:3,
+			secret: 1
+		}
+	};
 }
 async run(){//«
 //XDUITOYL
@@ -2518,7 +2600,9 @@ async run(){//«
 		this.no(`the prompt is too wide (have ${use_prompt.length}, max = ${term_wid - 4})`);
 		return;
 	}
-	let ln = await this.readStdinChunk(use_prompt); // OEHRHFJR
+	let ln = await this.readStdinChunk(use_prompt,{
+		passwordMode: opts.secret
+	}); // OEHRHFJR
 	if (isEOF(ln)){
 		this.no();
 		return;
@@ -2765,12 +2849,6 @@ init(){//«
 async run(){//«
 //	const{badLinkType, linkType, idbDataType, dirType}=ShellMod.var;
 	const{pipeTo, isSub, args, opts} = this;
-	const out=(...args)=>{
-		this.out(...args);
-	};
-	const err=(...args)=>{
-		this.err(...args);
-	};
 	let is_term = this.isTermOut;
 	let nargs = args.length;
 	let dir_was_last = false;
@@ -2796,18 +2874,18 @@ async run(){//«
 		if (recur) recur_dirs = [];
 		if (!node) {
 			dir_was_last = false;
-			err(`${regpath}: no such file or directory`);
+			this.err(`${regpath}: no such file or directory`);
 			return;
 		}
 		if (node.appName !== FOLDER_APP) {
 			if (wants_dir) {
-				err(`${regpath}: not a directory`);
+				this.err(`${regpath}: not a directory`);
 				return;
 			}
-			if (dir_was_last) out("");
+			if (dir_was_last) this.out("");
 			dir_was_last = false;
 			if (node.appName==LINK_APP){
-				out(`${node.name} -> ${node.symLink}`);
+				this.out(`${node.name} -> ${node.symLink}`);
 				return;
 			}
 			let sz = "?";
@@ -2816,7 +2894,7 @@ async run(){//«
 				if (file) sz = file.size;
 			}
 			else if (Number.isFinite(node.size)) sz = node.size;
-			out(`${node.name} ${sz}`);
+			this.out(`${node.name} ${sz}`);
 			return;
 		}
 		if (force || !node.done) await fsapi.popDir(node);
@@ -2826,8 +2904,10 @@ async run(){//«
 		let names=[];
 		let lens = [];
 		let types = [];
-		if (out.length && nargs > 1 || recur) out("");
-		if (nargs > 1 || recur) out(`${path}:`);
+//		if (out.length && nargs > 1 || recur) out("");
+		if (nargs > 1 || recur) this.out("");
+		path = path.replace(/\/+/g, "/")
+		if (nargs > 1 || recur) this.out(`\n${path}:`);
 		let s = "";
 		let dir_arr = [];
 		for (let nm of arr){
@@ -2870,14 +2950,14 @@ async run(){//«
 			for (let nm of dir_arr) name_lens.push(nm.length);
 			let ret = [];
 			this.term.fmtLs(dir_arr, name_lens, ret, types, colors);
-			if (!ret.length) out("");
+			if (!ret.length) this.out("");
 			else {
-				if (colors.length) out(ret.join("\n"), {colors, didFmt: true});
-				else out(ret.join("\n"), {didFmt: true});
+				if (colors.length) this.out(ret.join("\n"), {colors, didFmt: true});
+				else this.out(ret.join("\n"), {didFmt: true});
 			}
 		}//»
 		else {
-			out(dir_arr.join("\n"));
+			this.out(dir_arr.join("\n"));
 		}
 		if (recur) {
 			for (let dir of recur_dirs) await do_path(dir);
@@ -2900,6 +2980,7 @@ run(){
 	let keys = Object.keys(env);//let keys = env._keys;
 	let out = [];
 	for (let key of keys){
+		if (key.match(/^_/)) continue;
 		let val = env[key];
 		out.push(`${key}=${val}`);
 	}
@@ -2953,6 +3034,7 @@ async run(){
 	got_dir = regpath;
 	if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
 	this.env.cwd.cwd = got_dir;
+	this.env.vars.PWD = got_dir;
 	this.ok();
 }
 }
@@ -3186,7 +3268,6 @@ async run(){
 }
 }//»
 
-
 this.builtins={//«
 gh: com_gh,
 cat: com_cat,
@@ -3295,8 +3376,23 @@ const Sequence = class {//«
 }//»
 const Newlines = class extends Sequence{//«
 	get isNLs(){ return true; }
-	toString(){ return "newline"; }
+//	toString(){ return "newline"; }
+	toString(){ 
+		if (Number.isFinite(this.num)) return "\n".repeat(this.num);
+		else return "\n"; 
+	}
 }//»
+class Spaces extends Sequence{
+//	get isSpaces(){ return true; }
+	toString(){
+		return this.val.join("");
+	}
+}
+class HeredocOPChars extends Sequence{
+	toString(){
+		return this.val.join("");
+	}
+}
 const Word = class extends Sequence{//«
 async expandSubs(shell, opts={}){//«
 /*«
@@ -4304,7 +4400,7 @@ throw new Error("NOT is_comsub || is_math || is_param ?!?!? HJKHFDK^&*^$*&#");
 let in_backquote = opts.inBQ;
 let cont_sub = opts.contSub;
 
-let start = this.index;
+let start = opts.useStart || this.index;
 let sub = cont_sub || (is_math ? new MathSub(start, par) : 
 	(is_param ? new ParamSub(start, par) : new ComSub(start, par))
 	);
@@ -4410,6 +4506,7 @@ else if (is_param && ch==="}"){//«
 	return sub;
 }//»
 else if (paren_depth === 0 && is_comsub && ch===")"){//«
+//log(this.index, cur);
 	this.index = cur;
 //XMDJKT
 	sub.raw = this.source.slice(start+2, this.index).join("");
@@ -4434,10 +4531,17 @@ else if (ch===" " || ch==="\t"){//«
 }//»
 else{//«
 	if (ch==="#"&&have_space){
-		return 'the substitution was terminated by "#"';
+		if (!is_comsub) return "a '#' was encountered in the substitution";
+		this.index=cur;
+		this.skipSingleLineComment();
+		cur = this.index;
+		ch = this.source[cur];
+		continue;
 	}
-	out.push(ch);
-	have_space = false;
+	else {
+		out.push(ch);
+		have_space = false;
+	}
 }//»
 
 cur++;
@@ -4449,7 +4553,15 @@ this.index = cur;
 if (this.eol()){
 	sub.val = out;
 	await this.more();
-	return await this.scanSub(par, {isMath: is_math, isComSub: is_comsub, isParam: is_param, inBQ: in_backquote, contSub: sub, parenDepth: paren_depth});
+	return await this.scanSub(par, {
+		isMath: is_math, 
+		isComSub: is_comsub, 
+		isParam: is_param, 
+		inBQ: in_backquote, 
+		contSub: sub, 
+		parenDepth: paren_depth,
+		useStart: start
+	});
 }
 
 
@@ -4680,7 +4792,7 @@ return sub;
 //»
 
 }//»
-async scanWord(opts={}){//«
+async scanWord(opts={}, in_heredoc){//«
 /*
 Now we need to be "backslash aware". scanWord always begins in a "top-level" scope, which
 can either be in free space or just after "`", "$(" or "$((" that are in free space,
@@ -4753,7 +4865,8 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			wordarr.push(rv);
 			continue;
 		}//»
-		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){//«
+		else if (ch==='`' || (!in_heredoc && ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'))){//«
+//		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){
 			is_plain_chars = false;
 			if (ch==="`" && in_backquote){
 				this.throwUnexpectedToken("unexpected EOF reached");
@@ -4785,7 +4898,8 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			this.index++;
 		}//»
 		else if (is_param && ch==="}") break;//WUEHSKR
-		else if (ch==="\n"||ch===" "||ch==="\t") {//«
+		else if (ch==="\n"||ch==="\x20"||ch==="\t") {//«
+//		else if (ch==="\n"||ch===" "||ch==="\t") {
 			if (is_param){
 				return this.unexp("whitespace token", BADSUB);
 			}
@@ -4847,10 +4961,15 @@ log(wrd);
 			word.isCommandStart = true;
 		}
 	}
+//cwarn("DONE");
+//log(start, this.index);
+//log(this.source);
 	word.raw = this.source.slice(start, this.index).join("");
+//log(word);
 	return word;
 }//»
-scanNewlines(par, env, heredoc_flag){//«
+scanNewlines(par, env){//«
+//scanNewlines(par, env, heredoc_flag){
 
 	let start = this.index;
 	let val = [];
@@ -4859,17 +4978,45 @@ scanNewlines(par, env, heredoc_flag){//«
 	let start_line_start = this.index;
 	while (this.source[start+iter]==="\n"){
 		iter++;
-		if (heredoc_flag) break;
+//		if (heredoc_flag) break;
 	}
 	this.index+=iter;
 	this.lineStart = start_line_start+iter;
 	this.lineNumber+=iter;
 
-	let newlines = new Newlines(start, par, env);
-	newlines.newlines = iter;
+	let newlines = new Newlines(start);
+	newlines.num = iter;
 	return newlines;
 
 }//»
+
+scanSpaces(){//«
+	let start = this.index;
+	let iter=0;
+	let out = [];
+	while (this.source[start+iter]==="\x20"){
+		iter++;
+		out.push("\x20");
+	}
+	this.index+=iter;
+	let spaces = new Spaces(start);
+	spaces.val = out;
+	return spaces;
+}//»
+scanHeredocOpChars(){//«
+	let start = this.index;
+	let iter = 0;
+	let out = [];
+	while (OPERATOR_CHARS.includes(this.source[start+iter])){
+		iter++;
+		out.push(this.source[start+iter]);
+	}
+	this.index+=iter;
+	let chars = new HeredocOPChars(start);
+	chars.val = out;
+	return chars;
+}//»
+
 spliceSource(len){//«
 	this.source.splice(this.index-len, len);
 	this.index-=len;
@@ -4895,7 +5042,9 @@ scanNextLineNot(delim){//«
 	if (!this.isInteractive && this.eof()) return false;
 	return ln;
 }//»
-async lex(heredoc_flag){//«
+async lex(in_heredoc){//«
+
+// in_heredoc: to activate the alternate lexing rules in a heredoc
 
 if (this.eof()) {//«
 	return {
@@ -4910,14 +5059,26 @@ if (this.eof()) {//«
 
 let ch = this.source[this.index];
 
-//We never do this because we are always entering single lines from the interactive terminal
-//or sending them through one-by-one via ScriptCom.
-if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
+// We never do this because we are always entering single lines from the
+// interactive terminal or sending them through one-by-one via ScriptCom.
 
+//if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
+if (ch==="\n") return this.scanNewlines(null, this.env);
+
+/*EJRKSNRM
+If in a heredoc, and we have a space, we need to preserve them with:
+this.scanSpaces()
+*/
+if (ch==="\x20" && in_heredoc) return this.scanSpaces();
 if (OPERATOR_CHARS.includes(ch)) {
+	if (in_heredoc) {
+// Suck up all the shell metacharacters that might cause scanOperator
+// to complain
+		return this.scanHeredocOpChars();
+	}
 	return this.scanOperator();
 }
-return await this.scanWord();
+return await this.scanWord({}, in_heredoc);
 
 }//»
 
@@ -4936,6 +5097,7 @@ constructor(code, opts={}) {//«
 	this.isInteractive = opts.isInteractive;
 	this.isContinue = opts.isContinue;
 	this.heredocScanner = opts.heredocScanner;
+	this.isHeredoc = opts.isHeredoc;
 	this.errorHandler = new ErrorHandler();
 	this.scanner = new Scanner(code, opts, this.errorHandler);
 	this.lookahead = {//«
@@ -4971,39 +5133,6 @@ end(){//«
 //SLKIURUJ
 	return(this.tokNum===this.numToks);
 }//»
-/*
-dumpTokens(){//«
-
-let toks = this.tokens;
-let tok = toks[this.tokNum];
-
-while(tok){
-	if (isNLs(tok)){
-//cwarn("NL");
-		this.tokNum++;
-		while (isNLs(toks[this.tokNum])) {
-			this.tokNum++;
-		}
-	}
-	else {
-		if (tok.isWord){
-			log(tok.toString());
-		}
-		else{
-			if (tok.isHeredoc){
-				cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
-			}
-			else {
-				cwarn(tok[tok.type]);
-			}
-		}
-		this.tokNum++;
-	}
-	tok=toks[this.tokNum];
-}
-
-}//»
-*/
 skipNewlines(){//«
 	let toks = this.tokens;
 	if (!isNLs(toks[this.tokNum])) return false;
@@ -5049,10 +5178,15 @@ nextTok(){//«
 	this.tokNum++;
 	return this.tokens[this.tokNum];
 }//»
-async scanNextTok(heredoc_flag) {//«
+async scanNextTok() {//«
+//async scanNextTok(heredoc_flag) {
 	let token = this.lookahead;
-	this.scanner.scanComments();
-	let next = await this.scanner.lex(heredoc_flag);
+//NFMSHFKG
+	if (!this.isHeredoc) {
+		this.scanner.scanComments();
+	}
+//	let next = await this.scanner.lex(null, this.isHeredoc);
+	let next = await this.scanner.lex(this.isHeredoc);
 	this.hasLineTerminator = (token.lineNumber !== next.lineNumber);
 	this.lookahead = next;
 	return token;
@@ -5960,7 +6094,7 @@ catch(e){
 }
 
 }//»
-async tokenize(){//«
+async tokenize(in_heredoc){//«
 	let toks = [];
 	let next = this.lookahead;
 	let heredocs;
@@ -5996,7 +6130,19 @@ async tokenize(){//«
 					heredocs = [];
 					heredoc_num = 0;
 				}
+/*SRLGNZUT
+If one of the strings is String.escaped == true, then the heredoc will
+be "escaped", meaning that it doesn't expand its contents.
+*/
+				let escaped = false;
+				for (let ch of next.val){
+					if (ch instanceof String && ch.escaped === true){
+						escaped = true;
+						break;
+					}
+				}
 				cur_heredoc_tok.delim = next.toString();
+				cur_heredoc_tok.escaped = escaped;
 				heredocs.push({tok: cur_heredoc_tok, delim: next.toString()});	
 				cur_heredoc_tok = null;
 			}//»
@@ -6018,10 +6164,9 @@ log(next);
 			toks.push(next);
 			cur_heredoc_tok = next;
 		}//»
-		else {//«
-				toks.push(next);
-		}//»
-		await this.scanNextTok(!!heredocs);
+		else toks.push(next);
+//		await this.scanNextTok(!!heredocs);
+		await this.scanNextTok(in_heredoc || !!heredocs);
 		next = this.lookahead;
 
 	}
@@ -6096,6 +6241,40 @@ log(next);
 
 }//»
 
+/*
+dumpTokens(){//«
+
+let toks = this.tokens;
+let tok = toks[this.tokNum];
+
+while(tok){
+	if (isNLs(tok)){
+//cwarn("NL");
+		this.tokNum++;
+		while (isNLs(toks[this.tokNum])) {
+			this.tokNum++;
+		}
+	}
+	else {
+		if (tok.isWord){
+			log(tok.toString());
+		}
+		else{
+			if (tok.isHeredoc){
+				cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
+			}
+			else {
+				cwarn(tok[tok.type]);
+			}
+		}
+		this.tokNum++;
+	}
+	tok=toks[this.tokNum];
+}
+
+}//»
+*/
+
 };
 
 //»
@@ -6108,7 +6287,6 @@ constructor(termarg){//«
 	this.env = this.#term.env;
 	this.cancelled = false;
 }//»
-
 //fatal(mess){throw new Error(mess);}
 fatal(mess){throw new ShellError(mess);}
 async expandComsub(tok, opts){//«
@@ -6143,7 +6321,6 @@ async expandComsub(tok, opts){//«
 			subLines: sub_lines,
 			env: sdup(this.env),
 			shell: this,
-//			Term: this.Term
 			term: this.#term
 		});
 		return sub_lines.join("\n");
@@ -6158,7 +6335,6 @@ async expandComsub(tok, opts){//«
 		}
 	}
 }//»
-
 curlyExpansion(tok, from_pos){//«
 //const curly_expansion = (tok, from_pos) => {
 
@@ -6373,7 +6549,6 @@ else{//«
 }//»
 
 }//»
-
 async filepathExpansion(tok, cur_dir){//«
 /*«
 First we need to separate everything by "/" (escapes or quotes don't matter)
@@ -6418,8 +6593,6 @@ for (let i=0; i < dirs.length; i++){
 //													  v----REMOVE THIS SPACE
 //		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
 		try{ 
-//log(`^${nm}$`);
-
 			let re = new RegExp(`^${nm}$`);
 			for (let key of keys){
 				if (!is_dot && key[0]===".") continue;
@@ -6454,7 +6627,6 @@ return await do_dirs(new_paths, parr);
 
 };//»
 let arr = tok.val;
-//EPRORMSIS
 /*
 //EUDJGLHJ
 Why am I not checking for: 
@@ -6465,7 +6637,7 @@ let patstr='';
 let parr;
 let qtyp;
 let path_arr=[];
-
+let have_unquoted_meta_char = false;
 for (let ch of arr){//«
 if (ch=="/"){
 	path_arr.push(patstr);
@@ -6481,17 +6653,23 @@ if (ch==="'"||ch==='"'){
 else if (qtyp){
 //XMJFGRTU
 //	if ([".", "*","?","[","]"].includes(ch)) patstr+="\\";
-	if ([".", "*","?","[","]", "(", ")"].includes(ch)) patstr+="\\";
+	if ([".", "*", "?", "[", "]", "(", ")", "|"].includes(ch)) patstr+="\\";
 	patstr+=ch;
 }
 else if (ch==="."){
 	patstr+='\\.';
 }
 else if (ch==="*"){
+	have_unquoted_meta_char = true;
 	patstr+='.*';
 }
 else if (ch==="?"){
+	have_unquoted_meta_char = true;
 	patstr+='.';
+}
+else if (ch==="["){
+	have_unquoted_meta_char = true;
+	patstr+=ch;
 }
 else {
 	if (ch instanceof String){
@@ -6502,7 +6680,9 @@ else {
 }
 
 }//»
-//log(`<${patstr}>`);
+if (!have_unquoted_meta_char) {
+	return tok;
+}
 if (patstr){
 	path_arr.push(patstr);
 }
@@ -6526,7 +6706,6 @@ return words;
 }
 return tok;
 };//»
-
 async getStdinLines(in_redir, haveSubLines){//«
 let stdin;
 let red = in_redir[0];
@@ -6549,16 +6728,6 @@ else if (red==="<<<"){
 	stdin = [val];
 }
 else if (red==="<<"){
-/*
-	if (!heredocScanner){
-		if (haveSubLines){
-			return "heredocs are not implemented within command substititions";
-		}
-		else{
-			return "no 'heredocScanner' was found! (this error should not exist djkljk*&*[}#$JKF)";
-		}
-	}
-*/
 	return val.split("\n");
 }
 return stdin;
@@ -6634,33 +6803,6 @@ for (let k=0; k < arr.length; k++){//quote removal«
 }//»
 return arr;
 }//»
-/*
-async tryImport(com, comword){//«
-//If we have a string rather than a function, do the command library importing routine.
-//The string is always the name of the library (rather than the command)
-//This happens when: 
-//1) libraries are defined in ShellMod.preloadLibs, and 
-//2) this is the first invocation of a command from one of those libraries.
-	try{
-//		await ShellMod.util.importComs(com);//com is the library name
-//log(this.env.coms);
-		await import_coms(com, this.env.coms);//com is the library name
-		if (this.cancelled) return;
-	}catch(e){
-		if (this.cancelled) return;
-cerr(e);
-		return `sh: command library: '${com}' could not be loaded`;
-	}
-//	let gotcom = shellmod.activeCommands[comword];
-	let gotcom = this.env.coms[comword];
-log(gotcom);
-	if (!(gotcom instanceof Function)){
-cerr(`sh: '${comword}' is invalid or missing in command library: '${com}'`);
-		return `sh: '${comword}' is invalid or missing in command library: '${com}'`;
-	}
-	return gotcom;
-}//»
-*/
 makeCompoundCommand(com, opts, parentCommand){//«
 	let typ = com.type;
 	let comp = com.compound_command;
@@ -6693,7 +6835,6 @@ makeCompoundCommand(com, opts, parentCommand){//«
 	if (typ === "function_def") return new FunctionCom(this, opts, comp.name, comp.body.function_body.command, parentCommand);
 	this.fatal(`What Compound Command type: ${type}`);
 }//»
-
 async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 //	const {loopNum, scriptOut, stdin, stdinLns, outRedir, scriptArgs, scriptName, subLines, heredocScanner, env, isInteractive}=opts;
 	const {loopNum, subLines, scriptArgs, scriptName,  heredocScanner, env, isInteractive}=opts;
@@ -6850,7 +6991,6 @@ else{
 
 //SKIOPRHJT
 }//»
-
 async makeScriptCom(com_ast, comopts, parentCommand){//«
 	const mkerr=(mess)=>{
 		return make_sh_err_com(comword, mess, {shell: this});
@@ -6893,7 +7033,6 @@ async makeScriptCom(com_ast, comopts, parentCommand){//«
 	com.isScript = true;
 	return com;
 }//»
-
 async executePipeline(pipe, loglist, loglist_iter, opts, parentCommand, in_background){//«
 	let lastcomcode;
 	let {stdin: optStdin, env}=opts;
@@ -6909,7 +7048,6 @@ async executePipeline(pipe, loglist, loglist_iter, opts, parentCommand, in_backg
 		let com_ast = pipelist[j];
 		let com;
 
-//DNGZXER
 		let in_redir, out_redir;
 		let redirs = com_ast.redirs||[];
 		for (let red of redirs){
@@ -6923,6 +7061,7 @@ log(red);
 		}
 		let errmess;
 		let redir_in_arr;
+		let is_heredoc;
 		if (in_redir){
 			let rv2 = await in_redir.setValue(this, opts);
 			if (isStr(rv2)){
@@ -6930,9 +7069,9 @@ log(red);
 			}
 			else{
 				redir_in_arr = in_redir.value.split("\n");
+				is_heredoc = in_redir.isHeredoc;
 			}
 		}
-//VOPDUKKD
 		let comopts = sdup(opts);
 		comopts.inBackground = in_background;
 		if (com_ast.simple_command && com_ast.simple_command.name && com_ast.simple_command.name.toString().match(/\x2f/)){
@@ -6956,10 +7095,60 @@ log(com_ast);
 
 		if (this.cancelled) return;
 		if (isStr(com)) return com;
-//FSHSKEOK
-		if (redir_in_arr){
-			com.initRedirInBuffer(redir_in_arr);
-		}
+
+if (redir_in_arr) {
+
+if (is_heredoc && !in_redir.escaped){//«
+//cwarn("123");
+//DNGZXER
+let hdparser = new Parser(redir_in_arr.join("\n").split(""), {
+	isHeredoc: true,
+	env: this.env,
+	term: this.#term,
+	isInteractive: false,
+	shell: this
+});
+redir_in_arr = [];
+try{
+	await hdparser.scanNextTok(true);
+	await hdparser.tokenize(true);
+}
+catch(e){
+cerr(e);
+	let use_name;
+	let p = parentCommand;
+
+//What if we are in a function?
+	if (p && p.opts && p.opts.scriptName) use_name = p.opts.scriptName;
+	else use_name = "sh";
+	this.response(`${use_name}: ${e.message}`, {isErr: true});
+	hdparser.tokens = [];
+
+}
+
+for (let tok of hdparser.tokens){//«
+	if (tok instanceof Word) {
+		await tok.expandSubs(this, opts);
+		let field1 = tok.fields.shift();
+		let last = redir_in_arr.pop();
+		if (!last) last = "";
+		last += field1;
+		redir_in_arr.push(last);
+		if (tok.fields.length) redir_in_arr.push(...tok.fields);
+	}
+	else {
+		let last = redir_in_arr.pop();
+		if (!last) last = "";
+		last += tok.toString();
+		redir_in_arr.push(last);
+	}
+}//»
+
+
+}//»
+
+com.initRedirInBuffer(redir_in_arr);
+}
 		if (out_redir){
 			com.initRedirOutBuffer(out_redir);
 		}
@@ -7059,7 +7248,6 @@ we *ALWAYS* break from the logic list, so we return
 	return lastcomcode;
 }
 //»
-
 async executeAndOr(andor_list, andor_sep, opts, parentCommand, in_background){//«
 let loglist=[];
 let last = andor_list.pop();
@@ -7129,8 +7317,6 @@ this evaluates to true, and hi is output
 	}
 	return lastcomcode;
 }//»
-
-
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
 this.commandStr = command_str;
@@ -7203,47 +7389,59 @@ cancel(){//«
 		com.cancel && com.cancel();
 	}
 }//»
-error(mess){
-	this.#term.response(mess, {isErr: true});
-}
-warn(mess){
-	this.#term.response(mess, {isWrn: true});
-}
+error(mess){this.#term.response(mess, {isErr: true});}
+warn(mess){this.#term.response(mess, {isWrn: true});}
 response(val, opts){
 	this.#term.response(val, opts);
 	this.#term.scrollIntoView();
 	this.#term.refresh();
 }
-async readLine(use_prompt){
-	let ln = await this.#term.readLine(use_prompt);
+async readLine(use_prompt, opts){
+	let ln = await this.#term.readLine(use_prompt, opts);
 	return ln;
 }
-get screenW(){
-	return this.#term.w;
-}
-get homeDir(){
-	return this.#term.getHomedir();
-}
-get history(){
-	return this.#term.history.join("\n");
-}
-clearScreen(){
-	this.#term.clear();
-}
-getCh(arg) {
-	return this.#term.getch(arg);
-}
-exportToTerm(args){
-	return add_to_env(args, this.#term.env.vars, {if_export: true});
-}
+get screenW(){return this.#term.w;}
+get homeDir(){return this.#term.getHomedir();}
+get history(){return this.#term.history.join("\n");}
+clearScreen(){this.#term.clear();}
+refresh(){this.#term.render();}
+getCh(arg) {return this.#term.getch(arg);}
+exportToTerm(args){return add_to_env(args, this.#term.env.vars, {if_export: true});}
+
+/*
+async tryImport(com, comword){//«
+//If we have a string rather than a function, do the command library importing routine.
+//The string is always the name of the library (rather than the command)
+//This happens when: 
+//1) libraries are defined in ShellMod.preloadLibs, and 
+//2) this is the first invocation of a command from one of those libraries.
+	try{
+//		await ShellMod.util.importComs(com);//com is the library name
+//log(this.env.coms);
+		await import_coms(com, this.env.coms);//com is the library name
+		if (this.cancelled) return;
+	}catch(e){
+		if (this.cancelled) return;
+cerr(e);
+		return `sh: command library: '${com}' could not be loaded`;
+	}
+//	let gotcom = shellmod.activeCommands[comword];
+	let gotcom = this.env.coms[comword];
+log(gotcom);
+	if (!(gotcom instanceof Function)){
+cerr(`sh: '${comword}' is invalid or missing in command library: '${com}'`);
+		return `sh: '${comword}' is invalid or missing in command library: '${com}'`;
+	}
+	return gotcom;
+}//»
+*/
 };
 this.Shell = Shell;
 
 //»
+
 }
 //»
-
-})();
 
 
 /*Put these commands elsewhere«
@@ -7292,3 +7490,4 @@ const com_curcol = class extends Com{//«
 }//»
 »*/
 
+})();

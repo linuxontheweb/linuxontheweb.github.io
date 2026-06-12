@@ -226,15 +226,21 @@ class com_vimtest extends Com{//«
 #doNum;
 #killed;
 #prettyMod;
+#delay;
+
 //»
 static getOpts(){//«
 	return {
-		s:{
+		s: {
 			n: 3, // How many iters?
 			f: 1, // Force terminal output
+			d: 3, // ms delay between key events
+			v: 1, // verbosely dump the bad undo/redo strings
+			g: 1, // force getting of the vim module
 		},
-		l:{
-			once: 1 // No loops, just run commands and validate the undo/redo
+		l: {
+			once: 1, // No loops, just run commands and validate the undo/redo
+			delay: 3 // Same as '-d'
 		}
 	}
 }//»
@@ -250,7 +256,14 @@ internal config variables, later.
 
 */
 
-if (!await util.loadMod(DEF_EDITOR_MOD_NAME)) {
+let del = this.opts.delay || this.opts.d;
+if (del){
+	let n = del.pnni();
+	if (isNaN(n)) return this.no(`Invalid delay: ${del}`);
+	this.#delay = n;
+}
+
+if (!await util.loadMod(DEF_EDITOR_MOD_NAME, {force: this.opts.g})) {
 	this.no("could not load the editor module");
 	return;
 }
@@ -259,25 +272,34 @@ this.#prettyMod = (await util.getMod("util.pretty")).getmod().js;
 //this.#prettyMod = await util.getMod("util.pretty").getmod().js;
 
 }//»
-validate(){//«
+async validate(){//«
+const esc_many = () => {
+	editor.onescape();
+	editor.onescape();
+	editor.onescape();
+	editor.onescape();
+	editor.onescape();
+	editor.onescape();
+	editor.onescape();
+}
 
 const editor = this.#editor;
-editor.onescape();
-editor.onescape();
-editor.onescape();
-editor.onescape();
-editor.onescape();
-editor.onescape();
-editor.onescape();
-
+esc_many();
 this.#fatalErr = editor.fatalErr;
 if (this.#fatalErr) return;
 
 let final_str = editor.curStr;
 try{
-	editor.onkeydown(0, "u_CAS");
+//	editor.onkeydown(0, "u_CAS");
+	await editor.undoAll(this.#delay);
+	esc_many();
 	this.#fatalErr = editor.fatalErr;
 	if (editor.curStr !== editor.initStr){
+if (this.opts.v) {
+cerr("BADUNDO");
+log(`INIT <${editor.initStr}>`);
+log(`CURSTR <${editor.curStr}>`);
+}
 		this.#fatalErr = editor.fatalErr || new Error("BADUNDO");
 	}
 }
@@ -287,9 +309,16 @@ cerr(e);
 }
 if (!this.#fatalErr) {
 try{
-	editor.onkeydown(0, "r_CAS");
+//	editor.onkeydown(0, "r_CAS");
+	await editor.redoAll(this.#delay);
+	esc_many();
 	this.#fatalErr = editor.fatalErr;
 	if (editor.curStr !== final_str){
+if (this.opts.v) {
+cerr("BADREDO");
+log(`STARTED WITH <${final_str}>`);
+log(`ENDED AS <${editor.curStr}>`);
+}
 		this.#fatalErr = editor.fatalErr || new Error("BADREDO");
 	}
 }
@@ -300,13 +329,14 @@ cerr(e);
 }
 
 }//»
-sendComs(coms){//«
+async sendComs(coms){//«
 
 const editor = this.#editor;
 //const {editor} = this;
 
 //Key helpers«
 
+/*
 const keydown=(sym, num=0)=>{//«
 	if (!num) return editor.onkeydown(0, sym);
 	for (let i=0; i < num; i++){
@@ -326,6 +356,10 @@ const esc = (num=0) =>{//«
 	for (let i=0; i < num; i++) editor.onescape();
 };//»
 const quit = (if_force) => {editor.quit();};
+*/
+
+//»
+
 const ascii = (val, num=0)=> {//«
 	let sym;
 	if (val.match(/[A-Z]/)) sym = `${val.toLowerCase()}_S`;
@@ -333,17 +367,29 @@ const ascii = (val, num=0)=> {//«
 	if (!num) return editor.onkeydown({key: val}, sym);
 	for (let i=0; i < num; i++) editor.onkeydown({key: val}, sym);
 };//»
-const ascii_str = str =>{for (let ch of str) ascii(ch);};
 
-//»
-for (let com of coms){
-	if (com==="ESC_") editor.onescape();
-	else if (com==="\\x20") ascii(" ");
-	else if (com.length == 1){
-		ascii(com);
+let del = this.#delay;
+if (Number.isFinite(del)){//«
+	for (let com of coms){
+		if (com==="ESC_") editor.onescape();
+		else if (com==="\\x20") ascii(" ");
+		else if (com.length == 1){
+			ascii(com);
+		}
+		else editor.onkeydown(0, com);
+		await util.sleep(del);
 	}
-	else editor.onkeydown(0, com);
-}
+}//»
+else {//«
+	for (let com of coms){
+		if (com==="ESC_") editor.onescape();
+		else if (com==="\\x20") ascii(" ");
+		else if (com.length == 1){
+			ascii(com);
+		}
+		else editor.onkeydown(0, com);
+	}
+}//»
 
 }//»
 genKeys(){//«
@@ -459,8 +505,8 @@ const HOTKEY_FUNCS = [//«
 }//»
 initEditor(){//«
 
-let TERM_W = 10;
-let TERM_H = 10;
+let TERM_W = 17;
+let TERM_H = 4;
 
 let NOOP = ()=>{};
 let faketerm = {//«
@@ -495,18 +541,30 @@ this.#awaitCb = this.#editor.init(this.#baseFile, fullpath, {
 
 }//»
 async runComs(coms){//«
-	this.sendComs(coms); 
-	this.validate();
+	await this.sendComs(coms); 
+	await this.validate();
 	this.#editor.quit();
 	await this.#awaitCb;
 }//»
 async runAlgo(coms, if_final){//«
+const send_info = () => {
+	this.inf(`${iter}\x29 coms: ${coms.length} | slice: ${do_num}`.slice(0, shell.screenW), {didFmt: true, isUpdate: true, noAddName: true});
+};
+const {shell} = this;
+//if (!if_final) this.out(" ");
+if (!if_final) this.out(" ", {isBreak: true});
 
-const MAX_ITER = 1000;
+const start_time = Date.now();
+const AWAIT_MS = 1000;
+let last_update_per = 0;
+
+const MAX_ITER = 1500;
 
 let prev_coms;
 let iter = -1;
 let last_fatal_coms = [];
+let last_fatal_err;
+let do_num;
 
 let final_loc;
 if (if_final) final_loc = 0;
@@ -516,9 +574,10 @@ let since_fatal = 0;
 
 while (true) {
 
-if (if_final && final_loc >= coms.length) return last_fatal_coms;
+//if (if_final && final_loc >= coms.length) return last_fatal_coms;
+if (if_final && final_loc >= coms.length) return { coms: last_fatal_coms, err: last_fatal_err };
 
-if (this.#killed) return [];
+if (this.#killed) return {};
 iter++;
 this.#fatalErr = null;
 this.initEditor();
@@ -527,6 +586,7 @@ await this.runComs(coms);
 if (this.#fatalErr) {
 	since_fatal = 0;
 	last_fatal_coms = coms;
+	last_fatal_err = this.#fatalErr;
 	if (if_final) {
 		prev_coms = coms;
 		coms = coms.slice(0, final_loc).concat(coms.slice(final_loc+1));
@@ -542,7 +602,7 @@ else {
 		coms = coms.slice(0, final_loc).concat(coms.slice(final_loc+1));
 		continue;
 	}
-	if (!prev_coms) return [];
+	if (!prev_coms) return {};
 // since_fatal++; // This is too slow for larger keydown/command arrays
 // For n commands, go up by
 // n
@@ -556,9 +616,21 @@ else {
 	since_fatal += fac;
 	coms = prev_coms;
 }
-if (iter > MAX_ITER || coms.length < 8 || (since_fatal >= coms.length)) return coms;
+//if (iter > MAX_ITER || coms.length < 8 || (since_fatal >= coms.length)) {
+if (iter > MAX_ITER) {
+	send_info();
+	return { coms: last_fatal_coms, err: last_fatal_err };
+}
+//else if (coms.length < 8) {
+//	return { coms: last_fatal_coms, err: last_fatal_err };
+//}
+else if (since_fatal >= coms.length) {
+//	return coms;
+	send_info();
+	return { coms: last_fatal_coms, err: last_fatal_err };
+//	return {};
+}
 prev_coms = coms;
-let do_num;
 
 //« Do how many?
 if (if_final){
@@ -590,24 +662,39 @@ let up_to = coms.length - do_num;
 let use_loc = Math.floor(Math.random() * up_to);
 coms = coms.slice(0, use_loc).concat(coms.slice(use_loc+do_num));
 
-log(`iter: ${iter} | #coms: ${coms.length} | num: ${do_num} | from: ${use_loc}`);
+//let mess = `This is message number: ${i}...`;
+//mess = mess;
+//log(`${iter}) coms: ${coms.length} | slice: ${do_num} | from: ${use_loc}`);
+
+
+
+let this_update_per = (Date.now() - start_time) % AWAIT_MS;
+if (this_update_per > last_update_per){
+	last_update_per = this_update_per;
+	send_info();
+	this.shell.refresh();
+	await util.sleep(0);
+} 
 
 }
 
-return last_fatal_coms;
+//return last_fatal_coms;
+send_info();
+return { coms: last_fatal_coms, err: last_fatal_err };
 
 };//»
+let err;
+({coms, err} = await do_loop());
+//coms = await do_loop();
 
-coms = await do_loop();
-
-if (coms.length && !if_final) {
+if (coms && coms.length && !if_final) {
 //log("FIRST", coms.length);
 	return await this.runAlgo(coms, true);
 }
 
 //log("FINAL", coms.length);
 
-return coms;
+return {coms, err};
 
 }//»
 async run(){//«
@@ -667,41 +754,57 @@ if (this.#keysFile) {
 	let in_len = coms.length;
 	if (opts.once){
 		this.initEditor();
-		coms = await this.runComs(coms);
+		await this.sendComs(coms); 
+		this.#fatalErr = this.#editor.fatalErr;
+
+//		await this.validate();
+		this.#editor.quit();
+		await this.#awaitCb;
+
+//		await this.runComs(coms);
+
+		if (this.#fatalErr) this.no(this.#fatalErr.message);
+		else this.ok();
+		return;
 	}
-	else if (coms.length > 100){
-		coms = await this.runAlgo(coms);
+
+	let rv;
+	if (coms.length > 100){
+		rv = await this.runAlgo(coms);
 	}
 	else{
-		coms = await this.runAlgo(coms, true);
+		rv = await this.runAlgo(coms, true);
 	}
-if (this.#fatalErr){
-this.err(this.#fatalErr.message);
-}
-	if (!coms){
-		this.ok();
+
+	coms = rv.coms;
+	if (rv.err){
+		this.err(rv.err.message);
 	}
+	if (!coms){}
 	else if (in_len == coms.length){
-		this.ok(`No change (still ${in_len} commands)`);
+		this.inf(`No change (still ${in_len} commands)`);
 	}
 	else {
+		this.inf(`${coms.length} commands (${in_len - coms.length} less)`);
 		this.out(coms.join(" "));
-//		this.ok(`${coms.length} commands (-${in_len - coms.length})`);
-		this.ok(`${coms.length} commands (was ${in_len})`);
 	}
+	this.ok();
 }
 else {
-	let coms = await this.runAlgo(this.genKeys());
-if (this.#fatalErr){
-this.err(this.#fatalErr.message);
-}
-	this.out(coms.join(" "));
-	this.ok(`${coms.length} commands`);
-
+	let {coms, err} = await this.runAlgo(this.genKeys());
+	if (err){
+		this.err(err.message);
+	}
+	if (coms && coms.length) {
+		this.out(coms.join(" "));
+//		this.inf(`${coms.length} commands`);
+	}
+	this.ok();
 }
 //»
 
 }//»
+
 /*
 done(out, num_used){//«
 
@@ -732,7 +835,6 @@ this.#killed = true;
 }//»
 
 }//»
-
 class com_vim extends Com{//«
 #prettyMod;
 static getOpts(){//«
@@ -1484,6 +1586,13 @@ const com_mv = class extends Com{//«
 	}
 }//»
 const com_cp = class extends Com{//«
+	static getOpts(){
+		return{
+			s: {
+				r: 1
+			}
+		}
+	}
 	init(){
 		if (!this.args.length) {
 			this.no(`missing operand`);
@@ -1498,7 +1607,7 @@ const com_cp = class extends Com{//«
 			have_error=true;
 			this.err(mess);
 		};
-		await fsapi.comMv(args, {if_cp: true, exports: {cberr: err, werr: err, cur_dir: this.env.cwd.cwd, termobj: term}});
+		await fsapi.comMv(args, {if_cp: true, if_recur: !!this.opts.r, exports: {cberr: err, werr: err, cur_dir: this.env.cwd.cwd, termobj: term}});
 		have_error?this.no():this.ok();	
 	}
 }//»

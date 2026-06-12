@@ -235,7 +235,8 @@ const handler = async(req, res) => {//«
 			args[ar[0]] = ar[1];
 		}
 	}
-	if (marr=url.match(/^\/_(.+)$/)){
+//	if (marr=url.match(/^\/_(.+)$/)){
+	if (marr=url.match(/^\/_([a-z]+)$/)){
 		mime = EXT_TO_MIME.txt;
 		svc_handler(marr[1], args, req, res);
 		return;

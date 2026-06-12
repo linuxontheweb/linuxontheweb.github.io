@@ -1,4 +1,4 @@
-
+(()=>{"use strict";const MODNAME="util.webmparser";
 /*«The moral: 0xFF is not a valid size!!!
 
 https://matroska-org.github.io/libebml/specs.html
@@ -61,8 +61,6 @@ for (const codec of codecs) {
 »*/
 
 //Imports«
-//import { util, api as capi } from "util";
-//import { globals } from "config";
 
 const util = LOTW.api.util;
 const globals = LOTW.globals;
@@ -74,8 +72,7 @@ const {pathToNode}=fsapi;
 const USECODEC = "vp9";
 //»
 
-
-export const mod = function(){//«
+LOTW.mods[MODNAME] = function(){//«
 
 const NOOP=()=>{};
 
@@ -2059,9 +2056,6 @@ this.coms={//«
 }//»
 
 
-
-
-
 /*«
 
 const reencode_from_video_file = (path, start, end, shell_funcs={}) =>{//«
@@ -2272,4 +2266,4 @@ const {//«
 	set_obj_val
 } = Shell;//»
 »*/
-
+})();

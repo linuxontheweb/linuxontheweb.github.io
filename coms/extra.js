@@ -90,16 +90,17 @@ cancel(){//«
 		let blob = new Blob(this.#recordedChunks, {
 			type: "video/webm"
 		});
-		let mod = await util.getMod("util.webmparser");
 		let bytes = await util.toBytes(blob);
-		let rv = await mod.coms.remux(this.term, bytes);
-		await fsapi.writeFile(this.#outPath, rv);
+		await fsapi.writeFile(this.#outPath, bytes);
+
+//		let mod = await util.getMod("util.webmparser");
+//		let rv = await mod.coms.remux(this.term, bytes);
+//		await fsapi.writeFile(this.#outPath, rv);
+
 //'V_MPEG4/ISO/AVC' == CODECID
 //		let rv = mod.coms.parse(term, bytes);
-//log(rv);
-//		fsapi.writeFile(out_path, blob);
+//		fsapi.writeFile(this.#outPath, blob);
 //		util.download(blob, outname);
-//		Y();
 		this.#promCb();
 	},500);
 }//»
@@ -137,8 +138,8 @@ async run(){//«
 	//const terr=(arg)=>{term_error(term, arg);Y();};
 	let outname = args.shift();
 	if (!outname) return this.no("No outname given");
-	let out_path = normPath(outname, this.term.cwd);
-log(`OUT: ${out_path}`);
+	let out_path = normPath(outname, this.term.env.cwd.cwd);
+//log(`OUT: ${out_path}`);
 	let okay_rv = await validate_out_path(out_path);
 	if (isStr(okay_rv)) return this.no(okay_rv);
 	this.#outPath = out_path;
@@ -147,6 +148,30 @@ log(`OUT: ${out_path}`);
 //	await this.doRec();//
 //	this.ok();
 }//»
+}//»
+const com_bindwin = class extends Com{//«
+static getOpts(){
+return {s:{d:3},l:{desc: 3}};
+}
+	run(){
+		const{args}=this;
+		let numstr = args.shift();
+		if (!numstr) return this.no(`expected a window id arg`);
+		if (!numstr.match(/[0-9]+/)) return this.no(`${numstr}: invalid numerical argument`);
+		let num = parseInt(numstr);
+		let elem = document.getElementById(`win_${num}`);
+		if (!elem) return this.no(`${numstr}: window not found`);
+		let win = elem._winObj;
+		if (!win) return this.no(`${numstr}: the window doesn't have an associated object!?!?`);
+		if (win.ownedBy) return this.no("Cannot bind 'owned' windows!");
+		let use_key = args.shift();
+		if (!(use_key && use_key.match(/^[1-9]$/))) return this.no(`expected a 'key' arg (1-9)`);
+		let desc = this.opts.desc || this.opts.d;
+		globals.boundWins[use_key] = {win, desc, app: win.appName};
+		win.bindNum = use_key;
+//		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
+		this.ok(`Alt+${use_key} -> win_${numstr}`);
+	}
 }//»
 
 /*Put these commands in their own libraries«
@@ -273,29 +298,6 @@ say_type="Workspace";
 this.ok(`${say_type}[${say_num}].${com} = ${val}`);
 
 }//»
-}//»
-const com_bindwin = class extends Com{//«
-static getOpts(){
-return {s:{d:3},l:{desc: 3}};
-}
-	run(){
-		const{args}=this;
-		let numstr = args.shift();
-		if (!numstr) return this.no(`expected a window id arg`);
-		if (!numstr.match(/[0-9]+/)) return this.no(`${numstr}: invalid numerical argument`);
-		let num = parseInt(numstr);
-		let elem = document.getElementById(`win_${num}`);
-		if (!elem) return this.no(`${numstr}: window not found`);
-		let win = elem._winObj;
-		if (!win) return this.no(`${numstr}: the window doesn't have an associated object!?!?`);
-		if (win.ownedBy) return this.no("Cannot bind 'owned' windows!");
-		let use_key = args.shift();
-		if (!(use_key && use_key.match(/^[1-9]$/))) return this.no(`expected a 'key' arg (1-9)`);
-		let desc = this.opts.desc || this.opts.d || win.appName;
-		globals.boundWins[use_key] = {win, desc};
-		win.bindNum = use_key;
-		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
-	}
 }//»
 
 const com_wat2wasm = class extends Com{//«
@@ -482,7 +484,8 @@ log(rv);
 
 }//»
 »*/
-/*
+
+/*Update these to extend the 'Com' class
 const com_walt = async (args, opts) => {//«
     let {term}=opts; 
 	let walt = (await util.getMod("util.walt")).Walt;
@@ -752,6 +755,7 @@ return write_to_redir(term, blob, redir)
 const coms = {//«
 //	webmcat: com_webmcat,
 //	remux: com_remux,
+	bindwin: com_bindwin,
 	record: com_record,
 //	wasm: com_wasm,
 //	walt: com_walt,

@@ -1,4 +1,115 @@
 (()=>{"use strict";const MODNAME="term.vim";
+/*6/11/26: « ALL VIMTEST ALL THE TIME
+
+VM1760:1 Uncaught (in promise) SyntaxError: Octal literals are not allowed in strict mode.
+    at doParseNumber (util.js:767:87)
+    at _.ppi (util.js:892:60)
+    at handle_edit_input_enter (vim.js?v=7753938:2380:17)
+    at handle_stat_input_keydown (vim.js?v=7753938:7138:28)
+
+fs.js:1174 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'y')
+    at path_to_node (fs.js:1174:23)
+    at String.toNode (fs.js:3204:19)
+    at _.toText (fs.js:3236:24)
+    at init_file_mode (vim.js?v=7753938:3103:24)
+    at handle_edit_input_enter (vim.js?v=7753938:2289:37)
+    at handle_stat_input_keydown (vim.js?v=7753938:7138:28)
+
+
+
+
+Needed to change the minTermWidth to 10 in term.js to get this one to barf
+with BADREDO:
+
+a A 2 3 4 \x20 \x20 ESC_ c_A o ESC_ k o_A I 5 6 j_CAS A 7 DEL_
+
+STARTED WITH <756//«A234
+//» 
+> 
+ENDED AS <7
+56//«A234
+//» 
+>
+
+
+THIS JUST MEANS THAT THE FINAL DEL_ WAS NEVER REDONE!
+
+Needed to add: open_line_if_folded(1) @QYTDJTIM
+
+
+
+O ESC_ u  
+
+  OR 
+
+o ESC_ u
+
+  OR
+
+i ENTER_ ESC_ u
+
+
+l_A DEL_ ENTER_
+
+Needed to clean up basic logic at the end of handle_linewrap_key
+
+
+A I ESC_ ? \ ( ENTER_ I a j_CAS n
+
+This is invoked on the (final) n
+vimtest: Invalid regular expression: /\\(/: Unterminated group
+So on auto-test, I am just catching these and returning null,
+but in manual mode, I am cerr'ing the exception to the console
+@EYWTLSNFR
+
+
+In auto-testing, this invokes: INFLOOP
+
+The first issue is that we were NOT doing maybe_scroll in render
+when never_render == false, so the below issue wouldn't trigger
+in manual mode.
+
+A S ENTER_ I ENTER_ 2 ENTER_ < ENTER_ 5 ENTER_ ] ENTER_ c ENTER_ 
+k ENTER_ S ENT ER_ O ESC_ v_CAS ? [ ] ENTER_
+
+@WYRJTIKT, in auto-testing, when ry is SUPPOSED to be 0 (which is what
+it is during manual testing), it is instead: undefined.
+
+This is totally because of:
+escape_regex_metachars = false 
+@KTUTJFKT.
+We were doing a reverse search on the string "[]", which means
+that, in order to match it in the reverse direction, the search 
+string was reversed to "][".
+
+So now in toggle_regex_escape_mode, we are returning when in
+"auto mode" is on (never_render == true).
+
+
+@YSHOKDB: Needed to "chomp" the trailing space, to allow
+passing this vimtest sequence, which failed on redo_all:
+a J j_CAS u
+
+ANYWHERE ELSE I NEED TO DO THIS?!?!
+
+
+Can't manually replicate this error, running vimtest --once (no undo/redo all)
+
+NO LINE IN FIND_WORD LOOP:
+@RHDNRTOK: y == -1 and  ln == undefined
+
+o_A a ENTER_ ENTER_ ENTER_ ENTER_ ESC_ ENTER_ a ENTER_ ENTER_C 
+ENTER_ ENTER_ END_ ENTER_ ESC_ ENTER_ B ? d ENTER_ 
+
+FUNDAMENTALLY DIFFERENT Y-VALUES AT START OF FIND_WORD. I WONDER IF Y
+IS BEING CHANGED AT !NEVER_RENDER
+@EYRITOYK
+FIND: <d> @y(-1) //AUTO
+FIND: <d> @y(0)  //MANUAL
+
+THERE WAS A MAYBE_SCROLL IN RENDER THAT WASN'T BEING CALLED WITH NEVER_RENDER!
+ 
+»*/
 /* CAUTIONARY TALE TO ***ALWAYS*** SET NUM_LINES, WHEN SETTING LINES«
 
 FIXED @WEUTJOEJ: VERY SUBTLE BUG TO SET LINES BUT NOT NUM_LINES!!!
@@ -11,7 +122,7 @@ buffer...
 
 »*/
 //ISSUE IN ONESCAPE W/ CANCELLING OVERWRITE QUERIES @HSRRDFDF
-/* Need to call REALY on SELTOP before feeding it it SCROLL_TO !!! «
+/* Need to call REALY on SELTOP before feeding it to SCROLL_TO !!! «
 
 @SJDUIRHJKED !!!!!!!!!!
 
@@ -25,26 +136,6 @@ UGH!!!!!! SELECTION LOCATIONS ARE NOT "REALITY BASED THINGS" (WHICH SCROLL_TO IS
 6/3/26
 HERE WE ARE A DAY LATER AFTER LEARNING THIS LESSON:
 @WIRKGNDJ
-
-»*/
-/*Failed tests«
-
-Initial strings don't match
-
-79x5 (faketerm dimensions)
-
-I CAN'T REPRODUCE THIS MANUALLY
-
-a ENTER_ ENTER_C ESC_ o ENTER_ , ESC_ HOME_ G V x L
-
-vimtest: ABORTING (RY IS UNDEFINED)
-
-NOTE: w/o the final 'L', this works. All it does is put the cursor on
-the bottom line.
-
-@EKSHTKDH: This error showed up on the console while testing, now I'm
-putting a THROW on it.
-
 
 »*/
 /* NON-STANDARD VIM MODES «
@@ -611,10 +702,12 @@ show under its own auspices.
 	}
 }//»
 
-	if (no_render || never_render) return;
+	maybe_scroll();
+	if (no_render || never_render) {
+		return;
+	}
 
 	if (SYNTAX===JS_SYNTAX)	js_syntax_screen();
-	maybe_scroll();
 
 	let outarr = [];
 	let usex = x;
@@ -704,7 +797,7 @@ show under its own auspices.
 					useright = (curnum==cy())?x:edit_sel_mark;
 				}
 				else{
-throw new Error("Weird condition detected in visual mark mode involving curnum (current line number), seltop (selection top) and selbot (selection bottom)!");
+return THROW("Weird condition detected in visual mark mode involving curnum (current line number), seltop (selection top) and selbot (selection bottom)!");
 				}
 				if (useleft < 0) useleft = 0;
 				if (useright < 0) useright = 0;
@@ -890,10 +983,12 @@ this.render = render;
 //Util«
 
 const THROW = s => {//«
+//cerr("THROWN", s);
 let err;
 if (s instanceof Error) err = s;
 else err = new Error(s);
 if (never_render){
+cerr(err);
 killed = err;
 quit();
 }
@@ -934,15 +1029,11 @@ if (!rv.ok) return stat_err(txt);
 stat(txt);
 
 };//»
-
 const validate_initial_str=async()=>{//«
-	let str = get_edit_save_arr()[0]; 
-	if (str == initial_str) return;
-cwarn("INITIAL");
-log(initial_str);
-cwarn("CURRENT");
-log(str);
-	poperr("The initial strings do not match");
+	if (never_render) return;
+	if (get_edit_save_arr()[0] !== initial_str){
+poperr("Initial strings do not match");
+	}
 };//»
 const cur_sha1=async(s)=>{//«
 let str = get_edit_save_arr()[0];
@@ -1017,6 +1108,7 @@ const realy=(num)=>{if(!fold_mode)return num;return lens[num];};
 
 const set_ry = () => {//«
 	let _cy = y+scroll_num;
+//log(y, scroll_num);
 	if (!fold_mode) {
 		ry = _cy;
 		return;
@@ -1038,7 +1130,7 @@ return;
 //EDPOPLKIUK
 //cerr("RY IS UNDEFINED");
 //		throw new Error("WHAT IS RY DOING BEING UNDEFINED???????");
-return THROW("ABORTING (RY IS UNDEFINED)");
+return THROW(`ABORTING (RY IS UNDEFINED: y(${y}) scrnum(${scroll_num}))`);
 	}
 };//»
 const set_line_lens = ()=>{//«
@@ -2203,6 +2295,139 @@ const init_stat_input = which => {//«
 	stat_input_type = which;
 	render({},67);
 };//»
+const handle_edit_input_enter = async()=> {//«
+
+	let inp_type = stat_input_type;
+	stat_input_type = undefined;
+	let com = stat_com_arr.join("").trim();
+
+	if (inp_type==SAVE_AS_MODE) save_as(com);
+	else if (inp_type==FILE_OPEN_MODE) init_file_mode(com);
+	else if (inp_type==":") {//«
+		if (!com) return render({},86)
+		this.command_history.unshift(com);
+		let marr;
+//SPOLUITJ
+if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
+	if (mode===VIS_LINE_MODE && marr[1]){
+		stat_err("'%': Invalid range modifier in visual line mode");
+		return;
+	}
+	search_and_replace(marr[3], {file: marr[1], exact: marr[2]});
+	return;
+}//»
+		if (com.match(/^\d+$/)) {
+			if (!last_updown) {
+				scroll_hold_x = x;
+			}
+			last_updown = true;
+			let n = parseInt(com)-1;
+			if (n < 0) return render();
+			scroll_to(n, {doRender: true});
+			return;
+		}
+		else if (marr = com.match(/^x +(.*)$/)){
+			cur_background_command = marr[1];
+//			Term.executeBackgroundCommand(cur_background_command);
+//			render();
+stat_ok("Saved to cur_background_command");
+			return;
+		}
+		else if (marr = com.match(/^tab +(.*)$/)){
+			let num = marr[1];
+			if (Term.setTabSize(num)) return stat_ok(`Tab size is set to: ${num}`);
+			stat_err("Error: invalid tab size");
+			return;
+		}
+		else if (mode===VIS_LINE_MODE){
+//			stat_err("Invalid command in visual line mode");
+			stat_err("Unknown command: " + com);
+			return;
+		};
+		if (com=="q"||com=="quit") maybe_quit();
+		else if (com=="q!"||com=="quit!") quit();
+		else if (marr = com.match(/^w(rite)?( +(.+))?$/)){
+			let fname = marr[3];
+			if (!fname){
+				if (edit_fullpath) return edit_save();
+				stat_err("No file name given");
+				return;
+			}
+			save_as(fname);
+			return;
+		}
+		else if (com=="wq"){
+			if (!edit_fullpath){
+				stat_err("No file name");
+				return;
+			}
+			edit_save(false, {doQuit: true});
+			return;
+		}
+		else if (marr = com.match(/^set( +(.+))?$/)){//«
+			if (!marr[2]) return stat("Nothing to set!");
+			let arr = marr[2].split(/ +/);
+			let assignment = arr.shift();
+			if (!assignment) return stat("Nothing to set!");
+			let setarr = assignment.split("=");
+			let which = setarr[0];
+			let arg = setarr[1];
+			if (which=="wraplen"){
+				if (!arg) return stat("No arg given!");
+				let num = arg.ppi();
+				if (!num) return stat_err(`Invalid arg to 'wraplen': ${arg}`);
+				WRAP_LENGTH = num;
+				stat_ok(`OK: wraplen=${arg}`);
+			}
+			else if (which=="no_ctrl_n"){
+				if (arg=="1"||arg=="true") NO_CTRL_N=true;
+				else if (arg=="0"||arg=="false") NO_CTRL_N=false;
+				else return stat_warn("Invalid argument to 'no_ctrl_n'");
+				stat_ok(`OK: no_ctrl_n=${NO_CTRL_N}`);
+			}
+		}//»
+		else if (com==="stdin"){
+			if (!stdin_lines) stat_warn("No lines received from stdin");
+			else init_file_mode("*stdin*",{isStdin: true});
+		}
+		else stat_err("Unknown command: " + com);
+	}//»
+	else if (inp_type=="|"){//«
+		let got = com.ppi();
+		if (isNaN(got)){
+			render();
+			return;
+		}
+//		let n = parseInt(com)-1;
+		let n=got-1;
+		let ln = curarr();//let ln = curln(true);
+		if (ln._fold){
+stat_warn("Please unfold the line!");
+return;
+		}
+		let len = ln.length;
+		if (n<0) n=0;
+		else if (n > len) n = len;//else if (n > curln(true).length) n = curln(true).length;
+		x=n;
+		if (is_vis_mode()) set_sel_mark();
+		render();
+	}//»
+	else if (inp_type=="/"||inp_type=="?"){//«
+		if (!com) return render();
+		let exact = false;
+		let marr;
+		if (marr = com.match(/^<(.+)>$/)){
+			com = marr[1];
+			exact = true;
+		}
+		this.search_history.unshift(com);
+		find_word(com,{reverse: inp_type=="?", exact});
+	}//»
+	else{
+		stat_warn("Handle enter for input type: " + inp_type);
+	}
+
+};//»
 
 const get_cur_spaces = (which, x_is_max)=>{//«
 	let ln = curarr();
@@ -2458,139 +2683,6 @@ const handle_tab_path_completion = async(if_ctrl, gotpath, stat_com_pref)=>{//«
 
 	if (is_folder&&rv.length==1) num_completion_tabs=0;
 	else num_completion_tabs++;
-
-};//»
-const handle_edit_input_enter = async()=> {//«
-
-	let inp_type = stat_input_type;
-	stat_input_type = undefined;
-	let com = stat_com_arr.join("").trim();
-
-	if (inp_type==SAVE_AS_MODE) save_as(com);
-	else if (inp_type==FILE_OPEN_MODE) init_file_mode(com);
-	else if (inp_type==":") {//«
-		if (!com) return render({},86)
-		this.command_history.unshift(com);
-		let marr;
-//SPOLUITJ
-if (marr = com.match(/^(%)?s(b)?\/(.*)$/)){//«
-	if (mode===VIS_LINE_MODE && marr[1]){
-		stat_err("'%': Invalid range modifier in visual line mode");
-		return;
-	}
-	search_and_replace(marr[3], {file: marr[1], exact: marr[2]});
-	return;
-}//»
-		if (com.match(/^\d+$/)) {
-			if (!last_updown) {
-				scroll_hold_x = x;
-			}
-			last_updown = true;
-			let n = parseInt(com)-1;
-			if (n < 0) return render();
-			scroll_to(n, {doRender: true});
-			return;
-		}
-		else if (marr = com.match(/^x +(.*)$/)){
-			cur_background_command = marr[1];
-//			Term.executeBackgroundCommand(cur_background_command);
-//			render();
-stat_ok("Saved to cur_background_command");
-			return;
-		}
-		else if (marr = com.match(/^tab +(.*)$/)){
-			let num = marr[1];
-			if (Term.setTabSize(num)) return stat_ok(`Tab size is set to: ${num}`);
-			stat_err("Error: invalid tab size");
-			return;
-		}
-		else if (mode===VIS_LINE_MODE){
-//			stat_err("Invalid command in visual line mode");
-			stat_err("Unknown command: " + com);
-			return;
-		};
-		if (com=="q"||com=="quit") maybe_quit();
-		else if (com=="q!"||com=="quit!") quit();
-		else if (marr = com.match(/^w(rite)?( +(.+))?$/)){
-			let fname = marr[3];
-			if (!fname){
-				if (edit_fullpath) return edit_save();
-				stat_err("No file name given");
-				return;
-			}
-			save_as(fname);
-			return;
-		}
-		else if (com=="wq"){
-			if (!edit_fullpath){
-				stat_err("No file name");
-				return;
-			}
-			edit_save(false, {doQuit: true});
-			return;
-		}
-		else if (marr = com.match(/^set( +(.+))?$/)){//«
-			if (!marr[2]) return stat("Nothing to set!");
-			let arr = marr[2].split(/ +/);
-			let assignment = arr.shift();
-			if (!assignment) return stat("Nothing to set!");
-			let setarr = assignment.split("=");
-			let which = setarr[0];
-			let arg = setarr[1];
-			if (which=="wraplen"){
-				if (!arg) return stat("No arg given!");
-				let num = arg.ppi();
-				if (!num) return stat_err(`Invalid arg to 'wraplen': ${arg}`);
-				WRAP_LENGTH = num;
-				stat_ok(`OK: wraplen=${arg}`);
-			}
-			else if (which=="no_ctrl_n"){
-				if (arg=="1"||arg=="true") NO_CTRL_N=true;
-				else if (arg=="0"||arg=="false") NO_CTRL_N=false;
-				else return stat_warn("Invalid argument to 'no_ctrl_n'");
-				stat_ok(`OK: no_ctrl_n=${NO_CTRL_N}`);
-			}
-		}//»
-		else if (com==="stdin"){
-			if (!stdin_lines) stat_warn("No lines received from stdin");
-			else init_file_mode("*stdin*",{isStdin: true});
-		}
-		else stat_err("Unknown command: " + com);
-	}//»
-	else if (inp_type=="|"){//«
-		let got = com.ppi();
-		if (isNaN(got)){
-			render();
-			return;
-		}
-//		let n = parseInt(com)-1;
-		let n=got-1;
-		let ln = curarr();//let ln = curln(true);
-		if (ln._fold){
-stat_warn("Please unfold the line!");
-return;
-		}
-		let len = ln.length;
-		if (n<0) n=0;
-		else if (n > len) n = len;//else if (n > curln(true).length) n = curln(true).length;
-		x=n;
-		if (is_vis_mode()) set_sel_mark();
-		render();
-	}//»
-	else if (inp_type=="/"||inp_type=="?"){//«
-		if (!com) return render();
-		let exact = false;
-		let marr;
-		if (marr = com.match(/^<(.+)>$/)){
-			com = marr[1];
-			exact = true;
-		}
-		this.search_history.unshift(com);
-		find_word(com,{reverse: inp_type=="?", exact});
-	}//»
-	else{
-		stat_warn("Handle enter for input type: " + inp_type);
-	}
 
 };//»
 
@@ -3225,23 +3317,38 @@ if (sym.length==1){//«
 	render();
 	return;
 }//»
+
+let ln = curarr();
 if (sym=="BACK_"){//«
 	if (x==0) {
 		if (cy()==0) return;
 		up();
+		ln = curarr();
 		x=w-1;
 	}
 	else x--;
 }//»
-else if (sym=="DEL_"){}
+else if (sym=="DEL_"){
+if (x==0 && cy()==0 && !ln.length){
+//cwarn("NOPE", x, cy());
+return;
+}
+}
 else{
 	unused_keydowns.push(keydown_iter);
 	cerr(`WHAT SYM IN LINEWRAP MODE: ${sym}`);
 	return;
 }
 
-let ln = curarr();
 let have_ch = ln.splice(x, 1)[0];
+if (!have_ch){
+cwarn("LN");
+log(ln);
+cwarn("LINES");
+log(lines);
+return THROW(`NO CHARACTER FOUND x(${x}) cy(${cy()})`);
+//return;
+}
 let add1;
 let adv;
 if (sym=="BACK_"){
@@ -3859,16 +3966,26 @@ const right = ()=>{//«
 //Search/Replace«
 
 let cur_search;
-//let escape_regex_metachars = true;
-let escape_regex_metachars = false;
+//KTUTJFKT
+let escape_regex_metachars = true;
+//let escape_regex_metachars = false;
 
 const toggle_regex_escape_mode=()=>{//«
+if (never_render) return;
 	escape_regex_metachars = !escape_regex_metachars;
 	Term.doOverlay(`RegEx escape mode: ${escape_regex_metachars?"on":"off"}`);
 }//»
 const escape_metachars = word => {//«
-//							 /   [   ]   (   )   {   }   |
-	return word.replace(/([?*+.\x2f\x5b\x5d\x28\x29\x7b\x7d\x7c])/g, "\\$1");
+//							     /   [   ]   (   )   {   }   |
+	word = word.replace(/([?*+.\x2f\x5b\x5d\x28\x29\x7b\x7d\x7c])/g, "\\$1");
+	let marr = word.match(/(\x5c+)$/);
+	if (!marr) return word;
+	if (marr[1].length % 2) {
+//log(`${word}\x5C`);
+		return `${word}\x5C`;
+	}
+return word;
+//	word = word.replace(/\x5c$/, "");
 };//»
 const resume_search=(if_rev)=>{//«
 	if (cur_search) {
@@ -3879,28 +3996,39 @@ const resume_search=(if_rev)=>{//«
 };//»
 
 const try_word_match=(ln, word, if_exact, xoff, reverse)=>{//«
+//if ()
+//return null;
 //cwarn(reverse);
+//cwarn(`TWM:<${word}>`);
 	let lnstr;
 	if (isStr(ln)) lnstr = ln;
 	else lnstr = ln.join("");
-if (reverse) {
-	lnstr = lnstr.slice(0, xoff-1).split("").reverse().join("");
-	word = word.split("").reverse().join("");
-}
-else {
-	lnstr = lnstr.slice(xoff);
-}
+	if (reverse) {
+		lnstr = lnstr.slice(0, xoff-1).split("").reverse().join("");
+		word = word.split("").reverse().join("");
+//cwarn(`REV:<${word}>`);
+	}
+	else {
+		lnstr = lnstr.slice(xoff);
+	}
 	if (!lnstr) return;
 	if (escape_regex_metachars) word = escape_metachars(word);
+//log(`FIND: <${word}>`);
 	let rv; 
 try {
 	if (if_exact) rv = (new RegExp("\\b"+word+"\\b")).exec(lnstr);
 	else rv = (new RegExp(word)).exec(lnstr);
 }
 catch(e){
-//cwarn("CAUGHT!");
+//cwarn("CAUGHT!", word);
 //log(e.message);
-stat_err(`${e.message}`);
+if (!never_render) {
+//EYWTLSNFR
+cwarn("CAUGHT");
+cerr(e);
+}
+//stat_err(`${e.message}`);
+//return THROW(e);
 return null;
 }
 	if (!rv) return null;
@@ -3941,7 +4069,11 @@ const find_word_in_fold_lines=(lns, wrd, if_exact, xoff, if_rev, stack, iter)=>{
 		}
 	}
 }//»
+
+const MAX_SEARCH_ITERS = never_render ? 5000 : 100000; 
+
 const find_word = (word, opts={})=>{//«
+//EYRITOYK
 	if (!word) return render();
 	let {exact, reverse, noAdv, endY} = opts;
 	if (!(exact || escape_regex_metachars)){
@@ -3949,6 +4081,7 @@ const find_word = (word, opts={})=>{//«
 			(new RegExp(word));
 		}
 		catch(e){
+//cwarn("CAUGHT");
 			stat_err(`Invalid regex: ${word}`);
 			return;
 		}
@@ -3970,16 +4103,22 @@ const find_word = (word, opts={})=>{//«
 	let got_match = false;
 	while (true) {//«
 		iter++;
-		if (iter >= 100000){
+		if (iter >= MAX_SEARCH_ITERS){
+//		if (iter >= 100){
 /*WPLKMBGH
     at find_word (vim.js?v=2017610:4373:7)
     at resume_search (vim.js?v=2017610:4276:3)
     at Object.n (vim.js?v=2017610:7543:9)
 */
-throw new Error("INFLOOP WUT WUT HARHARHAR");
+//cerr(`INFLOOP: word(<${word}>) iter(${iter})`);
+return THROW(`INFLOOP: word(<${word}>) iter(${iter})`);
 		}
 		let ln = lines[y];
+//cwarn(y);
+//log(ln);
 if (!ln){
+//RHDNRTOK
+//cerr(`NO LINE IN FIND_WORD LOOP (y=${y})`);
 return THROW(`NO LINE IN FIND_WORD LOOP (y=${y})`);
 }
 		if (ln._fold){//«
@@ -3999,6 +4138,7 @@ return THROW(`NO LINE IN FIND_WORD LOOP (y=${y})`);
 		}//»
 		else {//«
 //WMJYUI
+//log(`TRY: <${word}>`);
 			let rv = try_word_match(ln, word, exact, x, reverse);
 			if (rv){
 				got_match = true;
@@ -4024,10 +4164,19 @@ return THROW(`NO LINE IN FIND_WORD LOOP (y=${y})`);
 			x = 0;
 		}
 		set_ry();
+//log(`${ry} === ${start_ry}`);
+//WYRJTIKT
+if (!Number.isFinite(ry)){
+THROW(`WHY IS RY UNDEFINED IN FIND_WORD???`);
+break;
+}
 		if (ry===start_ry){
+//cwarn("DONE1");
 			break;
 		}
-		else if (Number.isFinite(end_ry) && ry === end_ry){
+//log(2, ry, end_ry);
+		if (Number.isFinite(end_ry) && ry === end_ry){
+//cwarn("DONE2");
 			break;
 		}
 	}//»
@@ -4593,6 +4742,8 @@ const do_redo = (chg) => {//«
 		if (ch=="\n"){//«
 			if (neg){
 				x=0;
+//QYTDJTIM
+				open_line_if_folded(1);
 				y++;
 				set_ry();
 				do_backspace({noAct: true});
@@ -5138,24 +5289,46 @@ return THROW("UNKNOWN CHANGE TYPE: EXPECTED A SINGLE CHAR OR A LINES ARRAY!!!");
 
 };//»
 
-const undo_all=async()=>{//«
+const undo_all=async(del)=>{//«
 	if (!is_command_or_edit_mode()) return;
-	while (actions.length) {
-		if (killed) return;
-		undo();
+	if (Number.isFinite(del)){
+		while (actions.length) {
+			if (killed) return;
+			undo();
+			util.sleep(del);
+		}
+	}
+	else {
+		while (actions.length) {
+			if (killed) return;
+			undo();
+		}
 	}
 	reinit_folds();
 	stat("Initial state");
-//	validate_initial_str();
-};//»
-const redo_all=async()=>{//«
+	validate_initial_str();
+};
+this.undoAll = undo_all;
+//»
+const redo_all=async(del)=>{//«
 	if (!is_command_or_edit_mode()) return;
-	while (undos.length) {
-		if (killed) return;
-		redo();
+	if (Number.isFinite(del)){
+		while (undos.length) {
+			if (killed) return;
+			redo();
+			util.sleep(del);
+		}
+	}
+	else {
+		while (undos.length) {
+			if (killed) return;
+			redo();
+		}
 	}
 	stat("Current state");
-};//»
+};
+this.redoAll = redo_all;
+//»
 
 //»
 //Syntax«
@@ -6282,7 +6455,9 @@ const fmt=(str,opts={})=>{//«
 	delete_lines({time, keepFirst: true});
 	if (!yank_buffer) return;
 	let s='';
-	for (let ln of yank_buffer) s+=ln.join("")+" ";
+	for (let ln of yank_buffer) s+=ln.join("")+"\x20";
+//YSHOKDB
+	s = s.replace(/\x20$/, "");
 	let ar = fmt(s,{maxlen:WRAP_LENGTH,nopad:true}).split("\n");
 	yank_buffer = [];
 	for (let ln of ar) yank_buffer.push(ln.split(""));
@@ -6507,9 +6682,9 @@ const delete_line = (yarg, opts = {}) => {//«
 	delete_lines(opts);
 //	adjust_cursor();
 };//»
-/*
 const delete_to_end=()=>{//«
 	if (mode !== COMMAND_MODE) return;
+	toggle_if_folded();
 	let ln = curarr();//let ln = curln(true);
 	if (x===ln.length) return;
 	yank_buffer = [ln.splice(x)];
@@ -6522,6 +6697,7 @@ const delete_to_end=()=>{//«
 const delete_to_top=()=>{//«
 	if (mode !== COMMAND_MODE) return;
 	if (cy()==0) return;
+//cwarn("TO TOP");
 	mode = VIS_LINE_MODE;
 	seltop = 0;
 	selbot = cy();
@@ -6535,6 +6711,7 @@ const delete_to_bottom=()=>{//«
 	if (cy()==llen_min1) {
 		if (!curarr()._fold) return;
 	}
+//cwarn("TO BOT");
 	mode = VIS_LINE_MODE;
 	seltop = cy();
 	selbot = llen_min1;
@@ -6542,6 +6719,7 @@ const delete_to_bottom=()=>{//«
 //	adjust_cursor();
 	mode = COMMAND_MODE;
 };//»
+/*
 */
 const delete_word = (opts={})=>{//«
 
@@ -6848,7 +7026,6 @@ const newline = (which) =>{//«
 		enter({fromNewline: true});
 		y--;
 		set_ry();//THE CASE OF THE DEADLY ***NOT*** SETTING OF RY
-//FGJKUYTEPOI
 	}
 	mode = INSERT_MODE;
 	render();
@@ -7127,16 +7304,19 @@ const KEY_CHAR_FUNCS={//«
 	p: ()=>{handle_paste("p", {doFold: true})},//After
 	P: ()=>{handle_paste("P", {doFold: true})},//Before
 
-//	D: delete_to_end,
-//	T: delete_to_top,
-//	B: delete_to_bottom,
+	D: delete_to_end,
+	T: delete_to_top,
+	B: delete_to_bottom,
 
 	C: try_clipboard_copy,
 
 //No Action needed below
 
 //Undo/Redo
-	u: undo,
+	u: ()=>{
+		if (never_render) return;
+		undo();
+	},
 //	r: redo,
 //	U:()=>{undo({single: true})},
 //	R:()=>{redo({single: true})},
@@ -7234,8 +7414,10 @@ r_C:()=>{
 	if (mode == INSERT_MODE){
 //		cwarn("CTRL_R INSERT");
 	}
-	else redo();
-
+	else {
+if (never_render) return;
+		redo();
+	}
 },
 e_C:()=>{
 	if (is_edit_mode()) {

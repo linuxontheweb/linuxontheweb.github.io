@@ -1,12 +1,5 @@
 (()=>{"use strict";const MODNAME="util.pretty";
-
-/*
-! function(t, e) {
-	"object" == typeof exports && "object" == typeof module ? module.exports = e() : "function" == typeof define && define.amd ? define("beautifier", [], e) : "object" == typeof exports ? exports.beautifier = e() : t.beautifier = e()
-}(
-"undefined" != typeof self ? self : "undefined" != typeof windows ? window : "undefined" != typeof global ? global : this,
-*/
-//export const mod = function(){
+//@WENTKSMT: This keeps on throwing in vimtest
 LOTW.mods[MODNAME] = function() {
 let pretty = function() {
 	return function(t) {
@@ -190,7 +183,19 @@ let pretty = function() {
 			}
 			return null
 		}, T.prototype._allow_regexp_or_xml = function(t) {
-			return t.type === h.RESERVED && a(t.text, ["return", "case", "throw", "else", "do", "typeof", "yield"]) || t.type === h.END_EXPR && ")" === t.text && t.opened.previous.type === h.RESERVED && a(t.opened.previous.text, ["if", "while", "for"]) || a(t.type, [h.COMMENT, h.START_EXPR, h.START_BLOCK, h.START, h.END_BLOCK, h.OPERATOR, h.EQUALS, h.EOF, h.SEMICOLON, h.COMMA])
+			return t.type === h.RESERVED && a(
+				t.text, 
+				["return", "case", "throw", "else", "do", "typeof", "yield"]
+			) || t.type === h.END_EXPR && ")" === t.text && 
+/*WENTKSMT
+In automated testing (vimtest), getting lots of errors:
+Cannot read properties of null (reading 'previous')
+    at T._allow_regexp_or_xml
+*/
+			t.opened && 
+			t.opened.previous.type === h.RESERVED && 
+			a(t.opened.previous.text, ["if", "while", "for"]) 
+			|| a(t.type, [h.COMMENT, h.START_EXPR, h.START_BLOCK, h.START, h.END_BLOCK, h.OPERATOR, h.EQUALS, h.EOF, h.SEMICOLON, h.COMMA])
 		}, T.prototype._read_regexp = function(t, e) {
 			if ("/" === t && this._allow_regexp_or_xml(e)) {
 				for (var i = this._input.next(), n = !1, s = !1; this._input.hasNext() && (n || s || this._input.peek() !== t) && !this._input.testChar(r.newline);) i += this._input.peek(), n ? n = !1 : (n = "\\" === this._input.peek(), "[" === this._input.peek() ? s = !0 : "]" === this._input.peek() && (s = !1)), this._input.next();

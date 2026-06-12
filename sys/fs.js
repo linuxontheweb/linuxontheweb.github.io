@@ -1,3 +1,4 @@
+(()=>{"use strict";
 /*README«
 
 The LOTW file system is implemented here. IndexedDB is used to define the structure of the
@@ -16,7 +17,13 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
-/*12/14/25
+/*6/10/26: An issue w/ implementing: `$ cp -r /site/path/to/folder .` «
+@JPDKAJD: We previously were awaiting on node.buffer, but I think 
+that property was removed, and now it seems to work with awaiting
+on node.bytes (which *is* defined in FileNode as a getter property).
+JUST PUT THE buffer PROPERTY BACK ON FileNode!
+»*/
+/*12/14/25«
 
 Added try/catch block @XMNYTGH for this fetch statment in getBlob
 (type===MOUNT_TYPE), and returned null. Then I added a check for null in
@@ -26,7 +33,7 @@ check for null to other commands (like vim) and other applications (like
 TextEdit) and possibly parts of the system. Also for the fetch in
 try_make_site_dir. So this is turning into a pattern...
 
-*/
+»*/
 /*10/20/25: Need to reimagine the "add_lock_funcs" concept @GSIEKFO, probably by«
 adding these methods to the nodes themselves. I guess the lockFile/unlockFile 
 functions were being used before the FSNode concept was originally introduced.
@@ -141,6 +148,8 @@ com_ytdl (coms/yt.js): Old style command, depends upon websockets backend won't 
 
 In DirNode, just made an okWrite getter method @SIEMGKG
 »*/
+//Old Notes«
+
 /*9/29/25: Proposing: NetFileNode«
 
 Let's put a new kind of FSNode in here (NetFileNode @TWKMJORH) devoted to
@@ -169,7 +178,6 @@ I just created a file in coms/net/fs.js, so we can have a suite of tools to enab
 debugging, and eventually real-world use cases..
 
 »*/
-//New Issues«
 /*5/24/25: THERE WAS AN ISSUE WITH NOT HAVING "." on certain DirNode's kids,«
 at the top-level, so we had to add them in at the dir mounting points during
 fs init. This bug screwed up the folder app.
@@ -212,8 +220,6 @@ We are giving a console warning if the type fields do not match upon updating.
 
 */
 //»
-
-(()=>{"use strict";
 
 
 //Imports«
@@ -913,6 +919,12 @@ log(this);
 		Y(ent);
 	});
 }//»
+get buffer(){
+	if (!this.okGet()) return;
+	return getBlob(this, {
+		buffer: true
+	});
+}
 get bytes(){//«
 	if (!this.okGet()) return;
 	return getBlob(this, {
@@ -1421,13 +1433,13 @@ cerr(`Could not remove: ${node.fullpath} (${errmess})`);
 };//»
 
 const comMv=async (paths, opts={})=>{//«
-	return com_mv(paths,{if_cp: opts.if_cp, shell_exports: opts.exports} );
+	return com_mv(paths,{if_recur: opts.if_recur, if_cp: opts.if_cp, shell_exports: opts.exports} );
 };//»
 const com_mv = async(args, opts={}) => {//«
 //const com_mv = async(shell_exports, args, if_cp, dom_objects, recur_opts) => {
 
 let{
-	shell_exports, if_cp, dom_objects, recur_opts
+	shell_exports, if_recur, if_cp, dom_objects, recur_opts
 }=opts;
 
 const no_move_all=()=>{//«
@@ -1573,7 +1585,14 @@ for (let arg of args){//«
 	}
 	else if (com==="cp"&&isfolder){
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${path}: not (currently) copying directories`});
+		if (if_recur){
+//log(srcret);
+//			mvarr.push({ERR: `${arg}: not (currently) copying directories`});
+			mvarr.push([path, srcret]);
+		}
+		else {
+			mvarr.push({ERR: `-r not specified; omitting directory '${arg}'`});
+		}
 	}
 	else if (isfolder && path == globals.user.desk_path){
 		mvarr.push({ERR:`not modifying the working desktop path: ${path}`});
@@ -1624,7 +1643,8 @@ for (let arr of mvarr) {//«
 			savedirpath = destret.fullpath;
 			gotto = `${savedirpath}/${node.name}`;
 			savename = node.name;
-		} else {
+		}
+		else {
 			gotto = topath = topatharg;
 			savedirpath = destret.par.fullpath;
 			savename = destret.name;
@@ -1665,8 +1685,7 @@ for (let arr of mvarr) {//«
 	}
 
 //"Manual recursion" needed for non HTML5FileSystem folders...
-
-	if (!(type == FS_TYPE) && app === FOLDER_APP){//«
+	if (type != FS_TYPE && app === FOLDER_APP){//«
 		let nm = savename;
 		if (savedir.kids[nm]){
 			gotfail=true;
@@ -1679,6 +1698,11 @@ for (let arr of mvarr) {//«
 			continue;
 		}
 		let newpath = `${savedir.fullpath}/${nm}`;
+//if (type == MOUNT_TYPE){
+//	gotfail=true;
+//	werr(`So you wanna copy the folder: '${nm}' from the server???`);
+//	continue;
+//}
 		if (!await mkDir(newpath, null, {root: is_root})){
 			gotfail=true;
 			werr(`${newpath}: there was a problem creating the folder`);
@@ -1702,13 +1726,14 @@ for (let arr of mvarr) {//«
 			}
 		};
 //		await this.com_mv(shell_exports, arr, true, null, obj);
-		await this.com_mv(arr, {shell_exports, if_cp: true, recur_opts: obj});
+		await this.com_mv(arr, {shell_exports, if_recur: true, if_cp: true, recur_opts: obj});
 		continue;
 	}//»
 	if (type==MOUNT_TYPE){//«
 		let tofullpath = `${savedir.fullpath}/${savename}`;
-		let gotbuf = await node.buffer;
 //JPDKAJD
+//		let gotbuf = await node.buffer;
+		let gotbuf = await node.bytes;
 		let newnode = await saveFsByPath(tofullpath, gotbuf);
 		if (!newnode) {
 			werr(`${tofullpath}: There was a problem saving to the file`);
@@ -2266,8 +2291,12 @@ const mount_dir=(list, par)=>{//«
 const try_make_site_dir=async()=>{//«
 //	mount_tree("site", MOUNT_TYPE);
 	let rv;
+	let use_list;
+	if (globals.is_local) use_list = '/_loc_list.json';
+	else use_list = '/list.json';
 	try {
-		rv = await fetch(`/list.json`);
+//		rv = await fetch(`/list.json`);
+		rv = await fetch(use_list);
 	}
 	catch(e){
 cwarn("Could not get list.json for /site");
@@ -2525,8 +2554,8 @@ log(dirobj);
 			return populate_remote_user_dirobj(dirobj, opts);
 		}
 		else{
-cwarn("Got dirobj.sys = false");
-log(dirobj);
+//cwarn("Got dirobj.sys = false");
+//log(dirobj);
 		}
 		
 	}
@@ -3221,8 +3250,14 @@ _.toLines=function(opts={}){
 	opts.lines = true;
 	return this.toText(opts);
 }
-_.toBytes=async function(opts={}){let node=await this.toNode(opts);if(node)return node.bytes;};
-_.toBuffer=async function(opts={}){let node=await this.toNode(opts);if(node)return node.buffer;};
+_.toBytes=async function(opts={}){
+	let node=await this.toNode(opts);
+	if(node)return node.bytes;
+};
+_.toBuffer=async function(opts={}){
+	let node=await this.toNode(opts);
+	if(node) return node.buffer;
+};
 _.toBlob=async function(opts={}){//«
 	let node = await this.toNode(opts);
 	if (!node) return;
@@ -3294,15 +3329,7 @@ globals.api.fs=this.api;
 
 //»
 
-
-})();
-
-
-
-
-
-
-/*
+/*OLD«
 const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
 	if (is_sys) return true;
 	let iter = 0;
@@ -3351,4 +3378,6 @@ onst checkDirPerm=async(path_or_obj,opts={})=>{//«
 	else obj = path_or_obj;
 	return check_fs_dir_perm(obj, opts.root, opts.sys, opts.user);
 };//»
-*/
+»*/
+
+})();

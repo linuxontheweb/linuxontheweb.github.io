@@ -19,7 +19,19 @@ experts only.
 in the code.)
 
 »*/
+/*6/10/26: BUGS: After resizing a folder with no active Cursor,«
+the previous icon to show its label, showed it again.
 
+When opening an icon called TextEdit.app, with these JSON contents:
+
+{app: TextEdit}
+
+... and then typing stuff in the editor, then hitting
+Ctrl+s, it saved to the TextEdit.app file, overwriting the JSON,
+with whatever I typed into the editor. Fixed it @SFNTKTHF, by
+*NOT* passing along the icon to open_app.
+
+»*/
 /*5/28/26: BUG: When turning off a folder's cursor, and doing «
 the Home key, then turning it back on, the damn thing doesn't know
 how to change rows, downwards.
@@ -137,7 +149,7 @@ const {//«
 	fsUrl,
 	isFin,
 	makeScript,
-	mkOverlay
+	mkOverlay,
 } = NS.api.util;//»
 
 //»
@@ -542,7 +554,7 @@ const center = (elem, usewin) => {//«
 	if (usey < 0) usey = 0;
 	elem._x = usex;
 	elem._y = usey;
-}/*»*/
+}//»
 const make_popup_str = (which) => {//«
 	let str = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" width="64px" height="64px">';
 	if (which == "alert") {
@@ -2510,9 +2522,11 @@ resize(){//«
 	if (this.isFolder && CWIN === this) {
 //	if (this.isFolder){
 		let cur = this.cursor;
+//log(cur);
 		let icn = this.Main.lasticon;
 		if (!icn) return;
 		icn.iconElem.scrollIntoViewIfNeeded();
+		if (!cur.ison()) return;
 		cur.curElem._loc(icn.iconElem.offsetLeft+globals.css.CUR_FOLDER_XOFF, icn.iconElem.offsetTop+globals.css.CUR_FOLDER_XOFF);
 		check_html_of_cursor_icon(icn.iconElem);
 	}
@@ -3177,6 +3191,7 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		if (this.isMinimized) this.taskbarButton.onmousedown();
 //		if (this.childWin) this.childWin.on();
 		CWIN = this;
+		this.setLayout(workspace.layoutMode); 
 	};
 	//»
 	off(){//«
@@ -3456,7 +3471,7 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		};//»
 		const mkhandle = (wid, hgt, x, y) => {//«
 			let div = make('div');
-			div._bor= "1px solid black";
+			div._bor= "2px solid black";
 			div._pos= "absolute";
 			div._w= wid;
 			div._h = hgt;
@@ -3531,13 +3546,18 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 			odiv._h = rect.height;
 			statdiv.innerHTML = Math.round(rect.width) + "x" + Math.round(rect.height) + "+" + Math.round(rect.left) + "+" + Math.round(rect.top);
 		};//»
+		let r = 256 - Math.floor(Math.random() * 176);
+		let g = 256 - Math.floor(Math.random() * 176);
+		let b = 256 - Math.floor(Math.random() * 176);
 		odiv.on=()=>{
 			statdiv._tcol= "#ccc";
-			odiv._bgcol= "rgba(224,224,224,0.4)";
+			odiv._bgcol= `rgba(${r},${g},${b},0.4)`;
+//			odiv._bgcol= util.randCol(0.4);
 		};
 		odiv.off=()=>{
 			statdiv._tcol= "#999";
-			odiv._bgcol= "rgba(176,176,176,0.4)";
+//			odiv._bgcol= `rgba(${r},${g},${b},0.5)`;
+			odiv._bgcol= `rgba(96,96,96,0.75)`;
 		};
 		win._add(odiv);
 		this.moveDiv = odiv;
@@ -5941,13 +5961,8 @@ the prevPaths array still holds good.*/
 	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE,USERS_TYPE];
 	if (!OK_TYPES.includes(typ)) return poperr(`Cannot open type: ${typ}`);
 
-//	if (check_special_ext(node)) return;
-//log(useApp);
 	if (check_special_ext(node, useApp)) return;
-//	if (!useApp && check_special_ext(node)) return;
 	
-//	if (typ==FS_TYPE&&!fs.check_fs_dir_perm(node)) return noopen("permission denied");
-//log(node.par);
 	if (typ==FS_TYPE&&!node.par.okWrite) return noopen("permission denied");
 	let ret = await node.bytes;
 	if (!ret) return noopen();
@@ -7082,7 +7097,9 @@ cerr(e.message);
 	if (!which) {
 		return poperr(`No ${ext} field in the JSON object!`);
 	}
-	return open_app(which, {winArgs: icn.winArgs, appArgs: obj.args, icon: icn});
+//SFNTKTHF
+	return open_app(which, {winArgs: icn.winArgs, appArgs: obj.args});
+//	return open_app(which, {winArgs: icn.winArgs, appArgs: obj.args, icon: icn});
 }//»
 const open_file_by_path = async(patharg, opt={}) => {//«
 	const err = (str) => {
@@ -7807,6 +7824,7 @@ const show_overlay=(str)=>{//«
 	if (overlay_timer) clearTimeout(overlay_timer);
 	else desk.appendChild(overlay);
 	center(overlay, desk);
+	overlay._y = 0;
 	overlay_timer = setTimeout(()=>{
 		overlay_timer = null;
 		overlay._del();
@@ -8016,7 +8034,8 @@ const check_input = ()=>{//«
 		e.preventDefault();
 	}
 //	if ((CUR.ison() || CWIN) && ARROW_KEY_SYMS.includes(kstr)){
-	if ((CUR.ison() || (CWIN && !CWIN.isFolder)) && ARROW_KEY_SYMS.includes(kstr)){
+	if (text_inactive && (CUR.ison() || (CWIN && !CWIN.isFolder)) && ARROW_KEY_SYMS.includes(kstr)){
+//log("?");
 		e.preventDefault();
 	}
 //»
@@ -8254,7 +8273,8 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 		}
 	}//»
 
-	if (marr = kstr.match(/^([1-9])_AS$/)){
+//	if (marr = kstr.match(/^([1-9])_AS$/)){
+	if (marr = kstr.match(/^([1-9])_A$/)){
 		return raise_bound_win(marr[1]);
 	}
 //SHORTCUTS1
@@ -8264,7 +8284,7 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 		case "d_A": return (e.preventDefault(), minimize_all_windows());
 		case "t_A": return open_terminal();
 		case "e_A": return (e.preventDefault(), open_home_folder());
-		case "0_AS": return open_app("WorkMan");
+		case "0_A": return open_app("WorkMan");
 		case "l_CAS": return console.clear();
 //		case "b_A": return toggle_taskbar();
 		case "b_A": return taskbar.toggle();
