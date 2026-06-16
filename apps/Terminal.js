@@ -1853,9 +1853,10 @@ async quoteCompletion(use_dir, tok0, arr, arr_pos){//«
 }//»
 async getDirContents(dir, pattern, opts={}){//«
 	let {if_cd, if_keep_ast} = opts;
+let list;
 	const domatch=async()=>{//«
-		kids = ret.kids;
-		keys = Object.keys(kids);
+//		kids = ret.kids;
+//		keys = Object.keys(kids);
 		let match_arr = [];
 		if (!if_keep_ast) pattern = pattern.replace(/\*/g, "[a-zA-Z_]*");
 		pattern = pattern.replace(/\xa0/g, " ");
@@ -1868,10 +1869,13 @@ catch(e){
 //log(e);
 return match_arr;
 }
-		for (let i=0; i < keys.length; i++) {
-			let key = keys[i];
-			if (key=="."||key=="..") continue;
-			let kid = kids[key];
+//		for (let i=0; i < keys.length; i++) {
+		for (let kid of list) {
+//			let key = keys[i];
+//			if (key=="."||key=="..") continue;
+//			let kid = kids[key];
+			let nm = kid.name;
+/*
 			if (!this.rootState){
 				let cur = kid;
 				while (cur.treeroot !== true) {
@@ -1883,17 +1887,23 @@ return match_arr;
 				}
 				if (!kid) continue;
 			}
+*/
 			let useapp = kid.appName;
-			let ret = [keys[i], useapp];
+//			let ret = [keys[i], useapp];
+			let ret = [nm, useapp];
 			if (useapp == "Link") ret.push(kid.link);
-			if (pattern == "" || re.test(keys[i])) match_arr.push(ret);
+//			if (pattern == "" || re.test(keys[i])) match_arr.push(ret);
+			if (pattern == "" || re.test(nm)) match_arr.push(ret);
 		}
 		return match_arr;
 	};//»
 	if (dir===null) throw new Error("this.getDirContents() no dir!");
 	let ret = await fsapi.pathToNode(dir);
 	if (!(ret&&ret.appName==FOLDER_APP)) return [];
-	let type = ret.type;
+	list = await ret.list;
+//	let type = ret.type;
+
+/*
 	let kids=ret.kids;
 	let keys=Object.keys(kids);
 	if (type==FS_TYPE&&!ret.done) {
@@ -1902,6 +1912,7 @@ return match_arr;
 		ret.done = true;
 		ret.kids = ret2;
 	}
+*/
 	return domatch();
 }
 //»
@@ -1933,8 +1944,9 @@ async doContents(contents, use_dir, tok, arr_pos){//«
 		if (type==FOLDER_APP) {
 //			this.handleLetterPress("/");//"/"
 			handle_chars+="/";
-			let rv = await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
-			if (!rv) return cerr("hdk76FH3");
+//			let rv = await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
+//			if (!rv) return cerr("hdk76FH3");
+			await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
 		}
 		else if (type=="appDir"||type=="libDir"){
 //			this.handleLetterPress(".");//"/"
@@ -2503,6 +2515,7 @@ handleLetterPress(char_arg, no_render){//«
 			if (window.performance.now() - then < 100) return char_arg;
 			return "*";
 		};
+		setTimeout(()=>{this.render();}, 100);
 	}
 	if (!ln[x]) ln[x] = char_arg;
 	else ln.splice(x, 0, char_arg);

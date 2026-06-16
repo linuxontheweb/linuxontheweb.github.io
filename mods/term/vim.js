@@ -1,10 +1,38 @@
 (()=>{"use strict";const MODNAME="term.vim";
+/*6/14/26: Just removed all syntax-highlighting, which as hardcoded into«
+this file, for JS-only purposes. If I'm going to support syntax highlighting
+in the future, it will be closer to the "real" vim way of treating each
+of the different language modes as (external) plugins.
+
+Regardless, there will be a clear separation between syntax elements
+that affect a file's *global* state (i.e. multiline quotes/comments)
+and those that do not.
+
+The quickest syntax updates will affect the immediate line, and
+the next quickest will affect the visual screen.
+
+One thing to ne aware of is the existence of VERY LONG LINES, and 
+the duality between:
+
+1) the *usual* method of skipping over those parts of them that are hanging off
+the edge of the screen.
+
+2) the fact that they will tend to incorporate syntax elements that might
+affect global issues (for example, if they have multiline comments like
+/*....* /, then the '* /' will cause any attempts to comment the line, itself 
+out with '/*' to fail). Multi-line quoting (like `....`) is slightly different
+because start and end quote chars (or sequences thereof, as in Python) tend to
+be the same, so opening a quote with one of the chars on a preceding line will
+have a *toggling* effect, rather than the *masking* effect of multi-line
+comments.
+
+»*/
 /*6/11/26: « ALL VIMTEST ALL THE TIME
 
 VM1760:1 Uncaught (in promise) SyntaxError: Octal literals are not allowed in strict mode.
     at doParseNumber (util.js:767:87)
     at _.ppi (util.js:892:60)
-    at handle_edit_input_enter (vim.js?v=7753938:2380:17)
+    at handle_stat_input_enter (vim.js?v=7753938:2380:17)
     at handle_stat_input_keydown (vim.js?v=7753938:7138:28)
 
 fs.js:1174 Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'y')
@@ -12,102 +40,8 @@ fs.js:1174 Uncaught (in promise) TypeError: Cannot read properties of undefined 
     at String.toNode (fs.js:3204:19)
     at _.toText (fs.js:3236:24)
     at init_file_mode (vim.js?v=7753938:3103:24)
-    at handle_edit_input_enter (vim.js?v=7753938:2289:37)
+    at handle_stat_input_enter (vim.js?v=7753938:2289:37)
     at handle_stat_input_keydown (vim.js?v=7753938:7138:28)
-
-
-
-
-Needed to change the minTermWidth to 10 in term.js to get this one to barf
-with BADREDO:
-
-a A 2 3 4 \x20 \x20 ESC_ c_A o ESC_ k o_A I 5 6 j_CAS A 7 DEL_
-
-STARTED WITH <756//«A234
-//» 
-> 
-ENDED AS <7
-56//«A234
-//» 
->
-
-
-THIS JUST MEANS THAT THE FINAL DEL_ WAS NEVER REDONE!
-
-Needed to add: open_line_if_folded(1) @QYTDJTIM
-
-
-
-O ESC_ u  
-
-  OR 
-
-o ESC_ u
-
-  OR
-
-i ENTER_ ESC_ u
-
-
-l_A DEL_ ENTER_
-
-Needed to clean up basic logic at the end of handle_linewrap_key
-
-
-A I ESC_ ? \ ( ENTER_ I a j_CAS n
-
-This is invoked on the (final) n
-vimtest: Invalid regular expression: /\\(/: Unterminated group
-So on auto-test, I am just catching these and returning null,
-but in manual mode, I am cerr'ing the exception to the console
-@EYWTLSNFR
-
-
-In auto-testing, this invokes: INFLOOP
-
-The first issue is that we were NOT doing maybe_scroll in render
-when never_render == false, so the below issue wouldn't trigger
-in manual mode.
-
-A S ENTER_ I ENTER_ 2 ENTER_ < ENTER_ 5 ENTER_ ] ENTER_ c ENTER_ 
-k ENTER_ S ENT ER_ O ESC_ v_CAS ? [ ] ENTER_
-
-@WYRJTIKT, in auto-testing, when ry is SUPPOSED to be 0 (which is what
-it is during manual testing), it is instead: undefined.
-
-This is totally because of:
-escape_regex_metachars = false 
-@KTUTJFKT.
-We were doing a reverse search on the string "[]", which means
-that, in order to match it in the reverse direction, the search 
-string was reversed to "][".
-
-So now in toggle_regex_escape_mode, we are returning when in
-"auto mode" is on (never_render == true).
-
-
-@YSHOKDB: Needed to "chomp" the trailing space, to allow
-passing this vimtest sequence, which failed on redo_all:
-a J j_CAS u
-
-ANYWHERE ELSE I NEED TO DO THIS?!?!
-
-
-Can't manually replicate this error, running vimtest --once (no undo/redo all)
-
-NO LINE IN FIND_WORD LOOP:
-@RHDNRTOK: y == -1 and  ln == undefined
-
-o_A a ENTER_ ENTER_ ENTER_ ENTER_ ESC_ ENTER_ a ENTER_ ENTER_C 
-ENTER_ ENTER_ END_ ENTER_ ESC_ ENTER_ B ? d ENTER_ 
-
-FUNDAMENTALLY DIFFERENT Y-VALUES AT START OF FIND_WORD. I WONDER IF Y
-IS BEING CHANGED AT !NEVER_RENDER
-@EYRITOYK
-FIND: <d> @y(-1) //AUTO
-FIND: <d> @y(0)  //MANUAL
-
-THERE WAS A MAYBE_SCROLL IN RENDER THAT WASN'T BEING CALLED WITH NEVER_RENDER!
  
 »*/
 /* CAUTIONARY TALE TO ***ALWAYS*** SET NUM_LINES, WHEN SETTING LINES«
@@ -481,6 +415,7 @@ let actions=[];
 let act_iter=0;
 
 let undos=[];
+let undo_step_mode = false;
 
 let fold_mode = true;
 //let fold_mode = false;
@@ -494,8 +429,6 @@ let one_line_mode;
 let quit_on_enter;
 //let has_internal_tabs;
 
-let SYNTAX_TIMEOUT_MS = 1500;
-let syntax_timeout;
 
 const overrides=["c_A", "f_CAS"];
 const PREV_DEF_SYMS=[
@@ -707,7 +640,7 @@ show under its own auspices.
 		return;
 	}
 
-	if (SYNTAX===JS_SYNTAX)	js_syntax_screen();
+//	if (SYNTAX===JS_SYNTAX)	js_syntax_screen();
 
 	let outarr = [];
 	let usex = x;
@@ -1603,10 +1536,10 @@ cerr("HOWWWWW CAN THERE BE NO USELINES.LENGTH????");
 
 	set_line_lens();
 
-	let ln = fold[0];
-	if (SYNTAX && !ln._multi && ln.length >= 2 && ln[0]==="/" && ln[1]==="*"){
-		syntax_multiline_comments();
-	}
+//	let ln = fold[0];
+//	if (SYNTAX && !ln._multi && ln.length >= 2 && ln[0]==="/" && ln[1]==="*"){
+//		syntax_multiline_comments();
+//	}
 }//»
 
 const open_prev_line_if_folded = () => {//«
@@ -2165,7 +2098,7 @@ return;
 		let par = edit_fobj.par;
 //		if (par.type === FS_TYPE && !await fsapi.checkDirPerm(par)){
 //		if (!await fsapi.checkDirPerm(par)){
-		if (!par.okWrite){
+		if (!par.perm){
 			stat_err("Permission denied");
 			return;
 		}
@@ -2200,7 +2133,7 @@ const checkok = () =>{//«
 	rtype = rootobj.type;
 	if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype==USERS_TYPE)) return `Cannot create file type: ${rootobj.type}`;
 //	if (!fs.check_fs_dir_perm(parobj,is_root)) return `Permission denied: ${fname}`;
-	if (!parobj.okWrite) return `Permission denied: ${fname}`;
+	if (!parobj.perm) return `Permission denied: ${fname}`;
 	return true;
 }; //» 
 const save_ok = ifnew => {//«
@@ -2235,7 +2168,8 @@ rootobj = parobj.root;
 let rv = checkok();
 if (isStr(rv)) return err(rv);
 //MDOPILKL
-let gotkid = parobj.kids[fname];
+//let gotkid = parobj.kids[fname];
+let gotkid = parobj.getKid(fname);
 if (!gotkid) {
 	return save_ok(true);
 }
@@ -2295,7 +2229,7 @@ const init_stat_input = which => {//«
 	stat_input_type = which;
 	render({},67);
 };//»
-const handle_edit_input_enter = async()=> {//«
+const handle_stat_input_enter = async()=> {//«
 
 	let inp_type = stat_input_type;
 	stat_input_type = undefined;
@@ -2379,11 +2313,22 @@ stat_ok("Saved to cur_background_command");
 				WRAP_LENGTH = num;
 				stat_ok(`OK: wraplen=${arg}`);
 			}
+//These 'togglers' use identical logic and can be generalized/refactored «
 			else if (which=="no_ctrl_n"){
 				if (arg=="1"||arg=="true") NO_CTRL_N=true;
 				else if (arg=="0"||arg=="false") NO_CTRL_N=false;
 				else return stat_warn("Invalid argument to 'no_ctrl_n'");
 				stat_ok(`OK: no_ctrl_n=${NO_CTRL_N}`);
+			}
+			else if (which == "undo_step_mode"){
+				if (arg=="1"||arg=="true") undo_step_mode=true;
+				else if (arg=="0"||arg=="false") undo_step_mode=false;
+				else return stat_warn("Invalid argument to 'undo_step_mode'");
+				stat_ok(`OK: undo_step_mode=${undo_step_mode}`);
+			}
+//»
+			else if (which){
+				stat_err(`set: Unknown option: '${which}'`);
 			}
 		}//»
 		else if (com==="stdin"){
@@ -4713,7 +4658,7 @@ if (killed) return;
 	set_ry();
 	if (x>0 && x===curarr().length) x--;
 	render();
-	do_syntax_timeout();
+//	do_syntax_timeout();
 	return true;
 };//»
 const undo_end = (tm)=>{//«
@@ -4725,7 +4670,7 @@ if (killed) return;
 		x--;
 	}
 	render();
-	do_syntax_timeout();
+//	do_syntax_timeout();
 }//»
 
 const do_redo = (chg) => {//«
@@ -4912,17 +4857,8 @@ c_A i o_A ENTER_ l_A ENTER_ ENTER_ u V \x20 l_C i
 				do_enter({noAct: true, data});
 			}
 			else {
-//log("HIHI");
-//				x=0;
-//				open_prev_line_if_folded();
-//				do_backspace({noAct: true});
-//do_del_enter({noAct: true});
-//log(12345);
-//				del_ch({noAct: true});
-
 				if (curfold()) open_line_if_folded();
 				else open_line_if_folded(1);
-
 				down();
 				x=0;
 				do_backspace({noAct: true});
@@ -5125,8 +5061,6 @@ let {neg, fileChomp, isLines, isViz, isBlockInsert} = chg.opts;
 if (isLines && !neg) openFoldHits = false;
 else openFoldHits = true;
 x = chg.x;
-//log(chg.y, ry);
-
 
 //QLKMNYUHY
 if (isViz) open_folds_in_line_range(ch.length);
@@ -5141,7 +5075,7 @@ if (isStr(ch)&&ch.length==1){//«
 	if (ch === "\n"){//Consecutive newlines«
 		if (neg){
 //Delete a previous newline
-			while (c === "\n" && u.opts.neg && u.y === ry - 1 && !check_if_folded(-1)){
+			while (!undo_step_mode && c === "\n" && u.opts.neg && u.y === ry - 1 && !check_if_folded(-1)){
 				undos.pop();
 				actions.push(u);
 				y--;
@@ -5154,7 +5088,7 @@ if (isStr(ch)&&ch.length==1){//«
 		}
 		else {
 //Redoing a deleted newline
-			while (c === "\n" && !u.opts.neg && u.y === ry){
+			while (!undo_step_mode && c === "\n" && !u.opts.neg && u.y === ry){
 				undos.pop();
 				actions.push(u);
 				do_redo(u);
@@ -5174,7 +5108,7 @@ if (isStr(ch)&&ch.length==1){//«
 		}
 	}//»
 	else {//Adjacent characters on the same line«
-		while(u.y == ry && isStr(c) && c.length == 1 && c !== "\n" && (u.x == x || u.x == x-1 || u.x == x+1)) {
+		while(!undo_step_mode && u.y == ry && isStr(c) && c.length == 1 && c !== "\n" && (u.x == x || u.x == x-1 || u.x == x+1)) {
 			undos.pop();
 			actions.push(u);
 			do_redo(u);
@@ -5231,7 +5165,7 @@ const undo = async (o={}) => {//«
 		if (ch === "\n"){//Consecutive newlines«
 			if (neg){//« Redoing a deleted newline
 				while (a.time == tm || 
-					(c === "\n" && a.opts.neg && a.y === ry - 1)){
+					(!undo_step_mode && c === "\n" && a.opts.neg && a.y === ry - 1)){
 
 					actions.pop();
 					undos.push(a);
@@ -5244,7 +5178,7 @@ const undo = async (o={}) => {//«
 			}//»
 			else {// Undoing a newline (via backspace from next line down, x=0)«
 				while (a.time == tm || 
-						(c === "\n" && !a.opts.neg && a.y === ry-1 && 
+						(!undo_step_mode && c === "\n" && !a.opts.neg && a.y === ry-1 && 
 													!check_if_folded(-1))){
 					actions.pop();
 					undos.push(a);
@@ -5258,7 +5192,7 @@ const undo = async (o={}) => {//«
 		}//»
 		else {//Adjacent characters on the same line«
 			while(a.time == tm || 
-				(a.y == ry && isStr(c) && c.length == 1 && c !== "\n" 
+				(!undo_step_mode && a.y == ry && isStr(c) && c.length == 1 && c !== "\n" 
 								&& (a.x == x || a.x == x-1 || a.x == x+1))) {
 				actions.pop();
 				undos.push(a);
@@ -5331,287 +5265,6 @@ this.redoAll = redo_all;
 //»
 
 //»
-//Syntax«
-
-//Var«
-//let real_line_colors=[];
-const NO_SYNTAX=0;
-const JS_SYNTAX=1;
-
-let SYNTAX=NO_SYNTAX;
-//let SYNTAX=JS_SYNTAX;
-const KEYWORDS=[
-"async",
-"await",
-"break",
-"case",
-"catch",
-"class",
-"const",
-"continue",
-"constructor",
-"debugger",
-"default",
-"delete",
-"do",
-"else",
-"export",
-"extends",
-"finally",
-"for",
-"if",
-"import",
-"in",
-"instanceof",
-"new",
-"return",
-"super",
-"switch",
-"throw",
-"try",
-"typeof",
-"while",
-"with",
-"implements",
-"interface",
-"package",
-"private",
-"protected",
-"null",
-"undefined"
-];
-const LIGHT_RED="#ff998f";
-//const LIGHT_RED="#ffaa9f";
-const RED="#ff3333";
-
-//const JS_KEYWORD_COL = "#af5f00";
-//const JS_KEYWORD_COL = "#b7a000";
-const JS_KEYWORD_COL = "#b39301";
-//const JS_DEC_COL = "#06989a";
-const JS_DEC_COL = "#01acb3";
-const JS_COMMENT_COL = LIGHT_RED;
-//const JS_QUOTE_COL= "#f66";
-const JS_QUOTE_COL= LIGHT_RED;
-const JS_BOOL_COL = LIGHT_RED;
-const PAREN_COL = "#bba";
-//const JS_COMMENT_COL = "#ef2929";
-//const JS_QUOTE_COL="#c00";
-let KEYWORD_STR='';
-for (let c of KEYWORDS) KEYWORD_STR+="\\b"+c+"\\b"+"|";
-KEYWORD_STR=KEYWORD_STR.slice(0,KEYWORD_STR.length-1);
-
-const DECS = ["LOTW","function","this","var","let"];
-let DEC_STR='';
-for (let c of DECS) DEC_STR+="\\b"+c+"\\b"+"|";
-DEC_STR=DEC_STR.slice(0,DEC_STR.length-1);
-
-const BRACES = ["{","}","[","]"];
-let BRACES_STR = "{|}|\\[|\\]";
-
-const BOOLS=["true","false"];
-const BOOL_STR="\\btrue\\b|\\bfalse\\b";
-
-const C_COMMENT = "//";
-const SQUOTE = "'";
-const DQUOTE = '"';
-const C_OPEN_COMMENT_PAT = "/\\x2a";
-const C_CLOSE_COMMENT_PAT = "\\x2a/";
-const C_OPEN_COMMENT = "/\x2a";
-const C_CLOSE_COMMENT = "\x2a/";
-const BACKTICK = "\x60"; 
-//const JS_STR="("+BRACES_STR+"|"+PARENS_STR+"|"+BOOL_STR+"|"+KEYWORD_STR+"|"+DEC_STR+"|"+C_COMMENT+"|"+C_OPEN_COMMENT_PAT+"|"+C_CLOSE_COMMENT_PAT+"|"+BACKTICK+"|"+SQUOTE+"|"+DQUOTE+")";
-const JS_STR="("+BRACES_STR+"|"+BOOL_STR+"|"+KEYWORD_STR+"|"+DEC_STR+"|"+C_COMMENT+"|"+C_OPEN_COMMENT_PAT+"|"+C_CLOSE_COMMENT_PAT+"|"+BACKTICK+"|"+SQUOTE+"|"+DQUOTE+")";
-const ALPHA_JS_STR="("+BOOL_STR+"|"+KEYWORD_STR+"|"+DEC_STR+")";
-const ALPHA_JS_RE = new RegExp(ALPHA_JS_STR);
-
-//»
-const parse_js_syntax_line=(arr_or_ln, is_str)=>{//«
-	const mkobj=(pos, len, col, which)=>{
-		colobj[pos]=[len, col, "", which, pos];
-	};
-	let _state, _type;
-	let _statei, _stateln, _col;
-	let _end;
-	let colobj=[];
-	if(!arr_or_ln) return;
-	let ln;
-	let arr;
-//	let is_multi = arr_or_ln._multi;
-	if (is_str) {
-		ln = arr_or_ln;
-		arr = ln.split("");
-	}
-	else {
-		ln = arr_or_ln.join("");
-		arr = arr_or_ln;
-	}
-	if (!ln) {
-		return colobj;
-	}
-	let marr;
-	let type = null;
-	let from=0;
-	let to = ln.length-1;
-	let JS_RE  = new RegExp(JS_STR,"g");
-	let didnum = 0;
-	if (arr_or_ln._multi) {
-		_type = C_OPEN_COMMENT;
-		_col = JS_COMMENT_COL;
-	}
-	else {
-	while (marr = JS_RE.exec(ln)){
-		didnum++;
-		let tok = marr[1];
-		let i = marr.index;
-		if (!_state){//«
-			if (KEYWORDS.includes(tok)){
-				mkobj(i,tok.length, JS_KEYWORD_COL, "kw");
-				continue;
-			}
-			if (DECS.includes(tok)){
-				mkobj(i,tok.length, JS_DEC_COL, "dec");
-				continue;
-			}
-			if (BRACES.includes(tok)){
-				mkobj(i,1, "#06989a");
-				continue;
-			}
-			if (BOOLS.includes(tok)){
-				mkobj(i,tok.length, JS_BOOL_COL, "bool");
-				continue;
-			}
-			let c1 = arr[i]||" ";
-			let col;
-			if (tok==DQUOTE||tok==SQUOTE||tok==BACKTICK) {
-				if (check_odd_escapes(arr, i)) continue;
-				col=JS_QUOTE_COL;
-			}
-			else if (tok==C_COMMENT||tok==C_OPEN_COMMENT) col=JS_COMMENT_COL;
-			else col="";
-			if (tok==C_COMMENT){
-				mkobj(i, arr.length-i, col, "//");
-				break;
-			}
-//			_stateln = _ry;
-			_statei = i;
-			_col=col;
-			_state = true;
-			_type = tok;
-			type = tok;
-		}//»
-		else {//«
-			if (type==tok){
-				if (check_odd_escapes(arr, i)) continue;
-				mkobj(_statei, i-_statei+1, _col, tok);
-				_state = false;
-				_type=null;
-				_col=null;
-				type=null;
-			}
-			else if (tok==C_CLOSE_COMMENT&&_type==C_OPEN_COMMENT){
-				mkobj(_statei, i-_statei+2, _col,_type);
-//				if (_stateln==_ry) mkobj(_statei, i-_statei+2, _col,_type);
-//				else {
-//					mkobj(0, i+2, _col, _type);
-//					_end = i+2;
-//				}
-				_state=false;
-				_type=null;
-				_col=null;
-			}
-//«
-//			else if (tok==BACKTICK&&_type==BACKTICK){
-//				if (check_odd_escapes(arr, i)) continue;
-//				if (_stateln==_ry) mkobj(_statei, i-_statei+1, _col,_type);
-//				else mkobj(0, i+1, _col, _type);
-//				_state = false;
-//				_type=null;
-//				_col=null;
-//			}
-//»
-			else if (type==C_OPEN_COMMENT){
-//log("STATE OPEN");
-			}
-			else{
-//console.warn("SYNTAX WHAT?????????", tok, _type);
-didnum=0;
-			}
-		}//»
-	}
-	}
-
-	if (!didnum && (_type==C_OPEN_COMMENT||_type==BACKTICK))mkobj(0, arr.length, _col);
-	else if (_state && (type==SQUOTE||type==DQUOTE)){
-		mkobj(_statei, arr.length-_statei, _col, type);
-		_state = false;
-	}
-	else if (_state) mkobj(_statei, arr.length-_statei, _col, _type);
-	if (!(_type==C_OPEN_COMMENT||_type==BACKTICK)){
-		_type=null;
-		_state=null;
-	}
-	_statei=null;
-//log(colobj);
-	return colobj;
-}//»
-const js_syntax_screen=()=>{//«
-	let to = scroll_num+h-num_stat_lines;
-	let _ry;
-	for (let i=scroll_num; i < to; i++){
-		let ln = lines[i];
-		if (!ln || ln._fold) {
-			continue;
-		}
-		let col;
-		if (fold_mode) col = real_line_colors[lens[i]];
-		else col = real_line_colors[i];
-		if (col) {
-			line_colors[i] = col;
-			continue;
-		}
-		if (!ln.length) continue;
-		col = parse_js_syntax_line(ln);
-//log(col);
-		if (fold_mode) real_line_colors[lens[i]] = col;
-		else real_line_colors[i] = col;
-		line_colors[i] = col;
-	}
-}//»
-
-const del_syntax_multiline_comments=()=>{//«
-	real_line_colors=[];
-	for (let ln of lines) delete ln._multi;
-	render();
-}//»
-const syntax_multiline_comments=()=>{//«
-	let len = lines.length;
-	let open = false;
-	let type;
-	real_line_colors = [];
-	for (let i=0; i < len; i++){
-		let ln = lines[i];
-		if (ln._fold) continue;
-		let str = ln.join("");
-		if (open){
-			if (str.match(/\x2a\x2f/)) {
-				open = false;
-				ln._multi = true;
-			}
-			else ln._multi = true;
-		}
-		else {
-			if (str.match(/\x2f\x2a/)) {
-				ln._multi = true;
-				open = true;
-				type="c";
-			}
-			else ln._multi = false;
-		}
-	}
-	render();
-};//»
-
-//»
 //Edit«
 
 //Simple/Helpers«
@@ -5679,7 +5332,7 @@ const insert_comment=()=>{//«
 			x=0;
 			y--;
 			set_ry();
-			syntax_multiline_comments();
+//			syntax_multiline_comments();
 		}//»
 		mode=INSERT_MODE;
 		render({},39);
@@ -5757,7 +5410,7 @@ const del = () => {//«
 	if (mode===VIS_LINE_MODE) delete_first_space();
 	else {
 		del_ch();
-		do_syntax_timeout();
+//		do_syntax_timeout();
 		render();
 	}
 }//»
@@ -5770,36 +5423,6 @@ const open_all_sel_folds = (opts={})=>{//«
 	let y_is_bot = selbot === cy();
 
 	for (let i=seltop; i <= selbot; i++) {
-/*DNPLJGU«
-
-vim.js?v=2017610:6046 Uncaught (in promise) TypeError: 
-					Cannot read properties of undefined (reading '_fold')
-    at open_all_sel_folds (vim.js?v=2017610:6046:10)
-    at delete_lines (vim.js?v=2017610:6817:14)
-    at Object.do_justify [as j_C] (vim.js?v=2017610:6671:2)
-
-
- at open_all_sel_folds (vim.js?v=2837382:5996:10)
-    at delete_lines (vim.js?v=2837382:6760:14)
-    at do_justify (vim.js?v=2837382:6621:2)
-    at Object.j_CAS (vim.js?v=2837382:7601:1)
-
-    at open_all_sel_folds (vim.js?v=2017610:6046:10)
-    at delete_lines (vim.js?v=2017610:6817:14)
-    at delete_line (vim.js?v=2017610:6867:2)
-    at Object.handle_ch_del [as x] (vim.js?v=2017610:6948:3)
-    at handle_press (vim.js?v=2017610:7304:49)
-
-    at open_all_sel_folds (vim.js?v=2017610:6046:10)
-    at delete_lines (vim.js?v=2017610:6817:14)
-    at do_pretty (vim.js?v=2017610:6609:2)
-    at Object.try_dopretty [as p_A] (vim.js?v=2017610:1463:2)
-
-    at open_all_sel_folds (vim.js?v=2017610:6046:10)
-    at insert_line_comments (vim.js?v=2017610:6339:2)
-    at handle_visual_key (vim.js?v=2017610:7402:21)
-    at handle_press (vim.js?v=2017610:7302:3)
-»*/
 		let ln = lines[i];
 if (!ln){
 return THROW(`NO LINE: SELTOP(${seltop}) SELBOT(${selbot})`);
@@ -6719,8 +6342,6 @@ const delete_to_bottom=()=>{//«
 //	adjust_cursor();
 	mode = COMMAND_MODE;
 };//»
-/*
-*/
 const delete_word = (opts={})=>{//«
 
 	let wrd;
@@ -6762,27 +6383,17 @@ const handle_ch_del = ()=>{//«
 	let ln = curarr();
 	if (ln._fold) return;
 	if (!ln.length) {
-		if (cy()==0) return;
+//		if (cy()==0) return;
+		if (cy()==0 && lines.length == 1) return;
 		delete_line();
 		return;
 	}
 	del_ch();
 	render();
 };//»
-/*
-const do_del_enter = (opts={}) => {//«
-if (x == curarr().length && !at_file_end()){
-down();
-x=0;
-do_backspace(opts);
-return;
-}
-};//»
-*/
 const del_ch = (opts={}) =>{//«
 	let ln = curarr();//let ln = curln(true);
 	if (!curch()) {
-//if (opts.prependSpace) return;
 		if (!ln.length){
 			delete_line(cy(), opts);
 			return;
@@ -6824,16 +6435,6 @@ const print_chars = (s, opts={}) =>{//«
 	if (mode!==INSERT_MODE) x--;
 };//»
 
-const do_syntax_timeout=()=>{//«
-//return;
-	if (syntax_timeout) clearTimeout(syntax_timeout);
-	syntax_timeout=setTimeout(()=>{
-//cwarn("DO MULTILINE!");
-		syntax_multiline_comments();
-		syntax_timeout = null;
-	}, SYNTAX_TIMEOUT_MS);
-};//»
-
 const print_ch = (ch, opts={}) => {//«
 if (!ch){
 //UROPLKMHGBGT
@@ -6848,17 +6449,16 @@ return;
 		ln = curarr();
 	}
 
-//    let tm = time || (new Date).getTime();
-    let tm = time || act_iter++;
-    if (!noAct) {
-//log(x);
+//  let tm = time || (new Date).getTime();
+	let tm = time || act_iter++;
+	if (!noAct) {
 		actions.push(new Action(x, ry, ch, tm, {adv: true}));
 	}
 	ln.splice(x, 0, ch);
 	if (fromHandler){
 		x++;
 		render();
-		do_syntax_timeout();
+//		do_syntax_timeout();
 
 	}
 
@@ -6876,17 +6476,9 @@ const replace_char = (ch, opts={})=>{//«
 	let past_line_end = x === curlen();
 	let gotch;
 	if (x==0 && !curarr().length) return;
+	else if (!past_line_end) gotch = del_ch({time});
 
-//else {
-else if (!past_line_end){
-	gotch = del_ch({time});
-//log(`<${gotch}>`);
-}
-
-// WHAT DO I DO HERE ???
 // DSJRKFH
-//	let did_inc = false;
-///*
 	if (at_line_end) {
 		x++;
 	}
@@ -6897,7 +6489,7 @@ else if (!past_line_end){
 	if (opts.fromHandler) {
 		x++;
 		render();
-		do_syntax_timeout();
+//		do_syntax_timeout();
 	}
 };//»
 const replace_one_char = () => {//«
@@ -6908,15 +6500,11 @@ const replace_one_char = () => {//«
 		stat_cb=null;
 
 		if (c) {
-			if (c.length == 1) {
-				replace_char(c);
-			}
-else if (c==="\x20_") replace_char(" ");
-else if (c==="TAB_") replace_char("\t");
-else if (c==="ENTER_"){
-replace_char("\n");
-}
-//let arr = curarr();
+			if (c.length == 1) replace_char(c);
+			else if (c==="\x20_") replace_char(" ");
+			else if (c==="TAB_") replace_char("\t");
+			else if (c==="ENTER_") replace_char("\n");
+
 		}
 		render();
 	};
@@ -6939,7 +6527,7 @@ const tab = (opts={}) => {//«
 
 const do_enter = (opts={}) =>{//«
 	let {noAct, time, num, data}=opts;
-//    let tm = time || (new Date).getTime();
+//	let tm = time || (new Date).getTime();
     let tm = time || act_iter++;
 	let arr = curarr();//let arr = curln(true);
 	let start = arr.splice(0,x);
@@ -6948,9 +6536,9 @@ const do_enter = (opts={}) =>{//«
 	let linenum = curnum();
 	lines[linenum] = start;
 	lines.splice(curnum(1), 0, end);
-	if (SYNTAX) {
-		real_line_colors = [];
-	}
+//	if (SYNTAX) {
+//		real_line_colors = [];
+//	}
 	let _y = cy();
     if (!noAct) {
 		actions.push(new Action(x, ry, "\n", tm, {isBlockInsert: opts.isBlockInsert}));
@@ -6965,7 +6553,7 @@ const do_enter = (opts={}) =>{//«
 }//»
 const enter = (opts={})=>{//«
 	if (quit_on_enter){
-log("Got line", lines[0].join(""));
+//log("Got line", lines[0].join(""));
 quit();
 	}
 	else if (one_line_mode){
@@ -7005,12 +6593,10 @@ quit();
 		x = curlen();//x = curln().length;
 	}
 	do_enter(opts);
-//	if (did_toggle) toggle_cur_fold();
 	no_render=false;
 	set_line_lens();
 	render({},47);
 	dirty_flag = true;
-//	Term.is_dirty = true;
 }//»
 const newline = (which) =>{//«
 	if (one_line_mode){
@@ -7025,7 +6611,7 @@ const newline = (which) =>{//«
 		mode = INSERT_MODE;
 		enter({fromNewline: true});
 		y--;
-		set_ry();//THE CASE OF THE DEADLY ***NOT*** SETTING OF RY
+		set_ry();//If you change y, you MUST set_ry()
 	}
 	mode = INSERT_MODE;
 	render();
@@ -7034,8 +6620,8 @@ const nobreak_enter = (opts={}) => {opts.noBreak=true;enter(opts);};
 
 const do_backspace = (opts={})=>{//«
 	let {noAct, time, noRender, data} = opts;
-//    let tm = time || (new Date).getTime();
-    let tm = time || act_iter++;
+//	let tm = time || (new Date).getTime();
+	let tm = time || act_iter++;
 	let have_ch;
 	if (fold_mode){//«
 		let fold;
@@ -7094,7 +6680,7 @@ const backspace = () => {//«
 	if (is_normal_mode()) return try_empty_line_del();
 	if (mode!==INSERT_MODE) return;
 	do_backspace();
-	do_syntax_timeout();
+//	do_syntax_timeout();
 }//»
 
 //»
@@ -7151,7 +6737,7 @@ const handle_stat_input_keydown = (sym) => {//«
 		return;
 	}
 	num_completion_tabs = 0;
-	if (sym=="ENTER_") return handle_edit_input_enter();
+	if (sym=="ENTER_") return handle_stat_input_enter();
 	if (sym=="LEFT_"){
 		if (stat_x > 0) stat_x--;
 	}
@@ -7453,32 +7039,6 @@ l_A: init_line_wrap_mode,
 
 //KSJTUSHF
 x_CA: send_command_to_reload_win,
-/*
-w_CAS:()=>{//«
-//get_all_words();
-//cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
-},//»
-s_CAS:()=>{//«
-	let vimvars = globals.vim;
-	let val = get_edit_str();
-	val=`(function(){"use strict";${val}})()`;
-	let url = URL.createObjectURL(new Blob([val]));
-	let scr = document.createElement('script');
-	scr.onload=()=>{
-		if (vimvars.curDevScript) {
-			document.head.removeChild(vimvars.curDevScript);
-		}
-		vimvars.curDevScript = scr;
-con.log("LOADOKAY!");
-	};
-	scr.onerror=(e)=>{
-log("GOT SYNTAX ERROR???");
-cerr(e);
-	};
-	scr.src = url;
-	document.head.appendChild(scr);
-},//»
-*/
 //Init/Toggle modes
 p_C: init_complete_mode,
 v_C: init_visual_block_mode,
@@ -7490,10 +7050,6 @@ do_justify();
 },
 //p_CAS: Term.togglePaste,
 m_CAS: toggle_regex_escape_mode,
-
-//Display
-//o_CAS: reset_display,
-q_C: syntax_multiline_comments,
 
 //Scroll
 // _C: scroll_screen_to_cursor,
@@ -7563,6 +7119,30 @@ else{
 stat_warn("No matches!");
 }
 }//»
+w_CAS:()=>{//«
+//get_all_words();
+//cwarn(`GOT: ${ALLWORDS.length} WORDS (MIN_WORD_LEN == ${MIN_WORD_LEN})`);
+},//»
+s_CAS:()=>{//«
+	let vimvars = globals.vim;
+	let val = get_edit_str();
+	val=`(function(){"use strict";${val}})()`;
+	let url = URL.createObjectURL(new Blob([val]));
+	let scr = document.createElement('script');
+	scr.onload=()=>{
+		if (vimvars.curDevScript) {
+			document.head.removeChild(vimvars.curDevScript);
+		}
+		vimvars.curDevScript = scr;
+con.log("LOADOKAY!");
+	};
+	scr.onerror=(e)=>{
+log("GOT SYNTAX ERROR???");
+cerr(e);
+	};
+	scr.src = url;
+	document.head.appendChild(scr);
+},//»
 */
 };//»
 
@@ -7608,29 +7188,14 @@ this.onkeyup=(e, sym)=>{//«
 	}
 };//»
 
-/*
-this.onkeypress=(e, sym, code)=>{//«
-keydown_iter++;
-	let mode = mode;
-		if (code < 32 || code > 126) return;
-		if (mode===LINE_WRAP_MODE){
-			handle_linewrap_key(sym);
-			return;
-		}
-		return handle_press(sym);
-};//»
-*/
-
 let keydown_iter=-1;
 let unused_keydowns = [];
 this.onkeydown=async(e, sym, code)=>{//«
-//if (this.autoMode) return;
 if (killed) return;
 keydown_iter++;
 
 	if (sym.match(/^_[CAS]+$/)) return;
 	num_escapes=0;
-//	let mode = mode;
 	if (e && PREV_DEF_SYMS.includes(sym)) e.preventDefault();
 	if (sym.match(/^[\x20-\x7f]_S?$/)) {
 		if (mode===LINE_WRAP_MODE){
@@ -7890,11 +7455,11 @@ this.isEditor = true;
 if (patharg) {
 	let arr = patharg.split("/");
 	edit_fname = arr.pop();
-	let ext = edit_fname.split(".").pop();
-	if (ext) {
-		if (ext.match(/^js(on)?$/i)) SYNTAX = JS_SYNTAX;
-		else SYNTAX=NO_SYNTAX;
-	}
+//	let ext = edit_fname.split(".").pop();
+//	if (ext) {
+//		if (ext.match(/^js(on)?$/i)) SYNTAX = JS_SYNTAX;
+//		else SYNTAX=NO_SYNTAX;
+//	}
 }
 
 lines=[];
@@ -7917,9 +7482,7 @@ cwarn("Using ondevreload");
 }
 this.fname = edit_fname;
 
-syntax_multiline_comments();
-//cwarn(lines.length);
-//log(JSON.stringify(lines));
+//syntax_multiline_comments();
 
 if (opts.insert) set_edit_mode("i");
 else if (!edit_fname) {
@@ -7963,6 +7526,303 @@ return;
 //}; End vim mod«
 }
 //»
+
+/*
+//Syntax«
+
+let SYNTAX_TIMEOUT_MS = 1500;
+let syntax_timeout;
+
+
+//Var«
+//let real_line_colors=[];
+const NO_SYNTAX=0;
+const JS_SYNTAX=1;
+
+let SYNTAX=NO_SYNTAX;
+//let SYNTAX=JS_SYNTAX;
+const KEYWORDS=[
+"async",
+"await",
+"break",
+"case",
+"catch",
+"class",
+"const",
+"continue",
+"constructor",
+"debugger",
+"default",
+"delete",
+"do",
+"else",
+"export",
+"extends",
+"finally",
+"for",
+"if",
+"import",
+"in",
+"instanceof",
+"new",
+"return",
+"super",
+"switch",
+"throw",
+"try",
+"typeof",
+"while",
+"with",
+"implements",
+"interface",
+"package",
+"private",
+"protected",
+"null",
+"undefined"
+];
+const LIGHT_RED="#ff998f";
+//const LIGHT_RED="#ffaa9f";
+const RED="#ff3333";
+
+//const JS_KEYWORD_COL = "#af5f00";
+//const JS_KEYWORD_COL = "#b7a000";
+const JS_KEYWORD_COL = "#b39301";
+//const JS_DEC_COL = "#06989a";
+const JS_DEC_COL = "#01acb3";
+const JS_COMMENT_COL = LIGHT_RED;
+//const JS_QUOTE_COL= "#f66";
+const JS_QUOTE_COL= LIGHT_RED;
+const JS_BOOL_COL = LIGHT_RED;
+const PAREN_COL = "#bba";
+//const JS_COMMENT_COL = "#ef2929";
+//const JS_QUOTE_COL="#c00";
+let KEYWORD_STR='';
+for (let c of KEYWORDS) KEYWORD_STR+="\\b"+c+"\\b"+"|";
+KEYWORD_STR=KEYWORD_STR.slice(0,KEYWORD_STR.length-1);
+
+const DECS = ["LOTW","function","this","var","let"];
+let DEC_STR='';
+for (let c of DECS) DEC_STR+="\\b"+c+"\\b"+"|";
+DEC_STR=DEC_STR.slice(0,DEC_STR.length-1);
+
+const BRACES = ["{","}","[","]"];
+let BRACES_STR = "{|}|\\[|\\]";
+
+const BOOLS=["true","false"];
+const BOOL_STR="\\btrue\\b|\\bfalse\\b";
+
+const C_COMMENT = "//";
+const SQUOTE = "'";
+const DQUOTE = '"';
+const C_OPEN_COMMENT_PAT = "/\\x2a";
+const C_CLOSE_COMMENT_PAT = "\\x2a/";
+const C_OPEN_COMMENT = "/\x2a";
+const C_CLOSE_COMMENT = "\x2a/";
+const BACKTICK = "\x60"; 
+//const JS_STR="("+BRACES_STR+"|"+PARENS_STR+"|"+BOOL_STR+"|"+KEYWORD_STR+"|"+DEC_STR+"|"+C_COMMENT+"|"+C_OPEN_COMMENT_PAT+"|"+C_CLOSE_COMMENT_PAT+"|"+BACKTICK+"|"+SQUOTE+"|"+DQUOTE+")";
+const JS_STR="("+BRACES_STR+"|"+BOOL_STR+"|"+KEYWORD_STR+"|"+DEC_STR+"|"+C_COMMENT+"|"+C_OPEN_COMMENT_PAT+"|"+C_CLOSE_COMMENT_PAT+"|"+BACKTICK+"|"+SQUOTE+"|"+DQUOTE+")";
+const ALPHA_JS_STR="("+BOOL_STR+"|"+KEYWORD_STR+"|"+DEC_STR+")";
+const ALPHA_JS_RE = new RegExp(ALPHA_JS_STR);
+
+//»
+const parse_js_syntax_line=(arr_or_ln, is_str)=>{//«
+	const mkobj=(pos, len, col, which)=>{
+		colobj[pos]=[len, col, "", which, pos];
+	};
+	let _state, _type;
+	let _statei, _stateln, _col;
+	let _end;
+	let colobj=[];
+	if(!arr_or_ln) return;
+	let ln;
+	let arr;
+//	let is_multi = arr_or_ln._multi;
+	if (is_str) {
+		ln = arr_or_ln;
+		arr = ln.split("");
+	}
+	else {
+		ln = arr_or_ln.join("");
+		arr = arr_or_ln;
+	}
+	if (!ln) {
+		return colobj;
+	}
+	let marr;
+	let type = null;
+	let from=0;
+	let to = ln.length-1;
+	let JS_RE  = new RegExp(JS_STR,"g");
+	let didnum = 0;
+	if (arr_or_ln._multi) {
+		_type = C_OPEN_COMMENT;
+		_col = JS_COMMENT_COL;
+	}
+	else {
+	while (marr = JS_RE.exec(ln)){
+		didnum++;
+		let tok = marr[1];
+		let i = marr.index;
+		if (!_state){//«
+			if (KEYWORDS.includes(tok)){
+				mkobj(i,tok.length, JS_KEYWORD_COL, "kw");
+				continue;
+			}
+			if (DECS.includes(tok)){
+				mkobj(i,tok.length, JS_DEC_COL, "dec");
+				continue;
+			}
+			if (BRACES.includes(tok)){
+				mkobj(i,1, "#06989a");
+				continue;
+			}
+			if (BOOLS.includes(tok)){
+				mkobj(i,tok.length, JS_BOOL_COL, "bool");
+				continue;
+			}
+			let c1 = arr[i]||" ";
+			let col;
+			if (tok==DQUOTE||tok==SQUOTE||tok==BACKTICK) {
+				if (check_odd_escapes(arr, i)) continue;
+				col=JS_QUOTE_COL;
+			}
+			else if (tok==C_COMMENT||tok==C_OPEN_COMMENT) col=JS_COMMENT_COL;
+			else col="";
+			if (tok==C_COMMENT){
+				mkobj(i, arr.length-i, col, "//");
+				break;
+			}
+//			_stateln = _ry;
+			_statei = i;
+			_col=col;
+			_state = true;
+			_type = tok;
+			type = tok;
+		}//»
+		else {//«
+			if (type==tok){
+				if (check_odd_escapes(arr, i)) continue;
+				mkobj(_statei, i-_statei+1, _col, tok);
+				_state = false;
+				_type=null;
+				_col=null;
+				type=null;
+			}
+			else if (tok==C_CLOSE_COMMENT&&_type==C_OPEN_COMMENT){
+				mkobj(_statei, i-_statei+2, _col,_type);
+//				if (_stateln==_ry) mkobj(_statei, i-_statei+2, _col,_type);
+//				else {
+//					mkobj(0, i+2, _col, _type);
+//					_end = i+2;
+//				}
+				_state=false;
+				_type=null;
+				_col=null;
+			}
+//«
+//			else if (tok==BACKTICK&&_type==BACKTICK){
+//				if (check_odd_escapes(arr, i)) continue;
+//				if (_stateln==_ry) mkobj(_statei, i-_statei+1, _col,_type);
+//				else mkobj(0, i+1, _col, _type);
+//				_state = false;
+//				_type=null;
+//				_col=null;
+//			}
+//»
+			else if (type==C_OPEN_COMMENT){
+//log("STATE OPEN");
+			}
+			else{
+//console.warn("SYNTAX WHAT?????????", tok, _type);
+didnum=0;
+			}
+		}//»
+	}
+	}
+
+	if (!didnum && (_type==C_OPEN_COMMENT||_type==BACKTICK))mkobj(0, arr.length, _col);
+	else if (_state && (type==SQUOTE||type==DQUOTE)){
+		mkobj(_statei, arr.length-_statei, _col, type);
+		_state = false;
+	}
+	else if (_state) mkobj(_statei, arr.length-_statei, _col, _type);
+	if (!(_type==C_OPEN_COMMENT||_type==BACKTICK)){
+		_type=null;
+		_state=null;
+	}
+	_statei=null;
+//log(colobj);
+	return colobj;
+}//»
+const js_syntax_screen=()=>{//«
+	let to = scroll_num+h-num_stat_lines;
+	let _ry;
+	for (let i=scroll_num; i < to; i++){
+		let ln = lines[i];
+		if (!ln || ln._fold) {
+			continue;
+		}
+		let col;
+		if (fold_mode) col = real_line_colors[lens[i]];
+		else col = real_line_colors[i];
+		if (col) {
+			line_colors[i] = col;
+			continue;
+		}
+		if (!ln.length) continue;
+		col = parse_js_syntax_line(ln);
+//log(col);
+		if (fold_mode) real_line_colors[lens[i]] = col;
+		else real_line_colors[i] = col;
+		line_colors[i] = col;
+	}
+}//»
+
+const del_syntax_multiline_comments=()=>{//«
+	real_line_colors=[];
+	for (let ln of lines) delete ln._multi;
+	render();
+}//»
+const syntax_multiline_comments=()=>{//«
+	let len = lines.length;
+	let open = false;
+	let type;
+	real_line_colors = [];
+	for (let i=0; i < len; i++){
+		let ln = lines[i];
+		if (ln._fold) continue;
+		let str = ln.join("");
+		if (open){
+			if (str.match(/\x2a\x2f/)) {
+				open = false;
+				ln._multi = true;
+			}
+			else ln._multi = true;
+		}
+		else {
+			if (str.match(/\x2f\x2a/)) {
+				ln._multi = true;
+				open = true;
+				type="c";
+			}
+			else ln._multi = false;
+		}
+	}
+	render();
+};//»
+
+const do_syntax_timeout=()=>{//«
+//return;
+	if (syntax_timeout) clearTimeout(syntax_timeout);
+	syntax_timeout=setTimeout(()=>{
+//cwarn("DO MULTILINE!");
+		syntax_multiline_comments();
+		syntax_timeout = null;
+	}, SYNTAX_TIMEOUT_MS);
+};//»
+//»
+*/
 
 //«OLD
 /*

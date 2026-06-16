@@ -237,10 +237,12 @@ static getOpts(){//«
 			d: 3, // ms delay between key events
 			v: 1, // verbosely dump the bad undo/redo strings
 			g: 1, // force getting of the vim module
+			b: 3, // The base file to apply the commands to. (Otherwise a new/empty file is used)
 		},
 		l: {
 			once: 1, // No loops, just run commands and validate the undo/redo
-			delay: 3 // Same as '-d'
+			delay: 3, // == -d
+			base: 3 //  == -b
 		}
 	}
 }//»
@@ -294,6 +296,7 @@ try{
 	await editor.undoAll(this.#delay);
 	esc_many();
 	this.#fatalErr = editor.fatalErr;
+//log(`Undo results: ${editor.curStr.length} chars  (really was: ${editor.initStr.length} chars)`);
 	if (editor.curStr !== editor.initStr){
 if (this.opts.v) {
 cerr("BADUNDO");
@@ -313,6 +316,7 @@ try{
 	await editor.redoAll(this.#delay);
 	esc_many();
 	this.#fatalErr = editor.fatalErr;
+//log(`Redo results: ${editor.curStr.length} chars  (really was: ${final_str.length} chars)`);
 	if (editor.curStr !== final_str){
 if (this.opts.v) {
 cerr("BADREDO");
@@ -552,7 +556,11 @@ const send_info = () => {
 };
 const {shell} = this;
 //if (!if_final) this.out(" ");
-if (!if_final) this.out(" ", {isBreak: true});
+if (!if_final) {
+	this.out(" ", {isBreak: true});
+	this.term.refresh();
+	await util.sleep(0);
+}
 
 const start_time = Date.now();
 const AWAIT_MS = 1000;
@@ -709,7 +717,6 @@ if (opts.n){
 }
 else this.#doNum = DEF_ITERS;
 
-
 let keys_file = args.shift();//«
 
 if (keys_file){
@@ -736,8 +743,8 @@ this.#keysFile = keys_file;
 }//»
 
 let val = "";
-if (args.length) {//«
-	let base_file = args.shift();
+if (opts.base || opts.b) {//«
+	let base_file = opts.base || opts.b;
 	val = await base_file.toText(env.cwd);
 	if (val){
 		this.inf(`Using base file: '${base_file}' (${val.length} chars)`);
@@ -767,6 +774,9 @@ if (this.#keysFile) {
 		else this.ok();
 		return;
 	}
+
+	this.term.refresh();
+	await util.sleep(0);
 
 	let rv;
 	if (coms.length > 100){
@@ -958,7 +968,7 @@ screen never shows.
 			let path = arr.join("/");
 			parnode = await fsapi.pathToNode(path);
 			if (!parnode) return this.no(`${path}: no such directory`);
-			if (!parnode.okWrite) return this.no(`${fullpath}: permission denied`);
+			if (!parnode.perm) return this.no(`${fullpath}: permission denied`);
 			val = "";
 			typ = parnode.root.type;
 		}//»
@@ -1554,7 +1564,7 @@ async run(){
 			err(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
 			continue; 
 		}
-		if (!parnode.okWrite) {
+		if (!parnode.perm) {
  			err(`${path}: Permission denied`);
 			continue;
 		}
@@ -1646,7 +1656,7 @@ async run(){
 			continue; 
 		}
 //		if (!await fsapi.checkDirPerm(parnode)) {
-		if (!parnode.okWrite) {
+		if (!parnode.perm) {
 //		if (parnode.type === FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 			err(`${fullpath}: permission denied`);
 			continue;
@@ -1758,7 +1768,7 @@ async run(){
 	}
 
 //	if (!await fsapi.checkDirPerm(target_node.par)) {
-	if (!target_node.par.okWrite) {
+	if (!target_node.par.perm) {
 		return err(`${target_node.par.fullpath}: permission denied`);
 	}
 
@@ -1779,7 +1789,7 @@ async run(){
 		return err(`${fullpath}: the parent directory is not of type '${FS_TYPE}'`);
 	}
 //	if (!await fsapi.checkDirPerm(parnode)) {
-	if (!parnode.okWrite) {
+	if (!parnode.perm) {
 		return err(`${path}: permission denied`);
 	}
 	let newnode = await fsapi.makeHardLink(parnode, fname, blobid);
@@ -1826,7 +1836,7 @@ async run(){
 		return err(`${fullpath}: the parent directory is not of type '${FS_TYPE}'`);
 	}
 //	if (!await fsapi.checkDirPerm(parnode)) {
-	if (!parnode.okWrite) {
+	if (!parnode.perm) {
 		return err(`${path}: permission denied`);
 	}
 	let newnode = await fsapi.makeLink(parnode, fname, target, normPath(target, this.env.cwd.cwd));

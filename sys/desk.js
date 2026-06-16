@@ -2948,7 +2948,7 @@ addDOMListeners(){//«
 				let thispath = this.fullpath;
 				if (CDICN.path === thispath) return nogo();
 //				if (!await fsapi.checkDirPerm(thispath)||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
-				if (!this.app.node.okWrite||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
+				if (!this.app.node.perm||(newPathIsBad(CDICN.fullpath, `${thispath}/${CDICN.node.name}`))) return nogo();
 				didleave = false;
 				if (!CDICN) return;
 				if (!didleave) on();
@@ -4359,11 +4359,14 @@ const reload_icons = async(is_refresh) => {//«
 cerr("Nothing returned from pathToNode:\x20"+fullpath);
 		return;
 	}
-	if (!ret.done) await fsapi.popDir(ret);
-	let kids = ret.kids;
-	let keys = getKeys(kids);
-	let kid;
-	let arr = [];
+	reload_desk_icons(await ret.list);
+//	if (!ret.done) await fsapi.popDir(ret);
+//	let kids = ret.kids;
+//	let kids = await ret.kids;
+//	let keys = getKeys(kids);
+//	let kid;
+//	let arr = [];
+/*
 	for (let i = 0; i < keys.length; i++) {
 		let name = keys[i];
 		if (name == "." || name == "..") continue;
@@ -4371,8 +4374,11 @@ cerr("Nothing returned from pathToNode:\x20"+fullpath);
 		if (kid.perm===false) continue;
 		arr.push(kid);
 	}
-	reload_desk_icons(arr);
-};//»
+*/
+//log(arr);
+//	reload_desk_icons(arr);
+}
+;//»
 const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {//«
 
 	let icn = iconarg ||{appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
@@ -4690,7 +4696,7 @@ wrapper.onmouseover = async e => {//«
 		node = ref;
 	}
 //	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
-	if (CDICN.noMove || typ!==FS_TYPE || !node.okWrite || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
+	if (CDICN.noMove || typ!==FS_TYPE || !node.perm || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
 		not_allowed = true;
 	}
 	didleave = false;
@@ -4920,7 +4926,8 @@ setApp(){//«
 			ext_text = ext;
 		}
 	}
-	if (node.kids) app=FOLDER_APP;
+//	if (node.kids) app=FOLDER_APP;
+	if (node.haveKids) app=FOLDER_APP;
 	else if (node.appicon){
 		try{
 			app=JSON.parse(node.appicon).app;
@@ -5963,7 +5970,7 @@ the prevPaths array still holds good.*/
 
 	if (check_special_ext(node, useApp)) return;
 	
-	if (typ==FS_TYPE&&!node.par.okWrite) return noopen("permission denied");
+	if (typ==FS_TYPE&&!node.par.perm) return noopen("permission denied");
 	let ret = await node.bytes;
 	if (!ret) return noopen();
 	icn.node = node;
@@ -8433,7 +8440,6 @@ const dokeyup = function(e) {//«
 		}
 	},250);
 	body.removeChild(gbid("error_message"));
-
 //	globals.nodejs_mode = (await fetch('/_env?key=MAYBENODEJS')).ok;
 
 })();

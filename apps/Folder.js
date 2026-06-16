@@ -201,10 +201,10 @@ cwarn("Cannot go forward with goto_path ===", goto_path);
 const load_dir=()=>{//«
 
 let typ = dir.type;
-kids = dir.kids;
+kids = dir.kidsCopy;
 //log(dir);
 let keys = Object.keys(kids);
-
+/*
 let ind = keys.indexOf(".");
 if (ind < 0){
 cerr(`The "." entry was not found in the dir kids (${dir.fullpath}!`);
@@ -217,7 +217,7 @@ cerr(`The ".," entry was not found in the dir kids (${dir.fullpath}!`);
 log(dir);
 }
 else keys.splice(ind, 1);
-
+*/
 
 if (picker_mode){
 	let dirs = [];
@@ -385,7 +385,7 @@ const reload = async(newpath)=>{//«
 	Main.scrollTop=0;
 	icondv.innerHTML="";
 	await init(true);
-	_stat_num(`${Object.keys(dir.kids).length-2} entries`);
+	_stat_num(`${Object.keys(kids).length} entries`);
 	if (Win.cursor) {
 		delete Main.lasticon;
 		Win.cursor.set();
@@ -442,7 +442,7 @@ cwarn("No path given (Win._fullpath)");
 	else load_dir();
 	this.node = dir;
 	if (dir.type!==FS_TYPE) {
-		num_entries = Object.keys(dir.kids).length-2;
+		num_entries = Object.keys(kids).length-2;
 		stat_num();
 	}
 	stat_mess();
@@ -524,7 +524,10 @@ this.onappinit=(arg, prevpaths)=>{//«
 	if (!path) cerr("No path in onappinit!");
 	init();
 };//»
-this.update=()=>{_stat_num(`${Object.keys(dir.kids).length-2} entries`);};
+this.update=()=>{
+	kids = dir.kidsCopy;
+	_stat_num(`${Object.keys(kids).length} entries`);
+};
 this.add_icon=(icn)=>{Main.scrollTop=0;};
 this.stat=stat_cur;
 

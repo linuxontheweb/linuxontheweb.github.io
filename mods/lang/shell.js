@@ -917,7 +917,7 @@ if (op==="-w"){//«
 	if (node.isDir) usenode = node;
 	else usenode = node.par;
 //	return maybe_neg(await fsapi.checkDirPerm(usenode));
-	return maybe_neg(usenode.okWrite);
+	return maybe_neg(usenode.perm);
 }//»
 if (op==="-s"){//«
 	if (!node.isFile) return maybe_neg(true);
@@ -1506,7 +1506,7 @@ let typ = parnode.type;
 if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||USERS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
 	return `${fname}: invalid or unsupported path`;
 }
-if (!parnode.okWrite) {
+if (!parnode.perm) {
 	return `${fname}: Permission denied`;
 }
 if (node){
@@ -2897,10 +2897,15 @@ async run(){//«
 			this.out(`${node.name} ${sz}`);
 			return;
 		}
-		if (force || !node.done) await fsapi.popDir(node);
+//		if (force || !node.done) await fsapi.popDir(node);
+		let list = await node.list;
+//cwarn("LIST");
+//log(list);
 		dir_was_last = true;
-		let kids = node.kids;
-		let arr = Object.keys(kids);//let arr = kids._keys;
+//		let kids = await node.kids;
+
+//		let kids = node.kids;
+//		let arr = Object.keys(kids);//let arr = kids._keys;
 		let names=[];
 		let lens = [];
 		let types = [];
@@ -2909,6 +2914,8 @@ async run(){//«
 		path = path.replace(/\/+/g, "/")
 		if (nargs > 1 || recur) this.out(`\n${path}:`);
 		let s = "";
+
+/*
 		let dir_arr = [];
 		for (let nm of arr){
 			if (!all) {
@@ -2917,33 +2924,59 @@ async run(){//«
 			}
 			dir_arr.push(nm);
 		}
+*/
+		let dir_arr = [];
+		for (let n of list){
+			let nm = n.name;
+			if (!all) {
+//				if (nm=="."||nm=="..") continue;
+				if (nm.match(/^\./)) continue;
+			}
+			dir_arr.push(nm);
+		}
+
 		if (recur){
-			for (let nm of dir_arr){
-				let n = kids[nm];
+			for (let n of list){
+//				let n = kids[nm];
+//let n = node.getKid(n 
+				let nm = n.name;
 				if (nm=="."||nm=="..") continue;
 				if (n.appName === FOLDER_APP) recur_dirs.push(n);
 			}
 		}
 		dir_arr = dir_arr.sort();
+
 		if (is_term) {//«
 			for (let nm of dir_arr){
-				let n = kids[nm];
+//			for (let n of list){
+//				let n = kids[nm];
+//				let nm = n.name;
 				if (nm.match(/\x20/)){
 					nm=`'${nm}'`;
 				}
-				if (n.appName===FOLDER_APP) {
+//				if (n.appName===FOLDER_APP) {
+				let n = node.getKid(nm);
+				if (n.isDir === true) {
 //					types.push(dirType);
 					types.push(DIR_TYPE);
 				}
-				else if (n.appName==="Link") {
+//				else if (n.appName==="Link") {
+				else if (n.isLink === true) {
 //					if (!await n.ref) types.push(badLinkType);
 					if (!await n.ref) types.push(BAD_LINK_TYPE);
 //					else types.push(linkType);
 					else types.push(LINK_TYPE);
 				}
 //				else if (n.blobId === idbDataType) types.push(idbDataType);
-				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
+//				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
+				else if (n.isData === true) types.push(IDB_DATA_TYPE);
 				else types.push(null);
+			}
+			if (all) {
+				dir_arr.unshift("..");
+				dir_arr.unshift(".");
+				types.unshift(DIR_TYPE);
+				types.unshift(DIR_TYPE);
 			}
 			let name_lens = [];
 			let colors = [];
@@ -2957,6 +2990,10 @@ async run(){//«
 			}
 		}//»
 		else {
+			if (all) {
+				dir_arr.unshift("..");
+				dir_arr.unshift(".");
+			}
 			this.out(dir_arr.join("\n"));
 		}
 		if (recur) {
