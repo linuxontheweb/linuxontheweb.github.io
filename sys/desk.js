@@ -1696,7 +1696,6 @@ const open_home_folder=()=>{open_file_by_path(globals.user.home_path);};
 const open_terminal = (if_dev) => {
 	open_app(TERMINAL_APP, {force: true});
 };
-const open_help=()=>{open_app("Help");}
 const make_popup_link = href =>{//«
 	let sp = make("span");
 	let a = make('a');
@@ -1734,8 +1733,6 @@ const DESK_CONTEXT_MENU=[
 	},
 	"Explorer::Alt+e",open_home_folder,
 	"Terminal::Alt+t", open_terminal,
-//	"Help::Alt+h", open_help,
-	"Help", open_help,
 	"Links",[
 		"Github\xa0Repo",()=>{
 			let sp = make_popup_link("https://github.com/linuxontheweb/linuxontheweb.github.io");
