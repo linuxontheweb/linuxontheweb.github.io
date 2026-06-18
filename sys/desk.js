@@ -8291,7 +8291,7 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 		case "d_A": return (e.preventDefault(), minimize_all_windows());
 		case "t_A": return open_terminal();
 		case "e_A": return (e.preventDefault(), open_home_folder());
-		case "0_A": return open_app("WorkMan");
+		case "0_A": return open_app("util.WorkMan");
 		case "l_CAS": return console.clear();
 //		case "b_A": return toggle_taskbar();
 		case "b_A": return taskbar.toggle();

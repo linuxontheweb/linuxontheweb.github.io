@@ -1,4 +1,4 @@
-(()=>{"use strict";const APPNAME="WorkMan";
+(()=>{"use strict";const APPNAME="util.WorkMan";
 
 /*Here lies a small little "window manager," invokable via "Ctrl+Alt+0",«
 which will allow us to make quick/dirty rearrangements to the windows

@@ -74,9 +74,8 @@ if (qObj.branch && !(/^[a-zA-Z]\w*$/.test(qObj.branch))){
 const FS_PREF = qObj.branch || DEF_BRANCH_NAME;
 //const FS_PREF=DEF_BRANCH_NAME;
 const FS_TYPE= "fs";
-const MOUNT_TYPE= "mnt";
 const SHM_TYPE= "shm";
-const USERS_TYPE = "users";
+//const USERS_TYPE = "users";
 //Node types
 const DIR_TYPE="d",LINK_TYPE="l",BAD_LINK_TYPE="b",IDB_DATA_TYPE="i";
 
@@ -126,7 +125,7 @@ const SHELL_ERROR_CODES={
 const APPLICATIONS_MENU = [//«
 	"Text\xa0Editor","TextEdit",
 	"Unicode\xa0Symbols", "util.Unicoder",
-	"Your\xa0App\xa0Here", "YourApp",
+	"Your\xa0App\xa0Here", "dev.YourApp",
 	"Any\xa0Other", 0,
 	"Apps\xa0Can", 0,
 	"Go\xa0Here", 0,
@@ -139,7 +138,7 @@ const IMAGE_EXTENSIONS=["jpg","gif","png","webp"];
 
 const TERMINAL_APP = "Terminal";
 const IMAGE_APP = "util.ImageView";
-const MEDIA_APP = "MediaPlayer";
+const MEDIA_APP = "util.MediaPlayer";
 const MEDIA_EDIT_APP = "media.VideoCutter";
 //We are using "MEDIA" to refer either to individual video-based apps or to 
 //the array of video- and image-based apps.
@@ -500,9 +499,8 @@ fs: {
 	FS_PREF,
 	FS_TYPE,
 	FS_DB_NAME,
-	MOUNT_TYPE,
 	SHM_TYPE,
-	USERS_TYPE,
+//	USERS_TYPE,
 
 	DIR_TYPE,
 	LINK_TYPE,

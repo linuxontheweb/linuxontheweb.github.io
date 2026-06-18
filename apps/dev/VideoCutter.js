@@ -1,4 +1,4 @@
-(()=>{"use strict";const APPNAME="media.VideoCutter";
+(()=>{"use strict";const APPNAME="dev.VideoCutter";
 
 /*9/16/25: How about a "redraw ruler" command for when things seem to get stuck?«
 I am current editing a ~22 min long video, and there are times where not all the

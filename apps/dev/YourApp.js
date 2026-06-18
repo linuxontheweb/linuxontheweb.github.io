@@ -1,4 +1,4 @@
-(()=>{"use strict";const APPNAME="YourApp";
+(()=>{"use strict";const APPNAME="dev.YourApp";
 LOTW.apps[APPNAME] = class {
 	constructor(Win){
 		this.Win = Win;

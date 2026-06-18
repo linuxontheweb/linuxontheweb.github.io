@@ -1,4 +1,4 @@
-(()=>{"use strict";const APPNAME="MediaPlayer";
+(()=>{"use strict";const APPNAME="util.MediaPlayer";
 
 /*Just using this as a looper, e.g. to take a nice White/Brown noise media file and
 reset the currentTime to zero when the ontimeupdate event shows it to be within 

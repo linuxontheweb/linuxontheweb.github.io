@@ -117,7 +117,6 @@ if (!(rv&&rv.node)){
 return;
 }
 »
-cp from MOUNT_TYPE (@JPDKAJD)
 cp from FS_TYPE -> copy_node (@EYTKFHSC)
 
 writeFile (calls saveFsByPath)
@@ -272,7 +271,6 @@ const {
 	FS_DB_NAME,
 	FS_PREF,
 	FS_TYPE,
-	MOUNT_TYPE,
 	SHM_TYPE,
 	USERS_TYPE,
 	USERNAME,
@@ -292,7 +290,6 @@ const {
 	FS_PREF,
 	FS_TYPE,
 	FS_DB_NAME,
-	MOUNT_TYPE,
 	SHM_TYPE,
 //USERS_TYPE,
 	DIR_TYPE,
@@ -991,7 +988,7 @@ return;
 }//»
 writeLocked(){return LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];}
 okGet(){//«
-	if (this.type==MOUNT_TYPE||this.type==SHM_TYPE) return true;
+	if (this.type==SHM_TYPE) return true;
 	let bid = this.blobId;
 	if (!bid || bid < FIRST_BLOB_ID) {
 		return;
@@ -1640,16 +1637,11 @@ for (let arg of args){//«
 	}
 	let srctype = srcret.type;
 	let isfolder = srcret.appName === FOLDER_APP;
-	if (srcret.treeroot || (srcret.root == srcret && srcret.type!==MOUNT_TYPE)) {
+	if (srcret.treeroot || srcret.root == srcret) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `skipping top level directory: ${path}`});
 	}
-	else if (srctype == MOUNT_TYPE && !if_cp) {
-		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${path}: cannot move from the mounted directory`});
-	}
-//	else if (!(srctype == FS_TYPE || srctype == MOUNT_TYPE)) {
-	else if (!(srctype == FS_TYPE || srctype == MOUNT_TYPE || srctype == SHM_TYPE)) {
+	else if (!(srctype == FS_TYPE || srctype == SHM_TYPE)) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${path}: cannot ${verb} from directory type: ${srctype}`});
 	}
@@ -1779,11 +1771,6 @@ for (let arr of mvarr) {//«
 			continue;
 		}
 		let newpath = `${savedir.fullpath}/${nm}`;
-//if (type == MOUNT_TYPE){
-//	gotfail=true;
-//	werr(`So you wanna copy the folder: '${nm}' from the server???`);
-//	continue;
-//}
 		if (!await mkDir(newpath, null, {root: is_root})){
 			gotfail=true;
 			werr(`${newpath}: there was a problem creating the folder`);
@@ -1810,36 +1797,7 @@ for (let arr of mvarr) {//«
 		await this.com_mv(arr, {shell_exports, if_recur: true, if_cp: true, recur_opts: obj});
 		continue;
 	}//»
-	if (type==MOUNT_TYPE){//«
-		let tofullpath = `${savedir.fullpath}/${savename}`;
-//JPDKAJD
-//		let gotbuf = await node.buffer;
-		let gotbuf = await node.bytes;
-		let newnode = await saveFsByPath(tofullpath, gotbuf);
-		if (!newnode) {
-			werr(`${tofullpath}: There was a problem saving to the file`);
-		}
-		else{
-			if (dom_objects){
-				let icons = dom_objects.icons;
-				if (icons){
-					let fromicon = icons[frompath];
-					if (fromicon) {
-//JEPOLMNYTH
-						fromicon.node = newnode;
-					}
-				}
-			}
-		}
-		gotfrom = null;
-		await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
-			node: newnode,
-			icon: fromicon,
-			win: towin
-		});
-
-	}//»
-	else if (type==FS_TYPE){//«
+	if (type==FS_TYPE){//«
 		if (savetype !== FS_TYPE) {
 			werr(`not (yet) ${com}'ing from type="${FS_TYPE}"`);
 			continue;
@@ -1924,29 +1882,7 @@ const getBlob = async(node, opts={})=>{//«
 	let file;
 	let rv;
 //This is guaranteed to be something in /site/
-	if (node.type===MOUNT_TYPE){
-		let arr = node.fullpath.split("/");
-		arr.shift();
-		arr.shift();
-		let url = `/${arr.join("/")}`;
-//Not doing dynamic backend stuff
-//		if (Number.isFinite(opts.from) && Number.isFinite(opts.to)){
-//			url+=`?start=${opts.from}&end=${opts.to}`;
-//		}
-		rv;
-//XMNYTGH
-		try{
-			rv = await fetch(url);
-		}
-		catch(e){
-			return null;
-		}
-		if (!rv.ok){
-			return;
-		}
-		file = await rv.blob();
-	}
-	else if (node.type==SHM_TYPE){
+	if (node.type==SHM_TYPE){
 		file = node._blob;
 		if (!file) {
 			file = new Blob([]);
@@ -2477,57 +2413,11 @@ const init = async()=>{//«
 		root.addKid(ret, setter_secret);
 	}
 	await mkDir("/var","appdata");
-//	try_make_site_dir();
-	mount_tree("site", MOUNT_TYPE);
 	return true;
 };//»
 
 // ^^^^^^^^^^    TO HERE    ^^^^^^^^^^
 
-
-const try_make_site_dir=async()=>{//«
-
-const mount_dir=(list, par)=>{//«
-	let kids = par.kids;
-	for (let i=0; i < list.length; i++){
-		let arr = list[i].split("/");
-		let nm = arr[0];
-		let sz = arr[1];
-		if (sz){
-			let node = mk_dir_kid(par, nm, {size: parseInt(sz), isFile: true});
-			kids[nm] = node;
-		}
-		else {
-			let dir = mk_dir_kid(par, nm, {isDir: true});
-			mount_dir(list[i+1], dir);
-			kids[nm] = dir;
-			i++;
-		}
-	}
-};//»
-
-//	mount_tree("site", MOUNT_TYPE);
-	let rv;
-	let use_list;
-	if (globals.is_local) use_list = '/_loc_list.json';
-	else use_list = '/list.json';
-	try {
-//		rv = await fetch(`/list.json`);
-		rv = await fetch(use_list);
-	}
-	catch(e){
-cwarn("Could not get list.json for /site");
-return;
-	}
-	if (!rv.ok){
-		cwarn("Could not get list.json for /site");
-		return;
-	}
-	let list = await rv.json();
-	mount_dir(list, root.kids.site);
-	root.kids.site.done = true;
-	return true;
-};//»
 
 this.mk_user_dirs=async()=>{//«
 	let cur_user = globals.user.CURRENT_USER;
@@ -2620,8 +2510,7 @@ const populate_dirobj = async(dirobj, opts = {}) => {//«
 	if (dirobj.type == FS_TYPE) return populate_fs_dirobj(dirobj, opts);
 	if (!dirobj.done){
 		if (dirobj.sys == true) {
-			if (dirobj.type == MOUNT_TYPE) await try_make_site_dir();
-//			else if (dirobj.type == USERS_TYPE) {
+//			if (dirobj.type == USERS_TYPE) {
 // PHDEYHJ
 // Upon calling `$ users mount` (imported from the inet.fs command library), we can
 // export a default function to do this populating. If they want finer grained control
@@ -2631,10 +2520,8 @@ const populate_dirobj = async(dirobj, opts = {}) => {//«
 // log(opts.vals);
 //				return populate_remote_users_dirobj(dirobj, opts);
 //			}
-			else{
 cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
 log(dirobj);
-			}
 		}
 //		else if (dirobj.type == USERS_TYPE){
 //			return populate_remote_user_dirobj(dirobj, opts);
