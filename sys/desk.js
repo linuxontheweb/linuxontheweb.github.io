@@ -108,6 +108,7 @@ const{
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
+	MIME_TO_EXT,
 	ALL_EXTENSIONS,
 	ALL_EXTENSIONS_RE,
 	EXT_TO_APP_MAP,
@@ -6296,7 +6297,7 @@ const update_all_paths = (oldpath, newpath) => {//«
 this.update_all_paths = update_all_paths;
 //»
 
-const make_new_text_file = (winarg, val, ext, opts={})=>{//«
+const make_new_file = (winarg, val, ext, opts={})=>{//«
 	return new Promise(async(Y,N)=>{
 		let path = winarg.fullpath;
 		let usepos = null;
@@ -6385,7 +6386,7 @@ cwarn("Creating empty file");
 	if (winarg===desk&&windows_showing){
 		toggle_show_windows();
 	}
-	make_new_text_file(winarg, val, "txt");
+	make_new_file(winarg, val, "txt");
 };//»
 const make_new_icon = async(winarg, type) => {//«
 	if (globals.read_only) return;
@@ -7882,6 +7883,23 @@ const poperr=(s,opts)=>{_poperr(s,opts);};
 const popok=(s,opts)=>{_popok(s,opts);};
 const make_popup = arg=>{return _make_popup(arg);};
 
+const try_clipboard_paste = async () => {//«
+	let items;
+	try {
+		items = await navigator.clipboard.read();
+	}
+	catch(e){
+cerr(e);
+		return
+	}
+	let item = items[0];
+	if (!item) return;
+	let typ = item.types[item.types.length-1];
+	let ext = MIME_TO_EXT[typ];
+	if (!ALL_EXTENSIONS.includes(ext)) ext = "";
+	make_new_file(desk, await item.getType(typ), ext)
+};//»
+
 //»
 //Keyboard«
 
@@ -8325,6 +8343,12 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 
 	}//»
 	else if (kstr=="r_") return reload_desk_icons_cb();
+	else if (kstr=="v_CS") {
+//log(123);
+//const destinationImage = document.querySelector("#destination");
+//destinationImage.addEventListener("click", pasteImage);
+		try_clipboard_paste();
+	}
 	else{
 	}
 

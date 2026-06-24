@@ -6030,10 +6030,12 @@ const fmt=(str,opts={})=>{//«
 	}=opts;
 	let ret = [];
 	let dopad = 0;
+	let usew;
 	if (maxlen&&maxlen < w) {
 		if (!nopad) dopad = Math.floor((w - maxlen)/2);
-		w = maxlen;
+		usew = maxlen;
 	}
+	else usew = w;
 
 	let wordarr = str.split(/\x20+/);
 	let ln="";
@@ -6043,14 +6045,14 @@ const fmt=(str,opts={})=>{//«
 		let gotlen = (ln + " " + w1).length;
 // Breaking consecutive non-whitespace char strings along hyphen (-), emdash (—), and forward-slash (/)
 
-		if (gotlen > w && (m=w1.match(/^([a-z]+[-\/\u2014])([-\/\u2014a-z]+[a-z])/i))){
-			if ((ln + " " + m[1]).length < w){
+		if (gotlen > usew && (m=w1.match(/^([a-z]+[-\/\u2014])([-\/\u2014a-z]+[a-z])/i))){
+			if ((ln + " " + m[1]).length < usew){
 				ln = ln + " " + m[1];
 				w1 = m[2];
 			}
 		}
 		gotlen = (ln + " " + w1).length;
-		if (gotlen >= w){
+		if (gotlen >= usew){
 			if (dopad) ret.push((" ".repeat(dopad))+ln);
 			else ret.push(ln);
 			ln = w1;

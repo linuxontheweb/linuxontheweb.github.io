@@ -131,6 +131,59 @@ const APPLICATIONS_MENU = [//«
 	"Go\xa0Here", 0,
 ];//»
 
+const MIME_TO_EXT = {//«
+"text/plain":"txt",
+"text/html":"html",
+"text/rtf":"rtf",
+"text/csv":"csv",
+"text/calendar":"ics",
+"text/css":"css",
+"text/javascript":"js",
+"text/markdown":"md",
+"text/vcard":"vcf",
+"text/xml":"xml",
+"image/png":"png",
+"image/jpeg":"jpg",
+"image/gif":"gif",
+"image/webp":"webp",
+"image/svg+xml":"svg",
+"image/bmp":"bmp",
+"image/tiff":"tiff",
+"image/x-icon":"ico",
+"image/heic":"heic",
+"image/avif":"avif",
+"application/json":"json",
+"application/ld+json":"jsonld",
+"application/xml":"xml",
+"application/pdf":"pdf",
+"application/zip":"zip",
+"application/x-tar":"tar",
+"application/x-7z-compressed":"7z",
+"audio/mpeg":"mp3",
+"audio/ogg":"ogg",
+"audio/wav":"wav",
+"audio/webm":"webm",
+"audio/midi":"mid",
+"audio/flac":"flac",
+"audio/aac":"aac",
+"video/mp4":"mp4",
+"video/webm":"webm",
+"video/ogg":"ogv",
+"video/quicktime":"mov",
+"video/x-msvideo":"avi",
+"application/msword":"doc",
+"application/vnd.ms-excel":"xls",
+"application/vnd.ms-powerpoint":"ppt",
+"application/epub+zip":"epub",
+"application/vnd.openxmlformats-officedocument.wordprocessingml.document":"docx",
+"application/vnd.openxmlformats-officedocument.presentationml.presentation":"pptx",
+"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":"xlsx",
+"text/uri-list":"uri",
+"application/x-web-custom-data":"bin"
+}
+
+//»
+
 const ALL_EXTENSIONS=[];
 const TEXT_EXTENSIONS=[ "txt","js","json","css","sh","app"];
 const MEDIA_EXTENSIONS=["webm","mp4","m4a","ogg","mp3"];
@@ -481,6 +534,7 @@ app: {
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
+	MIME_TO_EXT,
 	ALL_EXTENSIONS,
 	ALL_EXTENSIONS_RE,
 	EXT_TO_APP_MAP,
