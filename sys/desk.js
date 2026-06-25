@@ -4306,8 +4306,8 @@ const get_all_windows=()=>{//«
 //»
 //Folders«
 
+/*
 const make_folder = () => {//«
-
 	if (!CWIN || CWIN.appName != FOLDER_APP){
 		make_new_icon(desk, FOLDER_APP);
 	}
@@ -4315,6 +4315,7 @@ const make_folder = () => {//«
 		make_new_icon(CWIN, FOLDER_APP);
 	}
 };//»
+*/
 
 const reload_desk_icons_cb = async () => {//«
 	CG.on();
@@ -6956,6 +6957,7 @@ const open_text_editor = (opts={}) => {//«
 };
 api.openTextEditor = open_text_editor;
 //»
+/*
 const make_file = () => {//«
 	if (!CWIN || CWIN.appName != FOLDER_APP){
 		make_new_icon(desk, "Text");
@@ -6964,7 +6966,7 @@ const make_file = () => {//«
 		make_new_icon(CWIN, "Text");
 	}
 };//»
-
+*/
 const raise_app_if_open=(appname)=>{//«
 	for (let w of get_all_windows()){
 		if (w.ownedBy) continue;
@@ -7897,7 +7899,7 @@ cerr(e);
 	let typ = item.types[item.types.length-1];
 	let ext = MIME_TO_EXT[typ];
 	if (!ALL_EXTENSIONS.includes(ext)) ext = "";
-	make_new_file(desk, await item.getType(typ), ext)
+	make_new_file((CWIN || desk), await item.getType(typ), ext)
 };//»
 
 //»
@@ -8272,6 +8274,8 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 				return move_icon_array({toOrigin: true});
 			}
 		}
+		else if (kstr=="v_CS") return try_clipboard_paste();
+		
 	}//»
 
 //«Various harcoded keysyms that *just* intercept the current window
@@ -8343,12 +8347,7 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 
 	}//»
 	else if (kstr=="r_") return reload_desk_icons_cb();
-	else if (kstr=="v_CS") {
-//log(123);
-//const destinationImage = document.querySelector("#destination");
-//destinationImage.addEventListener("click", pasteImage);
-		try_clipboard_paste();
-	}
+//	else if (kstr=="v_CS") try_clipboard_paste();
 	else{
 	}
 
