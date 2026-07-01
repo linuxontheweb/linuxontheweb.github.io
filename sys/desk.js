@@ -4449,6 +4449,7 @@ this.clear_desk_icons = ()=>{
 };
 //»
 const reload_desk_icons = async(arr) => {//«
+
 	if (desk.icons) {
 		for (let icn of desk.icons) {
 			if (icn) icn.del();
@@ -4460,6 +4461,7 @@ const reload_desk_icons = async(arr) => {//«
 		else if (a.name < b.name) return -1;
 		return 0;
 	});
+
 	for(let node of arr){
 		let ref;
 		if (node.link) ref = await node.ref;
@@ -4479,23 +4481,6 @@ cerr("Nothing returned from toNode:\x20"+fullpath);
 		return;
 	}
 	reload_desk_icons(await ret.list);
-//	if (!ret.done) await fsapi.popDir(ret);
-//	let kids = ret.kids;
-//	let kids = await ret.kids;
-//	let keys = getKeys(kids);
-//	let kid;
-//	let arr = [];
-/*
-	for (let i = 0; i < keys.length; i++) {
-		let name = keys[i];
-		if (name == "." || name == "..") continue;
-		kid = kids[name];
-		if (kid.perm===false) continue;
-		arr.push(kid);
-	}
-*/
-//log(arr);
-//	reload_desk_icons(arr);
 }
 ;//»
 const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {//«

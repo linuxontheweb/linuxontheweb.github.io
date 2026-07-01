@@ -802,16 +802,10 @@ async loadKids(opts={}) {//«
 	if (this.done && !opts.force) return;
 	await populate_dirobj(this, opts);
 }//»
-async _getKids(opts={}){//«
+async _getKids(opts={}) {
 	if (!this.done) await populate_dirobj(this, opts);
-	let rv = [];
-	let kids = this.#kids;
-
-	for (let k in kids){
-		rv.push(kids[k]);
-	}
-	return rv;
-}//»
+	return Object.values(this.#kids);
+}
 //get moveLocks(){return this.#moveLocks;}
 get isDir(){return true;}
 get nameList() {return Object.keys(this.#kids);}
@@ -819,11 +813,7 @@ get kidList(){return Object.values(this.#kids);}
 get length() {return Object.keys(this.#kids).length;}
 get isRoot(){return this.#isRoot;}
 get appName(){return this.#appName;}
-get haveKids(){
-//cerr(12345);
-	return Object.keys(this.#kids).length > 0;
-}
-//get haveKids(){return true;}
+get haveKids(){return Object.keys(this.#kids).length > 0;}
 get list(){return this._getKids();}
 get type(){return this.#type;}
 get root(){return this.#root;}
@@ -2517,8 +2507,8 @@ this.mk_user_dirs=async()=>{//«
 	globals.user.home_path = home_path;
 	globals.user.desk_path = `${home_path}/Desktop`.regpath();
 	try{
-		await mkDir(home_path, null, {root: true, noMakeIcon: true, perm: cur_user});
-		await mkDir(globals.user.desk_path, null, {root: true, noMakeIcon: true});
+		await mkDir("/home", cur_user, {root: true, noMakeIcon: true, perm: cur_user});
+		await mkDir(home_path, "Desktop", {root: true, noMakeIcon: true});
 		await popDirByPath('/home');
 		await popDirByPath(home_path);
 	} catch (e) {
