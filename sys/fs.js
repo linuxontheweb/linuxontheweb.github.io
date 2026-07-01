@@ -1816,7 +1816,6 @@ for (let arr of mvarr) {//«
 //"Manual recursion" needed for non HTML5FileSystem folders...
 	if (type != FS_TYPE && app === FOLDER_APP){//«
 		let nm = savename;
-//		if (savedir.kids[nm]){
 		if (savedir.getKid(nm)){
 			gotfail=true;
 			werr(`refusing to clobber: ${nm}`);
@@ -1828,34 +1827,22 @@ for (let arr of mvarr) {//«
 			continue;
 		}
 		let newpath = `${savedir.fullpath}/${nm}`;
-		if (!await mkDir(newpath, null, {root: is_root})){
+		if (!await mkDir(savedir.fullpath, nm, {root: is_root})){
 			gotfail=true;
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
+
 		if (NS.Desk) NS.Desk.make_icon_if_new(await path_to_node(newpath));
 		werr(`Created: ${newpath}`);
 		if (!node.done) await popDir(node);
 		let arr = [];	
-
-/*
-		let kids=node.kids;
-		for (let k in kids){
-			if (k=="."||k=="..") continue;
-			arr.push(kids[k].fullpath);
-		}
-		arr.push(newpath);
-*/
-
 		let kids = node.kidList;
 		for (let k of kids) arr.push(k.fullpath);
-
+		arr.push(newpath);
 		let obj = {
-			cbok: () => {
-			},
-			cberr: () => {
-				gotfail = true;
-			}
+			cbok: () => {},
+			cberr: () => {gotfail = true;}
 		};
 		await this.com_mv(arr, {shell_exports, if_recur: true, if_cp: true, recur_opts: obj});
 		continue;
@@ -2351,7 +2338,6 @@ cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING P
 		if (!parid) return cerr("GEJ76GF");
 		id = await db.createNode(name, DIR_FS_TYPE, parid);
 		if (!id) return cerr("DEYBGJTU");
-		kid = mk_dir_kid(parobj, name, {isDir: true, perm: opts.perm});
 	}
 //	else if (typ === USERS_TYPE){
 //		id = await globals.funcs["netfs.fbMkdir"](parpath, parobj.id, name);
@@ -2360,6 +2346,7 @@ cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING P
 //		kid = mk_dir_kid(parobj, name, {isDir: true, appData: parobj.appData});
 //	}
 //	kid.id = id;
+	kid = mk_dir_kid(parobj, name, {isDir: true, perm: opts.perm});
 	_set_id(kid, id);
 	_add_kid(parobj, kid);
 	if (NS.Desk && !opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
