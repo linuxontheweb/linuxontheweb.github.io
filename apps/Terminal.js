@@ -311,8 +311,8 @@ constructor(Win){//«
 
 this.Win=Win;
 
-this.main = Win.main;
-this.mainWin = Win.main;
+this.main = Win.Main;
+//this.mainWin = Win.main;
 this.Desk = Win.Desk;
 this.statusBar = Win.statusBar;
 this.env={
@@ -1637,7 +1637,8 @@ async initHistory(history, historyNode){//«
 	}
 }//»
 async getHistory(val){//«
-	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
+//	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
+	let fnode = await HISTORY_FOLDER.toNode();
 	if (!fnode){
 		if (!await fsapi.mkDir(globals.user.HOME_PATH, ".history")){
 cerr("Could not make the .history folder!");
@@ -1648,7 +1649,8 @@ cerr("Could not make the .history folder!");
 		cwarn("History directory path is NOT a directory!!!");
 		return;
 	}
-	let node = await fsapi.pathToNode(HISTORY_PATH);
+//	let node = await fsapi.pathToNode(HISTORY_PATH);
+	let node = await HISTORY_PATH.toNode();
 	if (!node) {
 		node = await fsapi.touchFile(fnode, "shell.txt");
 		this.historyNode = node;
@@ -1829,7 +1831,8 @@ async quoteCompletion(use_dir, tok0, arr, arr_pos){//«
 			this.awaitNextTab = true;
 		}
 		else if (ret[0][1]==="Link"){
-			let obj = await fsapi.pathToNode(`${use_dir}/${use_str}${rem}`);
+//			let obj = await fsapi.pathToNode(`${use_dir}/${use_str}${rem}`);
+			let obj = await `${use_dir}/${use_str}${rem}`.toNode();
 			if (obj && obj.appName===FOLDER_APP){
 				this.handleLetterPress("/");
 				this.awaitNextTab = true;
@@ -1898,7 +1901,8 @@ return match_arr;
 		return match_arr;
 	};//»
 	if (dir===null) throw new Error("this.getDirContents() no dir!");
-	let ret = await fsapi.pathToNode(dir);
+//	let ret = await fsapi.pathToNode(dir);
+	let ret = await dir.toNode();
 	if (!(ret&&ret.appName==FOLDER_APP)) return [];
 	list = await ret.list;
 //	let type = ret.type;
@@ -1938,18 +1942,15 @@ async doContents(contents, use_dir, tok, arr_pos){//«
 		for (let i=tok.length; i < chars.length; i++) {
 			let gotch = chars[i];
 			str+=gotch;
-//			this.handleLetterPress(gotch);
 			handle_chars+=gotch;
 		}
+//log(type === LINK_APP);
 		if (type==FOLDER_APP) {
-//			this.handleLetterPress("/");//"/"
-			handle_chars+="/";
-//			let rv = await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
-//			if (!rv) return cerr("hdk76FH3");
-			await fsapi.popDirByPath(use_dir+"/"+str,{root:this.rootState});
+			if (!handle_chars.length) handle_chars = "/";
+			let node = await `${use_dir}/${str}`.toNode();
+			if (node) await node.loadKids();
 		}
 		else if (type=="appDir"||type=="libDir"){
-//			this.handleLetterPress(".");//"/"
 			handle_chars+=".";
 		}
 		else if (type=="Link") {
@@ -1958,20 +1959,19 @@ async doContents(contents, use_dir, tok, arr_pos){//«
 cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
 			}
 			else if (!link.match(/^\x2f/)) {
-//cwarn("this.handleTab():  GOWDA link YO NOT FULLPATH LALA");
+//cwarn("this.handleTab(): GOWDA link YO NOT FULLPATH LALA");
 			}
 			else {
-				let obj = await fsapi.pathToNode(link);
+//				let obj = await fsapi.pathToNode(link);
+				let obj = await link.toNode();
 				if (obj&&obj.appName==FOLDER_APP) {
 					if (this.awaitNextTab) {
-//						this.handleLetterPress("/");
 						handle_chars+="/";
 					}
 					this.awaitNextTab = true;
 				}
 				else {
 					if (!this.lines[this.cy()][this.x]) {
-//						this.handleLetterPress(" ");
 						handle_chars+=" ";
 					}
 				}
@@ -1979,7 +1979,6 @@ cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
 		}
 		else {
 			if (!this.lines[this.cy()][this.x]) {
-//				this.handleLetterPress(" ");
 				handle_chars+=" ";
 			}
 		}
@@ -2094,12 +2093,14 @@ async doCompletion(){//«
 //		if (tok0 == "help"){
 //			contents = await this.getCommandArr(use_dir, Object.keys(this.ShellMod.activeCommands), tok)
 //		}
-		if (tok0 == "lib" || tok0 == "import"){
-			contents = await this.getCommandArr(use_dir, await util.getList("/site/coms/"), tok)
-		}
-		else if (tok0 == "app" || tok0 == "appicon"){
-			contents = await this.getCommandArr(use_dir, await util.getList("/site/apps/"), tok)
-		}
+
+//		if (tok0 == "lib" || tok0 == "import"){
+//			contents = await this.getCommandArr(use_dir, await util.getList("/site/coms/"), tok)
+//		}
+//		else if (tok0 == "app" || tok0 == "appicon"){
+//			contents = await this.getCommandArr(use_dir, await util.getList("/site/apps/"), tok)
+//		}
+
 
 	}
 	if (contents && contents.length) this.doContents(contents, use_dir, tok, arr_pos);

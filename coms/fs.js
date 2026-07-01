@@ -136,12 +136,12 @@ const{
 //const{comClasses}
 const fsapi = fsMod.api;
 const widgets = NS.api.widgets;
-const {pathToNode}=fsapi;
+//const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
 //const {Com, ErrCom, make_error_com} = comClasses;
 const {Com} = ShellMod.comClasses;
 const{Desk}=LOTW;
-const{make_icon_if_new}=Desk;
+//const{make_icon_if_new}=Desk;
 //»
 
 //Var«
@@ -172,7 +172,8 @@ let line_num = 0;
 file_num++;
 		fullpath = normPath(files.pop(), cur_dir);
 //		fullpath = normPath(args.shift(), cur_dir);
-		let node = await fsapi.pathToNode(fullpath);
+//		let node = await fsapi.pathToNode(fullpath);
+		let node = await fullpath.toNode();
 		if (!node) {
 			fullterr(`no such file or directory`);
 			continue;
@@ -933,9 +934,11 @@ cerr(e);
 	}
 	else {//«
 		fullpath = normPath(path, this.env.cwd.cwd);
-		node = await fsapi.pathToNode(fullpath);
+//		node = await fsapi.pathToNode(fullpath);
+		node = await fullpath.toNode();
 		if (!node){//«
-			let badlink = await fsapi.pathToNode(fullpath, true);
+//			let badlink = await fsapi.pathToNode(fullpath, true);
+			let badlink = await fullpath.toNode({getLink: true});
 			if (badlink){
 /*« While it might seem strange to allow the editing of a "bad link", 
 that is how Linux works: as long as the parent directory of the symlink is
@@ -966,7 +969,8 @@ screen never shows.
 			let arr = fullpath.split("/");
 			let nm = arr.pop();
 			let path = arr.join("/");
-			parnode = await fsapi.pathToNode(path);
+//			parnode = await fsapi.pathToNode(path);
+parnode = await path.toNode();
 			if (!parnode) return this.no(`${path}: no such directory`);
 			if (!parnode.perm) return this.no(`${fullpath}: permission denied`);
 			val = "";
@@ -1206,7 +1210,6 @@ async init(){//«
 	this.pager = new NS.mods[DEF_PAGER_MOD_NAME](this.term);
 	this.pager.exitChars=["q"];
 	let path = this.args[0];
-//	let path = this.args.shift();
 	let arr;
 	let name;
 	if (!path) {
@@ -1222,14 +1225,15 @@ async init(){//«
 	}
 	else {
 		let fullpath = normPath(path, this.env.cwd.cwd);
-		let node = await fsapi.pathToNode(fullpath);
+		let node = await fullpath.toNode();
 		if (!node) {
 			return this.no(`${fullpath}: no such file or directory`);
 		}
 		if (node.appName === FOLDER_APP) {
 			return this.no(`${fullpath}: is a directory`);
 		}
-		let val = await node.getValue({text:true});
+//		let val = await node.getValue({text:true});
+		let val = await node.text;
 		if (val) arr = val.split("\n");
 		else if (val === null){
 			return this.no(`${fullpath}: could not get the contents`);
@@ -1547,14 +1551,16 @@ async run(){
 	while (args.length) {
 		let path = args.shift();
 		let fullpath = normPath(path, this.env.cwd.cwd);
-		let node = await pathToNode(fullpath);
+//		let node = await pathToNode(fullpath);
+		let node = await fullpath.toNode();
 		if (node) {
 			continue; 
 		}
 		let arr = fullpath.split("/");
 		let fname = arr.pop();
 		let parpath = arr.join("/");
-		let parnode = await pathToNode(parpath);
+//		let parnode = await pathToNode(parpath);
+		let parnode = await parpath.toNode();
 		if (!(parnode && parnode.appName === FOLDER_APP)) {
 			err(`${parpath}: Not a directory`);
 			continue; 
@@ -1570,7 +1576,7 @@ async run(){
 		}
 		let newnode = await fsapi.touchFile(parnode, fname);
 		if (!newnode) err(`${fullpath}: The file could not be created`);
-		else make_icon_if_new(newnode);
+//		else make_icon_if_new(newnode);
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1633,7 +1639,8 @@ async run(){
 	while (args.length) {
 		let path = args.shift();
 		let fullpath = normPath(path, this.env.cwd.cwd);
-		let node = await fsapi.pathToNode(fullpath);
+//		let node = await fsapi.pathToNode(fullpath);
+		let node = await fullpath.toNode();
 		if (node) {
 			err(`${fullpath}: the file or directory exists`);
 			continue;
@@ -1645,7 +1652,8 @@ async run(){
 			err(`${fullpath}: permission denied`);
 			continue;
 		}
-		let parnode = await fsapi.pathToNode(parpath);
+//		let parnode = await fsapi.pathToNode(parpath);
+		let parnode = await parpath.toNode();
 		if (!(parnode && parnode.appName === FOLDER_APP)) {
 			err(`${parpath}: not a directory`);
 			continue; 
@@ -1663,7 +1671,7 @@ async run(){
 		}
 		let newdir = await fsapi.mkDir(parnode, fname);
 		if (!newdir) err(`${fullpath}: the directory could not be created`);
-		else make_icon_if_new(newdir);
+//		else make_icon_if_new(newdir);
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1714,7 +1722,8 @@ async run(){
 		let cwd = this.env.cwd.cwd
 		for (let path of args){
 			let fullpath = normPath(path, cwd);
-			let node = await fsapi.pathToNode(fullpath, true);
+//			let node = await fsapi.pathToNode(fullpath, true);
+			let node = await fullpath.toNode({getLink: true});
 			if (!node) {
 				err(`${path}: no such file or directory`);
 				continue;
@@ -1752,7 +1761,8 @@ async run(){
 	let target = args.shift();
 	let path = args.shift();
 
-	let target_node = await fsapi.pathToNode(normPath(target, this.env.cwd.cwd));
+//	let target_node = await fsapi.pathToNode(normPath(target, this.env.cwd.cwd));
+	let target_node = await normPath(target, this.env.cwd.cwd).toNode();
 	if (!target_node) {
 		return err("the target does not exist");
 	}
@@ -1773,14 +1783,16 @@ async run(){
 	}
 
 	let fullpath = normPath(path, this.env.cwd.cwd);
-	let node = await fsapi.pathToNode(fullpath, true);
+//	let node = await fsapi.pathToNode(fullpath, true);
+	let node = await fullpath.toNode({getLink: true});
 	if (node) {
 		return err(`${path}: already exists`);
 	}
 	let arr = fullpath.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
-	let parnode = await fsapi.pathToNode(parpath);
+//	let parnode = await fsapi.pathToNode(parpath);
+	let parnode = await parpath.toNode();
 
 	if (!(parnode && parnode.appName === FOLDER_APP)) {
 		return err(`${parpath}: not a directory`);
@@ -1821,14 +1833,16 @@ async run(){
 	let path = args.shift();
 
 	let fullpath = normPath(path, this.env.cwd.cwd);
-	let node = await fsapi.pathToNode(fullpath, true);
+//	let node = await fsapi.pathToNode(fullpath, true);
+	let node = await fullpath.toNode({getLink: true});
 	if (node) {
 		return err(`${path}: already exists`);
 	}
 	let arr = fullpath.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
-	let parnode = await fsapi.pathToNode(parpath);
+//	let parnode = await fsapi.pathToNode(parpath);
+	let parnode = await parpath.toNode();
 	if (!(parnode && parnode.appName === FOLDER_APP)) {
 		return err(`${parpath}: not a directory`);
 	}
@@ -1883,7 +1897,8 @@ async run(){
 	if (this.killed || !args.length) return;
 	let path = args.shift();
 	let fullpath = normPath(path, this.env.cwd.cwd);
-	let node = await fsapi.pathToNode(fullpath);
+//	let node = await fsapi.pathToNode(fullpath);
+	let node = await fullpath.toNode();
 	if (!node) {
 		this.no(`${fullpath}: the file could not be found`);
 		return;
@@ -1928,7 +1943,8 @@ async run(){
 			if (nargs > 1) out.push(`${arg}:`);
 			if (arg.match(/^[0-9]+$/)) arg = parseInt(arg);
 			else{
-				let got = await fsapi.pathToNode(normPath(arg, cur_dir));
+//				let got = await fsapi.pathToNode(normPath(arg, cur_dir));
+				let got = await normPath(arg, cur_dir).toNode();
 				if (got && Number.isFinite(got.blobId)) out.push(got.blobId+"");
 				else out.push("?");
 				if (nargs > 1) out.push("");

@@ -344,6 +344,20 @@ const toBuf=dat=>{if(!dat)return null;if(dat instanceof ArrayBuffer)return dat;i
 const blobToStr=b=>{return new Promise(async(Y,N)=>{Y(bufToStr(await blobToBuf(b)));});};
 const bytesToStr=bytearg=>{let bytes2str=(bytes)=>{let arr=[];for(let i=0;i<bytes.length;i++)arr[i]=String.fromCharCode(bytes[i]);return arr.join("");};if(bytearg instanceof ArrayBuffer){let tmp=new Uint8Array(bytearg);bytearg=tmp;}if(bytearg.buffer){try{var decoder=new TextDecoder('utf-8');var view=new DataView(bytearg.buffer);return decoder.decode(view);}catch(e){return bytes2str(bytearg);}}else if(typeof bytearg==="string")return bytearg;};
 const toStr=dat=>{if(typeof dat==="string" || dat instanceof String)return dat;if(dat instanceof ArrayBuffer || dat.buffer instanceof ArrayBuffer)return bytesToStr(dat);if(dat instanceof Blob)return blobToStr(dat);try{return dat.toString();}catch(e){}console.error("Unknown object in to capi.toStr");};
+const toJSON=dat=>{//«
+if (!dat) return;
+let str = toStr(dat);
+if (!(str && isStr(str))) {
+cerr("No string!");
+return;
+}
+try{
+return JSON.parse(str);
+}catch(e){
+cerr(e);
+}
+};//»
+
 const sharedStart=(array)=>{//«
 	let A= array.concat().sort(), 
 	a1= A[0], a2= A[A.length-1], L= a1.length, i= 0;
@@ -547,6 +561,7 @@ decompress,
 blobToStr,
 bytesToStr,
 toStr,
+toJSON,
 getNameExt,
 toBuf,
 toBlob,

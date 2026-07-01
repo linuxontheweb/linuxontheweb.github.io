@@ -89,71 +89,23 @@ win.area = area;
 main._add(area);
 //»
 
+this.getValue=()=>{return area.value;};
+this.loadFmt = Win.fmts.TEXT;
 const save_context_cb = async()=>{//«
 
 if (view_only) return poperr("The file is in 'read only' mode");
 if (globals.read_only) return poperr("Cannot save in 'read only' mode");
 
-let rv;
-if (topwin.icon){
-	let rv = await topwin.icon.node.setValue(area.value);
-	if (rv && !Number.isFinite(rv.size)) poperr("Could not save the file");
-	else{
-		statbar.innerText = `${rv.size} bytes written`;
-	}
-	return;
-}
-else if (topwin.fullpath){
-cwarn("Got topwin.fullpath but not topwin.icon!!!");
-	let rv = await fsapi.writeFile(topwin.fullpath, area.value, {noMakeIcon: true});
-	if (!rv) return poperr("Could not write the file");
-	statbar.innerText = `${rv.size} bytes written`;
-	return;
-}
-
-let ext = EXTENSIONS[USE_EXT];
-
-//let {path, name} = await Desk.api.saveAs(topwin, ext);
-let {parNode, name} = await Desk.api.saveAs(topwin, ext);
-if (!parNode) {
-	return;
-}
-let path = parNode.fullpath;
-name = name.trim();
-if (!name.match(/^[-._a-zA-Z0-9 ]+$/)){
-	return poperr("Invalid name");
-}
-let fullpath = `${path}/${name}.${ext}`;
-//if (! await fsapi.checkDirPerm(path)) return poperr(`${path}: permission denied`);
-if (!parNode.okWrite) return poperr(`${path}: permission denied`);
-if (await fsapi.pathToNode(fullpath)) return poperr(`${fullpath}: Already exists`);
-
-let node = await fsapi.writeFile(fullpath, area.value);
-if (!node) return poperr("Could not write the file");
-if (node.icons.length===1){
-	let icn = node.icons[0];
-	Win.icon = icn;
-	icn.win = Win;
-}
-else {
-	Win.icon=undefined;
-	delete Win.icon;
-}
-
-statbar.innerText = `${node.size} bytes written`;
-Win.name = name;
-Win.path = path;
-Win.ext = ext;
-Win.title = name;
-Win.saveFolder = null;
-node.lockFile();
-Win.node = node;
+let rv = await Win.saveFile(EXTENSIONS[USE_EXT]);
+if (Number.isFinite(rv)) statbar.innerText = `${rv} bytes written`;
 
 }//»
+
 const open_new_window=()=>{Desk.api.openApp(Win.appName, {force: true})};
 
 //OBJ/CB«
 
+//this.loadFmt = 123;
 this.overrides = {//«
 	's_A': 1,
 	'b_CAS': 1
@@ -184,21 +136,7 @@ this.onblur = ()=>{//«
 	}
 }
 //»
-this.onloadfile=(bytes, opts={})=>{//«
-	if (!bytes) return;
-	if (bytes.length > MAX_TEXTAREA_BYTES){
-		opts.viewOnly = true;
-		popup(`View only (file size clamped to MAX_TEXTAREA_BYTES=${MAX_TEXTAREA_BYTES}).`);
-		bytes = bytes.slice(0, MAX_TEXTAREA_BYTES);
-setTimeout(()=>{
-if (!(Win.icon && Win.icon.node)){
-cwarn("NO Win.icon && Win.icon.node after 250ms setTimeout???");
-return;
-}
-	Win.icon.node.unlockFile();
-}, 250);
-	}
-    let text = util.bytesToStr(bytes);
+this.onloadfile=(text, opts={})=>{//«
 	area.value = text;
 	if (view_only || opts.viewOnly) {
 		view_only = true;
@@ -207,13 +145,10 @@ return;
 	area.setSelectionRange(0,0);
 }
 //»
-this.onappinit=(arg={})=>{
-if (arg.text) area.value = arg.text;
-if (arg.selected) {
-	area.select();
-}
-//log("HI ARG", arg);
-};
+this.onappinit=(arg={})=>{//«
+	if (arg.text) area.value = arg.text;
+	if (arg.selected) area.select();
+};//»
 this.onescape=()=>{//«
 	if (area.selectionStart!==area.selectionEnd) {
 		area.selectionEnd = area.selectionStart;
@@ -230,7 +165,7 @@ this.onkeydown=(e,k)=>{//«
 	}
 	else if (k=="w_A") open_new_window();
 };//»
-this.get_context = ()=>{//«
+this.getContext = ()=>{//«
 //	if (view_only) return [];
 	area.blur();
 	let as="";
@@ -254,5 +189,71 @@ this.get_context = ()=>{//«
 
 }
 
+
+/*OLD
+const save_context_cb = async()=>{//«
+
+if (view_only) return poperr("The file is in 'read only' mode");
+if (globals.read_only) return poperr("Cannot save in 'read only' mode");
+
+
+let rv;
+if (topwin.icon){
+	let rv = await topwin.icon.node.write(area.value);
+	if (rv && !Number.isFinite(rv.size)) poperr("Could not save the file");
+	else{
+		statbar.innerText = `${rv.size} bytes written`;
+	}
+	return;
+}
+//«
+//else if (topwin.fullpath){
+//cwarn("Got topwin.fullpath but not topwin.icon!!!");
+//	let rv = await fsapi.writeFile(topwin.fullpath, area.value, {noMakeIcon: true});
+//	if (!rv) return poperr("Could not write the file");
+//	statbar.innerText = `${rv.size} bytes written`;
+//	return;
+//}
+//»
+
+let ext = EXTENSIONS[USE_EXT];
+
+//let {path, name} = await Desk.api.saveAs(topwin, ext);
+let {parNode, name} = await Desk.api.saveAs(topwin, ext);
+if (!parNode) {
+	return;
+}
+let path = parNode.fullpath;
+name = name.trim();
+if (!name.match(/^[-._a-zA-Z0-9 ]+$/)){
+	return poperr("Invalid name");
+}
+let fullpath = `${path}/${name}.${ext}`;
+//if (! await fsapi.checkDirPerm(path)) return poperr(`${path}: permission denied`);
+if (!parNode.okWrite) return poperr(`${path}: permission denied`);
+if (await fsapi.pathToNode(fullpath)) return poperr(`${fullpath}: Already exists`);
+
+let node = await fsapi.writeFile(fullpath, area.value);
+if (!node) return poperr("Could not write the file");
+
+statbar.innerText = `${node.size} bytes written`;
+
+
+
+//Desk.make_icon_if_new: creates an icon if its path is the desktop or any folder windows
+//node.icons is created in FSNode.constructor (fs.js)
+//node.icons.push(this) is called in Icon.constructor (desk.js)
+
+
+Win.icon = node.icons[0];
+if (Win.icon) Win.icon.win = Win;
+Win.node = node;
+Win.title = name;
+Win.saveFolder = null;
+node.lockFile();
+
+
+}//»
+*/
 
 })();

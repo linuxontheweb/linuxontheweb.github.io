@@ -925,9 +925,9 @@ if (op==="-s"){//«
 cwarn("Not checking the size of non-local-fs files");
 		return maybe_neg(true);
 	}
-	let f = await node._file;
+	let f = await node.file;
 	if (!f){
-cwarn("No file returned from node._file!!!", node);
+cwarn("No file returned from node.file!!!", node);
 		return maybe_neg(false);
 	}
 	return maybe_neg(!!f.size);
@@ -994,8 +994,8 @@ if (op==="-ef"){//«
 }//»
 if (node1.type===FS_TYPE&&node2.type===FS_TYPE){//«
 
-let f1 = await node1._file;
-let f2 = await node2._file;
+let f1 = await node1.file;
+let f2 = await node2.file;
 if (!(f1&&f2)){//«
 cwarn("No files on the node[s]");
 log(node1, node2);
@@ -1459,7 +1459,8 @@ fname.tildeExpansion();
 //ZOPIRUTKS------------------vvvvvvvvvvv
 let fullpath = normPath(fname.toString(), env.cwd.cwd);
 //log("FULL", fullpath);
-let node = await fsapi.pathToNode(fullpath);
+//let node = await fsapi.pathToNode(fullpath);
+let node = await fullpath.toNode();
 if (node) {//«
 	if (node.isDevice){
 		if (fullpath == "/dev/null") return true;
@@ -1498,7 +1499,8 @@ let patharr = fullpath.split("/");
 patharr.pop();
 let parpath = patharr.join("/");
 if (!parpath) return `${fname}: Permission denied`;
-let parnode = await fsapi.pathToNode(parpath);
+//let parnode = await fsapi.pathToNode(parpath);
+let parnode = await parpath.toNode();
 if (!parnode){
 	return `${fname}: invalid or unsupported path`;
 }
@@ -2784,13 +2786,13 @@ async run(){
 }
 }//»
 const com_echo = class extends Com{//«
-//	static getOpts(){
-//		return {s: {n: 1}};
-//	}
+	static getOpts(){
+		return {s: {n: 1}};
+	}
 	async run(){
 		let nl = this.opts.n ? "":"\n";
-//		let str = new String(this.args.join(" ")+nl);
-		let str = new String(this.args.join(" "));
+		let str = new String(this.args.join(" ")+nl);
+//		let str = new String(this.args.join(" "));
 		str.noChomp = true;
 		this.out(str);
 		this.ok();
@@ -2864,7 +2866,8 @@ async run(){//«
 			path = node_or_path;
 			wants_dir = node_or_path.match(/\x2f$/);
 			regpath = normPath(node_or_path, this.env.cwd.cwd);
-			node = await fsapi.pathToNode(regpath, !wants_dir);
+//			node = await fsapi.pathToNode(regpath, !wants_dir);
+			node = await regpath.toNode({getLink: !wants_dir});
 		}
 		else {
 			node = node_or_path;
@@ -2890,46 +2893,28 @@ async run(){//«
 			}
 			let sz = "?";
 			if (node.type === FS_TYPE) {
-				let file = await node._file;
+				let file = await node.file;
 				if (file) sz = file.size;
 			}
 			else if (Number.isFinite(node.size)) sz = node.size;
 			this.out(`${node.name} ${sz}`);
 			return;
 		}
-//		if (force || !node.done) await fsapi.popDir(node);
-		let list = await node.list;
-//cwarn("LIST");
-//log(list);
+//		let list = await node.list;
+		await node.loadKids();
+		let list = node.kidList;
 		dir_was_last = true;
-//		let kids = await node.kids;
-
-//		let kids = node.kids;
-//		let arr = Object.keys(kids);//let arr = kids._keys;
 		let names=[];
 		let lens = [];
 		let types = [];
-//		if (out.length && nargs > 1 || recur) out("");
 		if (nargs > 1 || recur) this.out("");
 		path = path.replace(/\/+/g, "/")
 		if (nargs > 1 || recur) this.out(`\n${path}:`);
 		let s = "";
-
-/*
-		let dir_arr = [];
-		for (let nm of arr){
-			if (!all) {
-				if (nm=="."||nm=="..") continue;
-				if (nm.match(/^\./)) continue;
-			}
-			dir_arr.push(nm);
-		}
-*/
 		let dir_arr = [];
 		for (let n of list){
 			let nm = n.name;
 			if (!all) {
-//				if (nm=="."||nm=="..") continue;
 				if (nm.match(/^\./)) continue;
 			}
 			dir_arr.push(nm);
@@ -2937,8 +2922,6 @@ async run(){//«
 
 		if (recur){
 			for (let n of list){
-//				let n = kids[nm];
-//let n = node.getKid(n 
 				let nm = n.name;
 				if (nm=="."||nm=="..") continue;
 				if (n.appName === FOLDER_APP) recur_dirs.push(n);
@@ -2948,27 +2931,17 @@ async run(){//«
 
 		if (is_term) {//«
 			for (let nm of dir_arr){
-//			for (let n of list){
-//				let n = kids[nm];
-//				let nm = n.name;
 				if (nm.match(/\x20/)){
 					nm=`'${nm}'`;
 				}
-//				if (n.appName===FOLDER_APP) {
 				let n = node.getKid(nm);
 				if (n.isDir === true) {
-//					types.push(dirType);
 					types.push(DIR_TYPE);
 				}
-//				else if (n.appName==="Link") {
 				else if (n.isLink === true) {
-//					if (!await n.ref) types.push(badLinkType);
 					if (!await n.ref) types.push(BAD_LINK_TYPE);
-//					else types.push(linkType);
 					else types.push(LINK_TYPE);
 				}
-//				else if (n.blobId === idbDataType) types.push(idbDataType);
-//				else if (n.blobId === IDB_DATA_TYPE) types.push(IDB_DATA_TYPE);
 				else if (n.isData === true) types.push(IDB_DATA_TYPE);
 				else types.push(null);
 			}
@@ -3065,7 +3038,8 @@ async run(){
 	let got_dir;
 	let saypath = args[0];
 	let regpath = normPath(saypath, this.env.cwd.cwd);
-	let ret = await fsapi.pathToNode(regpath);
+//	let ret = await fsapi.pathToNode(regpath);
+	let ret = await regpath.toNode();
 	if (!ret) return this.no(`${saypath}: no such file or directory`);
 	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: not a directory`);
 	got_dir = regpath;
@@ -3162,7 +3136,8 @@ async run(){
 	};
 	for (let path of this.args) {
 		let fullpath = normPath(path, this.env.cwd.cwd);
-		let node = await fsapi.pathToNode(fullpath);
+//		let node = await fsapi.pathToNode(fullpath);
+		let node = await fullpath.toNode();
 		if (!node) {
 			err(`${path}: no such file or directory`);
 			continue;
@@ -6620,12 +6595,10 @@ let files_ok = !parr.length;
 let new_paths=[];
 for (let i=0; i < dirs.length; i++){
 	let dirname = dirs[i];
-//log("DIRNAME", dirname);
 	let dir_str = start_dir+"/"+dirname;
-	let dir = await fsapi.pathToNode(dir_str);
-	let kids = dir.kids;
-	if (!kids) continue;
-	let keys = Object.keys(kids);
+	let dir = await dir_str.toNode();
+
+	let keys = dir.nameList;
 	if (nm.match(/[*?]/)||nm.match(/\[[-0-9a-z]+\]/i)) {
 //													  v----REMOVE THIS SPACE
 //		let fpat = nm.replace(/\./g,"\\.").replace(/\* /g, ".*").replace(/\?/g, ".");
@@ -6634,7 +6607,8 @@ for (let i=0; i < dirs.length; i++){
 			for (let key of keys){
 				if (!is_dot && key[0]===".") continue;
 				if (re.test(key)){
-					let node = kids[key];
+//					let node = kids[key];
+					let node = dir.getKid(key);
 					if (!node) continue;
 					if (!files_ok && node.appName!==FOLDER_APP) continue;
 //					if (key==="."||key==="..") continue;
@@ -6650,7 +6624,8 @@ log(e.message);
 		}
 	}
 	else{
-		let node = kids[nm];
+//		let node = kids[nm];
+		let node = dir.getKid(nm);
 		if (!node) continue;
 		if (!files_ok && node.appName!==FOLDER_APP) continue;
 		if (nm==="."||nm==="..") continue;
@@ -7038,7 +7013,8 @@ async makeScriptCom(com_ast, comopts, parentCommand){//«
 //MFLOUYTW
 	simp_com.name.tildeExpansion();
 	let comword = simp_com.name.toString();
-	let node = await fsapi.pathToNode(normPath(comword, this.env.cwd.cwd));
+//	let node = await fsapi.pathToNode(normPath(comword, this.env.cwd.cwd));
+	let node = await normPath(comword, this.env.cwd.cwd).toNode();
 
 	if (!node) return mkerr(`file not found`);
 

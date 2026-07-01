@@ -98,7 +98,7 @@ const load_file=arg=>{
 	let img = new Image;
 	img.src = arg.url;
 	Main._add(img);
-	getkids(arg.node.fullpath);
+//	getkids(arg.node.fullpath);
 	topwin.title = arg.node.baseName;
 };
 const load_bytes=bytes=>{
@@ -139,8 +139,8 @@ this.onappinit=(arg)=>{
 this.onloadfile=load_bytes;;
 
 this.onkeydown=(e,k)=>{
-    if (k=="LEFT_") prev();
-    else if (k=="RIGHT_") next();
+//    if (k=="LEFT_") prev();
+//    else if (k=="RIGHT_") next();
 };
 setTimeout(()=>{
 	textarea.focus();

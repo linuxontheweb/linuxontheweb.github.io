@@ -1397,7 +1397,7 @@ globals.api.wdg = api;
 //globals.fs = fs;
 const fs = globals.fsMod;
 const fsapi = fs.api;
-const{pathToNode}=fsapi;
+//const{pathToNode}=fsapi;
 //»
 //Flags/Modes«
 let dev_mode;
@@ -2443,10 +2443,18 @@ api.switchToWorkspace = switch_to_workspace;
 //Windows«
 
 class Window {//«
-
+#rect;
 #isBusy;
 constructor(arg){//«
 	this.#isBusy = false;
+	this.node = arg.fileNode;
+	this.fmts={
+		TEXT: 1,
+		TYPED_U8: 2,
+		PARSED_OR_ERR: 3,
+		BLOB: 4,
+		ARR_BUF: 5
+	};
 	this.allowClose = true;
 	this.allowMove = true;
 	this.allowResize = true;
@@ -2529,8 +2537,8 @@ resize(){//«
 		check_html_of_cursor_icon(icn.iconElem);
 	}
 }//»
-sbcr(){this._rect=this.winElem.getBoundingClientRect();}
-gbcr(){return this._rect;}
+sbcr(){this.#rect=this.winElem.getBoundingClientRect();}
+gbcr(){return this.#rect;}
 toggleBusy(){this.#isBusy = !this.isBusy;}
 checkProp(which){//«
 	let workspace = workspaces[this.workspaceNum];
@@ -3043,8 +3051,8 @@ cwarn("No drop on main window");
 }//»
 contextMenuOn(e){//«
 	let {imgDiv: img_div, winElem: win, winId: winid} = this;
-	if (!this.app.get_context) return;
-	let items = this.app.get_context();
+	if (!this.app.getContext) return;
+	let items = this.app.getContext();
 	if (!items) items = [];
 //GSKRBSJTK
 	if (!this.ownedBy) {
@@ -3233,7 +3241,7 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		if (!a.onkeydown) a.onkeydown = NOOP;
 		if (!a.onkeyup) a.onkeyup = NOOP;
 		if (!a.onkeypress) a.onkeypress = NOOP;
-		if (!a.get_context) a.get_context = ()=>{return [];}
+		if (!a.getContext) a.getContext = ()=>{return [];}
 	//	check_win_visible(this);
 
 	};//»
@@ -3439,10 +3447,10 @@ cwarn("WINDOW IS OFFSCREEN... moving it to 0,0!");
 		}
 		top_win_on();
 	};//»
-	close(if_force){/*«*/
+	close(if_force){//«
 		if (if_force) return this.doClose();
 		this.closeButton.click();
-	}/*»*/
+	}//»
 	setLayout(if_set){//«
 		const get_cursor = (e, rect) => {//«
 			let lr_pad = rect.width * 0.25;
@@ -3636,6 +3644,70 @@ ICONS = OK;
 		for (let icn of _icons) ret.push(icn.icon);
 		return ret;
 	};//»
+
+mkOverlay(){//«
+	this.overlay = mkOverlay({id: this.id});
+	this.maxOverlayLength=42;
+}//»
+doOverlay(strarg){//«
+	if (!this.overlay) return;
+	let str;
+	if (strarg) {
+		str = strarg;
+		if (str.length > this.maxOverlayLength) str = str.slice(0,this.maxOverlayLength)+"...";
+	}
+	this.overlay.innerText = str;
+	if (this.overlayTimer) clearTimeout(this.overlayTimer);
+	else this.Main.appendChild(this.overlay);
+	center(this.overlay, this.Main);
+	if (this.Main.scrollTop) this.overlay._y += this.Main.scrollTop;
+	this.overlayTimer = setTimeout(()=>{
+		this.overlayTimer = null;
+		this.overlay._del();
+	}, 1500);
+}
+//»
+async iconValFmt(){//«
+//let bytes = await this.icon
+	if (!this.icon) return null;
+	let node = this.icon.node;
+	let fmt = this.app.loadFmt;
+	let val;
+	if (fmt){
+		let fmts = this.fmts;
+		switch (fmt) {
+
+		case fmts.TEXT:
+			val = await node.text;
+			break;
+		case fmts.TYPED_U8:
+			val = await node.bytes;
+			break;
+		case fmts.JSON_OR_ERR:
+			val = await node.text;
+			try{
+				val = JSON.parse(val);
+			}catch(e){
+				val = e;
+			}
+			break;
+		case fmts.BLOB:
+			val = await node.blob;
+			break;
+		case fmts.ARR_BUF:
+			val = await node.buffer;
+			break;
+		default:
+			poperr(`Unknown loadFmt: ${fmt}`);
+//			this.close();
+			val = null;
+
+		}
+	}
+	else val = await node.bytes;
+	return val;
+}//»
+
 async reload(opts={}){//«
 	if (this.isFolder) icon_array_off();
 	let {app, appName, main} = this;
@@ -3777,100 +3849,144 @@ cwarn(`Using app: '${winapp}'`);
 
 }//»
 
-mkOverlay(){//«
-	this.overlay = mkOverlay({id: this.id});
-	this.maxOverlayLength=42;
-}//»
-doOverlay(strarg){//«
-	if (!this.overlay) return;
-	let str;
-	if (strarg) {
-		str = strarg;
-		if (str.length > this.maxOverlayLength) str = str.slice(0,this.maxOverlayLength)+"...";
+async saveFile(ext){//«
+
+const {app} = this;
+
+let rv;
+if (this.node){
+	if (!this.node.writeable){
+		popup("Read only!");
+		return;
 	}
-	this.overlay.innerText = str;
-	if (this.overlayTimer) clearTimeout(this.overlayTimer);
-	else this.Main.appendChild(this.overlay);
-	center(this.overlay, this.Main);
-	if (this.Main.scrollTop) this.overlay._y += this.Main.scrollTop;
-	this.overlayTimer = setTimeout(()=>{
-		this.overlayTimer = null;
-		this.overlay._del();
-	}, 1500);
+	let rv = await this.node.write(await app.getValue());
+	if (!(rv && Number.isFinite(rv.size))) {
+		poperr("Could not save the file");
+		return;
+	}
+	return rv.size;
 }
-//»
+
+let {parNode, name} = await save_as(this, ext);
+if (!parNode) { // Cancelled
+	return;
+}
+let path = parNode.fullpath;
+let fullpath = `${path}/${name}`;
+if (ext) fullpath += `.${ext}`;
+
+if (!parNode.writeable){
+	popup("Read only!");
+	return;
+}
+if (!parNode.perm) {
+	poperr(`${path}: permission denied`);
+	return;
+}
+//if (await fsapi.pathToNode(fullpath)) {
+if (await fullpath.toNode()) {
+	poperr(`${fullpath}: Already exists`);
+	return 
+}
+let node = await fsapi.writeFile(fullpath, await app.getValue());
+if (!node) {
+	poperr("Could not write the file");
+	return 
+}
+//statbar.innerText = `${node.size} bytes written`;
+
+/*
+
+make_icon_if_new: creates an icon if its path is the desktop or any folder windows
+node.icons is created in FSNode.constructor (fs.js)
+node.icons.push(this) is called in Icon.constructor (desk.js)
+
+*/
+
+let icn = node.icons[0];
+if (icn){
+	this.icon = icn;
+	icn.win = this;
+}
+this.node = node;
+this.title = name;
+delete this.saveFolder;
+node.lockFile();
+
+return node.size;
+
+}//»
 
 //»
 
 //«Properties
+
+get fullpath(){if (!this.node) return null;return this.node.fullpath;}
+get ext(){if (!this.node) return null;return this.node.ext;}
+get name(){if (!this.node) return null;return this.node.name;}
+get baseName(){if (!this.node) return null;return this.node.baseName;}
+get path(){if (!this.node) return null;return this.node.path;}
+
+get title(){return this.nameSpan.innerText.trim();}
+set title(arg){//«
+	this.nameSpan.innerText = arg;
+	if (this.isMinimized) this.minTitle.innerText = arg
+}//»
+
 get isBusy(){return this.#isBusy;}
 set bort(val){this.winElem.style.borderTop = val;}
 set borb(val){this.winElem.style.borderBottom = val;}
 set borl(val){this.winElem.style.borderLeft = val;}
 set borr(val){this.winElem.style.borderRight = val;}
 set bor(val){this.winElem.style.border = val;}
-get rect(){return this._rect;}
+get rect(){return this.#rect;}
 get x(){return parseInt(this.winElem.style.left);}
 get y(){return parseInt(this.winElem.style.top);}
 set x(val){//«
 	if(Number.isFinite)val=`${val}px`;
 	this.winElem.style.left=val;
-	this._rect=this.winElem.getBoundingClientRect();
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
 set y(val){//«
 	if(Number.isFinite)val=`${val}px`;
 	this.winElem.style.top=val;
-	this._rect=this.winElem.getBoundingClientRect();
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
 set l(val){//«
-	let diff = this._rect.left - parseInt(val);
+	let diff = this.#rect.left - parseInt(val);
 	this.Main._w += diff;
 	this.winElem._x = val;
-	this._rect=this.winElem.getBoundingClientRect();
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
-get w(){return this._rect.width;}
-get h(){return this._rect.height;}
+get w(){return this.#rect.width;}
+get h(){return this.#rect.height;}
 set w(val){//«
 	let per;
 	if (per = getStrPer(val)){
 		this.Main._w = winw() * per;
 	}
-	else this.Main._w += parseInt(val) - this._rect.width;
-	this._rect=this.winElem.getBoundingClientRect();
+	else this.Main._w += parseInt(val) - this.#rect.width;
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
 set h(val){//«
 //Chrome size
 	let per;
 	if (per = getStrPer(val)){
-		let diff = this._rect.height - this.Main._h;
+		let diff = this.#rect.height - this.Main._h;
 		this.Main._h = (winh() * per) - diff;
 	}
-	else this.Main._h += parseInt(val) - this._rect.height;
-	this._rect=this.winElem.getBoundingClientRect();
+	else this.Main._h += parseInt(val) - this.#rect.height;
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
-get r(){return this._rect.right;}
+get r(){return this.#rect.right;}
 set r(val){//«
-	this.Main._w += parseInt(val) - this._rect.right;
-	this._rect=this.winElem.getBoundingClientRect();
+	this.Main._w += parseInt(val) - this.#rect.right;
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
-get b(){return this._rect.bottom;}
+get b(){return this.#rect.bottom;}
 set b(val){//«
 	this.Main._h += parseInt(val) - this.gbcr().bottom;
-	this._rect=this.winElem.getBoundingClientRect();
-}//»
-get fullpath(){//«
-	if (!this.name) {
-//cwarn("This window has no name!!!");
-		return null;
-	}
-	let path = (this.path ? this.path : "/") + "/" + this.name;
-	if (this.ext) path = path + "." + this.ext;
-	return path.regpath();
-}//»
-get title(){return this.nameSpan.innerText.trim();}
-set title(arg){//«
-	this.nameSpan.innerText = arg;
-	if (this.isMinimized) this.minTitle.innerText = arg
+	this.#rect=this.winElem.getBoundingClientRect();
 }//»
 
 //»
@@ -3888,8 +4004,11 @@ const set_win_resize_inc = async() => {//«
 const win_reload = async () => {//«
 	if (!CWIN) return;
 	if (!await CWIN.reload()) return;
-	let bytes = CWIN._bytes;
-	if (bytes) CWIN.app.onloadfile(bytes);
+
+	let val = await CWIN.iconValFmt();
+	if (val===null) return;
+	if (val) CWIN.app.onloadfile(val);
+
 }//»
 const get_newwin_obj = (app) => {//«
 	let X = DEF_NEW_WIN_X;
@@ -4353,9 +4472,10 @@ const reload_desk_icons = async(arr) => {//«
 const reload_icons = async(is_refresh) => {//«
 	let fullpath = DESK_PATH;
 	let usemain = desk;
-	let ret = await pathToNode(fullpath);
+//	let ret = await pathToNode(fullpath);
+	let ret = await fullpath.toNode();
 	if (!ret) {
-cerr("Nothing returned from pathToNode:\x20"+fullpath);
+cerr("Nothing returned from toNode:\x20"+fullpath);
 		return;
 	}
 	reload_desk_icons(await ret.list);
@@ -4380,7 +4500,7 @@ cerr("Nothing returned from pathToNode:\x20"+fullpath);
 ;//»
 const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {//«
 
-	let icn = iconarg ||{appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
+	let icn = iconarg || {appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
 	icn.winArgs = winargs;
 	return open_new_window(icn, {saver: saverarg, prevPaths: prevpaths});
 }//»
@@ -4390,7 +4510,8 @@ const check_name_exists = async(str, which, usepath) => {//«
 	if (which) path = which.fullpath;
 	else path = usepath;
 	let fullpath = `${path}/${str}`.regpath();
-	return pathToNode(fullpath);
+	return fullpath.toNode();
+//	return pathToNode(fullpath);
 }//»
 const get_icon_array = (arg, if_compact) => {//«
 	if (arg!==desk) {
@@ -4926,7 +5047,7 @@ setApp(){//«
 		}
 	}
 //	if (node.kids) app=FOLDER_APP;
-	if (node.haveKids) app=FOLDER_APP;
+	if (node.isDir) app=FOLDER_APP;
 	else if (node.appicon){
 		try{
 			app=JSON.parse(node.appicon).app;
@@ -5230,7 +5351,7 @@ const show_node_props=async(node)=>{//«
 		if (!await node.ref) broken = "(broken)";
 		s+=`Link text: ${node.symLink}<br>${broken}`
 	}
-	let file = await node._file;
+	let file = await node.file;
 	if (!file) {
 		return pop();
 	}
@@ -5362,7 +5483,8 @@ let did_reset = false;
 let do_copy = false;
 //log
 
-let fromnode = await pathToNode(ICONS[0].fullpath, true);
+//let fromnode = await pathToNode(ICONS[0].fullpath, true);
+let fromnode = await ICONS[0].fullpath.toNode({getLink: true});
 let paths = [];
 let good = [];
 let empties = [];
@@ -5371,7 +5493,8 @@ let NO_MOVE_ICONS = [];
 let ERROR_MSGS=[];
 let icon_obj = {};
 let real_locs = [];
-let destnode = await pathToNode(destpath);
+//let destnode = await pathToNode(destpath);
+let destnode = await destpath.toNode();
 let desttype = destnode.type;
 let fromtype = fromnode.type;
 let scrl = desk.scrollLeft;
@@ -5450,7 +5573,8 @@ for (let icn of ICONS) {//Sanity check«
 	icn.off();
 	let usename = icn.name;
 	if (icn.ext) usename += "." + icn.ext;
-	if (await pathToNode(destpath + "/" + usename)) {
+//	if (await pathToNode(destpath + "/" + usename)) {
+	if (await (destpath + "/" + usename).toNode()) {
 		icn.shake();
 		continue;
 	}
@@ -5956,16 +6080,18 @@ the prevPaths array still holds good.*/
 		return win;
 	}//»
 	let link = icn.link;
-	let node = await pathToNode(fullpath);
+//	let node = await pathToNode(fullpath);
+	let node = await fullpath.toNode();
 	if (!node) {
-		let badlink = await pathToNode(fullpath, true);
+//		let badlink = await pathToNode(fullpath, true);
+		let badlink = await fullpath.toNode({getLink: true});
 		if (badlink && badlink.link) return noopen(`Bad link: '${badlink.symLink}'`);
 		return noopen("file not found");
 	}
-	let typ = node.type;
 
-	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE,USERS_TYPE];
-	if (!OK_TYPES.includes(typ)) return poperr(`Cannot open type: ${typ}`);
+	let typ = node.type;
+//	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE,USERS_TYPE];
+//	if (!OK_TYPES.includes(typ)) return poperr(`Cannot open type: ${typ}`);
 
 	if (check_special_ext(node, useApp)) return;
 	
@@ -6184,10 +6310,11 @@ const save_icon_editing = async() => {//«
 		return;
 	}
 	if (ifnew){//«
-		let parobj = await pathToNode(parpath);
+//		let parobj = await pathToNode(parpath);
+		let parobj = await parpath.toNode();
 		if (!parobj) {
 			doend();
-cerr("pathToNode(): parpath not found:" + parpath);
+cerr("toNode(): parpath not found:" + parpath);
 			return;
 		}
 		let rtype = parobj.type;
@@ -6207,7 +6334,8 @@ cerr("Unsupported type:" + rtype);
 		else abort("Could not create the new directory");
 		return;
 	}//»
-	let srcnode = await pathToNode(srcpath);
+//	let srcnode = await pathToNode(srcpath);
+	let srcnode = await srcpath.toNode();
 	let srctype = srcnode.type;
 	if (srctype!==FS_TYPE) return doend();
 	if (await fsapi.comMv([srcpath, destpath])) {
@@ -6314,7 +6442,8 @@ const make_new_file = (winarg, val, ext, opts={})=>{//«
 				return Y();
 			}
 		}
-		let parobj = await pathToNode(path);
+//		let parobj = await pathToNode(path);
+		let parobj = await path.toNode();
 		if (!parobj) return;
 		let rtype = parobj.type;
 		if (!(rtype==FS_TYPE||rtype==SHM_TYPE)){
@@ -6356,7 +6485,8 @@ const make_folder_icon = async(winarg) => {//«
 		iter++;
 		if (iter >= 50) return poperr("Infinite loop detected in make_folder_icon");
 	}
-	let parobj = await pathToNode(usepath);
+//	let parobj = await pathToNode(usepath);
+	let parobj = await usepath.toNode();
 	if (!parobj) return;
 	let rtype = parobj.type;
 	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) {
@@ -6400,7 +6530,8 @@ const make_icon_if_new = async node => {//«
 //log("make_icon_if_new", node);
 	if (isStr(node)) {
 		let path = node;
-		node = await pathToNode(path);
+//		node = await pathToNode(path);
+		node = await path.toNode();
 		if (!node){
 cwarn(`No node returned in make_icon_if_new, (path=${path})`);
 			return;
@@ -6957,16 +7088,6 @@ const open_text_editor = (opts={}) => {//«
 };
 api.openTextEditor = open_text_editor;
 //»
-/*
-const make_file = () => {//«
-	if (!CWIN || CWIN.appName != FOLDER_APP){
-		make_new_icon(desk, "Text");
-	}
-	else {
-		make_new_icon(CWIN, "Text");
-	}
-};//»
-*/
 const raise_app_if_open=(appname)=>{//«
 	for (let w of get_all_windows()){
 		if (w.ownedBy) continue;
@@ -6984,10 +7105,16 @@ const raise_app_if_open=(appname)=>{//«
 };//»
 
 const open_app = async(appname, opts={}) => {//«
+
 /*
-We only need fullpath in case of a "dev reloaded" window that has a path but is not associated with an icon.
+
+We only need fullpath in case of a "dev reloaded" window that has a path but is
+not associated with an icon.
+
 This happens when reloading a folder window.
+
 */
+
 	let {force, winArgs, appArgs={}, icon, fullpath, dataUrl} = opts;
 	let usename, usepath, useext;
 	if (fullpath){
@@ -7003,7 +7130,7 @@ This happens when reloading a folder window.
 	}
 	let win = new Window({
 		fullPath: fullpath,
-//		CB: winCb,
+		fileNode: appArgs.node,
 		winArgs: winArgs,
 		name: usename || appname.split(".").pop(),
 		appName: appname,
@@ -7014,11 +7141,11 @@ This happens when reloading a folder window.
 		icon.win = win;
 		win.icon = icon;
 	}
-	if (fullpath) {
-		win.name = usename;
-		win.path = usepath;
-		win.ext = useext;
-	}
+//	if (fullpath) {
+//		win.name = usename;
+//		win.path = usepath;
+//		win.ext = useext;
+//	}
 	return await win.loadApp();
 };
 api.openApp=open_app;
@@ -7065,6 +7192,7 @@ const open_new_window = async (icn, opts={}) => {//«
 
 	let win = new Window({
 //		CB: cb,
+		fileNode: icn.node,
 		winArgs: icn.winArgs,
 		appName: app,
 		viewOnly,
@@ -7075,9 +7203,10 @@ const open_new_window = async (icn, opts={}) => {//«
 	});
 //	if (!win) return;
 
-	win.name = usename;
-	win.path = usepath;
-	win.ext = useext;
+//	win.name = usename;
+//	win.path = usepath;
+//	win.ext = useext;
+
 	icn.win = win;
 	win.icon = icn;
 
@@ -7112,7 +7241,8 @@ const open_file_by_path = async(patharg, opt={}) => {//«
 	const err = (str) => {
 		poperr(str);
 	};
-	let node = await pathToNode(patharg);
+//	let node = await pathToNode(patharg);
+	let node = await patharg.toNode();
 	if (!node) {
 		let marr;
 		return err("Cannot open:" + patharg);
@@ -7163,7 +7293,7 @@ this.open_file_by_path=open_file_by_path;
 //»
 const open_file = async (bytes, icn, useapp) => {//«
 //const open_file = async (bytes, icn, useapp, cb) => {
-	if (!bytes) bytes = new Uint8Array();
+//	if (!bytes) bytes = new Uint8Array();
 	let viewOnly = false;
 	if (VIEWONLY_APPS.includes(icn.appName)) viewOnly = true;
 	let name, ext;
@@ -7177,11 +7307,23 @@ const open_file = async (bytes, icn, useapp) => {//«
 	}
 	let win = await open_new_window(icn, {altApp: useapp});
 	if (!win) return;
-	win._bytes = bytes;
-	win.ext = icn.ext;
-	win.app.onloadfile(bytes, {name, ext, viewOnly});
+//	win.ext = icn.ext;
+	let val = await win.iconValFmt();
+	if (val===null) return;
+	win.app.onloadfile(val, {name, ext, viewOnly});
 	return win;
 }//»
+
+/*
+const make_file = () => {//«
+	if (!CWIN || CWIN.appName != FOLDER_APP){
+		make_new_icon(desk, "Text");
+	}
+	else {
+		make_new_icon(CWIN, "Text");
+	}
+};//»
+*/
 
 //»
 //Cursor«
@@ -7729,11 +7871,11 @@ cerr(mess);
 
 //Opens a folder in "Save As..." mode
 //DWEUNFKL
-api.saveAs=(win, ext)=>{//«
+const save_as=(win, ext)=>{//«
 	return new Promise(async(Y,N)=>{
 		open_file_by_path(globals.user.home_path, {
 			winArgs: {bottomPad: SAVEAS_BOTTOM_HGT},
-			saver:{
+			saver: {
 				ext, 
 				folderCb: fwin=>{
 					win.saveFolder = fwin;
@@ -7743,7 +7885,7 @@ api.saveAs=(win, ext)=>{//«
 					win.saveFolder = null;
 					if (!fwin) Y({});
 //					else Y({path: fwin.fullpath, name: savename});
-					else Y({parNode: fwin.app.node, name: savename});
+					else Y({parNode: fwin.app.node, name: savename.trim()});
 					CWIN = null;
 					win.up();
 					win.on();
@@ -7951,8 +8093,8 @@ const check_input = ()=>{//«
 };//»
 	const check_prompt=cpr=>{//«
 		if (cpr.keyHandler) {
-			if (kstr == "ENTER_A") kstr = "ENTER_";
-			else return cpr.keyHandler(kstr, e, false, code, mod_str);
+			if (sym == "ENTER_A") sym = "ENTER_";
+			else return cpr.keyHandler(sym, e, false, code, mod_str);
 		}
 		let okbut;
 		let canbut = cpr.cancel_button;
@@ -7965,23 +8107,23 @@ const check_input = ()=>{//«
 		if (okbut) {//«
 			let keys = cpr.__keys;
 			if (keys) {//«
-				if (kstr != "ESC_" && (keys === true)) cpr.keyok = true;
-				if (kstr != "ESC_") {
+				if (sym != "ESC_" && (keys === true)) cpr.keyok = true;
+				if (sym != "ESC_") {
 					if (keys === true) cpr.keyok = true;
 					else {
-						if (kstr.match(/_S$/)) {
-							if (kstr==="_S") return;
-							let ch = String.fromCharCode(kstr[0].charCodeAt()-32);
+						if (sym.match(/_S$/)) {
+							if (sym==="_S") return;
+							let ch = String.fromCharCode(sym[0].charCodeAt()-32);
 							cpr.keyok = keys[ch];
 						}
-						else cpr.keyok = keys[kstr[0]];
+						else cpr.keyok = keys[sym[0]];
 					}
 				}
 				if (cpr.keyok) clickok();
 //				return clickok();
 			}//»
-			else if ((kstr == 'ENTER_') || (kstr == "ESC_" && cpr.inactive)) {
-				if (kstr=="ENTER_"){
+			else if ((sym == 'ENTER_') || (sym == "ESC_" && cpr.inactive)) {
+				if (sym=="ENTER_"){
 					if (act instanceof HTMLInputElement &&  act.type == "file") return;
 					if (!text_inactive && (act instanceof HTMLTextAreaElement) && !act._noinput) return;
 					e.preventDefault();
@@ -7990,17 +8132,17 @@ const check_input = ()=>{//«
 				}
 			}
 		}//»
-		if (canbut&&kstr=="ESC_") return canbut.click();
-		if (kstr=="a_C"){//«
+		if (canbut&&sym=="ESC_") return canbut.click();
+		if (sym=="a_C"){//«
 			if (cpr.messdiv.style.userSelect=="text") document.getSelection().selectAllChildren(cpr.messdiv);
 		}//»
-		else if (kstr=="c_C"){//«
+		else if (sym=="c_C"){//«
 			if (cpr.messdiv.style.userSelect=="text") {
 				document.execCommand("copy")
 				window.getSelection().removeAllRanges();
 			}
 		}//»
-		else if (kstr==="ESC_"){//«
+		else if (sym==="ESC_"){//«
 			if (cpr.cancel) cpr.cancel();
 		}//»
 
@@ -8026,7 +8168,7 @@ const check_input = ()=>{//«
 	let cpr = Desk.CPR;
 	let code = e.keyCode;
 	let mod_str = "";
-	let chr, kstr;
+	let chr, sym;
 	let act = document.activeElement;
 	let act_type = null;
 	if (act) act_type = act.type;
@@ -8036,14 +8178,14 @@ const check_input = ()=>{//«
 	if (e.altKey) mod_str += "A";
 	if (e.shiftKey) mod_str += "S";
 	chr = KC[code];
-	kstr = chr + "_" + mod_str;
-	e._sym = kstr;
+	sym = chr + "_" + mod_str;
+	e._sym = sym;
 //»
 	if (PREV_DEF_ALL_KEYS) {//«
 		if (e.altKey||e.ctrlKey) e.preventDefault();
 	}//»
 	if (debug_keydown) {//«
-		log(kstr, e.keyCode, e.code, e);
+		log(sym, e.keyCode, e.code, e);
 	}//»
 
 //Prevent the default behaviour of these shortcuts//«
@@ -8051,14 +8193,14 @@ const check_input = ()=>{//«
 		BACK_: 1,
 		a_C:1
 	};
-	if (ALWAYS_PREVENT.includes(kstr)) e.preventDefault();
+	if (ALWAYS_PREVENT.includes(sym)) e.preventDefault();
 	if (act && act_type && act_type.match(/^(text|password|number)/)) text_inactive = false; 
 //An active textarea is not considered as "text"
-	if (text_inactive && notext_prevdef[kstr]) {
+	if (text_inactive && notext_prevdef[sym]) {
 		e.preventDefault();
 	}
-//	if ((CUR.ison() || CWIN) && ARROW_KEY_SYMS.includes(kstr)){
-	if (text_inactive && (CUR.ison() || (CWIN && !CWIN.isFolder)) && ARROW_KEY_SYMS.includes(kstr)){
+//	if ((CUR.ison() || CWIN) && ARROW_KEY_SYMS.includes(sym)){
+	if (text_inactive && (CUR.ison() || (CWIN && !CWIN.isFolder)) && ARROW_KEY_SYMS.includes(sym)){
 //log("?");
 		e.preventDefault();
 	}
@@ -8074,7 +8216,7 @@ or when there is an active context menu.
 	if (CEDICN) {//«
 		if (act !== CEDICN._namearea) CEDICN._namearea.focus();
 
-		if (kstr == "ESC_"){
+		if (sym == "ESC_"){
 			if (CEDICN.nodelete) {
 				CEDICN.nodelete = undefined;
 				CEDICN._namearea.value = CEDICN.name;
@@ -8087,14 +8229,14 @@ or when there is an active context menu.
 			}
 			CG.off();
 		}
-		else if (kstr == 'ENTER_') {
+		else if (sym == 'ENTER_') {
 			save_icon_editing();
 		}
-		else if (kstr=="TAB_")e.preventDefault();
+		else if (sym=="TAB_")e.preventDefault();
 		return;
 	}//»
 //Enter key selects a menu option or unminimizes a window
-	else if (kstr == "ENTER_") {//«
+	else if (sym == "ENTER_") {//«
 //		if (desk_menu) return desk_menu.select();
 		if (Desk.deskMenu) return Desk.deskMenu.select();
 		else if (cwin && cwin.context_menu) return cwin.context_menu.select();
@@ -8103,16 +8245,16 @@ or when there is an active context menu.
 		}
 	}//»
 //Direction keys to navigate the current context menu
-	else if (ARROW_KEY_SYMS.includes(kstr)) {//«
-//	else if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {
+	else if (ARROW_KEY_SYMS.includes(sym)) {//«
+//	else if (sym == "LEFT_" || sym == "RIGHT_" || sym == "UP_" || sym == "DOWN_") {
 		if (Desk.deskMenu) {
-			return Desk.deskMenu.keyHandler(e, kstr);
+			return Desk.deskMenu.keyHandler(e, sym);
 		}
-		else if (cwin && cwin.context_menu) return cwin.context_menu.keyHandler(e, kstr);
+		else if (cwin && cwin.context_menu) return cwin.context_menu.keyHandler(e, sym);
 	} //»
 //We have a context menu on the desktop. Kill it with Escapes, or bail out.
 	else if (Desk.deskMenu) {//«
-		if (kstr == "ESC_") Desk.deskMenu.kill();
+		if (sym == "ESC_") Desk.deskMenu.kill();
 		return;
 	}//» 
 //If there's a click guard, don't window escape things below.
@@ -8123,7 +8265,7 @@ or when there is an active context menu.
 //that we want to be inactive (by adding a .disabled property).
 	}//»
 //Escape and a focused window
-	else if (kstr == "ESC_" && cwin) {//«
+	else if (sym == "ESC_" && cwin) {//«
 		if (taskbar.switcherIsOn()) return taskbar.switcherOff();
 		if (windows.layout_mode) return toggle_layout_mode();
 		if (cwin.context_menu) {
@@ -8146,8 +8288,8 @@ that are running in a terminal window, like vim or less.
 		return;
 	}//»
 //A "soft escape", use on a window means its escape handler is not called
-	else if (kstr==="\x60_C"&&cwin){//«
-//	else if (kstr==="ESC_A"&&cwin){
+	else if (sym==="\x60_C"&&cwin){//«
+//	else if (sym==="ESC_A"&&cwin){
 //This is really just useful for folders that need to keep their
 //active icon arrays still active so that icons can be moved to the
 //desktop via the keyboard.
@@ -8177,7 +8319,7 @@ that are running in a terminal window, like vim or less.
 
 //Desktop and folder specific functions dealing with icons or the icon cursor:
 	if (!cwin || (cwin.appName==FOLDER_APP && !cwin.isBusy)){//«
-		if (kstr == "c_A" || kstr == "c_CA") {//«
+		if (sym == "c_A" || sym == "c_CA") {//«
 			let curicon;
 			if (CUR.ison()) curicon = CUR.geticon();
 			if (curicon || ICONS.length===1){
@@ -8201,7 +8343,7 @@ cwarn("There was an unattached icon in ICONS!");
 				return;
 			}
 
-			else if (cobj && cobj.get_context) {
+			else if (cobj && cobj.getContext) {
 				if (!(cobj.overrides && cobj.overrides["c_A"])) {
 					if (cwin.isLayout) return;
 					cwin.contextMenuOn();
@@ -8209,16 +8351,16 @@ cwarn("There was an unattached icon in ICONS!");
 				}
 			}
 		}//»
-		if (cwin && cwin.saver && kstr.match(/^TAB_S?$/)){
+		if (cwin && cwin.saver && sym.match(/^TAB_S?$/)){
 			e.preventDefault();
-			cobj.onkeydown(e, kstr, mod_str);
+			cobj.onkeydown(e, sym, mod_str);
 			return;
 		}
-		if (kstr=="c_"||kstr=="/_") {
+		if (sym=="c_"||sym=="/_") {
 			if (check_input()) return;
 			return toggle_cursor();
 		}
-		if (cwin&&(PAGING_KEY_SYMS.includes(kstr))){//«
+		if (cwin&&(PAGING_KEY_SYMS.includes(sym))){//«
 			if (!CUR.ison()) {
 				if (document.activeElement !== cwin.Main){
 cwarn("document.activeElement !== cwin.Main !?!?!");
@@ -8228,70 +8370,70 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 			let mn = cwin.main;
 			let icn = CUR.geticon();
 			if (icn) icn.hideLabelName();
-			if (kstr==="PGDOWN_") mn.scrollTop+=mn.clientHeight;
-			else if (kstr==="PGUP_") mn.scrollTop-=mn.clientHeight;
-			else if (kstr==="HOME_") mn.scrollTop=0;
+			if (sym==="PGDOWN_") mn.scrollTop+=mn.clientHeight;
+			else if (sym==="PGUP_") mn.scrollTop-=mn.clientHeight;
+			else if (sym==="HOME_") mn.scrollTop=0;
 			else mn.scrollTop=mn.scrollHeight;
 			select_first_visible_folder_icon(cwin);
 			return;
 		}//»
-		else if (CUR.ison()&&CUR_KSYMS.includes(kstr)) {//«
-			if (ARROW_KEY_SYMS.includes(kstr)) {
-//			if (kstr == "LEFT_" || kstr == "RIGHT_" || kstr == "UP_" || kstr == "DOWN_") {
+		else if (CUR.ison()&&CUR_KSYMS.includes(sym)) {//«
+			if (ARROW_KEY_SYMS.includes(sym)) {
+//			if (sym == "LEFT_" || sym == "RIGHT_" || sym == "UP_" || sym == "DOWN_") {
 //				e.preventDefault();
-				CUR.move(kstr[0]);
+				CUR.move(sym[0]);
 				return 
 			}
-			else if (kstr == "LEFT_C" || kstr == "RIGHT_C" || kstr == "UP_C" || kstr == "DOWN_C") return CUR.move(kstr[0],true);
-			else if (kstr=="ENTER_") {
+			else if (sym == "LEFT_C" || sym == "RIGHT_C" || sym == "UP_C" || sym == "DOWN_C") return CUR.move(sym[0],true);
+			else if (sym=="ENTER_") {
 				if (act.tagName=="BUTTON") return;
 				CUR.select();
 				return;
 			}
-			else if (kstr=="ENTER_C") return CUR.select(null,null,{ctrlKey:true});
-			else if (kstr=="ENTER_A") return CUR.select(null,true);
-			else if (kstr=="ENTER_CA") return CUR.select(null,true, {ctrlKey:true});
-			else if (kstr=="\x20_") {
+			else if (sym=="ENTER_C") return CUR.select(null,null,{ctrlKey:true});
+			else if (sym=="ENTER_A") return CUR.select(null,true);
+			else if (sym=="ENTER_CA") return CUR.select(null,true, {ctrlKey:true});
+			else if (sym=="\x20_") {
 				if (check_input()) return;
 				e.preventDefault();
 				CUR.select(true);
 				return 
 			}
 		}//»
-		else if (kstr=="BACK_C"&&ICONS.length)return delete_selected_files();
-		else if (kstr=="a_C") return select_all_icons();
-		else if (kstr=="s_" && !cwin) return switch_icons();
-		else if (kstr=="p_"&&CUR.ison()) {
+		else if (sym=="BACK_C"&&ICONS.length)return delete_selected_files();
+		else if (sym=="a_C") return select_all_icons();
+		else if (sym=="s_" && !cwin) return switch_icons();
+		else if (sym=="p_"&&CUR.ison()) {
 			if (cwin&&!text_inactive) return;
 			let icn = CUR.geticon();
 			if (icn) return show_node_props(icn.node);
 		}
-		else if (kstr=="m_S") return move_icon_array({toClosest: true});
-		else if (kstr.match(/_$/)){
+		else if (sym=="m_S") return move_icon_array({toClosest: true});
+		else if (sym.match(/_$/)){
 			if (check_input()) return;
-			if (kstr=="m_") return move_icon_array();
-			else if (kstr=="0_"&&!cwin) {
+			if (sym=="m_") return move_icon_array();
+			else if (sym=="0_"&&!cwin) {
 				return move_icon_array({toOrigin: true});
 			}
 		}
-		else if (kstr=="v_CS") return try_clipboard_paste();
+		else if (sym=="v_CS") return try_clipboard_paste();
 		
 	}//»
 
 //«Various harcoded keysyms that *just* intercept the current window
 
 	if (!qObj["no-switcher"]) {//«
-		if (kstr.match(/^[1-9]_CAS$/)){
-			switch_to_workspace(parseInt(kstr.split("_")[0])-1);
+		if (sym.match(/^[1-9]_CAS$/)){
+			switch_to_workspace(parseInt(sym.split("_")[0])-1);
 			return;
 		}
-		if (kstr=="LEFT_CAS"){
+		if (sym=="LEFT_CAS"){
 			current_workspace_num--;
 			if (current_workspace_num<0) current_workspace_num = num_workspaces-1;
 			switch_to_workspace(current_workspace_num, true);
 			return;
 		}
-		if (kstr=="RIGHT_CAS"){
+		if (sym=="RIGHT_CAS"){
 			current_workspace_num++;
 			if (current_workspace_num>=num_workspaces) current_workspace_num = 0;
 			switch_to_workspace(current_workspace_num, true);
@@ -8299,12 +8441,12 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 		}
 	}//»
 
-//	if (marr = kstr.match(/^([1-9])_AS$/)){
-	if (marr = kstr.match(/^([1-9])_A$/)){
+//	if (marr = sym.match(/^([1-9])_AS$/)){
+	if (marr = sym.match(/^([1-9])_A$/)){
 		return raise_bound_win(marr[1]);
 	}
 //SHORTCUTS1
-	switch(kstr){
+	switch(sym){
 		case "`_A": return window_cycle();
 //		case "d_A": return (e.preventDefault(), toggle_show_windows());
 		case "d_A": return (e.preventDefault(), minimize_all_windows());
@@ -8326,31 +8468,26 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 //Change this to send to current workspace
 	if (cwin) {//«
 		if (cwin.popup) return check_prompt(cwin.popup);
-		workspace.keyDown(e, kstr, mod_str);
+		workspace.keyDown(e, sym, mod_str);
 		return;
 	}//»
 
 //SHORTCUTS2
 //These keys are "free" for the desktop to do what it wants
 //«
-	if (kstr == "ESC_") return handle_ESC();
-//	else if (kstr=="1_CA") return open_text_editor();
-	else if (kstr=="w_CAS"){
-		for (let w of windows){
-			log(w.fullpath);
-		}
+	switch(sym){
+		case "ESC_": return handle_ESC();
+		case "w_CAS":
+			for (let w of windows){
+				log(w.fullpath);
+			}
+			return;
+		case "0_":
+			if (CUR.ison()) CUR.zero();
+			return;
+		case "r_": return reload_desk_icons_cb();
+//		case "1_CA": return open_text_editor();
 	}
-	else if (kstr=="0_"){
-		if (CUR.ison()) CUR.zero();
-	}
-	else if (kstr=="m_CAS"){//«
-
-	}//»
-	else if (kstr=="r_") return reload_desk_icons_cb();
-//	else if (kstr=="v_CS") try_clipboard_paste();
-	else{
-	}
-
 //»
 
 };

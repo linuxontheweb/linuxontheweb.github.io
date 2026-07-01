@@ -113,7 +113,7 @@ let prev_paths;
 let is_loading = false;
 let drag_timeout;
 let dir;
-let kids;
+//let kids;
 let curnum;
 let observer;
 
@@ -201,30 +201,14 @@ cwarn("Cannot go forward with goto_path ===", goto_path);
 const load_dir=()=>{//«
 
 let typ = dir.type;
-kids = dir.kidsCopy;
-//log(dir);
-let keys = Object.keys(kids);
-/*
-let ind = keys.indexOf(".");
-if (ind < 0){
-cerr(`The "." entry was not found in the dir kids (${dir.fullpath}!`);
-log(dir);
-}
-else keys.splice(ind, 1);
-ind = keys.indexOf("..");
-if (ind < 0){
-cerr(`The ".," entry was not found in the dir kids (${dir.fullpath}!`);
-log(dir);
-}
-else keys.splice(ind, 1);
-*/
-
+let keys = dir.nameList;
 if (picker_mode){
 	let dirs = [];
 	let files = [];
 	for (let k of keys){
-		if(kids[k].appName===FOLDER_APP) dirs.push(k);
-		else if (save_as_ext && kids[k].ext === save_as_ext) files.push(k);
+		let kid = dir.getKid(k);
+		if(kid.appName===FOLDER_APP) dirs.push(k);
+		else if (save_as_ext && kid.ext === save_as_ext) files.push(k);
 	}
 	dirs.sort();
 	files.sort();
@@ -267,7 +251,8 @@ observer = new IntersectionObserver((ents)=>{
 
 for (let kid of icondv.children) {
 	kid.show = async()=>{//«
-		let got = kids[kid.dataset.name];
+//		let got = kids[kid.dataset.name];
+let got = dir.getKid(kid.dataset.name);
 /*If this 'got' should be "owned" by a FileSaver that is writing to it, then we//«
 want to be able to call a callback with 'got' and get
 an updating overdiv put on it.  Right now, FileSaver creates the kid node upon
@@ -368,6 +353,14 @@ const reload = async(newpath)=>{//«
 	if (is_loading) return;
 	prev_paths = this.prevPaths;
 	if (newpath) {
+//log(`PM: ${picker_mode}`);
+		path = newpath;
+		Win.node = await newpath.toNode();
+		if (picker_mode) Win.title = `Save\xa0Location\xa0:\xa0'${Win.node.name}'`;
+		else Win.title = Win.node.name;
+	}
+/*«
+	if (newpath) {
 		path = newpath;
 		if (path==="/") {
 			delete Win.path;
@@ -378,19 +371,23 @@ const reload = async(newpath)=>{//«
 			let arr = path.split("/");
 			Win.name = arr.pop();
 			Win.title = Win.name;
-			Win.path=arr.join("/");
+			Win.path = arr.join("/");
 		}
 	}
+»*/
 	is_loading = true;
 	Main.scrollTop=0;
 	icondv.innerHTML="";
 	await init(true);
-	_stat_num(`${Object.keys(kids).length} entries`);
+//	_stat_num(`${Object.keys(kids).length} entries`);
+	_stat_num(`${dir.length} entries`);
 	if (Win.cursor) {
 		delete Main.lasticon;
 		Win.cursor.set();
 	}
-};//»
+};
+this.reload=reload;
+//»
 
 const init=(if_reinit)=>{//«
 
@@ -404,45 +401,23 @@ return new Promise(async(Y,N)=>{
 cwarn("No path given (Win._fullpath)");
 		return;
 	}
-	dir = await fs.pathToNode(path);
+//	dir = await fs.pathToNode(path);
+	dir = await path.toNode();
 	if (!dir) {
 		delete this.node;
 		if (path) poperr(`Directory not found: ${path}`);
 		else cwarn("Opening in 'app mode'");
 		return;
 	}
-    if (!dir.done){//«
-        _stat_num("Getting entries...");
-        let cb=(ents)=>{
-            num_entries+=ents.length;
-            stat_num();
-            if (numdiv) numdiv.innerHTML=`${num_entries} entries loaded`;
-        };
-        let numdiv;
-        let done = false;
-        setTimeout(()=>{
-            if (done) return;
-            numdiv = make("div");
-            numdiv._tcol="#bbb";
-            numdiv._pad=10;
-            numdiv._fs=24;
-            numdiv._fw="bold";
-            numdiv._ta="center";
-            numdiv.innerHTML=`${num_entries} entries loaded`;
-            numdiv._pos="absolute";
-            numdiv.vcenter();
-            Main._add(numdiv);
-        }, 100);
-        await fs.popDirByPath(path, {par:dir,streamCb:cb});
-        done = true;
-        if (numdiv) numdiv._del();
-        dir.done=true;
-        load_dir();
-    }//»
-	else load_dir();
+	if (!dir.done) {
+		_stat_num("Getting entries...");
+		await dir.loadKids();
+	}
+	load_dir();
 	this.node = dir;
 	if (dir.type!==FS_TYPE) {
-		num_entries = Object.keys(kids).length-2;
+//		num_entries = Object.keys(kids).length;
+		num_entries = dir.length;
 		stat_num();
 	}
 	stat_mess();
@@ -458,8 +433,7 @@ this.set_save_name=(name)=>{
 if (save_input && isStr(name)) save_input.value = name;
 };
 
-this.reload=reload;
-this.get_context=()=>{//«
+this.getContext=()=>{//«
 	let choices = [
 		"Folder",()=>{Desk.make_new_icon(Win, FOLDER_APP)},
 		"Text File"
@@ -480,10 +454,10 @@ this.get_context=()=>{//«
 	}   
 	return arr;
 };//»
-this.onfocus=()=>{
+this.onfocus=()=>{//«
 	if (!save_input) return;
 	setTimeout(()=>{save_input.focus();},0);
-};
+};//»
 this.onescape=()=>{//«
 	if (savebut) {
 		let act = document.activeElement;
@@ -511,12 +485,8 @@ else if (s=="f_"||s=="f_C") go_forth();
 else if (s=="s_"||s=="s_C") do_save();
 
 }//»
-this.onkill = () => {//«
-	icondv._del();
-}//»
-this.onresize = () => {
-	cur_div.style.maxWidth = `${Main.clientWidth - MAX_WID_DIFF}px`;
-}
+this.onkill = () => {icondv._del();}
+this.onresize = () => {cur_div.style.maxWidth = `${Main.clientWidth - MAX_WID_DIFF}px`;}
 this.onappinit=(arg, prevpaths)=>{//«
 	Win.makeScrollable();
 	prev_paths = prevpaths;
@@ -524,10 +494,10 @@ this.onappinit=(arg, prevpaths)=>{//«
 	if (!path) cerr("No path in onappinit!");
 	init();
 };//»
-this.update=()=>{
-	kids = dir.kidsCopy;
-	_stat_num(`${Object.keys(kids).length} entries`);
-};
+this.update=()=>{//«
+//	kids = dir.kidsCopy;
+	_stat_num(`${dir.length} entries`);
+};//»
 this.add_icon=(icn)=>{Main.scrollTop=0;};
 this.stat=stat_cur;
 

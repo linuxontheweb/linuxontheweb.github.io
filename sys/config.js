@@ -243,7 +243,7 @@ const ALL_EXTENSIONS_RE= new RegExp("^(.+)\\.(" + ALL_EXTENSIONS.join("|") + ")$
 /* Interesting Icons
 Large kitchen knife 1f52a
 */
-const APPICONS = {//«
+const APP_NAME_TO_ICON = {//«
 	Launcher:"1f680",
 	HTML:"1f310",
 	Folder:"1f4c1",
@@ -526,7 +526,7 @@ app: {
 	MEDIA_EDIT_APP,
 	IMAGE_APP,
 	MEDIA_APPS,
-	APPICONS,
+	APPICONS: APP_NAME_TO_ICON,
 	TEXT_EDITOR_APP,
 	DEF_BIN_APP,
 	WRITING_APPS,

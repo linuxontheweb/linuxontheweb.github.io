@@ -1960,6 +1960,7 @@ const try_revert = ()=>{//«
 
 const try_save = (if_saveas)=>{//«
 	if (no_save_mode) return stat_warn("no_save_mode is on!");
+	if (edit_fobj && !edit_fobj.writeable) return stat_warn("Read only!");
 	if (is_saving) {
 		return stat_warn(`is_saving: ${is_saving}`);
 	}
@@ -2049,6 +2050,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 	}
 //	let opts={retObj: true};
 	let usepath = edit_fullpath;
+/*«
 	let OK_TYPES=[FS_TYPE, USERS_TYPE];
 	if (!OK_TYPES.includes(edit_ftype)){
 		if (usepath.match(/\/dev\/shm/)) {
@@ -2061,6 +2063,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 			return;
 		}
 	}
+»*/
 	let rv;
 	if (VALIDATE_JSON_ON_SAVE && usepath.match(/\.(json|app)$/i) && val.length < MAX_LEN_TO_VALIDATE_JSON){
 		try{
@@ -2160,7 +2163,8 @@ let fname = arr.pop();
 let pardir = arr.join("/");
 if (!pardir) pardir = "/";
 if (!fname) return err("No file name given");
-let parobj = await fsapi.pathToNode(pardir);
+//let parobj = await fsapi.pathToNode(pardir);
+let parobj = await pardir.toNode();
 if (!parobj) return err(`${pardir}: directory not found`);
 let rtype;
 let rootobj;

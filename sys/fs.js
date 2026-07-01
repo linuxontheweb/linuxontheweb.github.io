@@ -1,12 +1,14 @@
 (()=>{"use strict";
 /*README«
 
-The LOTW file system is implemented here. IndexedDB is used to define the structure of the
-file system, while the origin-private file system (OPFS) API is used as the storage
-solution for "normal" files. As convenience, there are String prototypes (@STRPROTOS) that enable
-the quick translation between pathnames and file system nodes as well as file contents.
-If the string is only a simple file name (e.g. my_file.txt) or a relative path (e.g. ../config.json),
-then you can pass in an object with a "cwd" member, in order for the full path to be resolved.
+The LOTW file system is implemented here. IndexedDB is used to define the
+structure of the file system, while the origin-private file system (OPFS) API
+is used as the storage solution for "normal" files. As convenience, there are
+String prototypes (@STRPROTOS) that enable the quick translation between
+pathnames and file system nodes as well as file contents.  If the string is
+only a simple file name (e.g. my_file.txt) or a relative path (e.g.
+../config.json), then you can pass in an object with a "cwd" member, in order
+for the full path to be resolved.
 
 For example:
 
@@ -18,6 +20,12 @@ let node = await fname.toNode({cwd: path});
 
 »*/
 
+/*6/30/26: Most of this logic should only be accessible from: «
+
+1) String.prototype's
+2) FSNode (and derived class) method's 
+
+»*/
 /*6/15/25: Time to DEEPLY STUDY this to FULLY encapsulate DIRECTORY CHILDREN«
 First step:
 Add @JDPEIO, add private #kids field to DirNode and create the object
@@ -49,6 +57,8 @@ TextEdit) and possibly parts of the system. Also for the fetch in
 try_make_site_dir. So this is turning into a pattern...
 
 »*/
+//Old Notes«
+
 /*10/20/25: Need to reimagine the "add_lock_funcs" concept @GSIEKFO, probably by«
 adding these methods to the nodes themselves. I guess the lockFile/unlockFile 
 functions were being used before the FSNode concept was originally introduced.
@@ -84,7 +94,7 @@ WE ARE CURRENTLY RETURNING A NUMBER (BYTES WRITTEN), BUT IF A NODE IS BEING CREA
 THE NEW NODE'S ID IS A MUCH, MUCH MORE SIGNIFICANT PIECE OF INFORMATION.
 
 The fundamental distinction I want to make is:
-1) If a file exists (pathToNode yields a node), then use the node's setValue method
+1) If a file exists (path_to_node yields a node), then use the node's setValue method
 to handle all write operations.
 2) If not, use writeFile.
 
@@ -161,8 +171,6 @@ com_ytdl (coms/yt.js): Old style command, depends upon websockets backend won't 
 
 In DirNode, just made an okWrite getter method @SIEMGKG
 »*/
-//Old Notes«
-
 /*9/29/25: Proposing: NetFileNode«
 
 Let's put a new kind of FSNode in here (NetFileNode @TWKMJORH) devoted to
@@ -265,19 +273,6 @@ const {
 } = util;
 
 //const sleep=()=>{return new Promise((Y,N)=>{});}
-/*
-const {
-//	PROJECT_ROOT_MOUNT_NAME,
-	FS_DB_NAME,
-	FS_PREF,
-	FS_TYPE,
-	SHM_TYPE,
-	USERS_TYPE,
-	USERNAME,
-	HOME_PATH,
-	DESK_PATH,
-} = globals;
-*/
 const {
 
 	LINK_APP,
@@ -318,6 +313,13 @@ const DIR_FS_TYPE="d";
 const LINK_FS_TYPE="l";
 const FILE_FS_TYPE="f";
 
+//»
+
+//FS«
+
+
+//new FS(){«
+globals.fsMod = new function() {
 //»
 
 class FsDB {//«
@@ -481,7 +483,9 @@ throw new Error("Could not add the root node!");
 throw new Error(`WUT NO ROOTID RETURNED AFTER ADDING ROOT NODE (${path}) ?!?!?`);
 		}
 	}
-	root.id = rootid;
+//log(root);
+//	root.id = rootid;
+	_set_root_id(rootid);
 	return true;
 }//»
 
@@ -585,29 +589,121 @@ cwarn("BLOCKED");
 
 }//»
 
-//FS«
-
-//new FS(){«
-globals.fsMod = new function() {
-//»
-
 //FSNode«
 
 const LOCKED_BLOBS = {};
+
+// File-private setter methods «
+
+// These allow as to set private FSNode members with "external" calls
+// The functions are defined inside of static blocks
+
+let _set_name;
+let _set_par;
+let _add_kid;
+let _del_kid;
+let _add_root_kid;
+
+// indexedDB row id's
+let _set_root_id;
+let _set_id; 
+
+// Read from: localStorage['nextBlobId']
+// Used for the names of the files in OPFS://blobs/
+let _set_blob_id; 
+
+// For file on /dev/shm
+let _set_mem_blob; 
+
+let _set_sym_link;
+
+let _set_data;
+//»
+
+class RootDirNode {//«
+#id;
+#kids;
+#appName;
+constructor(){//«
+	this.isDir = true;
+	this.#appName = FOLDER_APP;
+	this.#kids = {};
+	this.done = true;
+}//»
+loadKids(){}
+get id(){return this.#id;}
+get appName(){return this.#appName}
+get treeroot(){return true;}
+get haveKids(){return true;}
+get root(){return this;}
+get fullpath(){return "/";}
+get path(){return "/";}
+get type(){return "root";}
+get name(){return "/";}
+get baseName(){return "/";}
+set name(arg){}
+//_setName(){}
+get okWrite(){cwarn(`okWrite: THIS IS OUTDATED!!!`);return false;}
+get sys(){return true;}
+get done(){return true;}
+set done(arg){}
+rmMoveLock(){}
+get list(){return this.#kids;}
+get kids(){throw new Error("YOU TRIED TO ACCESS KIDS");}
+set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
+getKid(name){return this.#kids[name];}
+get nameList() {return Object.keys(this.#kids);}
+get kidList(){return Object.values(this.#kids);}
+get length() {return Object.keys(this.#kids).length;}
+get list(){
+	let rv = [];
+	let kids = this.#kids;
+	for (let k in kids){
+		rv.push(kids[k]);
+	}
+	return rv;
+}
+
+/*
+_mountDir(name, type, opts={}){//«
+let dir = new DirNode(name, this, {type, sys: true});
+this.#kids[name] = dir;
+return dir;
+}//»
+*/
+static {
+
+_add_root_kid = (kid) => {//«
+if (root.#kids[kid.name]){
+//cwarn(`'/${kid.name}': ALREADY EXISTS`);
+return;
+}
+root.#kids[kid.name] = kid;
+}//»
+
+_set_root_id = (id) =>{root.#id = id;};
+
+}
+
+}//»
+
 //FSNODEDEF
+
 class FSNode {//«
+
 #root;
-//#path;
+#blobId;
+#id;
 #par;
-constructor(par){//«
+#name;
+constructor(name, par){//«
 //	this.setName(name);
-//	this.#name = name;
+	this.#name = name;
 	this.#par = par;
 //	this.root = par.root;
 	this.#root = par.root;
 	this.icons = [];
 }//»
-
 get fullpath(){//«
 //	Object.defineProperty(this,"fullpath",{get:()=>{let str=this.name;if(!str)return null;let curobj=this;let i=0;while(true){if(curobj && curobj.par)str=`${curobj.par.name}/${str}`;else break;curobj=curobj.par;i++;}let arr=str.split("/");while(!arr[0] && arr.length){arr.shift();i++;}str=arr.join("/");return("/"+str).regpath();}});
 	let str = this.name;
@@ -629,41 +725,35 @@ get fullpath(){//«
 	return ("/" + str).regpath();
 }//»
 get par(){return this.#par;}
-_setPar(par, arg){//«
-// Need a secret that is internal to this file
-if (arg !== setter_secret){
-cerr("NONONO JHKDHFJK");
-return;
-}
-	this.#par=par;
-}//»
 get type(){return this.#root.type;}
-get name(){throw new Error("Get name of FSNode???");}
-set name(name){throw new Error("Set name of FSNode???");}
-get path(){//«
-//	if (this._path) return this._path;
-	return this.par.fullpath;
-}//»
+get name(){	return this.#name;}
+get id(){	return this.#id;}
+get baseName(){	return this.#name;}
+get path(){	return this.par.fullpath;}
 writeLocked(){return false;}
 get root(){return this.#root;}
+get blobId(){return this.#blobId;}
 
-}//»
+get isFile(){return false;}
+get isDir(){return false;}
+get isLink(){return false;}
+get isData(){return false;}
+get isDevice(){return false;}
 
-class DevNode extends FSNode{//«
+static {
 
-#name;
-constructor(name, par){
-	super(par);
-	this.#name = name;
-	this.isDevice = true;
-	this.appName = "Device";
+_set_name = (node, name)=>{	node.#name = name;};
+_set_par = (node, par) => {	node.#par = par;};
+_set_id = (node, id) =>{node.#id = id;};
+_set_blob_id = (node, id) => {node.#blobId = id;}
+
 }
-get name(){return this.#name;}
-get baseName(){return this.#name;}
+
 }//»
+
 class DirNode extends FSNode{//«
 //JDPEIO
-#name;
+//#name;
 #kids;
 #type;
 #root;
@@ -674,9 +764,9 @@ class DirNode extends FSNode{//«
 #moveLocks;
 #isRoot;
 constructor(name, par, opts={}){//«
-	super(par);
-	this.#name = name;
-	this.isDir = true;
+	super(name, par);
+//	this.#name = name;
+//	this.isDir = true;
 	this.#appName = FOLDER_APP;
 	if (opts.type) { 
 		this.#type = opts.type;
@@ -708,56 +798,39 @@ rmMoveLock(lockarg){//«
 	}
 }//»
 addMoveLock(lockarg){this.#moveLocks.push(lockarg);}
+async loadKids(opts={}) {//«
+	if (this.done && !opts.force) return;
+	await populate_dirobj(this, opts);
+}//»
 async _getKids(opts={}){//«
 	if (!this.done) await populate_dirobj(this, opts);
 	let rv = [];
 	let kids = this.#kids;
+
 	for (let k in kids){
 		rv.push(kids[k]);
 	}
 	return rv;
 }//»
 //get moveLocks(){return this.#moveLocks;}
-_setName(val, arg){//«
-if (arg !== setter_secret){
-cerr("NOOOOOO KJKLDSKDS");
-return;
-}
-	this.#name = val;
-}//»
-delKid(kid, arg){//«
-if (arg !== setter_secret){
-cerr("NONONO EJKHJFS");
-return;
-}
-
-if (!this.#kids[kid.name]){
-cwarn(`'${this.fullpath}/${kid.name}': DOES NOT EXIST`);
-return;
-}
-delete this.#kids[kid.name];
-}//»
-addKid(kid, arg){//«
-if (arg !== setter_secret){
-cerr("NONONO IOUMJE");
-return;
-}
-if (this.#kids[kid.name]){
-//cwarn(`'${this.fullpath}/${kid.name}': ALREADY EXISTS`);
-return;
-}
-this.#kids[kid.name] = kid;
-}//»
+get isDir(){return true;}
+get nameList() {return Object.keys(this.#kids);}
+get kidList(){return Object.values(this.#kids);}
+get length() {return Object.keys(this.#kids).length;}
 get isRoot(){return this.#isRoot;}
 get appName(){return this.#appName;}
-get haveKids(){return true;}
+get haveKids(){
+//cerr(12345);
+	return Object.keys(this.#kids).length > 0;
+}
+//get haveKids(){return true;}
 get list(){return this._getKids();}
 get type(){return this.#type;}
 get root(){return this.#root;}
 get sys(){return this.#sys;}
 get isMoveLocked(){return this.#moveLocks.length > 0;}
 get okWrite(){
-cwarn(`okWrite: THIS IS OUTDATED!!!`);
+cwarn(`okWrite: THIS IS OUTDATED (use '.perm' instead)!!!`);
 	return this.perm;
 }
 get perm(){//«
@@ -766,13 +839,17 @@ get perm(){//«
 	if (isStr(p)) return (globals.user.CURRENT_USER === p);
 
 	let cur = this.par;
-	while (cur.treeroot !== true){
+	while (cur.treeroot !== true) {
 		p = cur.perm;
 		if (isBool(p)) return p;
 //		if (isStr(p)) return (globals.user.CURRENT_USER === p);
 		cur = cur.par;
 	}
 	return false;
+}//»
+get writeable(){//«
+	if (this.type === SITE_FS_TYPE) return false;
+	return true;
 }//»
 get readonly(){return this.#readOnly;}
 get readOnly(){return this.#readOnly;}
@@ -786,209 +863,52 @@ cwarn("YOU CALLED kidsCopy, BUT THAT IS A ***HACK***!!!");
 get kids(){throw new Error("YOU TRIED TO GET KIDS");}
 set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
 getKid(name){return this.#kids[name];}
-get name(){return this.#name;}
-get baseName(){return this.#name;}
-set name(arg){this.#name = arg;}
-
+mkNewFile(path, opts={}){//«
+let fullpath = normPath(path, this.fullpath);
+if (!fullpath) return;
+return mkFile(fullpath, opts);
 }//»
-class RootDirNode {//«
-#kids;
-#appName;
-constructor(){//«
-	this.isDir = true;
-	this.#appName = FOLDER_APP;
-	this.#kids = {};
+mkDir(path, opts){//«
+let fullpath = normPath(path, this.fullpath);
+if (!fullpath) return;
+return mk_dir(fullpath, opts);
 }//»
-get appName(){return this.#appName}
-get treeroot(){return true;}
-get haveKids(){return true;}
-get root(){return this;}
-get fullpath(){return "/";}
-get path(){return "/";}
-get type(){return "root";}
-get name(){return "/";}
-get baseName(){return "/";}
-set name(arg){}
-_setName(){}
-get okWrite(){cwarn(`okWrite: THIS IS OUTDATED!!!`);return false;}
-get sys(){return true;}
-get done(){return true;}
-set done(arg){}
-rmMoveLock(){}
-get list(){return this.#kids;}
-get kids(){throw new Error("YOU TRIED TO ACCESS KIDS");}
-set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
-addKid(kid, arg){//«
-if (arg !== setter_secret){
-cerr("NONONO WEJKLEJW");
+static {
+_add_kid = (dir, kid) => {//«
+if (dir.#kids[kid.name]){
+//cerr(`${dir.fullpath}/${kid.name}: ALREADY EXISTS`);
 return;
 }
-if (this.#kids[kid.name]){
-//cwarn(`'/${kid.name}': ALREADY EXISTS`);
+	dir.#kids[kid.name] = kid;
+};//»
+_del_kid = (dir, kid) => {//«
+
+if (!dir.#kids[kid.name]){
+cerr(`'${dir.fullpath}/${kid.name}': DOES NOT EXIST`);
 return;
 }
-this.#kids[kid.name] = kid;
-}//»
-getKid(name){return this.#kids[name];}
-get list(){
-//	return Object.keys(this.#kids);
-	let rv = [];
-	let kids = this.#kids;
-	for (let k in kids){
-		rv.push(kids[k]);
-	}
-	return rv;
+delete dir.#kids[kid.name];
+
+};//»
 }
-
-/*
-_mountDir(name, type, opts={}){//«
-let dir = new DirNode(name, this, {type, sys: true});
-this.#kids[name] = dir;
-return dir;
-}//»
-*/
-
-}//»
-class LinkNode extends FSNode{//«
-#name;
-#appName;
-constructor(name, par){//«
-	super(par);
-	this.#name = name;
-	this.#appName = LINK_APP;
-	this.isLink = true;
-}//»
-get link(){//«
-//	if(isLink){Object.defineProperty(this,"link",{get:()=>{let symlink=this.symLink;if(symlink.match(/^\x2f/))return symlink;return `${this.path}/${symlink}`;}});Object.defineProperty(this,"ref",{get:()=>{return pathToNode(this.link);}});}
-	let symlink = this.symLink;
-	if (symlink.match(/^\x2f/)) return symlink;
-	return `${this.path}/${symlink}`;
-}//»
-_setName(val, arg){//«
-if (arg !== setter_secret){
-cerr("NOOOOOO EJHJKHJS");
-return;
-}
-	this.#name = val;
-}//»
-get ref(){return pathToNode(this.link);}
-get name(){return this.#name;}
-get baseName(){return this.#name;}
-set name(arg){this.#name = arg;}
-get appName(){return this.#appName;};
-}//»
-class DataNode extends FSNode{//«
-#name;
-
-constructor(name, par){//«
-	super(par);
-	this.#name = name;
-	this.isData = true;
-}//»
-_setName(val, arg){//«
-if (arg !== setter_secret){
-cerr("NOOOOOO YUYUIERBNM");
-return;
-}
-	this.#name = val;
-}//»
-
-getDataType(){return this.data.type;}
-getDataValue(){return this.data.value;}
-async setDataValue(val){//«
-	let dat = this.data;
-	if (!dat){
-cerr("Data not found");
-log(this);
-		return;
-	}
-	if (!isDef(val)){
-cerr("Data types *require* a 'value' field (util.isDef() === true)");
-return;
-	}
-	dat.value = val;
-	if (!await db.setNodeData(this.id, this.data)) {
-cerr("Could not set node data");
-		return;
-	}
-	return true;
-}//»
-async setValue(val, opts={}){//«
-	if (!(isObj(val) && isStr(val.type))){
-cerr(`Expected an object with a 'type' field! (for inline data storage)`);
-		return;
-	}
-	if (!isDef(val.value)){
-cerr("Data types *require* a 'value' field (util.isDef() === true)");
-return;
-	}
-	if (this.data.type !== val.type){
-cwarn(`The data types have changed: '${this.data.type}' => '${val.type}'`);
-	}
-	if (!await db.setNodeData(this.id, val)) {
-cerr("Could not set node data", this);
-		return;
-	}
-	this.data = val;
-	return true;
-}//»
-async getValue(opts={}){//«
-	if (opts && opts.text) {
-cwarn("This is a data node, but opts.text was specified in getValue!");
-		try{
-			return JSON.stringify(this.data);
-		}catch(e){
-cerr(e);
-		}
-		return this.data.toString();
-	}
-	return this.data;
-}//»
-get name(){return this.#name;}
-get baseName(){return this.#name;}
-set name(arg){this.#name = arg;}
-
 
 }//»
 class FileNode extends FSNode{//«
 
-#name;
-#ext;
-#baseName;
-#appName;
+//#blobId;
 #lock;
+#entry;
+#memBlob;
+//#useMemBlob;
 constructor(name, par){//«
-	super(par);
-	this._setName(name, setter_secret);
-	this.isFile = true;
+	super(name, par);
+//	if (par.fullpath.match(/^\/dev\/shm/)) this.#useMemBlob = true;
+//	this.isFile = true;
 	this.#lock = {};
-}//»
-_setName(val, arg){//«
-if (arg !== setter_secret){
-cerr("NOOOOOO DADJKLSA");
-return;
-}
-	this.#name = val;
-	let arr = getNameExt(val);
-	if (arr[1]) {
-		this.#ext = arr[1];
-		this.#baseName = arr[0];
-		this.#appName = util.extToApp(this.#ext);
-	}
-	else {
-		this.#ext="";
-		this.#baseName = val;
-		this.#appName = "";
-	}
-//	kid.ext = util.getNameExt(name)[1];
-//	let app = util.extToApp(name);
-//	kid.appName = app;
-//	kid.size = opts.size;
-
 }//»
 writeLocked(){return LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];}
 okGet(){//«
-	if (this.type==SHM_TYPE) return true;
+	if (this.type==SHM_TYPE || this.type == SITE_FS_TYPE) return true;
 	let bid = this.blobId;
 	if (!bid || bid < FIRST_BLOB_ID) {
 		return;
@@ -1006,7 +926,8 @@ okSet(){//«
 }//»
 async getRealBlobId(){//«
 	let bid = get_blob_id();
-	this.blobId = bid;
+//	this.blobId = bid;
+	_set_blob_id(this, bid);
 	if (!await db.setNodeBlobID(this.id, bid)) {
 cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
 		return;
@@ -1024,7 +945,11 @@ async setValue(val, opts={}){//«
 cerr("Unknown value", val);
 		return;
 	}
-	if (this.blobId===NULL_BLOB_FS_TYPE){//«
+	if (this.useMemBlob) {
+		this.#memBlob = blob;
+		return;
+	}
+	if (this.blobId === NULL_BLOB_FS_TYPE){//«
 		if (!await this.getRealBlobId()){
 cerr("Could not getRealBlobId()!?!?!?");
 			return;
@@ -1035,6 +960,9 @@ cerr("Could not getRealBlobId()!?!?!?");
 	this.size = rv.size;
 	return rv;
 }//»
+get isFile(){return true;}
+write(val, opts){return this.setValue(val, opts);}
+get writeable(){return this.par.writeable;}
 unlockFile(){//«
 	delete LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];
 //	delete LOCKED_BLOBS[this.blobId];
@@ -1061,12 +989,12 @@ async lockFile(){//«
 	}
 }//»
 async _getEntry(){//«
-	if (this._entry) return this._entry;
+	if (this.#entry) return this.#entry;
 	if (!this.okGet()) return;
 	let id = this.blobId;
 	if (id === NULL_BLOB_FS_TYPE){
 		id = get_blob_id();
-		this.blobId = id;
+		_set_blob_id(this, id);
 	}
 	else if (this.type==SHM_TYPE) return;
 	else if (!Number.isFinite(id)) {
@@ -1075,19 +1003,158 @@ log(this);
 		return;
 	}
 	let ent = await get_blob_entry(id);
-	this._entry = ent;
+	this.#entry = ent;
 	return ent;
 }//»
 get entry(){return this._getEntry();}
-get buffer(){if(!this.okGet())return;return getBlob(this,{buffer:true});}
-get blob(){if(!this.okGet())return;return getBlob(this,{blob:true});}
-get bytes(){if(!this.okGet())return;return getBlob(this,{bytes:true});}
-get text(){if(!this.okGet())return;return getBlob(this,{text:true});}
-get _file(){if (!this.okGet()) return;return getBlob(this,{getFileOnly:true});}
-get name(){return this.#name;}
-get ext(){return this.#ext;}
-get baseName(){return this.#baseName;}
-get appName(){return this.#appName;}
+get useMemBlob(){return this.type === SHM_TYPE;}
+get memBlob(){return this.#memBlob;}
+get buffer(){//«
+	if(!this.okGet())return;
+	if (this.useMemBlob) {
+		if (this.#memBlob) return this.#memBlob.buffer;
+		return;
+	}
+	return getBlob(this,{buffer:true});
+}//»
+get blob(){//«
+	if(!this.okGet())return;
+	if (this.useMemBlob) return this.#memBlob;
+	return getBlob(this,{blob:true});
+}//»
+get bytes(){//«
+	if(!this.okGet())return;
+	if (this.useMemBlob) {
+		if (this.#memBlob) return util.toBytes(this.#memBlob);
+		return;
+	}
+	return getBlob(this,{bytes:true});
+}//»
+get text(){//«
+	if(!this.okGet())return;
+	if (this.useMemBlob) {
+		if (this.#memBlob) return util.toStr(this.#memBlob);
+		return;
+	}
+	return getBlob(this,{text:true});
+}//»
+get file(){if (!this.okGet()) return;return getBlob(this,{getFileOnly:true});}
+
+//get name(){return this.#name;}
+get ext(){let arr = getNameExt(this.name);if (arr[1]) return arr[1];return "";}
+get baseName(){let arr = getNameExt(this.name);if (arr[1]) return arr[0];return this.name;}
+get appName(){let arr = getNameExt(this.name);if (arr[1]) return util.extToApp(arr[1]);return "";}
+static {
+
+_set_mem_blob = (node, blob)=>{
+	node.#memBlob = blob;
+}
+
+}
+
+}//»
+
+class LinkNode extends FSNode{//«
+
+#symLink;
+#appName;
+constructor(name, par){//«
+	super(name, par);
+	this.#appName = LINK_APP;
+//	this.isLink = true;
+}//»
+get link(){//«
+	let symlink = this.#symLink;
+	if (symlink.match(/^\x2f/)) return symlink;
+	return `${this.path}/${symlink}`;
+}//»
+get isLink(){return true;}
+get ref(){return path_to_node(this.link);}
+get appName(){return this.#appName;};
+get symLink(){return this.#symLink;}
+get writeable(){return this.par.writeable;}
+static{
+_set_sym_link = (node, val) => {node.#symLink = val;};
+}
+
+}//»
+class DataNode extends FSNode{//«
+#data;
+constructor(name, par){//«
+	super(name, par);
+}//»
+getDataType(){return this.#data.type;}
+getDataValue(){return this.#data.value;}
+async setDataValue(val){//«
+	let dat = this.#data;
+	if (!dat){
+cerr("Data not found");
+log(this);
+		return;
+	}
+	if (!isDef(val)){
+cerr("Data types *require* a 'value' field (util.isDef() === true)");
+return;
+	}
+	dat.value = val;
+	if (!await db.setNodeData(this.id, this.#data)) {
+cerr("Could not set node data");
+		return;
+	}
+	return true;
+}//»
+async setValue(val, opts={}){//«
+	if (!(isObj(val) && isStr(val.type))){
+cerr(`Expected an object with a 'type' field! (for inline data storage)`);
+		return;
+	}
+	if (!isDef(val.value)){
+cerr("Data types *require* a 'value' field (util.isDef() === true)");
+return;
+	}
+	if (this.#data.type !== val.type){
+cwarn(`The data types have changed: '${this.#data.type}' => '${val.type}'`);
+	}
+	if (!await db.setNodeData(this.id, val)) {
+cerr("Could not set node data", this);
+		return;
+	}
+	this.#data = val;
+	return true;
+}//»
+write(val, opts){return this.setValue(val, opts);}
+get writeable(){return this.par.writeable;}
+async getValue(opts={}){//«
+	if (opts && opts.text) {
+cwarn("This is a data node, but opts.text was specified in getValue!");
+		try{
+			return JSON.stringify(this.#data);
+		}catch(e){
+cerr(e);
+		}
+		return this.#data.toString();
+	}
+	return this.#data;
+}//»
+get isData(){return true;}
+data(){return this.#data;}
+static{
+_set_data = (node, val) => {node.#data = val;};
+}
+}//»
+class DevNode extends FSNode{//«
+
+//#name;
+constructor(name, par){
+	super(name, par);
+//	this.#name = name;
+//	this.isDevice = true;
+	this.appName = "Device";
+}
+get writeable(){return this.par.writeable;}
+get isDevice(){return true;}
+//get name(){return this.#name;}
+//get baseName(){return this.#name;}
 
 }//»
 //TWKMJORH
@@ -1104,8 +1171,6 @@ util.isFile = isFile;
 //»
 
 //Var«
-
-let setter_secret = Math.floor(Math.random()*10000000);
 
 let rootId;
 /*«
@@ -1176,10 +1241,12 @@ const try_get_fs_type_kid=async(nm, curpar)=>{//«
 This is currently for FS_TYPE only, but we should extend it to whatever other types that
 do the same kind of dynamic discovery mechanism.
 */
-//cwarn(`TRYGET: ${nm}`);
+//cwarn(`TRYGET: ${nm} ${curpar.id}`);
+//log(curpar);
 	let rv = await db.getNodeByNameAndParId(nm, curpar.id);
 //	if (!check_db_rv(rv)) return;
 	let gotrow = rv.rows[0];
+//log(gotrow);
 	if (!gotrow) return;
 	let isDir, isLink, isData, isFile;
 	switch(gotrow.value){
@@ -1204,17 +1271,27 @@ do the same kind of dynamic discovery mechanism.
 		path: curpar.fullpath,
 	});
 	if (isLink) {
-		kid.symLink = gotrow.data;
+//		kid.symLink = gotrow.data;
+_set_sym_link(kid, gotrow.data);
 	}
 	else if (isData){
-		kid.blobId = IDB_DATA_TYPE;
-		kid.data = gotrow.data;
+//		kid.blobId = IDB_DATA_TYPE;
+		_set_blob_id(kid, IDB_DATA_TYPE);
+//		kid.data = gotrow.data;
+_set_data(kid, gotrow.data);
 	}
 	else if (!isDir){
-		kid.blobId = gotrow.data;
+//		kid.blobId = gotrow.data;
+		_set_blob_id(kid, gotrow.data);
+
 	}
-	kid.id = gotrow.id;
-	if (!kid.root) kid.root = curpar.root;
+//	kid.id = gotrow.id;
+//_set_blob_id
+//	_add_kid(curpar, kid);
+	_set_id(kid, gotrow.id);
+//	if (!kid.root) kid.root = curpar.root;
+
+//log(kid);
 	return kid;
 };//»
 
@@ -1248,49 +1325,34 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 	let parts = path.split("/");
 	parts.shift();
 	let topname = parts.shift();
-//	let curpar = root.kids[topname];
-//cwarn(topname);
 	let curpar = root.getKid(topname);
-//log(curpar);
 	if (!curpar) return null;
 	if (!parts.length) return curpar;
-
-//	let curkids = curpar.kids;
 	let curpath = curpar.fullpath;
 	let fname = parts.pop();
-//cwarn(`PTN: ${fname}, DONE: ${curpar.done} LEN: ${parts.length}`);
-//log(curpar);
-//log(parts);
+
 	while(parts.length){//«
 		let nm = parts.shift();
-//		let gotkid = curkids[nm];
 		let gotkid = curpar.getKid(nm);
 		if (gotkid) curpar = gotkid;
 		else {//«
 			if (!curpar.done) {
 				let rtype = curpar.type;
-//log(`RTYPE: ${rtype}`);
 				if (rtype==FS_TYPE){
 					let kid = await try_get_fs_type_kid(nm, curpar);
 					if (!kid) return done();
-//					curkids[nm] = kid;
-					curpar.addKid(kid, setter_secret);
+					_add_kid(curpar, kid);
 				}
 //				else if (rtype == USERS_TYPE){
 //					let kid = await try_get_users_type_kid(nm, curpar);
 //					if (!kid) return done();
 //					curkids[nm] = kid;
 //				}
-				else await popDir(curpar);
-//				gotkid = curkids[nm];
-				gotkid = curpar.getKid(nm);
-				if (!gotkid) return null;
-				curpar = gotkid;
+				else await curpar.loadKids();
 			}
-//			let newpar = curkids[nm];
-			let newpar = curpar.getKid(nm);
-			if (!(newpar&&newpar.appName===FOLDER_APP)) return null;
-			curpar = newpar;
+			curpar = curpar.getKid(nm);
+			if (!(curpar&&curpar.appName===FOLDER_APP)) return null;
+			if (!parts.length) break;
 		}//»
 		if (curpar.appName===LINK_APP){//«
 			if (iter > MAX_LINK_ITERS) return null;
@@ -1310,22 +1372,19 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 			}
 		}//»
 		curpath = curpar.fullpath;
-//		curkids = curpar.kids;
 	}//»
 
 	let parref;
-//	if (!curkids&&!if_get_link&&(parref=await curpar.ref)&&parref.kids){
-	if (!curpar.haveKids&&!if_get_link&&(parref=await curpar.ref)&&parref.haveKids){
+
+	if (!curpar.isDir&&!if_get_link&&(parref=await curpar.ref)&&parref.haveKids){
 		curpar = parref;
 		curpath = curpar.fullpath;
-//		curkids = curpar.kids;
 	}
-//log(curpar);
-	if (!curpar.haveKids) {
+
+	if (!curpar.isDir) {
 		return done();
 	}
 
-//	node = curkids[fname];
 	node = curpar.getKid(fname);
 	if (node||curpar.done) {
 		if (node && !node.root) node.root = curpar.root;
@@ -1336,8 +1395,7 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 		let kid = await try_get_fs_type_kid(fname, curpar);
 		if (!kid) return done();
 		node = kid;
-//		curkids[fname] = kid;
-		curpar.addKid(kid, setter_secret);
+		_add_kid(curpar, kid);
 		return done();
 	}//»
 //	else if (curpar.type===USERS_TYPE){
@@ -1348,8 +1406,10 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 //		return done();
 //	}
 	else{
-		await popDir(curpar);
-		let gotnode = curkids[fname];
+//		await popDir(curpar);
+		await curpar.loadKids();
+//		let gotnode = curkids[fname];
+		let gotnode = curpar.getKid(fname);
 		if (!gotnode) return null;
 		node = gotnode;
 		if (!node.root) node.root = curpar.root;
@@ -1357,7 +1417,6 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 	}
 
 };
-const pathToNode = path_to_node;
 //»
 
 const getPathByDirId=async(idarg)=>{//«
@@ -1410,11 +1469,10 @@ const rmFile=async(fobj, opts)=>{//«
 		return [];
 	};
 	if (fobj.appName===FOLDER_APP){
-		let kids = fobj.kids;
-		for (let k in kids){
-			if (k=="."||k=="..") continue;
-cwarn(`Deleting:`, kids[k]);
-			await delete_fobj(kids[k], opts);
+		let kids = fobj.kidList;
+		for (let kid of kids){
+cwarn(`Deleting:`, kid);
+			await delete_fobj(kid, opts);
 		}
 	}
 	let id = fobj.id;
@@ -1438,7 +1496,7 @@ const clearStorage = async ()=>{//«
 	return true;
 };//»
 const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
-	let obj = await pathToNode(path, true);
+	let obj = await path_to_node(path, true);
 	if (!obj){
 		errcb(`could not stat: ${path}`);
 		return;
@@ -1478,9 +1536,11 @@ const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
 		errcb(`${path}: is "move locked"`);
 		return;
 	}
-	if (!obj.done) obj.kids = await popDirByPath(obj.fullpath);
-	let numkids = get_keys(obj.kids).length;
-	if (!do_full_dirs && numkids > 2) {
+//	if (!obj.done) obj.kids = await popDirByPath(obj.fullpath);
+	if (!obj.done) await obj.loadKids();
+//	let numkids = get_keys(obj.kids).length;
+//	if (!do_full_dirs && numkids > 2) {
+	if (!do_full_dirs && obj.haveKids) {
 		errcb(`${path}: not an empty folder`);
 		return;
 	}
@@ -1503,8 +1563,7 @@ cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
 cerr(`Could not remove: ${node.fullpath} (${errmess})`);
 		return;
 	}
-//	delete node.par.kids[node.name];
-	node.par.delKid(node, setter_secret);
+	_del_kid(node.par, node);
 	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
 	return true;
 };//»
@@ -1513,7 +1572,6 @@ const comMv=async (paths, opts={})=>{//«
 	return com_mv(paths,{if_recur: opts.if_recur, if_cp: opts.if_cp, shell_exports: opts.exports} );
 };//»
 const com_mv = async(args, opts={}) => {//«
-//const com_mv = async(shell_exports, args, if_cp, dom_objects, recur_opts) => {
 
 let{
 	shell_exports, if_recur, if_cp, dom_objects, recur_opts
@@ -1550,7 +1608,6 @@ let {
 	cur_dir,
 	failopts,
 	is_root,
-	pathToNode,
 	no_move_cb
 } = shell_exports;
 
@@ -1562,7 +1619,6 @@ if (!wout) wout=s=>{
 log("OUT",s);
 };
 
-if (!pathToNode) pathToNode = this.api.pathToNode;
 
 if (recur_opts){
 	cbok = recur_opts.cbok;
@@ -1593,7 +1649,7 @@ if (args.length < 2) {
 }
 let topatharg = getFullPath(args.pop(), cur_dir);
 //»
-let destret = await pathToNode(topatharg);
+let destret = await path_to_node(topatharg);
 
 //Failure conditions...«
 
@@ -1607,13 +1663,12 @@ else if (args.length===1){
 //This allows a destination to be clobbered if the name is in the folder.
 //Only if the file is explicitly named, does this error happen.
 	if (!force && destret && destret.appName != FOLDER_APP) {
-//log(cberr);
 		cberr(`${topatharg}: not clobbering the destination`);
 		return;
 	}
 }
-if (destret && destret.type == FS_TYPE) {
-//	if (!check_fs_dir_perm(destret, is_root)) {
+//if (destret && destret.type == FS_TYPE) {
+if (destret) {
 	if (!destret.perm) {
 		no_move_all();
 		return cberr(`${topatharg}: permission denied`);
@@ -1628,7 +1683,7 @@ for (let arg of args){//«
 		continue;
 	}
 
-	let srcret = await pathToNode(path, true);
+	let srcret = await path_to_node(path, true);
 
 	if (!srcret) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
@@ -1641,17 +1696,21 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `skipping top level directory: ${path}`});
 	}
-	else if (!(srctype == FS_TYPE || srctype == SHM_TYPE)) {
+//	else if (!(srctype == FS_TYPE || srctype == SHM_TYPE)) {
+//		if (no_move_cb) no_move_cb(icon_obj[path]);
+//		mvarr.push({ERR: `${path}: cannot ${verb} from directory type: ${srctype}`});
+//	}
+	else if (com==="mv" && !srcret.writeable) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
-		mvarr.push({ERR: `${path}: cannot ${verb} from directory type: ${srctype}`});
+		mvarr.push({ERR: `${path} is "read only"`});
 	}
 //No moving of files that are actively being edited
-	else if (com==="mv"&&srcret.writeLocked()) {
+	else if (com==="mv" && srcret.writeLocked()) {
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${path} is "write locked"`});
 	}
 //No moving of folders that contain files that are actively being edited
-	else if (com==="mv"&&isfolder&&srcret.isMoveLocked){
+	else if (com==="mv" && isfolder && srcret.isMoveLocked){
 		if (no_move_cb) no_move_cb(icon_obj[path]);
 		mvarr.push({ERR: `${path} is "move locked"`});
 	}
@@ -1673,7 +1732,8 @@ for (let arg of args){//«
 
 }//»
 
-if (destret && destret.appName == FOLDER_APP && destret.type === FS_TYPE){//«
+if (destret && destret.isDir && destret.type === FS_TYPE){//«
+//if (destret && destret.appName == FOLDER_APP && destret.type === FS_TYPE){
 //if (destret && destret.appName == FOLDER_APP && destret.type === "fs"){
 	if (!destret.done) await popDir(destret);
 //	let kids = destret.kids;
@@ -1744,7 +1804,7 @@ for (let arr of mvarr) {//«
 		}
 		continue;
 	}
-	let savedir = await pathToNode(savedirpath);
+	let savedir = await path_to_node(savedirpath);
 	if (!savedir) {
 		werr(`${savedirpath}: no such directory`);
 		continue;
@@ -1752,15 +1812,22 @@ for (let arr of mvarr) {//«
 	let savetype = savedir.type;
 
 //	if (savetype !== FS_TYPE) {
-	if (!(savetype == FS_TYPE || savetype == SHM_TYPE)) {
-		werr(`Not (yet) supporting ${verb} to type='${savetype}'`);
+	if (!savedir.writeable){
+		werr(`${savedir.fullpath}: read only`);
 		continue;
 	}
+
+//	if (!(savetype == FS_TYPE || savetype == SHM_TYPE)) {
+//		werr(`Not (yet) supporting ${verb} to type='${savetype}'`);
+//		continue;
+//	}
+
 
 //"Manual recursion" needed for non HTML5FileSystem folders...
 	if (type != FS_TYPE && app === FOLDER_APP){//«
 		let nm = savename;
-		if (savedir.kids[nm]){
+//		if (savedir.kids[nm]){
+		if (savedir.getKid(nm)){
 			gotfail=true;
 			werr(`refusing to clobber: ${nm}`);
 			continue;
@@ -1776,16 +1843,23 @@ for (let arr of mvarr) {//«
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
-		if (NS.Desk) NS.Desk.make_icon_if_new(await pathToNode(newpath));
+		if (NS.Desk) NS.Desk.make_icon_if_new(await path_to_node(newpath));
 		werr(`Created: ${newpath}`);
 		if (!node.done) await popDir(node);
 		let arr = [];	
+
+/*
 		let kids=node.kids;
 		for (let k in kids){
 			if (k=="."||k=="..") continue;
 			arr.push(kids[k].fullpath);
 		}
 		arr.push(newpath);
+*/
+
+		let kids = node.kidList;
+		for (let k of kids) arr.push(k.fullpath);
+
 		let obj = {
 			cbok: () => {
 			},
@@ -1793,46 +1867,45 @@ for (let arr of mvarr) {//«
 				gotfail = true;
 			}
 		};
-//		await this.com_mv(shell_exports, arr, true, null, obj);
 		await this.com_mv(arr, {shell_exports, if_recur: true, if_cp: true, recur_opts: obj});
 		continue;
 	}//»
-	if (type==FS_TYPE){//«
-		if (savetype !== FS_TYPE) {
-			werr(`not (yet) ${com}'ing from type="${FS_TYPE}"`);
+//	if (type==FS_TYPE){//«
+//		if (savetype !== FS_TYPE) {
+//			werr(`not (yet) ${com}'ing from type="${FS_TYPE}"`);
+//			continue;
+//		}
+	if (verb=="move"){
+		if (!await move_node(node, savename, savedir)){
+			werr(`Could not move from ${frompath} to ${topath}`);
 			continue;
 		}
-		if (verb=="move"){
-			if (!await move_node(node, savename, savedir)){
-				werr(`Could not move from ${frompath} to ${topath}`);
-				continue;
-			}
+	}
+	else{
+		if (!(node = await copy_node(node, savename, savedir))){
+			werr(`Could not copy from ${frompath} to ${topath}`);
+			continue;
 		}
-		else{
-			if (!(node = await copy_node(node, savename, savedir))){
-				werr(`Could not copy from ${frompath} to ${topath}`);
-				continue;
-			}
-		}
-		if (if_cp) {
-			gotfrom = null;
-		}
+	}
+	if (if_cp) {
+		gotfrom = null;
+	}
 //TUIMN
-		if (node.isFile) {
-cwarn("DELETE node.appName", node.appName);
-			delete node.appName;
-		}
-		await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
-			node,
-			icon: fromicon,
-			win: towin
-		});
-	}//»
-else{//«
-	gotfail=true;
-	werr(`Unknown type: ${type}`);
-	continue;
-}//»
+//	if (node.isFile) {
+//cwarn("DELETE node.appName", node.appName);
+//		delete node.appName;
+//	}
+	await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
+		node,
+		icon: fromicon,
+		win: towin
+	});
+//	}//»
+//else{//«
+//	gotfail=true;
+//	werr(`Unknown type: ${type}`);
+//	continue;
+//}//»
 
 }//»
 
@@ -1851,7 +1924,16 @@ const copy_node = async(node, newName, toNode)=>{//«
 	let newpath = `${toNode.fullpath}/${newName}`;
 	if (util.newPathIsBad(node.fullpath, newpath)) return;
 //EYTKFHSC
-	return saveFsByPath(newpath, await getBlob(node, {binary: true}));
+	if (toNode.type == FS_TYPE) {
+		return saveFsByPath(newpath, await getBlob(node, {binary: true}));
+	}
+	else {
+		let save_blob = await node.blob;
+		node = mk_dir_kid(toNode, newName, {isFile: true});
+		await node.setValue(save_blob);
+		_add_kid(toNode, node);
+		return node;
+	}
 };//»
 const move_node = async(node, newName, toNode)=>{//«
 	if (util.newPathIsBad(node.fullpath, `${toNode.fullpath}/${newName}`)) return;
@@ -1859,21 +1941,35 @@ const move_node = async(node, newName, toNode)=>{//«
 	let par = node.par;
 	let parid = par.id;
 	let saveid = toNode.id;
-//	db.init();
 	let savename;
 	if (newName && (newName !== node.name)){
 		savename = newName;
 	}
-	if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
-//	delete par.kids[node.name];
-	par.delKid(node, setter_secret);
-	node._setName(newName, setter_secret);
-//	node.name = newName;
-//	toNode.kids[newName] = node;
-	toNode.addKid(node, setter_secret);
-	node._setPar(toNode, setter_secret);
-//	node.par = toNode;
+	let save_blob = null;
+	if (node.type == FS_TYPE) {
+		if (toNode.type == FS_TYPE) {
+			if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
+		}
+		else {
+			save_blob = await node.blob;
+			if (!await db.removeNode(id, parid)) return cerr("YUREFJKK");
+		}
+	}
+	else save_blob = await node.blob;
+	
+
+	_del_kid(par, node);
+	if (save_blob !== null) {
+		node = mk_dir_kid(toNode, newName, {isFile: true});
+		await node.setValue(save_blob);
+	}
+	else {
+		_set_name(node, newName);
+		_set_par(node, toNode);
+	}
+	_add_kid(toNode, node);
 	return true;
+
 };//»
 
 const getBlob = async(node, opts={})=>{//«
@@ -1881,15 +1977,28 @@ const getBlob = async(node, opts={})=>{//«
 	let id = node.id;
 	let file;
 	let rv;
-//This is guaranteed to be something in /site/
-	if (node.type==SHM_TYPE){
-		file = node._blob;
+	if (node.type==SHM_TYPE){//«
+		file = node.memBlob;
 		if (!file) {
 			file = new Blob([]);
-			node._blob = file;
+//			node._blob = file;
+			_set_mem_blob(node, file);
 		}
-	}
-	else {
+	}//»
+	else if (node.type===SITE_FS_TYPE){//«
+		let path = node.fullpath.replace(/^\/site/, "");
+		let rv;
+		try {
+			rv = await fetch(path);
+		}
+		catch(e){
+cerr(e);
+			return;
+		}
+		if (!rv.ok) return;
+		file = await rv.blob();
+	}//»
+	else {//«
 		let bid = node.blobId;
 		if (!bid||(bid===NULL_BLOB_FS_TYPE && !opts.getFileOnly)) {
 if (!bid){
@@ -1909,7 +2018,7 @@ cwarn("The data should already be on the node! (node.data)");
 		if (!ent) return;
 		file = await ent.getFile();
 		if (opts.getFileOnly) return file;
-	}
+	}//»
 	if (!file) return;
 	let fmt;
 	if (opts.buffer) fmt="arraybuffer";
@@ -1972,12 +2081,12 @@ const write_blob = async(fent, blob, opts={}) => {//«
 	} = opts;
 	let f;
 	if (node){
-		if (node.type==SHM_TYPE){
-			if (append&&node._blob) blob = new Blob([node._blob, blob]);
-			node._blob = blob;
+		if (node.useMemBlob){
+			if (append&&node.memBlob) blob = new Blob([node.memBlob, blob]);
+			_set_mem_blob(node, blob);
 			return {size: blob.size};
 		}
-		f = await opts.node._file;
+		f = await opts.node.file;
 	}
 	let writer = await fent.createWritable({keepExistingData: append});
 	if (append) writer.seek(f.size);
@@ -2003,7 +2112,7 @@ const writeFile = async(path, val, opts = {}) => {//«
 		else if (name==="log") console.log(val);
 		return true;
 	}//»
-	let exists = await pathToNode(path);
+	let exists = await path_to_node(path);
 	if (exists) {
 //	if (exists && !opts.append){
 cwarn("writeFile was called on an existing file!?!?!");
@@ -2032,7 +2141,7 @@ cerr(rv);
 		let arr = path.split("/");
 		let name = arr.pop();
 		let parpath = arr.join("/");
-		let parnode = await pathToNode(parpath);
+		let parnode = await path_to_node(parpath);
 		if (!parnode) {
 cwarn(`NO PARENT NODE FOUND AT: ${parpath}`);
 			return;
@@ -2067,29 +2176,21 @@ const saveFsByPath=async(path, val, opts={})=>{//«
 if (globals.read_only) return;
 
 let blob;
-let node = await pathToNode(path);
+let node = await path_to_node(path);
 if (!node) {
 	let patharr = path.split("/");
 	let fname = patharr.pop();
 	let parpath = patharr.join("/");
-	let parobj = await pathToNode(parpath);
+	let parobj = await path_to_node(parpath);
 	if (!parobj) return [null, `${parpath}: Bad parent path`];
 	node = await touchFile(parobj, fname, opts);
-	node._setName(fname, setter_secret);
-//	let ext = util.getNameExt(fname)[1];
-//	node.ext = ext;
-//DHYUI
-//	node.appName = util.extToApp(ext);
+	_set_name(node, fname);
 }
 else if (opts.data){
 return [null, "Use node.setValue instead of saveFsByPath!"]
-//	if (!await db.setNodeData(node.id, opts.data)) {
-//cerr("Could not set node data", node);
-//		return;
-//	}
 }
 
-if (node.blobId===NULL_BLOB_FS_TYPE){//«
+if (node.blobId === NULL_BLOB_FS_TYPE){//«
 	if (!await node.getRealBlobId()){
 cerr(`saveFsByPath(${path}): could not get a real blob id!?!?!`);
 return;
@@ -2119,11 +2220,10 @@ return node;
 }//»
 const makeHardLink = async(parobj, name, blobid) =>{//«
 	if (!parobj.done) await popDir(parobj);
-	let kids = parobj.kids;
-	if (kids[name]) {
-cwarn("GOTERMPT");
-		return kids[name];
-	}
+//	let kids = parobj.kids;
+	let got = parobj.getKid(name);
+	if (got) return got;
+
 	let parid = parobj.id;
 	let rv;
 //	db.init();
@@ -2132,8 +2232,10 @@ cwarn("GOTERMPT");
 
 	let kid = mk_dir_kid(parobj, name, {isFile: true});
 
-	kid.blobId = blobid;
-	kid.id = id;
+//	kid.blobId = blobid;
+	_set_blob_id(kid, blobId);
+//	kid.id = id;
+	_set_id(kid, id);
 	kids[name] = kid;
 	return kid;
 };//»
@@ -2142,8 +2244,6 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	if (globals.read_only)return;
 
 	if (!parobj.done) await popDir(parobj);
-//	let kids = parobj.kids;
-//	if (kids[name]) {
 	let gotkid = parobj.getKid(name);
 	if (gotkid) {
 		return gotkid;
@@ -2152,10 +2252,9 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	let rv;
 	let id;
 	let is_shm = parobj.type==SHM_TYPE;
-//	let is_users = parobj.type==USERS_TYPE;
 	if (is_shm){
 	}
-//	else if (is_users){
+//	else if (is_users){//«
 //		let rv = await globals.funcs["netfs.fbWrite"](`${parobj.fullpath}/${name}`);
 //		if (isErr(rv)){
 //cerr(rv);
@@ -2166,8 +2265,8 @@ const touchFile = async(parobj, name, opts={})=>{//«
 //cerr(`ID IS NaN!?! id=${id}`);
 //return;
 //}
-//	}
-	else {
+//	}//»
+	else {//«
 		if (opts.data) {
 			let val = opts.data;
 			if (!(isObj(val) && isStr(val.type))){
@@ -2178,7 +2277,7 @@ cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)
 		}
 		else id = await db.createNode(name, NULL_BLOB_FS_TYPE, parid);
 		if (!id) return cerr("ADBNYURL");
-	}
+	}//»
 	let kid = mk_dir_kid(parobj, name,{
 		isData: !!opts.data,
 		isFile: !opts.data
@@ -2190,13 +2289,19 @@ cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)
 //		kid.blobId = 0;
 //	}
 	else if (opts.data) {
-		kid.blobId = IDB_DATA_TYPE;
-		kid.data = opts.data;
+//		kid.blobId = IDB_DATA_TYPE;
+_set_blob_id(kid, IDB_DATA_TYPE);
+//		kid.data = opts.data;
+_set_data(opts.data);
 	}
-	else kid.blobId = NULL_BLOB_FS_TYPE;
-	kid.id = id;
-//	kids[name] = kid;
-	parobj.addKid(kid, setter_secret);
+	else {
+//		kid.blobId = NULL_BLOB_FS_TYPE;
+_set_blob_id(kid, NULL_BLOB_FS_TYPE);
+	}
+//	kid.id = id;
+	_set_id(kid, id);
+	_add_kid(parobj, kid);
+	if (NS.Desk&&!opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
 	return kid;
 
 };//»
@@ -2207,13 +2312,27 @@ cerr("Need a full path");
 	}
 	let arr = await path.toParNodeAndName(path);
 	if (!arr) return;
-	return touchFile(arr[0], arr[1], opts);
+//if (!arr[0])
+	let par = arr[0];
+if (!par.perm){
+cerr(`Permission denied: ${par.fullpath}`);
+return;
+}
+	let nm = arr[1];
+	return touchFile(par, nm, opts);
 };//»
-
-const mkDir=async(parpatharg, name, opts={})=>{//«
+const mkDir = async(pararg, name, opts={})=>{//«
 	if (globals.read_only)return;
-	let if_no_make_icon = opts.noMakeIcon; 
+	let parobj;
+	if (isStr(pararg)) {
+		parobj = await pararg.toNode(opts);
+		if (!parobj) return;
+	}
+	else parobj = pararg;
+	let fullpath = `${parobj.fullpath}/${name}`;
+/*«
 	let parpath;
+
 	if (isObj(parpatharg)) parpath = parpatharg.fullpath;
 	else parpath = parpatharg;
 	if (name===null||name===undefined){
@@ -2222,36 +2341,17 @@ const mkDir=async(parpatharg, name, opts={})=>{//«
 		parpath = arr.join("/");
 	}
 	let fullpath = `${parpath}/${name}`.regpath();
-	let parobj = await pathToNode(parpath);
+	let parobj = await path_to_node(parpath);
 	if (!parobj) return;
-//	let no_db = false;
-	let typ = parobj.type;
-/*«
-	if (parobj.type!==FS_TYPE) {
-		if (parobj.type==SHM_TYPE) no_db = true;
-		else if (parobj.type==USERS_TYPE) {
-//cwarn(`mkDir: USERS: <${parpath}> <${name}>`);
-//return;
-			no_db = true;
-		}
-		else return;
-	}
 »*/
-	if (await pathToNode(fullpath)){//«
+//	let no_db = false;
+
+	let typ = parobj.type;
+	if (await path_to_node(fullpath)){//«
 //		let kid = parobj.kids[name];
-let kid = parobj.getKid(name);
+		let kid = parobj.getKid(name);
 		if (kid) return kid;
 cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING PATHTONODE("${fullpath}") ???`);
-/*
-		kid = await try_get_fs_type_kid(name, parobj);
-		if (kid){
-			parobj.kids[name] = kid;
-			return kid;
-		}
-cerr(`Got NO KID after try_get_fs_type_kid in mkDir("${parpatharg}","${name}"), WITH ARGS BELOW`);
-log("NAME", name);
-log("PAROBJ",parobj);
-*/
 		return;
 	}//»
 	let id;
@@ -2261,7 +2361,6 @@ log("PAROBJ",parobj);
 		if (!parid) return cerr("GEJ76GF");
 		id = await db.createNode(name, DIR_FS_TYPE, parid);
 		if (!id) return cerr("DEYBGJTU");
-//		kid = mk_dir_kid(parobj, name, {isDir: true});
 		kid = mk_dir_kid(parobj, name, {isDir: true, perm: opts.perm});
 	}
 //	else if (typ === USERS_TYPE){
@@ -2270,12 +2369,35 @@ log("PAROBJ",parobj);
 //log("parobj.APPDATA?", parobj.appData);
 //		kid = mk_dir_kid(parobj, name, {isDir: true, appData: parobj.appData});
 //	}
-	kid.id = id;
-	parobj.kids[name] = kid;
-
-	if (NS.Desk&&!if_no_make_icon) NS.Desk.make_icon_if_new(kid);
+//	kid.id = id;
+	_set_id(kid, id);
+	_add_kid(parobj, kid);
+	if (NS.Desk && !opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
 	return kid;
 
+};
+//»
+const mk_dir = async (fullpath, opts) => {//«
+
+let node = await fullpath.toNode({getLink: true});
+if (node) {
+cerr(`The file exists: ${fullpath}`);
+	return;
+}
+let arr = fullpath.split("/");
+let name = arr.pop();
+let parpath = arr.join("/");
+if (!parpath) parpath = "/";
+let par = await parpath.toNode();
+if (!par){
+cerr(`Not found: ${parpath}`);
+return;
+}
+if (!par.perm){
+cerr(`Permission denied: ${parpath}`);
+return;
+}
+return mkDir(par, name, opts);
 };//»
 const makeLink=async(parobj, name, target, fullpath)=>{//«
 	if (globals.read_only)return;
@@ -2288,9 +2410,14 @@ const makeLink=async(parobj, name, target, fullpath)=>{//«
 		isLink: true,
 		size: target.length,
 	});
-	kid.symLink = target;
-	kid.id = id;
-	parobj.kids[name]=kid;
+//	kid.symLink = target;
+	_set_sym_link(kid, target);
+//	kid.id = id;
+	_set_id(kid, id);
+
+//	parobj.kids[name]=kid;
+	_add_kid(parobj, kid);
+
 	if (NS.Desk) NS.Desk.make_icon_if_new(kid);
 	return kid;
 };//»
@@ -2300,7 +2427,7 @@ const makeLink=async(parobj, name, target, fullpath)=>{//«
 //Init/Populate/Mount Dirs«
 
 const DEV_FS_TYPE = "dev";
-const DEV_SHM_TYPE = "shm";
+const SITE_FS_TYPE = "site";
 
 // ALL THIS "INIT" STUFF IS STUPID AND MUST BE REFACTORED!!!
 
@@ -2321,80 +2448,44 @@ This is only called for /dev (from make_dev_tree) and /site (from init)
 
 */
 
-//	let dir = new DirNode(name, pararg||root);
-	let dir = new DirNode(name, root, {sys: true, type});
-//	dir._type = type;
-//	dir.kids = {};
-//	dir.sys = true;
+	let dir = new DirNode(name, root, {sys: true, type, perm: false});
+	_add_root_kid(dir);
 
-	root.addKid(dir, setter_secret);
-
-//	if (!pararg) dir._path = "/";
-//	else dir._path = dir.par.fullpath;
-
-/*
-	if (pararg) pararg.kids[name]=dir;
-	else root.kids[name]=dir;
-//	dir.root=dir;
-	dir.kids['.']=dir;
-	dir.kids['..']=root;
-*/
 	return dir;
 }
 //this.mount_tree = mount_tree;
 //»
 const make_dev_tree = ()=>{//«
-//	let par = mount_tree("dev", "dev");
 	let par = mount_tree("dev", DEV_FS_TYPE);
-//	let kids = par.kids;
 	let arr = ["null", "log"];
 	for (let name of arr){
 		let kid = new DevNode(name, par);
-		par.addKid(kid, setter_secret);
-//		kid.root = par;
-//		kids[name]=kid;
+		_add_kid(par, kid);
 	}   
-	let shm = mk_dir_kid(par, "shm", {isDir: true, type: DEV_SHM_TYPE, perm: true});
-//	shm.root = shm;
-//	shm._type = "shm";
-//	shm._type = DEV_SHM_TYPE;
-//	shm.perm = true;
+	let shm = mk_dir_kid(par, "shm", {isDir: true, type: SHM_TYPE, perm: true});
 	shm.done = true;
-//	kids["shm"] = shm;
-	par.addKid(shm, setter_secret);
+	_add_kid(par, shm);
 	par.done=true;
 	par.longdone=true;
 };//»
 
 const init = async()=>{//«
 	const make_fs_tree = async (name, opts={}) => {//«
-/*
-		const new_root_tree = (name, type, opts) => {//«
-			let dir = new DirNode(name, root, opts);
-//			dir.kids={};
-//			dir._type = FS_TYPE;
-			return dir;
-		};//»
-*/
 		let dirstr = null;
-//		let tree = new_root_tree(name, FS_TYPE, opts);
 		let tree = new DirNode(name, root, opts);
-//		let kids = tree.kids;
-//		tree.root = tree;
-//log(tree);
-//		kids['..'] = root;
-//		root.kids[name] = tree;
-		root.addKid(tree, setter_secret);
+		_add_root_kid(tree);
 		let rv = await db.getNodeByNameAndParId(name, rootId);
 	//	if (!check_db_rv(rv)) return;
 		let rows = rv.rows;
 		if (rows.length){
-			tree.id = rows[0].id;
+//			tree.id = rows[0].id;
+			_set_id(tree, rows[0].id);
 			return tree;
 		}
 		rv = await db.createNode(name, DIR_FS_TYPE, rootId);
 		if (!rv) return;
-		tree.id = rv;
+//		tree.id = rv;
+		_set_id(tree, rv);
 		return tree;
 	};//»
 	if (!await db.init(root, FS_PREF)) {
@@ -2410,9 +2501,10 @@ const init = async()=>{//«
 		else opts.perm = false;
 		let ret = await make_fs_tree(name, opts);
 		if (!ret) return;
-		root.addKid(ret, setter_secret);
+		_add_root_kid(ret);
 	}
 	await mkDir("/var","appdata");
+	mount_tree("site", SITE_FS_TYPE);
 	return true;
 };//»
 
@@ -2438,55 +2530,21 @@ cerr(e);
 //»
 
 //RYSHTKFH
+
 const mk_dir_kid = (par, name, opts={}) => {//«
-//	let {isDir, isLink, isData, isFile, isNetFile, appData} = opts;
 	let {isDir, isLink, isData, isFile} = opts;
-	let mod_time = opts.modTime;
-	let path = opts.path;
-	let fullpath = `${path}/${name}`;
-	let file = opts.file;
-	let ent = opts.entry;
 	let kid;
-	if (opts.useKid) kid = opts.useKid;
-	else {
-		if (isFile) kid = new FileNode(name, par);
-		else if (isDir) {
-//			let opts = {};
-			if (par.par.treeroot == true) {
-				if (par.name == "home") opts.perm = name;
-				else if (par.name == "var" && name == "cache") opts.readOnly = true;
-			}
-			kid = new DirNode(name, par, opts);
-//if (name==="shm") {
-//log(kid);
-//}
+	if (isFile) kid = new FileNode(name, par);
+	else if (isDir) {
+		if (par.par.treeroot == true) {
+			if (par.name == "home") opts.perm = name;
+			else if (par.name == "var" && name == "cache") opts.readOnly = true;
 		}
-		else if (isLink) kid = new LinkNode(name, par);
-		else if (isData) kid = new DataNode(name, par);
-//		else if (isNetFile) kid = new NetFileNode(name, par, appData);
-		else FATAL("WHAT KIND OF NODE???");
+		kid = new DirNode(name, par, opts);
 	}
-	if (isDir) {
-//		kid.appName = FOLDER_APP;
-//		let kidsobj = kid.kids || {'..': par};
-//		kidsobj['.'] = kid;
-//		kid.kids = kidsobj;
-//		kid.moveLocks=[];
-	}
-	else if (isLink) {
-//		kid.appName=LINK_APP;
-	}
-	else if (isData){
-//WLOTUYJG
-	}
-	else {
-//		kid.ext = util.getNameExt(name)[1];
-//		let app = util.extToApp(name);
-//		kid.appName = app;
-//		kid.size = opts.size;
-	}	
-	
-	kid.file = file;
+	else if (isLink) kid = new LinkNode(name, par);
+	else if (isData) kid = new DataNode(name, par);
+	else FATAL("WHAT KIND OF NODE???");
 	return kid;
 }
 //»
@@ -2495,7 +2553,7 @@ const popDir = (dirobj, opts = {}) => {return populate_dirobj(dirobj, opts);};
 const popDirByPath=(patharg, opts={})=>{return populate_dirobj_by_path(patharg, opts);};
 
 const populate_dirobj_by_path = async(patharg, opts={}) => {//«
-	let obj = await pathToNode(patharg);
+	let obj = await path_to_node(patharg);
 	if (!obj) return cerr(`${patharg}: not found`);
 	if (obj.appName !== FOLDER_APP) return cerr(`${patharg}: not a directory`);
 	if (obj.done){
@@ -2520,6 +2578,9 @@ const populate_dirobj = async(dirobj, opts = {}) => {//«
 // log(opts.vals);
 //				return populate_remote_users_dirobj(dirobj, opts);
 //			}
+if (dirobj.type === SITE_FS_TYPE){
+	return populate_site_dir(dirobj, opts);
+}
 cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
 log(dirobj);
 		}
@@ -2536,9 +2597,6 @@ log(dirobj);
 	return true;
 }//»
 const populate_fs_dirobj = async(parobj, opts={}) => {//«
-//cwarn("populate_fs_dirobj");
-//log(parobj);
-//let kids = parobj.kids;
 let rv;
 let dirid = parobj.id;
 rv = await db.getAll(dirid);
@@ -2567,27 +2625,48 @@ for (let obj of rows){
 		isData,
 		isFile
 	});
-	kid.id = id;
+	_set_id(kid, id);
 	if (isLink){
-		kid.symLink = value;
+		_set_sym_link(kid, value);
 	}
 	else if (isData){
-		kid.blobId = IDB_DATA_TYPE;
-		kid.data = value;
+		_set_blob_id(kid, IDB_DATA_TYPE);
+		_set_data(kid, value);
 	}
 	else if (isFile){
-		kid.blobId = value;
+		_set_blob_id(kid, value);
 	}
-//	kids[name] = kid;
-	parobj.addKid(kid, setter_secret);
+	_add_kid(parobj, kid);
 	if (kid.appName==="Application") kid.appicon = await kid.text;
 }
 
 parobj.done=true;
-//return kids;
 return true;
 }//»
-
+const populate_site_dir = async(par, opts={}) => {//«
+const domount=(list, par)=>{//«
+	for (let i=0; i < list.length; i++){
+		let arr = list[i].split("/");
+		let nm = arr[0];
+		let sz = arr[1];
+		if (sz){
+			let node = mk_dir_kid(par, nm, {size: parseInt(sz), isFile: true});
+			_add_kid(par, node);
+		}
+		else {
+			let dir = mk_dir_kid(par, nm, {isDir: true});
+			domount(list[i+1], dir);
+			_add_kid(par, dir);
+			i++;
+		}
+	}
+};//»
+let rv = await fetch('/list.json');
+if (!rv.ok) return;
+let list = await rv.json();
+domount(list, par);
+par.done = true;
+};//»
 
 //»
 //Util«
@@ -2621,7 +2700,7 @@ cerr("NEED FULLPATH IN CHECK_FS_BY_PATH");
 			cb();
 			return;
 		}
-		if (await pathToNode(fullpath)) return cb(true);
+		if (await path_to_node(fullpath)) return cb(true);
 		cb(false);
 	}
 	if (!basename) return cerr("basename is not set!");
@@ -2720,9 +2799,10 @@ this.set_fent = async(cb) => {//«
 let arr = fullpath.split("/");
 let fname = arr.pop();
 let parpath = arr.join("/");
-let parobj = await pathToNode(parpath);
+let parobj = await path_to_node(parpath);
 if (!parobj) return cb(null, "No parent object!");
-if (parobj.kids[fname]) return cb(null,`${fname}: the name is already taken`);
+//if (parobj.kids[fname]) return cb(null,`${fname}: the name is already taken`);
+if (parobj.getKid(fname)) return cb(null,`${fname}: the name is already taken`);
 
 let node = await saveFsByPath(fullpath, null, {getEntry: true});
 if (!(node&&node.entry)) return cb(null, `${fullpath}, Could not get the file entry`);
@@ -2854,7 +2934,7 @@ const toNode = async function(opts={}) {//«
 cerr("Cannot construct a full path!");
 		return false;
 	}
-	let node = await pathToNode(normPath(s), opts.getLink);
+	let node = await path_to_node(normPath(s), opts.getLink);
 	if (!node) return node;
 	if (opts.doPopDir && node.isDir===true){
 		await popDir(node, opts);
@@ -2878,7 +2958,7 @@ _.toParNodeAndName=async function(opts={}){//«
 	let arr = s.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
-	let parnode = await pathToNode(parpath);
+	let parnode = await path_to_node(parpath);
 	if (!(parnode && parnode.appName === FOLDER_APP)) {
 cerr(`${parpath}: Not a directory!`);
 		return;
@@ -2931,6 +3011,33 @@ _.toJson=async function(opts={}){//«
 cerr(e);
 	}
 };//»
+
+_.mkNewFile = async function(opts={}){//«
+
+let fullpath = normPath(this, opts.cwd);
+if (!fullpath) {
+cerr(`normPath(${this}, ${opts.cwd}) returned null`);
+	return;
+}
+let node = await fullpath.toNode({getLink: true});
+if (node) {
+cerr(`The file exists: ${fullpath}`);
+	return;
+}
+return mkFile(fullpath, opts);
+
+}//»
+_.mkDir = async function(opts={}) {//«
+let fullpath = normPath(this, opts.cwd);
+if (!fullpath) {
+cerr(`normPath(${this}, ${opts.cwd}) returned null`);
+	return;
+}
+if (fullpath === "/") return;
+return mk_dir(fullpath, opts);
+}//»
+
+
 }
 
 //»
@@ -2946,7 +3053,7 @@ this.api = {//«
 	makeHardLink,
 	touchFile,
 	mkFile,
-//	saveFsByPath,
+
 	doFsRm,
 	mkDir,
 
@@ -2962,13 +3069,9 @@ this.api = {//«
 
 	comMv,
 
-	popDir,
-	popDirByPath,
-//	mountDir,
+//	popDir,
+//	popDirByPath,
 
-	pathToNode,
-
-//	checkDirPerm,
 
 }
 NS.api.fs=this.api;
@@ -3222,7 +3325,7 @@ this.check_fs_dir_perm=check_fs_dir_perm;
 onst checkDirPerm=async(path_or_obj,opts={})=>{//«
 	let obj;
 	if (isStr(path_or_obj)){
-		obj = await pathToNode(path_or_obj);
+		obj = await path_to_node(path_or_obj);
 		if (!obj) return Y(false);
 	}
 	else obj = path_or_obj;
@@ -3281,7 +3384,7 @@ const getchunk=async()=>{
 }
 if (stream_cb) stream_cb(null, getchunk);
 
-let fobj = await pathToNode(patharg);
+let fobj = await path_to_node(patharg);
 let parts = fobj.fullpath.split("/");
 parts.shift();
 parts.shift();
