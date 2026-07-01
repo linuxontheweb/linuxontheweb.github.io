@@ -884,12 +884,9 @@ delete dir.#kids[kid.name];
 
 }//»
 class FileNode extends FSNode{//«
-
-//#blobId;
 #lock;
 #entry;
 #memBlob;
-//#useMemBlob;
 constructor(name, par){//«
 	super(name, par);
 //	if (par.fullpath.match(/^\/dev\/shm/)) this.#useMemBlob = true;
@@ -1137,12 +1134,11 @@ class DevNode extends FSNode{//«
 //#name;
 constructor(name, par){
 	super(name, par);
-//	this.#name = name;
-//	this.isDevice = true;
-	this.appName = "Device";
+//	this.appName = "Device";
 }
 get writeable(){return this.par.writeable;}
 get isDevice(){return true;}
+get appName(){return "Device"}
 //get name(){return this.#name;}
 //get baseName(){return this.#name;}
 
@@ -2942,7 +2938,7 @@ cerr(`${parpath}: Not a directory!`);
 	}
 	return [parnode, fname, s];
 }//»
-_.toText = async function(opts = {}) {
+_.toText = async function(opts = {}) {/*«*/
 	let node = await this.toNode(opts);
 	if (!node) return;
 	if (!node.isFile) return;
@@ -2951,23 +2947,11 @@ _.toText = async function(opts = {}) {
 	if (txt && !opts.noChomp) txt = txt.replace(/\n$/, "");
 	if (opts.lines === true) return txt.split("\n");
 	return txt;
-};
-_.hasTextExt = function(opts={}){
-	let ext = this.split(".").pop();
-	return TEXT_EXTENSIONS.includes(ext);
-}
-_.toLines=function(opts={}){
-	opts.lines = true;
-	return this.toText(opts);
-}
-_.toBytes=async function(opts={}){
-	let node=await this.toNode(opts);
-	if(node)return node.bytes;
-};
-_.toBuffer=async function(opts={}){
-	let node=await this.toNode(opts);
-	if(node) return node.buffer;
-};
+};/*»*/
+_.hasTextExt = function(opts={}){let ext = this.split(".").pop();return TEXT_EXTENSIONS.includes(ext);}
+_.toLines=function(opts={}){opts.lines = true;return this.toText(opts);}
+_.toBytes=async function(opts={}){let node=await this.toNode(opts);if(node)return node.bytes;};
+_.toBuffer=async function(opts={}){let node=await this.toNode(opts);if(node) return node.buffer;};
 _.toBlob=async function(opts={}){//«
 	let node = await this.toNode(opts);
 	if (!node) return;
@@ -3013,7 +2997,26 @@ cerr(`normPath(${this}, ${opts.cwd}) returned null`);
 if (fullpath === "/") return;
 return mk_dir(fullpath, opts);
 }//»
+_.execute = async function(opts={}){//«
 
+let term;
+if (NS.Terminal){
+	term = NS.Terminal;
+}
+else if (NS.Desk){
+	let win = await NS.Desk.api.openApp("Terminal");
+	term = win.app;
+	await term.onappinit();
+}
+if (!term) return;
+let rv = await term.autoTypeCommand(this+"", opts);
+if (!opts.capture) return;
+if (!isArr(rv)) return;
+let s="";
+for (let ln of rv) s+=ln.join("")+"\n";
+return s;
+
+}//»
 
 }
 

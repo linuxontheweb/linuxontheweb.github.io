@@ -6727,6 +6727,7 @@ if (red==="<"){
 	if (!node) {
 		return `${val}: no such file or directory`;
 	}
+log(node);
 	if (!node.isFile){
 		return `${val}: not a regular file`;
 	}

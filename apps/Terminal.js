@@ -305,6 +305,7 @@ LOTW.apps[APPNAME] = class {
 //#readLineStartLine;
 //#getChCb;
 //#getChDefCh;
+#autoCapture;
 
 //»
 constructor(Win){//«
@@ -579,14 +580,21 @@ executeBackgroundCommand(s){//«
 	shell.execute(s,{env});
 
 }//»
-autoTypeCommand(str){
+async autoTypeCommand(str, opts={}){//«
 if (this.sleeping || this.curShell){
 cwarn(`Skipping: '${str}'`);
 return;
 }
 	for (let c of str) this.handleLetterPress(c);
-	this.handleEnter({noSave: true});
+if (opts.capture) this.#autoCapture = [];
+	await this.handleEnter({noSave: true});
+if (opts.capture) {
+let cap = this.#autoCapture;
+this.#autoCapture = undefined;
+return cap;
 }
+}//»
+
 //»
 //Util«
 
@@ -2325,7 +2333,16 @@ here, so we need to make sure we are putting the message into the appropriate
 lines array (otherwise, the message gets printed onto the actor's screen.
 */
 
-	const{ termLines: lines, termLineColors: line_colors }= this;
+//	let { termLines: lines, termLineColors: line_colors } = this;
+let lines, line_colors;
+if (this.#autoCapture) {
+	lines = this.#autoCapture;
+	line_colors = [];
+}
+else {
+	lines = this.termLines;
+	line_colors = this.termLineColors;
+}
 	let readline_lines;
 	if (Number.isFinite(this.readLineStartLine)) {
 		readline_lines = [];
@@ -2912,13 +2929,7 @@ async handleEnter(opts={}){//«
 		return;
 	}
 	this.x=0;
-
-//VSHEUROJ
-//	this.y++;
-//	this.lines.push([]);
-//	this.scrollIntoView();
 	this.forceNewline();
-
 	this.render();
 	await this.execute(str, opts);
 	this.sleeping = null;
@@ -3275,15 +3286,11 @@ onkill(if_dev_reload){//«
 //»
 
 async onappinit(appargs={}){//«
-//cwarn("TERMINAL!!!");
-//log(appargs.noKbReloadzzz, appargs.noKbReload);
 	await this.loadShell();
 	let {reInit} = appargs;
 	if (!reInit) {
 		reInit = {};
 	}
-//QDPLMRT
-//	let {termBuffer, addMessage, commandStr, histories, useOnDevReload} = reInit;
 	let {history, historyNode, addMessage, commandStr, cwd} = reInit;
 	if (appargs.noKbReload){
 		if (!addMessage) addMessage = "";
@@ -3298,7 +3305,6 @@ async onappinit(appargs={}){//«
 	if (cwd) this.env.cwd.cwd = cwd;
 	this.setPrompt();
 	this.render();
-//	this.onfocus();
 	if (commandStr) {
 		for (let c of commandStr) this.handleLetterPress(c); 
 		this.handleEnter({noSave: true});
