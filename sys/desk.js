@@ -6478,7 +6478,8 @@ const make_folder_icon = async(winarg) => {//«
 		return poperr(`Not making a directory of type: '${rtype}'`);
 	}
 	let obj;
-	let icn = new Icon({name: name, baseName: name, kids:true, fake: true, parApp: usewin.app});
+	let icn = new Icon({name: name, baseName: name, isDir: true, kids:true, fake: true, parApp: usewin.app});
+//log(icn);
 	icn.isnew = true;
 	if (usewin===desk) placeInIconSlot(icn, {create: true});
 	else add_icon_to_folder_win(icn, usewin.top);
