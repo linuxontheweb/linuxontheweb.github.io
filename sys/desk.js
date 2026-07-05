@@ -20,11 +20,9 @@ in the code.)
 
 »*/
 /*7/5/26: What *exactly* needs to be exposed to the world on Window objects?«
-
 1) set: title
 2) get: name, fullpath
-2) get: app
-
+3) get: app
 »*/
 /*7/3/26: Put private field setter methods for Icon and Window classes: «
 
