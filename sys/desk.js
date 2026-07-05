@@ -2600,7 +2600,7 @@ checkProp(which){//«
 		return false;
 	}
 	if (this.allowNone){
-		show_overlay(`Window[${this.winNum}].allowNone == true`);
+		show_overlay(`Window[${this.#winNum}].allowNone == true`);
 		return;
 	}
 	let prop = "allow"+which;
@@ -2609,7 +2609,7 @@ checkProp(which){//«
 		return false;
 	}
 	if (this[prop]) return true;
-	show_overlay(`Window[${this.winNum}].${prop} == false`);
+	show_overlay(`Window[${this.#winNum}].${prop} == false`);
 	return false;
 }//»
 makeDOMElem(arg){//«
@@ -2618,6 +2618,7 @@ makeDOMElem(arg){//«
 //	let {winId: winid, winArgs: winargs, appName: app} = this;
 
 	let winid = this.#winId;
+
 	let winargs = this.#winArgs;
 	let app = this.#appName;
 	let wintitle;
@@ -2933,7 +2934,7 @@ font-size: 12.5px;
 left: 1.5px;
 top: 2.75px;
 	`;
-	numdiv.innerHTML=`${this.winNum}`;
+	numdiv.innerHTML=`${this.#winNum}`;
 	footer_wrap._add(numdiv);
 //»
 
