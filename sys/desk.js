@@ -2516,7 +2516,7 @@ constructor(arg){//«
 	let app_name = arg.appName;
 	this.#appName = app_name;
 
-	this.#isFolder = app_name === FOLDER_APP;
+	this.isFolder = app_name === FOLDER_APP;
 
 	this.#winNum = ++win_num;
 
@@ -3225,7 +3225,6 @@ setWinArgs(args){//«
 		if (this.isFolder && !this.isMinimized) {
 			if (CUR.curElem.parentNode === desk) {
 				let icn = CUR.geticon();
-//log(icn);
 				if (icn && !icn.empty) icn.hideLabelName();
 				desk.lastcurpos = CUR.getpos();
 			}
@@ -8432,7 +8431,7 @@ that are running in a terminal window, like vim or less.
 //Open context menu of selected icon, desktop or current window
 
 //Desktop and folder specific functions dealing with icons or the icon cursor:
-	if (!cwin || (cwin.appName==FOLDER_APP && !cwin.isBusy)){//«
+	if (!cwin || (cwin.isFolder && !cwin.isBusy)){//«
 		if (sym == "c_A" || sym == "c_CA") {//«
 			let curicon;
 			if (CUR.ison()) curicon = CUR.geticon();
