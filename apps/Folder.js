@@ -349,37 +349,18 @@ tab_order = [inp, savebut, canbut];
 };//»
 
 const reload = async(newpath)=>{//«
-//	Win.iconsOff();
 	if (is_loading) return;
 	prev_paths = this.prevPaths;
 	if (newpath) {
-//log(`PM: ${picker_mode}`);
 		path = newpath;
 		Win.node = await newpath.toNode();
 		if (picker_mode) Win.title = `Save\xa0Location\xa0:\xa0'${Win.node.name}'`;
 		else Win.title = Win.node.name;
 	}
-/*«
-	if (newpath) {
-		path = newpath;
-		if (path==="/") {
-			delete Win.path;
-			Win.name="/";
-			Win.title="/";
-		}
-		else{
-			let arr = path.split("/");
-			Win.name = arr.pop();
-			Win.title = Win.name;
-			Win.path = arr.join("/");
-		}
-	}
-»*/
 	is_loading = true;
 	Main.scrollTop=0;
 	icondv.innerHTML="";
 	await init(true);
-//	_stat_num(`${Object.keys(kids).length} entries`);
 	_stat_num(`${dir.length} entries`);
 	if (Win.cursor) {
 		delete Main.lasticon;

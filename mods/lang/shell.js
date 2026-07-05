@@ -82,6 +82,10 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 }»
 
 »*/
+/* 7/2/26: Need to figure out how to run commands without a real terminal.
+Will need to invoke a shell with the stdout capture option.
+
+*/
 /*6/11/26 Introducing have_unquoted_meta_char in filepathExpansion:«
 If we don't see unquoted versions of "*", "?", or "[" in the pattern
 string, then just return the token, without sending it into the
@@ -6332,8 +6336,8 @@ async expandComsub(tok, opts){//«
 			mainParser: this.parser.mainParser,
 			subLines: sub_lines,
 			env: sdup(this.env),
-			shell: this,
-			term: this.#term
+//			shell: this,
+//			term: this.#term
 		});
 		return sub_lines.join("\n");
 	}
@@ -7333,7 +7337,7 @@ this evaluates to true, and hi is output
 }//»
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
-this.commandStr = command_str;
+	this.commandStr = command_str;
 	let parser = new Parser(command_str.split(""), opts);
 	this.parser = parser;
 //TRYHERE
@@ -7390,7 +7394,6 @@ catch(e){
 		this.error(mess,{isErr: true});
 	}
 	else{
-
 		throw e;
 	}
 }
@@ -7405,15 +7408,8 @@ cancel(){//«
 }//»
 error(mess){this.#term.response(mess, {isErr: true});}
 warn(mess){this.#term.response(mess, {isWrn: true});}
-response(val, opts){
-	this.#term.response(val, opts);
-	this.#term.scrollIntoView();
-	this.#term.refresh();
-}
-async readLine(use_prompt, opts){
-	let ln = await this.#term.readLine(use_prompt, opts);
-	return ln;
-}
+response(val,opts){this.#term.response(val, opts);this.#term.scrollIntoView();this.#term.refresh();}
+async readLine(use_prompt, opts){return ln;}
 get screenW(){return this.#term.w;}
 get homeDir(){return this.#term.getHomedir();}
 get history(){return this.#term.history.join("\n");}
@@ -7456,7 +7452,6 @@ this.Shell = Shell;
 
 }
 //»
-
 
 /*Put these commands elsewhere«
 //Terminal-based object logging/introspection utility

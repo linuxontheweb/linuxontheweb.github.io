@@ -19,7 +19,54 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
+/*7/3/26: Put del(), move(), and copy() on FileNode???
+Also getters: canDel, canMove, and canCopy?
 
+On DirNode:
+getters: canMoveFrom?
+
+IDEA: @OLNDTKJG: node.checkAnyKids
+
+*/
+/* 7/2/26: PUT ICON ADD/DEL LOGIC @HISLKFNF«
+
+Need a better way of thinking about @EHGJGKYE
+
+The idea *was* that only FS_TYPE needed to update a single value in a registry
+in order to change the parent of a directory
+
+//"Manual recursion" needed for non HTML5FileSystem folders...
+if (type != FS_TYPE && app === FOLDER_APP){
+// let arr = [];
+// Fill up arr
+// arr.push(newpath)
+await this.com_mv(arr, ...);
+continue;
+}
+
+PROBLEMS:
+
+1) This is invoked *even* when we just need to update the name, i.e.
+
+mv /dev/shm/some_folder_name /dev/shm/another_folder_name
+(Now we have a warning for that condition)
+
+
+2) It doesn't actually 'mv', but ALWAYS copies
+
+
+3) Don't know why `if_cp: true` @SUTIYKJ (instead of `if_cp: if_cp`)
+
+The point is that if a `mv` operation involving an actual change in location
+is being done, such that the directory types are the same, then this should 
+only need a simple "bookmark" update operation. 
+
+For example, in /dev/shm,
+we just need to do: _add_kid/_del_kid on node.par and savedir.
+
+_del_kid(node.par, node);
+_add_kid(savedir, node);
+»*/
 /*6/30/26: Most of this logic should only be accessible from: «
 
 1) String.prototype's
@@ -294,10 +341,10 @@ const {
 	APPDATA_PATH,
 } = globals.fs;
 const {
-	USERNAME,
-	CURRENT_USER,
-	HOME_PATH,
-	DESK_PATH,
+//	USERNAME,
+//	CURRENT_USER,
+//	HOME_PATH,
+//	DESK_PATH,
 } = globals.user;
 //»
 
@@ -449,6 +496,19 @@ cerr(e);
 
 });
 }//»
+checkIsEmpty(which, dirid) {/*«*/
+	return new Promise((Y, N) => {
+		// Request only the very first key
+		let req = this.getStore().index(which).getKey(dirid); 
+		req.onsuccess = () => { Y(req.result === undefined); };
+		req.onerror = () => {
+			cerr(req.error);
+			Y();
+		}
+	});
+}
+/*»*/
+
 addNode(node){//«
 	return new Promise((Y,N)=>{
 		let store= this.#db.transaction([NODES_TABLE_NAME],"readwrite").objectStore(NODES_TABLE_NAME);
@@ -516,6 +576,7 @@ async getAll (dirid){//«
 	let rv = await this.getDirKids("parId", dirid);
 	return {rows: rv||[]};
 }//»
+checkEmpty(dirid){ return this.checkIsEmpty("parId", dirid); }
 async getNodesByBlobId(blobid){//«
 	let rv = await this.getDirKids("value", blobid);
 	return {rows: rv||[]};
@@ -598,19 +659,24 @@ const LOCKED_BLOBS = {};
 // These allow as to set private FSNode members with "external" calls
 // The functions are defined inside of static blocks
 
-let _set_name;
-let _set_par;
-let _add_kid;
-let _del_kid;
+//let _set_name;
+//let _set_par;
+
+let _node_update;
+let _dir_update;
+
+//let _add_kid;
+//let _del_kid;
+
 let _add_root_kid;
 
 // indexedDB row id's
 let _set_root_id;
-let _set_id; 
+//let _set_id; 
 
 // Read from: localStorage['nextBlobId']
 // Used for the names of the files in OPFS://blobs/
-let _set_blob_id; 
+//let _set_blob_id; 
 
 // For file on /dev/shm
 let _set_mem_blob; 
@@ -618,17 +684,19 @@ let _set_mem_blob;
 let _set_sym_link;
 
 let _set_data;
+
 //»
 
 class RootDirNode {//«
 #id;
 #kids;
 #appName;
+//#done;
 constructor(){//«
 	this.isDir = true;
 	this.#appName = FOLDER_APP;
 	this.#kids = {};
-	this.done = true;
+//	this.#done = true;
 }//»
 loadKids(){}
 get id(){return this.#id;}
@@ -646,7 +714,6 @@ set name(arg){}
 get okWrite(){cwarn(`okWrite: THIS IS OUTDATED!!!`);return false;}
 get sys(){return true;}
 get done(){return true;}
-set done(arg){}
 rmMoveLock(){}
 get list(){return this.#kids;}
 get kids(){throw new Error("YOU TRIED TO ACCESS KIDS");}
@@ -704,6 +771,140 @@ constructor(name, par){//«
 	this.#root = par.root;
 	this.icons = [];
 }//»
+
+async move(newName, toDir){//«
+	let node = this;
+	if (util.newPathIsBad(node.fullpath, `${toDir.fullpath}/${newName}`)) return;
+//Need to update this to allow for moving/renaming arbitrary node types 
+//within the same directory type
+	let id = node.id;
+	let par = node.par;
+	let parid = par.id;
+	let saveid = toDir.id;
+	let savename;
+	if (newName && (newName !== node.name)){
+		savename = newName;
+	}
+
+// This logic is supposed to result in the fact that save_blob === null means
+// that we are mv'ing a dir.
+
+	let save_blob = null;
+	if (node.type == FS_TYPE) {
+		if (toDir.type == FS_TYPE) {
+			if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
+		}
+		else {
+			if (node.isFile) save_blob = await node.blob;
+			if (!await db.removeNode(id, parid)) return cerr("YUREFJKK");
+		}
+	}
+//	else save_blob = await node.blob;
+	else if (node.isFile) save_blob = await node.blob;
+
+	_dir_update(2, par, node);
+
+	if (save_blob !== null) {
+		node = mk_dir_kid(toDir, newName, {isFile: true});
+		await node.setValue(save_blob);
+	}
+	else {
+		_node_update(1, node, newName);
+		_node_update(2, node, toDir);
+	}
+	_dir_update(1, toDir, node);
+	return node;
+
+}//»
+async copy(newName, toNode, opts={}){//«
+//async copy(newName, toNode, no_make_icon)
+	let node = this;
+	let newpath = `${toNode.fullpath}/${newName}`;
+	if (util.newPathIsBad(node.fullpath, newpath)) return;
+//EYTKFHSC
+	if (toNode.type == FS_TYPE) {
+
+//		return saveFsByPath(newpath, await getBlob(node, {binary: true}), { noMakeIcon: no_make_icon });
+		return saveFsByPath(newpath, await getBlob(node, {binary: true}), opts);
+	}
+	let save_blob = await node.blob;
+	node = mk_dir_kid(toNode, newName, {isFile: true});
+	await node.setValue(save_blob);
+	_dir_update(1, toNode, node);
+	return node;
+}//»
+
+async del(opts={}){//«
+	let node = this;
+	const OK_TYPES=[FS_TYPE, SHM_TYPE, IDB_DATA_TYPE];
+	if (!OK_TYPES.includes(node.type)) {
+cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
+		return;
+	}
+	let path = node.fullpath;
+	if (node.sys) {
+cerr("Not removing toplevel");
+		return;
+	}
+//	if (node.appName===FOLDER_APP){
+	if (node.isDir){
+		await node.loadKids();
+		let kids = node.kidList;
+		for (let kid of kids){
+cwarn(`Deleting:`, kid);
+			await kid.del(opts);
+		}
+	}
+	let id = node.id;
+	let parid = node.par.id;
+	if (!(id&&parid)) {
+		if (node.type==SHM_TYPE) {}
+		else {
+cerr(`NO ID && PARID???`);
+log(node);
+log(node.par);
+cerr(`Could not remove: ${node.fullpath}`);
+			return;
+		}
+	}
+	if (!await db.removeNode(id, parid)) {
+cerr("FRYNBSJ");
+		return 
+	}
+//WMNJUGFNH
+
+	_dir_update(2, node.par, node);
+	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
+	return true;
+}//»
+canRm(opts={}){//«
+//	let obj = this;
+	let rtype = this.type;
+	let path = this.fullpath;
+	if (this.appName !== FOLDER_APP) {//«
+		if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype===IDB_DATA_TYPE)){
+			return `${path}: not (currently) handling fs type: '${rtype}'`;
+		}
+		if (!this.par.perm) return `${path}: permission denied`;
+		else if (this.writeLocked()) return `${path} is "write locked"`;
+		return true;
+	}//»
+
+// Folders...
+	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) return `not removing directory type: '${rtype}': ${path}`;
+	if (NS.Desk && (path == globals.user.desk_path)) return `not removing the working desktop path: ${path}`;
+	if (this.par.treeroot) return `not removing toplevel directory: ${path}`;
+	if (this.isMoveLocked) return `${path}: is "move locked"`;
+	if (!opts.doFullDirs && !opts.isEmpty) return `${path}: not an empty folder`;
+	if (!this.perm) return `${path}: permission denied`;
+	return true;
+//};
+
+
+
+}//»
+
+
 get fullpath(){//«
 //	Object.defineProperty(this,"fullpath",{get:()=>{let str=this.name;if(!str)return null;let curobj=this;let i=0;while(true){if(curobj && curobj.par)str=`${curobj.par.name}/${str}`;else break;curobj=curobj.par;i++;}let arr=str.split("/");while(!arr[0] && arr.length){arr.shift();i++;}str=arr.join("/");return("/"+str).regpath();}});
 	let str = this.name;
@@ -740,14 +941,21 @@ get isLink(){return false;}
 get isData(){return false;}
 get isDevice(){return false;}
 
-static {
-
-_set_name = (node, name)=>{	node.#name = name;};
-_set_par = (node, par) => {	node.#par = par;};
-_set_id = (node, id) =>{node.#id = id;};
-_set_blob_id = (node, id) => {node.#blobId = id;}
-
+static {//«
+//_set_name = (node, name)=>{	node.#name = name;};
+//_set_par = (node, par) => {	node.#par = par;};
+//_set_id = (node, id) =>{node.#id = id;};
+//_set_blob_id = (node, id) => {node.#blobId = id;}
+_node_update = (which, node, val) => {
+switch(which){
+case 1: { node.#name = val; break }
+case 2: { node.#par = val; break }
+case 3: { node.#id = val; break }
+case 4: { node.#blobId = val; break }
+default: THROW(`WHAT WHICH IS THIS: ${which}`);
 }
+}
+}//»
 
 }//»
 
@@ -763,6 +971,7 @@ class DirNode extends FSNode{//«
 #appName;
 #moveLocks;
 #isRoot;
+#done;
 constructor(name, par, opts={}){//«
 	super(name, par);
 //	this.#name = name;
@@ -803,7 +1012,7 @@ async loadKids(opts={}) {//«
 	await populate_dirobj(this, opts);
 }//»
 async _getKids(opts={}) {
-	if (!this.done) await populate_dirobj(this, opts);
+	if (!this.#done) await populate_dirobj(this, opts);
 	return Object.values(this.#kids);
 }
 //get moveLocks(){return this.#moveLocks;}
@@ -852,6 +1061,7 @@ cwarn("YOU CALLED kidsCopy, BUT THAT IS A ***HACK***!!!");
 }//»
 get kids(){throw new Error("YOU TRIED TO GET KIDS");}
 set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
+get isEmpty(){ return db.checkEmpty(this.id); }
 getKid(name){return this.#kids[name];}
 mkNewFile(path, opts={}){//«
 let fullpath = normPath(path, this.fullpath);
@@ -863,12 +1073,12 @@ let fullpath = normPath(path, this.fullpath);
 if (!fullpath) return;
 return mk_dir(fullpath, opts);
 }//»
+get done(){return this.#done;}
 static {
+//HISLKFNF
+/*
 _add_kid = (dir, kid) => {//«
-if (dir.#kids[kid.name]){
-//cerr(`${dir.fullpath}/${kid.name}: ALREADY EXISTS`);
-return;
-}
+if (dir.#kids[kid.name]) return;
 	dir.#kids[kid.name] = kid;
 };//»
 _del_kid = (dir, kid) => {//«
@@ -880,6 +1090,32 @@ return;
 delete dir.#kids[kid.name];
 
 };//»
+*/
+
+_dir_update = (which, dir, val) => {
+
+switch (which){
+	case 1: {// add
+		if (!dir.#kids[val.name]) dir.#kids[val.name] = val;
+		break;
+	}
+	case 2: {// del
+		if (!dir.#kids[val.name]){
+cerr(`'${dir.fullpath}/${val.name}': DOES NOT EXIST`);
+			return;
+		}
+		delete dir.#kids[val.name];
+		break;
+	}	
+	case 3: { // done
+		dir.#done = val;
+		break;
+	}
+	default: THROW(`UNKNOWN OP ${which}`);
+}
+
+};
+
 }
 
 }//»
@@ -914,7 +1150,7 @@ okSet(){//«
 async getRealBlobId(){//«
 	let bid = get_blob_id();
 //	this.blobId = bid;
-	_set_blob_id(this, bid);
+	_node_update(4, this, bid);
 	if (!await db.setNodeBlobID(this.id, bid)) {
 cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
 		return;
@@ -981,7 +1217,7 @@ async _getEntry(){//«
 	let id = this.blobId;
 	if (id === NULL_BLOB_FS_TYPE){
 		id = get_blob_id();
-		_set_blob_id(this, id);
+		_node_update(4, this, id);
 	}
 	else if (this.type==SHM_TYPE) return;
 	else if (!Number.isFinite(id)) {
@@ -1157,6 +1393,7 @@ util.isFile = isFile;
 //»
 
 //Var«
+const THROW = mess =>{throw new Error(mess);}
 
 let rootId;
 /*«
@@ -1223,16 +1460,8 @@ const getNodesByBlobId = async (blobId) =>{//«
 };//»
 
 const try_get_fs_type_kid=async(nm, curpar)=>{//«
-/*
-This is currently for FS_TYPE only, but we should extend it to whatever other types that
-do the same kind of dynamic discovery mechanism.
-*/
-//cwarn(`TRYGET: ${nm} ${curpar.id}`);
-//log(curpar);
 	let rv = await db.getNodeByNameAndParId(nm, curpar.id);
-//	if (!check_db_rv(rv)) return;
 	let gotrow = rv.rows[0];
-//log(gotrow);
 	if (!gotrow) return;
 	let isDir, isLink, isData, isFile;
 	switch(gotrow.value){
@@ -1253,31 +1482,19 @@ do the same kind of dynamic discovery mechanism.
 		isData,
 		isLink,
 		isFile,
-//		isFile:!(isDir||isData||isLink),
 		path: curpar.fullpath,
 	});
 	if (isLink) {
-//		kid.symLink = gotrow.data;
-_set_sym_link(kid, gotrow.data);
+		_set_sym_link(kid, gotrow.data);
 	}
 	else if (isData){
-//		kid.blobId = IDB_DATA_TYPE;
-		_set_blob_id(kid, IDB_DATA_TYPE);
-//		kid.data = gotrow.data;
-_set_data(kid, gotrow.data);
+		_node_update(4, kid, IDB_DATA_TYPE);
+		_set_data(kid, gotrow.data);
 	}
 	else if (!isDir){
-//		kid.blobId = gotrow.data;
-		_set_blob_id(kid, gotrow.data);
-
+		_node_update(4, kid, gotrow.data);
 	}
-//	kid.id = gotrow.id;
-//_set_blob_id
-//	_add_kid(curpar, kid);
-	_set_id(kid, gotrow.id);
-//	if (!kid.root) kid.root = curpar.root;
-
-//log(kid);
+	_node_update(3, kid, gotrow.id);
 	return kid;
 };//»
 
@@ -1327,7 +1544,7 @@ cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
 				if (rtype==FS_TYPE){
 					let kid = await try_get_fs_type_kid(nm, curpar);
 					if (!kid) return done();
-					_add_kid(curpar, kid);
+					_dir_update(1, curpar, kid);
 				}
 //				else if (rtype == USERS_TYPE){
 //					let kid = await try_get_users_type_kid(nm, curpar);
@@ -1381,7 +1598,7 @@ cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
 		let kid = await try_get_fs_type_kid(fname, curpar);
 		if (!kid) return done();
 		node = kid;
-		_add_kid(curpar, kid);
+		_dir_update(1, curpar, kid);
 		return done();
 	}//»
 //	else if (curpar.type===USERS_TYPE){
@@ -1421,136 +1638,66 @@ const getPathByDirId=async(idarg)=>{//«
 const doFsRm=async(args, errcb, opts={})=>{//«
 	let{dirsOnly}=opts;
 	let cwd = opts.CWD;
-	let is_root = opts.ROOT||opts.root;
-	let do_full_dirs = opts.FULLDIRS||opts.fullDirs;
+//	let is_root = opts.ROOT||opts.root;
+//	let do_full_dirs = opts.FULLDIRS||opts.fullDirs;
 	let arr = [];
 	let no_error = true;
+	if (!errcb){
+		errcb = mess =>{cerr(mess);};
+	}
 	for (let path of args){
+		let node = await path.toNode({cwd});
+		if (!node) {
+			errcb(`could not stat: ${path}`);
+			continue;
+		}
+
+//OLNDTKJG
+// How about node.checkAnyKids (instead of waiting to load *all* kids) ?
+		let is_empty;
+		if (node.isDir) {
+			if (!node.done) is_empty = await node.isEmpty;
+			else is_empty = !node.haveKids;
+		}
+		let rv = node.canRm({isEmpty: is_empty, doFullDirs: opts.FULLDIRS || opts.fullDirs});
+/*«
 		let node = await check_ok_rm(
 			normPath(path, cwd), 
 			errcb, 
 			is_root, 
 			do_full_dirs
 		);
-		if (!node) {
-			no_error = false;
-			continue;
-		}
-		if (dirsOnly && node.appName!==FOLDER_APP){
+»*/
+		if (rv !== true) {//«
+			if (isStr(rv)){
+				errcb(rv);
+				no_error = false;
+				continue;
+			}
+cwarn("WHAT IS THIS VALUE?");
+log(rv);
+			THROW("UNKNOWN RV FROM node.canRm!?!?!");
+			return;
+		}//»
+		if (dirsOnly && !node.isDir){
+//		if (dirsOnly && node.appName!==FOLDER_APP){
 			errcb(`${node.fullpath}: not a directory`);
 			no_error = false;
 			continue;
 		}
 		arr.push(node);
 	}
-	for (let obj of arr) {
-		if (!await delete_fobj(obj, opts)) no_error = false;
+	for (let node of arr) {
+//		if (!await delete_fobj(obj, opts)) no_error = false;
+		if (!await node.del(opts)) no_error = false;
 	}
 	return no_error;
-};//»
-const rmFile=async(fobj, opts)=>{//«
-	if (fobj.sys) return [null, "Not removing toplevel"];
-	const bad=(mess)=>{
-		cerr(mess);
-		return [];
-	};
-	if (fobj.appName===FOLDER_APP){
-		let kids = fobj.kidList;
-		for (let kid of kids){
-cwarn(`Deleting:`, kid);
-			await delete_fobj(kid, opts);
-		}
-	}
-	let id = fobj.id;
-	let parid = fobj.par.id;
-	if (!(id&&parid)) {
-		if (fobj.type==SHM_TYPE) return [true];
-bad(`NO ID && PARID???`);
-log(fobj);
-log(fobj.par);
-		return [];
-	}
-	if (!await db.removeNode(id, parid)) return bad("FRYNBSJ");
-//WMNJUGFNH
-	return [true];
 };//»
 const clearStorage = async ()=>{//«
 	let opfs = await navigator.storage.getDirectory();
 	await opfs.removeEntry("blobs", { recursive: true });
 	let rv = await db.dropDatabase();
 	localStorage.clear();
-	return true;
-};//»
-const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
-	let obj = await path_to_node(path, true);
-	if (!obj){
-		errcb(`could not stat: ${path}`);
-		return;
-	}
-	let rtype = null;
-	rtype = obj.type;
-	if (obj.treeroot === true) {
-		errcb("ignoring the request to remove root");
-		return;
-	}
-	if (obj.appName !== FOLDER_APP) {//«
-		if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype===IDB_DATA_TYPE)){
-			errcb(`${path}: not (currently) handling fs type: '${rtype}'`);
-			return;
-		}
-
-//		if (!check_fs_dir_perm(obj.par, is_root)) errcb(`${path}: permission denied`);
-		if (!obj.par.perm) errcb(`${path}: permission denied`);
-		else if (obj.writeLocked()) errcb(`${path} is "write locked"`);
-		else return obj;
-		return;
-	}//»
-	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) {
-		errcb(`not removing directory type: '${rtype}': ${path}`);
-		return;
-	}
-	if (NS.Desk && (path == globals.user.desk_path)) {
-		errcb(`not removing the working desktop path: ${path}`);
-		return;
-	} 
-	if (obj.par.treeroot) {
-		errcb(`not removing toplevel directory: ${path}`);
-		return;
-	} 
-//	if (obj.moveLocks.length){
-	if (obj.isMoveLocked){
-		errcb(`${path}: is "move locked"`);
-		return;
-	}
-//	if (!obj.done) obj.kids = await popDirByPath(obj.fullpath);
-	if (!obj.done) await obj.loadKids();
-//	let numkids = get_keys(obj.kids).length;
-//	if (!do_full_dirs && numkids > 2) {
-	if (!do_full_dirs && obj.haveKids) {
-		errcb(`${path}: not an empty folder`);
-		return;
-	}
-//	if (!check_fs_dir_perm(obj, is_root)) {
-	if (!obj.perm) {
-		errcb(`${path}: permission denied`);
-		return;
-	}
-	return obj;
-};//»
-const delete_fobj = async(node, opts={})=>{//«
-	const OK_TYPES=[FS_TYPE, SHM_TYPE, IDB_DATA_TYPE];
-	if (!OK_TYPES.includes(node.type)) {
-cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
-		return;
-	}
-	let path = node.fullpath;
-	let [delret, errmess] = await rmFile(node, opts);
-	if (!delret){
-cerr(`Could not remove: ${node.fullpath} (${errmess})`);
-		return;
-	}
-	_del_kid(node.par, node);
-	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
 	return true;
 };//»
 
@@ -1586,18 +1733,23 @@ if (if_cp) {
 //Imports from the calling environment (either the shell or desktop)«
 if (!shell_exports) shell_exports = {};
 let {
-	wclerr,
+	winf, // Write to info stream
 	werr,
+	wclerr,
 	wout,
 	cbok,
 	cberr,
 	cur_dir,
 	failopts,
 	is_root,
-	no_move_cb
+	no_move_cb,
+	done_cb
 } = shell_exports;
 
 if (!wclerr) wclerr=NOOP;
+if (!winf) winf=s=>{
+log("INF",s);
+};
 if (!werr) werr=s=>{
 log("ERR",s);
 };
@@ -1633,8 +1785,10 @@ if (args.length < 2) {
 	cberr("Too few args given");
 	return;
 }
-let topatharg = getFullPath(args.pop(), cur_dir);
+
 //»
+
+let topatharg = getFullPath(args.pop(), cur_dir);
 let destret = await path_to_node(topatharg);
 
 //Failure conditions...«
@@ -1646,15 +1800,20 @@ if ((args.length > 1) && (!destret || (destret.appName != FOLDER_APP))) {
 	return;
 }
 else if (args.length===1){
-//This allows a destination to be clobbered if the name is in the folder.
-//Only if the file is explicitly named, does this error happen.
+
+// This allows a destination to be clobbered if the name is in the folder.
+// Only if the file is explicitly named, does this error happen.
+
 	if (!force && destret && destret.appName != FOLDER_APP) {
 		cberr(`${topatharg}: not clobbering the destination`);
 		return;
 	}
 }
-//if (destret && destret.type == FS_TYPE) {
 if (destret) {
+	if (!destret.writeable) {
+		no_move_all();
+		return cberr(`${topatharg}: read only`);
+	}
 	if (!destret.perm) {
 		no_move_all();
 		return cberr(`${topatharg}: permission denied`);
@@ -1672,42 +1831,36 @@ for (let arg of args){//«
 	let srcret = await path_to_node(path, true);
 
 	if (!srcret) {
-		if (no_move_cb) no_move_cb(icon_obj[path]);
+		if (no_move_cb) no_move_cb(icon_obj[path], 1);
 		mvarr.push({ERR: `no such entry: ${path}`});
 		continue;
 	}
 	let srctype = srcret.type;
 	let isfolder = srcret.appName === FOLDER_APP;
 	if (srcret.treeroot || srcret.root == srcret) {
-		if (no_move_cb) no_move_cb(icon_obj[path]);
+		if (no_move_cb) no_move_cb(icon_obj[path], 2);
 		mvarr.push({ERR: `skipping top level directory: ${path}`});
 	}
-//	else if (!(srctype == FS_TYPE || srctype == SHM_TYPE)) {
-//		if (no_move_cb) no_move_cb(icon_obj[path]);
-//		mvarr.push({ERR: `${path}: cannot ${verb} from directory type: ${srctype}`});
-//	}
 	else if (com==="mv" && !srcret.writeable) {
-		if (no_move_cb) no_move_cb(icon_obj[path]);
+		if (no_move_cb) no_move_cb(icon_obj[path], 3);
 		mvarr.push({ERR: `${path} is "read only"`});
 	}
-//No moving of files that are actively being edited
 	else if (com==="mv" && srcret.writeLocked()) {
-		if (no_move_cb) no_move_cb(icon_obj[path]);
+//No moving of files that are actively being edited
+		if (no_move_cb) no_move_cb(icon_obj[path], 4);
 		mvarr.push({ERR: `${path} is "write locked"`});
 	}
-//No moving of folders that contain files that are actively being edited
 	else if (com==="mv" && isfolder && srcret.isMoveLocked){
-		if (no_move_cb) no_move_cb(icon_obj[path]);
+//No moving of folders that contain files that are actively being edited
+		if (no_move_cb) no_move_cb(icon_obj[path], 5);
 		mvarr.push({ERR: `${path} is "move locked"`});
 	}
-	else if (com==="cp"&&isfolder){
-		if (no_move_cb) no_move_cb(icon_obj[path]);
+	else if (com==="cp" && isfolder){
 		if (if_recur){
-//log(srcret);
-//			mvarr.push({ERR: `${arg}: not (currently) copying directories`});
 			mvarr.push([path, srcret]);
 		}
 		else {
+			if (no_move_cb) no_move_cb(icon_obj[path], 6);
 			mvarr.push({ERR: `-r not specified; omitting directory '${arg}'`});
 		}
 	}
@@ -1719,10 +1872,7 @@ for (let arg of args){//«
 }//»
 
 if (destret && destret.isDir && destret.type === FS_TYPE){//«
-//if (destret && destret.appName == FOLDER_APP && destret.type === FS_TYPE){
-//if (destret && destret.appName == FOLDER_APP && destret.type === "fs"){
 	if (!destret.done) await popDir(destret);
-//	let kids = destret.kids;
 	let okarr=[];
 	for (let elm of mvarr){
 		if (elm.ERR) {
@@ -1797,40 +1947,38 @@ for (let arr of mvarr) {//«
 	}
 	let savetype = savedir.type;
 
-//	if (savetype !== FS_TYPE) {
 	if (!savedir.writeable){
 		werr(`${savedir.fullpath}: read only`);
 		continue;
 	}
 
-//	if (!(savetype == FS_TYPE || savetype == SHM_TYPE)) {
-//		werr(`Not (yet) supporting ${verb} to type='${savetype}'`);
-//		continue;
-//	}
+	if (app === FOLDER_APP && (if_cp || type !== savedir.type)){//«
 
+// EHGJGKYE
 
-//"Manual recursion" needed for non HTML5FileSystem folders...
-	if (type != FS_TYPE && app === FOLDER_APP){//«
+// Recursion needed for folders when:
+// - Copying
+// - Moving between different file system types
+
+// Moving within the same type should just require a simple "bookmark" update
+
 		let nm = savename;
 		if (savedir.getKid(nm)){
 			gotfail=true;
 			werr(`refusing to clobber: ${nm}`);
 			continue;
 		}
-		if (dom_objects){
-			gotfail=true;
-			werr(`${nm}: please copy from the terminal`);
-			continue;
-		}
+
 		let newpath = `${savedir.fullpath}/${nm}`;
-		if (!await mkDir(savedir.fullpath, nm, {root: is_root})){
+		if (!await mkDir(savedir.fullpath, nm, {root: is_root, noMakeIcon: !!dom_objects})){
 			gotfail=true;
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
 
-		if (NS.Desk) NS.Desk.make_icon_if_new(await path_to_node(newpath));
-		werr(`Created: ${newpath}`);
+//		if (NS.Desk && !dom_objects) NS.Desk.make_icon_if_new(await path_to_node(newpath));
+//		werr(`Created: ${newpath}`);
+		winf(`Created: ${newpath}`);
 		if (!node.done) await popDir(node);
 		let arr = [];	
 		let kids = node.kidList;
@@ -1840,22 +1988,43 @@ for (let arr of mvarr) {//«
 			cbok: () => {},
 			cberr: () => {gotfail = true;}
 		};
-		await this.com_mv(arr, {shell_exports, if_recur: true, if_cp: true, recur_opts: obj});
+		await this.com_mv(arr, {
+			shell_exports,
+			if_recur: true,
+//SUTIYKJ
+// Why did we put this here instead of passing the original value?
+//			if_cp: true, 
+			if_cp, 
+
+			recur_opts: 
+			obj
+		});
+		if (!if_cp) {
+//cwarn("DELETE THE DIR...");
+// Moving a dir *from* FS_TYPE (to /dev/shm ???)
+			if (node.type === FS_TYPE) {
+				if (!await db.removeNode(node.id, node.par.id)) {
+cerr("UKFHJKD");
+				}
+			}
+			_dir_update(2, node.par, node);
+		}
+
+		if (done_cb && fromicon) done_cb(fromicon);
+
 		continue;
 	}//»
-//	if (type==FS_TYPE){//«
-//		if (savetype !== FS_TYPE) {
-//			werr(`not (yet) ${com}'ing from type="${FS_TYPE}"`);
-//			continue;
-//		}
+
 	if (verb=="move"){
-		if (!await move_node(node, savename, savedir)){
+//		if (!await move_node(node, savename, savedir)){
+		if (!await node.move(savename, savedir)){
 			werr(`Could not move from ${frompath} to ${topath}`);
 			continue;
 		}
 	}
 	else{
-		if (!(node = await copy_node(node, savename, savedir))){
+//		if (!(node = await copy_node(node, savename, savedir, !!dom_objects))){
+		if (!(node = await node.copy(savename, savedir, {noMakeIcon: !!dom_objects}))){
 			werr(`Could not copy from ${frompath} to ${topath}`);
 			continue;
 		}
@@ -1863,87 +2032,29 @@ for (let arr of mvarr) {//«
 	if (if_cp) {
 		gotfrom = null;
 	}
-//TUIMN
-//	if (node.isFile) {
-//cwarn("DELETE node.appName", node.appName);
-//		delete node.appName;
-//	}
-	await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
-		node,
-		icon: fromicon,
-		win: towin
-	});
-//	}//»
-//else{//«
-//	gotfail=true;
-//	werr(`Unknown type: ${type}`);
-//	continue;
-//}//»
-
+	if (done_cb && fromicon) {
+		done_cb(fromicon);
+	}
+	if (NS.Desk && !dom_objects) {
+		await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
+			node,
+			icon: fromicon,
+			win: towin
+		});
+	}
 }//»
 
 if (NS.Desk && !dom_objects) NS.Desk.update_folder_statuses();
 if (gotfail) {
-	cberr && cberr();
+//	cberr && cberr();
 	return false;
 }
-cbok&&cbok();
+//cbok&&cbok();
 return true;
 
 }
 this.com_mv = com_mv;
 //»
-const copy_node = async(node, newName, toNode)=>{//«
-	let newpath = `${toNode.fullpath}/${newName}`;
-	if (util.newPathIsBad(node.fullpath, newpath)) return;
-//EYTKFHSC
-	if (toNode.type == FS_TYPE) {
-		return saveFsByPath(newpath, await getBlob(node, {binary: true}));
-	}
-	else {
-		let save_blob = await node.blob;
-		node = mk_dir_kid(toNode, newName, {isFile: true});
-		await node.setValue(save_blob);
-		_add_kid(toNode, node);
-		return node;
-	}
-};//»
-const move_node = async(node, newName, toNode)=>{//«
-	if (util.newPathIsBad(node.fullpath, `${toNode.fullpath}/${newName}`)) return;
-	let id = node.id;
-	let par = node.par;
-	let parid = par.id;
-	let saveid = toNode.id;
-	let savename;
-	if (newName && (newName !== node.name)){
-		savename = newName;
-	}
-	let save_blob = null;
-	if (node.type == FS_TYPE) {
-		if (toNode.type == FS_TYPE) {
-			if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
-		}
-		else {
-			save_blob = await node.blob;
-			if (!await db.removeNode(id, parid)) return cerr("YUREFJKK");
-		}
-	}
-	else save_blob = await node.blob;
-	
-
-	_del_kid(par, node);
-	if (save_blob !== null) {
-		node = mk_dir_kid(toNode, newName, {isFile: true});
-		await node.setValue(save_blob);
-	}
-	else {
-		_set_name(node, newName);
-		_set_par(node, toNode);
-	}
-	_add_kid(toNode, node);
-	return true;
-
-};//»
 
 const getBlob = async(node, opts={})=>{//«
 	let istext = opts.text;
@@ -2008,6 +2119,7 @@ cwarn("The data should already be on the node! (node.data)");
 //	return await get_data_from_fs_file(file, fmt, start, end);
 
 };//»
+
 const get_data_from_fs_file=(file,format,start,end)=>{//«
 	return new Promise(async(Y,N)=>{
 		const OK_FORMATS=["blob","bytes","text","binarystring","dataurl","arraybuffer"];
@@ -2036,7 +2148,6 @@ cwarn("Format not given, defaulting to 'arraybuffer'");
 		else reader.readAsArrayBuffer(file);
 	});
 };//»
-
 const get_blob_dir=async ()=>{//«
 	let opfs = await navigator.storage.getDirectory();
 	let blobDir = await opfs.getDirectoryHandle('blobs', {create: true});
@@ -2068,6 +2179,7 @@ const write_blob = async(fent, blob, opts={}) => {//«
 	return {size: blob.size};
 }
 //»
+
 
 const writeFile = async(path, val, opts = {}) => {//«
 	let invalid = () => {
@@ -2157,7 +2269,7 @@ if (!node) {
 	let parobj = await path_to_node(parpath);
 	if (!parobj) return [null, `${parpath}: Bad parent path`];
 	node = await touchFile(parobj, fname, opts);
-	_set_name(node, fname);
+	_node_update(1, node, fname);
 }
 else if (opts.data){
 return [null, "Use node.setValue instead of saveFsByPath!"]
@@ -2206,9 +2318,9 @@ const makeHardLink = async(parobj, name, blobid) =>{//«
 	let kid = mk_dir_kid(parobj, name, {isFile: true});
 
 //	kid.blobId = blobid;
-	_set_blob_id(kid, blobId);
+	_node_update(4, kid, blobId);
 //	kid.id = id;
-	_set_id(kid, id);
+	_node_update(3, kid, id);
 	kids[name] = kid;
 	return kid;
 };//»
@@ -2263,17 +2375,17 @@ cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)
 //	}
 	else if (opts.data) {
 //		kid.blobId = IDB_DATA_TYPE;
-_set_blob_id(kid, IDB_DATA_TYPE);
+_node_update(4, kid, IDB_DATA_TYPE);
 //		kid.data = opts.data;
 _set_data(opts.data);
 	}
 	else {
 //		kid.blobId = NULL_BLOB_FS_TYPE;
-_set_blob_id(kid, NULL_BLOB_FS_TYPE);
+_node_update(4, kid, NULL_BLOB_FS_TYPE);
 	}
 //	kid.id = id;
-	_set_id(kid, id);
-	_add_kid(parobj, kid);
+	_node_update(3, kid, id);
+	_dir_update(1, parobj, kid);
 	if (NS.Desk&&!opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
 	return kid;
 
@@ -2343,13 +2455,36 @@ cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING P
 //	}
 //	kid.id = id;
 	kid = mk_dir_kid(parobj, name, {isDir: true, perm: opts.perm});
-	_set_id(kid, id);
-	_add_kid(parobj, kid);
+	_node_update(3, kid, id);
+	_dir_update(1, parobj, kid);
 	if (NS.Desk && !opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
 	return kid;
 
 };
 //»
+const makeLink=async(parobj, name, target, fullpath)=>{//«
+	if (globals.read_only)return;
+	let parid = parobj.id;
+	let rv;
+//	db.init();
+	let id = await db.createNode(name, LINK_FS_TYPE, parid, target);
+	if (!id) return cerr("ENHYTDJ");
+	let kid = mk_dir_kid(parobj, name, {
+		isLink: true,
+		size: target.length,
+	});
+//	kid.symLink = target;
+	_set_sym_link(kid, target);
+//	kid.id = id;
+	_node_update(3, kid, id);
+
+//	parobj.kids[name]=kid;
+	_dir_update(1, parobj, kid);
+
+	if (NS.Desk) NS.Desk.make_icon_if_new(kid);
+	return kid;
+};//»
+
 const mk_dir = async (fullpath, opts) => {//«
 
 let node = await fullpath.toNode({getLink: true});
@@ -2372,29 +2507,171 @@ return;
 }
 return mkDir(par, name, opts);
 };//»
-const makeLink=async(parobj, name, target, fullpath)=>{//«
-	if (globals.read_only)return;
-	let parid = parobj.id;
-	let rv;
-//	db.init();
-	let id = await db.createNode(name, LINK_FS_TYPE, parid, target);
-	if (!id) return cerr("ENHYTDJ");
-	let kid = mk_dir_kid(parobj, name, {
-		isLink: true,
-		size: target.length,
-	});
-//	kid.symLink = target;
-	_set_sym_link(kid, target);
-//	kid.id = id;
-	_set_id(kid, id);
 
-//	parobj.kids[name]=kid;
-	_add_kid(parobj, kid);
 
-	if (NS.Desk) NS.Desk.make_icon_if_new(kid);
-	return kid;
+/* Now: methods on FSNode
+const copy_node = async(node, newName, toNode, no_make_icon)=>{//«
+	let newpath = `${toNode.fullpath}/${newName}`;
+	if (util.newPathIsBad(node.fullpath, newpath)) return;
+//EYTKFHSC
+	if (toNode.type == FS_TYPE) {
+
+		return saveFsByPath(newpath, await getBlob(node, {binary: true}), { noMakeIcon: no_make_icon });
+	}
+	else {
+		let save_blob = await node.blob;
+		node = mk_dir_kid(toNode, newName, {isFile: true});
+		await node.setValue(save_blob);
+		_dir_update(1, toNode, node);
+		return node;
+	}
+};//»
+const move_node = async(node, newName, toDir)=>{//«
+	if (util.newPathIsBad(node.fullpath, `${toDir.fullpath}/${newName}`)) return;
+//Need to update this to allow for moving/renaming arbitrary node types 
+//within the same directory type
+	let id = node.id;
+	let par = node.par;
+	let parid = par.id;
+	let saveid = toDir.id;
+	let savename;
+	if (newName && (newName !== node.name)){
+		savename = newName;
+	}
+
+// This logic is supposed to result in the fact that save_blob === null means
+// that we are mv'ing a dir.
+
+	let save_blob = null;
+	if (node.type == FS_TYPE) {
+		if (toDir.type == FS_TYPE) {
+			if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
+		}
+		else {
+			if (node.isFile) save_blob = await node.blob;
+			if (!await db.removeNode(id, parid)) return cerr("YUREFJKK");
+		}
+	}
+//	else save_blob = await node.blob;
+	else if (node.isFile) save_blob = await node.blob;
+
+	_dir_update(2, par, node);
+
+	if (save_blob !== null) {
+		node = mk_dir_kid(toDir, newName, {isFile: true});
+		await node.setValue(save_blob);
+	}
+	else {
+		_node_update(1, node, newName);
+		_node_update(2, node, toDir);
+	}
+	_dir_update(1, toDir, node);
+	return true;
+
 };//»
 
+const delete_fobj = async(node, opts={})=>{//«
+	const OK_TYPES=[FS_TYPE, SHM_TYPE, IDB_DATA_TYPE];
+	if (!OK_TYPES.includes(node.type)) {
+cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
+		return;
+	}
+	let path = node.fullpath;
+	if (node.sys) {
+cerr("Not removing toplevel");
+		return;
+	}
+//	if (node.appName===FOLDER_APP){
+	if (node.isDir){
+		await node.loadKids();
+		let kids = node.kidList;
+		for (let kid of kids){
+cwarn(`Deleting:`, kid);
+			await delete_fobj(kid, opts);
+		}
+	}
+	let id = node.id;
+	let parid = node.par.id;
+	if (!(id&&parid)) {
+		if (node.type==SHM_TYPE) {}
+		else {
+cerr(`NO ID && PARID???`);
+log(node);
+log(node.par);
+cerr(`Could not remove: ${node.fullpath}`);
+			return;
+		}
+	}
+	if (!await db.removeNode(id, parid)) {
+cerr("FRYNBSJ");
+		return 
+	}
+//WMNJUGFNH
+
+	_dir_update(2, node.par, node);
+	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
+	return true;
+};//»
+
+
+const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
+	let obj = await path_to_node(path, true);
+	if (!obj){
+		errcb(`could not stat: ${path}`);
+		return;
+	}
+	let rtype = null;
+	rtype = obj.type;
+	if (obj.treeroot === true) {
+		errcb("ignoring the request to remove root");
+		return;
+	}
+	if (obj.appName !== FOLDER_APP) {//«
+		if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype===IDB_DATA_TYPE)){
+			errcb(`${path}: not (currently) handling fs type: '${rtype}'`);
+			return;
+		}
+
+//		if (!check_fs_dir_perm(obj.par, is_root)) errcb(`${path}: permission denied`);
+		if (!obj.par.perm) errcb(`${path}: permission denied`);
+		else if (obj.writeLocked()) errcb(`${path} is "write locked"`);
+		else return obj;
+		return;
+	}//»
+	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) {
+		errcb(`not removing directory type: '${rtype}': ${path}`);
+		return;
+	}
+	if (NS.Desk && (path == globals.user.desk_path)) {
+		errcb(`not removing the working desktop path: ${path}`);
+		return;
+	} 
+	if (obj.par.treeroot) {
+		errcb(`not removing toplevel directory: ${path}`);
+		return;
+	} 
+//	if (obj.moveLocks.length){
+	if (obj.isMoveLocked){
+		errcb(`${path}: is "move locked"`);
+		return;
+	}
+//	if (!obj.done) obj.kids = await popDirByPath(obj.fullpath);
+	if (!obj.done) await obj.loadKids();
+//	let numkids = get_keys(obj.kids).length;
+//	if (!do_full_dirs && numkids > 2) {
+	if (!do_full_dirs && obj.haveKids) {
+		errcb(`${path}: not an empty folder`);
+		return;
+	}
+//	if (!check_fs_dir_perm(obj, is_root)) {
+	if (!obj.perm) {
+		errcb(`${path}: permission denied`);
+		return;
+	}
+	return obj;
+};//»
+
+*/
 
 //»
 //Init/Populate/Mount Dirs«
@@ -2433,13 +2710,15 @@ const make_dev_tree = ()=>{//«
 	let arr = ["null", "log"];
 	for (let name of arr){
 		let kid = new DevNode(name, par);
-		_add_kid(par, kid);
+		_dir_update(1, par, kid);
 	}   
 	let shm = mk_dir_kid(par, "shm", {isDir: true, type: SHM_TYPE, perm: true});
-	shm.done = true;
-	_add_kid(par, shm);
-	par.done=true;
-	par.longdone=true;
+//	shm.done = true;
+_dir_update(3, shm , true);
+	_dir_update(1, par, shm);
+//	par.done=true;
+_dir_update(3, par, true);
+//	par.longdone=true;
 };//»
 
 const init = async()=>{//«
@@ -2452,13 +2731,13 @@ const init = async()=>{//«
 		let rows = rv.rows;
 		if (rows.length){
 //			tree.id = rows[0].id;
-			_set_id(tree, rows[0].id);
+			_node_update(3, tree, rows[0].id);
 			return tree;
 		}
 		rv = await db.createNode(name, DIR_FS_TYPE, rootId);
 		if (!rv) return;
 //		tree.id = rv;
-		_set_id(tree, rv);
+		_node_update(3, tree, rv);
 		return tree;
 	};//»
 	if (!await db.init(root, FS_PREF)) {
@@ -2572,6 +2851,7 @@ log(dirobj);
 const populate_fs_dirobj = async(parobj, opts={}) => {//«
 let rv;
 let dirid = parobj.id;
+
 rv = await db.getAll(dirid);
 //if (!check_db_rv(rv)) return 
 
@@ -2598,22 +2878,23 @@ for (let obj of rows){
 		isData,
 		isFile
 	});
-	_set_id(kid, id);
+	_node_update(3, kid, id);
 	if (isLink){
 		_set_sym_link(kid, value);
 	}
 	else if (isData){
-		_set_blob_id(kid, IDB_DATA_TYPE);
+		_node_update(4, kid, IDB_DATA_TYPE);
 		_set_data(kid, value);
 	}
 	else if (isFile){
-		_set_blob_id(kid, value);
+		_node_update(4, kid, value);
 	}
-	_add_kid(parobj, kid);
+	_dir_update(1, parobj, kid);
 	if (kid.appName==="Application") kid.appicon = await kid.text;
 }
 
-parobj.done=true;
+//parobj.done=true;
+_dir_update(3, parobj, true);
 return true;
 }//»
 const populate_site_dir = async(par, opts={}) => {//«
@@ -2624,12 +2905,12 @@ const domount=(list, par)=>{//«
 		let sz = arr[1];
 		if (sz){
 			let node = mk_dir_kid(par, nm, {size: parseInt(sz), isFile: true});
-			_add_kid(par, node);
+			_dir_update(1, par, node);
 		}
 		else {
 			let dir = mk_dir_kid(par, nm, {isDir: true});
 			domount(list[i+1], dir);
-			_add_kid(par, dir);
+			_dir_update(1, par, dir);
 			i++;
 		}
 	}
@@ -2638,7 +2919,8 @@ let rv = await fetch('/list.json');
 if (!rv.ok) return;
 let list = await rv.json();
 domount(list, par);
-par.done = true;
+//par.done = true;
+_dir_update(3, par, true);
 };//»
 
 //»
@@ -2972,7 +3254,6 @@ _.toJson=async function(opts={}){//«
 cerr(e);
 	}
 };//»
-
 _.mkNewFile = async function(opts={}){//«
 
 let fullpath = normPath(this, opts.cwd);
@@ -2998,24 +3279,33 @@ if (fullpath === "/") return;
 return mk_dir(fullpath, opts);
 }//»
 _.execute = async function(opts={}){//«
-
-let term;
-if (NS.Terminal){
-	term = NS.Terminal;
+if (!globals.ShellMod) {
+	if (!await util.loadMod("lang.shell")) {
+		return new Error("Could not load the shell module");
+	}
+	globals.ShellMod = new LOTW.mods["lang.shell"]();
 }
-else if (NS.Desk){
-	let win = await NS.Desk.api.openApp("Terminal");
-	term = win.app;
-	await term.onappinit();
-}
-if (!term) return;
-let rv = await term.autoTypeCommand(this+"", opts);
-if (!opts.capture) return;
-if (!isArr(rv)) return;
-let s="";
-for (let ln of rv) s+=ln.join("")+"\n";
-return s;
-
+let term = {
+	env: {
+		vars:{},
+		cwd: {
+			cwd: globals.user.HOME_PATH
+		},
+		coms: globals.ShellMod.builtins,
+		funcs: {}
+	},
+	response:(out, opts={})=>{
+log(out, opts);
+	}
+};
+const shell = new globals.ShellMod.Shell(term);
+let sub_lines = [];
+await shell.execute(this, {
+	env: term.env,
+	isInteractive: false,
+	subLines: sub_lines
+});
+return sub_lines;
 }//»
 
 }
@@ -3192,7 +3482,8 @@ const populate_remote_users_dirobj = (parobj, opts) => {//«
 		kid.id = 0;
 		kids[name] = kid;
 	}
-	parobj.done = true;
+//	parobj.done = true;
+_dir_update(3, parobj, true);
 	return kids;
 };//»
 const populate_remote_user_dirobj = async(parobj, opts) => {//«
@@ -3237,7 +3528,8 @@ for (let i=0; i < names.length; i++){
 	kid.id = ids[i];
 	kids[nm] = kid;
 }
-parobj.done=true;
+//parobj.done=true;
+_dir_update(3, parobj, true);
 return kids;
 };//»
 
@@ -3442,7 +3734,8 @@ log(text);
 	let kids = dirobj.kids;
 	let par = dirobj;
 	dirobj.checked = true;
-	dirobj.done = true;
+//	dirobj.done = true;
+_dir_update(3, dirobj, true);
 	for (let k of ret) {
 		if (k.match(/^total\x20+\d+/)) continue;
 		let arr = k.split(" ");

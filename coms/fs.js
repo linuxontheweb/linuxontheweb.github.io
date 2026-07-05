@@ -1597,7 +1597,16 @@ const com_mv = class extends Com{//«
 			have_error=true;
 			this.err(mess);
 		};
-		await fsapi.comMv(args, {if_cp: false, exports: {cberr: err, werr: err, cur_dir: this.env.cwd.cwd, termobj: term}});
+		await fsapi.comMv(args, {
+			if_cp: false, 
+			exports: {
+				cberr: err, 
+				werr: err, 
+				winf: mess=>{this.inf(mess)},
+				cur_dir: this.env.cwd.cwd, 
+				termobj: term
+			}
+		});
 		have_error?this.no():this.ok();	
 	}
 }//»
@@ -1623,7 +1632,18 @@ const com_cp = class extends Com{//«
 			have_error=true;
 			this.err(mess);
 		};
-		await fsapi.comMv(args, {if_cp: true, if_recur: !!this.opts.r, exports: {cberr: err, werr: err, cur_dir: this.env.cwd.cwd, termobj: term}});
+		await fsapi.comMv(args, {
+			if_cp: true, 
+			if_recur: !!this.opts.r, 
+			exports: {
+				cberr: err, 
+				werr: err, 
+				winf: mess=>{this.inf(mess)},
+				cur_dir: 
+				this.env.cwd.cwd, 
+				termobj: term
+			}
+		});
 		have_error?this.no():this.ok();	
 	}
 }//»

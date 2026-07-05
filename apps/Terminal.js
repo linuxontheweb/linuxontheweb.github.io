@@ -300,13 +300,6 @@ LOTW.apps[APPNAME] = class {
 
 //Private Vars«
 
-//#readLineCb;
-//#readLineStr;
-//#readLineStartLine;
-//#getChCb;
-//#getChDefCh;
-#autoCapture;
-
 //»
 constructor(Win){//«
 
@@ -364,9 +357,9 @@ this.paragraphSelectMode = true;
 
 this.isScrolling = false;
 this.didInit = false;
-this.winid = this.Win.id;
+this.winid = this.Win.winId;
 this.cursorId = `cursor_${this.winid}`;
-this.numId = this.winid.split("_")[1];
+this.numId = this.Win.id;
 
 this.tabSize=4;
 this.minTermWid = 10;
@@ -551,16 +544,15 @@ this.doOverlay = (str) => {
 }//»
 //»
 //Execute«
-
 async execute(str, opts={}){//«
 	const shell = new this.Shell(this);
 	this.curShell = shell;
 	str = str.replace(/\x7f/g, "");
 	await this.curShell.execute(str, {
 		env: this.env,
-		term: this,
+//		term: this,
 		isInteractive: true,
-		shell: this.curShell,
+//		shell: this.curShell,
 		heredocScanner:eof=>{return this.heredocScanner(eof);},
 	});
 	let save_str;
@@ -580,21 +572,6 @@ executeBackgroundCommand(s){//«
 	shell.execute(s,{env});
 
 }//»
-async autoTypeCommand(str, opts={}){//«
-if (this.sleeping || this.curShell){
-cwarn(`Skipping: '${str}'`);
-return;
-}
-	for (let c of str) this.handleLetterPress(c);
-if (opts.capture) this.#autoCapture = [];
-	await this.handleEnter({noSave: true});
-if (opts.capture) {
-let cap = this.#autoCapture;
-this.#autoCapture = undefined;
-return cap;
-}
-}//»
-
 //»
 //Util«
 
@@ -671,7 +648,6 @@ async loadShell(){//«
 			return;
 		}
 		globals.ShellMod = new LOTW.mods["lang.shell"]();
-//		globals.ShellMod.init();
 	}
 	this.ShellMod = globals.ShellMod;
 	this.Shell = globals.ShellMod.Shell;
@@ -1913,18 +1889,6 @@ return match_arr;
 	let ret = await dir.toNode();
 	if (!(ret&&ret.appName==FOLDER_APP)) return [];
 	list = await ret.list;
-//	let type = ret.type;
-
-/*
-	let kids=ret.kids;
-	let keys=Object.keys(kids);
-	if (type==FS_TYPE&&!ret.done) {
-		let ret2 = await fsapi.popDir(ret,{});
-		if (!ret2) return [];
-		ret.done = true;
-		ret.kids = ret2;
-	}
-*/
 	return domatch();
 }
 //»
@@ -2118,7 +2082,6 @@ async doCompletion(){//«
 //»
 //Response/Format«
 
-
 fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
 if (arr.length == 0) return;
 const VALS = arr;
@@ -2205,7 +2168,6 @@ for (let ln of out){
 }
 }
 //»
-
 fmt2(str, type, maxlen){//«
 //This does soft-wrapping (introduces line breaks at spaces before 'w' chars)
     if (type) str = type + ": " + str;
@@ -2333,16 +2295,7 @@ here, so we need to make sure we are putting the message into the appropriate
 lines array (otherwise, the message gets printed onto the actor's screen.
 */
 
-//	let { termLines: lines, termLineColors: line_colors } = this;
-let lines, line_colors;
-if (this.#autoCapture) {
-	lines = this.#autoCapture;
-	line_colors = [];
-}
-else {
-	lines = this.termLines;
-	line_colors = this.termLineColors;
-}
+	let { termLines: lines, termLineColors: line_colors } = this;
 	let readline_lines;
 	if (Number.isFinite(this.readLineStartLine)) {
 		readline_lines = [];

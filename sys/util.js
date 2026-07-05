@@ -494,6 +494,7 @@ LOTW.api.util = (()=>{//«
 //export const util = (()=>{
 
 return {
+THROW: mess=>{throw new Error(mess)},
 fetch: async(url, arg={})=>{//«
 	let rv;
 	try{

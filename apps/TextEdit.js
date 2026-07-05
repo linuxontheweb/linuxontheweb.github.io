@@ -111,6 +111,7 @@ this.overrides = {//«
 	'b_CAS': 1
 };//»
 this.onfocus = ()=>{//«
+/*
 	if (topwin.saveFolder){
 		topwin.off();
 		setTimeout(()=>{
@@ -120,6 +121,7 @@ this.onfocus = ()=>{//«
 		},0);
 		return;
 	}
+*/
 	if (modified) return;
 	focused = true;
 	if (win.area) {
