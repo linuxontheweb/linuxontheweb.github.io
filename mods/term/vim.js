@@ -1976,10 +1976,9 @@ const try_save_as=(opts={})=>{//«
 	try_save(true);	
 };//»
 const edit_save = async(if_nostat, com_opts={})=>{//«
-if (this.autoMode) return;
+	if (this.autoMode) return;
 	let write_err = "";
 	const write_cb_func = async(node)=>{//«
-//	const write_cb_func = async(ret)=>{
 		if (node) {
 //We were doing a "save as" from another file, so we need to unlock it since we
 //aren't using that file anymore
@@ -1996,7 +1995,11 @@ if (this.autoMode) return;
 				Term.curEditNode = edit_fobj;
 				edit_fobj.lockFile();
 			}
-			if (Desk) Desk.make_icon_if_new(node);
+			if (Desk) {
+//				Desk.make_icon_if_new(node);
+cwarn(`Not calling make_icon_if_new, w/ new node:`);
+log(node);
+			}
 			if (!if_nostat) {
 				if (write_err) stat_message_type = STAT_ERR;
 				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${node.size}C written${write_err}`;
@@ -2048,22 +2051,7 @@ Meaning that this should always be a simple "Save" call rather than any kind of
 		render();
 		return;
 	}
-//	let opts={retObj: true};
 	let usepath = edit_fullpath;
-/*«
-	let OK_TYPES=[FS_TYPE, USERS_TYPE];
-	if (!OK_TYPES.includes(edit_ftype)){
-		if (usepath.match(/\/dev\/shm/)) {
-		}
-		else {
-			stat_message = `Invalid file system type:  ${edit_ftype}`;
-			try_revert();
-			render({},80);
-			is_saving = false;
-			return;
-		}
-	}
-»*/
 	let rv;
 	if (VALIDATE_JSON_ON_SAVE && usepath.match(/\.(json|app)$/i) && val.length < MAX_LEN_TO_VALIDATE_JSON){
 		try{
@@ -2076,50 +2064,31 @@ cerr(e);
 	}
 	let node;
 	if (!edit_fobj) {//«
-		node = await fsapi.writeFile(usepath, val);
-/*«
-		if (edit_ftype === USERS_TYPE){
-			node = await fsapi.writeFile(usepath, val);
-//			if (node) rv = {node, size: node.size};
+		let rv = await usepath.toParNodeAndName();
+		if (!(rv && rv[0] && rv[1])) {
+			stat_err(`${usepath}: resolution failed`);
+			return;
 		}
-		else {
-//			rv = await fsapi.saveFsByPath(usepath, val, opts);
-			node = await fsapi.saveFsByPath(usepath, val);//IN BLOCK COMMENT
+		let parnode = rv[0];
+		let name = rv[1];
+		let obj = await parnode.mkNewFile(name);
+		if (!obj){
+			stat_err(`${usepath}: could not create the file`);
+			return;
 		}
-*/
-//log(rv);
-/*
-if (!(rv&&rv.node)){
-stat_err("There was a problem writing the file (see console)");
-cwarn("Here is the returned value from saveFsByPath");
-log(rv);
-return;
-}
-»*/
+		if (await obj.setValue(val)) node = obj;
+
 	}//»
 	else {//«
 		let par = edit_fobj.par;
-//		if (par.type === FS_TYPE && !await fsapi.checkDirPerm(par)){
-//		if (!await fsapi.checkDirPerm(par)){
 		if (!par.perm){
 			stat_err("Permission denied");
 			return;
 		}
-//		rv = await edit_fobj.setValue(val, opts);
 		if (await edit_fobj.setValue(val)){
 			node = edit_fobj;
 		}
-/*«
-if (!(rv&&rv.node)){
-stat_err("There was a problem writing the file (see console)");
-cwarn("Here is the returned value from node.setValue");
-log(rv);
-is_saving = false;
-return;
-}
-»*/
 	}//»
-//	return write_cb_func(rv);
 	return write_cb_func(node);
 }
 //»
@@ -2133,13 +2102,11 @@ const err=s=>{//«
 	render({},82);
 };//»
 const checkok = () =>{//«
-	rtype = rootobj.type;
-	if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype==USERS_TYPE)) return `Cannot create file type: ${rootobj.type}`;
-//	if (!fs.check_fs_dir_perm(parobj,is_root)) return `Permission denied: ${fname}`;
-	if (!parobj.perm) return `Permission denied: ${fname}`;
+	if (!parobj.writeable) return `${parobj.fullpath}: read only`;
+	if (!parobj.perm) return `${parobj.fullpath}: permission denied`;
 	return true;
 }; //» 
-const save_ok = ifnew => {//«
+const save_ok = () => {//«
 	if (edit_fobj) {
 		edit_fobj_hold = edit_fobj;
 		edit_fobj = undefined;
@@ -2167,17 +2134,15 @@ if (!fname) return err("No file name given");
 let parobj = await pardir.toNode();
 if (!parobj) return err(`${pardir}: directory not found`);
 let rtype;
-let rootobj;
-rootobj = parobj.root;
 let rv = checkok();
 if (isStr(rv)) return err(rv);
 //MDOPILKL
-//let gotkid = parobj.kids[fname];
 let gotkid = parobj.getKid(fname);
 if (!gotkid) {
+//	edit_fobj = await parobj.mkNewFile(fname);
 	return save_ok(true);
 }
-if (gotkid.writeLocked()){
+if (gotkid.isWriteLocked){
 	stat_message = `${fname}: the file is write locked`;
 	try_revert();
 	stat_message_type = STAT_ERR;
@@ -7440,7 +7405,7 @@ let linesarg = arg.split(/\r?\n/);
 edit_fobj = o.node;
 
 if (edit_fobj) {
-	if (edit_fobj.writeLocked()) {
+	if (edit_fobj.isWriteLocked) {
 //THROW("WE SHOULD NOT HAVE A WRITE_LOCKED FILE!!!");
 topwin._fatal(new Error("This is a 'write locked' file!"));
 	}

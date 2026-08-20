@@ -82,10 +82,130 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 }»
 
 »*/
-/* 7/2/26: Need to figure out how to run commands without a real terminal.
+
+/* BUGGY: Detecting "ambiguous redirect": filename expansion must result in 1 field «
+
+For Stdin/Stdout filenames:
+
+When exactly is a shell redirect considered "ambiguous"? I am implementing a «
+POSIX shell.
+
+
+In a POSIX-compliant shell, an ambiguous redirect error occurs when a
+redirection operator (like >, >>, or <) targets a word that expands to nothing,
+to more than one word, or to a pattern that matches multiple files.
+
+
+Core Triggers for Ambiguous Redirection
+
+Multi-Word Expansion: A variable expands into multiple words due to spaces, and
+it is not quoted.
+
+Empty Expansion: A variable is null or unset, and it is not quoted.
+
+Globbing Duplication: A wildcard pattern matches more than one filename.
+
+Examples of Failures
+
+1. Unquoted Spaces (Multi-Word)
+
+file="my log.txt"
+
+echo "test" > $file
+
+Why it fails: $file expands to my and log.txt. The shell does not know which
+word is the intended destination.
+
+2. Unset or Null Variables (Empty)
+
+echo "test" > $unset_var
+
+Why it fails: The variable expands to an empty string, leaving the redirection
+operator with no target file.3.
+
+Multiple Glob Matches
+
+echo "test" > *.txt
+
+Why it fails: If there is more than one .txt file in the directory, the target
+is ambiguous. POSIX requires this to fail unless the glob matches exactly one
+file.
+
+How to Implement This in Your Shell
+
+To correctly handle this in your parser and execution engine, process the
+redirection target word through these strict evaluation steps:
+
+Perform Expansions: Apply parameter expansion, command substitution, and
+arithmetic expansion to the redirection word.
+
+Apply Pathname Expansion: Run globbing (if enabled) on the result.
+
+Count the Fields: Count the resulting fields after word splitting and globbing.
+
+Exactly 1 field: 
+The redirection is valid. Use this single field as the filename.
+
+0 fields or >1 field: 
+Stop execution immediately and print an "ambiguous redirect" error.
+
+The Quoting Exception
+
+If a variable is wrapped in double quotes, word splitting and globbing are
+suppressed. This guarantees exactly one field, preventing the error.
+
+
+# This is always safe, even if $file is empty or contains spaces
+
+echo "test" > "$file" 
+//»
+
+
+@EYUWENMRE: We are doing *tilde* expansions, so this works:
+echo hi > ~/har
+
+But we weren't doing any other kind, so this didn't work:
+
+for i in {1..10}; do echo $i > /dev/shm/$i; done 
+
+In Stdin.setValue @TWEJKDLJ, we are doing:
+
+if (!arg.isSimple){
+	return `expected a 'simple' file redirection (have '${raw}')`;
+}
+arg.tildeExpansion();
+arg.dsSQuoteExpansion();
+
+... which probably isn't exactly right. Need to do the exact same
+expansion stuff as discussed above, in the same way as with Stdout.
+We can use a function called: expand_redir_path.
+
+Should we not just do:
+
+let arr = [fname];
+await Shell.allExpansions(arr)
+... then test for arr.length here?
+
+This seems to be the way to go.
+
+»*/
+
+/* 7/22/26: Need to refactor Stdout.write? «
+
+We should create the node (@URUJGHKN), and 
+*then* use node.setVal (instead of fsapi.WRITEFILE).
+
+Just look at the line under @XBUTHYKYN!!!! IT IS *LITERALLY* INSANE.
+If there is a single reason why we need to slow down, and just *look*
+at what has actually been written over the past 15 years, and then
+very very slowly (like molasses), update it to a fully modern/generic/encapsulated 
+form, the reason is wholly contained in THAT line.
+
+»*/
+/* 7/2/26: Need to figure out how to run commands without a real terminal.«
 Will need to invoke a shell with the stdout capture option.
 
-*/
+»*/
 /*6/11/26 Introducing have_unquoted_meta_char in filepathExpansion:«
 If we don't see unquoted versions of "*", "?", or "[" in the pattern
 string, then just return the token, without sending it into the
@@ -413,15 +533,15 @@ const{
 	SHELL_ERROR_CODES,
 }=globals.term;
 const{
-	FS_TYPE,
+	OP_FS_TYPE,
 	USERS_TYPE,
 	MOUNT_TYPE,
 	SHM_TYPE,
 
-	DIR_TYPE,
-	LINK_TYPE,
-	BAD_LINK_TYPE,
-	IDB_DATA_TYPE,
+	DIR_NODE_TYPE,
+	LINK_NODE_TYPE,
+	BAD_LINK_NODE_TYPE,
+
 }=globals.fs;
 const util = LOTW.api.util;
 const {
@@ -925,7 +1045,7 @@ if (op==="-w"){//«
 }//»
 if (op==="-s"){//«
 	if (!node.isFile) return maybe_neg(true);
-	if (node.type!==FS_TYPE) {
+	if (node.type!==OP_FS_TYPE) {
 cwarn("Not checking the size of non-local-fs files");
 		return maybe_neg(true);
 	}
@@ -996,7 +1116,7 @@ if (op==="-ef"){//«
 	}
 	return maybe_neg(node1===node2);
 }//»
-if (node1.type===FS_TYPE&&node2.type===FS_TYPE){//«
+if (node1.type===OP_FS_TYPE&&node2.type===OP_FS_TYPE){//«
 
 let f1 = await node1.file;
 let f2 = await node2.file;
@@ -1367,13 +1487,12 @@ allLibs: LOTW.libs,
 
 class Stdin{//«
 
-constructor(tok, arg){
+constructor(tok, arg){//«
 	this.tok=tok;
-	this.arg=arg;
+	this.file=arg;
 	this.isStdin = true;
 	this.isRedir = true;
-}
-
+}//»
 async setValue(shell, opts={}){//«
 
 const{env, scriptName, scriptArgs} = opts;
@@ -1384,35 +1503,31 @@ if (this.tok.isHeredoc) {
 	this.escaped = this.tok.escaped;
 	return true;
 }
-const{tok, arg}=this;
+const{tok, file}=this;
 const {r_op}=tok;
+
 if (r_op==="<"){//«
-	let arg = this.arg;
-	let raw = arg.raw;
-	if (!arg.isSimple){
-		return `expected a 'simple' file redirection (have '${raw}')`;
-	}
-//TWEJKDLJ
-	arg.tildeExpansion();
-	arg.dsSQuoteExpansion();
-	let fname = arg.toString();
+//	let arg = this.arg;
+	let {file} = this;
+
+// See Stdout.write @EYUWENMRE and the associated note for "ambiguous redirect"
+
+	let arr = await shell.allExpansions([file], opts);
+	if (arr.length !== 1) return `${file.toString()}: ambiguous redirect`;
+	let fname = arr[0].toString();
+
 	let node = await fname.toNode(env.cwd);
-	if (!node) {
-		return `${raw}: no such file or directory`;
-	}
-	if (!node.isFile){
-		return `${raw}: not a regular file`;
-	}
+	if (!node) return `${fname}: no such file or directory`;
+	if (!node.isFile) return `${fname}: not a regular file`;
 	let rv = await node.text;
-	if (!isStr(rv)){
-		return `${raw}: an invalid value was returned`;
-	}
+	if (!isStr(rv)) return `${fname}: an invalid value was returned`;
 	this.value = rv;
+
 	return true;
 }//»
 if (r_op==="<<<"){//«
 //SYEORLDJ
-	let arr = [this.arg];
+	let arr = [this.file];
 	await shell.allExpansions(arr);
 //MSYEOKFK
 	let out=[];
@@ -1425,22 +1540,18 @@ if (r_op==="<<<"){//«
 return `Unknown stdin redirection: ${rop}`;
 
 }//»
-
-dup(){
-	return new Stdin(this.tok, this.arg&&this.arg.dup());
-}
+dup(){return new Stdin(this.tok, this.file && this.file.dup());}
 
 }//»
 class Stdout{//«
 
-constructor(tok, file){
+constructor(tok, file){//«
 	this.tok=tok;
 	this.file=file;
 	this.isStdout = true;
 	this.isRedir = true;
-}
-
-async write(arrarg, env){//«
+}//»
+async write(shell, opts, arrarg, env){//«
 
 let val;
 if (arrarg instanceof Uint8Array) val = arrarg;
@@ -1457,13 +1568,15 @@ const{tok, file: fname}=this;
 //const {op}=tok;//WRONG!!!
 //-----vvv
 const {val: op}=tok;
-//log(env);
-//This is instance of Word vvvvv
-fname.tildeExpansion();
-//ZOPIRUTKS------------------vvvvvvvvvvv
-let fullpath = normPath(fname.toString(), env.cwd.cwd);
-//log("FULL", fullpath);
-//let node = await fsapi.pathToNode(fullpath);
+
+let use_fname;
+
+// EYUWENMRE
+let arr = await shell.allExpansions([fname], opts);
+if (arr.length !== 1) return `${fname.toString()}: ambiguous redirect`;
+use_fname = arr[0].toString();
+
+let fullpath = normPath(use_fname, env.cwd.cwd);
 let node = await fullpath.toNode();
 if (node) {//«
 	if (node.isDevice){
@@ -1484,15 +1597,15 @@ cwarn("WHAT KIND OF DEVICE???", fullpath);
 		return;
 	}
 	if (!node.isFile){
-		return `${fname}: not a regular file`;
+		return `${use_fname}: not a regular file`;
 	}
-//	if (node.type == FS_TYPE && op===">" && !ok_clobber) {
-	if (node.type == FS_TYPE && op===">" && !ALLOW_REDIR_CLOBBER) {
+//	if (node.type == OP_FS_TYPE && op===">" && !ok_clobber) {
+	if (node.type == OP_FS_TYPE && op===">" && !ALLOW_REDIR_CLOBBER) {
 		if (env.CLOBBER_OK==="true"){}
-		else return `not clobbering '${fname}' (ALLOW_REDIR_CLOBBER==${ALLOW_REDIR_CLOBBER})`;
+		else return `not clobbering '${use_fname}' (ALLOW_REDIR_CLOBBER==${ALLOW_REDIR_CLOBBER})`;
 	}
-	if (node.writeLocked()){
-		return `${fname}: the file is "write locked" (${node.writeLocked()})`;
+	if (node.isWriteLocked){
+		return `${use_fname}: the file is "write locked"`;
 	}
 }//»
 //YAFHKANT
@@ -1500,33 +1613,40 @@ if (!(isStr(val)||(val instanceof Uint8Array))){
 	return "Invalid value sent to Stdout.write (want String or Uint8Array)";
 }
 let patharr = fullpath.split("/");
-patharr.pop();
+
+let nm = patharr.pop();
 let parpath = patharr.join("/");
-if (!parpath) return `${fname}: Permission denied`;
-//let parnode = await fsapi.pathToNode(parpath);
+if (!parpath) return `${use_fname}: Permission denied`;
 let parnode = await parpath.toNode();
 if (!parnode){
-	return `${fname}: invalid or unsupported path`;
+	return `${use_fname}: invalid or unsupported path`;
 }
-let typ = parnode.type;
-if (!(parnode.appName===FOLDER_APP&&(typ===FS_TYPE||USERS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
-	return `${fname}: invalid or unsupported path`;
-}
-if (!parnode.perm) {
-	return `${fname}: Permission denied`;
-}
-if (node){
-	if (!await node.setValue(val, {append: op === ">>"})) return `${fname}: Could not write to the file`;
-}
-else{
-	if (!await fsapi.writeFile(fullpath, val)) return `${fname}: Could not write to the file`;
-}
-return true;
-}//»
 
-dup(){
-	return new Stdin(this.tok, this.arg.dup());
+//«
+//let typ = parnode.type;
+//XBUTHYKYN CRAZY LOGIC --vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+//if (!(parnode.appName===FOLDER_APP&&(typ===OP_FS_TYPE||USERS_TYPE||typ===SHM_TYPE||typ=="dev"))) {
+//	return `${use_fname}: invalid or unsupported path`;
+//}»
+
+if (!parnode.writeable) {
+	return `${use_fname}: read only`;
 }
+
+// Simplify this by creating the node if needed, like above
+if (!node){
+	if (!parnode.perm) {
+		return `${use_fname}: permission denied`;
+	}
+
+	node = await parnode.mkNewFile(nm);
+	if (!node) return `${use_fname}: could not create the new file`;
+}
+if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file 1234`;
+return true;
+
+}//»
+dup(){ return new Stdout(this.tok, this.file.dup()); }
 
 }//»
 
@@ -1568,7 +1688,7 @@ DIE(`Unknown value as arg to initRedirInBuffer (see above)`);
 		this.#subOutBuffer = [];
 		this.haveSubOut = true;
 	}
-	writeOutRedir(){return this.#redirOut.write(this.#redirOutBuffer, this.env);}
+	writeOutRedir(shell, opts){return this.#redirOut.write(shell, opts, this.#redirOutBuffer, this.env);}
 	out(val, opts={}){//«
 		if (this.shell.cancelled) return;
 		if (this.haveRedirOut){
@@ -2896,7 +3016,7 @@ async run(){//«
 				return;
 			}
 			let sz = "?";
-			if (node.type === FS_TYPE) {
+			if (node.type === OP_FS_TYPE) {
 				let file = await node.file;
 				if (file) sz = file.size;
 			}
@@ -2906,6 +3026,12 @@ async run(){//«
 		}
 //		let list = await node.list;
 		await node.loadKids();
+
+if (!node.done){
+	this.err(`${node.fullpath}: could not populate the directory`);
+	return;
+
+}
 		let list = node.kidList;
 		dir_was_last = true;
 		let names=[];
@@ -2940,20 +3066,19 @@ async run(){//«
 				}
 				let n = node.getKid(nm);
 				if (n.isDir === true) {
-					types.push(DIR_TYPE);
+					types.push(DIR_NODE_TYPE);
 				}
 				else if (n.isLink === true) {
-					if (!await n.ref) types.push(BAD_LINK_TYPE);
-					else types.push(LINK_TYPE);
+					if (!await n.ref) types.push(BAD_LINK_NODE_TYPE);
+					else types.push(LINK_NODE_TYPE);
 				}
-				else if (n.isData === true) types.push(IDB_DATA_TYPE);
 				else types.push(null);
 			}
 			if (all) {
 				dir_arr.unshift("..");
 				dir_arr.unshift(".");
-				types.unshift(DIR_TYPE);
-				types.unshift(DIR_TYPE);
+				types.unshift(DIR_NODE_TYPE);
+				types.unshift(DIR_NODE_TYPE);
 			}
 			let name_lens = [];
 			let colors = [];
@@ -3125,33 +3250,6 @@ cerr(e);
 
 }
 }//»
-const com_open = class extends Com{//«
-init(){
-	if (!this.args.length) {
-		this.no(`missing operand`);
-	}
-}
-async run(){
-	const{err:_err}=this;
-	let have_error = false;
-	const err=mess=>{
-		have_error = true;
-		_err(mess);
-	};
-	for (let path of this.args) {
-		let fullpath = normPath(path, this.env.cwd.cwd);
-//		let node = await fsapi.pathToNode(fullpath);
-		let node = await fullpath.toNode();
-		if (!node) {
-			err(`${path}: no such file or directory`);
-			continue;
-		}
-		let win = await Desk.open_file_by_path(node.fullpath);
-		if (!win) err(`${path}: could not be opened`);
-	}
-	have_error?this.no():this.ok();
-}
-}//»
 const com_epoch = class extends Com{//«
 	run(){
 		this.out(Math.round((new Date).getTime()/ 1000)+"");
@@ -3284,6 +3382,36 @@ async run(){
 }
 }//»
 
+/*
+const com_open = class extends Com{//«
+init(){
+	if (!this.args.length) {
+		this.no(`missing operand`);
+	}
+}
+async run(){
+	const{err:_err}=this;
+	let have_error = false;
+	const err=mess=>{
+		have_error = true;
+		_err(mess);
+	};
+	for (let path of this.args) {
+		let fullpath = normPath(path, this.env.cwd.cwd);
+//		let node = await fsapi.pathToNode(fullpath);
+		let node = await fullpath.toNode();
+		if (!node) {
+			err(`${path}: no such file or directory`);
+			continue;
+		}
+let win = await Desk.open_file_by_path(node.fullpath);//COMMENTED OUT IN COM_OPEN!!!
+		if (!win) err(`${path}: could not be opened`);
+	}
+	have_error?this.no():this.ok();
+}
+}//»
+*/
+
 this.builtins={//«
 gh: com_gh,
 cat: com_cat,
@@ -3313,7 +3441,7 @@ echodelay: com_echodelay,
 env: com_env,
 app: com_app,
 appicon: com_appicon,
-open: com_open,
+//open: com_open,
 msleep: com_msleep,
 test: com_test,
 get: com_get
@@ -3427,7 +3555,7 @@ const fields = [];
 let curfield="";
 for (let ent of this.val){
 
-	if (ent instanceof BQuote || ent instanceof ComSub|| ent instanceof ParamSub){//«
+	if (ent instanceof BQuote || ent instanceof ComSub || ent instanceof ParamSub){//«
 //The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
 		let rv = await ent.expand(shell, opts);
 		if (rv) {
@@ -6750,6 +6878,7 @@ else if (red==="<<"){
 return stdin;
 }//»
 async allExpansions(arr, shopts={}, opts={}){//«
+//log(`IN: ${arr.length}`);
 //log(arr[1].val[0]);
 const{env,scriptName,scriptArgs} = shopts;
 const{isAssign}=opts;
@@ -6818,6 +6947,8 @@ for (let k=0; k < arr.length; k++){//quote removal«
 		tok.quoteRemoval();
 	}
 }//»
+
+//log(`OUT: ${arr.length}`);
 return arr;
 }//»
 makeCompoundCommand(com, opts, parentCommand){//«
@@ -7213,7 +7344,7 @@ for (let com of pipeline){//«
 	}
 	if (!com.haveRedirOut) continue;
 
-	let rv = await com.writeOutRedir()
+	let rv = await com.writeOutRedir(this, opts);
 	if (this.cancelled) continue;
 	if (rv===true) continue;
 	if (isStr(rv)) {
@@ -7338,6 +7469,7 @@ this evaluates to true, and hi is output
 //SLDPEHDBF
 async compile(command_str, opts={}){//«
 	this.commandStr = command_str;
+	opts.shell = this;
 	let parser = new Parser(command_str.split(""), opts);
 	this.parser = parser;
 //TRYHERE

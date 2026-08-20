@@ -19,7 +19,437 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
-/*7/3/26: Put del(), move(), and copy() on FileNode???
+
+/* PATTERN FOR CREATING NEW FILE NODE TYPES W/ ARBITRARY data/getBlob/setBlob«
+
+@YSXBPMNF
+
+Here is a basic template:
+
+const getter = async (node, opts) => {//«
+	let my_str = node.getData("someStr");
+
+	let blob;
+	// Make the blob...
+	return blob_to_ret_val(blob, opts); 
+};//»
+const setter = async (node, val, opts={}) => {//«
+
+let my_arr = node.getData("someArr");
+// opts: append
+let size;
+// Figure out the saved size
+return {size}
+};//»
+const data = {//«
+	someStr : "hi",
+	someArr: [1,2,3],
+	someBool: false
+};//»
+
+let my_node = new FileNode(my_name, my_par, {
+	getBlob: getter,
+	setBlob: setter,
+	data
+});
+_dir_update(1, par, my_node);
+
+»*/
+/* 8/6/26: Stop passing icons through comMv! «
+
+For the 2 callbacks @WURBTMYJ (done_cb and no_move_cb), just call them with the
+*paths*, and the caller can trivially associate this with the relevant element.
+It simply doesn't make any sense, conceptually speaking, to have any awareness
+of graphical objects in this module.
+
+»*/
+/* 8/4/26: Gotten rid of the main "old school" api methods «
+
+They've all been changed to:
+
+parobj.mkWhat:
+
+mkNewFile,
+mkDir
+mkSymLink
+mkHardLink
+
+»*/
+/*8/3/26: No more writeFile, saveFsByPath, or mkFile !!! «
+
+These represent the old way of stateless functions.
+
+It is important to use the new way: String.prototype -> FSNode.
+
+This ensures that the program pathways are as "tight" as possible.
+
+There are still a handful of calls to fsapi.mkDir scattered about
+(desk.js, term.js, coms/fs.js), so these should be updated to
+pardir.mkDir(newdirname), then we can rename it to mk_dir.
+
+
+»*/
+/* 8/1/26: In String.toParNodeAndName «
+
+How about an option to create a file or dir w/ the given name?
+
+This is less "powerful" than String.toNode({mkFile: true}), because
+*that* one creates all of the missing directories in the path, while
+*this* only succeeds if the immediate parent actually exists.
+
+@EJUPMNHGU
+
+»*/
+
+// Notes«
+
+/* 7/31/26: During comMv, let's make dest folder 'isMoveLocked' «
+
+@MNASYRGK:
+
+dest_par_node.addMoveLock(move_lock);
+
+
+This way, nothing weird should happen during long mv/cp operations.
+
+
+First of all, a "lock" is just an empty object, i.e. kept as a private
+variable in FileNodes, but now we can have locks that are kept in the
+comMv scope.
+
+But there is a difference between these two things:
+
+1) The shell's mv/cp which allows arbitrary source args. Here, there is NO SUCH
+THING AS *the* src folder, while there necessarily is a dest folder (i.e. the
+final arg).
+
+2) The desktop's mouse-based mv/cp operation which necessarily has singular
+source and dest folders.
+
+So in comMv, we can figure out the dest par node as the first thing, and
+then put our move lock on it.
+
+Then, if the desktop wants to put a lock on the source par node, then it
+can do that.
+
+ALSO: created ALWAYS_DONE_DIR_TYPES, so that in the constructor,
+this.#done = true. This currently only is only used for SHM_FS_TYPE.
+
+»*/
+/* 7/30/26: Back here after refactoring the desktop 'open icon' logic «
+
+I just commented out all "weird" desktop updating operations
+(make_icon_if_new, move_icon_by_path, update_folder_statuses). The working
+theory is that, ***IN GENERAL, ICONS DO NOT MATTER***. The corollary is:
+***IF YOU ARE DOING SOMETHING THAT MATTERS, USE THE SHELL***
+
+
+First of all:
+
+Folder icons that are not actively being shown in the GUI are 
+"auto-pruned" by the folder app logic as such:
+
+kid.show = async()=>{
+	let got = dir.getKid(kid.dataset.name);
+	if (!got){
+		kid._del();
+		return;
+	}
+// Make the icon...
+}
+
+
+»*/
+/* 7/26/26: TRYING TO UNCOVER WHERE THE node.link PROPERTY COMES FROM «
+
+First of all, we do have a symLink property on LinkNode that is set
+via _set_sym_link.
+
+»*/
+/* 7/24/26: How to add/del icons «
+
+THIS IS THE SAME ESSENTIAL NOTE AS 7/2/26!!!
+
+@RNFHTOYL: Where directory child elements are added
+@DPLRJTBBM: Where directory child elements are deleted
+
+We need to check for the existence of NS.Desk as well as being in
+a "normal" operation mode (i.e. not initializing).
+
+Then, there might be issues with existing icons that have been created in (or
+will be deleted by) the GUI logic (e.g. in NS.Desk.move_icons). In this case,
+we will need to provide an 'opts' object, so that these icons are left alone.
+
+
+Also, we technically will need to allow for doing these icon add/del operations
+on RootDirNode, but "top level" dirs are currently only in the fs init 
+phase, and there is no concept of removing them.
+
+»*/
+/* 7/22,23/26: Now making the FULL FS ABSTRACTION «
+
+All we have to do is simply *look* at comMv.
+
+»*/
+/* 7/21/26: The concept of "moving" (and when it must be "copy and remove") «
+
+WHY IS OP_FS_TYPE REFERENCE TWICE IN COM_MV?
+
+
+- @XJRJHURJ: This is only for folders that need to do copy-type
+operations, and this test is for when we *also* need to do remove
+(i.e. it is copy and remove). So we need to make this generic by
+way of testing for: hasBackend and hasRm.
+
+
+
+move://«
+
+1) Are the fs types the same? If not: goto cp_and_rm
+2) hasBackend: Is there a permanent (e.g. database-backed) backend that needs 
+to be updated?
+	- if not the fs type is "volatile", goto move_finalization 
+3) hasSimpleMove/hasAtomicMove (or just: hasMove): Is there a backend mv operation 
+that (atomically) provides "change parent" and "rename" (where the parId and 
+path=parId/name fields are both updated)?
+	- If so, try the move operation
+		- if failed: error ("Backend move failed")
+		- else: goto move_finalization
+4) Go to cp_and_rm
+
+//»
+
+move_finalization://«
+
+1) If "change parent":
+	- remove the node from the old parent
+	- update the node's name (if applicable)
+	- add to the new parent
+2) If "rename" only:
+	- update the node's name
+
+//»
+
+cp_and_rm://«
+
+1) hasRm: Can the "from" fs type do a remove?
+	- if not: error ("Can't remove")
+2) hasMkNewFile: Can the "to" fs type make a new file (assumption: the contents 
+of any new file can *always* be updated)
+	- if not: error ("Can't create")
+3) Get save_blob from from_node
+4) Make to_node
+5) Save save_blob to to_node
+6) Try remove from_node from backend
+	- If success remove from_node from old parent
+	- else error ("Backend removal failed")
+7) add to_node to the new parent
+
+//»
+
+
+Lesson: We need these predicates:  
+
+1) hasBackend
+2) hasSimpleMove (includes chgPar and rename)
+3) hasRm and hasMkNewFile
+
+SITE_FS_TYPE (we are currently just checking for 'writable'):
+- hasBackend: true
+- hasSimpleMove: false
+- hasRm: false
+- hasMkNewFile: false
+
+For move's, this forces us to *try* either a move or cp_and_rm,
+but when all the pathways fail, this ends up being an overall 
+failed operation.
+
+
+What if we had a fs like this:
+- hasBackend: true
+- hasSimpleMove: false
+- hasRm: false
+- hasMkNewFile: true
+
+Then, we can't do move's, but we can do cp's
+But, if hasRm=true, then we *can* do move's, but only via the cp_and_rm path.
+
+»*/
+/* 7/20/26: Just made mkDir and mkNewFile on DirNode's  «
+
+These need to be passed in as args for alternative FS types,
+the same as w/ popDir, tryGetKid, getBlob, and setBlob.
+
+
+
+In path_to_node 
+Need to implement tryKetKid for *every* fs type, instead of testing for
+`rtype==OP_FS_TYPE`:
+	- @SHMYILYHG
+	- @BSGDUGTJK
+
+The default one will be to simple call loadKids and then call getKid. 
+
+»*/
+/* 7/16/26: Finally: an option in String.toNode for creating new File or Dir «
+
+@HSJRKTHTG: Need to check for mkDir or mkFile on failure. But this isn't
+quite right, because I want to automatically make all subdirectories
+rather than merely doing toParNodeAndName, and returning on failure.
+
+IS THERE ANYTHING IN HERE THAT ACTUALLY *MAKES* ALL THE SUBDIRS?
+
+»*/
+/* 7/13/26: Forget about that "integration" stuff from 7/10/26 «
+
+Now: we are just checking for dev_mode @ESHFKNOI, and then loading our
+(new) module at mods/fs/fbase.js, followed by the necessary init stuff.
+We can worry over do loading of arbitrary fs types, when there are enough
+examples of those to make it a fully generic operation.
+
+
+»*/
+/* 7/11/26: Recenter our thinking around client-side scriptability «
+
+Instead of trying to devise the "perfect" remote db schema to support a
+"perfectly mounted filesystem", let's put as much complexity as humanly
+possible into the local configuration steps, largely via shell scripts.
+
+»*/
+/* 7/10/26: NO!!! Integration of alt file systems via URL "boot flags"  «
+
+Example: ?bgcol=112&mnt=fbase,cool,other
+
+@GPDYHJLO inspect qObj.mnt and attempt to load/mount fs types:
+- fbase
+- cool
+- other
+
+There we will:
+
+1) dynamically load the modules (from, e.g. /mods/fs/fbase.js)
+2) call the exported init function to give them handles to
+   the different FSNode types, and receive the 'mntPar' DirNode
+3) mount the 'mntPar' DirNode returned from step 2:
+   - e.g. /mnt/fbase
+
+Then when path_to_node is called on the children, the appropriate
+versions of popDir and tryGetKid will be called, which use the
+FileNode/DirNode constructors to export the various "primitive" (db-centric) 
+fs methods into this module.
+
+
+In FSNode.move (@OIKFBJKB), we need to be generic about moving between file
+systems of the same type, by way of checking for the ability to do "simple
+reparenting".  Otherwise, we need to treat it as the copy-then-delete method
+when "moving" between wholly different file systems.
+
+
+»*/
+/* 7/9/26: Change the Firebase logic to any login via auth.uid? «
+
+Need to update lines like this in the database schema:
+
+".write": "auth != null && auth.provider === 'github' && 
+	auth.token.firebase.identities['github.com'][0] === $ghid",
+
+
+... to:
+
+"$uid": {
+	".write": "auth != null && auth.uid === $uid",
+}
+
+
+Also: change SESS_ID_BYTE_LEN from 3 to 6, making it much
+more robust against collision issues: 256^3=64^4 (~10^8) vs 
+256^6=64^8 (~10^15) combinations.
+
+»*/
+/* 7/8/26: Workflow of: FSNode.type == "remote" «
+
+The first thing to do is integrate the logic developed ~Oct 2025, which
+is now sitting in coms/dev/net/fs.js.
+
+It is important to put the inner core of that logic into modules that are
+loaded *after* /sys/fs/js in the main '.html' files, such as /mods/fs/net.js
+below:
+
+<script src="/sys/config.js"></script>
+<script src="/sys/util.js"></script>
+<script src="/sys/fs.js"></script>
+
+<script src="/mods/fs/net.js"></script>
+
+<script src="/sys/desk.js"></script>
+
+In this fs extension, a subtree will be mounted, e.g. on /mnt, and all of
+the primitive functions that need to be used by the node classes in 
+/sys/fs.js may be exported.
+
+Then, command authors should not *generally* need any awareness of the
+underlying implementation details.
+
+So even though any fs extensions are loaded *after* the main fs
+module (fs.main), it is the interface module (e.g. sys/desk.js or sys/terminal.js)
+which calls the init function of fs.main. This can then call any
+init functions which have registered themselves (i.e. in /mods/fs/net.js) 
+in order to do mounting operations on the already well-initialized file system.
+
+In case the internet is disconnected while trying to do all the initialization
+stuff, we will want another means of performing remote initializations, i.e.
+manually invoking (via CLI) the same init functions that were registered
+to the system in /mods/fs/net.js, and were called (but failed) during fs.init.
+
+»*/
+/*7/7/26: Now: Put a tryGetKid method on DirNode? «
+
+For every file system type that is not in LOCAL_MNT_TYPES, we now require:
+	- FileNode to implement getBlob and setBlob (@SGJTPOL)
+	- DirNode to implement popDir and tryGetKid (@UDLMDHEK)
+
+This is in anticipation of fully integrating the various REMOTE_FS_TYPE's
+of mounted file systems into LOTW.
+
+»*/
+/*7/6/26: How to load alternative fs types, like "remote"? «
+
+LOAD THEM IN THE .html FILE AFTER FS.JS AND BEFORE THE MAIN .JS FILE 
+(e.g. DESK.JS or SHELL.JS)
+
+But first, let's change the (confusing) 'root' property (@NDITPLOI) 
+to something more appropriate.
+
+.mntPar
+
+A "mount parent" is the closest parent that defines the given file system
+type (i.e. OP_FS_TYPE/DEV_FS_TYPE/SHM_FS_TYPE)
+
+
+
+Now we have a symmetry in FileNode between getValue and setValue.
+These both call the "external" methods: get_local_blob and set_local_blob.
+
+Want to create two private members on FileNode @SKMTNHGM:
+#getBlob, #setBlob
+
+This way, arbitrary file types (using the APIs of various remote domains, etc) 
+can extend the functionality like:
+
+let node = new fsapi.FileNode(name, par, {
+	getBlob: my_remote_getter,
+	setBlob: my_remote_setter
+}); 
+
+If these methods aren't supplied in the options, they will default to
+get_local_blob and set_local_blob, defined here.
+
+
+Likewise, for the various DirObj types, we will want to supply our own
+populateDir method, which will default to populate_dirobj.
+
+»*/
+/*7/3/26: Put del(), move(), and copy() on FileNode???«
 Also getters: canDel, canMove, and canCopy?
 
 On DirNode:
@@ -27,16 +457,16 @@ getters: canMoveFrom?
 
 IDEA: @OLNDTKJG: node.checkAnyKids
 
-*/
+»*/
 /* 7/2/26: PUT ICON ADD/DEL LOGIC @HISLKFNF«
 
 Need a better way of thinking about @EHGJGKYE
 
-The idea *was* that only FS_TYPE needed to update a single value in a registry
+The idea *was* that only OP_FS_TYPE needed to update a single value in a registry
 in order to change the parent of a directory
 
 //"Manual recursion" needed for non HTML5FileSystem folders...
-if (type != FS_TYPE && app === FOLDER_APP){
+if (type != OP_FS_TYPE && app === FOLDER_APP){
 // let arr = [];
 // Fill up arr
 // arr.push(newpath)
@@ -78,7 +508,6 @@ First step:
 Add @JDPEIO, add private #kids field to DirNode and create the object
 to hold the children in its constructor.
 
-
 appData is in opts in mk_dir_kid (@RYSHTKFH), but it is positional in all the
 FSNode constructors.
 
@@ -95,7 +524,7 @@ JUST PUT THE buffer PROPERTY BACK ON FileNode!
 »*/
 /*12/14/25«
 
-Added try/catch block @XMNYTGH for this fetch statment in getBlob
+Added try/catch block @XMNYTGH for this fetch statment in get_local_blob
 (type===MOUNT_TYPE), and returned null. Then I added a check for null in
 coms/fs.js: com_less, which caused the less command to report an error, rather
 than (successfully) show an empty buffer. We should probably add this same
@@ -104,13 +533,11 @@ TextEdit) and possibly parts of the system. Also for the fetch in
 try_make_site_dir. So this is turning into a pattern...
 
 »*/
-//Old Notes«
-
 /*10/20/25: Need to reimagine the "add_lock_funcs" concept @GSIEKFO, probably by«
 adding these methods to the nodes themselves. I guess the lockFile/unlockFile 
 functions were being used before the FSNode concept was originally introduced.
 As they currently exist, there are going to be blobId collisions between files
-of type: FS_TYPE and USERS_TYPE. 
+of type: OP_FS_TYPE and USERS_TYPE. 
 
 Does the concept of locking a file (for editing) even apply to IDB_DATA_TYPE files?
 We were previously calling add_lock_funcs on them in mk_dir_kid (@WLOTUYJG). But
@@ -126,8 +553,8 @@ issues is with locking nodes (with blobId=0) in NetFileNode @EKSHRKG.
 The notes below are from earlier in the day. I got rid of all invocations of checkDirPerm
 and check_fs_dir_perm, and replaced with (getter) DirNode.okWrite (@SIEMGKG).
 
-I did a major overhaul by getting rid of all external invocations of saveFsByPath.
-writeFile can only be called when writing new files. Otherwise, use the given
+I did a major overhaul by getting rid of all external invocations of SAVEFSBYPATH.
+WRITEFILE can only be called when writing new files. Otherwise, use the given
 node's setValue method (currently only implemented on FileNode or NetFileNode).
 
 In apps/Folder.js, I added 'this.node' property to show up as Win.app.node, in
@@ -143,9 +570,9 @@ THE NEW NODE'S ID IS A MUCH, MUCH MORE SIGNIFICANT PIECE OF INFORMATION.
 The fundamental distinction I want to make is:
 1) If a file exists (path_to_node yields a node), then use the node's setValue method
 to handle all write operations.
-2) If not, use writeFile.
+2) If not, use WRITEFILE.
 
-saveFsByPath
+SAVEFSBYPATH
 Returns«
 
 let rv = await write_blob(await node.entry, blob, opts); // rv == {size: blob.size};
@@ -163,30 +590,30 @@ vim«
 let opts={retObj: true};
 //...
 if (edit_ftype === USERS_TYPE){
-	let node = await fsapi.writeFile(usepath, val);
+	let node = await fsapi.WRITEFILE(usepath, val);
 	if (node) rv = {node, size: node.size};
 }
 else {
-	rv = await fsapi.saveFsByPath(usepath, val, opts);
+	rv = await fsapi.SAVEFSBYPATH(usepath, val, opts);
 }
 if (!(rv&&rv.node)){
 //REPORT ERROR!!!
 return;
 }
 »
-cp from FS_TYPE -> copy_node (@EYTKFHSC)
+cp from OP_FS_TYPE -> copy_node (@EYTKFHSC)
 
-writeFile (calls saveFsByPath)
+WRITEFILE (calls SAVEFSBYPATH)
 Shell redirect (Stdout.write)«
 
-if (!await fsapi.writeFile(fullpath, val, {append: op===">>"})) {
+if (!await fsapi.WRITEFILE(fullpath, val, {append: op===">>"})) {
 	return `${fname}: Could not write to the file`;
 }
 return true;
 »
 Desktop«
 In the desktop, when going through the gui to create a new text file, save_icon_editing->doend
-calls writeFile.
+calls WRITEFILE.
 »
 TextEdit«
 
@@ -200,13 +627,13 @@ if (topwin.icon){
 }
 else if (topwin.fullpath){
 cwarn("Got topwin.fullpath but not topwin.icon!!!");
-    let rv = await fsapi.writeFile(topwin.fullpath, area.value, {noMakeIcon: true});
+    let rv = await fsapi.WRITEFILE(topwin.fullpath, area.value, {noMakeIcon: true});
     if (!rv) return poperr("Could not write the file");
     statbar.innerText = `${rv.size} bytes written`;
     return;
 }
 //...
-let node = await fsapi.writeFile(fullpath, area.value);
+let node = await fsapi.WRITEFILE(fullpath, area.value);
 //...
 Win.node = node;
 //»
@@ -250,19 +677,19 @@ debugging, and eventually real-world use cases..
 at the top-level, so we had to add them in at the dir mounting points during
 fs init. This bug screwed up the folder app.
 
-We are not able to do any file moving operations to/from SHM_TYPE
-First: intra-SHM_TYPE mv operations are trivial for both files and folders
+We are not able to do any file moving operations to/from SHM_FS_TYPE
+First: intra-SHM_FS_TYPE mv operations are trivial for both files and folders
 Next:  "   "    "   " cp operations are trivial for files
-Then we need to figure out about mv'ing and cp'ing to/from FS_TYPE.
+Then we need to figure out about mv'ing and cp'ing to/from OP_FS_TYPE.
 cp is trivial for files
 »*/
-/*9/8/2024: Made /dev/shm to allow for arbitrary in-memory files and folders. Files under here
-will use a new SHM_TYPE, which tells the system not to mess with databasing (which
+/*9/8/2024: Made /dev/shm to allow for arbitrary in-memory files and folders. Files under here«
+will use a new SHM_FS_TYPE, which tells the system not to mess with databasing (which
 means that the entire directory is "forgotten" after each page reload). This makes
 it more temporary than /tmp. The file/folder creation and removal operations seem to be working,
 but there is no ability to mv or cp.
-*/
-/*9/7/2024: Just created a "data" fs type, which expects an object minimally like this:
+»*/
+/*9/7/2024: Just created a "data" fs type, which expects an object minimally like this:«
 
 {type: "whatever"}
 
@@ -271,7 +698,7 @@ currently checked. This uses the IDB_DATA_TYPE in the FSNode database's
 type field. It works via writeDataFile in the fs api (here). Upon FSNode
 creation, the data field is created with the given object. 
 
-In saveFsByPath, there are 2 possibilities:
+In SAVEFSBYPATH, there are 2 possibilities:
 1) Upon creation, we pass the data into touchFile (via the 'opts' object)
 2) If updating, we call db.setNodeData (which hasn't been tested yet)
 
@@ -286,13 +713,12 @@ node.setValue({type: "whatever", something: "new"});
 
 We are giving a console warning if the type fields do not match upon updating.
 
-*/
+»*/
+
 //»
 
 //Imports«
 
-//import { util } from "./util.js";
-//import { globals } from "./config.js";
 const NS = LOTW;
 const util = LOTW.api.util;
 const globals = LOTW.globals;
@@ -312,7 +738,6 @@ const {
 	isFunc,
 	isEOF,
 	isErr,
-//	isArr,
 	getNameExt,
 	getFullPath,
 	normPath,
@@ -329,41 +754,60 @@ const {
 
 } = globals.app;
 const {
+
 	FS_PREF,
-	FS_TYPE,
 	FS_DB_NAME,
-	SHM_TYPE,
-//USERS_TYPE,
-	DIR_TYPE,
-	LINK_TYPE,
-	BAD_LINK_TYPE,
-	IDB_DATA_TYPE,
+
+// File system "mount" types
+	OP_FS_TYPE,
+	SHM_FS_TYPE,
+	SITE_FS_TYPE,
+	DEV_FS_TYPE,
+	MNT_FS_TYPE,
+
+// File system "node" types
+
+	FILE_NODE_TYPE,
+	DIR_NODE_TYPE,
+	LINK_NODE_TYPE,
+	BAD_LINK_NODE_TYPE,
+	NULL_BLOB_NODE_TYPE,
+
 	APPDATA_PATH,
+
 } = globals.fs;
+
+
+const LOCAL_MNT_TYPES = [ OP_FS_TYPE, SITE_FS_TYPE, DEV_FS_TYPE, SHM_FS_TYPE, MNT_FS_TYPE ];
+
+const ALWAYS_DONE_DIR_TYPES = [SHM_FS_TYPE];
+
 const {
-//	USERNAME,
-//	CURRENT_USER,
-//	HOME_PATH,
-//	DESK_PATH,
-} = globals.user;
+//	qObj
+	test_icons
+} = globals.qObj;
+
 //»
 
 //Var«
+
+/*
+
+This stuff *might* go into the main config file, but seeing that it is
+so "inside baseball" (i.e. no other modules could need this information),
+then it might as well stay in here.
+
+*/
 
 const NODES_TABLE_NAME = "Nodes";
 const FS_BRANCH_PATH = `0/${FS_PREF}`;
 const DEF_NODE_ID = 1;
 const DBSIZE = 10*1024*1024;
 const FIRST_BLOB_ID = 100;
-const NULL_BLOB_FS_TYPE="n";
-const DIR_FS_TYPE="d";
-const LINK_FS_TYPE="l";
-const FILE_FS_TYPE="f";
 
 //»
 
-//FS«
-
+//FS «
 
 //new FS(){«
 globals.fsMod = new function() {
@@ -469,7 +913,6 @@ log("IDS",ids);
 		Y(out);
 	};//»
 
-//	let ind = db.transaction([NODES_TABLE_NAME],"readonly").objectStore(NODES_TABLE_NAME).index(which);
 	let ind = this.getStore().index(which);
 	let nodes, ids;
 	let req1 = ind.getAll(dirid);
@@ -496,7 +939,7 @@ cerr(e);
 
 });
 }//»
-checkIsEmpty(which, dirid) {/*«*/
+checkIsEmpty(which, dirid) {//«
 	return new Promise((Y, N) => {
 		// Request only the very first key
 		let req = this.getStore().index(which).getKey(dirid); 
@@ -507,22 +950,15 @@ checkIsEmpty(which, dirid) {/*«*/
 		}
 	});
 }
-/*»*/
-
+//»
 addNode(node){//«
 	return new Promise((Y,N)=>{
 		let store= this.#db.transaction([NODES_TABLE_NAME],"readwrite").objectStore(NODES_TABLE_NAME);
 		let req=store.add(node);
-		req.onerror=(e)=>{
-cerr(e);
-			Y();
-		};
-		req.onsuccess = e => {
-			Y(true);
-		};
+		req.onerror=(e)=>{cerr(e);Y();};
+		req.onsuccess = e => {Y(true);};
 	});
 }//»
-
 async init(root, branch_name){//«
 	if (this.#db) {
 cwarn("WHO CALLED FsDB.INIT?");
@@ -534,7 +970,7 @@ throw new Error("initDB() failed!");
 	let path = `0/${branch_name}`;
 	let rootid = await this.getByPath(path, true);
 	if (!rootid) {
-		if (!await this.addNode({parId: 0, path, type: DIR_FS_TYPE})){
+		if (!await this.addNode({parId: 0, path, type: DIR_NODE_TYPE})){
 throw new Error("Could not add the root node!");
 			return;
 		}
@@ -543,15 +979,14 @@ throw new Error("Could not add the root node!");
 throw new Error(`WUT NO ROOTID RETURNED AFTER ADDING ROOT NODE (${path}) ?!?!?`);
 		}
 	}
-//log(root);
-//	root.id = rootid;
 	_set_root_id(rootid);
 	return true;
 }//»
 
 async createNode(name, type, parId, value){//«
 //log(`createNode: ${name} ${type} ${parId}`);
-if (type===DIR_FS_TYPE||type===NULL_BLOB_FS_TYPE||type==LINK_FS_TYPE||(type===FILE_FS_TYPE && Number.isFinite(value))||type==IDB_DATA_TYPE) {
+//if (type===DIR_NODE_TYPE||type===NULL_BLOB_NODE_TYPE||type==LINK_NODE_TYPE||(type===FILE_NODE_TYPE && Number.isFinite(value))||type==IDB_DATA_TYPE) {
+if (type===DIR_NODE_TYPE||type===NULL_BLOB_NODE_TYPE||type==LINK_NODE_TYPE||(type===FILE_NODE_TYPE && Number.isFinite(value))) {
 	let path = `${parId}/${name}`;
 	let node = {parId, path, type: type};
 	if (value) node.value = value;
@@ -595,7 +1030,7 @@ cerr(`Could not getByPath(${path},true)`);
 async setNodeBlobID(nodeid, blobid){//«
 	let node = await this._getById(nodeid);
 	if (!node) return;
-	node.type=FILE_FS_TYPE;
+	node.type=FILE_NODE_TYPE;
 	node.value=blobid;
 	if (!await this.putById(nodeid, node)) return;
 	return true;
@@ -659,24 +1094,16 @@ const LOCKED_BLOBS = {};
 // These allow as to set private FSNode members with "external" calls
 // The functions are defined inside of static blocks
 
-//let _set_name;
-//let _set_par;
-
 let _node_update;
 let _dir_update;
-
-//let _add_kid;
-//let _del_kid;
 
 let _add_root_kid;
 
 // indexedDB row id's
 let _set_root_id;
-//let _set_id; 
 
 // Read from: localStorage['nextBlobId']
 // Used for the names of the files in OPFS://blobs/
-//let _set_blob_id; 
 
 // For file on /dev/shm
 let _set_mem_blob; 
@@ -701,17 +1128,17 @@ constructor(){//«
 loadKids(){}
 get id(){return this.#id;}
 get appName(){return this.#appName}
-get treeroot(){return true;}
+//get root(){return true;}
+get isRoot(){return true;}
 get haveKids(){return true;}
-get root(){return this;}
+//get root(){return this;}
+get mntPar(){return this;}
 get fullpath(){return "/";}
 get path(){return "/";}
 get type(){return "root";}
 get name(){return "/";}
 get baseName(){return "/";}
 set name(arg){}
-//_setName(){}
-get okWrite(){cwarn(`okWrite: THIS IS OUTDATED!!!`);return false;}
 get sys(){return true;}
 get done(){return true;}
 rmMoveLock(){}
@@ -722,6 +1149,7 @@ getKid(name){return this.#kids[name];}
 get nameList() {return Object.keys(this.#kids);}
 get kidList(){return Object.values(this.#kids);}
 get length() {return Object.keys(this.#kids).length;}
+//get par(){return this;}
 get list(){
 	let rv = [];
 	let kids = this.#kids;
@@ -731,18 +1159,10 @@ get list(){
 	return rv;
 }
 
-/*
-_mountDir(name, type, opts={}){//«
-let dir = new DirNode(name, this, {type, sys: true});
-this.#kids[name] = dir;
-return dir;
-}//»
-*/
 static {
 
 _add_root_kid = (kid) => {//«
 if (root.#kids[kid.name]){
-//cwarn(`'/${kid.name}': ALREADY EXISTS`);
 return;
 }
 root.#kids[kid.name] = kid;
@@ -758,142 +1178,64 @@ _set_root_id = (id) =>{root.#id = id;};
 
 class FSNode {//«
 
-#root;
+//Private «
+//NDITPLOI
+//#root; // Bad
+#data;
+#mntPar; // OK
+#type;
 #blobId;
 #id;
 #par;
 #name;
-constructor(name, par){//«
-//	this.setName(name);
+#delNode;
+#size;
+//»
+constructor(name, par, opts={}){//«
+if (!isStr(name)){
+log(name);
+return THROW("WHAT IS THIS NAME????");
+}
 	this.#name = name;
 	this.#par = par;
-//	this.root = par.root;
-	this.#root = par.root;
-	this.icons = [];
-}//»
-
-async move(newName, toDir){//«
-	let node = this;
-	if (util.newPathIsBad(node.fullpath, `${toDir.fullpath}/${newName}`)) return;
-//Need to update this to allow for moving/renaming arbitrary node types 
-//within the same directory type
-	let id = node.id;
-	let par = node.par;
-	let parid = par.id;
-	let saveid = toDir.id;
-	let savename;
-	if (newName && (newName !== node.name)){
-		savename = newName;
-	}
-
-// This logic is supposed to result in the fact that save_blob === null means
-// that we are mv'ing a dir.
-
-	let save_blob = null;
-	if (node.type == FS_TYPE) {
-		if (toDir.type == FS_TYPE) {
-			if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
-		}
-		else {
-			if (node.isFile) save_blob = await node.blob;
-			if (!await db.removeNode(id, parid)) return cerr("YUREFJKK");
-		}
-	}
-//	else save_blob = await node.blob;
-	else if (node.isFile) save_blob = await node.blob;
-
-	_dir_update(2, par, node);
-
-	if (save_blob !== null) {
-		node = mk_dir_kid(toDir, newName, {isFile: true});
-		await node.setValue(save_blob);
+	if (opts.type) { 
+		this.#mntPar = this;
+		this.#type = opts.type;
 	}
 	else {
-		_node_update(1, node, newName);
-		_node_update(2, node, toDir);
+		this.#mntPar = par.mntPar;
+		this.#type = this.#mntPar.type;
 	}
-	_dir_update(1, toDir, node);
-	return node;
-
-}//»
-async copy(newName, toNode, opts={}){//«
-//async copy(newName, toNode, no_make_icon)
-	let node = this;
-	let newpath = `${toNode.fullpath}/${newName}`;
-	if (util.newPathIsBad(node.fullpath, newpath)) return;
-//EYTKFHSC
-	if (toNode.type == FS_TYPE) {
-
-//		return saveFsByPath(newpath, await getBlob(node, {binary: true}), { noMakeIcon: no_make_icon });
-		return saveFsByPath(newpath, await getBlob(node, {binary: true}), opts);
-	}
-	let save_blob = await node.blob;
-	node = mk_dir_kid(toNode, newName, {isFile: true});
-	await node.setValue(save_blob);
-	_dir_update(1, toNode, node);
-	return node;
+	this.icons = [];
+	this.#delNode = opts.delNode || del_node;
+	this.#data = opts.data;
 }//»
 
 async del(opts={}){//«
-	let node = this;
-	const OK_TYPES=[FS_TYPE, SHM_TYPE, IDB_DATA_TYPE];
-	if (!OK_TYPES.includes(node.type)) {
-cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
-		return;
+	if (!this.#delNode(this)) return;
+	if (NS.Desk) {
+//		NS.Desk.cleanup_deleted_wins_and_icons(this.fullpath);
+cwarn(`Not calling cleanup_deleted_wins_and_icons(${this.fullpath})`);
 	}
-	let path = node.fullpath;
-	if (node.sys) {
-cerr("Not removing toplevel");
-		return;
-	}
-//	if (node.appName===FOLDER_APP){
-	if (node.isDir){
-		await node.loadKids();
-		let kids = node.kidList;
-		for (let kid of kids){
-cwarn(`Deleting:`, kid);
-			await kid.del(opts);
-		}
-	}
-	let id = node.id;
-	let parid = node.par.id;
-	if (!(id&&parid)) {
-		if (node.type==SHM_TYPE) {}
-		else {
-cerr(`NO ID && PARID???`);
-log(node);
-log(node.par);
-cerr(`Could not remove: ${node.fullpath}`);
-			return;
-		}
-	}
-	if (!await db.removeNode(id, parid)) {
-cerr("FRYNBSJ");
-		return 
-	}
-//WMNJUGFNH
-
-	_dir_update(2, node.par, node);
-	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
-	return true;
+	_dir_update(2, this.par, this);
 }//»
 canRm(opts={}){//«
 //	let obj = this;
 	let rtype = this.type;
 	let path = this.fullpath;
 	if (this.appName !== FOLDER_APP) {//«
-		if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype===IDB_DATA_TYPE)){
+		if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE||rtype===IDB_DATA_TYPE)){
 			return `${path}: not (currently) handling fs type: '${rtype}'`;
 		}
 		if (!this.par.perm) return `${path}: permission denied`;
-		else if (this.writeLocked()) return `${path} is "write locked"`;
+		else if (this.isWriteLocked) return `${path} is "write locked"`;
 		return true;
 	}//»
 
 // Folders...
-	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) return `not removing directory type: '${rtype}': ${path}`;
+	if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE)) return `not removing directory type: '${rtype}': ${path}`;
 	if (NS.Desk && (path == globals.user.desk_path)) return `not removing the working desktop path: ${path}`;
-	if (this.par.treeroot) return `not removing toplevel directory: ${path}`;
+	if (this.par.isRoot) return `not removing toplevel directory: ${path}`;
 	if (this.isMoveLocked) return `${path}: is "move locked"`;
 	if (!opts.doFullDirs && !opts.isEmpty) return `${path}: not an empty folder`;
 	if (!this.perm) return `${path}: permission denied`;
@@ -903,55 +1245,42 @@ canRm(opts={}){//«
 
 
 }//»
-
-
+getData(key){if (!this.#data) return; return this.#data[key];}
 get fullpath(){//«
-//	Object.defineProperty(this,"fullpath",{get:()=>{let str=this.name;if(!str)return null;let curobj=this;let i=0;while(true){if(curobj && curobj.par)str=`${curobj.par.name}/${str}`;else break;curobj=curobj.par;i++;}let arr=str.split("/");while(!arr[0] && arr.length){arr.shift();i++;}str=arr.join("/");return("/"+str).regpath();}});
 	let str = this.name;
-	if (!str) return null;
 	let curobj = this;
-	let i = 0;
 	while (true) {
 		if (curobj && curobj.par) str = `${curobj.par.name}/${str}`;
 		else break;
 		curobj = curobj.par;
-		i++;
 	}
 	let arr = str.split("/");
-	while (!arr[0] && arr.length) {
-		arr.shift();
-		i++;
-	}
+	while (!arr[0] && arr.length) arr.shift();
 	str = arr.join("/");
-	return ("/" + str).regpath();
+	return `/${str}`.regpath();
 }//»
+get size(){return this.#size;}
 get par(){return this.#par;}
-get type(){return this.#root.type;}
+get mntPar(){return this.#mntPar;}
+get type(){return this.#type;}
 get name(){	return this.#name;}
 get id(){	return this.#id;}
 get baseName(){	return this.#name;}
 get path(){	return this.par.fullpath;}
-writeLocked(){return false;}
-get root(){return this.#root;}
+get isWriteLocked(){return false;}
 get blobId(){return this.#blobId;}
-
 get isFile(){return false;}
 get isDir(){return false;}
 get isLink(){return false;}
-get isData(){return false;}
-get isDevice(){return false;}
 
 static {//«
-//_set_name = (node, name)=>{	node.#name = name;};
-//_set_par = (node, par) => {	node.#par = par;};
-//_set_id = (node, id) =>{node.#id = id;};
-//_set_blob_id = (node, id) => {node.#blobId = id;}
 _node_update = (which, node, val) => {
 switch(which){
 case 1: { node.#name = val; break }
 case 2: { node.#par = val; break }
 case 3: { node.#id = val; break }
 case 4: { node.#blobId = val; break }
+case 5: { node.#size = val; break }
 default: THROW(`WHAT WHICH IS THIS: ${which}`);
 }
 }
@@ -959,44 +1288,78 @@ default: THROW(`WHAT WHICH IS THIS: ${which}`);
 
 }//»
 
-class DirNode extends FSNode{//«
+class DirNode extends FSNode {//«
 //JDPEIO
-//#name;
+// Private «
 #kids;
-#type;
-#root;
 #sys;
 #perm;
 #readOnly;
 #appName;
 #moveLocks;
-#isRoot;
+#popDir;
+#tryGetKid;
+#mkDir;
+#mkNewFile;
 #done;
-constructor(name, par, opts={}){//«
-	super(name, par);
-//	this.#name = name;
-//	this.isDir = true;
+//»
+constructor(name, par, opts = {}) {//«
+	super(name, par, opts);
 	this.#appName = FOLDER_APP;
-	if (opts.type) { 
-		this.#type = opts.type;
-		this.#root = this;
-		this.#isRoot = true;
-	}
-	else {
-		this.#root = par.root;
-		this.#type = this.#root.type;
-		this.#isRoot = false;
-	}
-
 	if (isBool(opts.perm) || isStr(opts.perm)){
 		this.#perm = opts.perm;
 	}
-
 	this.#readOnly = opts.readOnly;
 	this.#sys = opts.sys;
 	this.#kids = {};
 	this.#moveLocks = [];
+/*
+	if (opts.type && !LOCAL_MNT_TYPES.includes(opts.type)) {//«
+//UDLMDHEK
+if (!(isFunc(opts.popDir) && isFunc(opts.tryGetKid))){
+return THROW(`NEED 'popDir' and 'tryGetKid' IN DIRNODE CONSTRUCTOR (type:${opts.type})!!!`);
+}
+		this.#popDir = opts.popDir;
+		this.#tryGetKid = opts.tryGetKid;
+
+if (isFunc(opts.mkDir)){//«
+	this.#mkDir = opts.mkDir;
+}
+else{
+this.#mkDir=(par, name)=>{
+cwarn(`mkDir(${name}): NOOP (TYPE: ${par.type})`);
+};
 }//»
+
+if (isFunc(opts.mkNewFile)){//«
+	this.#mkNewFile = opts.mkNewFile;
+}
+else{
+this.#mkNewFile=(par, name)=>{
+cwarn(`mkNewFile(${name}): NOOP (TYPE: ${par.type})`);
+};
+}//»
+
+	}//»
+	else {//«
+		this.#popDir = populate_dirobj;
+		this.#tryGetKid = try_get_fs_kid;
+		this.#mkDir = (name, opts={})=>{return mkDir(this, name, opts);};
+		this.#mkNewFile = (name, opts={})=>{return touchFile(this, name, opts);};
+	}//»
+*/
+
+	this.#popDir = opts.popDir || populate_dirobj;
+	this.#tryGetKid = opts.tryGetKid || try_get_fs_kid;
+	this.#mkDir = opts.mkDir || ((name, opts={}) =>{return mkDir(this, name, opts);})
+	this.#mkNewFile = opts.mkNewFile || ((name, opts={})=>{return touchFile(this, name, opts);})
+
+	if (ALWAYS_DONE_DIR_TYPES.includes(par.type)){
+		this.#done = true;
+	}
+//log(par.type);
+}//»
+tryGetKid(nm){ return this.#tryGetKid(this, nm); }
 rmMoveLock(lockarg){//«
 	let locks = this.#moveLocks;
 	for (let i=0; i < locks.length; i++){
@@ -1009,39 +1372,33 @@ rmMoveLock(lockarg){//«
 addMoveLock(lockarg){this.#moveLocks.push(lockarg);}
 async loadKids(opts={}) {//«
 	if (this.done && !opts.force) return;
-	await populate_dirobj(this, opts);
+//	await populate_dirobj(this, opts);
+	await this.#popDir(this, opts);
 }//»
-async _getKids(opts={}) {
-	if (!this.#done) await populate_dirobj(this, opts);
+async _getKids(opts={}) {//«
+//	if (!this.#done) await populate_dirobj(this, opts);
+	if (!this.#done) await this.#popDir(this, opts);
 	return Object.values(this.#kids);
-}
+}//»
 //get moveLocks(){return this.#moveLocks;}
 get isDir(){return true;}
 get nameList() {return Object.keys(this.#kids);}
 get kidList(){return Object.values(this.#kids);}
 get length() {return Object.keys(this.#kids).length;}
-get isRoot(){return this.#isRoot;}
+//get isRoot(){return this.#isRoot;}
 get appName(){return this.#appName;}
 get haveKids(){return Object.keys(this.#kids).length > 0;}
 get list(){return this._getKids();}
-get type(){return this.#type;}
-get root(){return this.#root;}
 get sys(){return this.#sys;}
 get isMoveLocked(){return this.#moveLocks.length > 0;}
-get okWrite(){
-cwarn(`okWrite: THIS IS OUTDATED (use '.perm' instead)!!!`);
-	return this.perm;
-}
 get perm(){//«
 	let p = this.#perm;
 	if (isBool(p)) return p;
 	if (isStr(p)) return (globals.user.CURRENT_USER === p);
-
 	let cur = this.par;
-	while (cur.treeroot !== true) {
+	while (cur.isRoot !== true) {
 		p = cur.perm;
 		if (isBool(p)) return p;
-//		if (isStr(p)) return (globals.user.CURRENT_USER === p);
 		cur = cur.par;
 	}
 	return false;
@@ -1063,40 +1420,38 @@ get kids(){throw new Error("YOU TRIED TO GET KIDS");}
 set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
 get isEmpty(){ return db.checkEmpty(this.id); }
 getKid(name){return this.#kids[name];}
-mkNewFile(path, opts={}){//«
-let fullpath = normPath(path, this.fullpath);
-if (!fullpath) return;
-return mkFile(fullpath, opts);
+mkHardLink(name, blobid){return make_hard_link(this, name, blobid);}
+mkSymLink(name, target, fullpath){return make_sym_link(this, name, target, fullpath);}
+mkDir(name, opts={}){//«
+if (name.match(/\x2f/)){
+cerr(`INVALID NAME IN MKDIR: ${name} (SLASH DETECTED)`);
+return;
+}
+	return this.#mkDir(name, opts);
 }//»
-mkDir(path, opts){//«
-let fullpath = normPath(path, this.fullpath);
-if (!fullpath) return;
-return mk_dir(fullpath, opts);
+mkNewFile(name, opts={}){//«
+if (name.match(/\x2f/)){
+cerr(`INVALID NAME IN MKNEWFILE: ${name} (SLASH DETECTED)`);
+return;
+}
+
+	return this.#mkNewFile(name, opts);
 }//»
+
 get done(){return this.#done;}
 static {
 //HISLKFNF
-/*
-_add_kid = (dir, kid) => {//«
-if (dir.#kids[kid.name]) return;
-	dir.#kids[kid.name] = kid;
-};//»
-_del_kid = (dir, kid) => {//«
 
-if (!dir.#kids[kid.name]){
-cerr(`'${dir.fullpath}/${kid.name}': DOES NOT EXIST`);
-return;
-}
-delete dir.#kids[kid.name];
-
-};//»
-*/
-
-_dir_update = (which, dir, val) => {
+_dir_update = (which, dir, val) => {//«
 
 switch (which){
 	case 1: {// add
-		if (!dir.#kids[val.name]) dir.#kids[val.name] = val;
+		if (!dir.#kids[val.name]) {
+			dir.#kids[val.name] = val;
+// RNFHTOYL
+// The fundamental "choke point" for all icon addition
+// val.mkIcons();
+		}
 		break;
 	}
 	case 2: {// del
@@ -1105,6 +1460,9 @@ cerr(`'${dir.fullpath}/${val.name}': DOES NOT EXIST`);
 			return;
 		}
 		delete dir.#kids[val.name];
+// DPLRJTBBM
+// The fundamental "choke point" for all icon deletion
+// val.rmIcons();
 		break;
 	}	
 	case 3: { // done
@@ -1114,42 +1472,33 @@ cerr(`'${dir.fullpath}/${val.name}': DOES NOT EXIST`);
 	default: THROW(`UNKNOWN OP ${which}`);
 }
 
-};
+};//»
 
 }
 
 }//»
-class FileNode extends FSNode{//«
+class FileNode extends FSNode {//«
+
+//SKMTNHGM
+// Private «
+#getBlob;
+#setBlob;
+
 #lock;
 #entry;
 #memBlob;
-constructor(name, par){//«
+//»
+constructor(name, par, opts={}) {//«
 	super(name, par);
-//	if (par.fullpath.match(/^\/dev\/shm/)) this.#useMemBlob = true;
-//	this.isFile = true;
 	this.#lock = {};
+
+	this.#getBlob = opts.getBlob || get_local_blob;
+	this.#setBlob = opts.setBlob || set_local_blob;
+
 }//»
-writeLocked(){return LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];}
-okGet(){//«
-	if (this.type==SHM_TYPE || this.type == SITE_FS_TYPE) return true;
-	let bid = this.blobId;
-	if (!bid || bid < FIRST_BLOB_ID) {
-		return;
-	}
-	return true;
-}//»
-okSet(){//«
-	if (this.type!==FS_TYPE) {
-		if (this.type==SHM_TYPE) return true;
-		return false;
-	}
-	let bid = this.blobId;
-	if (!bid || bid < FIRST_BLOB_ID) return false;
-	return true;
-}//»
+get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
 async getRealBlobId(){//«
 	let bid = get_blob_id();
-//	this.blobId = bid;
 	_node_update(4, this, bid);
 	if (!await db.setNodeBlobID(this.id, bid)) {
 cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
@@ -1158,36 +1507,25 @@ cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
 	return true;
 }//»
 async getValue(opts={}){//«
-	if (!this.okGet()) return;
-	return getBlob(this, opts);
+//	if (!this.okGet()) return;
+// return this.#blobGetter(this.opts);
+//	return get_blob(this, opts);
+	return this.#getBlob(this, opts);
 }//»
 async setValue(val, opts={}){//«
-	if (!this.okSet()) return;
+//	if (!this.okSet()) return;
 	let blob = toBlob(val);
 	if (!blob){
 cerr("Unknown value", val);
 		return;
 	}
-	if (this.useMemBlob) {
-		this.#memBlob = blob;
-		return;
-	}
-	if (this.blobId === NULL_BLOB_FS_TYPE){//«
-		if (!await this.getRealBlobId()){
-cerr("Could not getRealBlobId()!?!?!?");
-			return;
-		}
-	}//»
-	opts.node = this;
-	let rv = await write_blob(await this.entry, blob, opts);
-	this.size = rv.size;
-	return rv;
+//log(this.#setBlob);
+	return this.#setBlob(this, blob, opts);
 }//»
-get isFile(){return true;}
+
 write(val, opts){return this.setValue(val, opts);}
-get writeable(){return this.par.writeable;}
 unlockFile(){//«
-	delete LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`];
+	delete LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];
 //	delete LOCKED_BLOBS[this.blobId];
 	let par = this.par;
 	while (par){
@@ -1198,10 +1536,10 @@ unlockFile(){//«
 	}
 }//»
 async lockFile(){//«
-	if (this.blobId === NULL_BLOB_FS_TYPE){
+	if (this.blobId === NULL_BLOB_NODE_TYPE){
 		await this.getRealBlobId();
 	}
-	LOCKED_BLOBS[`${FS_TYPE}-${this.blobId}`] = true;
+	LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`] = true;
 	let par = this.par;
 	while (par){
 //		if (par.isRoot) break;
@@ -1213,13 +1551,13 @@ async lockFile(){//«
 }//»
 async _getEntry(){//«
 	if (this.#entry) return this.#entry;
-	if (!this.okGet()) return;
+//	if (!this.okGet()) return;
 	let id = this.blobId;
-	if (id === NULL_BLOB_FS_TYPE){
+	if (id === NULL_BLOB_NODE_TYPE){
 		id = get_blob_id();
 		_node_update(4, this, id);
 	}
-	else if (this.type==SHM_TYPE) return;
+	else if (this.type==SHM_FS_TYPE) return;
 	else if (!Number.isFinite(id)) {
 cerr(`The node does not have a valid blobId: ${id}`);
 log(this);
@@ -1229,55 +1567,89 @@ log(this);
 	this.#entry = ent;
 	return ent;
 }//»
+
+get writeable(){ return this.par.writeable; }
+get isFile(){return true;}
 get entry(){return this._getEntry();}
-get useMemBlob(){return this.type === SHM_TYPE;}
-get memBlob(){return this.#memBlob;}
+get useMemBlob(){return this.type === SHM_FS_TYPE;}
+get memBlob(){//«
+	if (this.#memBlob) return this.#memBlob;
+
+if (!this.useMemBlob) {
+cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
+}
+	return new Blob([]);
+
+}//»
 get buffer(){//«
-	if(!this.okGet())return;
-	if (this.useMemBlob) {
-		if (this.#memBlob) return this.#memBlob.buffer;
-		return;
-	}
-	return getBlob(this,{buffer:true});
+//	if(!this.okGet())return;
+if (this.useMemBlob) return this.memBlob.buffer;
+return(async()=>{
+let blob = await this.#getBlob(this);
+return blob_to_ret_val(blob, {buffer: true});
+})();
+//	return this.#getBlob(this,{buffer:true});
 }//»
 get blob(){//«
-	if(!this.okGet())return;
-	if (this.useMemBlob) return this.#memBlob;
-	return getBlob(this,{blob:true});
+//	if(!this.okGet())return;
+	if (this.useMemBlob) return this.memBlob;
+	return this.#getBlob(this);
+//	return this.#getBlob(this,{blob:true});
 }//»
 get bytes(){//«
-	if(!this.okGet())return;
-	if (this.useMemBlob) {
-		if (this.#memBlob) return util.toBytes(this.#memBlob);
-		return;
-	}
-	return getBlob(this,{bytes:true});
+//	if(!this.okGet())return;
+	if (this.useMemBlob) return util.toBytes(this.memBlob);
+	return(async()=>{
+		return blob_to_ret_val(await this.#getBlob(this), {bytes: true});
+	})();
+//	return this.#getBlob(this,{bytes:true});
 }//»
 get text(){//«
-	if(!this.okGet())return;
-	if (this.useMemBlob) {
-		if (this.#memBlob) return util.toStr(this.#memBlob);
-		return;
-	}
-	return getBlob(this,{text:true});
+//	if(!this.okGet())return;
+	if (this.useMemBlob) return util.toStr(this.memBlob);
+	return(async()=>{
+		return blob_to_ret_val(await this.#getBlob(this), {text: true});
+	})();
+//	return this.#getBlob(this,{text:true});
 }//»
-get file(){if (!this.okGet()) return;return getBlob(this,{getFileOnly:true});}
+get json(){//«
+	return (async ()=>{
+		let txt = await this.text;
+		if (!isStr(txt)) return;
+		try{
+			return JSON.parse(txt)
+		}
+		catch(e){
+cwarn(`CAUGHT: ${this.fullpath}`);
+cerr(e);
+		}
+	})();
+}//»
+get file(){//«
+//if (!this.okGet()) return;
+	return this.#getBlob(this);
+//	return this.#getBlob(this,{getFileOnly:true});
+}//»
 
-//get name(){return this.#name;}
 get ext(){let arr = getNameExt(this.name);if (arr[1]) return arr[1];return "";}
 get baseName(){let arr = getNameExt(this.name);if (arr[1]) return arr[0];return this.name;}
-get appName(){let arr = getNameExt(this.name);if (arr[1]) return util.extToApp(arr[1]);return "";}
-static {
+get appName(){//«
+//cwarn(`name: ${this.name}`);
+	let arr = getNameExt(this.name);
+	if (arr[1]) return util.extToApp(arr[1]);
+	return "";
+}//»
+
+static {//«
 
 _set_mem_blob = (node, blob)=>{
 	node.#memBlob = blob;
 }
 
-}
-
 }//»
 
-class LinkNode extends FSNode{//«
+}//»
+class LinkNode extends FSNode {//«
 
 #symLink;
 #appName;
@@ -1291,6 +1663,7 @@ get link(){//«
 	if (symlink.match(/^\x2f/)) return symlink;
 	return `${this.path}/${symlink}`;
 }//»
+get linkedNode(){return path_to_node(this.link);}
 get isLink(){return true;}
 get ref(){return path_to_node(this.link);}
 get appName(){return this.#appName;};
@@ -1301,125 +1674,30 @@ _set_sym_link = (node, val) => {node.#symLink = val;};
 }
 
 }//»
-class DataNode extends FSNode{//«
-#data;
-constructor(name, par){//«
-	super(name, par);
-}//»
-getDataType(){return this.#data.type;}
-getDataValue(){return this.#data.value;}
-async setDataValue(val){//«
-	let dat = this.#data;
-	if (!dat){
-cerr("Data not found");
-log(this);
-		return;
-	}
-	if (!isDef(val)){
-cerr("Data types *require* a 'value' field (util.isDef() === true)");
-return;
-	}
-	dat.value = val;
-	if (!await db.setNodeData(this.id, this.#data)) {
-cerr("Could not set node data");
-		return;
-	}
-	return true;
-}//»
-async setValue(val, opts={}){//«
-	if (!(isObj(val) && isStr(val.type))){
-cerr(`Expected an object with a 'type' field! (for inline data storage)`);
-		return;
-	}
-	if (!isDef(val.value)){
-cerr("Data types *require* a 'value' field (util.isDef() === true)");
-return;
-	}
-	if (this.#data.type !== val.type){
-cwarn(`The data types have changed: '${this.#data.type}' => '${val.type}'`);
-	}
-	if (!await db.setNodeData(this.id, val)) {
-cerr("Could not set node data", this);
-		return;
-	}
-	this.#data = val;
-	return true;
-}//»
-write(val, opts){return this.setValue(val, opts);}
-get writeable(){return this.par.writeable;}
-async getValue(opts={}){//«
-	if (opts && opts.text) {
-cwarn("This is a data node, but opts.text was specified in getValue!");
-		try{
-			return JSON.stringify(this.#data);
-		}catch(e){
-cerr(e);
-		}
-		return this.#data.toString();
-	}
-	return this.#data;
-}//»
-get isData(){return true;}
-data(){return this.#data;}
-static{
-_set_data = (node, val) => {node.#data = val;};
-}
-}//»
-class DevNode extends FSNode{//«
 
-//#name;
-constructor(name, par){
-	super(name, par);
-//	this.appName = "Device";
-}
-get writeable(){return this.par.writeable;}
-get isDevice(){return true;}
-get appName(){return "Device"}
-//get name(){return this.#name;}
-//get baseName(){return this.#name;}
-
-}//»
 //TWKMJORH
 
-const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof LinkNode || n instanceof DataNode || n instanceof DevNode);};
-//const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof NetFileNode || n instanceof LinkNode || n instanceof DataNode || n instanceof DevNode);};
+const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof LinkNode);};
 util.isNode = isNode;
 const isDir=n=>{return (n instanceof DirNode || n instanceof RootDirNode);};
 util.isDir = isDir;
 const isFile=n=>{return (n instanceof FileNode);};
-//const isFile=n=>{return (n instanceof FileNode || n instanceof NetFileNode);};
 util.isFile = isFile;
+
+// This gets passed into the constructors of (usually network-based) 
+// alterative file systems types
+
+const export_obj = {
+	DirNode, FileNode, nodeUpdate: _node_update, dirUpdate: _dir_update
+};
 
 //»
 
 //Var«
-const THROW = mess =>{throw new Error(mess);}
 
 let rootId;
-/*«
-const root=(()=>{
-//JSHFMOK
 
-	let o = {
-		name:"/",
-		appName:FOLDER_APP,
-		kids:{},
-		treeroot:true,
-		type:"root",
-		sys:true,
-		path:"/",
-		fullpath:"/",
-		done:true
-	};
-	o.kids['..'] = o;
-	o.kids['.'] = o;
-	o.root = o;
-	return o;
-})();
-»*/
-
-const ROOT = new RootDirNode();
-const root = ROOT;
+const root = new RootDirNode();
 globals.root = root;
 this.root = root;
 const db = new FsDB();
@@ -1430,11 +1708,10 @@ let BLOB_DIR;
 const MB = 1024*1024;
 const MAX_LOCAL_FILE_SIZE = MB;
 
-let FILE_SAVER_SLICE_SZ = 1 * MB;
+//EYTKSHRJT
 let MAX_REMOTE_SIZE = 1 * MB;
 let MAX_FILE_SIZE = 256*MB;
 
-const OK_WRITE_TYPES=[FS_TYPE];
 //const root_dirs = ["tmp", "usr", "home", "etc", "var"];
 const root_dirs = ["tmp", "home", "var"];
 
@@ -1443,43 +1720,116 @@ const MAX_LINK_ITERS = 8;
 
 //const sleep = ()=>{return new Promise((Y,N)=>{});};
 const NOOP=()=>{};
-const FATAL=s=>{throw new Error(s);};
-
-
-const bad_link_cbs = {};
+const THROW = mess =>{throw new Error(mess);}
 
 //»
 
-//Filesystem ops«
+// Filesystem ops «
 
-const getNodesByBlobId = async (blobId) =>{//«
-//	db.init();
-	let rv = await db.getNodesByBlobId(blobId);
-	return rv.rows;
-//	log(rv);
+
+const do_move = async(from_node, newName, toDir)=>{//«
+	if (util.newPathIsBad(from_node.fullpath, `${toDir.fullpath}/${newName}`)) return;
+//Need to update this to allow for moving/renaming arbitrary node types 
+//within the same directory type
+	let id = from_node.id;
+	let par = from_node.par;
+	let from_par_id = par.id;
+	let to_par_id = toDir.id;
+	let savename;
+	if (newName && (newName !== from_node.name)){
+		savename = newName;
+	}
+
+// This logic is supposed to result in the fact that save_blob === null means
+// that we are mv'ing a dir.
+
+	let save_blob = null;
+
+// OIKFBJKB: NEEDS TO BE FULLY GENERIC
+
+/*«
+if (from_node.type === toDir.type && from_node.canDoSimpleMove) {
+// Just need the id of the new parent dir, and the new node name
+	await from_node.simpleMove(to_par_id, savename);
+}
+else {
+//Get blob if isFile and do remove
+}
+»*/
+	if (from_node.type == OP_FS_TYPE) {
+		if (toDir.type == OP_FS_TYPE) {
+			if (!await db.moveNode(id, from_par_id, to_par_id, savename)) {
+cerr("db.moveNode: WHYFBSJ!?!?!");
+				return 
+			}
+		}
+		else {
+			if (from_node.isFile) save_blob = await from_node.blob;
+			if (!await db.removeNode(id, from_par_id)) {
+cerr("db.removeNo: YUREFJKK!?!?!");
+				return;
+			}
+		}
+	}
+//	else save_blob = await from_node.blob;
+	else if (from_node.isFile) save_blob = await from_node.blob;
+
+	_dir_update(2, par, from_node);
+
+	let to_node;
+	if (save_blob !== null) { // file node
+		to_node = mk_dir_kid(toDir, newName, {isFile: true});
+		await to_node.setValue(save_blob);
+	}
+	else { // dir node
+		to_node = from_node;
+		_node_update(1, to_node, newName);
+		_node_update(2, to_node, toDir);
+	}
+	_dir_update(1, toDir, to_node);
+	return to_node;
+
+};//»
+const do_copy = async(from_node, newName, toDir) => {//«
+//	let node = this;
+	let newpath = `${toDir.fullpath}/${newName}`;
+	if (util.newPathIsBad(from_node.fullpath, newpath)) return;
+//EYTKFHSC
+	let save_blob = await from_node.blob;
+	let to_node = await toDir.mkNewFile(newName, {noMakeIcon: true});
+	if (!to_node) return;
+	await to_node.setValue(save_blob);
+	_dir_update(1, toDir, to_node);
+	return to_node;
 };//»
 
-const try_get_fs_type_kid=async(nm, curpar)=>{//«
+const getNodesByBlobId = async (blobId) =>{//«
+	let rv = await db.getNodesByBlobId(blobId);
+	return rv.rows;
+};//»
+
+const try_get_fs_kid=async(curpar, nm)=>{//«
+	if (curpar.type !== OP_FS_TYPE){
+cwarn(`IN try_get_fs_kid, got TYPE==${curpar.type}!`);
+		await curpar.loadKids();
+		return curpar.getKid(nm);
+	}
 	let rv = await db.getNodeByNameAndParId(nm, curpar.id);
 	let gotrow = rv.rows[0];
 	if (!gotrow) return;
-	let isDir, isLink, isData, isFile;
+	let isDir, isLink, isFile;
 	switch(gotrow.value){
-		case DIR_FS_TYPE:
+		case DIR_NODE_TYPE:
 			isDir = true;
 			break
-		case LINK_FS_TYPE:
+		case LINK_NODE_TYPE:
 			isLink = true;
 			break;
-		case IDB_DATA_TYPE:
-			isData = true;
-			break
 		default:
 			isFile = true;
 	}
 	let kid = mk_dir_kid(curpar, nm,{
 		isDir,
-		isData,
 		isLink,
 		isFile,
 		path: curpar.fullpath,
@@ -1487,10 +1837,10 @@ const try_get_fs_type_kid=async(nm, curpar)=>{//«
 	if (isLink) {
 		_set_sym_link(kid, gotrow.data);
 	}
-	else if (isData){
-		_node_update(4, kid, IDB_DATA_TYPE);
-		_set_data(kid, gotrow.data);
-	}
+//	else if (isData){
+//		_node_update(4, kid, IDB_DATA_TYPE);
+//		_set_data(kid, gotrow.data);
+//	}
 	else if (!isDir){
 		_node_update(4, kid, gotrow.data);
 	}
@@ -1498,129 +1848,58 @@ const try_get_fs_type_kid=async(nm, curpar)=>{//«
 	return kid;
 };//»
 
-const path_to_node = async(patharg, if_get_link, iter) =>{//«
-	if (!patharg) return root;
-	if (!iter) iter=0;
-	const done=async()=>{//«
-/*Return here if://«
-1) There is not a node (this operation failed)
-2) The node is NOT a sym link
-3) We have a link, and want the link node iteself
-»*/
-		if (!node||node.appName!==LINK_APP||if_get_link) return node;
-		if (iter > MAX_LINK_ITERS) return null;
-		if (node.type==FS_TYPE){
-			if (!node.link){
-cerr(`NO node.link WITH node.appName==LINK_APP!?!?, (VERIFY IT HERE: ${node.appName})`);
-				return;
-			}
-			return path_to_node(node.link, if_get_link, ++iter);
+const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
+	const maybe_done = async() => {//«
+		if (node && node.isLink && !if_get_link) {
+			if (iter > MAX_LINK_ITERS) return null;
+			return path_to_node(node.link, false, ++iter);
 		}
-//I don't understand what this is about
-//How can it be a link, but not be type==FS_TYPE?
-cerr("HOW IS THIS POSSIBLE??? PLEBYTLNM");
-		let rv = await get_data_from_fs_file(node.file,"text");
-		return path_to_node(rv, if_get_link, ++iter);
+		else return node;
 	};//»
+	if (!patharg) return root;
 	let node;
 	let path = normPath(patharg);
 	if (path==="/") return root;
 	let parts = path.split("/");
 	parts.shift();
-	let topname = parts.shift();
-	let curpar = root.getKid(topname);
+	let curpar = root.getKid(parts.shift());
 	if (!curpar) return null;
 	if (!parts.length) return curpar;
-	let curpath = curpar.fullpath;
 	let fname = parts.pop();
-
 	while(parts.length){//«
 		let nm = parts.shift();
 		let gotkid = curpar.getKid(nm);
 		if (gotkid) curpar = gotkid;
 		else {//«
 			if (!curpar.done) {
-				let rtype = curpar.type;
-				if (rtype==FS_TYPE){
-					let kid = await try_get_fs_type_kid(nm, curpar);
-					if (!kid) return done();
-					_dir_update(1, curpar, kid);
-				}
-//				else if (rtype == USERS_TYPE){
-//					let kid = await try_get_users_type_kid(nm, curpar);
-//					if (!kid) return done();
-//					curkids[nm] = kid;
-//				}
-				else await curpar.loadKids();
+				let kid = await curpar.tryGetKid(nm); //SHMYILYHG
+				if (!kid) return null;
+				_dir_update(1, curpar, kid);
+				curpar = kid;
 			}
-			curpar = curpar.getKid(nm);
-			if (!(curpar&&curpar.appName===FOLDER_APP)) return null;
+			else curpar = curpar.getKid(nm);
+			if (!curpar) return null;
 			if (!parts.length) break;
 		}//»
-		if (curpar.appName===LINK_APP){//«
+		if (curpar.isLink){//«
 			if (iter > MAX_LINK_ITERS) return null;
-			if (curpar.type==FS_TYPE){
-				let gotdir = await curpar.ref;
-				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return null;
-				curpar = gotdir;
-			}
-			else {
-// I don't understand what this is about
-// How can it be a link, but not be type==FS_TYPE?
-cerr("HOW IS THIS POSSIBLE??? HFBEHDKL");
-				let rv = await get_data_from_fs_file(curpar.file,"text");
-				let [gotdir, lastdir, gotpath] = await path_to_node(rv, if_get_link, ++iter);
-				if (!(gotdir&&gotdir.appName===FOLDER_APP)) return null;
-				curpar = gotdir;
-			}
+			let gotdir = await curpar.linkedNode;
+			if (!(gotdir&&gotdir.isDir)) return null;
+			curpar = gotdir;
 		}//»
-		curpath = curpar.fullpath;
 	}//»
-
-	let parref;
-
-	if (!curpar.isDir&&!if_get_link&&(parref=await curpar.ref)&&parref.haveKids){
-		curpar = parref;
-		curpath = curpar.fullpath;
+	if (curpar.isLink && !if_get_link) {
+		let parref = await curpar.linkedNode;
+		if (parref && parref.haveKids) curpar = parref;
 	}
-
-	if (!curpar.isDir) {
-		return done();
-	}
-
+	if (!curpar.isDir) return maybe_done();
 	node = curpar.getKid(fname);
-	if (node||curpar.done) {
-		if (node && !node.root) node.root = curpar.root;
-		return done();
-	}
-
-	if (curpar.type===FS_TYPE){//«
-		let kid = await try_get_fs_type_kid(fname, curpar);
-		if (!kid) return done();
-		node = kid;
-		_dir_update(1, curpar, kid);
-		return done();
-	}//»
-//	else if (curpar.type===USERS_TYPE){
-//		let kid = await try_get_users_type_kid(fname, curpar);
-//		if (!kid) return done();
-//		node = kid;
-//		curkids[fname] = kid;
-//		return done();
-//	}
-	else{
-//		await popDir(curpar);
-		await curpar.loadKids();
-//		let gotnode = curkids[fname];
-		let gotnode = curpar.getKid(fname);
-		if (!gotnode) return null;
-		node = gotnode;
-		if (!node.root) node.root = curpar.root;
-		return done();
-	}
-
-};
-//»
+	if (node||curpar.done) return maybe_done();
+	node = await curpar.tryGetKid(fname);//BSGDUGTJK
+	if (!node) return null;
+	_dir_update(1, curpar, node);
+	return maybe_done();
+};//»
 
 const getPathByDirId=async(idarg)=>{//«
 	let id = idarg;
@@ -1638,8 +1917,6 @@ const getPathByDirId=async(idarg)=>{//«
 const doFsRm=async(args, errcb, opts={})=>{//«
 	let{dirsOnly}=opts;
 	let cwd = opts.CWD;
-//	let is_root = opts.ROOT||opts.root;
-//	let do_full_dirs = opts.FULLDIRS||opts.fullDirs;
 	let arr = [];
 	let no_error = true;
 	if (!errcb){
@@ -1693,6 +1970,49 @@ log(rv);
 	}
 	return no_error;
 };//»
+
+const del_node = async (node) => {//«
+//	let node = this;
+//	const OK_TYPES=[OP_FS_TYPE, SHM_FS_TYPE, IDB_DATA_TYPE];
+	const OK_TYPES=[OP_FS_TYPE, SHM_FS_TYPE];
+	if (!OK_TYPES.includes(node.type)) {
+cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
+		return;
+	}
+	let path = node.fullpath;
+	if (node.sys) {
+cerr("Not removing toplevel");
+		return;
+	}
+//	if (node.appName===FOLDER_APP){
+	if (node.isDir){
+		await node.loadKids();
+		let kids = node.kidList;
+		for (let kid of kids){
+cwarn(`Deleting:`, kid);
+			await kid.del(opts);
+		}
+	}
+	let id = node.id;
+	let parid = node.par.id;
+	if (!(id&&parid)) {
+		if (node.type==SHM_FS_TYPE) {}
+		else {
+cerr(`NO ID && PARID???`);
+log(node);
+log(node.par);
+cerr(`Could not remove: ${node.fullpath}`);
+			return;
+		}
+	}
+	if (!await db.removeNode(id, parid)) {
+cerr("FRYNBSJ");
+		return 
+	}
+//WMNJUGFNH
+	return true;
+};//»
+
 const clearStorage = async ()=>{//«
 	let opfs = await navigator.storage.getDirectory();
 	await opfs.removeEntry("blobs", { recursive: true });
@@ -1701,258 +2021,263 @@ const clearStorage = async ()=>{//«
 	return true;
 };//»
 
-const comMv=async (paths, opts={})=>{//«
-	return com_mv(paths,{if_recur: opts.if_recur, if_cp: opts.if_cp, shell_exports: opts.exports} );
-};//»
-const com_mv = async(args, opts={}) => {//«
+const comMv = async(args, opts={}) => {//«
 
-let{
-	shell_exports, if_recur, if_cp, dom_objects, recur_opts
-}=opts;
-
-const no_move_all=()=>{//«
-	if (no_move_cb){
-		for (let arg of args){
-			let path = getFullPath(arg, cur_dir);
-			no_move_cb(icon_obj[path]);
-		}
+const no_move_all = () => {//«
+	if (!no_move_cb) return;
+	for (let arg of args) {
+//		no_move_cb(icon_obj[getFullPath(arg, cwd)]);
+		no_move_cb(getFullPath(arg, cwd));
 	}
 }//»
 
-//Init«
+// Var «
 
-let errarr = [];
-let mvarr = [];
-let verb = "move";
-let com = "mv";
-if (if_cp) {
-	verb = "copy";
-	com = "cp";
-}
+//							  BAD IDEA ---->vvvvvvvvvvv
+//let { exports, if_recur, if_cp, if_force, dom_objects } = opts;
+let { exports, if_recur, if_cp, if_force } = opts;
 
-//Imports from the calling environment (either the shell or desktop)«
-if (!shell_exports) shell_exports = {};
+//Imports from the calling environment (shell or desktop) «
+
 let {
 	winf, // Write to info stream
 	werr,
-	wclerr,
-	wout,
-	cbok,
-	cberr,
-	cur_dir,
-	failopts,
-	is_root,
+	cwd = "/",
+// WURBTMYJ
 	no_move_cb,
-	done_cb
-} = shell_exports;
+	done_cb 
+} = exports;
+if (!winf) winf=s=>{log("INF",s);};
+if (!werr) werr = s => {log("ERR",s);};
 
-if (!wclerr) wclerr=NOOP;
-if (!winf) winf=s=>{
-log("INF",s);
-};
-if (!werr) werr=s=>{
-log("ERR",s);
-};
-if (!wout) wout=s=>{
-log("OUT",s);
-};
+//let icon_obj;
 
-
-if (recur_opts){
-	cbok = recur_opts.cbok;
-	cberr = recur_opts.cberr;
-}
-
-let icon_obj = {};
-let towin = null;
-
-if (dom_objects) {
-	icon_obj = dom_objects.icons;
-	towin = dom_objects.win;
-}
+//if (dom_objects) icon_obj = dom_objects.icons;
+//else icon_obj = {};
 
 //»
 
-let sws;
-if(failopts) sws=failopts(args,{SHORT:{f:1}});
-else sws = {};
-if (!sws) return;
-let gotfail = false;
-let force = sws.f;
-if (!args.length) return cberr("missing file operand");
-else if (args.length == 1) return cberr(`missing destination file operand after '${args[0]}'`);
-if (args.length < 2) {
-	cberr("Too few args given");
-	return;
-}
+let nargs = args.length;
+let dest_arg = args.pop();
+let dest_arg_fullpath = getFullPath(dest_arg, cwd);
+let dest_arg_node = await path_to_node(dest_arg_fullpath);
 
-//»
+let dest_par_path;
+let dest_par_node;
+let use_dest_name;
 
-let topatharg = getFullPath(args.pop(), cur_dir);
-let destret = await path_to_node(topatharg);
-
-//Failure conditions...«
-
-if (globals.read_only) return cberr("Read only");
-
-if ((args.length > 1) && (!destret || (destret.appName != FOLDER_APP))) {
-	cberr(`invalid destination path: ${topatharg}`);
-	return;
-}
-else if (args.length===1){
-
-// This allows a destination to be clobbered if the name is in the folder.
-// Only if the file is explicitly named, does this error happen.
-
-	if (!force && destret && destret.appName != FOLDER_APP) {
-		cberr(`${topatharg}: not clobbering the destination`);
-		return;
-	}
-}
-if (destret) {
-	if (!destret.writeable) {
-		no_move_all();
-		return cberr(`${topatharg}: read only`);
-	}
-	if (!destret.perm) {
-		no_move_all();
-		return cberr(`${topatharg}: permission denied`);
-	}
-}
-//»
-for (let arg of args){//«
-
-	let path = getFullPath(arg, cur_dir);
-	if (!path) {
-		mvarr.push({ERR: `getFullPath: returned null for: ${arg}!!!`});
-		continue;
-	}
-
-	let srcret = await path_to_node(path, true);
-
-	if (!srcret) {
-		if (no_move_cb) no_move_cb(icon_obj[path], 1);
-		mvarr.push({ERR: `no such entry: ${path}`});
-		continue;
-	}
-	let srctype = srcret.type;
-	let isfolder = srcret.appName === FOLDER_APP;
-	if (srcret.treeroot || srcret.root == srcret) {
-		if (no_move_cb) no_move_cb(icon_obj[path], 2);
-		mvarr.push({ERR: `skipping top level directory: ${path}`});
-	}
-	else if (com==="mv" && !srcret.writeable) {
-		if (no_move_cb) no_move_cb(icon_obj[path], 3);
-		mvarr.push({ERR: `${path} is "read only"`});
-	}
-	else if (com==="mv" && srcret.writeLocked()) {
-//No moving of files that are actively being edited
-		if (no_move_cb) no_move_cb(icon_obj[path], 4);
-		mvarr.push({ERR: `${path} is "write locked"`});
-	}
-	else if (com==="mv" && isfolder && srcret.isMoveLocked){
-//No moving of folders that contain files that are actively being edited
-		if (no_move_cb) no_move_cb(icon_obj[path], 5);
-		mvarr.push({ERR: `${path} is "move locked"`});
-	}
-	else if (com==="cp" && isfolder){
-		if (if_recur){
-			mvarr.push([path, srcret]);
-		}
-		else {
-			if (no_move_cb) no_move_cb(icon_obj[path], 6);
-			mvarr.push({ERR: `-r not specified; omitting directory '${arg}'`});
-		}
-	}
-	else if (isfolder && path == globals.user.desk_path){
-		mvarr.push({ERR:`not modifying the working desktop path: ${path}`});
-	}
-	else mvarr.push([path, srcret]);
-
-}//»
-
-if (destret && destret.isDir && destret.type === FS_TYPE){//«
-	if (!destret.done) await popDir(destret);
-	let okarr=[];
-	for (let elm of mvarr){
-		if (elm.ERR) {
-			okarr.push(elm);
-			continue;
-		}
-		let name = elm[1].name;
-//		let gotkid = kids[name];
-		let gotkid = destret.getKid(name);
-		if (gotkid&&gotkid.isDir===true){
-			okarr.push({ERR: `${destret.fullpath}: There is already a folder named '${name}'`});
-		}
-		else okarr.push(elm);
-	}
-	mvarr = okarr;
-}//»
-for (let arr of mvarr) {//«
-	if (arr.ERR) {
-		gotfail = true;
-		werr(arr.ERR);
-		continue;
-	}
-	let frompath = arr[0];
-	let fromicon = icon_obj[frompath];
-	let topath;
-	let todir;
-	let node = arr[1];
-	let type = node.type;
-	let app = node.appName;
-	let gotfrom, gotto;
-	let savedirpath;
-	let savename;
-
-	if (destret) {//«
-		if (destret.appName == FOLDER_APP) {
-			topath = topatharg.replace(/\/+$/, "") + "/" + node.name;
-			savedirpath = destret.fullpath;
-			gotto = `${savedirpath}/${node.name}`;
-			savename = node.name;
-		}
-		else {
-			gotto = topath = topatharg;
-			savedirpath = destret.par.fullpath;
-			savename = destret.name;
-		}
+if (dest_arg_node) {//«
+	if (dest_arg_node.isDir) {
+		dest_par_node = dest_arg_node;
+		dest_par_path = dest_par_node.fullpath;
 	}
 	else {
-		topath = topatharg;
-		gotto = getFullPath(topath, cur_dir);
-		let arr = gotto.split("/");
-		savename = arr.pop();
-		savedirpath = arr.join("/")
+		dest_par_node = dest_arg_node.par;
+		dest_par_path = dest_par_node.fullpath;
+	}
+}//»
+
+else {//«
+	let arr = dest_arg_fullpath.split("/");
+	use_dest_name = arr.pop();
+	dest_par_path = arr.join("/")
+	dest_par_node = await path_to_node(dest_par_path);
+	if (!dest_par_node) {
+		no_move_all();
+		werr(`${dest_par_path}: no such directory`);
+		return;
+	}
+	if (!dest_par_node.writeable) {
+		no_move_all();
+		werr(`${dest_par_path}: read-only`);
+		return;
+	}
+	if (!dest_par_node.perm) {
+		no_move_all();
+		werr(`${dest_par_path}: permission denied`);
+		return;
+	}
+}//»
+
+
+let mvarr = [];
+
+// Use this to lock the src & dest par nodes.
+
+const move_lock = {};
+
+//»
+
+// Immediate failure conditions «
+
+if (globals.read_only) {//«
+	no_move_all();
+	werr("Read only");
+	return 
+}//»
+if (nargs < 2) {//«
+	no_move_all();
+	werr(`invalid call to comMv: need at least 2 args, but got ${nargs}`);
+	return;
+}//»
+if ((nargs > 2) && (!dest_arg_node || (dest_arg_node.appName != FOLDER_APP))) {//«
+// We can only create the dest_arg_node with 2 total args
+// With 3+ args, the final arg *must* be a folder
+	no_move_all();
+	werr(`target '${dest_arg}' is not a directory`);
+	return;
+}//»
+if (dest_arg_node) {//«
+	if (!dest_arg_node.writeable) {
+		no_move_all();
+		return werr(`${dest_arg_fullpath}: read-only`);
+	}
+	if (!dest_arg_node.perm) {
+		no_move_all();
+		return werr(`${dest_arg_fullpath}: permission denied`);
+	}
+}//»
+
+//»
+
+
+// Create the array of valid sources
+for (let arg of args){//«
+
+	let src_path = getFullPath(arg, cwd);//«
+	if (!src_path) {
+		werr( `getFullPath: returned null for: ${arg}!!!`);
+		continue;
+	}//»
+	let src_node = await path_to_node(src_path, true);//«
+	if (!src_node) {
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `no such entry: ${src_path}`);
+		continue;
 	}//»
 
-	gotfrom = getFullPath(frompath, cur_dir);
-
-	if (!(gotfrom && gotto)) {
-		if (!gotfrom) {
-			gotfail=true;
-			werr(`could not resolve: ${frompath}`);
+	if (!if_cp && src_node.isRoot) {//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `skipping root directory`);
+	}//»
+	else if (!if_cp && !src_node.par.writeable) {//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `${src_path}: read-only`);
+	}//»
+	else if (!if_cp && !src_node.par.perm) {//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `${src_path}: permission denied`);
+	}//»
+	else if (!if_cp && src_node.isWriteLocked) {//«
+//No moving of files that are actively being edited
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `${src_path}: write-locked`);
+	}//»
+	else if (!if_cp && src_node.isMoveLocked){//«
+//	else if (!if_cp && src_node.isDir && src_node.isMoveLocked){
+//No moving of folders that contain files that are actively being edited
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `${src_path}: move-locked`);
+	}//»
+	else if (if_cp && src_node.isDir){//«
+		if (if_recur) {
+			mvarr.push([src_path, src_node]);
 		}
-		if (!gotto) {
-			gotfail=true;
-			werr(`could not resolve: ${topath}`);
+		else {
+			if (no_move_cb) no_move_cb(src_path);
+			werr( `-r not specified; omitting directory '${arg}'`);
 		}
-		continue;
-	}
-	let savedir = await path_to_node(savedirpath);
-	if (!savedir) {
-		werr(`${savedirpath}: no such directory`);
-		continue;
-	}
-	let savetype = savedir.type;
+	}//»
+	else if (src_node.isDir && NS.Desk && src_path == globals.user.desk_path){//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr(`not modifying the active desktop path: ${src_path}`);
+	}//»
+	else mvarr.push([src_path, src_node]);
 
-	if (!savedir.writeable){
-		werr(`${savedir.fullpath}: read only`);
-		continue;
-	}
+}//»
 
-	if (app === FOLDER_APP && (if_cp || type !== savedir.type)){//«
+// Check for overwrites
+if (dest_arg_node){//«
+
+// When the destination is a directory, any overwrites will be its *kids*
+	if (dest_arg_node.isDir) {//«
+		if (!dest_arg_node.done) await dest_arg_node.loadKids();
+		if (!dest_arg_node.done) {
+			no_move_all();
+			werr(`could not populate the destination folder: '${dest_arg_node.name}'`);
+			return;
+		}
+		let okarr = [];
+		for (let elm of mvarr){
+			let name = elm[1].name;
+			let gotkid = dest_arg_node.getKid(name);
+			if (gotkid){
+// Must NEVER overwrite a directory
+				if (gotkid.isDir) {
+					if (no_move_cb) no_move_cb(elm[0]);
+					werr( `${dest_arg_node.fullpath}: there is already a folder named '${name}'`);
+				}
+				else if (!if_force){
+					if (no_move_cb) no_move_cb(elm[0]);
+					werr( `${dest_arg_node.fullpath}/${name}: not clobbering the destination (use -f to override)`);
+				}
+				else {
+// Overwriting non-dirs is OK if -f is specified
+					okarr.push(elm);
+				}
+			}
+			else okarr.push(elm);
+		}
+		mvarr = okarr;
+	}//»
+	else if (!if_force){//«
+		no_move_all();
+		werr(`${dest_arg_fullpath}: not clobbering the destination ('-f' not specified)`);
+		return;
+	}//»
+
+}//»
+
+//MNASYRGK
+dest_par_node.addMoveLock(move_lock);
+
+for (let arr of mvarr) {//«
+
+// Var «
+
+	let src_path = arr[0];
+	let src_node = arr[1];
+//	let src_icon = icon_obj[src_path];
+	let src_type = src_node.type;
+
+	let dest_name;
+	let dest_path;
+	let real_dest_path;
+
+//»
+
+	if (dest_arg_node) {//«
+		if (dest_arg_node.isDir) {
+			dest_name = src_node.name;
+			dest_path = `${dest_par_path}/${dest_name}`;
+			real_dest_path = dest_path;
+		}
+		else {
+			dest_name = dest_arg_node.name;
+			real_dest_path = dest_path = dest_arg_fullpath;
+		}
+	}//»
+	else {//«
+		real_dest_path = dest_path = dest_arg_fullpath;
+		dest_name = use_dest_name;
+	}//»
+
+	if (src_node.isDir && (if_cp || src_type !== dest_par_node.type)){ //«
+//	if (app === FOLDER_APP && (if_cp || src_type !== dest_par_node.type)){
+
+// Just because the fs types are the same, it doesn't mean that the 
+// move operation is *necessarily* "simple": NEED PREDICATE --------------vvvvvvvvvvvvv
+//	if (app === FOLDER_APP && (if_cp || src_type !== dest_par_node.type || !dest_par_node.hasSimpleMove)){
 
 // EHGJGKYE
 
@@ -1962,114 +2287,153 @@ for (let arr of mvarr) {//«
 
 // Moving within the same type should just require a simple "bookmark" update
 
-		let nm = savename;
-		if (savedir.getKid(nm)){
-			gotfail=true;
+		let nm = dest_name;
+		if (dest_par_node.getKid(nm)){
+			if (no_move_cb) no_move_cb(src_path);
 			werr(`refusing to clobber: ${nm}`);
 			continue;
 		}
 
-		let newpath = `${savedir.fullpath}/${nm}`;
-		if (!await mkDir(savedir.fullpath, nm, {root: is_root, noMakeIcon: !!dom_objects})){
-			gotfail=true;
+		let newpath = `${dest_par_node.fullpath}/${nm}`;
+//		if (!await mkDir(dest_par_node.fullpath, nm, {root: is_root, noMakeIcon: !!dom_objects})){
+//		if (!await mkDir(dest_par_node.fullpath, nm, {noMakeIcon: !!dom_objects})){
+
+//		if (!await mkDir(dest_par_node, nm, {noMakeIcon: !!dom_objects})){
+		if (!await mkDir(dest_par_node, nm, {noMakeIcon: true})){
+// BETTER???
+//		if (!await dest_par_node.mkDir(nm, {noMakeIcon: !!dom_objects})){
+
+			if (no_move_cb) no_move_cb(src_path);
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
 
 //		if (NS.Desk && !dom_objects) NS.Desk.make_icon_if_new(await path_to_node(newpath));
-//		werr(`Created: ${newpath}`);
 		winf(`Created: ${newpath}`);
-		if (!node.done) await popDir(node);
+		if (!src_node.done) await popDir(src_node);
 		let arr = [];	
-		let kids = node.kidList;
+		let kids = src_node.kidList;
 		for (let k of kids) arr.push(k.fullpath);
 		arr.push(newpath);
-		let obj = {
-			cbok: () => {},
-			cberr: () => {gotfail = true;}
-		};
-		await this.com_mv(arr, {
-			shell_exports,
+		await comMv(arr, {
+			exports,
 			if_recur: true,
 //SUTIYKJ
 // Why did we put this here instead of passing the original value?
 //			if_cp: true, 
-			if_cp, 
+			if_cp,
+			if_force
 
-			recur_opts: 
-			obj
 		});
 		if (!if_cp) {
 //cwarn("DELETE THE DIR...");
-// Moving a dir *from* FS_TYPE (to /dev/shm ???)
-			if (node.type === FS_TYPE) {
-				if (!await db.removeNode(node.id, node.par.id)) {
+// Moving a dir *from* OP_FS_TYPE (to /dev/shm ???)
+//XJRJHURJ
+			if (src_node.type === OP_FS_TYPE) {
+				if (!await db.removeNode(src_node.id, src_node.par.id)) {
 cerr("UKFHJKD");
 				}
 			}
-			_dir_update(2, node.par, node);
+			_dir_update(2, src_node.par, src_node);
 		}
 
-		if (done_cb && fromicon) done_cb(fromicon);
+		if (done_cb) done_cb(src_path);
 
 		continue;
 	}//»
 
-	if (verb=="move"){
-//		if (!await move_node(node, savename, savedir)){
-		if (!await node.move(savename, savedir)){
-			werr(`Could not move from ${frompath} to ${topath}`);
+	if (if_cp) {//«
+
+//		if (!(src_node = await src_node.copy(dest_name, dest_par_node, {noMakeIcon: !!dom_objects}))){
+//		if (!await do_copy(src_node, dest_name, dest_par_node, {noMakeIcon: !!dom_objects})){
+		if (!await do_copy(src_node, dest_name, dest_par_node)){
+			if (no_move_cb) no_move_cb(src_path);
+			werr(`could not copy from ${src_path} to ${dest_path}`);
 			continue;
 		}
-	}
-	else{
-//		if (!(node = await copy_node(node, savename, savedir, !!dom_objects))){
-		if (!(node = await node.copy(savename, savedir, {noMakeIcon: !!dom_objects}))){
-			werr(`Could not copy from ${frompath} to ${topath}`);
+/*Slot 1 «
+if (done_cb && src_icon) done_cb(src_icon);
+if (NS.Desk && !dom_objects){
+//NS.Desk.make_icon_if_new(src_node);
+// or
+//src_node.mkIcons();
+}
+»*/
+
+	}//»
+	else {//«
+
+//WYRHTIYK
+		if (!await do_move(src_node, dest_name, dest_par_node)){
+			if (no_move_cb) no_move_cb(src_path);
+			werr(`could not move from ${src_path} to ${dest_path}`);
 			continue;
 		}
-	}
-	if (if_cp) {
-		gotfrom = null;
-	}
-	if (done_cb && fromicon) {
-		done_cb(fromicon);
-	}
-	if (NS.Desk && !dom_objects) {
-		await NS.Desk.move_icon_by_path(gotfrom, gotto, app, {
-			node,
-			icon: fromicon,
-			win: towin
-		});
-	}
-}//»
-
-if (NS.Desk && !dom_objects) NS.Desk.update_folder_statuses();
-if (gotfail) {
-//	cberr && cberr();
-	return false;
+/*Slot 2 «
+if (done_cb && src_icon) done_cb(src_icon);
+if (NS.Desk && !dom_objects){
+	src_node.mvIcons(real_dest_path);
 }
-//cbok&&cbok();
-return true;
+»*/
 
-}
-this.com_mv = com_mv;
+	}//»
+
+// Move this logic into the above 2 slots«
+	if (done_cb) {
+		done_cb(src_path);
+	}
+	if (test_icons) await util.sleep(1000);
+
 //»
 
-const getBlob = async(node, opts={})=>{//«
-	let istext = opts.text;
-	let id = node.id;
-	let file;
-	let rv;
-	if (node.type==SHM_TYPE){//«
-		file = node.memBlob;
-		if (!file) {
-			file = new Blob([]);
-//			node._blob = file;
-			_set_mem_blob(node, file);
+
+}//»
+
+
+dest_par_node.rmMoveLock(move_lock);
+
+}//»
+
+const set_local_blob = async (node, blob, opts={}) => {//«
+	if (node.useMemBlob) {
+		_set_mem_blob(node, blob);
+		_node_update(5, node, blob.size);
+		return {size: blob.size};
+	}
+	if (node.blobId === NULL_BLOB_NODE_TYPE){//«
+		if (!await node.getRealBlobId()){
+cerr("Could not getRealBlobId()!?!?!?");
+			return;
 		}
 	}//»
-	else if (node.type===SITE_FS_TYPE){//«
+	opts.node = node;
+	let rv = await write_blob(await node.entry, blob, opts);
+	_node_update(5, node, rv.size);
+	return rv;
+
+};//»
+
+const blob_to_ret_val = async (blob, opts={}) => {//«
+
+	let fmt;
+	if (opts.buffer) fmt="arraybuffer";
+	else if (opts.text) fmt = "text";
+	else if (opts.blob) fmt="blob";
+	else fmt = "bytes";
+	let start=0;
+	if (opts.start) start = parseInt(opts.start);
+	let end;
+	if (opts.end) end = parseInt(opts.end);
+	let rv = await get_data_from_fs_file(blob, fmt, start, end);
+	if (rv && fmt==="text" && !opts.noChomp) rv = rv.replace(/\n$/, "");
+	return rv;
+
+};//»
+
+const get_local_blob = async(node)=>{//«
+	const EB = new Blob([]); // Empty Blob
+	if (node.type==SHM_FS_TYPE) return node.memBlob;
+	if (node.type===SITE_FS_TYPE){//«
 		let path = node.fullpath.replace(/^\/site/, "");
 		let rv;
 		try {
@@ -2077,47 +2441,27 @@ const getBlob = async(node, opts={})=>{//«
 		}
 		catch(e){
 cerr(e);
-			return;
+			return EB;
 		}
-		if (!rv.ok) return;
-		file = await rv.blob();
+		if (!rv.ok) {
+cerr("The response is not OK!");
+log(rv);
+			return EB;
+		}
+		return await rv.blob();
 	}//»
-	else {//«
-		let bid = node.blobId;
-		if (!bid||(bid===NULL_BLOB_FS_TYPE && !opts.getFileOnly)) {
-if (!bid){
+	let bid = node.blobId;
+	if (!bid){
 cerr("No node.blobId!?!?!?", node);
-}
-			if (!istext) return new Uint8Array();
-			return "";
-		}
-		if (bid===NULL_BLOB_FS_TYPE) {
-			return {size: 0};
-		}
-		if (bid===IDB_DATA_TYPE){
-cwarn("The data should already be on the node! (node.data)");
-			return this.data;
-		}
-		let ent = await get_blob_entry(`${bid}`);
-		if (!ent) return;
-		file = await ent.getFile();
-		if (opts.getFileOnly) return file;
-	}//»
-	if (!file) return;
-	let fmt;
-	if (opts.buffer) fmt="arraybuffer";
-	else if (istext) fmt = "text";
-	else if (opts.blob) fmt="blob";
-	else fmt = "bytes";
-	let start=0;
-	if (opts.start) start = parseInt(opts.start);
-	let end;
-	if (opts.end) end = parseInt(opts.end);
-	rv = await get_data_from_fs_file(file, fmt, start, end);
-	if (rv && fmt==="text" && !opts.noChomp) rv = rv.replace(/\n$/, "");
-	return rv;
-//	return await get_data_from_fs_file(file, fmt, start, end);
-
+		return EB;
+	}
+	if (bid===NULL_BLOB_NODE_TYPE) return EB;
+	let ent = await get_blob_entry(`${bid}`);
+	if (!ent) {
+cerr(`NO ENTRY: ${bid}`);
+		return EB;
+	}
+	return await ent.getFile();
 };//»
 
 const get_data_from_fs_file=(file,format,start,end)=>{//«
@@ -2180,148 +2524,21 @@ const write_blob = async(fent, blob, opts={}) => {//«
 }
 //»
 
-
-const writeFile = async(path, val, opts = {}) => {//«
-	let invalid = () => {
-		cerr(`Invalid path: ${path}`);
-	};
-	if (!(path && path.match(/^\x2f/))) return invalid();
-	let arr = path.split("/");
-	arr.shift();
-	let rootdir = arr.shift();
-	if (!rootdir) return invalid();
-	let is_dev_shm;
-	if (rootdir === "dev" && !(is_dev_shm = path.match(/\/dev\/shm/))){//«
-		let name = arr.shift();
-		if (name==="null"){}
-		else if (name==="log") console.log(val);
-		return true;
-	}//»
-	let exists = await path_to_node(path);
-	if (exists) {
-//	if (exists && !opts.append){
-cwarn("writeFile was called on an existing file!?!?!");
-		if (opts.reject) throw new Error(`The file exists`);
-		else return false;
-	}
-	if (root_dirs.includes(rootdir)||is_dev_shm){//«
-//	if (root_dirs.includes(rootdir)||path.match(/\/dev\/shm/)){
-		let node = await saveFsByPath(path, val, opts);
-//		if (!(exists || opts.noMakeIcon)) {
-		if (node && !opts.noMakeIcon) {
-			NS.Desk.move_icon_by_path(null, path, node.appName, {node});
-		}
-		return node;
-	}//»
-/*
-	else if (rootdir === "users") {//«
-//WNGKHPLK
-		let rv = await globals.funcs["netfs.fbWrite"](path, val);
-		if (isErr(rv)){
-cerr(rv);
-			if (opts.reject) throw rv;
-			else return false;
-		}
-		let node;
-		let arr = path.split("/");
-		let name = arr.pop();
-		let parpath = arr.join("/");
-		let parnode = await path_to_node(parpath);
-		if (!parnode) {
-cwarn(`NO PARENT NODE FOUND AT: ${parpath}`);
-			return;
-		}
-		else{
-			node = mk_dir_kid(parnode, name, {isNetFile: true, appData: parnode.appData});
-			parnode.kids[name] = node;
-//			if (!(exists || opts.noMakeIcon)) {
-			if (!opts.noMakeIcon) {
-				NS.Desk.move_icon_by_path(null, path, node.appName, {node});
-			}
-		}
-		node.id = rv.id;
-		node.size = rv.size;
-		return node;
-	}//»
-*/
-	else {
-cerr("Invalid or unsupported root dir:\x20" + rootdir);
-	}
-}//»
-const writeDataFile=(path, val, opts = {})=>{//«
-	if (!(isObj(val) && isStr(val.type))){
-cerr(`${path}: Expected an object with a 'type' field! (for inline data storage)`);
-		return;
-	}
-	opts.data = val;
-	return writeFile(path, val, opts)
-};//»
-const saveFsByPath=async(path, val, opts={})=>{//«
-
-if (globals.read_only) return;
-
-let blob;
-let node = await path_to_node(path);
-if (!node) {
-	let patharr = path.split("/");
-	let fname = patharr.pop();
-	let parpath = patharr.join("/");
-	let parobj = await path_to_node(parpath);
-	if (!parobj) return [null, `${parpath}: Bad parent path`];
-	node = await touchFile(parobj, fname, opts);
-	_node_update(1, node, fname);
-}
-else if (opts.data){
-return [null, "Use node.setValue instead of saveFsByPath!"]
-}
-
-if (node.blobId === NULL_BLOB_FS_TYPE){//«
-	if (!await node.getRealBlobId()){
-cerr(`saveFsByPath(${path}): could not get a real blob id!?!?!`);
-return;
-	}
-}//»
-
-if (opts.getEntry||opts.data) {
-	return node;
-}
-
-blob = toBlob(val);
-if (!blob){
-cerr(`${path}: Unknown type in saveFsByPath`);
-log(val);
-	return;
-}
-opts.node = node;
-let rv = await write_blob(await node.entry, blob, opts);
-
-node.size = rv.size;
-if (opts.retObj) {
-	rv.node = node;
-	return rv;
-}
-return node;
-
-}//»
-const makeHardLink = async(parobj, name, blobid) =>{//«
+const make_hard_link = async(parobj, name, blobid) =>{//«
 	if (!parobj.done) await popDir(parobj);
-//	let kids = parobj.kids;
 	let got = parobj.getKid(name);
 	if (got) return got;
 
 	let parid = parobj.id;
 	let rv;
-//	db.init();
-	let id = await db.createNode(name, FILE_FS_TYPE, parid, blobid);
+	let id = await db.createNode(name, FILE_NODE_TYPE, parid, blobid);
 	if (!id) return cerr("JEMEMEMEIOU");
 
 	let kid = mk_dir_kid(parobj, name, {isFile: true});
-
-//	kid.blobId = blobid;
-	_node_update(4, kid, blobId);
-//	kid.id = id;
+	_node_update(4, kid, blobid);
 	_node_update(3, kid, id);
-	kids[name] = kid;
+	_dir_update(1, parobj, kid);
+//	kids[name] = kid;
 	return kid;
 };//»
 const touchFile = async(parobj, name, opts={})=>{//«
@@ -2330,81 +2547,28 @@ const touchFile = async(parobj, name, opts={})=>{//«
 
 	if (!parobj.done) await popDir(parobj);
 	let gotkid = parobj.getKid(name);
-	if (gotkid) {
-		return gotkid;
-	}
+	if (gotkid) return gotkid;
 	let parid = parobj.id;
 	let rv;
 	let id;
-	let is_shm = parobj.type==SHM_TYPE;
-	if (is_shm){
-	}
-//	else if (is_users){//«
-//		let rv = await globals.funcs["netfs.fbWrite"](`${parobj.fullpath}/${name}`);
-//		if (isErr(rv)){
-//cerr(rv);
-//			return;
-//		}
-//		id = rv.id;
-//if (!isNum(id)){
-//cerr(`ID IS NaN!?! id=${id}`);
-//return;
-//}
-//	}//»
-	else {//«
-		if (opts.data) {
-			let val = opts.data;
-			if (!(isObj(val) && isStr(val.type))){
-cerr(`${name}: Expected an object with a 'type' field! (for inline data storage)`);
-				return;
-			}
-			id = await db.createNode(name, IDB_DATA_TYPE, parid, val);
-		}
-		else id = await db.createNode(name, NULL_BLOB_FS_TYPE, parid);
+	let is_shm = parobj.type == SHM_FS_TYPE;
+	if (!is_shm){
+		id = await db.createNode(name, NULL_BLOB_NODE_TYPE, parid);
 		if (!id) return cerr("ADBNYURL");
-	}//»
-	let kid = mk_dir_kid(parobj, name,{
-		isData: !!opts.data,
-		isFile: !opts.data
-	});
+	}
 
-	if (is_shm){
+	let kid = mk_dir_kid(parobj, name,{ isFile: true });
+	if (!is_shm) {
+		_node_update(4, kid, NULL_BLOB_NODE_TYPE);
 	}
-//	else if (is_users){
-//		kid.blobId = 0;
-//	}
-	else if (opts.data) {
-//		kid.blobId = IDB_DATA_TYPE;
-_node_update(4, kid, IDB_DATA_TYPE);
-//		kid.data = opts.data;
-_set_data(opts.data);
-	}
-	else {
-//		kid.blobId = NULL_BLOB_FS_TYPE;
-_node_update(4, kid, NULL_BLOB_FS_TYPE);
-	}
-//	kid.id = id;
 	_node_update(3, kid, id);
 	_dir_update(1, parobj, kid);
-	if (NS.Desk&&!opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
+	if (NS.Desk&&!opts.noMakeIcon) {
+cwarn(`Not calling make_icon_if_new w/ new node:`);
+log(kid);
+	}
 	return kid;
 
-};//»
-const mkFile = async (path, opts) => {//«
-	if (!(path && path.match(/^\x2f/))){
-cerr("Need a full path");
-		return;
-	}
-	let arr = await path.toParNodeAndName(path);
-	if (!arr) return;
-//if (!arr[0])
-	let par = arr[0];
-if (!par.perm){
-cerr(`Permission denied: ${par.fullpath}`);
-return;
-}
-	let nm = arr[1];
-	return touchFile(par, nm, opts);
 };//»
 const mkDir = async(pararg, name, opts={})=>{//«
 	if (globals.read_only)return;
@@ -2441,10 +2605,10 @@ cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING P
 	}//»
 	let id;
 	let kid;
-	if (typ===FS_TYPE) {
+	if (typ===OP_FS_TYPE) {
 		let parid = parobj.id;
 		if (!parid) return cerr("GEJ76GF");
-		id = await db.createNode(name, DIR_FS_TYPE, parid);
+		id = await db.createNode(name, DIR_NODE_TYPE, parid);
 		if (!id) return cerr("DEYBGJTU");
 	}
 //	else if (typ === USERS_TYPE){
@@ -2457,227 +2621,44 @@ cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING P
 	kid = mk_dir_kid(parobj, name, {isDir: true, perm: opts.perm});
 	_node_update(3, kid, id);
 	_dir_update(1, parobj, kid);
-	if (NS.Desk && !opts.noMakeIcon) NS.Desk.make_icon_if_new(kid);
+	if (NS.Desk && !opts.noMakeIcon) {
+//		NS.Desk.make_icon_if_new(kid);
+
+cwarn(`Not calling make_icon_if_new w/ new node:`);
+log(kid);
+
+	}
 	return kid;
 
 };
 //»
-const makeLink=async(parobj, name, target, fullpath)=>{//«
+const make_sym_link = async(parobj, name, target, fullpath)=>{//«
 	if (globals.read_only)return;
 	let parid = parobj.id;
 	let rv;
-//	db.init();
-	let id = await db.createNode(name, LINK_FS_TYPE, parid, target);
+	let id = await db.createNode(name, LINK_NODE_TYPE, parid, target);
 	if (!id) return cerr("ENHYTDJ");
 	let kid = mk_dir_kid(parobj, name, {
 		isLink: true,
 		size: target.length,
 	});
-//	kid.symLink = target;
 	_set_sym_link(kid, target);
-//	kid.id = id;
 	_node_update(3, kid, id);
-
-//	parobj.kids[name]=kid;
 	_dir_update(1, parobj, kid);
 
-	if (NS.Desk) NS.Desk.make_icon_if_new(kid);
+	if (NS.Desk) {
+//		NS.Desk.make_icon_if_new(kid);
+
+cwarn(`Not calling make_icon_if_new w/ new node:`);
+log(kid);
+
+	}
 	return kid;
 };//»
 
-const mk_dir = async (fullpath, opts) => {//«
-
-let node = await fullpath.toNode({getLink: true});
-if (node) {
-cerr(`The file exists: ${fullpath}`);
-	return;
-}
-let arr = fullpath.split("/");
-let name = arr.pop();
-let parpath = arr.join("/");
-if (!parpath) parpath = "/";
-let par = await parpath.toNode();
-if (!par){
-cerr(`Not found: ${parpath}`);
-return;
-}
-if (!par.perm){
-cerr(`Permission denied: ${parpath}`);
-return;
-}
-return mkDir(par, name, opts);
-};//»
-
-
-/* Now: methods on FSNode
-const copy_node = async(node, newName, toNode, no_make_icon)=>{//«
-	let newpath = `${toNode.fullpath}/${newName}`;
-	if (util.newPathIsBad(node.fullpath, newpath)) return;
-//EYTKFHSC
-	if (toNode.type == FS_TYPE) {
-
-		return saveFsByPath(newpath, await getBlob(node, {binary: true}), { noMakeIcon: no_make_icon });
-	}
-	else {
-		let save_blob = await node.blob;
-		node = mk_dir_kid(toNode, newName, {isFile: true});
-		await node.setValue(save_blob);
-		_dir_update(1, toNode, node);
-		return node;
-	}
-};//»
-const move_node = async(node, newName, toDir)=>{//«
-	if (util.newPathIsBad(node.fullpath, `${toDir.fullpath}/${newName}`)) return;
-//Need to update this to allow for moving/renaming arbitrary node types 
-//within the same directory type
-	let id = node.id;
-	let par = node.par;
-	let parid = par.id;
-	let saveid = toDir.id;
-	let savename;
-	if (newName && (newName !== node.name)){
-		savename = newName;
-	}
-
-// This logic is supposed to result in the fact that save_blob === null means
-// that we are mv'ing a dir.
-
-	let save_blob = null;
-	if (node.type == FS_TYPE) {
-		if (toDir.type == FS_TYPE) {
-			if (!await db.moveNode(id, parid, saveid, savename)) return cerr("WHYFBSJ");
-		}
-		else {
-			if (node.isFile) save_blob = await node.blob;
-			if (!await db.removeNode(id, parid)) return cerr("YUREFJKK");
-		}
-	}
-//	else save_blob = await node.blob;
-	else if (node.isFile) save_blob = await node.blob;
-
-	_dir_update(2, par, node);
-
-	if (save_blob !== null) {
-		node = mk_dir_kid(toDir, newName, {isFile: true});
-		await node.setValue(save_blob);
-	}
-	else {
-		_node_update(1, node, newName);
-		_node_update(2, node, toDir);
-	}
-	_dir_update(1, toDir, node);
-	return true;
-
-};//»
-
-const delete_fobj = async(node, opts={})=>{//«
-	const OK_TYPES=[FS_TYPE, SHM_TYPE, IDB_DATA_TYPE];
-	if (!OK_TYPES.includes(node.type)) {
-cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
-		return;
-	}
-	let path = node.fullpath;
-	if (node.sys) {
-cerr("Not removing toplevel");
-		return;
-	}
-//	if (node.appName===FOLDER_APP){
-	if (node.isDir){
-		await node.loadKids();
-		let kids = node.kidList;
-		for (let kid of kids){
-cwarn(`Deleting:`, kid);
-			await delete_fobj(kid, opts);
-		}
-	}
-	let id = node.id;
-	let parid = node.par.id;
-	if (!(id&&parid)) {
-		if (node.type==SHM_TYPE) {}
-		else {
-cerr(`NO ID && PARID???`);
-log(node);
-log(node.par);
-cerr(`Could not remove: ${node.fullpath}`);
-			return;
-		}
-	}
-	if (!await db.removeNode(id, parid)) {
-cerr("FRYNBSJ");
-		return 
-	}
-//WMNJUGFNH
-
-	_dir_update(2, node.par, node);
-	if (NS.Desk) NS.Desk.cleanup_deleted_wins_and_icons(path);
-	return true;
-};//»
-
-
-const check_ok_rm = async(path, errcb, is_root, do_full_dirs)=>{//«
-	let obj = await path_to_node(path, true);
-	if (!obj){
-		errcb(`could not stat: ${path}`);
-		return;
-	}
-	let rtype = null;
-	rtype = obj.type;
-	if (obj.treeroot === true) {
-		errcb("ignoring the request to remove root");
-		return;
-	}
-	if (obj.appName !== FOLDER_APP) {//«
-		if (!(rtype==FS_TYPE||rtype==SHM_TYPE||rtype===IDB_DATA_TYPE)){
-			errcb(`${path}: not (currently) handling fs type: '${rtype}'`);
-			return;
-		}
-
-//		if (!check_fs_dir_perm(obj.par, is_root)) errcb(`${path}: permission denied`);
-		if (!obj.par.perm) errcb(`${path}: permission denied`);
-		else if (obj.writeLocked()) errcb(`${path} is "write locked"`);
-		else return obj;
-		return;
-	}//»
-	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) {
-		errcb(`not removing directory type: '${rtype}': ${path}`);
-		return;
-	}
-	if (NS.Desk && (path == globals.user.desk_path)) {
-		errcb(`not removing the working desktop path: ${path}`);
-		return;
-	} 
-	if (obj.par.treeroot) {
-		errcb(`not removing toplevel directory: ${path}`);
-		return;
-	} 
-//	if (obj.moveLocks.length){
-	if (obj.isMoveLocked){
-		errcb(`${path}: is "move locked"`);
-		return;
-	}
-//	if (!obj.done) obj.kids = await popDirByPath(obj.fullpath);
-	if (!obj.done) await obj.loadKids();
-//	let numkids = get_keys(obj.kids).length;
-//	if (!do_full_dirs && numkids > 2) {
-	if (!do_full_dirs && obj.haveKids) {
-		errcb(`${path}: not an empty folder`);
-		return;
-	}
-//	if (!check_fs_dir_perm(obj, is_root)) {
-	if (!obj.perm) {
-		errcb(`${path}: permission denied`);
-		return;
-	}
-	return obj;
-};//»
-
-*/
-
 //»
-//Init/Populate/Mount Dirs«
+//Init/Populate/Mount Dirs «
 
-const DEV_FS_TYPE = "dev";
-const SITE_FS_TYPE = "site";
 
 // ALL THIS "INIT" STUFF IS STUPID AND MUST BE REFACTORED!!!
 
@@ -2690,7 +2671,7 @@ we should encapsulate it as a method on the root tree.
 */
 
 // vvvvvvvvvv   FROM HERE   vvvvvvvvvv
-const mount_tree=(name, type)=>{//«
+const mount_tree = (name, type) => { //«
 
 /*
 
@@ -2705,23 +2686,56 @@ This is only called for /dev (from make_dev_tree) and /site (from init)
 }
 //this.mount_tree = mount_tree;
 //»
-const make_dev_tree = ()=>{//«
+const make_dev_tree = () => { //«
 	let par = mount_tree("dev", DEV_FS_TYPE);
-	let arr = ["null", "log"];
-	for (let name of arr){
-		let kid = new DevNode(name, par);
-		_dir_update(1, par, kid);
-	}   
-	let shm = mk_dir_kid(par, "shm", {isDir: true, type: SHM_TYPE, perm: true});
-//	shm.done = true;
-_dir_update(3, shm , true);
-	_dir_update(1, par, shm);
-//	par.done=true;
-_dir_update(3, par, true);
-//	par.longdone=true;
-};//»
 
-const init = async()=>{//«
+//YSXBPMNF
+	let dev_null = new FileNode("null", par, {//«
+//		getBlob: (node, opts)=>{ return blob_to_ret_val(new Blob([]), opts); },
+		getBlob: (node)=>{ return new Blob([]); },
+		setBlob: ()=>{ return {size: 0}; }
+	});
+	_dir_update(1, par, dev_null);
+//»
+	let dev_log = new FileNode("log", par, {//«
+//		getBlob: (node, opts)=>{ return blob_to_ret_val(new Blob([]), opts); },
+		getBlob: (node)=>{ return new Blob([]); },
+		setBlob: async (node, val, opts)=>{
+			let str = await util.toStr(val);
+			console.log("[/dev/log]");
+			console.log(str);
+			return {size: str.length};
+		}
+	});
+	_dir_update(1, par, dev_log);
+//»
+
+	let shm = mk_dir_kid(par, "shm", {isDir: true, type: SHM_FS_TYPE, perm: true});
+	_dir_update(3, shm , true);
+	_dir_update(1, par, shm);
+	_dir_update(3, par, true);
+};//»
+const mk_user_dirs = async () => { //«
+	let cur_user = globals.user.CURRENT_USER;
+	let home_path = `/home/${cur_user}`;
+	globals.user.home_path = home_path;
+	globals.user.desk_path = `${home_path}/Desktop`.regpath();
+	try{
+//		await mkDir("/home", cur_user, {root: true, noMakeIcon: true, perm: cur_user});
+		await mkDir("/home", cur_user, {noMakeIcon: true, perm: cur_user});
+//		await mkDir(home_path, "Desktop", {root: true, noMakeIcon: true});
+		await mkDir(home_path, "Desktop", { noMakeIcon: true});
+		await popDirByPath('/home');
+		await popDirByPath(home_path);
+	} catch (e) {
+cerr(e);
+		return;
+	}       
+	return true;
+}           
+//»
+
+const init = async () => { //«
 	const make_fs_tree = async (name, opts={}) => {//«
 		let dirstr = null;
 		let tree = new DirNode(name, root, opts);
@@ -2734,7 +2748,7 @@ const init = async()=>{//«
 			_node_update(3, tree, rows[0].id);
 			return tree;
 		}
-		rv = await db.createNode(name, DIR_FS_TYPE, rootId);
+		rv = await db.createNode(name, DIR_NODE_TYPE, rootId);
 		if (!rv) return;
 //		tree.id = rv;
 		_node_update(3, tree, rv);
@@ -2744,59 +2758,63 @@ const init = async()=>{//«
 		throw new Error("Could not initialize the filesystem database");
 	}
 	rootId = root.id;
-	await make_dev_tree();
 //	mount_tree("loc", "data");
 //	mount_tree("glb", "data");
 	for (let name of root_dirs){
-		let opts={type: FS_TYPE};
+		let opts={type: OP_FS_TYPE};
 		if (name == "tmp") opts.perm = true;
 		else opts.perm = false;
 		let ret = await make_fs_tree(name, opts);
 		if (!ret) return;
 		_add_root_kid(ret);
 	}
+	await mk_user_dirs();
 	await mkDir("/var","appdata");
+	await make_dev_tree();
 	mount_tree("site", SITE_FS_TYPE);
+/*
+//ESHFKNOI
+if (globals.dev_mode){//«
+
+let mnt = mount_tree("mnt", MNT_FS_TYPE);
+_dir_update(3, mnt, true);
+await util.loadMod("fs.fbase");
+let mod = new LOTW.mods["fs.fbase"](export_obj);
+// Need to pass in the par DirNode, i.e. /mnt
+cwarn("SKIPPING '/mnt' INIT");
+// Need to update the schema
+//if (!await mod.init(mnt)){
+//cwarn("Could not init: fs.fbase");
+//}
+
+}//»
+*/
 	return true;
 };//»
 
 // ^^^^^^^^^^    TO HERE    ^^^^^^^^^^
 
-
-this.mk_user_dirs=async()=>{//«
-	let cur_user = globals.user.CURRENT_USER;
-	let home_path = `/home/${cur_user}`;
-	globals.user.home_path = home_path;
-	globals.user.desk_path = `${home_path}/Desktop`.regpath();
-	try{
-		await mkDir("/home", cur_user, {root: true, noMakeIcon: true, perm: cur_user});
-		await mkDir(home_path, "Desktop", {root: true, noMakeIcon: true});
-		await popDirByPath('/home');
-		await popDirByPath(home_path);
-	} catch (e) {
-cerr(e);
-		return;
-	}       
-	return true;
-}           
-//»
-
 //RYSHTKFH
 
 const mk_dir_kid = (par, name, opts={}) => {//«
-	let {isDir, isLink, isData, isFile} = opts;
+//	let {isDir, isLink, isData, isFile} = opts;
+	let {isDir, isLink, isFile} = opts;
 	let kid;
 	if (isFile) kid = new FileNode(name, par);
 	else if (isDir) {
-		if (par.par.treeroot == true) {
+		if (par.par.isRoot == true) {
 			if (par.name == "home") opts.perm = name;
 			else if (par.name == "var" && name == "cache") opts.readOnly = true;
 		}
 		kid = new DirNode(name, par, opts);
 	}
 	else if (isLink) kid = new LinkNode(name, par);
-	else if (isData) kid = new DataNode(name, par);
-	else FATAL("WHAT KIND OF NODE???");
+//	else if (isData) kid = new DataNode(name, par);
+	else {
+cwarr("HERE ARE OPTS");
+log(opts);
+		THROW("WHAT KIND OF NODE??? (see opts above)");
+	}
 	return kid;
 }
 //»
@@ -2817,31 +2835,18 @@ const populate_dirobj_by_path = async(patharg, opts={}) => {//«
 };
 //»
 const populate_dirobj = async(dirobj, opts = {}) => {//«
-	if (dirobj.type == FS_TYPE) return populate_fs_dirobj(dirobj, opts);
+	if (dirobj.type == OP_FS_TYPE) return populate_fs_dirobj(dirobj, opts);
 	if (!dirobj.done){
 		if (dirobj.sys == true) {
-//			if (dirobj.type == USERS_TYPE) {
-// PHDEYHJ
-// Upon calling `$ users mount` (imported from the inet.fs command library), we can
-// export a default function to do this populating. If they want finer grained control
-// of how to populate '/users' (with a list of known/friendly users, for example), they should
-// consult the "documentation" for the `users` command.
-// cwarn("POPULATE /users with vals...");
-// log(opts.vals);
-//				return populate_remote_users_dirobj(dirobj, opts);
-//			}
 if (dirobj.type === SITE_FS_TYPE){
 	return populate_site_dir(dirobj, opts);
 }
 cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
 log(dirobj);
 		}
-//		else if (dirobj.type == USERS_TYPE){
-//			return populate_remote_user_dirobj(dirobj, opts);
-//		}
 		else{
-//cwarn("Got dirobj.sys = false");
-//log(dirobj);
+cwarn(`Got dirobj.sys = false: ${dirobj.type}`);
+log(dirobj);
 		}
 		
 	}
@@ -2853,39 +2858,39 @@ let rv;
 let dirid = parobj.id;
 
 rv = await db.getAll(dirid);
-//if (!check_db_rv(rv)) return 
 
 let rows = rv.rows;
 for (let obj of rows){
 	let {id, name, type, value} = obj;
-	let isDir, isLink, isData, isFile;
+//	let isDir, isLink, isData, isFile;
+	let isDir, isLink, isFile;
 	switch(type){
-		case DIR_FS_TYPE:
+		case DIR_NODE_TYPE:
 			isDir = true;
 			break
-		case LINK_FS_TYPE:
+		case LINK_NODE_TYPE:
 			isLink = true;
 			break;
-		case IDB_DATA_TYPE:
-			isData = true;
-			break
+//		case IDB_DATA_TYPE:
+//			isData = true;
+//			break
 		default:
 			isFile = true;
 	}
 	let kid = mk_dir_kid(parobj, name, {
 		isDir,
 		isLink,
-		isData,
+//		isData,
 		isFile
 	});
 	_node_update(3, kid, id);
 	if (isLink){
 		_set_sym_link(kid, value);
 	}
-	else if (isData){
-		_node_update(4, kid, IDB_DATA_TYPE);
-		_set_data(kid, value);
-	}
+//	else if (isData){
+//		_node_update(4, kid, IDB_DATA_TYPE);
+//		_set_data(kid, value);
+//	}
 	else if (isFile){
 		_node_update(4, kid, value);
 	}
@@ -2893,7 +2898,6 @@ for (let obj of rows){
 	if (kid.appName==="Application") kid.appicon = await kid.text;
 }
 
-//parobj.done=true;
 _dir_update(3, parobj, true);
 return true;
 }//»
@@ -2926,8 +2930,10 @@ _dir_update(3, par, true);
 //»
 //Util«
 
+/*
+//let FILE_SAVER_SLICE_SZ = 1 * MB;
+let FILE_SAVER_SLICE_SZ = 10;
 //Used only by Desk.save_dropped_files«
-
 const FileSaver=function(){//«
 
 let cwd;
@@ -2937,7 +2943,7 @@ let fullpath;
 let ext;
 let file;
 let fSize;
-let fEnt; /*This is always what is being written to,and depends on the FileSystem API*/ 
+let fEnt; //This is always what is being written to,and depends on the FileSystem API
 let fObj;
 
 let bytesWritten = 0;
@@ -2948,13 +2954,8 @@ let saving_from_file = false;
 let cancelled = false;
 const ispos = arg=>{return isNum(arg,true);}
 const cerr=str=>{if(error_cb)error_cb(str);else cerr(str);};
-const get_new_fname = (cb, if_force) => {//«
+const get_new_fname = (cb) => {//«
 	const check_fs_by_path = async(fullpath, cb) => {
-		if (!fullpath.match(/^\x2f/)) {
-cerr("NEED FULLPATH IN CHECK_FS_BY_PATH");
-			cb();
-			return;
-		}
 		if (await path_to_node(fullpath)) return cb(true);
 		cb(false);
 	}
@@ -2962,9 +2963,10 @@ cerr("NEED FULLPATH IN CHECK_FS_BY_PATH");
 	let iter = 0;
 	const check_and_save = (namearg) => {
 		if (iter > 10) return cerr("FileSaver:\x20Giving up after:\x20" + iter + " attempts");
-		let patharg = (cwd + "/" + namearg).regpath();
+//		let patharg = (cwd + "/" + namearg).regpath();
+		let patharg = `${cwd}/${namearg}`.regpath();
 		check_fs_by_path(patharg, name_is_taken => {
-			if (name_is_taken && !if_force) return check_and_save((++iter) + "~" + basename);
+			if (name_is_taken) return check_and_save(`${++iter}~${basename}`);
 			cb(namearg);
 		});
 	};
@@ -3028,7 +3030,7 @@ cerr(`Invalid directory path: ${arg}`);
 };//»
 this.set_fsize=(arg)=>{if(!(isInt(arg)&& ispos(arg)))return cerr("Need positive integer for fSize");fSize=arg;};
 this.set_ext=(arg)=>{if(!(arg&&arg.match(/^[a-z0-9]+$/)))return cerr("Invalid extension given:need /^[a-z0-9]+$/");ext=arg;};
-this.set_filename = (arg, if_force) => {//«
+this.set_filename = (arg) => {//«
 return new Promise((Y,N)=>{
 	if (!cwd) {
 		Y();
@@ -3043,9 +3045,10 @@ cerr("Missing cwd");
 	get_new_fname(ret => {
 		if (!ret) return Y();
 		fname = ret;
-		fullpath = (cwd + "/" + fname).regpath();
+//		fullpath = (cwd + "/" + fname).regpath();
+		fullpath = `${cwd}/${fname}`.regpath();
 		Y(fname);
-	}, if_force)
+	})
 });
 };//»
 
@@ -3058,8 +3061,11 @@ let parobj = await path_to_node(parpath);
 if (!parobj) return cb(null, "No parent object!");
 //if (parobj.kids[fname]) return cb(null,`${fname}: the name is already taken`);
 if (parobj.getKid(fname)) return cb(null,`${fname}: the name is already taken`);
+// 7/26/26: Just added noMakeIcon: true here
+//The existence of an icon causes save_dropped_files to fail. That operation
+//requires that an icon with a position is created.
 
-let node = await saveFsByPath(fullpath, null, {getEntry: true});
+let node = await saveFsByPath(fullpath, null, {getEntry: true, noMakeIcon: true});//FileSaver.set_fent
 if (!(node&&node.entry)) return cb(null, `${fullpath}, Could not get the file entry`);
 
 fObj = node;
@@ -3094,36 +3100,10 @@ this.cancel = (cb) => {//«
 	});
 };//»
 
-/*
-this.start_blob_stream=()=>{//«
-	if(stream_started)return cerr("blob stream is already started!");
-	if(saving_from_file)return cerr("Already saving from a File object");
-//	if(!writer)return cerr("No writer is set!");
-	if(!fEnt)return cerr("No file entry is set!");
-//	if(!fSize)cwarn("fSize not set,so can't call update_cb with percent update,but with bytes written");
-//	if(!update_cb)cwarn("update_cb is NOT set!");
-//	if(!done_cb)cwarn("done_cb is NOT set!");
-	stream_started=true;
-};//»
-this.append_blob = (arg, cb) => {//«
-//	If no fSize is set,we can call update_cb with the number of bytes written
-	if (stream_ended) return cerr("The stream is ended!");
-	if (!stream_started) return cerr("Must call start_blob_stream first!");
-	if (!(arg instanceof Blob)) return cerr("The first arg MUST be a Blob!");
-	setTimeout(async()=>{
-		await save_file_chunk(arg, cb);
-	},0);
-};//»
-this.end_blob_stream = () => {//«
-	stream_ended = true;
-	if (fObj) fObj.unlockFile();
-	if (done_cb) done_cb();
-};//»
-*/
-
 }
 this.FileSaver=FileSaver;
 //»
+*/
 
 const event_to_files = (e) => {//«
 	var dt = e.dataTransfer;
@@ -3190,13 +3170,50 @@ cerr("Cannot construct a full path!");
 		return false;
 	}
 	let node = await path_to_node(normPath(s), opts.getLink);
-	if (!node) return node;
+	if (!node) {//«
+// HSJRKTHTG
+		if (!(opts.mkFile || opts.mkDir)) return;
+		let arr = s.split("/");
+		let name = arr.pop();
+		let par;
+		let rem = [];
+		while (arr.length) {
+//Need to "backtrack" to find the first node that exists
+			par = await arr.join("/").toNode({getLink: true});
+			if (par) break;
+			rem.push(arr.pop());
+		}
+		if (!par.isDir) {
+		// Error: can't build a path when one of the elements is not a directory
+cerr("can't build a path when one of the elements is not a directory:");
+log(par);
+			return;
+		}
+
+//Need to create DirNode's with the elements of rem, until we have
+//the par node that can be used to create the final node, whether it is
+// a file or a dir.
+		while (rem.length) {
+			let nm = rem.pop();
+			let gotpar = await mkDir(par, nm);
+			if (!gotpar) {
+		// Error: couldn't construct the path
+cerr(`Can't construct the path: ${par.fullpath}/${nm}/`);
+				return;
+			}
+			par = gotpar;
+		}
+		if (opts.mkDir) node = await mkDir(par, name);
+		else node = await touchFile(par, name);
+		if (!node) return;
+	}//»
 	if (opts.doPopDir && node.isDir===true){
 		await popDir(node, opts);
 	}
 	return node;
 };//»
 let _ = String.prototype;
+_.toNode=toNode;
 _.regpath = function(if_full) {//«
     let str = this;
     if (if_full) str = "/" + str;
@@ -3204,8 +3221,8 @@ _.regpath = function(if_full) {//«
     if (str == "/") return "/";
     return str.replace(/\/$/, "");
 }//»
-_.toNode=toNode;
 _.toParNodeAndName=async function(opts={}){//«
+// EJUPMNHGU
 	let s = this+"";
 	if (s.match(/^\x2f/)){}
 	else if (opts.cwd && opts.cwd.match(/^\x2f/)) s = `${opts.cwd}/${s}`
@@ -3214,11 +3231,11 @@ _.toParNodeAndName=async function(opts={}){//«
 	let fname = arr.pop();
 	let parpath = arr.join("/");
 	let parnode = await path_to_node(parpath);
-	if (!(parnode && parnode.appName === FOLDER_APP)) {
-cerr(`${parpath}: Not a directory!`);
-		return;
-	}
+	if (!(parnode && parnode.isDir)) return;
+	if (opts.mkFile) return [parnode, fname, await parnode.mkNewFile(fname)];
+	else if (opts.mkDir) return [parnode, fname, await parnode.mkDir(fname)];
 	return [parnode, fname, s];
+
 }//»
 _.toText = async function(opts = {}) {/*«*/
 	let node = await this.toNode(opts);
@@ -3254,30 +3271,6 @@ _.toJson=async function(opts={}){//«
 cerr(e);
 	}
 };//»
-_.mkNewFile = async function(opts={}){//«
-
-let fullpath = normPath(this, opts.cwd);
-if (!fullpath) {
-cerr(`normPath(${this}, ${opts.cwd}) returned null`);
-	return;
-}
-let node = await fullpath.toNode({getLink: true});
-if (node) {
-cerr(`The file exists: ${fullpath}`);
-	return;
-}
-return mkFile(fullpath, opts);
-
-}//»
-_.mkDir = async function(opts={}) {//«
-let fullpath = normPath(this, opts.cwd);
-if (!fullpath) {
-cerr(`normPath(${this}, ${opts.cwd}) returned null`);
-	return;
-}
-if (fullpath === "/") return;
-return mk_dir(fullpath, opts);
-}//»
 _.execute = async function(opts={}){//«
 if (!globals.ShellMod) {
 	if (!await util.loadMod("lang.shell")) {
@@ -3319,29 +3312,14 @@ this.api = {//«
 	init,
 
 	clearStorage,
-	makeLink,
-	makeHardLink,
-	touchFile,
-	mkFile,
 
 	doFsRm,
-	mkDir,
-
-	writeFile,
-	writeDataFile,
-
-	getBlob,
-	getDataFromFsFile: get_data_from_fs_file,
 
 	getBlobDir: get_blob_dir,
 	getNodesByBlobId,
 	getPathByDirId, 
 
 	comMv,
-
-//	popDir,
-//	popDirByPath,
-
 
 }
 NS.api.fs=this.api;
@@ -3352,444 +3330,151 @@ globals.api.fs=this.api;
   }
 //»
 
-
 //»
-
-/* NEW (NOT IMPLEMENTED YET)«
-
-
-class NetFileNode extends FSNode{//«
-
-constructor(name, par, data){//«
-	super(name, par, data);
-	this.isFile = true;
-	this.lock = {};
-}//»
-async #_getVal(opts){//«
-let arr = this.fullpath.split("/");
-arr.shift();
-arr.shift();
-arr.shift();
-let path = arr.join("/");
-//log("BLOBID?",this.blobId);
-//let rv = await globals.funcs["netfs.fbRead"](this.appData.id, this.par.id, this.name, opts);
-let rv = await globals.funcs["netfs.fbRead"](this.appData.id, this.blobId, opts);
-//let rv = await globals.funcs["netfs.fbRead"](this.appData.id, path, opts);
-if (isErr(rv)){
-	cerr(rv);
-}
-else return rv;
-}//»
-getValue(opts){return this.#_getVal(opts);}
-unlockFile(){//«
-	if (this.blobId === 0){
-cwarn(`NetFileNode.unlockFile: HAVE BLOBID=0, deleting this.isLocked`);
-delete this.isLocked;
-return;
-	}
-	delete LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`];
-	let par = this.par;
-	while (par){
-		if (par.type) break;
-		par.rmMoveLock(this.lock);
-		par = par.par;
-	}
-}//»
-
-lockFile(){//«
-//EKSHRKG
-	if (this.blobId === 0){
-cwarn(`NetFileNode.lockFile: HAVE BLOBID=0, setting this.isLocked=true`);
-this.isLocked = true;
-return;
-	}
-	LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`] = true;
-	let par = this.par;
-	while (par){
-		if (par.type) break;
-		par.moveLocks.push(this.lock);
-		par = par.par;
-	}
-}//»
-
-async setValue(val, opts){//«
-
-	let rv = await globals.funcs["netfs.fbSetBlob"](this.appData.id, this.id, this.blobId, val, opts);
-	//if (isNum(rv) && rv >= 0){
-	if (rv && isNum(rv.size) && rv.size >= 0 && isNum(rv.blobId)){
-	if (this.blobId === 0 && rv.blobId > 0) {
-cwarn(`Just "upgraded" the blobId (0->${rv.blobId}). Check locked: ${this.isLocked}...`);
-		if (this.isLocked) {
-			delete this.isLocked;
-			this.lockFile();
-		}
-	}
-	this.blobId = rv.blobId;
-	this.size = rv.size;
-	return true;
-}
-cwarn("Unknown value returned from netfs.fbSetBlob!");
-log(rv);
-}//»
-get bytes(){return this.#_getVal();}
-get text(){return this.#_getVal({forceText: true});}
-writeLocked(){
-//	return LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`];
-	return (this.isLocked || LOCKED_BLOBS[`${USERS_TYPE}-${this.blobId}`]);
-}
-
-}//»
-
-const try_get_users_type_kid = async(nm, parnode) => {//«
-//cwarn(`GET USERS KID: ${parnode.appData.id} ${parnode.id}/${nm}`);
-let rv = await globals.funcs["netfs.getUsersNodeByNameAndPar"](nm, parnode);
-if (!rv){
-//cwarn("NOTHING");
-return;
-}
-	let isDir, isNetFile;
-	switch(rv.val){
-		case -1:
-			isDir = true;
-			break
-		default:
-			isNetFile = true;
-	}
-	let kid = mk_dir_kid(parnode, nm,{
-		isDir,
-		isNetFile,
-		path: parnode.fullpath,
-		appData: parnode.appData
-	});
-	kid.id = rv.id;
-	if (rv.blobId) kid.blobId = rv.blobId;
-	if (!kid.root) kid.root = parnode.root;
-	return kid;
-
-};//»
-const populate_remote_users_dirobj = (parobj, opts) => {//«
-	let kids = parobj.kids;
-	let arr = opts.vals;
-	let uid = globals.auth.github.uid;
-	for (let i=0; i < arr.length; i+=2){
-		let name = arr[i];
-		let id = arr[i+1];
-		let kid = mk_dir_kid(parobj, name, {
-			isDir: true,
-			appData: {id}
-		});
-		kid.perm = () => {return id === globals.auth.github.uid;};
-		kid.id = 0;
-		kids[name] = kid;
-	}
-//	parobj.done = true;
-_dir_update(3, parobj, true);
-	return kids;
-};//»
-const populate_remote_user_dirobj = async(parobj, opts) => {//«
-
-let kids = parobj.kids;
-let arr = parobj.fullpath.split("/");
-arr.shift();
-arr.shift();
-let name = arr.shift();
-
-parobj.perm = ()=>{return parobj.appData.id === globals.auth.github.uid;};
-
-let appData = root.kids.users.kids[name].appData;
-let path = arr.join("/");
-//The path argument is for debugging (not needed to get the list from the database)
-let list = await globals.funcs["netfs.getUserDirList"](appData.id, parobj.id, path);
-if (isErr(list)){
-cerr(list);
-return kids;
-}
-let names = list.names;
-let vals = list.vals;
-let ids = list.ids;
-let blobids = list.blobIds;
-for (let i=0; i < names.length; i++){
-	let nm = names[i];
-	let val = vals[i];
-	let kid;
-	if (val === -1){
-		kid = mk_dir_kid(parobj, nm, {
-			isDir: true,
-			appData
-		});
-	}
-	else{
-		kid = mk_dir_kid(parobj, nm, {
-			isNetFile: true,
-			appData
-		});
-		kid.blobId = blobids[i];
-	}
-	kid.id = ids[i];
-	kids[nm] = kid;
-}
-//parobj.done=true;
-_dir_update(3, parobj, true);
-return kids;
-};//»
-
-»*/
 
 /*OLD«
 
-const check_db_rv = (rv, if_log)=>{//«
-    if (!(rv.rows||rv.message)) {
-cwarn(rv);
-        return false;
-    }   
-    if (!rv.message) {
-let rows = rv.rows;
-if (if_log) {
-for (let row of rows){
-log(row);
-}
-}
-        return true;
-    }   
-cerr(rv.message)
-    return false;
-}//»
+const mk_dir = async (fullpath, opts) => {//«
 
-const check_fs_dir_perm = (obj, is_root, is_sys, userarg) => {//«
-	if (is_sys) return true;
-	let iter = 0;
-	while (obj.treeroot !== true) {
-		iter++;
-		if (iter >= 10000) throw new Error("UMWUT");
-		if (obj.readonly){
-			if (is_sys) return true;
-			return false;
-		}
-		if ("perm" in obj) {
-			let perm = obj.perm;
-			if (perm === true) {
-				return true;
-			}
-			else if (perm === false) {
-				if (is_root) return true;
-				return false;
-			}
-			else if (isStr(perm)) {
-				if (is_root) return true;
-//				let checkname = userarg || Core.get_username();
-				let checkname = userarg || globals.user.CURRENT_USER;
-				return (checkname === perm);
-//				return (Core.get_username() === perm);
-			}
-			else if (isFunc(perm)) return obj.perm();
-			else {
-cerr("Unknown obj.perm field:", obj);
-			}
-		}
-		obj = obj.par;
-	}
-
-	if (is_root) return true;
-	return false;
-};
-this.check_fs_dir_perm=check_fs_dir_perm;
-//»
-onst checkDirPerm=async(path_or_obj,opts={})=>{//«
-	let obj;
-	if (isStr(path_or_obj)){
-		obj = await path_to_node(path_or_obj);
-		if (!obj) return Y(false);
-	}
-	else obj = path_or_obj;
-	return check_fs_dir_perm(obj, opts.root, opts.sys, opts.user);
+let node = await fullpath.toNode({getLink: true});
+if (node) {
+cerr(`The file exists: ${fullpath}`);
+	return;
+}
+let arr = fullpath.split("/");
+let name = arr.pop();
+let parpath = arr.join("/");
+if (!parpath) parpath = "/";
+let par = await parpath.toNode();
+if (!par){
+cerr(`Not found: ${parpath}`);
+return;
+}
+if (!par.perm){
+cerr(`Permission denied: ${parpath}`);
+return;
+}
+return mkDir(par, name, opts);
 };//»
+_.mkNewFile = async function(opts={}){//«
 
-const get_time_str_from_file = file =>{//«
-	let now = Date.now();
-	let use_year_before_time = now - (1000 * 86400 * MAX_DAYS);
-	let tm = file.lastModified;
-	let timearr = file.lastModifiedDate.toString().split(" ");
-	timearr.shift();
-	timearr.pop();
-	timearr.pop();
-	let timestr = timearr[0] + " " + timearr[1].replace(/^0/, " ") + " ";
-	if (file.lastModified < use_year_before_time) timestr += " " + timearr[2];
-	else {
-		let arr = timearr[3].split(":");
-		arr.pop();
-		timestr += arr.join(":");
+let fullpath = normPath(this, opts.cwd);
+if (!fullpath) {
+cerr(`normPath(${this}, ${opts.cwd}) returned null`);
+	return;
+}
+let node = await fullpath.toNode({getLink: true});
+if (node) {
+cerr(`The file exists: ${fullpath}`);
+	return;
+}
+return mkFile(fullpath, opts);
+
+}//»
+_.mkDir = async function(opts={}) {//«
+let fullpath = normPath(this, opts.cwd);
+if (!fullpath) {
+cerr(`normPath(${this}, ${opts.cwd}) returned null`);
+	return;
+}
+if (fullpath === "/") return;
+return mk_dir(fullpath, opts);
+}//»
+const writeFile = async(path, val, opts = {}) => {//«
+	let invalid = () => {
+		cerr(`Invalid path: ${path}`);
+	};
+	if (!(path && path.match(/^\x2f/))) return invalid();
+	let arr = path.split("/");
+	arr.shift();
+	let rootdir = arr.shift();
+	if (!rootdir) return invalid();
+//	let is_dev_shm;
+//	if (rootdir === "dev" && !(is_dev_shm = path.match(/\/dev\/shm/))){//«
+//		let name = arr.shift();
+//		if (name==="null"){}
+//		else if (name==="log") console.log(val);
+//		return true;
+//	}//»
+	let exists = await path_to_node(path);
+	if (exists) {
+//	if (exists && !opts.append){
+cwarn("WRITEFILE was called on an existing file!?!?!");
+		if (opts.reject) throw new Error(`The file exists`);
+		else return false;
 	}
-	return timestr;
+	if (root_dirs.includes(rootdir)){//«
+//	if (root_dirs.includes(rootdir)||is_dev_shm){
+		let node = await saveFsByPath(path, val, opts);//WRITEFILE
+		if (node && !opts.noMakeIcon) {
+cwarn(`Not calling move_icon_by_path: null -> ${path} (${node.appName})`);
+		}
+		return node;
+	}//»
+	else {
+cerr("Invalid or unsupported root dir:\x20" + rootdir);
+	}
+}//»
+const saveFsByPath = async(path, val, opts={})=>{//«
+
+if (globals.read_only) return;
+
+let blob;
+let node = await path_to_node(path);
+if (!node) {
+	let patharr = path.split("/");
+	let fname = patharr.pop();
+	let parpath = patharr.join("/");
+	let parobj = await path_to_node(parpath);
+	if (!parobj) return [null, `${parpath}: Bad parent path`];
+	node = await touchFile(parobj, fname, opts);
+	_node_update(1, node, fname);
+}
+
+if (node.blobId === NULL_BLOB_NODE_TYPE){//«
+	if (!await node.getRealBlobId()){
+cerr(`SAVEFSBYPATH(${path}): could not get a real blob id!?!?!`);
+return;
+	}
+}//»
+
+if (opts.getEntry||opts.data) {
+	return node;
+}
+
+blob = toBlob(val);
+if (!blob){
+cerr(`${path}: Unknown type in SAVEFSBYPATH`);
+log(val);
+	return;
+}
+opts.node = node;
+let rv = await write_blob(await node.entry, blob, opts);
+_node_update(5, node, rv.size);
+//node.size = rv.size;
+if (opts.retObj) {
+	rv.node = node;
+	return rv;
+}
+return node;
+
+}//»
+const mkFile = async (path, opts) => {//«
+	if (!(path && path.match(/^\x2f/))){
+cerr("Need a full path");
+		return;
+	}
+	let arr = await path.toParNodeAndName(path);
+	if (!arr) return;
+//if (!arr[0])
+	let par = arr[0];
+if (!par.perm){
+cerr(`Permission denied: ${par.fullpath}`);
+return;
+}
+	let nm = arr[1];
+	return touchFile(par, nm, opts);
 };//»
-const read_file_stream = (fullpath, cb) => {//«
-	get_local_file(fullpath, ret=>{
-		if (ret) cb(ret);
-		cb(true);
-	}, {}, cb);
-}//»
-const get_local_file = async (patharg, cb, opts={}, stream_cb) => {//«
-
-let done=false;
-const getchunk=async()=>{
-	if (done) return;
-	let endbyte;
-	if (!stream_cb) endbyte="end";
-	else {
-		endbyte = gotbytes + chunk_sz;
-		if (endbyte >= sz) endbyte = sz;
-	}
-	rv = await fetch(`${url}&range=${gotbytes}-${endbyte}`);
-	if (!rv.ok) return cb();
-	let blob;
-	if (opts.text) blob = await rv.text();
-	else blob = await rv.blob();
-	if (stream_cb) stream_cb(blob);
-	else{
-		cb(blob);
-		return;
-	}
-	gotbytes+=blob.size;
-	if (gotbytes>=sz) {
-		done=true;
-		cb();
-	}
-}
-if (stream_cb) stream_cb(null, getchunk);
-
-let fobj = await path_to_node(patharg);
-let parts = fobj.fullpath.split("/");
-parts.shift();
-parts.shift();
-parts.shift();
-
-let url = util.locUrl(fobj.root.port, parts.join("/"));
-let rv = await fetch(`${url}&getsize=1`);
-if (!rv.ok) return cb();
-let sz = parseInt(await rv.text());
-if (stream_cb) stream_cb(null,null, sz);
-else if (sz > MAX_LOCAL_FILE_SIZE) return cb();
-let chunk_sz = MB;
-let gotbytes = 0;
-getchunk();
-
-}//»
-this.drop_event_to_bytes = (e, cb) => {//«
-	let file = event_to_files(e)[0];
-	if (!file) return cb();
-	let reader = new FileReader();
-	reader.onerror = e => {
-		cerr("There was a read error");
-		log(e);
-	};
-	reader.onloadend = function(ret) {
-		let buf = this.result;
-		if (!(buf && buf.byteLength)) return cb();
-		cb(new Uint8Array(buf), file.name);
-	};
-	reader.readAsArrayBuffer(file);
-}//»
-
-«This is old stuff (mounting backend folders onto /mnt) that was replaced by a
-//single /site dir which uses a backend generated "list.json" file, that is
-//created each time that the local repo is synced to github. This 
-//requires a dynamic backend (Node.js).
-const Populate_rem_dirobj = async(patharg, cb, dirobj, opts = {}) => {//«
-	let holdpath = patharg;
-	let parts = patharg.split("/");
-	parts.shift();
-	parts.shift();
-	let baseurl;
-	if (patharg.match(/^\/www\/?/)){
-		baseurl = "";
-	}
-	else if (patharg.match(/^\/mnt\/?/)) {
-		parts.shift();
-		baseurl = dirobj.root.origin;
-	}
-	else return cerr(`patharg must begin with '/mnt' or '/www' (got '${patharg}')`);
-
-	let path = parts.join("/");
-	if (!path) path="/";
-	let rv;
-	let url = `${baseurl}/_getdir?path=${path}`;
-	try {
-		rv = await fetch(url);
-	}
-	catch(e){
-		cb(null, `could not fetch: ${url}`);
-		return;
-	}
-	if (!rv.ok) return cb(null, `response not "ok": ${url}`);
-	
-	let ret;
-	let text = await rv.text();
-	try{
-		ret = JSON.parse(text);
-	}
-	catch(e){
-		cb(null, `JSON parse error in response from: ${url} (see console)`);
-log(text);
-		return;
-	}
-	let kids = dirobj.kids;
-	let par = dirobj;
-	dirobj.checked = true;
-//	dirobj.done = true;
-_dir_update(3, dirobj, true);
-	for (let k of ret) {
-		if (k.match(/^total\x20+\d+/)) continue;
-		let arr = k.split(" ");
-		arr.shift(); //permissions like drwxrwxrwx or-rw-rw-r--
-		if (!arr[0]) arr.shift();
-		arr.shift(); //Some random number
-		while (arr.length && !arr[0]) arr.shift();
-
-		let sz_str = arr.shift();
-		let sz = strNum(sz_str);
-		let ctime;
-		let mtime = arr.shift();
-		let tm;
-		if (mtime=="None"&&ctime) {
-			mtime = ctime;
-			tm = parseInt(mtime);
-		}
-		else tm  = parseInt(mtime);
-		if (isNaN(tm)) {
-cwarn(`Populate_rem_dirobj(): skipping entry: ${k} (bad "mtime"=${mtime})`);
-			continue;
-		}
-		let use_year_before_time = Date.now() / 1000 - (86400 * MAX_DAYS);
-		let timearr = (new Date(tm * 1000) + "").split(" ");
-		timearr.shift();
-		timearr.pop();
-		timearr.pop();
-		let tmstr = timearr[0] + " " + timearr[1].replace(/^0/, " ") + " ";
-		if (tm < use_year_before_time) tmstr += " " + timearr[2];
-		else {
-			let arr = timearr[3].split(":");
-			arr.pop();
-			tmstr += arr.join(":");
-		}
-		let fname = arr.join(" ");
-		let isdir = false;
-		if (fname.match(/\/$/)) {
-			isdir = true;
-			fname = fname.replace(/\/$/, "");
-		}
-		let kidobj = mk_dir_kid(dirobj, fname,{
-			isDir: isdir,
-			size: sz,
-			modTime: tmstr,
-//			path: holdpath
-		});
-		kidobj.modified = tm;
-		kidobj.created = ctime;
-		kids[fname] = kidobj;
-	}
-	cb(kids);
-}
-//»
-»
 
 »*/
 

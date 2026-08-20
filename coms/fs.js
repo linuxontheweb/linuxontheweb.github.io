@@ -1,4 +1,5 @@
 (()=>{"use strict";const LIBNAME="fs";
+
 /*5/29/26: Timing issues w/ vimtest. The undo/redo feature checks«
 that actions have the same time in order to do them in batches.
 Now, when I am automating these in loops, Actions are bound to have
@@ -123,9 +124,8 @@ const{
 	SHELL_ERROR_CODES,
 }=globals.term;
 const{
-	FS_TYPE,
+	OP_FS_TYPE,
 	MOUNT_TYPE,
-	SHM_TYPE,
 	USERS_TYPE
 }=globals.fs;
 const{
@@ -133,15 +133,11 @@ const{
 	LINK_APP,
 	FOLDER_APP,
 }=globals.app;
-//const{comClasses}
 const fsapi = fsMod.api;
 const widgets = NS.api.widgets;
-//const {pathToNode}=fsapi;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
-//const {Com, ErrCom, make_error_com} = comClasses;
 const {Com} = ShellMod.comClasses;
 const{Desk}=LOTW;
-//const{make_icon_if_new}=Desk;
 //»
 
 //Var«
@@ -153,7 +149,6 @@ const allow_write_locked = false;
 //Funcs«
 //RIHGJD
 const get_file_lines_from_args = async(args, cur_dir, errcb)=>{//«
-//const get_file_lines_from_args = async(args, term, errcb)=>{
 	let err = [];
 	let out = [];
 	let name_map = [];
@@ -163,44 +158,22 @@ const get_file_lines_from_args = async(args, cur_dir, errcb)=>{//«
 		else err.push(`${fullpath}: ${arg}`);
 	};
 	let fullpath;
-//  let file_num  = args.length;
-let files = args.slice().reverse();
-let file_num = -1;
-let line_num = 0;
+	let files = args.slice().reverse();
+	let file_num = -1;
+	let line_num = 0;
 	while (files.length) {
-//	while (args.length) {
-file_num++;
+		file_num++;
 		fullpath = normPath(files.pop(), cur_dir);
-//		fullpath = normPath(args.shift(), cur_dir);
-//		let node = await fsapi.pathToNode(fullpath);
 		let node = await fullpath.toNode();
 		if (!node) {
 			fullterr(`no such file or directory`);
 			continue;
 		}
-		if (node.appName === FOLDER_APP) {
-			fullterr(`is a directory`);
+		if (!node.isFile) {
+			fullterr(`not a regular file`);
 			continue;
 		}
-		let typ = node.type;
-		if (typ==FS_TYPE) {
-			if (!node.blobId) {
-				fullterr(`no associated blob`);
-				continue;
-			}
-		}
-		else if (typ==MOUNT_TYPE||typ==SHM_TYPE){
-		}
-		else{
-			fullterr(`invalid type: '${typ}'`);
-			continue;
-		}
-
-		let val = await node.getValue({text: true});
-		if (!isStr(val)) {
-			fullterr("An unexpected value was returned");
-			continue;
-		}
+		let val = await node.text;
 		let arr = val.split("\n");
 		let ln_iter = 1;
 		for (let ln of arr) {
@@ -970,22 +943,24 @@ screen never shows.
 			let nm = arr.pop();
 			let path = arr.join("/");
 //			parnode = await fsapi.pathToNode(path);
-parnode = await path.toNode();
+			parnode = await path.toNode();
 			if (!parnode) return this.no(`${path}: no such directory`);
 			if (!parnode.perm) return this.no(`${fullpath}: permission denied`);
 			val = "";
-			typ = parnode.root.type;
+//			typ = parnode.root.type;
+			typ = parnode.type;
 		}//»
 		else {//«
-			if (node.writeLocked()) return this.no(`${path}: is locked by another application`);
+			if (node.isWriteLocked) return this.no(`${path}: is locked by another application`);
 			if (node.appName === FOLDER_APP) return this.no(`${fullpath}: is a directory`);
-			val = await node.getValue({text:true});
+			val = await node.text;
 			if (!isStr(val)){
 cwarn("Here are the contents...");
 log(val);
 				return this.no(`${path}: could not get the contents (see console)`);
 			}
-			typ = node.root.type;
+//			typ = node.root.type;
+			typ = node.type;
 		}//»
 		if (!opts.pipeok) this.noPipe = true;
 	}//»
@@ -1559,52 +1534,59 @@ async run(){
 		let arr = fullpath.split("/");
 		let fname = arr.pop();
 		let parpath = arr.join("/");
-//		let parnode = await pathToNode(parpath);
 		let parnode = await parpath.toNode();
 		if (!(parnode && parnode.appName === FOLDER_APP)) {
 			err(`${parpath}: Not a directory`);
 			continue; 
 		}
-		let OK_TYPES = [FS_TYPE, SHM_TYPE, USERS_TYPE];
-		if (!OK_TYPES.includes(parnode.type)) {
-			err(`${fullpath}: The parent directory has an unsupported type: '${parnode.type}'`);
-			continue; 
+		if (!parnode.writeable) {
+ 			err(`${path}: Read only`);
+			continue;
 		}
 		if (!parnode.perm) {
  			err(`${path}: Permission denied`);
 			continue;
 		}
-		let newnode = await fsapi.touchFile(parnode, fname);
+		let newnode = await parnode.mkNewFile(fname);
 		if (!newnode) err(`${fullpath}: The file could not be created`);
-//		else make_icon_if_new(newnode);
 	}
 	have_error?this.no():this.ok();	
 }
 
 }//»
 const com_mv = class extends Com{//«
+	static getOpts(){
+		return{
+			s: {
+				f: 1,
+				r: 1
+			}
+		}
+	}
 	init(){
 		if (!this.args.length) {
 			this.no(`missing operand`);
+		}
+		else if (this.args.length === 1){
+			this.no(`missing destination file operand after '${this.args[0]}'`);
 		}
 	}
 	async run(){
 		let{term, args}=this;
 		if (!args.length) return;
 		let have_error = false;
-		const err=mess=>{
-			if(!mess)return;
-			have_error=true;
-			this.err(mess);
-		};
 		await fsapi.comMv(args, {
 			if_cp: false, 
+			if_force: this.opts.f,
 			exports: {
-				cberr: err, 
-				werr: err, 
+				werr: mess => {
+					if (!mess) return;
+					have_error=true;
+					this.err(mess);
+				}, 
 				winf: mess=>{this.inf(mess)},
-				cur_dir: this.env.cwd.cwd, 
-				termobj: term
+				cwd: this.env.cwd.cwd,
+				com_opts: this.opts
 			}
 		});
 		have_error?this.no():this.ok();	
@@ -1614,6 +1596,7 @@ const com_cp = class extends Com{//«
 	static getOpts(){
 		return{
 			s: {
+				f: 1,
 				r: 1
 			}
 		}
@@ -1622,26 +1605,27 @@ const com_cp = class extends Com{//«
 		if (!this.args.length) {
 			this.no(`missing operand`);
 		}
+		else if (this.args.length === 1){
+			this.no(`missing destination file operand after '${this.args[0]}'`);
+		}
 	}
 	async run(){
 		let{term, args}=this;
 		if (!args.length) return;
 		let have_error = false;
-		const err=mess=>{
-			if(!mess)return;
-			have_error=true;
-			this.err(mess);
-		};
 		await fsapi.comMv(args, {
 			if_cp: true, 
 			if_recur: !!this.opts.r, 
+			if_force: this.opts.f,
 			exports: {
-				cberr: err, 
-				werr: err, 
+				werr: mess => {
+					if(!mess)return;
+					have_error=true;
+					this.err(mess);
+				}, 
 				winf: mess=>{this.inf(mess)},
-				cur_dir: 
-				this.env.cwd.cwd, 
-				termobj: term
+				cwd: this.env.cwd.cwd,
+//				com_opts: this.opts
 			}
 		});
 		have_error?this.no():this.ok();	
@@ -1659,7 +1643,6 @@ async run(){
 	while (args.length) {
 		let path = args.shift();
 		let fullpath = normPath(path, this.env.cwd.cwd);
-//		let node = await fsapi.pathToNode(fullpath);
 		let node = await fullpath.toNode();
 		if (node) {
 			err(`${fullpath}: the file or directory exists`);
@@ -1672,26 +1655,21 @@ async run(){
 			err(`${fullpath}: permission denied`);
 			continue;
 		}
-//		let parnode = await fsapi.pathToNode(parpath);
 		let parnode = await parpath.toNode();
-		if (!(parnode && parnode.appName === FOLDER_APP)) {
+		if (!(parnode && parnode.isDir)) {
 			err(`${parpath}: not a directory`);
 			continue; 
 		}
-		let OK_TYPES = [FS_TYPE, SHM_TYPE, USERS_TYPE];
-		if (!OK_TYPES.includes(parnode.type)) {
-			err(`${fullpath}: the parent directory has an unsupported type: '${parnode.type}'`);
-			continue; 
+		if (!parnode.writeable) {
+			err(`${fullpath}: read only`);
+			continue;
 		}
-//		if (!await fsapi.checkDirPerm(parnode)) {
 		if (!parnode.perm) {
-//		if (parnode.type === FS_TYPE && !await fsapi.checkDirPerm(parnode)) {
 			err(`${fullpath}: permission denied`);
 			continue;
 		}
-		let newdir = await fsapi.mkDir(parnode, fname);
+		let newdir = await parnode.mkDir(fname);
 		if (!newdir) err(`${fullpath}: the directory could not be created`);
-//		else make_icon_if_new(newdir);
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1786,14 +1764,11 @@ async run(){
 	if (!target_node) {
 		return err("the target does not exist");
 	}
-	if (target_node.type != FS_TYPE || target_node.appName === FOLDER_APP){
+	if (target_node.type != OP_FS_TYPE || target_node.appName === FOLDER_APP){
 		return err("the link cannot be created");
 	}
 	let blobid = target_node.blobId;
 	if (!Number.isFinite(blobid)) {
-		if (target_node.data) {
-			return err("the target node is a data node");
-		}
 		return err("the target node does not have an associated blob in the blob store");
 	}
 
@@ -1811,23 +1786,17 @@ async run(){
 	let arr = fullpath.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
-//	let parnode = await fsapi.pathToNode(parpath);
 	let parnode = await parpath.toNode();
 
 	if (!(parnode && parnode.appName === FOLDER_APP)) {
 		return err(`${parpath}: not a directory`);
 	}
-	if (parnode.type !== FS_TYPE) {
-		return err(`${fullpath}: the parent directory is not of type '${FS_TYPE}'`);
+	if (parnode.type !== OP_FS_TYPE) {
+		return err(`${fullpath}: the parent directory is not of type '${OP_FS_TYPE}'`);
 	}
-//	if (!await fsapi.checkDirPerm(parnode)) {
-	if (!parnode.perm) {
-		return err(`${path}: permission denied`);
-	}
-	let newnode = await fsapi.makeHardLink(parnode, fname, blobid);
-	if (!newnode) {
-		return err(`${path}: the link could not be created`);
-	}
+	if (!parnode.perm) return err(`${path}: permission denied`);
+	let newnode = await parnode.mkHardLink(fname, blobid);
+	if (!newnode) return err(`${path}: the link could not be created`);
 	this.suc(`${fname} -> blobId(${blobid})`);
 	this.ok();
 }
@@ -1836,47 +1805,29 @@ const com_symln = class extends Com{//«
 
 async run(){
 	let{args,term}=this;
-	const err=(mess)=>{
+	const err= mess => {
 		this.err(mess);
 		this.no();
 	};
-	if (!args.length) {
-		return err("missing file operand");
-	}
-	if (args.length==1){
-		return err("missing link name");
-	}
-	if (args.length>2){
-		return err("too many arguments");
-	}
+	if (!args.length) return err("missing file operand");
+	if (args.length==1) return err("missing link name");
+	if (args.length>2) return err("too many arguments");
+	
 	let target = args.shift();
 	let path = args.shift();
-
 	let fullpath = normPath(path, this.env.cwd.cwd);
-//	let node = await fsapi.pathToNode(fullpath, true);
 	let node = await fullpath.toNode({getLink: true});
-	if (node) {
-		return err(`${path}: already exists`);
-	}
+	if (node) return err(`${path}: already exists`);
 	let arr = fullpath.split("/");
 	let fname = arr.pop();
 	let parpath = arr.join("/");
-//	let parnode = await fsapi.pathToNode(parpath);
 	let parnode = await parpath.toNode();
-	if (!(parnode && parnode.appName === FOLDER_APP)) {
-		return err(`${parpath}: not a directory`);
-	}
-	if (parnode.type !== FS_TYPE) {
-		return err(`${fullpath}: the parent directory is not of type '${FS_TYPE}'`);
-	}
-//	if (!await fsapi.checkDirPerm(parnode)) {
-	if (!parnode.perm) {
-		return err(`${path}: permission denied`);
-	}
-	let newnode = await fsapi.makeLink(parnode, fname, target, normPath(target, this.env.cwd.cwd));
-	if (!newnode) {
-		return err(`${path}: the link could not be created`);
-	}
+	if (!(parnode && parnode.appName === FOLDER_APP)) return err(`${parpath}: not a directory`);
+	if (parnode.type !== OP_FS_TYPE) return err(`${fullpath}: the parent directory is not of type '${OP_FS_TYPE}'`);
+	if (!parnode.perm) return err(`${path}: permission denied`);
+	
+	let newnode = await parnode.mkSymLink(fname, target, normPath(target, this.env.cwd.cwd));
+	if (!newnode) return err(`${path}: the link could not be created`);
 	this.suc(`${fname} -> ${target}`);
 	this.ok();
 }
@@ -2055,26 +2006,6 @@ async run(){
 	this.ok("please refresh the page!");
 }
 }//»
-
-/*
-const com_unmount = async (args,opts, _) => {//«
-	let {term}=_; 
-	const terr=(arg)=>{return {err: arg};};
-    let mntdir = fs.root.kids.mnt;
-    let mntkids = mntdir.kids
-    let name = args.shift();
-    if (!name) return terr("Mount name not given!");
-	if (!mntkids[name]) return terr(`${name}: Not mounted`);
-	delete mntkids[name];
-};//»
-const com_mount = async (args,opts, _) => {//«
-	let {term}=_; 
-	const terr=(arg)=>{return {err: arg};};
-	let rv = await fsapi.mountDir(args.shift());//In a multiline comment!!!
-	if (isStr(rv)) return terr(rv);
-	else if (rv!==true) return terr(`Unknown response: ${rv}`);
-}//»
-*/
 
 //»
 

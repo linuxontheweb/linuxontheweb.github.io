@@ -22,7 +22,7 @@ const globals = LOTW.globals;
 //const {getAppIcon}= capi;
 const{NS}=globals;
 const{
-    FS_TYPE,
+    OP_FS_TYPE,
 }=globals.fs;
 const{
     FOLDER_APP,
@@ -50,6 +50,8 @@ let picker_mode;
 let save_as_ext;
 
 const thisApp = this;
+
+let _win_update;
 
 //»
 
@@ -173,13 +175,20 @@ const go_back = async()=>{//«
 		this.prevPaths = prev_paths;
 	}
 	else prev_paths.unshift(Win.fullpath);
-Win.iconsOff();
-	if (Win.icon){
-		delete Win.icon.win;
-		delete Win.icon;
+
+	let newpath;
+	if (arr.length===1) newpath = "/";
+	else newpath = arr.join("/");
+	let newnode = await newpath.toNode();
+	if (!newnode){
+cerr("KNOOWOWOWOW NEWWEWEWE NODEDEDE FORRRRR NEWPAHTHT", newpath);
+		return;
 	}
-	if (arr.length===1) await reload("/");
-	else await reload(arr.join("/"));
+	Win.iconsOff();
+	_win_update(3, Win, newnode);
+	await reload();
+	this.setTitle();
+
 };//»
 
 const go_forth=async()=>{//«
@@ -190,12 +199,15 @@ cwarn("Cannot go forward with goto_path ===", goto_path);
 		return;
 	}
 	if (!prev_paths.length) prev_paths = undefined;
-	Win.iconsOff();
-	if (Win.icon){
-		delete Win.icon.win;
-		delete Win.icon;
+	let newnode = await goto_path.toNode();
+	if (!newnode){
+cerr("HOWOWOWOW NONODE FOROROR GOTOPATHAHTAHT", goto_path);
+		return;
 	}
-	await reload(goto_path);
+	Win.iconsOff();
+	_win_update(3, Win, newnode);
+	await reload();
+	this.setTitle();
 };//»
 
 const load_dir=()=>{//«
@@ -240,11 +252,10 @@ observer = new IntersectionObserver((ents)=>{
 		if (ent.isIntersecting) {
 			if (!d.showing) d.show();
 		}
+// Do not hide it if it is in an "active selection" state
 		else if (!(d.icon && d.icon.isOn)) {
 			d.hide();
-			if (d.icon && d.icon.win){
-				delete d.icon.win.icon;
-			}
+//			if (d.icon && d.icon.win) delete d.icon.win.icon;
 		}
 	});
 }, options);
@@ -252,21 +263,29 @@ observer = new IntersectionObserver((ents)=>{
 for (let kid of icondv.children) {
 	kid.show = async()=>{//«
 //		let got = kids[kid.dataset.name];
-let got = dir.getKid(kid.dataset.name);
-/*If this 'got' should be "owned" by a FileSaver that is writing to it, then we//«
-want to be able to call a callback with 'got' and get
-an updating overdiv put on it.  Right now, FileSaver creates the kid node upon
-end_blob_stream, but we should do it upon start_blob_stream.»*/
+		let got = dir.getKid(kid.dataset.name);
+
 		if (!got){
-cwarn("Not found in kids: "+ kid.dataset.name);
+//cwarn("Not found in kids: "+ kid.dataset.name);
 			kid._del();
 			return;
 		}
-		let ref;
-		if (got.link) ref = await got.ref;
-		let icn = new Icon(got, {elem: kid, observer, ref, pickerMode: picker_mode, parApp: thisApp});
-		if (got.filesaver_cb) got.filesaver_cb(icn);
-//		icn._pos="relative";
+//		let ref;
+//		if (got.link) ref = await got.ref;
+//		let icn = new Icon(got, {elem: kid, observer, ref, pickerMode: picker_mode, parApp: thisApp});
+
+		let icn = new Icon(got, {elem: kid, observer, pickerMode: picker_mode, parApp: thisApp});
+
+/*If this 'got' should be "owned" by a FileSaver that is writing to it, then we «
+want to be able to call a callback with 'got' and get
+an updating overdiv put on it.  Right now, FileSaver creates the kid node upon
+end_blob_stream, but we should do it upon start_blob_stream.
+
+7/26/26: There is apparently no such thing as filesaver_cb.
+
+»*/
+//		if (got.filesaver_cb) got.filesaver_cb(icn);
+
 		icn.parWin = Win;
 		kid.showing = true;
 //		kid.icon = icn;
@@ -348,15 +367,20 @@ tab_order = [inp, savebut, canbut];
 
 };//»
 
-const reload = async(newpath)=>{//«
+const reload = async()=>{//«
+//const reload = async(newpath)=>{
 	if (is_loading) return;
 	prev_paths = this.prevPaths;
+	path = Win.fullpath;
+/*«
 	if (newpath) {
 		path = newpath;
-		Win.node = await newpath.toNode();
+// This should also go in open_window_by_icon
+//		_win_update(3, Win, await newpath.toNode());
 		if (picker_mode) Win.title = `Save\xa0Location\xa0:\xa0'${Win.node.name}'`;
 		else Win.title = Win.node.name;
 	}
+»*/
 	is_loading = true;
 	Main.scrollTop=0;
 	icondv.innerHTML="";
@@ -396,7 +420,7 @@ cwarn("No path given (Win._fullpath)");
 	}
 	load_dir();
 	this.node = dir;
-	if (dir.type!==FS_TYPE) {
+	if (dir.type!==OP_FS_TYPE) {
 //		num_entries = Object.keys(kids).length;
 		num_entries = dir.length;
 		stat_num();
@@ -413,6 +437,26 @@ cwarn("No path given (Win._fullpath)");
 this.set_save_name=(name)=>{
 if (save_input && isStr(name)) save_input.value = name;
 };
+this.setTitle = () => {
+	if (picker_mode) Win.title = `Save\xa0Location\xa0:\xa0'${Win.node.name}'`;
+	else Win.title = Win.node.name;
+};
+this.updatePrevPaths = () => {//«
+	prev_paths = this.prevPaths;
+	if (!prev_paths) return;
+// let newpath = Win.fullpath;
+// If the icon we are clicking is in the "next up" position in the folder's
+// prevPaths, then the prevPaths array still holds good.
+	if (prev_paths[0] === Win.fullpath){
+//log(`DOIT: <${newpath}>`);
+		prev_paths.shift();
+		if (!prev_paths.length) delete this.prevPaths;
+	}
+	//Otherwise, get rid of it.
+	else delete this.prevPaths;
+	prev_paths = this.prevPaths;
+
+};//»
 
 this.getContext=()=>{//«
 	let choices = [
@@ -468,10 +512,14 @@ else if (s=="s_"||s=="s_C") do_save();
 }//»
 this.onkill = () => {icondv._del();}
 this.onresize = () => {cur_div.style.maxWidth = `${Main.clientWidth - MAX_WID_DIFF}px`;}
-this.onappinit=(arg, prevpaths)=>{//«
+this.onappinit=(opts={})=>{//«
+//this.onappinit=(arg, prevpaths)=>{
 	Win.makeScrollable();
-	prev_paths = prevpaths;
-	path = arg;
+//	prev_paths = prevpaths;
+	_win_update = opts.winUpdate;
+	path = Win.fullpath;
+	Win.title = Win.name;
+//log(path);
 	if (!path) cerr("No path in onappinit!");
 	init();
 };//»

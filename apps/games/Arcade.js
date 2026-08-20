@@ -314,7 +314,10 @@ const load_init=(bytes,arg)=>{//«
 //log(bytes, name, ext);
 //let name = arg.name;
 //let ext = 
-	let {name, ext} = arg;
+//	let {name, ext} = arg;
+//log(`${name}.${ext}`);
+//log(`${Win.name}.${Win.ext}`);
+	let ext = Win.ext;
 	let wasm = ext_to_wasm[ext];
 	let jsmod = ext_to_js[ext];
 	let dims = ext_to_dims[ext];
@@ -323,8 +326,8 @@ const load_init=(bytes,arg)=>{//«
 	init_canvas(dims);
 //	init_gamepad(()=>{
 //log(wasm);
-	if (wasm) init_wasm(wasm, jsmod, bytes, name+"."+ext);
-	else init_js(jsmod, bytes,null,name+"."+ext);
+	if (wasm) init_wasm(wasm, jsmod, bytes, Win.name);
+	else init_js(jsmod, bytes,null, Win.name);
 //	});
 }//»
 

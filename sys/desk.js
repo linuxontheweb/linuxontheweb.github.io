@@ -19,6 +19,435 @@ experts only.
 in the code.)
 
 »*/
+
+/* BUG BUG BUG BUG: "Ghost Icons" appeared after moving them «
+
+ON 8/2/26
+
+AFTER CREATING A FOLDER ON THE DESKTOP VIA THE CONTEXT MENU:
+	- calling make_new_icon(desk, FOLDER_APP)
+
+I then tried to move 2 icons into it (by using the keyboard to
+move them directly onto the new icon), which seemed to worked, based on
+the animation.
+
+But then what happened (I think) is that I tried to move the new folder
+icon on the desktop (just changing the location), and the 2 icons that
+I'd moved *into* it suddenly popped back onto the screen (with half
+opacity), together w/ the following error:
+
+util.js:42 The icon was not in the icons array!
+
+But upon reloading the desktop, these icons were no longer there.
+
+So I guess this was a matter of icons that were not "cleaned up" by
+the move_icons operation.
+
+There seemed to be nothing "systemically incorrect" about this, it was
+just a matter of "ghost icons" suddenly appearing, seemingly "out of the blue".
+
+»*/
+
+/* BUGGY BUGGY BUGGY «
+
+After making the changes on 7/26/26
+
+THE LINK ICONS ARE BEING CONFUSED FOR THE REAL ICONS, DURING 
+DESKTOP MOVE OPERATIONS! OR RATHER: THEY SEEMED TO BE GETTING CONFUSED!!!
+
+Need to play around with creating links and moving them around to make
+sure that it is only the actual link icons that are being affected.
+
+On the Desktop, I had a regular file and then a link that linked to it.
+
+First, when moving the link, it seemed that the file moved, but the link
+didn't.  This seemed to happen a couple of times, and then I couldn't reproduce
+the issue anymore.
+
+»*/
+/* BUG BUG BUG (PROBABLY FIXED) «
+
+WHEN SAVING TO THE DESKTOP VIA SAVE_AS, THE SYSTEM THINKS THERE
+IS AN ICON THAT ISN'T REALLY THERE, AND THE NEW ICON NEVER SHOWS UP.
+
+This happens during the call to WRITEFILE @BDSVFHSK.
+
+After about a trillion hours of debugging, the offending culprit is
+the call to icn.del() in move_icon_by_path: @TEJKBTBHJ. This calls:
+	- clearFromStorage
+	- icn.iconElem._del.
+
+ALL OF THIS JUST GOES TO SHOW THAT THERE IS A ***TON*** OF LOGIC THAT WEAVES
+TOGETHER VARIOUS PARADIGMS OF MORE-OR-LESS SYSTEMIC THINKING, USING VARIOUS
+SORTS OF OBJECTS THAT HAVE OCCURRED OVER THE PAST ~14 YEARS!!!
+
+
+TypeError: fullname.match is not a function
+    at getNameExt (util.js:83:15)
+    at get appName (fs.js:1628:25)
+    at Icon.setApp (desk.js:5597:16)
+    at new Icon (desk.js:5272:7)
+    at Object.make_icon_if_new (desk.js:7080:22)
+    at touchFile (fs.js:2789:41)
+
+»*/
+
+/* 8/7/26: Simplifying the concept of move/copy callbacks «
+@SYIROKTHB are: done_cb and no_move_cb. In order to make the core fs module
+maximally simple, that logic should call these functions with the relevant
+paths. It is incumbent upon the application level (such as the desktop or 
+commands) to implement the increased complexity that they require. 
+»*/
+/*8/6/26: Finally: need a fully modern approach to icon creation «
+
+The sys/fs.js module should have no concept of icons. We should actually
+stop the quite ridiculous practice of passing *literal* icons through
+comMv. 
+
+»*/
+/* 8/3/26: Issues w/ save_icon_editing @UEOHTHKH. «
+1) Need to do the simple check of parobj.writeable and parobj.perm, rather
+than (cumbersomely) testing for fs types. But this check should probably
+be done in make_new_icon, by testing for the winarg's fullpath.
+2) Need to put the file and dir operations in the same place (I think).
+
+»*/
+/* 7/31/26: Put a move lock in the src dir in move_icons «
+
+@EIIRONSBR
+
+This is in *addition* to the move lock that is automatically added to the
+destination directory in fs.js.
+
+»*/
+/* 7/30/26: Analyzing move_icons «
+
+@XBRGSHJRJ
+
+The idea is to get the logic and "physics" of icons completely
+philosophically worked out.
+
+Let's look at icons created by save_dropped_files: 
+@UGGRKGTJD
+
+NO! LET'S START ON OUR OWN, FROM THE GROUND UP:
+@NMSDYURJK
+
+
+»*/
+/* 7/29/26: Let's get better function names, starting w/ open_icon «
+
+Need to be able to visualize the workflow from double-clicking to opening
+windows, via nothing but function names.
+
+1) open_window_by_icon (@YHFLJRHJ)
+2) open_window_by_node
+
+
+@EJTJHKTMY: There is a separate 'saver' that goes into the window
+constructor, meanwhile there is a 'winargs' with the bottomPad
+property set.
+
+»*/
+/* 7/28/26: File creation workflow «
+
+1) Get parent node, and populate the dir
+2) If !par.done
+	- Error: cannot populate the parent dir
+3) If !(par.writeable && par.perm)
+	- Error: cannot write
+4) node = par.makeNewFile(filename) // Creates icons by default
+5) If !node
+- Error: File creation
+
+With the node, we can set its contents via, for example:
+
+node.setValue(val) -> FileNode.#setBlob -> fs.set_blob -> fs.write_blob
+
+EVERYTHING IN THE 'node.setValue' CHAIN COMPLETELY BYPASSES ICON CREATION ISSUES
+
+
+So what is the current issue with the saveAs workflow?
+
+
+
+
+»*/
+/* 7/27/26: Start from open_window_by_icon and go from there «
+
+@YHFLJRHJ
+
+My thinking is to simply get rid of the concept of icons as having
+any relevance to the big scheme of things in LOTW.
+
+With LOTW, the major pattern is:
+
+let node = my_str.toNode({cwd: "/what/where/"});
+if (!node){
+//Error: You can't do that!
+return;
+}
+// Do something with the node
+
+
+At the beginnin of open_window_by_icon, we are all about fretting over the concept
+of icn.win. But all we really need to know is whether we are forcing a 
+new window, and if not: whether the fullpath of the resultant node is
+the same as an open window.
+
+
+On the case of getting rid of open_file_by_path.
+
+const open_file_by_path = async(patharg, opt={})  
+
+Now there are only 3 calls to it:
+	- 2 that just use patharg
+	- the other one that uses the 'opt' arg
+
+
+»*/
+/* 7/26/26: Icon.ref and save_dropped_files «
+
+@WEYITJGMH
+
+In Icon.setApp:
+We set this.useNode based on the the link's reference.
+This is *only* used in the constructor's next step: Icon.setImg.
+
+Now we are checking for node.isLink (@GRYUOTHH), and from there
+we are doing everything, as long as the link reference is valid, to 
+"upgrade" the icon to whatever the link says it is.
+
+
+
+ALSO: The concept of icons that are actively being saved by FileSaver (from
+save_dropped_files). I want this logic to be thoroughly integrated with the
+Folder's logic of IntersectionObserver. We can see the icon being created (via
+make_icon) @UGGRKGTJD. If being saved to a Folder win, it goes to
+add_icon_to_folder_win, which puts the newest icons in the first slot. The
+actual node is created in fsapi.FileSaver.set_fent, and it has no concept of
+the fact that it is actively being saved, although node.lockFile *is* called
+there.  So what I want is for the periodic saving logic to go through the node
+rather than this silly hack:
+
+filesaver.set_cb("update", per => {
+	odiv.innerHTML = per + "%";
+});
+
+We should give the filesaver's update callback to the node, which can itself
+update all of the icons, as necessary, meaning that, once the logic of adding
+icons to Folder windows is fully integrated with the IntersectionObserver, then
+only the visible icons will be updated with the progress.
+
+And now, apparently save_dropped_files doesn't (didn't) work, which I am now
+(was) taking as a good thing, seeing as how I'm getting increasingly less
+motivated by ideas of "brute functionality", and more interested in the
+literary/poetic quality of the program text itself. @DBFHGKT is invoked by:
+writer_func->make_icon. 
+
+FIXED: ADDED `noMakeIcon: true` into FileSaver->set_fent->saveFsByPath.
+
+Also, the icon's "Stop File Transfer" option, defined @SFBGKLHU, and put
+into the context menu @MYRSHTKL, does nothing other than call fObj.unlockFile.
+It doesn't actually either:
+- stop FileSaver.save_file_chunk from being repeatedly called
+- remove the icon's overdiv.
+
+I am able to test this out because I changed FILE_SAVER_SLICE_SZ in sys/fs.js 
+from 1*1000*1000 (1 MB) to 1, which makes the process take much longer.
+
+»*/
+/* 7/25/26: A single place where icons are created/deleted: «
+
+sys/fs.js:
+
+_dir_update(1, dir, node); // addition
+_dir_update(2, dir, node); // deletion
+
+
+But first, need to deal with this sort of ugly logic in 
+- make_icon @XCVBDUKSH
+- make_icon_if_new @WEIOYJHJR
+
+if (ext==="app") node.appicon = await node.text;
+let ref;
+if (node.link) ref = await node.ref;
+let icn = new _Icon(node, {ref, parApp: where.app});
+
+
+Where icons are created:
+- reload_desk_icons
+- move_icons (if copy)
+- make_new_file
+- make_folder_icon
+- make_icon_if_new
+	- place_icon_in_desk_slot
+	- add_icon_to_folder_win
+- make_icon
+
+- Folder.js
+	- kid.show
+
+Actually, the logic in Folder.js is very subtle.
+
+What are initially created are "placeholder" icons:
+
+for (let i=0; i < curnum; i++){
+let nm = keys[i];
+    if (!show_hidden && nm.match(/^\./)) continue;
+    s+=`<div data-name="${nm}" class="icon"></div>`;
+}
+icondv.innerHTML=s;
+
+... and then the IntersectionObserver is attached so that when
+the intersection is detected, the actual icons are created.
+
+So for the icons that are added to folders in move_icons, is it not
+just much better to simply refresh the folders after the operation 
+is finished?
+
+Then the whole question of adding icons reduces to these two *very distinct*
+ideas:
+
+- The Desktop 
+- Folders
+
+@XBCIOHFK: Is there any reason for doing this in the Icon constructor?
+if (!node.fake) node.icons.push(this);
+
+The point being that we are coming into the realization that a node only
+ever has one "concrete" icon (if its path is the desktop), while all others are
+only ever "ephemeral", controlled from the logic of the given Folder's
+IntersectionObserver. 
+
+So then in the _dir_update's we are here talking about, we only need to
+worry about whether the given node has DESK_PATH. Otherwise, the logic
+of the Folders themselves are in ***complete control***.
+
+For now, we will just use these icons:
+Link 2693: ⚓
+Application 26cf: ⛏
+
+
+»*/
+/* 7/24/26: Icons: Just stop «
+
+First of all, it needs to be called make_icons_if_new (instead of make_icon_if_new)
+
+Need to get a fundamental handle on how icons are created and deleted.
+
+Is sys/fs.js, we have:
+
+_dir_update(1, dir, node); // addition
+_dir_update(2, dir, node); // deletion
+
+I'm thinking is that *all* graphical updates should be done there.
+
+In init @EUOWTHKTG: we have
+1) fs.init
+2) reload_desk_icons
+
+...but if we are going to create icons *precisely* when nodes are connected
+to the root fs tree, then there is no need to perform a separate icon
+creation step.
+
+
+Let's just meditate on highly unnecessary complexity, for example,
+@WEIOYJHJR.
+First: the two await's need to go *inside* of the icon, such that the
+interface eventually builds itself into the accurate reflection of
+reality.
+Then: the part about checking the fullpath against all of the icons
+on the desktop needs to get "baked" into the logic of place_icon_in_desk_slot.
+@NTUUHTRHT is where we can check for the existence of an icon. If
+it exists, it should have the same fullpath as the one we are trying
+to put in. If it doesn't have the same fullpath, there are apparently
+2 icons occupying the same position, and *this* localstorage key
+should be deleted, 
+
+»*/
+/* 7/23/26: In make_icon: await'ing for node.text? node.ref? «
+
+I am highly suspicious of (node.appicon and ref), which is created upon 
+await'ing in:
+- make_icon (@XCVBDUKSH)
+- make_icon_if_new (@NMHUKBFH)
+
+WHY AREN'T THESE AWAITS DONE EITHER IN: 
+
+1) PATH_TO_NODE AND POPULATE_DIROBJ, WHERE WE ARE SUPPLIED WITH THE NODES IN
+THE ***FIRST PLACE***, AND WHICH WE MUST ***NECESSARILY*** AWAIT ON?
+2) IN ASYNC OPERATIONS THAT ARE "SPAWNED" FROM THE CONSTRUCTOR, SUCH THAT
+THE PROPERTIES (AND RESULTING GUI ELEMENTS) ARE PROGRESSIVELY BUILT UP
+RATHER THAN DONE SYNCHRONOUSLY?
+
+
+But the information can only be needed for:
+1) Activating the icon: in which case we just need to wait for the event
+2) GUI representation: in which case we can wait for when the icon's HTML
+element is being attached to the DOM, and do something like 
+(in Icon.setApp @KBEUIYJM):
+
+if (ext==="app") {//«
+(async()=>{
+let obj = await node.json;
+if (obj && obj.app){
+// Error: Bad/ill-formatted json
+return;
+}
+// 
+})();
+}//»
+else if (node.ref){//«
+(async(){
+let ref = await node.ref;
+if (!ref){
+// Set bad link
+return;
+}
+})();
+}//»
+else {//«
+// Normal...
+}//»
+
+... but the real lesson is that Icon.setApp is itself quite confused, and
+the ***actual functions*** of the properties that are being set inside of it,
+are, at the moment, quite mysterious.
+
+The reason why I've gotten to this point is because of the await'ing that
+I was doing in fs.comMv, for move_icon_by_path, which itself has to
+await make_icon.
+
+Then there is the await'ing on node.ref in the case that the icon is
+a link.
+
+***IF THERE ISN'T A "VERY GOOD REASON" TO DO AWAIT'ING, THEN IT SHOULDN'T BE DONE.
+I DON'T SEE HOW THESE 2 CASES OF "LINK" TYPE ICONS THAT _MIGHT_ GIVE IMMEDIATE
+VISUAL FEEDBACK IS A "VERY GOOD REASON".***
+
+»*/
+/* 7/22/26: Can we simplify move_icon_by_path now? «
+
+@EYSRHKTJGF
+
+It looks like we are only calling from 2 places (in sys/fs.js), and only
+with opts={node}. So we never seem to have either 'no_del_icon' or 
+'no_add_win'.
+
+First of all: it is called from
+- comMv
+- WRITEFILE
+
+But it is *not* called by mkDir, which calls make_icon_if_new
+
+So why doesn't WRITEFILE call make_icon_if_new?
+I think it *should* do so, because in WRITEFILE, the file (and thus
+the icon) is guaranteed not to exist.
+
+
+
+»*/
 /*7/5/26: What *exactly* needs to be exposed to the world on Window objects?«
 1) set: title
 2) get: name, fullpath
@@ -59,7 +488,7 @@ When opening an icon called TextEdit.app, with these JSON contents:
 ... and then typing stuff in the editor, then hitting
 Ctrl+s, it saved to the TextEdit.app file, overwriting the JSON,
 with whatever I typed into the editor. Fixed it @SFNTKTHF, by
-*NOT* passing along the icon to open_app.
+*NOT* passing along the icon to open_window_by_app_name.
 
 »*/
 /*5/28/26: BUG: When turning off a folder's cursor, and doing «
@@ -98,7 +527,6 @@ const{
 	MEDIA_EDIT_APP,
 	MEDIA_APPS,
 
-	VIEWONLY_APPS,
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
@@ -115,7 +543,7 @@ const{
 }=globals.user;
 const{
 	FS_PREF,
-	FS_TYPE, 
+	OP_FS_TYPE, 
 	USERS_TYPE, 
 	MOUNT_TYPE,
 	SHM_TYPE,
@@ -123,6 +551,7 @@ const{
 const{
 	APPLICATIONS_MENU,
 	LINK_APP,
+	APPLICATION_APP,
 	FOLDER_APP,
 	TEXT_APP,
 	TERMINAL_APP,
@@ -134,7 +563,6 @@ const{
 	TEXT_EDITOR_APP,
 	DEF_BIN_APP,
 	WRITING_APPS,
-	VIEWONLY_APPS,
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
@@ -534,7 +962,7 @@ cerr("!!!! Could not find the previous item! !!!!");
 		};//»
 		div.onmouseenter = e => {//«
 //			let desk_menu = this.Desk.deskMenu;
-			if((this.Desk.deskMenu || elem.context_menu)!==this) return;
+			if((this.Desk.deskMenu || this.elem.context_menu)!==this) return;
 			if (curitem) {
 				div.on(true);
 				return;
@@ -1412,7 +1840,7 @@ globals.api.wdg = api;
 }//»
 
 //new Desk(){«
-  new  (function(){
+  new  (function(){"use strict";
 
 	const Desk = this;
 	NS.Desk = this;
@@ -1434,6 +1862,7 @@ const fsapi = fs.api;
 let dev_mode;
 let admin_mode;
 let debug_localstorage=false;
+//let debug_localstorage=true;
 let show_desktop_during_win_cycle = true;
 //let show_desktop_during_win_cycle = false;
 let win_cycle_wins_hidden = false;
@@ -1529,6 +1958,8 @@ let CDICN, CDW, CRW, CEDICN;
 CDW = CDICN = CRW = CEDICN = null;
 let DDD;
 let CG;
+
+let desk_icons = [];
 //let windows = [];
 
 //»
@@ -1724,9 +2155,11 @@ Object.defineProperty(this,"WINS",{get:()=>windows});
 
 //Menu«
 
-const open_home_folder=()=>{open_file_by_path(globals.user.home_path);};
+const open_home_folder=async()=>{
+	open_new_window(await globals.user.home_path.toNode());
+};
 const open_terminal = (if_dev) => {
-	open_app(TERMINAL_APP, {force: true});
+	open_window_by_app_name(TERMINAL_APP, {force: true});
 };
 const make_popup_link = href =>{//«
 	let sp = make("span");
@@ -1989,7 +2422,8 @@ return;
 				DDD.style.right = "";
 				DDD._x= DDIE.clientX-winx();
 				DDD._w= e.clientX - DDIE.clientX;
-			} else {
+			}
+			else {
 				DDD.style.left = "";
 				DDD.style.right = (winw() - DDIE.clientX+winx())+"px";
 				DDD._w= DDIE.clientX - e.clientX;
@@ -1998,7 +2432,8 @@ return;
 				DDD.style.bottom = "";
 				DDD._y= DDIE.clientY-winy();
 				DDD._h = e.clientY - DDIE.clientY;
-			} else {
+			}
+			else {
 				DDD.style.top = "";
 				DDD.style.bottom = (winh(true) - DDIE.clientY+winy())+"px";
 				DDD._h = DDIE.clientY - e.clientY;
@@ -2032,7 +2467,8 @@ drag_timeout = setTimeout(()=>{
 				gotw = e.clientX - WDIE.clientX + scrleftdiff;
 				if (gotw > WDIE._maxWidth) gotw = WDIE._maxWidth;
 				d._w= gotw;
-			} else {
+			}
+			else {
 				d.style.left = "";
 				d.style.right = (w.main._w - (WDIE.clientX - w.winElem.offsetLeft + m.scrollLeft) - x_scroll_diff + scrleftdiff + winx())+"px";
 				d._w= WDIE.clientX - e.clientX - scrleftdiff;
@@ -2041,7 +2477,8 @@ drag_timeout = setTimeout(()=>{
 				d.style.bottom = "";
 				d._y= WDIE.clientY - w.winElem.offsetTop - w.titleBar._h + m.scrollTop - scrtopdiff-winy();
 				d._h = e.clientY - WDIE.clientY + scrtopdiff;
-			} else {
+			}
+			else {
 				d._y= e.clientY - m.getBoundingClientRect().top + m.scrollTop;
 				d._h = WDIE.clientY - e.clientY - scrtopdiff;
 			}
@@ -2107,12 +2544,12 @@ drag_timeout = setTimeout(()=>{
 				for(let i=0;i<ICONS.length;i++) ICONS[i].off();
 				CG.on();
 				let pos={X:e.clientX+desk.scrollLeft,Y:e.clientY+desk.scrollTop};
-				proms.push(placeInIconSlot(CDICN, {pos:pos, noClear: true}));
+				proms.push(place_icon_in_desk_slot(CDICN, {pos:pos, noClear: true}));
 				CDICN.moved = true;
 				for (let i = 0; i < ICONS.length; i++) {
 					let icn = ICONS[i];
 					if (ICONS[i] != CDICN) {
-						proms.push(placeInIconSlot(icn, {pos:pos, noClear: true}));
+						proms.push(place_icon_in_desk_slot(icn, {pos:pos, noClear: true}));
 					}
 				}
 				await Promise.all(proms);
@@ -2195,7 +2632,8 @@ drag_timeout = setTimeout(()=>{
 		if (CDICN.parWin === desk) return;
 		if (CDICN.path === DESK_PATH) return;
 //		if (CDICN.noMove) return;
-		if (newPathIsBad(CDICN.fullpath, DESK_PATH + "/" + CDICN.name)) return;
+//		if (newPathIsBad(CDICN.fullpath, DESK_PATH + "/" + CDICN.name)) return;
+		if (newPathIsBad(CDICN.fullpath, `${DESK_PATH}/${CDICN.name}`)) return;
 		didleave = false;
 		if (!CDICN) return;
 		if (!didleave) on();
@@ -2277,6 +2715,228 @@ const cldragimg = if_hard => {//«
 	CDL = null;
 	desk.style.cursor = "";
 };//»
+
+const reload_desk_icons_cb = async () => {//«
+	CG.on();
+	Desk.clear_desk_icons();
+	await reload_desk_icons();
+	CG.off();
+};
+//»
+const _reload_desk_icons = async(arr) => {//«
+	for (let icn of desk_icons) {
+		if (icn) icn.del();
+	}
+	desk_icons = [];
+	arr = arr.sort((a, b)=>{
+		if (a.name > b.name) return 1;
+		else if (a.name < b.name) return -1;
+		return 0;
+	});
+	for(let node of arr){
+		let icn = new Icon(node, {parApp: Desk});
+		icn.parWin = desk;
+		place_icon_in_desk_slot(icn, {create: true, load: true});
+	}
+	desk.loaded = true;
+}//»
+const reload_desk_icons = async() => {//«
+	let ret = await DESK_PATH.toNode();
+	if (!ret) {
+cerr("Nothing returned from toNode:\x20"+DESK_PATH);
+		return;
+	}
+	_reload_desk_icons(await ret.list);
+}
+;//»
+
+const vacate_icon_from_desk_slot = (icn, if_no_clear) => {//«
+	if (icn.parWin!==desk) return;
+	if (!(icn.name && icn.parWin)) {
+cerr("No icn.name && icn.parWin", icn);
+		return;
+	}
+//	let oldarr = icn.parWin.icons;
+	let ind = desk_icons.indexOf(icn);
+	if (ind > -1) {
+		if (icn.parWin===desk){
+//			if (!globals.read_only) delete localStorage[FS_PREF+":"+icn.Fullpath()];
+			if (!(globals.read_only || if_no_clear)) icn.clearFromStorage(null,3);
+		}
+		desk_icons[ind] = undefined;
+	}
+	else cerr("The icon was not in the icons array!", icn);
+}//»
+const place_icon_in_desk_slot = (icn, opts={}) => {//«
+
+const do_add = () => {//«
+//cwarn("DOADD!!!");
+//log(iconelm);
+	icn.parWin = desk;
+	icn.parApp = Desk;
+	desk._add(iconelm);
+	icn.saveToStorage();
+};//»
+
+let { pos, create, load, noVacate, noClear, doMove, cb } = opts;
+let startx = desk_grid_start_x;
+let starty = desk_grid_start_y;
+let iconelm = icn.iconElem;
+
+if (icn.name && !create && !noVacate) vacate_icon_from_desk_slot(icn, noClear);
+if (!SHOW_ICONS) iconelm.style.visibility="hidden";
+
+if (create){//«
+
+	iconelm._pos="absolute";
+	icn.parWin = desk;
+	icn.parApp = Desk;
+	desk._add(iconelm);
+
+	if (!pos) {
+		let s = localStorage[`${FS_PREF}:${icn.fullpath}`];
+		if (s) {//«
+			let parr = s.split(" ");
+			let col = parseInt(parr[0]);
+			let row = parseInt(parr[1]);
+			let slot_num = col + (row * DESK_GRID_W);
+			let dosave = false;
+			if (isNaN(slot_num) || slot_num < 0 || desk_icons[slot_num]){
+				slot_num=0;
+				dosave=true;
+				for (let j = slot_num+1; ;j++){
+					if (!desk_icons[j]){
+						slot_num=j;
+						row = Math.floor(slot_num/DESK_GRID_W);
+						col = slot_num % DESK_GRID_W;
+						break;
+					}
+				}
+			}
+//NTUUHTRHT
+			desk_icons[slot_num] = icn;
+			icn.col=col;
+			icn.row=row;
+			iconelm._z= ICON_Z;
+			iconelm._x=desk_grid_start_x + (col * IGSX);
+			iconelm._y=desk_grid_start_y + (row * IGSY);
+			if (dosave) icn.saveToStorage();
+			return;
+		}//»
+		else if (load){//«
+cwarn(`The icon (${icn.name}) was not found in localStorage!`);
+log(icn);
+		}//»
+		else {//«
+
+//cerr("WHAT ICON CREATE CONDITION IS THIS: !pos, !localStorage and !load!?!?");
+//log(icn);
+/*
+We get here from comMv -> move_icon_by_path
+*/
+
+		}//»
+//cwarn("CREATE!!!");
+	}
+
+}//»
+
+if (pos){//«
+
+	let low_dist = Infinity;
+	let low_x = null;
+	let low_y = null;
+	let good_it = null;
+	let posX = Math.round(pos.X);
+	let posY = Math.round(pos.Y);
+	let grid_x = Math.floor((posX - startx) / IGSX);
+	if (grid_x < 0) grid_x = 0;
+	let grid_y = Math.floor((posY - starty) / IGSY);
+	if (grid_y < 0) grid_y = 0;
+	let grid_pos = (grid_y * DESK_GRID_W) + grid_x;
+	let slot_num = 0;
+	if (!desk_icons[grid_pos] && (grid_x < DESK_GRID_W)) {//«
+		good_it = grid_pos;
+		low_x = startx + (grid_x * IGSX);
+		low_y = starty + (grid_y * IGSY);
+	}//»
+	else {//«
+		const check_low = () => {
+			let ynum = Math.floor(slot_num / DESK_GRID_W);
+			let xnum = slot_num % DESK_GRID_W;
+			let x = startx + (xnum * IGSX);
+			let y = starty + (ynum * IGSY);
+			let got_dist = dist(x + 40, y + 40, posX, posY);
+			if (got_dist < low_dist) {
+				low_dist = got_dist;
+				low_x = x;
+				low_y = y;
+				good_it = slot_num;
+			}
+		};
+		for (slot_num = 0; slot_num < desk_icons.length; slot_num++) {
+//			let icn = desk_icons[slot_num];
+//			if (!icn) check_low();
+			if (!desk_icons[slot_num]) check_low();
+		}
+		if (!(low_x && low_y)) check_low();
+	}//»
+	if (low_x && low_y) {//«
+		icn.col = good_it % DESK_GRID_W;
+		icn.row = Math.floor(good_it / DESK_GRID_W);
+		iconelm._z= ICON_Z;
+		desk_icons[good_it] = icn;
+		do_add();
+		if (doMove || !create) {
+			return move_icon(icn, low_x, low_y, {cb});
+		}
+		iconelm._x= low_x;
+		iconelm._y= low_y;
+		return;
+	}//»
+
+	throw new Error("failure");
+
+}//»
+else {//«
+/*«
+		let doit = () => {
+			let xnum = i % DESK_GRID_W;
+			let ynum = Math.floor(i / DESK_GRID_W);
+			x = startx + (xnum * IGSX);
+			y = starty + (ynum * IGSY);
+			icn.col = xnum;
+			icn.row = ynum;
+			iconelm._x= x;
+			iconelm._y= y;
+			desk_icons[i] = icn;
+			iconelm._z= ICON_Z;
+			do_add();
+		};
+»*/
+
+/*
+We get here when we "fall through" with the create flag
+*/
+
+	let slot_num = 0;
+	for (; slot_num < desk_icons.length; slot_num++) {
+		if (!(desk_icons[slot_num] && desk_icons[slot_num].iconElem.parentNode)) break;
+	}
+	let xnum = slot_num % DESK_GRID_W;
+	let ynum = Math.floor(slot_num / DESK_GRID_W);
+	icn.col = xnum;
+	icn.row = ynum;
+	iconelm._x= startx + (xnum * IGSX);
+	iconelm._y= starty + (ynum * IGSY);
+	desk_icons[slot_num] = icn;
+	iconelm._z= ICON_Z;
+	do_add();
+//	doit();
+	return;
+}//»
+
+}//»
 
 //»
 //«Workspaces
@@ -2394,7 +3054,7 @@ on(){//«
 //	if (this.tilingMode) tiling_underlay.on();
 	windows = this.windows;
 	for (let w of windows){
-		if (!w.isMinimized) w.winElem._dis="block";
+		if (!w.isMinimized) w.winElem._dis="";
 		else w.taskbarButton._dis="flex";
 	}
 	top_win_on();
@@ -2414,7 +3074,7 @@ off(){//«
 }//»
 
 }//»
-/*«Init*/
+//«Init
 let workspaces = [];
 for (let i = current_workspace_num; i < num_workspaces; i++ ){
 	workspaces.push(new Workspace(i));
@@ -2422,7 +3082,7 @@ for (let i = current_workspace_num; i < num_workspaces; i++ ){
 this.workspaces = workspaces;
 let workspace = workspaces[current_workspace_num];
 let windows = workspace.windows;
-/*»*/
+//»
 const switch_to_workspace = (num, if_force) => {//«
 
 if (!if_force && num == current_workspace_num){
@@ -2532,18 +3192,18 @@ constructor(arg){//«
 	if (arg.appArgs) this.#noSave = true;
 	else this.#noSave = false;
 
+	arg.topWin = this;
+
+	if (winargs.saver) {
+		this.bottomPad = SAVEAS_BOTTOM_HGT;
+		this.saver = winargs.saver;
+// 'this' window object becomes arg.saver.win.#saveFolder
+		_win_update(1, winargs.saver.win, this);
+	}
+
 	this.makeDOMElem(arg);
 	this.addDOMListeners();
 
-	arg.topWin = this;
-
-	if (arg.saver) {
-		this.bottomPad = winargs.bottomPad;
-		this.saver = arg.saver;
-		arg.saver.folderCb(this);
-	}
-
-	windows.push(this);
 	this.#arg = arg;
 
 	if (winargs.isMaxed){
@@ -2567,6 +3227,8 @@ constructor(arg){//«
 
 	this.#childWins = [];
 	this.#ownedBy = undefined;
+
+	windows.push(this);
 
 }//»
 
@@ -2613,7 +3275,6 @@ checkProp(which){//«
 makeDOMElem(arg){//«
 
 	let marr;
-//	let {winId: winid, winArgs: winargs, appName: app} = this;
 
 	let winid = this.#winId;
 
@@ -2639,7 +3300,8 @@ makeDOMElem(arg){//«
 	else if (winargs.WID === "100%") usew = winw();
 	else usew = defwinargs.WID;
 
-	let botpad = winargs.bottomPad;
+//	let botpad = winargs.bottomPad;
+	let botpad = this.bottomPad;
 	if (isFin(winargs.HGT)) useh = winargs.HGT;
 	else if (winargs.HGT === "100%") useh = winh();
 	else {
@@ -3686,10 +4348,13 @@ let db = drect.bottom;
 let OK=[];
 
 let icons = this.getIcons();
-
+//log(icons);
 for (let icn of icons) {
 	let wrap = icn.wrapper;
-	if (!wrap) continue;
+	if (!wrap) {
+//log("NONE", icn);
+		continue;
+	}
 	let rect = wrap.getBoundingClientRect();
 	if (rect.left > dr || rect.right < dl || rect.top > db || rect.bottom < dt) {
 		icn.off();
@@ -3734,8 +4399,10 @@ doOverlay(strarg){//«
 //»
 async iconValFmt(){//«
 //let bytes = await this.icon
-	if (!this.icon) return null;
-	let node = this.icon.node;
+//	if (!this.icon) return null;
+//	let node = this.icon.node;
+	let node = this.#node;
+	if (!node) return null;
 	let fmt = this.app.loadFmt;
 	let val;
 	if (fmt){
@@ -3855,8 +4522,10 @@ return new Promise((Y,N)=>{
 			this.statusBar.resize();
 			this.on();
 		}
+//log(this.args);
 		if (workspace.layoutMode) this.setLayout(true);
-		if (winapp===FOLDER_APP) this.app.onappinit(arg.fullPath, arg.prevPaths);
+//		if (winapp===FOLDER_APP) this.app.onappinit(arg.fullPath, arg.prevPaths);
+		if (winapp===FOLDER_APP) this.app.onappinit({winUpdate: _win_update});
 		else if (arg.appArgs) this.app.onappinit(arg.appArgs);
 		cb(this);
 	};//»
@@ -3917,34 +4586,36 @@ cwarn(`Using app: '${winapp}'`);
 
 
 }//»
-
-async saveFile(ext){//«
-
-//const {app} = this;
-let app = this.#app;
-
-let rv;
-if (this.#node){
+async _doSaveFile(val){//«
 	let node = this.#node;
 	if (!node.writeable){
 		popup("Read only!");
 		return;
 	}
-	let rv = await node.write(await app.getValue());
+	let rv = await node.write(val);
 	if (!(rv && Number.isFinite(rv.size))) {
 		poperr("Could not save the file");
 		return;
 	}
 	return rv.size;
-}
+}//»
+async saveFile(ext){//«
+
+//const {app} = this;
+let app = this.#app;
+let val = await await app.getValue();
+
+if (this.#node) return this._doSaveFile(val);
 
 let {parNode, name} = await save_as(this, ext);
-if (!parNode) { // Cancelled
-	return;
-}
+if (!parNode) return; // Cancelled
+
 let path = parNode.fullpath;
-let fullpath = `${path}/${name}`;
-if (ext) fullpath += `.${ext}`;
+let fullname = name;
+if (ext) fullname += `.${ext}`;
+
+let fullpath = `${path}/${fullname}`;
+//if (ext) fullpath += `.${ext}`;
 
 if (!parNode.writeable){
 	popup("Read only!");
@@ -3954,44 +4625,41 @@ if (!parNode.perm) {
 	poperr(`${path}: permission denied`);
 	return;
 }
-//if (await fsapi.pathToNode(fullpath)) {
-if (await fullpath.toNode()) {
-	poperr(`${fullpath}: Already exists`);
+
+await parNode.loadKids();
+if (!parNode.done){
+	poperr(`${path}: could not populate the parent folder`);
+	return;
+}
+if (parNode.getKid(fullname)) {
+//if (await fullpath.toNode()) {
+	poperr(`${fullpath}: already exists`);
 	return 
 }
-let node = await fsapi.writeFile(fullpath, await app.getValue());
+//BDSVFHSK
+
+let node = await parNode.mkNewFile(fullname);
 if (!node) {
-	poperr("Could not write the file");
+	poperr(`${fullpath}: could not create the new file`);
 	return 
 }
-//statbar.innerText = `${node.size} bytes written`;
 
-/*
-
-make_icon_if_new: creates an icon if its path is the desktop or any folder windows
-node.icons is created in FSNode.constructor (fs.js)
-node.icons.push(this) is called in Icon.constructor (desk.js)
-
-*/
-
-let icn = node.icons[0];
-if (icn){
-	this.icon = icn;
-	icn.win = this;
-}
 this.#node = node;
 this.title = name;
 this.#saveFolder = undefined;
-node.lockFile();
-
-return node.size;
+let rv = await this._doSaveFile(val);
+if (Number.isFinite(rv)) node.lockFile();
+return rv;
 
 }//»
 
 //»
 
 //«Properties
-
+get node(){return this.#node;}
+get arg(){return this.#arg;}
+get app(){return this.#app;}
+get appName(){return this.#appName;}
 get id(){return this.#id;}
 get winId(){return this.#winId;}
 get childWins(){return this.#childWins;}
@@ -4009,6 +4677,10 @@ set title(arg){//«
 }//»
 
 get isBusy(){return this.#isBusy;}
+get isShowing(){
+	let elm = this.winElem;
+	return elm._dis !== "none" && elm.parentNode === desk;
+}
 set bort(val){this.winElem.style.borderTop = val;}
 set borb(val){this.winElem.style.borderBottom = val;}
 set borl(val){this.winElem.style.borderLeft = val;}
@@ -4064,10 +4736,6 @@ set b(val){//«
 	this.#rect=this.winElem.getBoundingClientRect();
 }//»
 //»
-//get saveFolder(){return this.#saveFolder;}
-get app(){return this.#app;}
-//get node(){return this.#node;}
-
 static {//«
 
 _win_update = (which, win, val) => {
@@ -4083,6 +4751,10 @@ case 2: {
 	win.#saveFolder = undefined;
 	break;
 }
+case 3: {
+	win.#node = val;
+	break;
+}
 default: THROW(`WHAT WHICH (${which}) IN _win_update?`); 
 
 }
@@ -4092,6 +4764,55 @@ default: THROW(`WHAT WHICH (${which}) IN _win_update?`);
 }//»
 
 }//»
+
+const raise_window = (w) => {//«
+	if (w.workspaceNum !== current_workspace_num){
+		switch_to_workspace(w.workspaceNum);
+		w.on();
+		if (w.taskbarButton) w.taskbarButton._dis="flex";
+		else w.winElem._dis="block";
+	}
+	if (w.isMinimized) {
+		if (w.winElem.parentNode !== desk) {
+cerr("Where is the minimized window?");
+			return;
+		}
+		w.unminimize();
+	}
+	else{
+		w.on();
+	}
+};//»
+const raise_open_win_by_path = fullpath => {//«
+
+let wins_arr = [windows, get_all_windows()];
+for (let wins of wins_arr) {
+	for (let w of wins){
+		if (w.fullpath !== fullpath) continue;
+		raise_window(w);
+		return true;
+	}
+}
+
+return false;
+
+};//»
+const raise_open_win_by_app_name = appname => {//«
+
+let wins_arr = [windows, get_all_windows()];
+for (let wins of wins_arr) {
+	for (let w of wins){
+		if (w.appName !== appname) continue;
+		raise_window(w);
+		return true;
+	}
+}
+
+return false;
+
+};//»
+
+
 const set_win_resize_inc = async() => {//«
 	let rv = await POPAPI.popin("New resize increment?");
 	if (!rv) return;
@@ -4128,7 +4849,8 @@ const get_wins_by_path = (path,opts={}) => {//«
 		let wins = wspace.windows;
 		for (let w of wins) {
 			let ext = w.ext;
-			let winpath = (w.path + "/" + w.name).regpath();
+//			let winpath = (w.path + "/" + w.name).regpath();
+			let winpath = `${w.path}/${w.name}`.regpath();
 			if (winpath !== path) continue;
 			if (extArg) {
 				if (ext === extArg) ret.push(w);
@@ -4514,307 +5236,25 @@ const raise_bound_win=(num)=>{//«
 	if (!obj) return show_overlay(`key '${num}': not bound to a window`);
 	obj.win.on({switchToWorkspace: true});
 };//»
-const get_all_windows=()=>{//«
+const get_all_windows=(opts={})=>{//«
 	let wins=[];
+	let use_app = opts.useApp;
 	for (let wspace of workspaces){
-		wins.push(...wspace.windows);
+		if (use_app) {
+			for (let w of wspace.windows) {
+				if (w.appName === use_app) wins.push(w);
+			}
+		}
+		else wins.push(...wspace.windows);
 	}
 	return wins;
 };//»
-
-//»
-//Folders«
-
-/*
-const make_folder = () => {//«
-	if (!CWIN || CWIN.appName != FOLDER_APP){
-		make_new_icon(desk, FOLDER_APP);
-	}
-	else {
-		make_new_icon(CWIN, FOLDER_APP);
-	}
+const get_win_icon_array = which => {//«
+	let out = [];
+	let arr = Array.from(which.winElem.getElementsByClassName("icon"));
+	for (let icn of arr) out.push(icn.icon);
+	return out;
 };//»
-*/
-
-const reload_desk_icons_cb = async () => {//«
-	CG.on();
-	Desk.clear_desk_icons();
-	await reloadIcons();
-	CG.off();
-};
-this.clear_desk_icons = ()=>{
-	let nodes = Array.from(desk.childNodes);
-	let arr = nodes.filter(n => n.className === "icon");
-	while (arr.length) arr.pop()._del();
-};
-//»
-const reload_desk_icons = async(arr) => {//«
-
-	if (desk.icons) {
-		for (let icn of desk.icons) {
-			if (icn) icn.del();
-		}
-		desk.icons = [];
-	}
-	arr = arr.sort((a, b)=>{
-		if (a.name > b.name) return 1;
-		else if (a.name < b.name) return -1;
-		return 0;
-	});
-
-	for(let node of arr){
-		let ref;
-		if (node.link) ref = await node.ref;
-		let icn = new Icon(node, {ref, parApp: Desk});
-		icn.parWin = desk;
-		placeInIconSlot(icn, {create: true, load: true});
-	}
-	desk.loaded = true;
-}//»
-const reload_icons = async(is_refresh) => {//«
-	let fullpath = DESK_PATH;
-	let usemain = desk;
-//	let ret = await pathToNode(fullpath);
-	let ret = await fullpath.toNode();
-	if (!ret) {
-cerr("Nothing returned from toNode:\x20"+fullpath);
-		return;
-	}
-	reload_desk_icons(await ret.list);
-}
-;//»
-const open_folder_win = (name, path, iconarg, winargs, saverarg, prevpaths) => {//«
-
-	let icn = iconarg || {appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
-	icn.winArgs = winargs;
-	return open_new_window(icn, {saver: saverarg, prevPaths: prevpaths});
-}//»
-
-const check_name_exists = async(str, which, usepath) => {//«
-	let path;
-	if (which) path = which.fullpath;
-	else path = usepath;
-	let fullpath = `${path}/${str}`.regpath();
-	return fullpath.toNode();
-//	return pathToNode(fullpath);
-}//»
-const get_icon_array = (arg, if_compact) => {//«
-	if (arg!==desk) {
-		let out = [];
-		let arr = Array.from(arg.winElem.getElementsByClassName("icon"));
-		for (let icn of arr) out.push(icn.icon);
-		return out;
-	}
-	let icons;
-	if (desk.icons) {
-		icons = desk.icons;
-	}
-	else {
-		icons = set_icon_array_of_desk();
-	}
-	if (!if_compact) return icons;
-	let arr = [];
-	for (let i = 0; i < icons.length; i++) {
-		let icn = icons[i];
-		if (icn&&icn.parentNode) arr.push(icn);
-	}
-	return arr;
-}//»
-const set_icon_array_of_desk = () => {//«
-	let numx = DESK_GRID_W;
-	desk.cols = numx;
-	let arr = [];
-	let kids = desk.childNodes;
-	for (let i = 0; i < kids.length; i++) {
-		let kid = kids[i];
-		if (kid.className != "icon" || kid.path != DESK_PATH) continue;
-		let num = kid.col + (kid.row * numx);
-		arr[num] = kid;
-	}
-	desk.icons = arr;
-	return arr;
-}//»
-const vacate_icon_slot = (icn, if_no_clear) => {//«
-	if (icn.parWin!==desk) return;
-	if (!(icn.name && icn.parWin)) {
-cerr("No icn.name && icn.parWin", icn);
-		return;
-	}
-	let oldarr = icn.parWin.icons;
-	let ind = oldarr.indexOf(icn);
-	if (ind > -1) {
-		if (icn.parWin===desk){
-//			if (!globals.read_only) delete localStorage[FS_PREF+":"+icn.Fullpath()];
-			if (!(globals.read_only || if_no_clear)) icn.clearFromStorage(null,3);
-		}
-		oldarr[ind] = undefined;
-	} else cerr("The icon was not in the icons array!", icn);
-}//»
-const placeInIconSlot = (icn, opts={}) => {//«
-//const place_in_icon_slot = (icn, pos, if_create, if_load, if_no_vacate, if_no_clear)
-	const do_add=()=>{//«
-		icn.parWin = desk;
-		icn.parApp = Desk;
-		desk._add(iconelm);
-//log("FP", icn.fullpath);
-//log(icn.node);
-		icn.saveToStorage();
-	};//»
-	let{
-		pos, create, load, noVacate, noClear, doMove, cb
-	}= opts;
-	let startx = desk_grid_start_x;
-	let starty = desk_grid_start_y;
-//	let elem = desk;
-	if (icn.name && !create && !noVacate) vacate_icon_slot(icn, noClear);
-	let arr = get_icon_array(desk);
-	let iconelm = icn.iconElem;
-//LCIUDHJ
-	if (!SHOW_ICONS){
-		iconelm.style.visibility="hidden";
-	}
-	if (create){//«
-		iconelm._pos="absolute";
-		icn.parWin = desk;
-		icn.parApp = Desk;
-		desk._add(iconelm);
-
-/*In desk.css,«
-.iconl {
-    max-height:17px;
-    text-align: center;
-    overflow-wrap:break-word;
-    width:90px;
-    font-size:16px;
-    background-color:#000;
-    padding:1.5px;
-}
-»*/
-
-//If you want the overflowing icon names to be left justified rather than centered, uncomment below.
-//if (icn.label.clientHeight > 20) icn.label._ta = "left";
-		if (!pos) {
-//			let s = localStorage[FS_PREF+":"+icn.fullpath()];
-			let s = localStorage[FS_PREF+":"+icn.fullpath];
-			if (s){
-				let parr = s.split(" ");
-				let col = parseInt(parr[0]);
-				let row = parseInt(parr[1]);
-				let i = col + (row * DESK_GRID_W);
-				let dosave = false;
-				if (isNaN(i)|| i < 0 || arr[i]){
-					i=0;
-					dosave=true;
-					for (let j = i+1; ;j++){
-						if (!arr[j]){
-							i=j;
-							row = Math.floor(i/DESK_GRID_W);
-							col = i % DESK_GRID_W;
-							break;
-						}
-					}
-				}
-				arr[i] = icn;
-				icn.col=col;
-				icn.row=row;
-				iconelm._z= ICON_Z;
-				iconelm._x=desk_grid_start_x + (col * IGSX);
-				iconelm._y=desk_grid_start_y + (row * IGSY);
-				if (dosave) icn.saveToStorage();
-				return;
-			}
-			else if(load){
-cwarn(`The icon (${icn.name}) was not found in localStorage!`);
-log(icn);
-			}
-		}
-	}//»
-	if (!pos) {//«
-		let i = 0;
-		let x, y;
-		let doit = () => {
-			let xnum = i % desk.cols;
-			let ynum = Math.floor(i / desk.cols);
-			x = startx + (xnum * IGSX);
-			y = starty + (ynum * IGSY);
-			icn.col = xnum;
-			icn.row = ynum;
-			iconelm._x= x;
-			iconelm._y= y;
-			arr[i] = icn;
-			iconelm._z= ICON_Z;
-			do_add();
-		};
-		for (; i < arr.length; i++) {
-			if (!(arr[i] && arr[i].iconElem.parentNode)) break;
-		}
-		doit();
-		return;
-	}//»
-	let low_dist = Infinity;
-	let low_x = null;
-	let low_y = null;
-	let good_it = null;
-	let i = 0;
-//EIUKLMY
-	let posX = Math.round(pos.X);
-	let posY = Math.round(pos.Y);
-	let grid_x = Math.floor((posX - startx) / IGSX);
-	if (grid_x < 0) grid_x = 0;
-	let grid_y = Math.floor((posY - starty) / IGSY);
-	if (grid_y < 0) grid_y = 0;
-	let grid_pos = (grid_y * desk.cols) + grid_x;
-	if (!arr[grid_pos] && (grid_x < desk.cols)) {//«
-		good_it = grid_pos;
-		low_x = startx + (grid_x * IGSX);
-		low_y = starty + (grid_y * IGSY);
-	}//»
-	else {//«
-		let check_low = () => {
-			let ynum = Math.floor(i / desk.cols);
-			let xnum = i % desk.cols;
-			let x = startx + (xnum * IGSX);
-			let y = starty + (ynum * IGSY);
-			let got_dist = dist(x + 40, y + 40, posX, posY);
-			if (got_dist < low_dist) {
-				low_dist = got_dist;
-				low_x = x;
-				low_y = y;
-				good_it = i;
-			}
-		};
-		for (i = 0; i < arr.length; i++) {
-			let icn = arr[i];
-			if (!icn) check_low();
-		}
-		if (!(low_x && low_y)) check_low();
-	}//»
-	if (low_x && low_y) {
-		icn.col = good_it % desk.cols;
-		icn.row = Math.floor(good_it / desk.cols);
-		iconelm._z= ICON_Z;
-		arr[good_it] = icn;
-		do_add();
-		if (doMove || !create) {
-			return move_icon(icn, low_x, low_y, {cb});
-		}
-		iconelm._x= low_x;
-		iconelm._y= low_y;
-		return;
-	}
-	throw new Error("failure");
-}//»
-const reloadIcons = win => {return reload_icons();}
-const update_folder_statuses = usepath => {//«
-	for (let w of get_all_windows()) {
-		if (w.appName !== FOLDER_APP) continue;
-		if (usepath) {
-			if (w.fullpath === usepath) w.app.update();
-		} else w.app.update();
-	}
-};
-this.update_folder_statuses=update_folder_statuses;
-//»
 
 //»
 //Icons«
@@ -4825,12 +5265,15 @@ class Icon {//«
 
 constructor(node, opts={}){//«
 
-	let {elem, observer, ref, pickerMode, parApp}=opts;
+//	let {elem, observer, ref, pickerMode, parApp}=opts;
+	let {elem, observer, pickerMode, parApp}=opts;
 	this.parApp = parApp;
 	this.pickerMode = pickerMode;
 	this.elem = elem;
 	this.node = node;
-	this.ref = ref;
+
+// WEYITJGMH
+//	this.ref = ref;
 
 	this.makeDOMElem();
 	this.setApp();
@@ -4838,12 +5281,13 @@ constructor(node, opts={}){//«
 	this.setLabelName();
 	this.addDOMListeners();
 
-	if (!node.fake) node.icons.push(this);
+//XBCIOHFK
+//	if (!node.fake) node.icons.push(this);
 
 	if (observer) {//«
-		this.moveCb=()=>{
+		this.unobserve=()=>{
 			observer.unobserve(this.iconElem);
-			delete this.moveCb;
+			delete this.unobserve;
 		};
 	}//»
 
@@ -4879,9 +5323,9 @@ let not_allowed = false;
 const on = () => {//«
 	isopen = true;
 	wrapper.style.cursor = "copy";
+	this.imgDiv.innerHTML = '\u{2009}\u{1f4c2}';
 	if (!CDL) return;
 	CDL.into(this.name); 
-	this.imgDiv.innerHTML = '\u{2009}\u{1f4c2}';
 };//»
 const off = () => {//«
 	if (in_transit) return;
@@ -4889,9 +5333,9 @@ const off = () => {//«
 	isopen = false;
 	iconelm.style.cursor = "";
 	wrapper.style.cursor="";
+	this.imgDiv.innerHTML = '\u{1f4c1}';
 	if (!CDL) return;
 	CDL.reset();
-	this.imgDiv.innerHTML = '\u{1f4c1}';
 };//»
 
 wrapper.onmouseover = async e => {//«
@@ -4904,8 +5348,8 @@ wrapper.onmouseover = async e => {//«
 		ref.type;
 		node = ref;
 	}
-//	if (CDICN.noMove || typ!==FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
-//	if (CDICN.noMove || typ!==FS_TYPE || !node.perm || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
+//	if (CDICN.noMove || typ!==OP_FS_TYPE || !fs.check_fs_dir_perm(node) || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
+//	if (CDICN.noMove || typ!==OP_FS_TYPE || !node.perm || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
 //	if (CDICN.noMove || !node.perm || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
 	if (!node.perm || (CDICN.path === this.linkfullpath) || (newPathIsBad(CDICN.fullpath, this.linkfullpath + "/" + CDICN.name))) {
 		not_allowed = true;
@@ -4964,15 +5408,24 @@ wrapper.onmouseup = async e => {//«
 	if (this.parWin === desk) return;
 	this.parWin.clearDrag();
 };//»
-wrapper.ondragover=e=>{//«
+wrapper.ondragenter=e=>{//«
 	e.stopPropagation();
 	e.preventDefault();
+//cwarn("ENTER");
+//	on();
 };//»
+wrapper.ondragleave=e=>{//«
+	e.stopPropagation();
+	e.preventDefault();
+//cwarn("LEAVE");
+//	off();
+};//»
+
 wrapper.ondrop=async e=>{//«
 	e.stopPropagation();
 	e.preventDefault();
 	let win = await this.openWin();
-	await save_dropped_files(e, win);
+	save_dropped_files(e, win);
 };//»
 
 }//»
@@ -5036,7 +5489,7 @@ let menu = [//«
 }, 
 "Delete", () => {delete_selected_files(this);}
 ];//»
-let open_opts=["Binary\xa0Viewer", ()=>{open_icon(this,{useApp: DEF_BIN_APP});}];
+let open_opts=["Binary\xa0Viewer", ()=>{open_window_by_icon(this,{altApp: DEF_BIN_APP});}];
 /*
 If this is a media app, then it is probably going to be opened by the default
 player app. But we also want an option to edit it if there is an app that
@@ -5045,12 +5498,12 @@ Currently, there is only an app for editing webm videos: media.VideoCutter
 */
 if (this.appName !== FOLDER_APP){
 	if (TEXT_EXTENSIONS.includes(this.ext)){
-		open_opts.unshift(()=>{open_icon(this,{useApp:TEXT_EDITOR_APP});});
+		open_opts.unshift(()=>{open_window_by_icon(this,{altApp:TEXT_EDITOR_APP});});
 		open_opts.unshift("Text\xa0Editor");
 	}
 //	else if (this.ext === "webm" && this.appName != MEDIA_EDIT_APP){
 	else if ((this.ext == "webm" || this.ext == "mp4") && this.appName != MEDIA_EDIT_APP){
-		open_opts.unshift(()=>{open_icon(this,{useApp:MEDIA_EDIT_APP});});
+		open_opts.unshift(()=>{open_window_by_icon(this,{altApp:MEDIA_EDIT_APP});});
 		open_opts.unshift("Video\xa0Editor");
 	}
 	menu.unshift(open_opts);
@@ -5065,7 +5518,7 @@ wrapper.ondblclick = e => {//«
 		return;
 	}
 	this.dblclick = true;
-	open_icon(this, {e: e});
+	open_window_by_icon(this, {e: e});
 };//»
 
 {
@@ -5074,7 +5527,7 @@ wrapper.ondblclick = e => {//«
 	else typ = node.type;
 	this.type = typ;
 /*
-	if (typ!==FS_TYPE && this.isFolder){
+	if (typ!==OP_FS_TYPE && this.isFolder){
 		this.noMove = true;
 	}
 	else {
@@ -5111,92 +5564,64 @@ makeDOMElem(){//«
 //log(label);
 	label._over="hidden";
 	label.iconElem = d;
-	label.title = name;
+//log(`NAME: ${name}`);
+//	label.title = name;
 //	label._z = 100;
 	this.label = label;
 	this.nameSpan = label.childNodes[0];
 
 }//»
+async setLinkedApp(){//«
+//GRYUOTHH
+	let ref = await this.node.linkedNode;
+	if (ref){
+		if (ref.ext) this.ext = ref.ext.toLowerCase();
+		this.app = ref.appName;
+		this.appName = this.app;
+		this.ref = ref;
+		this.useNode = ref;
+		this.isFolder = ref.isDir;
+		this.setImg();
+		if (this.app === APPLICATION_APP) this.setAppIconApp();
+	}
+	this.addLink();
+	this.isLink = true
+}//»
+async setAppIconApp(){//«
+	let obj = await this.node.json;
+	if (obj && isStr(obj.app)){
+		this.useAppName = obj.app;
+		this.setImg();
+	}
+	else{
+		this.imgDiv._tcol = "#f77";;
+	}
+}//»
 setApp(){//«
-
-	let {node, ref} = this;
-//log(ref);
-	let usenode = node;
-	let ext;
-	let ext_text;
-
+//	let {node, ref} = this;
+	let {node} = this;
+//log(node);
+//	let ext;
+//	let ext_text;
 	let app;
-	let islink=false;
-
-	if (node.link){
-		islink = true;
-		this.link = node.link;
-		usenode = ref;
+	if (node.isDir) {
+		app=FOLDER_APP;
+		this.isFolder = true;
 	}
-
-	if (usenode && usenode.ext) {
-		ext = usenode.ext.toLowerCase();
-		if (TEXT_EXTENSIONS.includes(ext)) {
-			ext_text = ext;
-		}
+	else if (node.isLink) {
+		app=LINK_APP;
+		this.setLinkedApp();
 	}
-//	if (node.kids) app=FOLDER_APP;
-	if (node.isDir) app=FOLDER_APP;
-	else if (node.appicon){
-		try{
-			app=JSON.parse(node.appicon).app;
-			ext_text = "\u{2699}";
-		}
-		catch(e){cerr(e);};
-	}
-	else if (islink){
-//log(this);
-if (ref){
-	app = ref.appName;
-}
-else{
-//log(this);
-//cwarn("BROKEN LINK???");
-}
-	}
-	else if (node.appName) {
-//WJKNMTYT
-//cwarn("THIS IS STICKY???", node.appName);
-		app = node.appName;
-	}
-	else if (ext) {
-		app = extToApp(ext);
-	}
-
-
+	else if (node.appName) app = node.appName;
+//	else if (node.ext) app = extToApp(node.ext);
+	
 	if (!app) app = DEF_BIN_APP;
-//	if (!app&&!islink) app = DEF_BIN_APP;
 
-	if (app=="Application"&&ref&&ref.appicon){
-		try{
-			this.linkApp=JSON.parse(node.ref.appicon).app;
-		}
-		catch(e){cerr(e);};
-	}
-
-	this.isFolder = (app === FOLDER_APP) || (ref && ref.appName === FOLDER_APP);
 	this.app = app;
 	this.appName = app;
-	this.ext = ext;
-	this.extText = ext_text;
-	this.isLink = islink;
-
-	if (islink) {
-		if (ref) {//«
-			let arr = getNameExt(ref.name);
-			this.linkName = arr[0];
-			this.linkExt = arr[1];
-			this.linkPath = ref.par.fullpath;
-			this.ref = ref;
-		}//»
-//		this.addLink(!ref);
-	}
-	this.useNode = usenode;
+	this.ext = node.ext;
+	if (app === APPLICATION_APP) this.setAppIconApp();
+	
 }//»
 setImg(){//«
 	let{wrapper, useNode: usenode}=this;
@@ -5212,14 +5637,8 @@ setImg(){//«
 	if (ext_text){
 		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;">${ext_text}</div>`;
 	}
-	this.extText = ext_text;
-	let ch = getAppIcon(this.linkApp||this.appName,{html:true});
+	let ch = getAppIcon(this.useAppName||this.appName,{html:true});
 	wrapper.innerHTML = `${ext_div}<span class="iconi" style="min-width:48px;text-align:center;font-size:38px;position:relative;">${ch}</span>`;
-if (this.isLink){
-//	this.addLink(!ref);
-	this.addLink();
-//cwarn(`!!this.ref`);
-}
 	this.imgDiv = wrapper.childNodes[wrapper.children.length-1];
 	this.imgDiv.iconElem = this.iconElem;
 };//»
@@ -5251,6 +5670,7 @@ addOverlay(){//«
 			X: e.clientX,
 			Y: e.clientY
 		}, {
+// MYRSHTKL
 			items: ["Stop File Transfer", canfunc]
 		});
 	};
@@ -5284,12 +5704,16 @@ addOverlay(){//«
 	return overdiv;
 };
 //»
+/*
 openWin(){//«
 	return new Promise((Y,N)=>{
-		if (this.win) return Y(this.win);
-		open_icon(icn, {winCb: Y});
+//		if (this.win) return Y(this.win);
+//		open_window_by_icon(icn, {winCb: Y});
+		open_window_by_icon(this);
 	});
 };//»
+*/
+openWin(){return open_window_by_icon(this);}
 addLink(){//«
 	let if_broken = !this.ref;
 	if (this.link_div) this.link_div._del();
@@ -5358,7 +5782,7 @@ del(){//«
 	this.clearFromStorage(null,1);
 	this.iconElem._del();
 };//»
-clearFromStorage(patharg){//«
+clearFromStorage(patharg, which){//«
 	if (this.parWin !== desk) return;
 	let path;
 	if (patharg) path = patharg;
@@ -5379,16 +5803,22 @@ clear(patharg){clearFromStorage(patharg);}
 //»
 saveToStorage(){//«
 	if (globals.read_only) return;
-	if (this.parWin!==desk) return;
+	if (this.parWin!==desk) {
+//cwarn(`Ignoring call to saveToStorage. What is Icon.parwin?`);
+//log(this.parWin);
+		return;
+	}
 	let k =`${FS_PREF}:${this.fullpath}`;
 	let verb;
 	if (localStorage[k]) verb="Updating";	
 	else verb="Setting";
-	
+	let val =`${this.col} ${this.row}`;
+//	localStorage[k]=`${this.col} ${this.row}`;
+	localStorage[k] = val;
 if (debug_localstorage) {
-log(`${verb}: localStorage["${k}"]`);
+log(`${verb}: localStorage["${k}"] = ${val}`);
 }
-	localStorage[k]=`${this.col} ${this.row}`;
+
 }
 save(){saveToStorage();}
 //»
@@ -5407,7 +5837,7 @@ api.Icon = Icon;
 const toggle_icon_display = () => {//«
 	if (!dev_mode) return;
 	SHOW_ICONS = !SHOW_ICONS;
-	for (let icn of desk.icons){
+	for (let icn of desk_icons){
 		if (!icn) continue;
 		if (SHOW_ICONS){
 			icn.iconElem.style.visibility="";
@@ -5438,7 +5868,7 @@ const show_node_props=async(node)=>{//«
 	}
 	if (!app) app="<i>None</i>";
 	s+=`App: ${app}<br><br>`;
-	if (node.type!==FS_TYPE) {
+	if (node.type!==OP_FS_TYPE) {
 		if (isFin(node.size)) s+=`Size: ${node.size} bytes`;
 		return pop();
 	}
@@ -5465,212 +5895,173 @@ const show_node_props=async(node)=>{//«
 	s+=`<br><br>Blob id: ${node.blobId}`;
 	pop();
 };//»
+
 const move_icons = async (destpath,  opts={}) => {//«
-return new Promise(async(cb,N)=>{
-
+return new Promise(async(Y,N)=>{
+//XBRGSHJRJ
 let {e, win:destwin, loc}=opts;
+let _ICONS = ICONS;
 
-/*
-const do_end=async()=>{//«
-
-	if (destwin) {
-		if (destwin === desk) {
-			for (let icn of ICONS) {
-				icn.parWin = desk;
-				icn.parApp = Desk;
-				icn.iconElem._pos="absolute";
-				if(!icn.iconElem.parentNode) {
-//					if (!SHOW_ICONS) icn.iconElem.style.visibility="hidden";
-					desk._add(icn.iconElem);
-				}
-			}
-		}
-		else {
-			for (let icn of ICONS) {
-				icn.parWin = destwin;
-				icn.parApp = destwin.app;
-			}
-			let wins = get_wins_by_path(destwin.fullpath);
-			for (let w of wins) {
-//				w.app.update(didnum);
-				w.app.reload();
-			}
-		}
-	}
-	else {
-		let wins = get_wins_by_path(destpath);
-//		for (let w of wins) w.app.update();
-		for (let w of wins) w.app.reload();
-	}
-
-
-	if (origwin && origwin.appName == FOLDER_APP) {
-		let wins = get_wins_by_path(origwin.fullpath);
-		for (let w of wins) {
-			w.app.reload();
-//			if (do_copy) w.app.reload();
-//			else w.app.update(-didnum);
-		}
-	}
-
-	for (let icn of ICONS){
-		icn.iconElem._op=1;
-		delete icn.disabled;
-		icn.saveToStorage();
-		if (icn.link) {
-//			icn.addLink(!(await icn.node.ref));
-		}
-	}
-
-	icon_array_off(5);
-	if (cb) cb(true);
-	shell_moving_done = true;
-//	check_no_move_icons();
-
+const make_new_desk_icon = (node) => {//«
+	let newicn = new Icon(node, {parApp: Desk});
+	newicn.parWin = desk;
+	let pos;
+	if (e && destwin === desk) pos={X:e.clientX+scrl,Y:e.clientY+scrt}
+	place_icon_in_desk_slot(newicn, {
+		create: true, 
+		pos
+	});
 };//»
+
+/*SYIROKTHB
+Since the sys/fs.js module should have no concept of graphical objects,
+the arg for the following two functions should merely be a path.
 */
+let icon_obj = {};
 
-const rm_from_icons = icn => {//«
-
-	let idx = ICONS.indexOf(icn);
-	if (idx == -1){
-cwarn("ICON NOT IN THE ICON ARRAY?");
-log(icn);
-	}
-	else {
-		ICONS.splice(idx, 1);
-	}
-
-	if (!ICONS.length) {
-		cb();
-		if (origwin && origwin.app && origwin.app.stat) origwin.app.stat("");
-	}
+const done_cb = async path => {//«
+const get_icon_copy = () => {//«
+	let newicn = new Icon(icn.node,{parApp: icn.parApp});
+	newicn.parWin = icn.parWin;
+	let elm = newicn.iconElem;
+	elm._pos="fixed";
+	return newicn;
 };//»
-const done_cb = async (icn) => {//«
+/*
+For every icon that we need to move/copy, this is the callback the shell
+uses upon success, which triggers the move animations.
+*/
+	let icn = icon_obj[path];
 
-	if (icn.moveCb) icn.moveCb();
+	let scrl = desk.scrollLeft;
+	let scrt = desk.scrollTop;
 
-	let node = await `${destpath}/${icn.fullname}`.toNode();
-	icn.node = node;
-	if (!node.icons.includes(icn)) node.icons.push(icn);
+	let dest_node = await `${destpath}/${icn.fullname}`.toNode();
+//	if (!node.icons.includes(icn)) node.icons.push(icn);
 	
 	let rect = icn.iconElem._gbcr();
-	icn.iconElem._pos="fixed";
-	let scrdiff=0;
-	let nextsib;
-
-	if (icn.parWin!==desk) {
-		if (icn.show && !icn.showing) icn.show();
-		nextsib = icn.iconElem.nextSibling;
-	}
 
 //Onto a folder icon's dropzone
 	if (loc) {//«
-		vacate_icon_slot(icn);
-		icn.iconElem._loc(rect.left+desk.scrollLeft, rect.top+scrdiff+desk.scrollTop);
-		desk._add(icn.iconElem);
-		move_icon(icn, loc.X+desk.scrollLeft, loc.Y+desk.scrollTop, {scale:0.25, fade:true, 
-			cb:()=>{
-//				icn.iconElem._del();
+
+		if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
+
+		if (icn.parWin !== desk && !icn.iconElem.showing) {
+			rm_from_icons(icn);
+			return;
+		}
+
+		let mv_icn;
+		if (do_copy) mv_icn = get_icon_copy();
+		else {
+			mv_icn = icn;
+			if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
+		}
+
+		mv_icn.iconElem._loc(rect.left+desk.scrollLeft, rect.top+desk.scrollTop);
+		mv_icn.iconElem._pos="fixed";
+		desk._add(mv_icn.iconElem);
+		move_icon(mv_icn, loc.X+desk.scrollLeft, loc.Y+desk.scrollTop, {
+			scale: 0.25,
+			fade: true, 
+			cb:() => {
 				rm_from_icons(icn);
-				icn.del();
-//TEIOPLKJHY
-				if (icn.win && icn.win.icon){
-					icn.win.icon = undefined;
-					delete icn.win.icon;
-				}
+				if (!do_copy) icn.del();
 			}
 		});
 	}//»
-//Onto the desktop:get location from 'e',passed into the desktop's ondrop event handler
+
+//Onto the desktop: get location from 'e', passed into the desktop's ondrop event handler
 	else if (destwin == desk) {//«
-		icn.iconElem._loc(rect.left+scrl, rect.top+scrdiff+scrt);
-		desk._add(icn.iconElem);
-		placeInIconSlot(icn, {
+		if (!icn.iconElem.showing) {
+			rm_from_icons(icn);
+			make_new_desk_icon(dest_node);
+			return;
+		}
+
+		let mv_icn;
+		if (do_copy) mv_icn = get_icon_copy();
+		else mv_icn = icn;
+		
+		mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
+		desk._add(mv_icn.iconElem);
+		mv_icn.iconElem._pos="fixed";
+		place_icon_in_desk_slot(mv_icn, {
 			doMove: true,
 			create: do_copy,
 			pos:{X:e.clientX+scrl,Y:e.clientY+scrt},
 			cb:()=>{
 				rm_from_icons(icn);
-				icn.iconElem._op=1;
-				delete icn.disabled;
+				mv_icn.iconElem._op=1;
+				mv_icn.node = dest_node;
+				delete mv_icn.disabled;
 			}
 		});
 	}//»
-//Onto a folder main window,from the desktop or another folder. The folder automatically places it
+
+// Onto a folder main window, from the desktop or another folder. 
+// The folder automatically places it
 	else {//«
-		const movecb=()=>{//«
-			let name = icn.name;
-			let ext = icn.ext;
-			if (ext) name += `.${ext}`;
-			let icns = Array.from(destwin.iconDiv.children);
-			for (let ic of icns){
-				let ext = ic.ext;
-				let nm = ic.name;
-				if (ext) nm += `.${ext}`;
-				if (nm==name){
-//					icn.iconElem._del();
-					icn.del();
-					return;
+		let mv_icn;
+		const cb = () => {//«
+			rm_from_icons(icn);
+			if (destwin.isShowing && destwin.fullpath === destpath) {
+				mv_icn.iconElem.style.transform = "";
+				mv_icn.iconElem.style.transition = "";
+				mv_icn.iconElem._pos="";
+				add_icon_to_folder_win(mv_icn, destwin);
+				mv_icn.parApp = destwin.app;
+				mv_icn.iconElem._op=1;
+				mv_icn.node = dest_node;
+				delete mv_icn.disabled;
+			}
+			else if (!do_copy){
+				icn.del();
+			}
+		};//»
+		if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
+		if (icn.parWin !== desk && !icn.iconElem.showing) {
+			rm_from_icons(icn);
+			if (destwin.isShowing && destwin.fullpath === destpath) {
+				let newicn = new Icon(dest_node, {parApp: destwin.app});
+				add_icon_to_folder_win(newicn, destwin);
+			}
+			return;
+		}
+
+		if (destwin.isShowing && destwin.fullpath === destpath) {
+
+			if (icn.parWin === desk) {
+				if (do_copy) mv_icn = get_icon_copy();
+				else {
+					mv_icn = icn;
+					vacate_icon_from_desk_slot(icn);
 				}
 			}
-			icn.iconElem.style.transform = "";
-			icn.iconElem.style.transition = "";
-			icn.iconElem._pos="";
-			destwin.iconDiv._add(icn.iconElem);
-			icn.parWin = destwin;
-			icn.parApp = destwin.app;
-			icn.iconElem._op=1;
-			delete icn.disabled;
-			rm_from_icons(icn);
-		};//»
-		vacate_icon_slot(icn);
-		if (icn.parWin !== desk) {
-			icn.iconElem._loc(rect.left+scrl, rect.top+scrdiff+scrt);
-			desk._add(icn.iconElem);
-		} 
-		let icons = destwin.getIcons();
-		destwin.main.scrollTop = destwin.main.scrollHeight;
-		let last = icons.pop();
-		let wr;
+			else {
+				if (do_copy) mv_icn = get_icon_copy();
+				else mv_icn = icn;
+				mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
+				desk._add(mv_icn.iconElem);
+			}
+			mv_icn.iconElem._pos="fixed";
 
-		if (last) {
-			wr = last.iconElem._gbcr();
-			let d = mkdv();
-			d._op=0;
-			d._w=100;
-			d._h=100;
-			destwin.iconDiv._add(d);
-			let r2 = d._gbcr();
-			d._del();
-			move_icon(icn, r2.left+scrl, r2.top+scrt, {cb:movecb});
+			destwin.main.scrollTop = 0;
+			let wr = destwin.winElem._gbcr();
+			move_icon(mv_icn, wr.left+scrl, wr.top+destwin.titleBar.clientHeight+scrt, {cb});
 		}
 		else {
-			wr = destwin.winElem._gbcr();
-			move_icon(icn, wr.left+scrl, wr.top+destwin.titleBar.clientHeight+scrt, {cb:movecb});
+			rm_from_icons(icn);
+			if (!do_copy) {
+				if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
+				icn.del();
+			}
 		}
-	}//»
-
-	if (nextsib){//«
-		let empty = mkdv();
-		empty = mkdv();
-		empty.className = "emptyicon";
-		let obj = {
-			iconElem: empty,
-			empty: true,
-			parWin: origwin, 
-			fullname:" "
-		};
-		empty.icon = obj;
-		empty.iconElem = empty;
-		empty._w= 104;
-		empty._h = 104;
-		nextsib.parentNode.insertBefore(empty, nextsib);
-		empties.push(empty);
 	}//»
 
 };//»
-const no_move_cb = icn => {//«
+const no_move_cb = path => {//«
+	let icn = icon_obj[path];
 	if (!icn) return;
 	icn.iconElem._op=1;
 	delete icn.disabled;
@@ -5678,22 +6069,48 @@ const no_move_cb = icn => {//«
 	rm_from_icons(icn);
 };//»
 
-if (!ICONS[0]){//«
+const rm_from_icons = icn => {//«
+	if (!do_copy && icn.unobserve) icn.unobserve();
+	let idx = _ICONS.indexOf(icn);
+	if (idx == -1){
+cwarn("ICON NOT IN THE ICON ARRAY?");
+log(icn);
+	}
+	else {
+		_ICONS.splice(idx, 1);
+	}
+
+	if (!_ICONS.length) {
+//cwarn(`NOT UPDATING FOLDERS: ${frompath} -> ${destpath} `);
+/*
+		for (let w of get_all_windows({useApp: FOLDER_APP})) {
+			if (w.fullpath === frompath || w.fullpath == destpath) {
+				w.app.reload();
+			}
+		}
+*/
+		fromnode.par.rmMoveLock(move_lock);
+		Y();
+//		if (origwin && origwin.app && origwin.app.stat) origwin.app.stat("");
+	}
+};//»
+
+if (!_ICONS[0]){//«
 cwarn("THis is a rare event!");
 	cldragimg(true);
 	return;
 }//»
 
-if (globals.read_only || ICONS[0].pickerMode){//«
-	for (let icn of ICONS) {
+if (globals.read_only || _ICONS[0].pickerMode){//«
+	for (let icn of _ICONS) {
 		icn.shake();
 		icn.off();
 	}
-	cb();
+	Y();
 	return;
 };//»
 //Var«
-if (e && destpath === DESK_PATH) destwin = desk;
+if (!destwin && e && destpath === DESK_PATH) destwin = desk;
 //let origwin;
 let visual_moving_done = false;
 let shell_moving_done = false;
@@ -5702,65 +6119,46 @@ let didnum=0;
 let did_reset = false;
 let do_copy = false;
 
-let fromnode = await ICONS[0].fullpath.toNode({getLink: true});
+let fromnode = await _ICONS[0].fullpath.toNode({getLink: true});
+//log(fromnode.path);
 let paths = [];
 let good = [];
-let empties = [];
 let NO_MOVE_ICONS = [];
-let ERROR_MSGS=[];
-let icon_obj = {};
+//let ERROR_MSGS=[];
 let real_locs = [];
 //let destnode = await pathToNode(destpath);
 let destnode = await destpath.toNode();
 let desttype = destnode.type;
 let fromtype = fromnode.type;
-let scrl = desk.scrollLeft;
-let scrt = desk.scrollTop;
 //Fake parser.shell_exports object for fs.com_mv:cbok werr wclerr path2obj cwd is_root 
+
+const move_lock = {};
 
 //»
 
-let shell_exports = {//«
+const exports = {//«
 	no_move_cb,
 	done_cb,
-	werr: s => {
-		if (!s) return;
-		s = s.trim();
-		if (!s.length) return;
-		ERROR_MSGS.push(s);
-	},
-	cberr: mess => {
-		let err = "There was a problem moving the icon(s)";
-		if (mess) err += `: ${mess}`;
-		ERROR_MSGS.push(err);
-	},
-	cwd: "/",
-	is_root: false,
 };//»
 
 if (fromtype !== desttype) do_copy = true;
 
-for (let icn of ICONS) {//Sanity check«
+for (let icn of _ICONS) {//Sanity check«
 	icn.off();
 	let usename = icn.name;
-
 	if (icn.ext) usename += `.${icn.ext}`;
-//	if (icn.ext) usename += "." + icn.ext;
-
-	if (await (`${destpath}/${usename}`).toNode()) {
-//	if (await (destpath + "/" + usename).toNode()) {
+	let final_path = `${destpath}/${usename}`;
+	if (await final_path.toNode()) {
 		icn.shake();
 		continue;
 	}
-
 	if (icn.path === destpath) {
 		if (icn.parWin === desk && destwin == desk) {} 
 		else icn.shake();
 		continue;
 	}
-
 	let fullpath = icn.fullpath;
-	if (newPathIsBad(fullpath, `${destpath}/${usename}`)) {
+	if (newPathIsBad(fullpath, final_path)) {
 		icn.shake();
 		continue;
 	}
@@ -5769,59 +6167,28 @@ for (let icn of ICONS) {//Sanity check«
 }//»
 
 if (!paths.length) {//«
-
-	let icons = ICONS.slice();
-	ICONS=[];
+	let icons = _ICONS.slice();
+	_ICONS=[];
 	for (let icn of icons) icn.on(true);
-	if (cb) cb(false);
+	Y();
 	return;
-
 }//»
 
-ICONS=good;
-let origwin = ICONS[0].parWin;
-didnum = ICONS.length;
+_ICONS=good;
+let origwin = _ICONS[0].parWin;
+didnum = _ICONS.length;
 paths.push(destpath);
 
 /*
 if (do_copy){//«
 
-	let NEWICNS=[];
-	let newpaths = [];
-	for (let icn of ICONS){
-		NEWICNS.push(icn);
-		newpaths.push(icn.fullpath);
-	}
-
-	paths = newpaths;
-	if (!paths.length){
-		if (cb) cb();
-		return;
-	}
-	paths.push(destpath);
-	ICONS = NEWICNS;
-	icon_obj = {};
-	for (let icn of ICONS) icon_obj[icn.fullpath] = icn;
-
-}//»
-*/
-
-/*
-For every icon that we need to copy, let's have a callback so it will do
-the move animation,
-*/
-//Do the "real" system moving
-
-if (do_copy){//«
-
 let CP_ICONS = [];
 
-for (let icn of ICONS) {
+for (let icn of _ICONS) {
 	icn.off();
 	let r = icn.iconElem.getBoundingClientRect();
-	let ref;
-	if (icn.link) ref = await icn.ref;
-	let newicn = new Icon(icn.node,{ref, parApp: Desk});
+//	let newicn = new Icon(icn.node,{parApp: Desk});
+	let newicn = new Icon(icn.node,{parApp: icn.parApp});
 	let elm = newicn.iconElem;
 	elm._pos="fixed";
 	elm._x=r.left;
@@ -5832,27 +6199,34 @@ for (let icn of ICONS) {
 }
 
 if (!CP_ICONS.length){
-	cb();
+	Y();
 	return;
 }
-ICONS = CP_ICONS;
+_ICONS = CP_ICONS;
 
 }//»
+*/
 
-for (let icn of ICONS) {
+for (let icn of _ICONS) {
 	icon_obj[icn.fullpath] = icn;
-	icn.iconElem._op=0.5;
-	icn.disabled = true;
+	if (!do_copy) {
+		icn.iconElem._op=0.66;
+		icn.disabled = true;
+	}
 }
 
-await fs.com_mv(paths, {
-	shell_exports,
+//EIIRONSBR
+fromnode.par.addMoveLock(move_lock);
+
+//Do the "real" system moving
+await fsapi.comMv(paths, {
+	exports,
 	if_cp: do_copy,
 	if_recur: true,
-	dom_objects: {
-		win: destwin,
-		icons: icon_obj
-	}
+//	dom_objects: {
+//		win: destwin,
+//		icons: icon_obj
+//	}
 });
 
 //icon_array_off();
@@ -5860,6 +6234,7 @@ await fs.com_mv(paths, {
 
 });
 };//»
+
 const move_icon = (icn, want_x, want_y, opts={}) => {//«
 
 if (globals.read_only){
@@ -5914,105 +6289,6 @@ return new Promise((res, rej) => {
 
 };
 //»
-const move_icon_by_path = (frompath, topath, app, opts = {}) => {//«
-return new Promise(async(Y,N)=>{
-	const doend=()=>{//«
-		if (frompath && topath) update_all_paths(frompath, topath);
-		Y(ret);
-	};//»
-	let {node} = opts;
-	let ret = [];
-	let use_link;
-	let is_folder = (app == FOLDER_APP);
-	let no_del_icon = opts.icon;
-	if (no_del_icon){
-		delete no_del_icon.disabled;
-		no_del_icon.iconElem._op=1;
-	}
-	let no_add_win = opts.win;
-	let is_regular_file = false;
-	if (!(is_folder || opts.link)) is_regular_file = true;
-	let fromparts, frombase;
-//	let icons = [];
-	let icons = node.icons;
-
-//This means we are actually "moving" (rather than merely renaming)
-	if (frompath) {
-//WMKFTYIOP1 <---- WRONG
-//		if (frompath !== topath){
-//			while (node.icons.length) node.icons.pop().del();
-//		}
-		let pathname, ext;
-		if (is_regular_file){
-			let arr = getNameExt(frompath, true);
-			pathname = arr[0];
-			ext = arr[1];
-		}
-		else pathname = frompath;
-//		icons = get_icons_by_path(pathname, ext);
-		fromparts = fs.path_to_par_and_name(frompath);
-		frombase = fromparts[0];
-	}
-
-	let toparts = fs.path_to_par_and_name(topath);
-	let tobase = toparts[0].replace(/\/$/, "");
-	let toname = toparts[1];
-	let ext;
-	if (is_regular_file) {
-		let marr = ALL_EXTENSIONS_RE.exec(toname);
-		if (marr && marr[1] && marr[2]) {
-			toname = marr[1];
-			ext = marr[2];
-		}
-//FUIMNTYU
-//cwarn("DELETE NODE.APPNAME");
-//delete node.appName;
-	}
-	if (frombase) {
-		if (frombase === tobase) {
-			for (let icn of icons) {
-//				let usename = toname;
-//				if (ext) usename += `.${ext}`;
-				icn.updateDOMElement();
-			}
-			doend();
-			return 
-		}
-//WMKFTYIOP <---- RIGHT!?!?!?
-//		let icns = node.icons;
-//		while (icns.length) {
-		while (icons.length) {
-			let icn = icons.pop();
-			if (icn === no_del_icon) continue;
-			icn.del();
-		}
-		if (no_del_icon) icons.push(no_del_icon);
-	} 
-
-	for (let icn of icons) {
-		if (icn === no_del_icon) {
-			delete icn.disabled;
-			icn.iconElem._op=1;
-			continue;
-		}
-		icn.del();
-	}
-	let wins = get_wins_by_path(tobase, {getDesk: true});
-	opts.ext = ext;
-	for (let w of wins) {
-		if (w === no_add_win) {
-			if (no_del_icon) ret.push(no_del_icon);
-			continue;
-		}
-		let newicon = await make_icon(toname, w, opts);
-		if (newicon) ret.push(newicon);
-	}
-	doend();
-
-});
-}
-this.move_icon_by_path = move_icon_by_path;
-//»
 const move_icon_array=(opts={})=>{//«
 
 if (!ICONS.length) return;
@@ -6049,12 +6325,12 @@ const move_to_win_or_desk=()=>{//«
 		return;
 	}
 	if (par===desk && !toOrigin && !cur_is_on) return;
-	for (let icn of ICONS) vacate_icon_slot(icn, true);
+	for (let icn of ICONS) vacate_icon_from_desk_slot(icn, true);
 	if (toOrigin){
 		x=0;
 		y=0;
 	}
-	for (let icn of ICONS) placeInIconSlot(icn, {noVacate: true, pos:{X:x+desk.scrollLeft,Y:y+desk.scrollTop}});
+	for (let icn of ICONS) place_icon_in_desk_slot(icn, {noVacate: true, pos:{X:x+desk.scrollLeft,Y:y+desk.scrollTop}});
 	icon_array_off(15);
 };//»
 const moveit = async()=>{//«
@@ -6089,122 +6365,60 @@ const switch_icons = () => {//«
 	let r2 = icn2.iconElem._gbcr();
 	let scrl = desk.scrollLeft;
 	let scrt = desk.scrollTop;
-	vacate_icon_slot(icn1);
-	vacate_icon_slot(icn2);
-	placeInIconSlot(icn1, {noVacate: true, pos: {X:r2.left+scrl, Y:r2.top+scrt}});
-	placeInIconSlot(icn2, {noVacate: true, pos: {X:r1.left+scrl, Y:r1.top+scrt}});
+	vacate_icon_from_desk_slot(icn1);
+	vacate_icon_from_desk_slot(icn2);
+	place_icon_in_desk_slot(icn1, {noVacate: true, pos: {X:r2.left+scrl, Y:r2.top+scrt}});
+	place_icon_in_desk_slot(icn2, {noVacate: true, pos: {X:r1.left+scrl, Y:r1.top+scrt}});
 	icon_array_off();
 }//»
 
-const check_special_ext = (node, use_app) =>{//«
-	if (node.type !== FS_TYPE) return false;
+const open_window_of_media_app = (node, use_app) =>{//«
+	if (node.type !== OP_FS_TYPE) return false;
 	let ext = node.ext;
 	if (!ext) return false;
-//log(node);
-
 	if (use_app && !MEDIA_APPS.includes(use_app)) return false;
-
 	if (MEDIA_EXTENSIONS.includes(ext.toLowerCase())) {
 		let url = fsUrl(`/blobs/${node.blobId}`);
-		open_app(use_app || MEDIA_APP, {appArgs:{url, node}});
-		return true;
+		return open_window_by_app_name(use_app || MEDIA_APP, {appArgs:{url, node}});
 	}
 	if (IMAGE_EXTENSIONS.includes(ext.toLowerCase())) {
 		let url = fsUrl(`/blobs/${node.blobId}`);
-		open_app(use_app || IMAGE_APP, {appArgs:{url, node}});
-		return true;
+		return open_window_by_app_name(use_app || IMAGE_APP, {appArgs:{url, node}});
 	}   
 	return false; 
-};//»   
+};//» 
 
-//The main activation function (double-clicking)
-const open_icon = async(icn, opts={}) => {//«
-//	const{e, winCb, force, useApp}=opts;
-	const{e, force, useApp}=opts;
-	const noopen = (mess) => {
-		let str = `The file could not be opened:&nbsp;${fullpath}`;
-		if (mess) str += `<br>(${mess})`;
-		poperr(str);
-	};
+// The main GUI activation function (double-clicking or cursor selection)
+// This doesn't need to return anything
+const open_window_by_icon = async(icn, opts={}) => {//«
+//YHFLJRHJ
 	if (icn.disabled) return;
+	let {e, force, altApp}=opts;
+	if (!force && e && e.ctrlKey) force = true;
 	if (!windows_showing) toggle_show_windows();
 	icon_array_off(23);
-	let win;
-	let app=icn.appName;
 
-	let fullpath = icn.fullpath;
-	if (!icn.win){
-		OUTERLOOP: for (let wspace of workspaces) {
-			let wins = wspace.windows;
-			for (let w of wins){
-				if (!w.icon && w.fullpath===fullpath){
-					icn.win = w;
-					w.icon = icn;
-					break OUTERLOOP;
-				}
-			}
-		}
+	let node = icn.node;
+	if (node.isLink) {
+		let link = node.symLink;
+		node = await node.linkedNode;
+		if (!node) return poperr(`Bad link: '${link}'`);
 	}
-	if (!(!icn.win || force || (e && e.ctrlKey))) {//«
-		let w = icn.win;
-		if (w.workspaceNum !== current_workspace_num){
-			switch_to_workspace(w.workspaceNum);
-			w.on();
-			if (w.taskbarButton) w.taskbarButton._dis="flex";
-			else w.winElem._dis="block";
+	if (!force) {//«
+		if (raise_open_win_by_path(node.fullpath)) return;
+		if (node.isDir && icn.parWin !== desk && (folders_open_in_same_window ||
+				icn.parWin.saver)) {
+// This means we are going to reuse the icon's parent window
+			let parwin = icn.parWin;
+			_win_update(3, parwin, node);
+			parwin.app.updatePrevPaths();
+			await parwin.app.reload();
+			parwin.app.setTitle();
+			return;
 		}
-		if (w.isMinimized) {
-			if (w.winElem.parentNode !== desk) {
-cerr("Where is the minimized window?");
-				return;
-			}
-			w.unminimize();
-		}
-		else{
-			w.on();
-		}
-		return;
 	}//»
-	if (app==FOLDER_APP) {//«
-		let w = icn.parWin;
-		if (w && (w.saver || (w!==desk && !force && folders_open_in_same_window))){
-			if (w.app.prevPaths){
-/*If the icon we are clicking is in the "next up" position in the folder's prevPaths, then
-the prevPaths array still holds good.*/
-				if (w.app.prevPaths[0]===icn.fullpath){
-					w.app.prevPaths.shift();
-					if (!w.app.prevPaths.length) delete w.app.prevPaths;
-				}
-//Otherwise, get rid of it.
-				else delete w.app.prevPaths;
-			}
-			await w.app.reload(icn.fullpath);
-			win = w;
-		}
-		else win = await open_new_window(icn);
-		return win;
-	}//»
-	let link = icn.link;
-//	let node = await pathToNode(fullpath);
-	let node = await fullpath.toNode();
-	if (!node) {
-//		let badlink = await pathToNode(fullpath, true);
-		let badlink = await fullpath.toNode({getLink: true});
-		if (badlink && badlink.link) return noopen(`Bad link: '${badlink.symLink}'`);
-		return noopen("file not found");
-	}
 
-	let typ = node.type;
-//	const OK_TYPES=[FS_TYPE,MOUNT_TYPE,SHM_TYPE,USERS_TYPE];
-//	if (!OK_TYPES.includes(typ)) return poperr(`Cannot open type: ${typ}`);
-
-	if (check_special_ext(node, useApp)) return;
-	
-	if (typ==FS_TYPE&&!node.par.perm) return noopen("permission denied");
-	let ret = await node.bytes;
-	if (!ret) return noopen();
-	icn.node = node;
-	return open_icon_app(icn, ret, node.ext, useApp, force);
+	open_window_by_node(node, {altApp});
 
 }//»
 
@@ -6219,7 +6433,8 @@ const icon_array_off = (which) => {//«
 }//»
 const select_icons_in_drag_box_desk = (e) => {//«
 	if (!DDIE) return;
-	let icons = get_icon_array(desk);
+//	let icons = get_icon_array(desk);
+	let icons = desk_icons;
 	let hix = null,
 		lox;
 	let hiy = null,
@@ -6339,6 +6554,7 @@ const save_icon_editing = async() => {//«
 		CG.off();
 	};//»
 	const doend=async newname => {//«
+
 		let oldpath = `${parpath}/${holdname}`;
 		let oldext;
 		let newnameext;
@@ -6355,13 +6571,14 @@ const save_icon_editing = async() => {//«
 			newpath = `${parpath}/${newnameext}`;
 		}
 		CEDICN.dblclick = null;
-		if (CEDICN._savetext||CEDICN._savetext==="") {
-			let rv = await fsapi.writeFile(newpath, CEDICN._savetext, {noMakeIcon: true });
-			if (!rv) return abort("The file could not be created");
-			CEDICN.node = rv;
+		if (isStr(CEDICN._savetext)) {
+			let rv = await newpath.toParNodeAndName({mkFile: true, noMakeIcon: true}); // [parnode, name, new_node]
+			if (!(rv && rv.length == 3)) if (!rv) return abort("The file could not be created");
+			let node = rv[2];
+			rv = await node.setValue(CEDICN._savetext);// {size: ?}
+			CEDICN.node = node;
 			delete CEDICN._savetext;
 		}
-
 		if (newname){
 			update_all_paths(oldpath, newpath);
 			CEDICN.setWindowName();
@@ -6423,26 +6640,39 @@ cerr("toNode(): parpath not found:" + parpath);
 			return;
 		}
 		let rtype = parobj.type;
-		if (!(rtype==FS_TYPE||rtype==SHM_TYPE)){
+
+//UEOHTHKH
+// This needs to be updated to the "standard" way by checking:
+// parobj.writeable and parobj.perm.
+		if (!(rtype==OP_FS_TYPE||rtype==SHM_TYPE)){
 			doend();
 cerr("Unsupported type:" + rtype);
 			return;
 		}
-		if (CEDICN._savetext||CEDICN._savetext==="") {
+// ALSO: WHY IS THE *FOLDER* CREATED HERE...
+		if (CEDICN.appName === FOLDER_APP) {
+//			let mkret = await fsapi.mkDir(parobj, checkit, {noMakeIcon: true});
+			let mkret = await parobj.mkDir(checkit, {noMakeIcon: true});
+			if (mkret) {
+				CEDICN.node = mkret;
+				doend(checkit);
+			}
+			else abort("Could not create the new directory");
+		}
+		else {
+// ...BUT THE *FILE* IS CREATED IN DOEND???
 			return doend(checkithold);
 		}
-		let mkret = await fsapi.mkDir(parobj, checkit, {noMakeIcon: true});
-		if (mkret) {
-			CEDICN.node = mkret;
-			doend(checkit);
-		}
-		else abort("Could not create the new directory");
+//		if (isStr(CEDICN._savetext)) return doend(checkithold);
+
+// If no _savetext, it must be a dir ???		
 		return;
+
 	}//»
 //	let srcnode = await pathToNode(srcpath);
 	let srcnode = await srcpath.toNode();
 	let srctype = srcnode.type;
-	if (srctype!==FS_TYPE) return doend();
+	if (srctype!==OP_FS_TYPE) return doend();
 	if (await fsapi.comMv([srcpath, destpath])) {
 		return doend(checkithold);
 	}
@@ -6551,15 +6781,24 @@ const make_new_file = (winarg, val, ext, opts={})=>{//«
 		let parobj = await path.toNode();
 		if (!parobj) return;
 		let rtype = parobj.type;
-		if (!(rtype==FS_TYPE||rtype==SHM_TYPE)){
+		if (!(rtype==OP_FS_TYPE||rtype==SHM_TYPE)){
 			await popwait(`Cannot create a file of type: '${rtype}'`, "error");
 			Y();
 			return;
 		}
-		let icn = new Icon({name: `${name}.${ext}`, baseName: name, ext: ext, fake: true, parApp: winarg.app});
+		let arg = {
+			name: `${name}.${ext}`, 
+			baseName: name,
+			ext: ext,
+			appName: extToApp(ext),
+			fake: true,
+			parApp: winarg.app
+		};
+		let icn = new Icon(arg);
+		icn.ext = ext;
 		icn._savetext = val;
 		icn._editcb = Y;
-		if (winarg===desk) placeInIconSlot(icn, {create: true});
+		if (winarg===desk) place_icon_in_desk_slot(icn, {create: true});
 		else add_icon_to_folder_win(icn, winarg);
 		setTimeout(() => {
 			init_icon_editing(icn);
@@ -6594,14 +6833,20 @@ const make_folder_icon = async(winarg) => {//«
 	let parobj = await usepath.toNode();
 	if (!parobj) return;
 	let rtype = parobj.type;
-	if (!(rtype==FS_TYPE||rtype==SHM_TYPE)) {
+	if (!(rtype==OP_FS_TYPE||rtype==SHM_TYPE)) {
 		return poperr(`Not making a directory of type: '${rtype}'`);
 	}
-	let obj;
-	let icn = new Icon({name: name, baseName: name, isDir: true, kids:true, fake: true, parApp: usewin.app});
-//log(icn);
+	let arg = {
+		name: name,
+		baseName: name, 
+		isDir: true, 
+		kids:true, 
+		fake: true, 
+		parApp: usewin.app
+	};
+	let icn = new Icon(arg);
 	icn.isnew = true;
-	if (usewin===desk) placeInIconSlot(icn, {create: true});
+	if (usewin===desk) place_icon_in_desk_slot(icn, {create: true});
 	else add_icon_to_folder_win(icn, usewin.top);
 	setTimeout(() => {
 		init_icon_editing(icn);
@@ -6627,44 +6872,19 @@ cwarn("Creating empty file");
 };//»
 const make_new_icon = async(winarg, type) => {//«
 	if (globals.read_only) return;
+
+	let path = winarg.fullpath;
+	let node = await path.toNode();
+	let err;
+	if (!node) err = `${path}: directory not found`;
+	if (!node.writeable) err = `${path}: read only`;
+	if (!node.perm) `${path}: permission denied`;
+	if (err) return poperr(err);
+
 	if (type == FOLDER_APP) make_folder_icon(winarg);
 	else if (type == "Text") make_text_icon(winarg);
 };
 this.make_new_icon = make_new_icon;
-//»
-const make_icon_if_new = async node => {//«
-//log("make_icon_if_new", node);
-	if (isStr(node)) {
-		let path = node;
-//		node = await pathToNode(path);
-		node = await path.toNode();
-		if (!node){
-cwarn(`No node returned in make_icon_if_new, (path=${path})`);
-			return;
-		}
-	}
-	let ref;
-	if (node.link) ref = await node.ref;
-	let fullpath = node.fullpath;
-	let icons = get_desk_icons();
-	for (let icn of icons) {
-		if (icn.fullpath == fullpath) return;
-	}
-	let parts = pathParts(fullpath);
-	let dirpath = parts[0];
-	let fname = parts[1];
-	let ext = parts[2];
-	if (node.type==FS_TYPE && ext==="app"){
-		node.appicon = await node.text;
-	}
-	if (dirpath === DESK_PATH) {
-		placeInIconSlot(new Icon(node, {ref, parApp: Desk}), {create: true});
-	}
-	let wins = get_wins_by_path(dirpath);
-	for (let w of wins) add_icon_to_folder_win(new Icon(node, {ref, parApp: w.app}), w);
-
-};
-this.make_icon_if_new = make_icon_if_new;
 //»
 const make_icon = async(name, where, opts={}) => {//«
 
@@ -6694,11 +6914,15 @@ save_from_local with opts={icon, win}
 
 	let fullpath = `${path}/${fullname}`;
 
-	let icons = get_icon_array(where, true);
+	let icons;
+	if (where === desk) icons = desk_icons;
+	else icons = get_win_icon_array(where);
 	for (let icn of icons){
 		if (icn && icn.fullname === fullname) {
+//DBFHGKT
 cwarn(`make_icon: Already have an icon named: ${fullname}`);
 log(where);
+log(icn);
 			return;
 		}
 	}
@@ -6710,11 +6934,15 @@ cwarn("THIS IS A BAD ERROR, BUT SEE IF THE FAKE NODE WORKS ANYWAYS...");
 log(node);
 		node.kids = (oldicon && oldicon.appName === FOLDER_APP);
 	}
-	if (ext==="app") node.appicon = await node.text;
-	let ref;
-	if (node.link) ref = await node.ref;
-	let icn = new Icon(node, {ref, parApp: where.app});
-	if (where===desk) placeInIconSlot(icn, {pos: opts.pos, create: true});
+//XCVBDUKSH
+
+//	if (ext==="app") node.appicon = await node.text;
+//	let ref;
+//	if (node.link) ref = await node.ref;
+
+//	let icn = new Icon(node, {ref, parApp: where.app});
+	let icn = new Icon(node, {parApp: where.app});
+	if (where===desk) place_icon_in_desk_slot(icn, {pos: opts.pos, create: true});
 	else add_icon_to_folder_win(icn, where);
 	return icn;
 }
@@ -6750,24 +6978,9 @@ const delete_selected_files = async which => {//«
 
 const add_icon_to_folder_win = (icn, win) => {//«
 	let main = win.main;
-	icn.iconElem._pos= "relative";
+//	icn.iconElem._pos= "relative";
 	main.scrollTop = 0;
 	let idiv = main.iconDiv;
-
-//QHBTUDJYTA
-if (!idiv){//«
-log(`The window is below. It should only be a Folder.`)
-log(win);
-log(`Testing for win.appName === ${FOLDER_APP}:  ${win.appName === FOLDER_APP}`);
-log("The main div is below.");
-log(main);
-log(`There doesn't seem to be a .iconDiv property on it.`); 
-log(`There *should* be an element with id=="icondiv_win_#" inside of it.`);
-log(`Testing !!main.iconDiv: ${!!main.iconDiv}`);
-poperr("Please see the console to debug this very strange situation...");
-throw new Error("WHAT THE IN THE EVERLIVING CRAP IS THIS?????");
-}//»
-
 	let kids = idiv.childNodes;
 	if (!kids.length) idiv._add(icn.iconElem);
 	else idiv.insertBefore(icn.iconElem, kids[0]);
@@ -6782,6 +6995,169 @@ const check_html_of_cursor_icon = icn =>{//«
 	}
 	else icn.icon.showLabelName();
 };//»
+
+this.clear_desk_icons = () => {//«
+	let nodes = Array.from(desk.childNodes);
+	let arr = nodes.filter(n => n.className === "icon");
+	while (arr.length) arr.pop()._del();
+};
+//»
+
+/*
+const move_icon_by_path = async (frompath, topath, app, opts = {}) => {//«
+//return new Promise(async(Y,N)=>{
+	const doend=()=>{//«
+		if (frompath && topath) update_all_paths(frompath, topath);
+//		Y(ret);
+	};//»
+cwarn(`move_icon_by_path: ${frompath} -> ${topath}`);
+	let {node} = opts;
+//	let ret = [];
+	let use_link;
+	let is_folder = (app == FOLDER_APP);
+
+//EYSRHKTJGF
+	let no_del_icon = opts.icon;
+	if (no_del_icon){
+		delete no_del_icon.disabled;
+		no_del_icon.iconElem._op=1;
+	}
+	let no_add_win = opts.win;
+	let is_regular_file = false;
+	if (!(is_folder || opts.link)) is_regular_file = true;
+	let fromparts, frombase;
+//	let icons = [];
+	let icons = node.icons;
+
+//This means we are actually "moving" (rather than merely renaming)
+	if (frompath) {
+//WMKFTYIOP1 <---- WRONG
+//		if (frompath !== topath){
+//			while (node.icons.length) node.icons.pop().del();
+//		}
+		let pathname, ext;
+		if (is_regular_file){
+			let arr = getNameExt(frompath, true);
+			pathname = arr[0];
+			ext = arr[1];
+		}
+		else pathname = frompath;
+//		icons = get_icons_by_path(pathname, ext);
+		fromparts = fs.path_to_par_and_name(frompath);
+		frombase = fromparts[0];
+	}
+
+	let toparts = fs.path_to_par_and_name(topath);
+	let tobase = toparts[0].replace(/\/$/, "");
+	let toname = toparts[1];
+	let ext;
+	if (is_regular_file) {
+		let marr = ALL_EXTENSIONS_RE.exec(toname);
+		if (marr && marr[1] && marr[2]) {
+			toname = marr[1];
+			ext = marr[2];
+		}
+//FUIMNTYU
+//cwarn("DELETE NODE.APPNAME");
+//delete node.appName;
+	}
+	if (frombase) {
+		if (frombase === tobase) {
+			for (let icn of icons) {
+//				let usename = toname;
+//				if (ext) usename += `.${ext}`;
+				icn.updateDOMElement();
+			}
+			doend();
+			return 
+		}
+//WMKFTYIOP <---- RIGHT!?!?!?
+//		let icns = node.icons;
+//		while (icns.length) {
+		while (icons.length) {
+			let icn = icons.pop();
+			if (icn === no_del_icon) continue;
+cwarn("CALL ICN.DEL() 111 !!!");
+log(icn);
+			icn.del();
+		}
+		if (no_del_icon) icons.push(no_del_icon);
+	} 
+
+	for (let icn of icons) {
+		if (icn === no_del_icon) {
+			delete icn.disabled;
+			icn.iconElem._op=1;
+			continue;
+		}
+//TEJKBTBHJ
+cwarn("CALL ICN.DEL() 222 !!!");
+log(icn);
+		icn.del();
+	}
+	let wins = get_wins_by_path(tobase, {getDesk: true});
+	opts.ext = ext;
+	for (let w of wins) {
+		if (w === no_add_win) {
+//			if (no_del_icon) ret.push(no_del_icon);
+			continue;
+		}
+//		let newicon = await make_icon(toname, w, opts);
+		await make_icon(toname, w, opts);
+//		if (newicon) ret.push(newicon);
+	}
+	doend();
+
+//});
+}
+this.move_icon_by_path = move_icon_by_path;
+//»
+const make_icon_if_new = async node => {//«
+//log("make_icon_if_new", node);
+//cwarn("make_icon_if_new", node);
+	if (isStr(node)) {
+		let path = node;
+//		node = await pathToNode(path);
+		node = await path.toNode();
+		if (!node){
+cwarn(`No node returned in make_icon_if_new, (path=${path})`);
+			return;
+		}
+	}
+
+//WEIOYJHJR
+// ALL THIS STUFF NEEDS TO BE REFACTORED «
+//	let ref;
+//	if (node.link) ref = await node.ref;
+//	let fullpath = node.fullpath;
+//	let icons = get_desk_icons();
+//	for (let icn of icons) {
+//		if (icn.fullpath == fullpath) return;
+//	}
+//	let parts = pathParts(fullpath);
+//	let dirpath = parts[0];
+//	let fname = parts[1];
+//	let ext = parts[2];
+//	if (node.type==OP_FS_TYPE && ext==="app"){
+//// NMHUKBFH
+//		node.appicon = await node.text;
+//	}
+//»
+//	if (dirpath === DESK_PATH) {
+	let dirpath = node.path;
+	if (dirpath === DESK_PATH) {
+//cwarn("ON DESK!!!");
+//		place_icon_in_desk_slot(new Icon(node, {ref, parApp: Desk}), {create: true});
+		place_icon_in_desk_slot(new Icon(node, {parApp: Desk}), {create: true});
+	}
+	let wins = get_wins_by_path(dirpath);
+//	for (let w of wins) add_icon_to_folder_win(new Icon(node, {ref, parApp: w.app}), w);
+	for (let w of wins) add_icon_to_folder_win(new Icon(node, {parApp: w.app}), w);
+
+};
+this.make_icon_if_new = make_icon_if_new;
+//»
+*/
 
 //»
 //Taskbar«
@@ -7189,74 +7565,25 @@ toggle(){//«
 
 const open_text_editor = (opts={}) => {//«
 	opts.force = true;
-//	return open_app(TEXT_EDITOR_APP, {force: true});
-	return open_app(TEXT_EDITOR_APP, opts);
+	return open_window_by_app_name(TEXT_EDITOR_APP, opts);
 };
 api.openTextEditor = open_text_editor;
 //»
-const raise_app_if_open=(appname)=>{//«
-	for (let w of get_all_windows()){
-		if (w.ownedBy) continue;
-		if (w.appName==appname){
-			if (w.isMinimized) w.unminimize();
-			else w.on();
-			if (w.workspaceNum !== current_workspace_num) {
-				switch_win_to_workspace(w, current_workspace_num);
 
-			}
-			return w;
-		}
-	}
-	return false;
-};//»
-
-const open_app = async(appname, opts={}) => {//«
-
-/*
-
-We only need fullpath in case of a "dev reloaded" window that has a path but is
-not associated with an icon.
-
-This happens when reloading a folder window.
-
-*/
-
-	let {force, winArgs, appArgs={}, icon, fullpath, dataUrl} = opts;
-	let usename, usepath, useext;
-	if (fullpath){
-		let arr = getNameExt(fullpath, false, true);
-		usepath = arr[0];
-		usename = arr[1];
-		useext = arr[2];
-	}
+const open_window_by_app_name = async(appname, opts={}) => {//«
 	let gotwin;
-	if (!force && (gotwin = raise_app_if_open(appname))) {
+	if (!opts.force && (gotwin = raise_open_win_by_app_name(appname))) {
 		if (!windows_showing) toggle_show_windows();
 		return gotwin;
 	}
-	if (fullpath && !appArgs.node) appArgs.node = await fullpath.toNode();
-
 	let win = new Window({
-		fullPath: fullpath,
-		fileNode: appArgs.node,
-		winArgs: winArgs,
-		name: usename || appname.split(".").pop(),
 		appName: appname,
-		dataUrl,
-		appArgs: appArgs
+		appArgs: opts.appArgs || {}
 	});
-	if (icon) {
-		icon.win = win;
-		win.icon = icon;
-	}
-//	if (fullpath) {
-//		win.name = usename;
-//		win.path = usepath;
-//		win.ext = useext;
-//	}
-	return await win.loadApp();
+	await win.loadApp();
+	return win;
 };
-api.openApp=open_app;
+api.openApp=open_window_by_app_name;
 /*«
 api.openApp = (appname, opts={}) => {
 //this.open_app = (appname, force_open, winargs, appargs) => {
@@ -7270,162 +7597,59 @@ api.openApp = (appname, opts={}) => {
 //api.openApp=this.open_app;
 
 //»
-const open_new_window = async (icn, opts={}) => {//«
-//const open_new_window = async (icn, cb, opts={}) => {
+const open_new_window = async (node, opts={}) => {//«
+	let use_app = node.appName;
+	if (opts.altApp) use_app = opts.altApp;
+	if (!use_app) use_app = DEF_BIN_APP;
 
-//Verify that this is a correct determination
-	let app = icn.appName;
-	if (opts.altApp) app = opts.altApp;
-	else if (icn.linkapp) app = icn.linkapp;
-	let viewOnly;
-	if (icn.node && WRITING_APPS.includes(app)){
-		if (icn.node.writeLocked()){
-			viewOnly = true;
-		}
-		else if (icn.node.lockFile) icn.node.lockFile();
-	}
-	let usename = icn.linkName||icn.name;
-	let usepath = icn.linkPath||(icn.node&&icn.path)||icn.path||"";
-	let useext = icn.linkExt||icn.ext;
-	let ref = await icn.ref;
-	if (ref){
-		let arr = getNameExt(ref.name);
-		usename = arr[0];
-		useext = arr[1];
-		usepath = ref.par.fullpath;
-	}
-
-	let fullpath = `${usepath}/${usename}`;
-	if (useext) fullpath+=`.${useext}`;
-
-	if (fullpath && !icn.node) icn.node = await fullpath.toNode();
-	let win = new Window({
-//		CB: cb,
-		fileNode: icn.node,
-		winArgs: icn.winArgs,
-		appName: app,
-		viewOnly,
-		name: usename,
-		fullPath: fullpath,
-		prevPaths: opts.prevPaths,
-		saver: opts.saver
-	});
-//	if (!win) return;
-
-//	win.name = usename;
-//	win.path = usepath;
-//	win.ext = useext;
-
-	icn.win = win;
-	win.icon = icn;
-
-	return await win.loadApp();
-
-}//»
-const open_icon_app = async(icn, bytes, ext, useapp, force_open) => {//«
-//WKIUTHJU
-//const open_icon_app = async(icn, bytes, ext, useapp, force_open, win_cb) => {
-	if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
-	if (icn.appName=="Application") ext = "app";
-	if (!(!useapp && ext == "app")) return open_file(bytes, icn, useapp);
-	let obj;
-	try {
-		obj = JSON.parse(await toStr(bytes));
-		icn.appobj = obj;
-	} catch (e) {
-		poperr(`The application JSON could not be parsed (${e.message})`);
-cerr(e.message);
-		return;
-	}
-	if (!obj) return poperr("Open error #1");
-	let which = obj[ext];
-	if (!which) {
-		return poperr(`No ${ext} field in the JSON object!`);
-	}
-//SFNTKTHF
-	return open_app(which, {winArgs: icn.winArgs, appArgs: obj.args});
-//	return open_app(which, {winArgs: icn.winArgs, appArgs: obj.args, icon: icn});
-}//»
-const open_file_by_path = async(patharg, opt={}) => {//«
-	const err = (str) => {
-		poperr(str);
-	};
-
-// NEED TO PASS node TO THE NEW WINDOW METHOD
-	let node = await patharg.toNode();
-
-	if (!node) {
-		let marr;
-		return err("Cannot open:" + patharg);
-	}
-	if (node.appName == FOLDER_APP) {
-		let path;
-		if (!node.par) path="/";
-		else path = node.par.fullpath;
-		if (CUR.curElem.parentNode === desk) {
-			let icn = CUR.geticon();
-			if (icn) icn.hideLabelName();
-		}
-		return open_folder_win(node.name, path, null, opt.winArgs, opt.saver, opt.prevPaths);
-	}
-	if (check_special_ext(node)) return;
-	let fullpath = node.fullpath;
-	let patharr = fullpath.split("/");
-	if (!patharr[patharr.length - 1]) patharr.pop();
-	let fname = patharr.pop();
-//SJNMYEJK
-	let fake = {
-		winargs: opt.winArgs,
-		name: fname,
-		path: (patharr.join("/")).regpath(true),
-		fullpath: () => {
-			return fullpath;
-		}
-	};
-	let arr = getNameExt(fullpath);
-	let ext = arr[1];
-	if (ext) {
-		fake.name = arr[0];
-		fake.ext = ext;
-		fake.appName = extToApp(ext);
-	} 
-	else fake.appName = DEF_BIN_APP;
-	let rtype = node.type;
-	if (rtype!==FS_TYPE) return err(`Not (yet) handling type(${rtype})!`);
-	let bytes = await node.bytes;
-	if (!bytes) {
-cwarn("got nothing:" + fullpath);
-		return;
-	}
-	if (ext && ext == "app") return open_icon_app(fake, bytes, ext, null, opt.FORCE);
-	return open_file(bytes, fake);
-}
-this.open_file_by_path=open_file_by_path;
-//»
-const open_file = async (bytes, icn, useapp) => {//«
-//const open_file = async (bytes, icn, useapp, cb) => {
-//	if (!bytes) bytes = new Uint8Array();
 	let viewOnly = false;
-	if (VIEWONLY_APPS.includes(icn.appName)) viewOnly = true;
-	let name, ext;
-	if (icn.link) {
-		name = icn.linkName;
-		ext = icn.linkExt;
+	if (node && WRITING_APPS.includes(use_app)){
+		if (node.isWriteLocked) viewOnly = true;
+		else if (node.lockFile) node.lockFile();
 	}
-	else{
-		name = icn.name;
-		ext = icn.ext;
+	let win = new Window({
+		fileNode: node,
+		winArgs: opts.winArgs,
+		appName: use_app,
+		viewOnly,
+	});
+	return await win.loadApp();
+}//»
+const open_window_by_node = async(node, opts={}) => {//«
+//const open_window_by_node = async(node, useapp) => {
+	let useapp = opts.altApp;
+	let win;
+	if (win = await open_window_of_media_app(node, useapp)) return win;
+	
+	if (node.appName === APPLICATION_APP && !useapp) {
+		let obj = await node.json;
+		if (!(obj && obj.app)) {
+			poperr(`Invalid JSON in the file: ${node.fullpath}`);
+			return;
+		}
+		return open_window_by_app_name(obj.app, {appArgs: obj.args});
 	}
-	let win = await open_new_window(icn, {altApp: useapp});
+	win = await open_new_window(node, opts);
 	if (!win) return;
-//	win.ext = icn.ext;
 	let val = await win.iconValFmt();
 	if (val===null) return;
-	win.app.onloadfile(val, {name, ext, viewOnly});
+	win.title = node.baseName;
+	win.app.onloadfile(val);
 	return win;
+
+//	return open_file(node, useapp);
+
 }//»
 
 /*
+const open_file = async (node, useapp) => {//«
+	let win = await open_new_window(node, {altApp: useapp});
+	if (!win) return;
+	let val = await win.iconValFmt();
+	if (val===null) return;
+	win.app.onloadfile(val);
+	return win;
+}//»
 const make_file = () => {//«
 	if (!CWIN || CWIN.appName != FOLDER_APP){
 		make_new_icon(desk, "Text");
@@ -7660,7 +7884,8 @@ this.down=if_ctrl=>{//«
 		if (!elem) {
 			return;
 		}
-		if ((elem.className==="icon"||elem.className=="emptyicon") && elem.parentNode===icn.iconElem.parentNode){
+//		if ((elem.className==="icon"||elem.className=="emptyicon") && elem.parentNode===icn.iconElem.parentNode){
+		if (elem.className==="icon" && elem.parentNode===icn.iconElem.parentNode){
 			curElem._loc(elem.offsetLeft+CUR_FOLDER_XOFF, elem.offsetTop+CUR_FOLDER_YOFF);
 			curElem.scrollIntoViewIfNeeded();
 			this.main.lasticon = elem.icon;
@@ -7754,7 +7979,8 @@ this.up=if_ctrl=>{//«
 		let elem = document.elementFromPoint(5+rect.left, rect.top-10);
 		if (!elem) return;
 		if (elem.parentNode.className==="icon") elem = elem.parentNode;
-		if ((elem.className==="icon" || elem.className=="emptyicon") && elem.parentNode===icn.iconElem.parentNode){
+//		if ((elem.className==="icon" || elem.className=="emptyicon") && elem.parentNode===icn.iconElem.parentNode){
+		if (elem.className==="icon" && elem.parentNode===icn.iconElem.parentNode){
 			curElem._loc(elem.offsetLeft+CUR_FOLDER_XOFF, elem.offsetTop+CUR_FOLDER_YOFF);
 			curElem.scrollIntoViewIfNeeded();
 			this.main.lasticon = elem.icon;
@@ -7781,7 +8007,7 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 		if (!if_toggle&&ICONS.length==1) {
 			let icn = ICONS[0];
 			if (icn.pickerMode && !icn.isFolder){}
-			else open_icon(icn);
+			else open_window_by_icon(icn);
 			return true;
 		}
 		return false;
@@ -7799,7 +8025,7 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 	else if (if_open){
 		if (haveit) icn.off(true);
 		if (icn.pickerMode && !icn.isFolder) return;
-		open_icon(icn, {force: if_force_new_win});
+		open_window_by_icon(icn, {force: if_force_new_win});
 	}
 	else if (!haveit){
 		if (ICONS.length&&(icn.parWin!==ICONS[0].parWin)) icon_array_off(1);
@@ -7807,7 +8033,7 @@ this.select=(if_toggle,if_open,if_force_new_win)=>{//«
 	}
 	else {
 		if (icn.pickerMode && !icn.isFolder) return;
-		open_icon(icn, {force: if_force_new_win});
+		open_window_by_icon(icn, {force: if_force_new_win});
 	}
 };//»
 this.vizCheck=()=>{//«
@@ -7861,7 +8087,7 @@ const get_desk_context=()=>{//«
 	for (let i=0; i < apps_arr.length; i+=2){
 		apps_menu.push(apps_arr[i]);
 		let app = apps_arr[i+1];
-		if (isStr(app)) apps_menu.push(()=>{open_app(app)});
+		if (isStr(app)) apps_menu.push(()=>{open_window_by_app_name(app)});
 		else apps_menu.push(app);
 	}
 	return menu;
@@ -7870,40 +8096,43 @@ const get_desk_context=()=>{//«
 //Saving«
 
 //Called via "real/outer" OS file drop event(ChromeOS,Windows,etc)
+/*
 const save_dropped_files = (e_or_list, where) => {//«
+cwarn("save");
+log(e_or_list);
+log(where);
+
 //const save_dropped_files = (e, where) => {
-/*Reading folders doesn't work!«
-function traverseFileTree(item, path) {
-  path = path || "";
-  if (item.isFile) {
-    // Get file
-    item.file(function(file) {
-      console.log("File:", path + file.name);
-    });
-  } else if (item.isDirectory) {
-    // Get folder contents
-    var dirReader = item.createReader();
-    dirReader.readEntries(function(entries) {
-      for (var i=0; i<entries.length; i++) {
-        traverseFileTree(entries[i], path + item.name + "/");
-      }
-    });
-  }
-}
-
-
-  var items = e.dataTransfer.items;
-  for (var i=0; i<items.length; i++) {
-    // webkitGetAsEntry is where the magic happens
-    var item = items[i].webkitGetAsEntry();
-log(item);
-    if (item) {
-      traverseFileTree(item);
-    }
-
-  }
-return;
-»*/
+//Reading folders doesn't work!«
+//function traverseFileTree(item, path) {
+//  path = path || "";
+//  if (item.isFile) {
+//    // Get file
+//    item.file(function(file) {
+//      console.log("File:", path + file.name);
+//    });
+//  } else if (item.isDirectory) {
+//    // Get folder contents
+//    var dirReader = item.createReader();
+//    dirReader.readEntries(function(entries) {
+//      for (var i=0; i<entries.length; i++) {
+//        traverseFileTree(entries[i], path + item.name + "/");
+//      }
+//    });
+//  }
+//}
+//  var items = e.dataTransfer.items;
+//  for (var i=0; i<items.length; i++) {
+//    // webkitGetAsEntry is where the magic happens
+//    var item = items[i].webkitGetAsEntry();
+//log(item);
+//    if (item) {
+//      traverseFileTree(item);
+//    }
+//
+//  }
+//return;
+//»
 return new Promise(async(y,n)=>{
 	let usepath = where.fullpath;
 	let usepos, files;
@@ -7920,12 +8149,10 @@ return new Promise(async(y,n)=>{
 		files = fs.event_to_files(e);
 	}
 
-/*«
-	if (!where) {
-		usepath = DESK_PATH;
-	}
-	else usepath = where.fullpath;
-»*/
+//	if (!where) {
+//		usepath = DESK_PATH;
+//	}
+//	else usepath = where.fullpath;
 	let iter = -1;
 	let dofile = async() => {
 		iter++;
@@ -7952,11 +8179,13 @@ cerr(mess);
 			let parts = getNameExt(nameret);
 			let ext = parts.pop();
 			let fname = parts.pop();
+// UGGRKGTJD
 			let curicon = await make_icon(fname, where, {pos: usepos, ext: ext, node: fObj});
 			curicon.disabled=true;
 			curicon.addOverlay();
 			let odiv = curicon.overdiv;
 			odiv.innerHTML = "0%";
+// SFBGKLHU
 			curicon.cancel_func = () => {
 				fObj.unlockFile();
 			};
@@ -7977,35 +8206,53 @@ cerr(mess);
 });
 }
 
-//this.save_file_list_to_desk = (list) => {save_dropped_files(list, desk);};
 //»
+*/
+
+const save_dropped_files = (e_or_list, where) => {//«
+
+let pos, files;
+if (e_or_list instanceof FileList){
+	pos = {X: 0, Y: 0};
+	files = e_or_list;
+}
+else {
+	let e = e_or_list;
+	pos = {
+		X:e.clientX+desk.scrollLeft,
+		Y:e.clientY+desk.scrollTop
+	};
+	files = fs.event_to_files(e);
+}
+//NMSDYURJK
+cwarn("SAVE");
+log(files);
+
+
+};//»
 
 //Opens a folder in "Save As..." mode
 //DWEUNFKL
-const save_as=(win, ext)=>{//«
-	return new Promise(async(Y,N)=>{
-		open_file_by_path(globals.user.home_path, {
-			winArgs: {bottomPad: SAVEAS_BOTTOM_HGT},
-			saver: {
-				ext, 
-				folderCb: fwin=>{
-//					win.saveFolder = fwin;
-					_win_update(1, win, fwin);
-				},
-				cb:async (fwin, savename)=>{//«
-//					win.saveFolder.forceKill();
-//					win.saveFolder = null;
-					_win_update(2, win);
-					if (!fwin) Y({});
-//					else Y({path: fwin.fullpath, name: savename});
-					else Y({parNode: fwin.app.node, name: savename.trim()});
-					CWIN = null;
-					win.up();
-					win.on();
-				}//»
-			}
-		});
-	});
+
+const save_as = (win, ext)=>{//«
+
+return new Promise(async(Y,N)=>{
+
+const cb = async (fwin, savename)=>{//«
+	_win_update(2, win); // Kill/Delete win.#saveFolder
+	if (!fwin) Y({});
+	else Y({parNode: fwin.app.node, name: savename.trim()});
+	CWIN = null;
+	win.up();
+	win.on();
+};//»
+
+open_new_window(await globals.user.home_path.toNode(), {
+	winArgs: { saver: { ext, win, cb } }
+});
+
+});
+
 };//»
 
 //»
@@ -8024,6 +8271,13 @@ window.onfocus=(e)=>{//«
 	}
 };//»
 
+const check_name_exists = async(str, which, usepath) => {//«
+	let path;
+	if (which) path = which.fullpath;
+	else path = usepath;
+	let fullpath = `${path}/${str}`.regpath();
+	return fullpath.toNode();
+}//»
 const set_workspace_num = which => {//«
 	workspace_num_div.innerHTML=`${which+1}`;
 	workspace_num_div.title = `Current workspace: ${which+1}\nCtrl+Alt+Shift+[1-${num_workspaces}]\nto switch workspaces`;
@@ -8449,6 +8703,7 @@ cwarn("There was an unattached icon in ICONS!");
 				}
 				let rect = useicon.iconElem._gbcr();
 				useicon.wrapper.oncontextmenu({clientX: rect.left, clientY: rect.top, isFake: true});
+				return; //YGFAKJHBF
 			}
 			
 			else if (!cwin) {
@@ -8565,7 +8820,7 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 		case "d_A": return (e.preventDefault(), minimize_all_windows());
 		case "t_A": return open_terminal();
 		case "e_A": return (e.preventDefault(), open_home_folder());
-		case "0_A": return open_app("util.WorkMan");
+		case "0_A": return open_window_by_app_name("util.WorkMan");
 		case "l_CAS": return console.clear();
 //		case "b_A": return toggle_taskbar();
 		case "b_A": return taskbar.toggle();
@@ -8665,8 +8920,6 @@ const dokeyup = function(e) {//«
 	if (winorig.match(/localhost/)||winorig.match(/127\.0\.0\.1/)||winorig.match(/192\.168\./)) globals.is_local = true;
 	dev_mode = globals.dev_mode = globals.is_local||qObj.expert||false;
 	admin_mode = globals.admin_mode = !!(qObj.admin && qObj.admin.match(/^i_am_crazy$/i));
-	if (!await fs.api.init()) return;
-	if (!await fs.mk_user_dirs()) return;
 	check_for_desktops_in_other_tabs();
 	document.onkeyup = null;
 	make_desktop();
@@ -8675,7 +8928,11 @@ const dokeyup = function(e) {//«
 	desk._add(CUR.curElem);
 	CUR.set(0);
 	if (!isMobile && !qObj.nocursor && globals.is_local) CUR.on(true);
-	await reloadIcons();
+
+//EUOWTHKTG
+	if (!await fs.api.init()) return;
+	await reload_desk_icons();
+
 	if (localStorage[`taskbar_hidden:${globals.user.CURRENT_USER}`]) taskbar.hide();
 	taskbar.taskbarElem._op=TASKBAR_OP;
 
@@ -8721,6 +8978,7 @@ const dokeyup = function(e) {//«
 //»
 
 //»
+
 
 /*Hold«
 const tile_windows = () => {//«
@@ -9025,6 +9283,86 @@ for (let j = 0; j < arr.length; j++) {
 ////»
 return arr;
 };//»
+»*/
+
+/* Old «
+
+const update_folder_statuses = usepath => {//«
+	for (let w of get_all_windows()) {
+		if (w.appName !== FOLDER_APP) continue;
+		if (usepath) {
+			if (w.fullpath === usepath) w.app.update();
+		} else w.app.update();
+	}
+};
+this.update_folder_statuses=update_folder_statuses;
+//»
+const make_folder = () => {//«
+	if (!CWIN || CWIN.appName != FOLDER_APP){
+		make_new_icon(desk, FOLDER_APP);
+	}
+	else {
+		make_new_icon(CWIN, FOLDER_APP);
+	}
+};//»
+const open_folder_win = (name, path, winargs, saverarg, prevpaths) => {//«
+//	let icn = iconarg || {appName: FOLDER_APP,name: name,path: path,fullpath:()=>{(path + "/" + name).regpath()}};
+	let icn = {
+		winArgs: winargs,
+		appName: FOLDER_APP,
+		name: name,path: path,
+		fullpath:()=>{(path + "/" + name).regpath()}
+	};
+//	icn.winArgs = winargs;
+	return open_new_window(icn, {saver: saverarg, prevPaths: prevpaths});
+}//»
+const get_desk_icon_array = () => {//«
+	let icons;
+	if (desk.icons) {
+		icons = desk.icons;
+	}
+	else {
+		icons = set_icon_array_of_desk();
+	}
+	return icons;
+}//»
+const get_icon_array = (arg, if_compact) => {//«
+	if (arg!==desk) {
+		let out = [];
+		let arr = Array.from(arg.winElem.getElementsByClassName("icon"));
+		for (let icn of arr) out.push(icn.icon);
+		return out;
+	}
+	let icons;
+	if (desk.icons) {
+		icons = desk.icons;
+	}
+	else {
+		icons = set_icon_array_of_desk();
+	}
+	if (!if_compact) return icons;
+	let arr = [];
+	for (let i = 0; i < icons.length; i++) {
+		let icn = icons[i];
+		if (icn&&icn.parentNode) arr.push(icn);
+	}
+	return arr;
+}//»
+const set_icon_array_of_desk = () => {//«
+	let numx = DESK_GRID_W;
+	desk.cols = numx;
+	let arr = [];
+	let kids = desk.childNodes;
+	for (let i = 0; i < kids.length; i++) {
+		let kid = kids[i];
+		if (kid.className != "icon" || kid.path != DESK_PATH) continue;
+		let num = kid.col + (kid.row * numx);
+		arr[num] = kid;
+	}
+	desk.icons = arr;
+	return arr;
+}//»
+
 »*/
 
 //«})();

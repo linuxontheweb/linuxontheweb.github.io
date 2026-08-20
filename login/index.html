@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<link rel="icon" href="/www/favicon.ico">
     <title>Firebase Auth for LOTW</title>
+
+<!-- Style « -->
 <style>
 .maindiv{
 	display: flex;
@@ -119,18 +121,12 @@
 }
 
 </style>
+
+<!-- » -->
+
 </head>
 <body>
 
-<!--
-
-Here's a dead-simple single-file index.html for GitHub Pages using Firebase
-Auth (email/password + Google) via CDN (v10.12.5). Replace firebaseConfig with
-your project's config from Firebase console. Deploy to GitHub Pages.
-
-After auth, access database via getFirestore(app) (add import if needed).
-
--->
 
 <div id="status" class="maindiv" style="display: flex;">
 <h2>Checking authentication status...</h2>
@@ -148,7 +144,8 @@ After auth, access database via getFirestore(app) (add import if needed).
 <button id="signInBtn">Sign In</button>
 <br><br>
 </div>
-
+-->
+<!-- « -->
 <button id="googleSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
   <div class="gsi-material-button-content-wrapper">
@@ -165,10 +162,12 @@ After auth, access database via getFirestore(app) (add import if needed).
     <span style="display: none;">Sign in with Google</span>
   </div>
 </button>
+<!-- » -->
 
 <br>
 
--->
+<!-- « -->
+<!--
 <button id="githubSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
   <div class="gsi-material-button-content-wrapper">
@@ -183,7 +182,6 @@ After auth, access database via getFirestore(app) (add import if needed).
     <span style="display: none;">Sign in with GitHub</span>
   </div>
 </button>
-<!--
 <br>
 <button id="facebookSignInBtn" class="gsi-material-button">
   <div class="gsi-material-button-state"></div>
@@ -205,9 +203,11 @@ After auth, access database via getFirestore(app) (add import if needed).
   </div>
 </button>
 -->
+<!-- » -->
 
     </div>
 
+<!-- « -->
     <div id="authPart" class="maindiv" style="display: none;">
         <h2>Authenticated for Firebase access!</h2>
         <p id="userInfo"></p>
@@ -215,20 +215,21 @@ After auth, access database via getFirestore(app) (add import if needed).
     	<span class="gsi-material-button-contents">Sign out</span>
 		</button>
     </div>
+<!-- » -->
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/12.16.0/firebase-app.js";
         import { getAuth, 
 //			createUserWithEmailAndPassword, 
 //			signInWithEmailAndPassword, 
 			onAuthStateChanged, 
 			signOut, 
-//			GoogleAuthProvider, 
+			GoogleAuthProvider, 
 			signInWithPopup, 
-			GithubAuthProvider,
+//			GithubAuthProvider,
 //			FacebookAuthProvider 
-		} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-
+		} from "https://www.gstatic.com/firebasejs/12.16.0/firebase-auth.js";
+/*
         const firebaseConfig = {
             // Your config: apiKey, authDomain, projectId, etc.
 		  apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
@@ -239,12 +240,25 @@ After auth, access database via getFirestore(app) (add import if needed).
 		  messagingSenderId: "668423415088",
 		  appId: "1:668423415088:web:979b40c704cab2322ed4f5"
         };
+*/
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBHEN5WDUFgeA-CfP-KHUrFG3_ZJruylEw",
+    authDomain: "lotw-v001.firebaseapp.com",
+    databaseURL: "https://lotw-v001-default-rtdb.firebaseio.com",
+    projectId: "lotw-v001",
+    storageBucket: "lotw-v001.firebasestorage.app",
+    messagingSenderId: "686644388229",
+    appId: "1:686644388229:web:8f5e3b119def6b69cfe4ec"
+  };
+
+
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
 //      const provider = new GoogleAuthProvider();
-//		const googleProvider = new GoogleAuthProvider();
-		const githubProvider = new GithubAuthProvider(); 
-		githubProvider.setCustomParameters({
+		const googleProvider = new GoogleAuthProvider();
+//		const githubProvider = new GithubAuthProvider(); 
+		googleProvider.setCustomParameters({
 			prompt: 'select_account'
 		});
 //		const facebookProvider = new FacebookAuthProvider(); 
@@ -285,6 +299,12 @@ console.log(`Got email: ${email}`);
                 authDiv.style.display = 'none';
             }
         });
+		// Google sign in
+        document.getElementById('googleSignInBtn').addEventListener('click', () => {
+            signInWithPopup(auth, googleProvider)
+                .then(() => console.log('Google signed in'))
+                .catch((error) => console.error(error));
+        });
 /*
         // Sign up
         document.getElementById('signUpBtn').addEventListener('click', () => {
@@ -299,21 +319,15 @@ console.log(`Got email: ${email}`);
                 .then(() => alert('Signed in'))
                 .catch((error) => alert(error.message));
         });
-		// Google sign in
-        document.getElementById('googleSignInBtn').addEventListener('click', () => {
-            signInWithPopup(auth, googleProvider)
-                .then(() => console.log('Google signed in'))
-                .catch((error) => console.error(error));
-        });
-
-*/
-
         // GitHub sign in
         document.getElementById('githubSignInBtn').addEventListener('click', () => {
             signInWithPopup(auth, githubProvider)
                 .then(() => console.log('GitHub signed in'))
                 .catch((error) => console.error(error));
         });
+
+*/
+
 /*
         document.getElementById('facebookSignInBtn').addEventListener('click', () => {
             signInWithPopup(auth, facebookProvider)

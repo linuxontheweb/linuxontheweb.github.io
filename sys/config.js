@@ -73,11 +73,21 @@ if (qObj.branch && !(/^[a-zA-Z]\w*$/.test(qObj.branch))){
 }
 const FS_PREF = qObj.branch || DEF_BRANCH_NAME;
 //const FS_PREF=DEF_BRANCH_NAME;
-const FS_TYPE= "fs";
-const SHM_TYPE= "shm";
+
+const OP_FS_TYPE= "fs", // Origin-Private
+	DEV_FS_TYPE= "dev", // Any immediate child of /dev 
+	SHM_FS_TYPE= "shm", // Shared memory (volatile), /dev/shm
+	SITE_FS_TYPE = "site", // Files on the main backend (read-only)
+	MNT_FS_TYPE = "mnt"; // Maybe this should be called 'ALT_FS_TYPE'
+ 
 //const USERS_TYPE = "users";
-//Node types
-const DIR_TYPE="d",LINK_TYPE="l",BAD_LINK_TYPE="b",IDB_DATA_TYPE="i";
+
+// Node types
+const FILE_NODE_TYPE="f",
+	DIR_NODE_TYPE="d",
+	LINK_NODE_TYPE="l",
+	BAD_LINK_NODE_TYPE="b",
+	NULL_BLOB_NODE_TYPE="n";
 
 //»
 
@@ -202,12 +212,12 @@ const HTML_APP = "util.HTML";
 const TEXT_EDITOR_APP = "TextEdit";
 
 const FOLDER_APP = "Folder";
-const LINK_APP = "Link";
+const APPLICATION_APP = "__APPLICATION__";
+const LINK_APP = "__LINK__";
 const TEXT_APP = "util.TextView";
 const WRITING_APPS = [
 	TEXT_EDITOR_APP
 ];
-const VIEWONLY_APPS=[];
 
 //File extensions/Unicode icons«
 //Extension points to the array position above
@@ -216,7 +226,7 @@ const IA = IMAGE_APP;
 const MA = MEDIA_APP;
 const AA = "games.Arcade";
 const EXT_TO_APP_MAP = {//«
-	app:"Application",
+	app: APPLICATION_APP,
 	txt:TE,
 	js:TE,
 	json:TE,
@@ -244,6 +254,8 @@ const ALL_EXTENSIONS_RE= new RegExp("^(.+)\\.(" + ALL_EXTENSIONS.join("|") + ")$
 Large kitchen knife 1f52a
 */
 const APP_NAME_TO_ICON = {//«
+	[LINK_APP]: "1f517",
+	[APPLICATION_APP]: "41",
 	Launcher:"1f680",
 	HTML:"1f310",
 	Folder:"1f4c1",
@@ -491,6 +503,7 @@ const VIM_MODES={
 };
 //»
 //Firebase«
+/*
 const FIREBASE_CONFIG = {
     apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
     authDomain: "linuxontheweb.firebaseapp.com",
@@ -500,6 +513,20 @@ const FIREBASE_CONFIG = {
     messagingSenderId: "668423415088",
     appId: "1:668423415088:web:979b40c704cab2322ed4f5"
 };
+*/
+const FIREBASE_CONFIG = {
+	apiKey: "AIzaSyBHEN5WDUFgeA-CfP-KHUrFG3_ZJruylEw",
+	authDomain: "lotw-v001.firebaseapp.com",
+	databaseURL: "https://lotw-v001-default-rtdb.firebaseio.com",
+	projectId: "lotw-v001",
+	storageBucket: "lotw-v001.firebasestorage.app",
+	messagingSenderId: "686644388229",
+	appId: "1:686644388229:web:8f5e3b119def6b69cfe4ec"
+};
+const FIREBASE_BASE_URL = "https://www.gstatic.com/firebasejs/12.16.0";
+const FIREBASE_APP_URL = `${FIREBASE_BASE_URL}/firebase-app.js`;
+const FIREBASE_AUTH_URL = `${FIREBASE_BASE_URL}/firebase-auth.js`;
+const FIREBASE_DB_URL = `${FIREBASE_BASE_URL}/firebase-database.js`;
 //»
 LOTW.globals = {//«
 //export const globals = {
@@ -519,6 +546,7 @@ auth:{
 app: {
 	APPLICATIONS_MENU,
 	LINK_APP,
+	APPLICATION_APP,
 	FOLDER_APP,
 	TEXT_APP,
 	TERMINAL_APP,
@@ -530,7 +558,6 @@ app: {
 	TEXT_EDITOR_APP,
 	DEF_BIN_APP,
 	WRITING_APPS,
-	VIEWONLY_APPS,
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
@@ -547,19 +574,26 @@ css:{
 	BEWARE_RED,
 },
 firebase: {
-	config: FIREBASE_CONFIG
+	config: FIREBASE_CONFIG,
+	appUrl: FIREBASE_APP_URL,
+	authUrl: FIREBASE_AUTH_URL,
+	dbUrl: FIREBASE_DB_URL
 },
 fs: {
 	FS_PREF,
-	FS_TYPE,
+	OP_FS_TYPE,
 	FS_DB_NAME,
-	SHM_TYPE,
+	SHM_FS_TYPE,
+	SITE_FS_TYPE,
+	DEV_FS_TYPE,
 //	USERS_TYPE,
 
-	DIR_TYPE,
-	LINK_TYPE,
-	BAD_LINK_TYPE,
-	IDB_DATA_TYPE,
+	FILE_NODE_TYPE,
+	DIR_NODE_TYPE,
+	LINK_NODE_TYPE,
+	BAD_LINK_NODE_TYPE,
+	NULL_BLOB_NODE_TYPE,	
+
 	APPDATA_PATH,
 },
 mail: {

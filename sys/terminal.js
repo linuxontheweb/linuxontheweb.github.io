@@ -169,7 +169,6 @@ check_for_other_systems();
 
 (async()=>{
 	if (!await fs.api.init()) return;
-	if (!await fs.mk_user_dirs()) return;
 	WIN = new TerminalWindow();
 	if (!await WIN.loadApp()) return;
 	Object.freeze(NS);

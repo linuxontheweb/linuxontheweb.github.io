@@ -1,4 +1,12 @@
 (()=>{"use strict";const APPNAME="Terminal";
+
+/* 8/4/26: First real use of String.toNode({mkFile: true})«
+
+Now when getting the shell history file node (@SHEJTNYKD), all of the necessary
+subfolders will be created (namely, ~/.history).
+
+»*/
+
 /*6/10/26: How to enable printing again on the same line?«
 
 This is like updating a status line.
@@ -163,7 +171,7 @@ Now scrutinizing handleBackspace @MSKEUTJDK. Just want to enable basic multi-lin
 »*/
 //»
 
-//Terminal Imports«
+//Imports«
 const NS = LOTW;
 const util = LOTW.api.util;
 const globals = LOTW.globals;
@@ -201,14 +209,9 @@ const {//«
 //	nodejs_mode,
 } = globals;//»
 const{
-	FS_TYPE,
-	MOUNT_TYPE,
-	SHM_TYPE,
-    DIR_TYPE,
-    LINK_TYPE,
-    BAD_LINK_TYPE,
-    IDB_DATA_TYPE,
-
+    DIR_NODE_TYPE,
+    LINK_NODE_TYPE,
+    BAD_LINK_NODE_TYPE,
 }=globals.fs;
 const{
 	TEXT_EDITOR_APP,
@@ -232,39 +235,16 @@ const INT_ALNUM_RE = /[0-9\p{Letter}]/u;
 const INT_ALNUM_PRINT_RE = /[\x20-\x7E\p{Letter}]/u;
 
 //const PRINTABLE_RE = /[\p{Print}]/u;
-/*
-RIGHT
-UP
-DOWN
-DEL
-*/
 
-/*
-
-const{STAT_NONE,STAT_OK,STAT_WARN,STAT_ERR} = TERM_STAT_TYPES;
-
-const {
-	COMMAND_MODE,
-	INSERT_MODE,
-	REPLACE_MODE,
-	VIS_LINE_MODE,
-	VIS_MARK_MODE,
-	VIS_BLOCK_MODE,
-	CUT_BUFFER_MODE,
-	LINE_WRAP_MODE,
-	SYMBOL_MODE,
-	FILE_MODE,
-	COMPLETE_MODE,
-	REF_MODE
-} = VIM_MODES;
-*/
 const fsapi = fsMod.api;
 const widgets = LOTW.api.widgets;
 const {poperr} = widgets;
 
 const HISTORY_FOLDER = `${globals.user.HOME_PATH}/.history`;
 const HISTORY_PATH = `${HISTORY_FOLDER}/shell.txt`;
-const HISTORY_PATH_SPECIAL = `${HISTORY_FOLDER}/shell_special.txt`;
+
+//const HISTORY_PATH_SPECIAL = `${HISTORY_FOLDER}/shell_special.txt`;
+
 const LEFT_KEYCODE = KC.LEFT;
 
 const DEL_MODS=[
@@ -975,7 +955,7 @@ return;
 				let num1 = parseInt(numstr);
 				let obj = colobj[numstr];
 				if (obj[0] < 1){
-cwarn(`GOT INVALID colobj numstr(${numstr}) curnum(${curnum})`);
+//cwarn(`GOT INVALID colobj numstr(${numstr}) curnum(${curnum})`);
 //log(arr.join(""));
 					continue;
 				}
@@ -1569,20 +1549,21 @@ historyDownMatching(){//«
 		this.commandHold = null;
 	}
 }//»
+/*
 async saveSpecialCommand(){//«
-cwarn("UPDATE saveSpecialCommand to call node.setValue (and not fsapi.writeFile!!!)");
+cwarn("UPDATE saveSpecialCommand to call node.setValue (and not fsapi.WRITEFILE!!!)");
 return;
 	let s = this.getComArr().join("");
 	if (!s.match(/[a-z]/i)) {
 log("Not saving", s);
 		return;
 	}
-	if (await fsapi.writeFile(HISTORY_PATH_SPECIAL, `${s}\n`, {append: true})) return this.doOverlay(`Saved special: ${s}`);
+	if (await fsapi.WRITEFILE(HISTORY_PATH_SPECIAL, `${s}\n`, {append: true})) return this.doOverlay(`Saved special: ${s}`);
 	poperr(`Could not write to: ${HISTORY_PATH_SPECIAL}!`);
 };
 //»
+*/
 async appendToHistory(str){//«
-//	if (!await fsapi.writeFile(HISTORY_PATH, `${str}\n`, {append: true})) {
 	if (!await this.historyNode.setValue(`${str}\n`, {append: true})) {
 cwarn(`Could not write to history: ${HISTORY_PATH}`);
 	}
@@ -1621,41 +1602,19 @@ async initHistory(history, historyNode){//«
 	}
 }//»
 async getHistory(val){//«
-//	let fnode = await fsapi.pathToNode(HISTORY_FOLDER);
-	let fnode = await HISTORY_FOLDER.toNode();
-	if (!fnode){
-		if (!await fsapi.mkDir(globals.user.HOME_PATH, ".history")){
-cerr("Could not make the .history folder!");
-			return;
-		}
-	}
-	else if (fnode.appName !== FOLDER_APP){
-		cwarn("History directory path is NOT a directory!!!");
-		return;
-	}
-//	let node = await fsapi.pathToNode(HISTORY_PATH);
-	let node = await HISTORY_PATH.toNode();
-	if (!node) {
-		node = await fsapi.touchFile(fnode, "shell.txt");
-		this.historyNode = node;
-		return;
-	}
+
+//SHEJTNYKD
+let node = await HISTORY_PATH.toNode({mkFile: true});
+if (!node) {
+cerr(`Could not get/make the history file: ${HISTORY_PATH}`);
+return;
+}
 	this.historyNode = node;
 	let text = await node.text;
 	if (!text) return;
 	return text.split("\n");
 }
 //»
-
-/*
-async saveHistory(){//«
-	if (!await fsapi.writeFile(HISTORY_PATH, this.history.join("\n")+"\n")){
-		poperr(`Problem writing command history to: ${HISTORY_PATH}`);
-	}
-};
-
-//»
-*/
 
 //»
 //Prompt/Command line«
@@ -1814,7 +1773,8 @@ async quoteCompletion(use_dir, tok0, arr, arr_pos){//«
 			this.handleLetterPress("/");
 			this.awaitNextTab = true;
 		}
-		else if (ret[0][1]==="Link"){
+//		else if (ret[0][1]==="Link"){
+		else if (ret[0][1]===LINK_APP){
 //			let obj = await fsapi.pathToNode(`${use_dir}/${use_str}${rem}`);
 			let obj = await `${use_dir}/${use_str}${rem}`.toNode();
 			if (obj && obj.appName===FOLDER_APP){
@@ -1842,8 +1802,6 @@ async getDirContents(dir, pattern, opts={}){//«
 	let {if_cd, if_keep_ast} = opts;
 let list;
 	const domatch=async()=>{//«
-//		kids = ret.kids;
-//		keys = Object.keys(kids);
 		let match_arr = [];
 		if (!if_keep_ast) pattern = pattern.replace(/\*/g, "[a-zA-Z_]*");
 		pattern = pattern.replace(/\xa0/g, " ");
@@ -1856,38 +1814,20 @@ catch(e){
 //log(e);
 return match_arr;
 }
-//		for (let i=0; i < keys.length; i++) {
 		for (let kid of list) {
-//			let key = keys[i];
-//			if (key=="."||key=="..") continue;
-//			let kid = kids[key];
 			let nm = kid.name;
-/*
-			if (!this.rootState){
-				let cur = kid;
-				while (cur.treeroot !== true) {
-					if (cur.rootonly === true) {
-						kid = null;
-						break;
-					}
-					cur = cur.par;
-				}
-				if (!kid) continue;
-			}
-*/
 			let useapp = kid.appName;
-//			let ret = [keys[i], useapp];
 			let ret = [nm, useapp];
-			if (useapp == "Link") ret.push(kid.link);
-//			if (pattern == "" || re.test(keys[i])) match_arr.push(ret);
+//			if (useapp == "Link") ret.push(kid.link);
+			if (useapp == LINK_APP) ret.push(kid.link);
 			if (pattern == "" || re.test(nm)) match_arr.push(ret);
 		}
 		return match_arr;
 	};//»
 	if (dir===null) throw new Error("this.getDirContents() no dir!");
-//	let ret = await fsapi.pathToNode(dir);
 	let ret = await dir.toNode();
-	if (!(ret&&ret.appName==FOLDER_APP)) return [];
+//	if (!(ret&&ret.appName==FOLDER_APP)) return [];
+	if (!(ret&&ret.isDir)) return [];
 	list = await ret.list;
 	return domatch();
 }
@@ -1898,6 +1838,7 @@ async doGetDirContents(use_dir, tok, tok0, arr_pos)  {//«
 	this.doContents(ret, use_dir, tok, arr_pos);
 }//»
 async doContents(contents, use_dir, tok, arr_pos){//«
+
 	if (contents.length == 1) {//«
 
 //METACHAR_ESCAPE
@@ -1925,10 +1866,11 @@ async doContents(contents, use_dir, tok, arr_pos){//«
 		else if (type=="appDir"||type=="libDir"){
 			handle_chars+=".";
 		}
-		else if (type=="Link") {
+		else if (type==LINK_APP) {
+//log(contents);
 			let link = contents[0][2];
 			if (!link){
-cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
+cwarn("WHAT DOES THIS MEAN: !contents[0][2]?!?!?!?");
 			}
 			else if (!link.match(/^\x2f/)) {
 //cwarn("this.handleTab(): GOWDA link YO NOT FULLPATH LALA");
@@ -1936,7 +1878,9 @@ cwarn("WHAT DOES THIS MEAN: contents[0][2]?!?!?!?");
 			else {
 //				let obj = await fsapi.pathToNode(link);
 				let obj = await link.toNode();
-				if (obj&&obj.appName==FOLDER_APP) {
+//				if (obj&&obj.appName==FOLDER_APP) {
+//log(123);
+				if (obj&&obj.isDir) {
 					if (this.awaitNextTab) {
 						handle_chars+="/";
 					}
@@ -2149,10 +2093,9 @@ for (let i=0; i < NUM; i++){
 	let typ;
 	if (types) typ = types[i];
 	let color;
-	if (typ==DIR_TYPE) color="#909fff";
-	else if (typ==LINK_TYPE) color="#0cc";
-	else if (typ==BAD_LINK_TYPE) color="#f00";
-	else if (typ==IDB_DATA_TYPE) color="#cc0";
+	if (typ==DIR_NODE_TYPE) color="#909fff";
+	else if (typ==LINK_NODE_TYPE) color="#0cc";
+	else if (typ==BAD_LINK_NODE_TYPE) color="#f00";
 
     out[row][col] = what;
 	if (color_ret) {
@@ -3103,15 +3046,15 @@ this.doClipboardCopy(this.env.vars._LAST_);
 		case "e_C": 
 			this.seekLineEnd();
 			break;
-		case "g_CAS":
-			this.saveSpecialCommand();
-			break;
+//		case "g_CAS":
+//			this.saveSpecialCommand();
+//			break;
 		case "h_CAS":
 			this.selectFromHistory(HISTORY_PATH);
 			break;	
-		case "s_CAS":
-			this.selectFromHistory(HISTORY_PATH_SPECIAL);
-			break;
+//		case "s_CAS":
+//			this.selectFromHistory(HISTORY_PATH_SPECIAL);
+//			break;
 		case "r_CA"://DYUHJTK
 			this.reloadShell();
 			break;
@@ -3908,9 +3851,9 @@ fmtLs(arr, lens, ret, types, color_ret, col_arg){//«
 		let typ;
 		if (types) typ = types[i];
 		let color;
-		if (typ==DIR_TYPE) color="#909fff";
-		else if (typ==LINK_TYPE) color="#0cc";
-		else if (typ==BAD_LINK_TYPE) color="#f00";
+		if (typ==DIR_NODE_TYPE) color="#909fff";
+		else if (typ==LINK_NODE_TYPE) color="#0cc";
+		else if (typ==BAD_LINK_NODE_TYPE) color="#f00";
 		else if (typ==IDB_DATA_TYPE) color="#cc0";
 		col_num = Math.floor(i%num_cols);
 		row_num = Math.floor(i/num_cols);
