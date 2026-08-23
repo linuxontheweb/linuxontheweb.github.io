@@ -33,27 +33,36 @@ disappears, no matter the destination (it seems(.
 /*8/23/26: Icon update stuff «
 
 
-I. Added done_cb and no_move_cb into coms/fs.js: com_mv, com_cp
+I. Added done_cb and no_move_cb into coms/fs.js: com_mv, com_cp//«
 
 This doesn't affect the desktop directly, but rather indicates that we
 might want to share some code between these two modules.
+//»
 
-
-
-II. Can we reuse `make_icon` @SNEJRUTK, so that if `isStr(where) === true`, then 
+II. Can we reuse `make_icon` @SNEJRUTK, so that if `isStr(where) === true`, then //«
 `where` is just a path, and in the case that `where === DESK_PATH`, then
 we will make the desktop icon via place_icon_in_desk_slot.
 
 For all paths, we will look for all folder wins with the given path and
 call add_icon_to_folder_win.
+//»
 
-
-III. @SJRKSNRN: Need to really thing about done_cb. Do we really
+III. @SJRKSNRN: Need to really thing about done_cb. Do we really//«
 want to keep the old icons around? I think we should:
 a) await the animation promises
 b) delete the old (animated) icons
 c) call node.mkAllIcons
+//»
 
+// !!! FINAL ICON DEL/MAKE LOGIC !!! «
+Given the final fixing of the above bug, we just need to follow the instructions
+in the warning(s) for the various move/copy methods (folder icon, desktop, window)
+in order to make this a "pixel perfect" function call.
+
+a) folder icon: @WEBRNTJK 
+b) desktop: @XMJTJTKYH
+c) folder window: @PKHFBRNDH
+//»
 
 »*/
 
@@ -5964,22 +5973,6 @@ const get_icon_copy = () => {//«
 	elm._pos="fixed";
 	return newicn;
 };//»
-const do_end = () => {
-
-//SJRKSNRN
-/*
-1) delete the old (animated) icons
-2) call node.mkAllIcons
-
-For all move's, and for every window that is not (the "physical") destwin,
-
-
-
-*/
-cwarn("HI");
-log(`${oldpath} -> ${newpath}`);
-
-};
 
 /*
 For every icon that we need to move/copy, this is the callback the shell
@@ -6026,6 +6019,7 @@ uses upon success, which triggers the move animations.
 
 cwarn("FOLDER ICON: done");
 if (!do_copy) {
+// WEBRNTJK
 cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath}`);
 }
 /*
@@ -6073,6 +6067,7 @@ cwarn("DESK: done");
 Since the only moved icon has been relocated to the desktop, we need to call
 Desk.make_all_icons() with the new node, and the option to only
 */
+// XMJTJTKYH
 if (!do_copy){
 cwarn(`Remove all remaining icons from folder wins: ${oldpath}`);
 }
@@ -6107,6 +6102,7 @@ log(mv_icn.iconElem);
 				}
 
 cwarn("FOLDER MAIN: done");
+// PKHFBRNDH
 if (!do_copy){
 
 cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath} (skipping destwin)`);
