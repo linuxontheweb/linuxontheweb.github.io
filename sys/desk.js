@@ -62,7 +62,14 @@ in order to make this a "pixel perfect" function call.
 a) folder icon: @WEBRNTJK 
 b) desktop: @XMJTJTKYH
 c) folder window: @PKHFBRNDH
+
+For moving, we need to remove all old icons and update names and paths of open
+windows that were opened with the oldpath.
+
+
 //»
+
+ARE WE DONE W/ THE CLEANUP LOGIC @ZNRUTKGTJ???
 
 »*/
 
@@ -5231,7 +5238,7 @@ CRW.statusBar.resize();
 
 };//»
 
-this.cleanup_deleted_wins_and_icons = path => {//«
+const cleanup_deleted_wins_and_icons = path => {//«
     let namearr = getNameExt(path, null, true);
     let usepath = `${namearr[0]}/${namearr[1]}`;
     let useext = namearr[2];
@@ -5880,6 +5887,17 @@ api.Icon = Icon;
 
 //XKNFIUHJ
 
+const cleanup_deleted_icons = path => {//«
+    let namearr = getNameExt(path, null, true);
+    let usepath = `${namearr[0]}/${namearr[1]}`;
+    let useext = namearr[2];
+    let icons = get_icons_by_path(usepath, useext);
+    for (let icn of icons) {
+		if (icn.cancel_func) icn.cancel_func();
+		icn.del();
+    }  
+}//»
+
 const toggle_icon_display = () => {//«
 	if (!dev_mode) return;
 	SHOW_ICONS = !SHOW_ICONS;
@@ -6018,15 +6036,16 @@ uses upon success, which triggers the move animations.
 					if (!do_copy) icn.del();
 
 cwarn("FOLDER ICON: done");
-if (!do_copy) {
-// WEBRNTJK
-cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath}`);
-}
 /*
 Since the only moved icon has been removed, we are free to call
 Desk.make_all_icons() with the new node
 */
 					Desk.make_all_icons(await newpath.toNode());
+if (!do_copy) {
+// WEBRNTJK
+// 1
+rm_icons_and_update_wins(oldpath, newpath, {which: 1});
+}
 
 				}
 			});
@@ -6068,14 +6087,16 @@ Since the only moved icon has been relocated to the desktop, we need to call
 Desk.make_all_icons() with the new node, and the option to only
 */
 // XMJTJTKYH
-if (!do_copy){
-cwarn(`Remove all remaining icons from folder wins: ${oldpath}`);
-}
 
 cwarn(`Add icons to folder wins: ${newpath}`);
 
 log(mv_icn);
 log(mv_icn.iconElem);
+
+if (!do_copy){
+// 2
+rm_icons_and_update_wins(oldpath, newpath, {which: 2});
+}
 
 				}
 			});
@@ -6103,14 +6124,15 @@ log(mv_icn.iconElem);
 
 cwarn("FOLDER MAIN: done");
 // PKHFBRNDH
-if (!do_copy){
-
-cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath} (skipping destwin)`);
-
-}
 
 cwarn(`Add icons to desktop (if needed) AND folder wins: ${newpath} (skipping destwin)`);
 
+if (!do_copy){
+// 3
+
+rm_icons_and_update_wins(oldpath, newpath, {which: 3})
+
+}
 
 			};//»
 			if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
@@ -8150,6 +8172,48 @@ window.onfocus=(e)=>{//«
 		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
 	}
 };//»
+
+const rm_icons_and_update_wins=async(oldpath, newpath, opts={}) => {//«
+
+// «
+// 1
+// cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath}`);
+
+// 2
+//cwarn(`Remove all remaining icons from folder wins: ${oldpath}`);
+
+// 3
+//cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath} (skipping destwin)`);
+const {which} = opts;
+// »
+
+/* ZNRUTKGTJ
+Is this totally correct already? Do we need to worry about the minutae from
+the different cases above?
+*/
+
+// Delete icons (these are cheap)
+cleanup_deleted_icons(oldpath);
+
+// Update windows from oldpath -> newpath (just update the underlying 
+// Window.#node property.
+let node = await newpath.toNode();
+if (!node){
+cerr(`NO NODE FOUND FOR PATH: <${newpath}>!?!?!?`);
+return;
+}
+let wins = get_wins_by_path(oldpath);
+for (let win of wins) {
+	_win_update(3, win, node);
+
+// Actually, only the paths should change when called from `move_icons`.
+// In case we are being called from com_mv, we need to do this:
+	win.title = node.baseName;
+
+}
+
+
+}//»
 
 const check_name_exists = async(str, which, usepath) => {//«
 	let path;

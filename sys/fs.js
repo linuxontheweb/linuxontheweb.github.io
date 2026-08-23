@@ -1632,7 +1632,11 @@ get file(){//«
 }//»
 
 get ext(){let arr = getNameExt(this.name);if (arr[1]) return arr[1];return "";}
-get baseName(){let arr = getNameExt(this.name);if (arr[1]) return arr[0];return this.name;}
+get baseName(){//«
+	let arr = getNameExt(this.name);
+	if (arr[1]) return arr[0];
+	return this.name;
+}//»
 get appName(){//«
 //cwarn(`name: ${this.name}`);
 	let arr = getNameExt(this.name);
