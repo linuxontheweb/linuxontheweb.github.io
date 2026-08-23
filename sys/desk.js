@@ -20,6 +20,46 @@ in the code.)
 
 »*/
 
+/*XXX BUG BUG BUG BUG BUG BUG BUG BUG BUG BUG BUG: 8/23/26 XXX
+
+
+In move_icons, when the "moved" icon is in a folder window, the icon *ALWAYS*
+disappears, no matter the destination (it seems(.
+
+
+
+*/
+
+
+/*8/23/26: Icon update stuff «
+
+
+I. Added done_cb and no_move_cb into coms/fs.js: com_mv, com_cp
+
+This doesn't affect the desktop directly, but rather indicates that we
+might want to share some code between these two modules.
+
+
+
+II. Can we reuse `make_icon` @SNEJRUTK, so that if `isStr(where) === true`, then 
+`where` is just a path, and in the case that `where === DESK_PATH`, then
+we will make the desktop icon via place_icon_in_desk_slot.
+
+For all paths, we will look for all folder wins with the given path and
+call add_icon_to_folder_win.
+
+
+III. @SJRKSNRN: Need to really thing about done_cb. Do we really
+want to keep the old icons around? I think we should:
+a) await the animation promises
+b) delete the old (animated) icons
+c) call node.mkAllIcons
+
+
+»*/
+
+//OLD BUGS/NOTES«
+
 /* BUG BUG BUG BUG: "Ghost Icons" appeared after moving them «
 
 ON 8/2/26
@@ -47,7 +87,6 @@ There seemed to be nothing "systemically incorrect" about this, it was
 just a matter of "ghost icons" suddenly appearing, seemingly "out of the blue".
 
 »*/
-
 /* BUGGY BUGGY BUGGY «
 
 After making the changes on 7/26/26
@@ -92,25 +131,6 @@ TypeError: fullname.match is not a function
 
 »*/
 
-/*8/23/26: Icon update stuff «
-
-
-I. Added done_cb and no_move_cb into coms/fs.js: com_mv, com_cp
-
-This doesn't affect the desktop directly, but rather indicates that we
-might want to share some code between these two modules.
-
-
-
-II. Can we reuse `make_icon` @SNEJRUTK, so that if `isStr(where) === true`, then 
-`where` is just a path, and in the case that `where === DESK_PATH`, then
-we will make the desktop icon via place_icon_in_desk_slot.
-
-For all paths, we will look for all folder wins with the given path and
-call add_icon_to_folder_win.
-
-
-»*/
 /* 8/7/26: Simplifying the concept of move/copy callbacks «
 @SYIROKTHB are: done_cb and no_move_cb. In order to make the core fs module
 maximally simple, that logic should call these functions with the relevant
@@ -518,6 +538,7 @@ here is a place where I didn't properly update it to the new value (which was
 already imported at the top of the file). See @WOLUITHN for an example bug
 that was introduced by this.
 »*/
+//»
 
 //«(()=>{"use strict";
    (()=>{"use strict";
@@ -5936,7 +5957,7 @@ the arg for the following two functions should merely be a path.
 */
 let icon_obj = {};
 
-const done_cb = async path => {//«
+const done_cb = async (oldpath, newpath) => {//«
 const get_icon_copy = () => {//«
 	let newicn = new Icon(icn.node,{parApp: icn.parApp});
 	newicn.parWin = icn.parWin;
@@ -5944,140 +5965,197 @@ const get_icon_copy = () => {//«
 	elm._pos="fixed";
 	return newicn;
 };//»
+const do_end = () => {
+
+//SJRKSNRN
+/*
+1) delete the old (animated) icons
+2) call node.mkAllIcons
+
+For all move's, and for every window that is not (the "physical") destwin,
+
+
+
+*/
+cwarn("HI");
+log(`${oldpath} -> ${newpath}`);
+
+};
+
 /*
 For every icon that we need to move/copy, this is the callback the shell
 uses upon success, which triggers the move animations.
 */
-	let icn = icon_obj[path];
+		let icn = icon_obj[oldpath];
 
-	let scrl = desk.scrollLeft;
-	let scrt = desk.scrollTop;
+		let scrl = desk.scrollLeft;
+		let scrt = desk.scrollTop;
 
-	let dest_node = await `${destpath}/${icn.fullname}`.toNode();
-//	if (!node.icons.includes(icn)) node.icons.push(icn);
-	
-	let rect = icn.iconElem._gbcr();
-
-//Onto a folder icon's dropzone
-	if (loc) {//«
-
-		if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
-
-		if (icn.parWin !== desk && !icn.iconElem.showing) {
-			rm_from_icons(icn);
-			return;
-		}
-
-		let mv_icn;
-		if (do_copy) mv_icn = get_icon_copy();
-		else {
-			mv_icn = icn;
-			if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
-		}
-
-		mv_icn.iconElem._loc(rect.left+desk.scrollLeft, rect.top+desk.scrollTop);
-		mv_icn.iconElem._pos="fixed";
-		desk._add(mv_icn.iconElem);
-		move_icon(mv_icn, loc.X+desk.scrollLeft, loc.Y+desk.scrollTop, {
-			scale: 0.25,
-			fade: true, 
-			cb:() => {
-				rm_from_icons(icn);
-				if (!do_copy) icn.del();
-			}
-		});
-	}//»
-
-//Onto the desktop: get location from 'e', passed into the desktop's ondrop event handler
-	else if (destwin == desk) {//«
-		if (!icn.iconElem.showing) {
-			rm_from_icons(icn);
-			make_new_desk_icon(dest_node);
-			return;
-		}
-
-		let mv_icn;
-		if (do_copy) mv_icn = get_icon_copy();
-		else mv_icn = icn;
+		let dest_node = await `${destpath}/${icn.fullname}`.toNode();
+	//	if (!node.icons.includes(icn)) node.icons.push(icn);
 		
-		mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
-		desk._add(mv_icn.iconElem);
-		mv_icn.iconElem._pos="fixed";
-		place_icon_in_desk_slot(mv_icn, {
-			doMove: true,
-			create: do_copy,
-			pos:{X:e.clientX+scrl,Y:e.clientY+scrt},
-			cb:()=>{
+		let rect = icn.iconElem._gbcr();
+
+	//Onto a folder icon's dropzone
+		if (loc) {//«
+
+			if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
+
+			if (icn.parWin !== desk && !icn.iconElem.showing) {
 				rm_from_icons(icn);
-				mv_icn.iconElem._op=1;
-				mv_icn.node = dest_node;
-				delete mv_icn.disabled;
+				return;
 			}
-		});
-	}//»
 
-// Onto a folder main window, from the desktop or another folder. 
-// The folder automatically places it
-	else {//«
-		let mv_icn;
-		const cb = () => {//«
-			rm_from_icons(icn);
-			if (destwin.isShowing && destwin.fullpath === destpath) {
-				mv_icn.iconElem.style.transform = "";
-				mv_icn.iconElem.style.transition = "";
-				mv_icn.iconElem._pos="";
-				add_icon_to_folder_win(mv_icn, destwin);
-				mv_icn.parApp = destwin.app;
-				mv_icn.iconElem._op=1;
-				mv_icn.node = dest_node;
-				delete mv_icn.disabled;
+			let mv_icn;
+			if (do_copy) mv_icn = get_icon_copy();
+			else {
+				mv_icn = icn;
+				if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
 			}
-			else if (!do_copy){
-				icn.del();
-			}
-		};//»
-		if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
-		if (icn.parWin !== desk && !icn.iconElem.showing) {
-			rm_from_icons(icn);
-			if (destwin.isShowing && destwin.fullpath === destpath) {
-				let newicn = new Icon(dest_node, {parApp: destwin.app});
-				add_icon_to_folder_win(newicn, destwin);
-			}
-			return;
-		}
 
-		if (destwin.isShowing && destwin.fullpath === destpath) {
+			mv_icn.iconElem._loc(rect.left+desk.scrollLeft, rect.top+desk.scrollTop);
+			mv_icn.iconElem._pos="fixed";
+			desk._add(mv_icn.iconElem);
+			move_icon(mv_icn, loc.X+desk.scrollLeft, loc.Y+desk.scrollTop, {
+				scale: 0.25,
+				fade: true, 
+				cb:async () => {
+					rm_from_icons(icn);
+					if (!do_copy) icn.del();
 
-			if (icn.parWin === desk) {
-				if (do_copy) mv_icn = get_icon_copy();
-				else {
-					mv_icn = icn;
-					vacate_icon_from_desk_slot(icn);
+cwarn("FOLDER ICON: done");
+if (!do_copy) {
+cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath}`);
+}
+/*
+Since the only moved icon has been removed, we are free to call
+Desk.make_all_icons() with the new node
+*/
+					Desk.make_all_icons(await newpath.toNode());
+
 				}
+			});
+		}//»
+
+	//Onto the desktop: get location from 'e', passed into the desktop's ondrop event handler
+		else if (destwin == desk) {//«
+			if (!icn.iconElem.showing) {
+				rm_from_icons(icn);
+				make_new_desk_icon(dest_node);
+				return;
+			}
+
+			let mv_icn;
+			if (do_copy) mv_icn = get_icon_copy();
+			else mv_icn = icn;
+			
+			mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
+			desk._add(mv_icn.iconElem);
+			mv_icn.iconElem._pos="fixed";
+			place_icon_in_desk_slot(mv_icn, {
+				doMove: true,
+				create: do_copy,
+				pos:{X:e.clientX+scrl,Y:e.clientY+scrt},
+				cb:()=>{
+					rm_from_icons(icn);
+					mv_icn.iconElem._op=1;
+//					mv_icn.iconElem._dis="";
+					mv_icn.node = dest_node;
+					delete mv_icn.disabled;
+
+cwarn("DESK: done");
+/*
+Since the only moved icon has been relocated to the desktop, we need to call
+Desk.make_all_icons() with the new node, and the option to only
+*/
+if (!do_copy){
+cwarn(`Remove all remaining icons from folder wins: ${oldpath}`);
+}
+
+//cwarn(`HI DESK: ${oldpath} -> ${newpath}`);
+cwarn(`Add icons to folder wins: ${newpath}`);
+
+log(mv_icn.iconElem);
+
+				}
+			});
+		}//»
+
+	// Onto a folder main window, from the desktop or another folder. 
+	// The folder automatically places it
+		else {//«
+			let mv_icn;
+			const cb = () => {//«
+				rm_from_icons(icn);
+				if (destwin.isShowing && destwin.fullpath === destpath) {
+					mv_icn.iconElem.style.transform = "";
+					mv_icn.iconElem.style.transition = "";
+					mv_icn.iconElem._pos="";
+					add_icon_to_folder_win(mv_icn, destwin);
+					mv_icn.parApp = destwin.app;
+					mv_icn.iconElem._op=1;
+					mv_icn.node = dest_node;
+					delete mv_icn.disabled;
+				}
+				else if (!do_copy){
+					icn.del();
+				}
+
+cwarn("FOLDER MAIN: done");
+if (!do_copy){
+
+cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath} (skipping destwin)`);
+
+}
+
+cwarn(`Add icons to desktop (if needed) AND folder wins: ${newpath} (skipping destwin)`);
+
+
+			};//»
+			if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
+			if (icn.parWin !== desk && !icn.iconElem.showing) {
+				rm_from_icons(icn);
+				if (destwin.isShowing && destwin.fullpath === destpath) {
+					let newicn = new Icon(dest_node, {parApp: destwin.app});
+					add_icon_to_folder_win(newicn, destwin);
+				}
+				return;
+			}
+
+			if (destwin.isShowing && destwin.fullpath === destpath) {
+
+				if (icn.parWin === desk) {
+					if (do_copy) mv_icn = get_icon_copy();
+					else {
+						mv_icn = icn;
+						vacate_icon_from_desk_slot(icn);
+					}
+				}
+				else {
+					if (do_copy) mv_icn = get_icon_copy();
+					else mv_icn = icn;
+					mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
+					desk._add(mv_icn.iconElem);
+				}
+				mv_icn.iconElem._pos="fixed";
+
+				destwin.main.scrollTop = 0;
+				let wr = destwin.winElem._gbcr();
+				move_icon(mv_icn, wr.left+scrl, wr.top+destwin.titleBar.clientHeight+scrt, {cb});
 			}
 			else {
-				if (do_copy) mv_icn = get_icon_copy();
-				else mv_icn = icn;
-				mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
-				desk._add(mv_icn.iconElem);
+				rm_from_icons(icn);
+				if (!do_copy) {
+					if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
+					icn.del();
+				}
 			}
-			mv_icn.iconElem._pos="fixed";
+		}//»
 
-			destwin.main.scrollTop = 0;
-			let wr = destwin.winElem._gbcr();
-			move_icon(mv_icn, wr.left+scrl, wr.top+destwin.titleBar.clientHeight+scrt, {cb});
-		}
-		else {
-			rm_from_icons(icn);
-			if (!do_copy) {
-				if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
-				icn.del();
-			}
-		}
-	}//»
 
-};//»
-const no_move_cb = path => {//«
+
+	};//»
+	const no_move_cb = path => {//«
 	let icn = icon_obj[path];
 	if (!icn) return;
 	icn.iconElem._op=1;
@@ -6153,10 +6231,6 @@ const move_lock = {};
 
 //»
 
-const exports = {//«
-	no_move_cb,
-	done_cb,
-};//»
 
 if (fromtype !== desttype) do_copy = true;
 
@@ -6196,8 +6270,8 @@ let origwin = _ICONS[0].parWin;
 didnum = _ICONS.length;
 paths.push(destpath);
 
-/*
-if (do_copy){//«
+/* Weird kludge, using `CP_ICONS`«
+if (do_copy){
 
 let CP_ICONS = [];
 
@@ -6221,8 +6295,7 @@ if (!CP_ICONS.length){
 }
 _ICONS = CP_ICONS;
 
-}//»
-*/
+}»*/
 
 for (let icn of _ICONS) {
 	icon_obj[icn.fullpath] = icn;
@@ -6237,16 +6310,13 @@ fromnode.par.addMoveLock(move_lock);
 
 //Do the "real" system moving
 await fsapi.comMv(paths, {
-	exports,
+	exports: {//«
+		no_move_cb,
+		done_cb
+	},//»
 	if_cp: do_copy,
 	if_recur: true,
-//	dom_objects: {
-//		win: destwin,
-//		icons: icon_obj
-//	}
 });
-
-//icon_array_off();
 
 
 });
