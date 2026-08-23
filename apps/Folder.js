@@ -288,11 +288,12 @@ end_blob_stream, but we should do it upon start_blob_stream.
 
 		icn.parWin = Win;
 		kid.showing = true;
-//		kid.icon = icn;
+		kid.realIcon = icn;
 	};//»
 	kid.hide = ()=>{//«
 		kid.innerHTML="";
 		kid.showing = false;
+		delete kid.realIcon;
 	};//»
 		observer.observe(kid);
 	}

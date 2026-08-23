@@ -20,16 +20,15 @@ in the code.)
 
 »*/
 
-/*XXX BUG BUG BUG BUG BUG BUG BUG BUG BUG BUG BUG: 8/23/26 XXX
+/*XXX BUG BUG BUG: 8/23/26 (FIXED???) XXX«
 
 
 In move_icons, when the "moved" icon is in a folder window, the icon *ALWAYS*
 disappears, no matter the destination (it seems(.
 
+@IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
 
-
-*/
-
+»*/
 
 /*8/23/26: Icon update stuff «
 
@@ -5988,6 +5987,8 @@ uses upon success, which triggers the move animations.
 */
 		let icn = icon_obj[oldpath];
 
+		if (icn.unobserve) icn.unobserve(); //IRURMNFH: IS THIS IT???
+
 		let scrl = desk.scrollLeft;
 		let scrt = desk.scrollTop;
 
@@ -6046,9 +6047,13 @@ Desk.make_all_icons() with the new node
 			}
 
 			let mv_icn;
+
 			if (do_copy) mv_icn = get_icon_copy();
-			else mv_icn = icn;
-			
+			else {
+				mv_icn = icn;
+//log(mv_icn.show);
+//mv_icn.show && mv_icn.show();
+			}
 			mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
 			desk._add(mv_icn.iconElem);
 			mv_icn.iconElem._pos="fixed";
@@ -6072,9 +6077,9 @@ if (!do_copy){
 cwarn(`Remove all remaining icons from folder wins: ${oldpath}`);
 }
 
-//cwarn(`HI DESK: ${oldpath} -> ${newpath}`);
 cwarn(`Add icons to folder wins: ${newpath}`);
 
+log(mv_icn);
 log(mv_icn.iconElem);
 
 				}
@@ -6298,7 +6303,7 @@ _ICONS = CP_ICONS;
 }»*/
 
 for (let icn of _ICONS) {
-	icon_obj[icn.fullpath] = icn;
+	icon_obj[icn.fullpath] = icn.realIcon || icn;
 	if (!do_copy) {
 		icn.iconElem._op=0.66;
 		icn.disabled = true;
