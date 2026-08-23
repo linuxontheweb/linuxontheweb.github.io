@@ -69,6 +69,16 @@ windows that were opened with the oldpath.
 
 //»
 
+
+_TODO_: All of the fine-grained icon creation logic for the
+mv/cp operations, keeping in mind that we must not duplicate the work
+that is done by the interface, with the icons that were *physically* moved
+by the end user.
+
+Check: Case of folder win drop
+_TODO_: Desktop drop
+
+
 ARE WE DONE W/ THE CLEANUP LOGIC @ZNRUTKGTJ???
 
 »*/
@@ -5960,17 +5970,17 @@ const show_node_props=async(node)=>{//«
 	pop();
 };//»
 
-const move_icons = async (destpath,  opts={}) => {//«
+const move_icons = async (dest_path,  opts={}) => {//«
 return new Promise(async(Y,N)=>{
 //XBRGSHJRJ
-let {e, win:destwin, loc}=opts;
+let {e, win:dest_win, loc}=opts;
 let _ICONS = ICONS;
 
 const make_new_desk_icon = (node) => {//«
 	let newicn = new Icon(node, {parApp: Desk});
 	newicn.parWin = desk;
 	let pos;
-	if (e && destwin === desk) pos={X:e.clientX+scrl,Y:e.clientY+scrt}
+	if (e && dest_win === desk) pos={X:e.clientX+scrl,Y:e.clientY+scrt}
 	place_icon_in_desk_slot(newicn, {
 		create: true, 
 		pos
@@ -6003,7 +6013,7 @@ uses upon success, which triggers the move animations.
 		let scrl = desk.scrollLeft;
 		let scrt = desk.scrollTop;
 
-		let dest_node = await `${destpath}/${icn.fullname}`.toNode();
+		let dest_node = await `${dest_path}/${icn.fullname}`.toNode();
 	//	if (!node.icons.includes(icn)) node.icons.push(icn);
 		
 		let rect = icn.iconElem._gbcr();
@@ -6011,7 +6021,7 @@ uses upon success, which triggers the move animations.
 	//Onto a folder icon's dropzone
 		if (loc) {//«
 
-			if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
+			if (dest_path === DESK_PATH) make_new_desk_icon(dest_node);
 
 			if (icn.parWin !== desk && !icn.iconElem.showing) {
 				rm_from_icons(icn);
@@ -6034,25 +6044,20 @@ uses upon success, which triggers the move animations.
 				cb:async () => {
 					rm_from_icons(icn);
 					if (!do_copy) icn.del();
-
-cwarn("FOLDER ICON: done");
 /*
 Since the only moved icon has been removed, we are free to call
 Desk.make_all_icons() with the new node
 */
 					Desk.make_all_icons(await newpath.toNode());
-if (!do_copy) {
-// WEBRNTJK
-// 1
-rm_icons_and_update_wins(oldpath, newpath, {which: 1});
-}
+					if (!do_copy) rm_icons_and_update_wins(oldpath, newpath);
+
 
 				}
 			});
 		}//»
 
 	//Onto the desktop: get location from 'e', passed into the desktop's ondrop event handler
-		else if (destwin == desk) {//«
+		else if (dest_win == desk) {//«
 			if (!icn.iconElem.showing) {
 				rm_from_icons(icn);
 				make_new_desk_icon(dest_node);
@@ -6081,23 +6086,15 @@ rm_icons_and_update_wins(oldpath, newpath, {which: 1});
 					mv_icn.node = dest_node;
 					delete mv_icn.disabled;
 
-cwarn("DESK: done");
 /*
 Since the only moved icon has been relocated to the desktop, we need to call
 Desk.make_all_icons() with the new node, and the option to only
 */
-// XMJTJTKYH
 
-cwarn(`Add icons to folder wins: ${newpath}`);
-
-log(mv_icn);
-log(mv_icn.iconElem);
-
-if (!do_copy){
-// 2
-rm_icons_and_update_wins(oldpath, newpath, {which: 2});
-}
-
+					for (let win of get_wins_by_path(dest_path)) {
+						add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
+					}
+					if (!do_copy) rm_icons_and_update_wins(oldpath, newpath);
 				}
 			});
 		}//»
@@ -6108,12 +6105,12 @@ rm_icons_and_update_wins(oldpath, newpath, {which: 2});
 			let mv_icn;
 			const cb = () => {//«
 				rm_from_icons(icn);
-				if (destwin.isShowing && destwin.fullpath === destpath) {
+				if (dest_win.isShowing && dest_win.fullpath === dest_path) {
 					mv_icn.iconElem.style.transform = "";
 					mv_icn.iconElem.style.transition = "";
 					mv_icn.iconElem._pos="";
-					add_icon_to_folder_win(mv_icn, destwin);
-					mv_icn.parApp = destwin.app;
+					add_icon_to_folder_win(mv_icn, dest_win);
+					mv_icn.parApp = dest_win.app;
 					mv_icn.iconElem._op=1;
 					mv_icn.node = dest_node;
 					delete mv_icn.disabled;
@@ -6122,30 +6119,26 @@ rm_icons_and_update_wins(oldpath, newpath, {which: 2});
 					icn.del();
 				}
 
-cwarn("FOLDER MAIN: done");
-// PKHFBRNDH
-
-cwarn(`Add icons to desktop (if needed) AND folder wins: ${newpath} (skipping destwin)`);
-
-if (!do_copy){
-// 3
-
-rm_icons_and_update_wins(oldpath, newpath, {which: 3})
-
-}
+				if (dest_path === DESK_PATH) place_icon_in_desk_slot(new Icon(dest_node, {parApp: Desk}), {create: true});
+				for (let win of get_wins_by_path(dest_path)) {
+					if (win === dest_win) continue;
+					add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
+				}
+				if (!do_copy) rm_icons_and_update_wins(oldpath, newpath)
 
 			};//»
-			if (destpath === DESK_PATH) make_new_desk_icon(dest_node);
+
+//			if (dest_path === DESK_PATH) make_new_desk_icon(dest_node);
 			if (icn.parWin !== desk && !icn.iconElem.showing) {
 				rm_from_icons(icn);
-				if (destwin.isShowing && destwin.fullpath === destpath) {
-					let newicn = new Icon(dest_node, {parApp: destwin.app});
-					add_icon_to_folder_win(newicn, destwin);
+				if (dest_win.isShowing && dest_win.fullpath === dest_path) {
+					let newicn = new Icon(dest_node, {parApp: dest_win.app});
+					add_icon_to_folder_win(newicn, dest_win);
 				}
 				return;
 			}
 
-			if (destwin.isShowing && destwin.fullpath === destpath) {
+			if (dest_win.isShowing && dest_win.fullpath === dest_path) {//«
 
 				if (icn.parWin === desk) {
 					if (do_copy) mv_icn = get_icon_copy();
@@ -6162,20 +6155,19 @@ rm_icons_and_update_wins(oldpath, newpath, {which: 3})
 				}
 				mv_icn.iconElem._pos="fixed";
 
-				destwin.main.scrollTop = 0;
-				let wr = destwin.winElem._gbcr();
-				move_icon(mv_icn, wr.left+scrl, wr.top+destwin.titleBar.clientHeight+scrt, {cb});
-			}
-			else {
+				dest_win.main.scrollTop = 0;
+				let wr = dest_win.winElem._gbcr();
+				move_icon(mv_icn, wr.left+scrl, wr.top+dest_win.titleBar.clientHeight+scrt, {cb});
+			}//»
+			else {//«
 				rm_from_icons(icn);
 				if (!do_copy) {
 					if (icn.parWin === desk) vacate_icon_from_desk_slot(icn);
 					icn.del();
 				}
-			}
+			}//»
+
 		}//»
-
-
 
 	};//»
 	const no_move_cb = path => {//«
@@ -6199,17 +6191,17 @@ log(icn);
 	}
 
 	if (!_ICONS.length) {
-//cwarn(`NOT UPDATING FOLDERS: ${frompath} -> ${destpath} `);
+//cwarn(`NOT UPDATING FOLDERS: ${frompath} -> ${dest_path} `);
 /*
 		for (let w of get_all_windows({useApp: FOLDER_APP})) {
-			if (w.fullpath === frompath || w.fullpath == destpath) {
+			if (w.fullpath === frompath || w.fullpath == dest_path) {
 				w.app.reload();
 			}
 		}
 */
-		fromnode.par.rmMoveLock(move_lock);
+		from_node.par.rmMoveLock(move_lock);
 		Y();
-//		if (origwin && origwin.app && origwin.app.stat) origwin.app.stat("");
+//		if (orig_win && orig_win.app && orig_win.app.stat) orig_win.app.stat("");
 	}
 };//»
 
@@ -6228,46 +6220,39 @@ if (globals.read_only || _ICONS[0].pickerMode){//«
 	return;
 };//»
 //Var«
-if (!destwin && e && destpath === DESK_PATH) destwin = desk;
-//let origwin;
+if (!dest_win && e && dest_path === DESK_PATH) dest_win = desk;
+//let orig_win;
 let visual_moving_done = false;
 let shell_moving_done = false;
 let check_interval;
-let didnum=0;
 let did_reset = false;
 let do_copy = false;
 
-let fromnode = await _ICONS[0].fullpath.toNode({getLink: true});
-//log(fromnode.path);
+let from_node = await _ICONS[0].fullpath.toNode({getLink: true});
 let paths = [];
 let good = [];
-let NO_MOVE_ICONS = [];
-//let ERROR_MSGS=[];
-let real_locs = [];
-//let destnode = await pathToNode(destpath);
-let destnode = await destpath.toNode();
-let desttype = destnode.type;
-let fromtype = fromnode.type;
-//Fake parser.shell_exports object for fs.com_mv:cbok werr wclerr path2obj cwd is_root 
+let dest_node = await dest_path.toNode();
+let dest_type = dest_node.type;
+let from_type = from_node.type;
 
 const move_lock = {};
 
 //»
 
 
-if (fromtype !== desttype) do_copy = true;
+if (from_type !== dest_type) do_copy = true;
 
 for (let icn of _ICONS) {//Sanity check«
 	icn.off();
-	let usename = icn.name;
-	if (icn.ext) usename += `.${icn.ext}`;
-	let final_path = `${destpath}/${usename}`;
+	let use_name = icn.name;
+	if (icn.ext) use_name += `.${icn.ext}`;
+	let final_path = `${dest_path}/${use_name}`;
 	if (await final_path.toNode()) {
 		icn.shake();
 		continue;
 	}
-	if (icn.path === destpath) {
-		if (icn.parWin === desk && destwin == desk) {} 
+	if (icn.path === dest_path) {
+		if (icn.parWin === desk && dest_win == desk) {} 
 		else icn.shake();
 		continue;
 	}
@@ -6289,9 +6274,8 @@ if (!paths.length) {//«
 }//»
 
 _ICONS=good;
-let origwin = _ICONS[0].parWin;
-didnum = _ICONS.length;
-paths.push(destpath);
+let orig_win = _ICONS[0].parWin;
+paths.push(dest_path);
 
 /* Weird kludge, using `CP_ICONS`«
 if (do_copy){
@@ -6329,7 +6313,7 @@ for (let icn of _ICONS) {
 }
 
 //EIIRONSBR
-fromnode.par.addMoveLock(move_lock);
+from_node.par.addMoveLock(move_lock);
 
 //Do the "real" system moving
 await fsapi.comMv(paths, {
@@ -8173,19 +8157,7 @@ window.onfocus=(e)=>{//«
 	}
 };//»
 
-const rm_icons_and_update_wins=async(oldpath, newpath, opts={}) => {//«
-
-// «
-// 1
-// cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath}`);
-
-// 2
-//cwarn(`Remove all remaining icons from folder wins: ${oldpath}`);
-
-// 3
-//cwarn(`Remove ALL remaining icons from the desk and folders w/ path: ${oldpath} (skipping destwin)`);
-const {which} = opts;
-// »
+const rm_icons_and_update_wins = async (oldpath, newpath) => {//«
 
 /* ZNRUTKGTJ
 Is this totally correct already? Do we need to worry about the minutae from
