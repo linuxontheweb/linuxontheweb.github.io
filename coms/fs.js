@@ -1,5 +1,15 @@
 (()=>{"use strict";const LIBNAME="fs";
 
+/*8/23/26: Added done_cb and no_move_cb to com_mv and com_cp «
+cp: @WJTLDUTJ 
+mv: @NDMTKYI
+
+Now just need to hook these into whatever icon creation/deletion calls, as
+needed by the specific UI.
+
+
+
+»*/
 /*5/29/26: Timing issues w/ vimtest. The undo/redo feature checks«
 that actions have the same time in order to do them in batches.
 Now, when I am automating these in loops, Actions are bound to have
@@ -1549,6 +1559,7 @@ async run(){
 		}
 		let newnode = await parnode.mkNewFile(fname);
 		if (!newnode) err(`${fullpath}: The file could not be created`);
+		newnode.mkAllIcons();
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1575,10 +1586,18 @@ const com_mv = class extends Com{//«
 		let{term, args}=this;
 		if (!args.length) return;
 		let have_error = false;
+//NDMTKYI
+const done_cb = (oldpath, newpath) =>{
+log(`DONE: ${oldpath} -> ${newpath}`);
+};
+const no_move_cb = path =>{
+cwarn(`NOMV: ${path}`);
+};
+
 		await fsapi.comMv(args, {
 			if_cp: false, 
 			if_force: this.opts.f,
-			exports: {
+			exports: {//«
 				werr: mess => {
 					if (!mess) return;
 					have_error=true;
@@ -1586,8 +1605,10 @@ const com_mv = class extends Com{//«
 				}, 
 				winf: mess=>{this.inf(mess)},
 				cwd: this.env.cwd.cwd,
-				com_opts: this.opts
-			}
+				com_opts: this.opts,
+				done_cb,
+				no_move_cb
+			}//»
 		});
 		have_error?this.no():this.ok();	
 	}
@@ -1613,6 +1634,13 @@ const com_cp = class extends Com{//«
 		let{term, args}=this;
 		if (!args.length) return;
 		let have_error = false;
+//WJTLDUTJ
+const done_cb = (oldpath, newpath) =>{
+log(`CP_DONE: ${oldpath} -> ${newpath}`);
+};
+const no_move_cb = path =>{
+cwarn(`CP_NOMV: ${path}`);
+};
 		await fsapi.comMv(args, {
 			if_cp: true, 
 			if_recur: !!this.opts.r, 
@@ -1625,6 +1653,8 @@ const com_cp = class extends Com{//«
 				}, 
 				winf: mess=>{this.inf(mess)},
 				cwd: this.env.cwd.cwd,
+				done_cb,
+				no_move_cb
 //				com_opts: this.opts
 			}
 		});

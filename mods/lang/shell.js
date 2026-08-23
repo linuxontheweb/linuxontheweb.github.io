@@ -190,6 +190,11 @@ This seems to be the way to go.
 
 »*/
 
+/*8/23/26: Need to call Desk.make_all_icons with redirect creation...  «
+
+
+
+»*/
 /* 7/22/26: Need to refactor Stdout.write? «
 
 We should create the node (@URUJGHKN), and 
@@ -1641,6 +1646,7 @@ if (!node){
 
 	node = await parnode.mkNewFile(nm);
 	if (!node) return `${use_fname}: could not create the new file`;
+	node.mkAllIcons();
 }
 if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file 1234`;
 return true;

@@ -1210,7 +1210,7 @@ return THROW("WHAT IS THIS NAME????");
 	this.#delNode = opts.delNode || del_node;
 	this.#data = opts.data;
 }//»
-
+mkAllIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
 async del(opts={}){//«
 	if (!this.#delNode(this)) return;
 	if (NS.Desk) {
@@ -2140,7 +2140,6 @@ if (dest_arg_node) {//«
 
 //»
 
-
 // Create the array of valid sources
 for (let arg of args){//«
 
@@ -2337,7 +2336,7 @@ cerr("UKFHJKD");
 			_dir_update(2, src_node.par, src_node);
 		}
 
-		if (done_cb) done_cb(src_path);
+		if (done_cb) done_cb(src_path, real_dest_path);
 
 		continue;
 	}//»
@@ -2380,7 +2379,7 @@ if (NS.Desk && !dom_objects){
 
 // Move this logic into the above 2 slots«
 	if (done_cb) {
-		done_cb(src_path);
+		done_cb(src_path, real_dest_path);
 	}
 	if (test_icons) await util.sleep(1000);
 
@@ -2563,10 +2562,10 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	}
 	_node_update(3, kid, id);
 	_dir_update(1, parobj, kid);
-	if (NS.Desk&&!opts.noMakeIcon) {
-cwarn(`Not calling make_icon_if_new w/ new node:`);
-log(kid);
-	}
+//	if (NS.Desk&&!opts.noMakeIcon) {
+//cwarn(`Not calling make_icon_if_new w/ new node:`);
+//log(kid);
+//	}
 	return kid;
 
 };//»

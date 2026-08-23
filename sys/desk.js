@@ -92,6 +92,25 @@ TypeError: fullname.match is not a function
 
 »*/
 
+/*8/23/26: Icon update stuff «
+
+
+I. Added done_cb and no_move_cb into coms/fs.js: com_mv, com_cp
+
+This doesn't affect the desktop directly, but rather indicates that we
+might want to share some code between these two modules.
+
+
+
+II. Can we reuse `make_icon` @SNEJRUTK, so that if `isStr(where) === true`, then 
+`where` is just a path, and in the case that `where === DESK_PATH`, then
+we will make the desktop icon via place_icon_in_desk_slot.
+
+For all paths, we will look for all folder wins with the given path and
+call add_icon_to_folder_win.
+
+
+»*/
 /* 8/7/26: Simplifying the concept of move/copy callbacks «
 @SYIROKTHB are: done_cb and no_move_cb. In order to make the core fs module
 maximally simple, that logic should call these functions with the relevant
@@ -266,7 +285,6 @@ _dir_update(2, dir, node); // deletion
 
 
 But first, need to deal with this sort of ugly logic in 
-- make_icon @XCVBDUKSH
 - make_icon_if_new @WEIOYJHJR
 
 if (ext==="app") node.appicon = await node.text;
@@ -370,7 +388,6 @@ should be deleted,
 
 I am highly suspicious of (node.appicon and ref), which is created upon 
 await'ing in:
-- make_icon (@XCVBDUKSH)
 - make_icon_if_new (@NMHUKBFH)
 
 WHY AREN'T THESE AWAITS DONE EITHER IN: 
@@ -6289,7 +6306,7 @@ return new Promise((res, rej) => {
 
 };
 //»
-const move_icon_array=(opts={})=>{//«
+const move_icon_array = (opts={}) => {//«
 
 if (!ICONS.length) return;
 let{toOrigin, toClosest}=opts;
@@ -6870,6 +6887,7 @@ cwarn("Creating empty file");
 	}
 	make_new_file(winarg, val, "txt");
 };//»
+
 const make_new_icon = async(winarg, type) => {//«
 	if (globals.read_only) return;
 
@@ -6886,66 +6904,12 @@ const make_new_icon = async(winarg, type) => {//«
 };
 this.make_new_icon = make_new_icon;
 //»
-const make_icon = async(name, where, opts={}) => {//«
 
-/*«
-
-Only called in the desktop via save_dropped_files, with opts.pos
-
-Otherwise, it is on called at the end of:
-		
-	const move_icon_by_path = (frompath, topath, app, opts = {}) => 
-
-Those who call this with opts are:
-fs.com_mv, with opts={node, icon, win}
-save_from_local with opts={icon, win}
-
-»*/
-
-	let {ext, node, icon: oldicon} = opts;
-
-	let fullname;
-	if (ext) fullname = `${name}.${ext}`;
-	else fullname = name;
-
-	let path;
-	if (where == desk) path = DESK_PATH;
-	else path = `${where.path}/${where.name}`;
-
-	let fullpath = `${path}/${fullname}`;
-
-	let icons;
-	if (where === desk) icons = desk_icons;
-	else icons = get_win_icon_array(where);
-	for (let icn of icons){
-		if (icn && icn.fullname === fullname) {
-//DBFHGKT
-cwarn(`make_icon: Already have an icon named: ${fullname}`);
-log(where);
-log(icn);
-			return;
-		}
-	}
-
-	if (!node) {
-cerr("make_icon: !!!!! No node given!!!!!");
-cwarn("THIS IS A BAD ERROR, BUT SEE IF THE FAKE NODE WORKS ANYWAYS...");
-		node = {name:fullname, baseName: name, ext, fullpath};
-log(node);
-		node.kids = (oldicon && oldicon.appName === FOLDER_APP);
-	}
-//XCVBDUKSH
-
-//	if (ext==="app") node.appicon = await node.text;
-//	let ref;
-//	if (node.link) ref = await node.ref;
-
-//	let icn = new Icon(node, {ref, parApp: where.app});
-	let icn = new Icon(node, {parApp: where.app});
-	if (where===desk) place_icon_in_desk_slot(icn, {pos: opts.pos, create: true});
-	else add_icon_to_folder_win(icn, where);
-	return icn;
+const make_all_icons = node => {//«
+	if (node.path === DESK_PATH) place_icon_in_desk_slot(new Icon(node, {parApp: Desk}), {create: true});
+	for (let win of get_wins_by_path(node.path)) add_icon_to_folder_win(new Icon(node, {parApp: win.app}), win);
 }
+this.make_all_icons = make_all_icons;
 //»
 
 const delete_selected_files = async which => {//«
@@ -7003,161 +6967,6 @@ this.clear_desk_icons = () => {//«
 };
 //»
 
-/*
-const move_icon_by_path = async (frompath, topath, app, opts = {}) => {//«
-//return new Promise(async(Y,N)=>{
-	const doend=()=>{//«
-		if (frompath && topath) update_all_paths(frompath, topath);
-//		Y(ret);
-	};//»
-cwarn(`move_icon_by_path: ${frompath} -> ${topath}`);
-	let {node} = opts;
-//	let ret = [];
-	let use_link;
-	let is_folder = (app == FOLDER_APP);
-
-//EYSRHKTJGF
-	let no_del_icon = opts.icon;
-	if (no_del_icon){
-		delete no_del_icon.disabled;
-		no_del_icon.iconElem._op=1;
-	}
-	let no_add_win = opts.win;
-	let is_regular_file = false;
-	if (!(is_folder || opts.link)) is_regular_file = true;
-	let fromparts, frombase;
-//	let icons = [];
-	let icons = node.icons;
-
-//This means we are actually "moving" (rather than merely renaming)
-	if (frompath) {
-//WMKFTYIOP1 <---- WRONG
-//		if (frompath !== topath){
-//			while (node.icons.length) node.icons.pop().del();
-//		}
-		let pathname, ext;
-		if (is_regular_file){
-			let arr = getNameExt(frompath, true);
-			pathname = arr[0];
-			ext = arr[1];
-		}
-		else pathname = frompath;
-//		icons = get_icons_by_path(pathname, ext);
-		fromparts = fs.path_to_par_and_name(frompath);
-		frombase = fromparts[0];
-	}
-
-	let toparts = fs.path_to_par_and_name(topath);
-	let tobase = toparts[0].replace(/\/$/, "");
-	let toname = toparts[1];
-	let ext;
-	if (is_regular_file) {
-		let marr = ALL_EXTENSIONS_RE.exec(toname);
-		if (marr && marr[1] && marr[2]) {
-			toname = marr[1];
-			ext = marr[2];
-		}
-//FUIMNTYU
-//cwarn("DELETE NODE.APPNAME");
-//delete node.appName;
-	}
-	if (frombase) {
-		if (frombase === tobase) {
-			for (let icn of icons) {
-//				let usename = toname;
-//				if (ext) usename += `.${ext}`;
-				icn.updateDOMElement();
-			}
-			doend();
-			return 
-		}
-//WMKFTYIOP <---- RIGHT!?!?!?
-//		let icns = node.icons;
-//		while (icns.length) {
-		while (icons.length) {
-			let icn = icons.pop();
-			if (icn === no_del_icon) continue;
-cwarn("CALL ICN.DEL() 111 !!!");
-log(icn);
-			icn.del();
-		}
-		if (no_del_icon) icons.push(no_del_icon);
-	} 
-
-	for (let icn of icons) {
-		if (icn === no_del_icon) {
-			delete icn.disabled;
-			icn.iconElem._op=1;
-			continue;
-		}
-//TEJKBTBHJ
-cwarn("CALL ICN.DEL() 222 !!!");
-log(icn);
-		icn.del();
-	}
-	let wins = get_wins_by_path(tobase, {getDesk: true});
-	opts.ext = ext;
-	for (let w of wins) {
-		if (w === no_add_win) {
-//			if (no_del_icon) ret.push(no_del_icon);
-			continue;
-		}
-//		let newicon = await make_icon(toname, w, opts);
-		await make_icon(toname, w, opts);
-//		if (newicon) ret.push(newicon);
-	}
-	doend();
-
-//});
-}
-this.move_icon_by_path = move_icon_by_path;
-//»
-const make_icon_if_new = async node => {//«
-//log("make_icon_if_new", node);
-//cwarn("make_icon_if_new", node);
-	if (isStr(node)) {
-		let path = node;
-//		node = await pathToNode(path);
-		node = await path.toNode();
-		if (!node){
-cwarn(`No node returned in make_icon_if_new, (path=${path})`);
-			return;
-		}
-	}
-
-//WEIOYJHJR
-// ALL THIS STUFF NEEDS TO BE REFACTORED «
-//	let ref;
-//	if (node.link) ref = await node.ref;
-//	let fullpath = node.fullpath;
-//	let icons = get_desk_icons();
-//	for (let icn of icons) {
-//		if (icn.fullpath == fullpath) return;
-//	}
-//	let parts = pathParts(fullpath);
-//	let dirpath = parts[0];
-//	let fname = parts[1];
-//	let ext = parts[2];
-//	if (node.type==OP_FS_TYPE && ext==="app"){
-//// NMHUKBFH
-//		node.appicon = await node.text;
-//	}
-//»
-//	if (dirpath === DESK_PATH) {
-	let dirpath = node.path;
-	if (dirpath === DESK_PATH) {
-//cwarn("ON DESK!!!");
-//		place_icon_in_desk_slot(new Icon(node, {ref, parApp: Desk}), {create: true});
-		place_icon_in_desk_slot(new Icon(node, {parApp: Desk}), {create: true});
-	}
-	let wins = get_wins_by_path(dirpath);
-//	for (let w of wins) add_icon_to_folder_win(new Icon(node, {ref, parApp: w.app}), w);
-	for (let w of wins) add_icon_to_folder_win(new Icon(node, {parApp: w.app}), w);
-
-};
-this.make_icon_if_new = make_icon_if_new;
-//»
-*/
 
 //»
 //Taskbar«
@@ -9286,6 +9095,215 @@ return arr;
 »*/
 
 /* Old «
+
+//SNEJRUTK
+const make_icon = async(name, where, opts={}) => {//«
+
+//«
+
+//Only called in the desktop via save_dropped_files, with opts.pos
+//
+//Otherwise, it is on called at the end of:
+//		
+//	const move_icon_by_path = (frompath, topath, app, opts = {}) => 
+//
+//Those who call this with opts are:
+//fs.com_mv, with opts={node, icon, win}
+//save_from_local with opts={icon, win}
+
+//»
+
+	let {ext, node, icon: oldicon} = opts;
+
+	let fullname;
+	if (ext) fullname = `${name}.${ext}`;
+	else fullname = name;
+
+	let path;
+	if (where == desk) path = DESK_PATH;
+	else path = `${where.path}/${where.name}`;
+
+	let fullpath = `${path}/${fullname}`;
+
+	let icons;
+	if (where === desk) icons = desk_icons;
+	else icons = get_win_icon_array(where);
+	for (let icn of icons){
+		if (icn && icn.fullname === fullname) {
+//DBFHGKT
+cwarn(`Make_icon: Already have an icon named: ${fullname}`);
+log(where);
+log(icn);
+			return;
+		}
+	}
+
+	if (!node) {
+cerr("Make_icon: !!!!! No node given!!!!!");
+cwarn("THIS IS A BAD ERROR, BUT SEE IF THE FAKE NODE WORKS ANYWAYS...");
+		node = {name:fullname, baseName: name, ext, fullpath};
+log(node);
+		node.kids = (oldicon && oldicon.appName === FOLDER_APP);
+	}
+	let icn = new Icon(node, {parApp: where.app});
+	if (where===desk) place_icon_in_desk_slot(icn, {pos: opts.pos, create: true});
+	else add_icon_to_folder_win(icn, where);
+	return icn;
+}
+//»
+const move_icon_by_path = async (frompath, topath, app, opts = {}) => {//«
+//return new Promise(async(Y,N)=>{
+	const doend=()=>{//«
+		if (frompath && topath) update_all_paths(frompath, topath);
+//		Y(ret);
+	};//»
+cwarn(`move_icon_by_path: ${frompath} -> ${topath}`);
+	let {node} = opts;
+//	let ret = [];
+	let use_link;
+	let is_folder = (app == FOLDER_APP);
+
+//EYSRHKTJGF
+	let no_del_icon = opts.icon;
+	if (no_del_icon){
+		delete no_del_icon.disabled;
+		no_del_icon.iconElem._op=1;
+	}
+	let no_add_win = opts.win;
+	let is_regular_file = false;
+	if (!(is_folder || opts.link)) is_regular_file = true;
+	let fromparts, frombase;
+//	let icons = [];
+	let icons = node.icons;
+
+//This means we are actually "moving" (rather than merely renaming)
+	if (frompath) {
+//WMKFTYIOP1 <---- WRONG
+//		if (frompath !== topath){
+//			while (node.icons.length) node.icons.pop().del();
+//		}
+		let pathname, ext;
+		if (is_regular_file){
+			let arr = getNameExt(frompath, true);
+			pathname = arr[0];
+			ext = arr[1];
+		}
+		else pathname = frompath;
+//		icons = get_icons_by_path(pathname, ext);
+		fromparts = fs.path_to_par_and_name(frompath);
+		frombase = fromparts[0];
+	}
+
+	let toparts = fs.path_to_par_and_name(topath);
+	let tobase = toparts[0].replace(/\/$/, "");
+	let toname = toparts[1];
+	let ext;
+	if (is_regular_file) {
+		let marr = ALL_EXTENSIONS_RE.exec(toname);
+		if (marr && marr[1] && marr[2]) {
+			toname = marr[1];
+			ext = marr[2];
+		}
+//FUIMNTYU
+//cwarn("DELETE NODE.APPNAME");
+//delete node.appName;
+	}
+	if (frombase) {
+		if (frombase === tobase) {
+			for (let icn of icons) {
+//				let usename = toname;
+//				if (ext) usename += `.${ext}`;
+				icn.updateDOMElement();
+			}
+			doend();
+			return 
+		}
+//WMKFTYIOP <---- RIGHT!?!?!?
+//		let icns = node.icons;
+//		while (icns.length) {
+		while (icons.length) {
+			let icn = icons.pop();
+			if (icn === no_del_icon) continue;
+cwarn("CALL ICN.DEL() 111 !!!");
+log(icn);
+			icn.del();
+		}
+		if (no_del_icon) icons.push(no_del_icon);
+	} 
+
+	for (let icn of icons) {
+		if (icn === no_del_icon) {
+			delete icn.disabled;
+			icn.iconElem._op=1;
+			continue;
+		}
+//TEJKBTBHJ
+cwarn("CALL ICN.DEL() 222 !!!");
+log(icn);
+		icn.del();
+	}
+	let wins = get_wins_by_path(tobase, {getDesk: true});
+	opts.ext = ext;
+	for (let w of wins) {
+		if (w === no_add_win) {
+//			if (no_del_icon) ret.push(no_del_icon);
+			continue;
+		}
+//		let newicon = await make_icon(toname, w, opts);
+		await make_icon(toname, w, opts);
+//		if (newicon) ret.push(newicon);
+	}
+	doend();
+
+//});
+}
+this.move_icon_by_path = move_icon_by_path;
+//»
+const make_icon_if_new = async node => {//«
+//log("make_icon_if_new", node);
+//cwarn("make_icon_if_new", node);
+	if (isStr(node)) {
+		let path = node;
+//		node = await pathToNode(path);
+		node = await path.toNode();
+		if (!node){
+cwarn(`No node returned in make_icon_if_new, (path=${path})`);
+			return;
+		}
+	}
+
+//WEIOYJHJR
+// ALL THIS STUFF NEEDS TO BE REFACTORED «
+//	let ref;
+//	if (node.link) ref = await node.ref;
+//	let fullpath = node.fullpath;
+//	let icons = get_desk_icons();
+//	for (let icn of icons) {
+//		if (icn.fullpath == fullpath) return;
+//	}
+//	let parts = pathParts(fullpath);
+//	let dirpath = parts[0];
+//	let fname = parts[1];
+//	let ext = parts[2];
+//	if (node.type==OP_FS_TYPE && ext==="app"){
+//// NMHUKBFH
+//		node.appicon = await node.text;
+//	}
+//»
+//	if (dirpath === DESK_PATH) {
+	let dirpath = node.path;
+	if (dirpath === DESK_PATH) {
+//cwarn("ON DESK!!!");
+//		place_icon_in_desk_slot(new Icon(node, {ref, parApp: Desk}), {create: true});
+		place_icon_in_desk_slot(new Icon(node, {parApp: Desk}), {create: true});
+	}
+	let wins = get_wins_by_path(dirpath);
+//	for (let w of wins) add_icon_to_folder_win(new Icon(node, {ref, parApp: w.app}), w);
+	for (let w of wins) add_icon_to_folder_win(new Icon(node, {parApp: w.app}), w);
+
+};
+this.make_icon_if_new = make_icon_if_new;
+//»
 
 const update_folder_statuses = usepath => {//«
 	for (let w of get_all_windows()) {
