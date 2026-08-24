@@ -1264,6 +1264,7 @@ get par(){return this.#par;}
 get mntPar(){return this.#mntPar;}
 get type(){return this.#type;}
 get name(){	return this.#name;}
+get ext(){ return null; }
 get id(){	return this.#id;}
 get baseName(){	return this.#name;}
 get path(){	return this.par.fullpath;}
@@ -1636,6 +1637,9 @@ get baseName(){//«
 	let arr = getNameExt(this.name);
 	if (arr[1]) return arr[0];
 	return this.name;
+}//»
+get ext(){//«
+	return getNameExt(this.name)[1] || null;
 }//»
 get appName(){//«
 //cwarn(`name: ${this.name}`);

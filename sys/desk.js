@@ -29,8 +29,22 @@ disappears, no matter the destination (it seems(.
 @IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
 
 »*/
+/* 8/24/26: Something weird happening when trying to clean up icons...«
+after com_mv
+In cleanup_deleted_icons, we are calling get_icons_by_path @ENTKYOYJD
+But in there, the icons we get from get_desk_icons @FSNRMTUJ does not show
+the properties of the old icon, even though the old icon is still plainly
+there. I guess this implies that the icon's node was already switched out, or
+rather than the node itself was updated. So we need to iterate through all
+of the icon containers (desktop, folders) with the given path, and then iterate
+through all the names.
 
+
+»*/
 /*8/23/26: Icon update stuff «
+
+LOOKS LIKE THE DESKTOP ICON LOGIC IS PRETTY MUCH DONE, NOW NEED TO APPLY
+THIS SAME SORT OF LOGIC TO: coms/fs.js: com_mv and com_cp.
 
 
 I. Added done_cb and no_move_cb into coms/fs.js: com_mv, com_cp//«
@@ -77,7 +91,6 @@ by the end user.
 
 Check: Case of folder win drop
 _TODO_: Desktop drop
-
 
 ARE WE DONE W/ THE CLEANUP LOGIC @ZNRUTKGTJ???
 
@@ -4719,6 +4732,10 @@ return rv;
 //»
 
 //«Properties
+get icons(){
+if (this.#appName !== FOLDER_APP) return;
+return this.getIcons();
+}
 get node(){return this.#node;}
 get arg(){return this.#arg;}
 get app(){return this.#app;}
@@ -5256,7 +5273,7 @@ const cleanup_deleted_wins_and_icons = path => {//«
 	for (let win of wins){
 	    if (win && win.forceKill) win.forceKill();
 	}
-    let icons = get_icons_by_path(usepath, useext);
+    let icons = get_icons_by_path(usepath, useext || null);
     for (let icn of icons) {
 		if (icn.cancel_func) icn.cancel_func();
 		icn.del();
@@ -5682,7 +5699,7 @@ setApp(){//«
 
 	this.app = app;
 	this.appName = app;
-	this.ext = node.ext;
+//	this.ext = node.ext;
 	if (app === APPLICATION_APP) this.setAppIconApp();
 	
 }//»
@@ -5696,7 +5713,7 @@ setImg(){//«
 			ext_text = ext;
 		}
 	}
-	this.ext = ext;
+//	this.ext = ext;
 	if (ext_text){
 		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;">${ext_text}</div>`;
 	}
@@ -5890,23 +5907,57 @@ get fullpath(){return this.node.fullpath;}
 get path(){return this.node.path;}
 get fullname(){return this.node.name;}
 get name(){return this.node.baseName;}
+get ext(){return this.node.ext;}
 
 }
 api.Icon = Icon;
 //»
 
-//XKNFIUHJ
+const cleanup_deleted_icons = async fullpath => {//«
+/*
 
+First, let's separate the parts of the fullpath into path and name, and
+then iterate through all physical containers (desktop and folder windows)
+that have this path. Then we iterate through all of the icons to test
+the names against the given name.
+
+*/
+	let arr = await fullpath.toParNodeAndName();
+	if (!arr) return cerr("NO ARR RETURNED!?!i?");
+	let parnode = arr[0];
+	let name = arr[1];
+	if (!(parnode && name)) return cerr("NO PAR/NAME@@@");
+	let wins = get_wins_by_path(parnode.fullpath, {getDesk: true});
+	for (let win of wins){
+		let icons;
+		if (win === desk) icons = desk_icons;
+		else icons = win.icons;
+		for (let icn of icons){
+			if (icn && icn.fullname === name) {
+				if (icn.cancel_func) icn.cancel_func();
+				icn.del();
+			}
+		}
+	}
+};//»
+
+/*
 const cleanup_deleted_icons = path => {//«
-    let namearr = getNameExt(path, null, true);
-    let usepath = `${namearr[0]}/${namearr[1]}`;
-    let useext = namearr[2];
-    let icons = get_icons_by_path(usepath, useext);
-    for (let icn of icons) {
-		if (icn.cancel_func) icn.cancel_func();
-		icn.del();
-    }  
+let namearr = getNameExt(path, null, true);
+let usepath = `${namearr[0]}/${namearr[1]}`;
+let useext = namearr[2];
+//cwarn(`GETBYPATH ${usepath} ${useext}`);
+
+// ENTKYOYJD
+let icons = get_icons_by_path(usepath, useext || null);
+log(`GOT: ${icons.length}`);
+for (let icn of icons) {
+//log(icn);
+	if (icn.cancel_func) icn.cancel_func();
+	icn.del();
+}  
 }//»
+*/
 
 const toggle_icon_display = () => {//«
 	if (!dev_mode) return;
@@ -5970,22 +6021,24 @@ const show_node_props=async(node)=>{//«
 	pop();
 };//»
 
-const move_icons = async (dest_path,  opts={}) => {//«
-return new Promise(async(Y,N)=>{
-//XBRGSHJRJ
-let {e, win:dest_win, loc}=opts;
-let _ICONS = ICONS;
-
-const make_new_desk_icon = (node) => {//«
+const make_new_desk_icon = (node, pos) => {//«
 	let newicn = new Icon(node, {parApp: Desk});
 	newicn.parWin = desk;
-	let pos;
-	if (e && dest_win === desk) pos={X:e.clientX+scrl,Y:e.clientY+scrt}
 	place_icon_in_desk_slot(newicn, {
 		create: true, 
 		pos
 	});
 };//»
+
+
+const move_icons = async (dest_path,  opts={}) => {//«
+return new Promise(async(Y,N)=>{
+//XBRGSHJRJ
+let {e, win:dest_win, loc}=opts;
+let _ICONS = ICONS;
+let use_pos;
+if (e && dest_win === desk) use_pos={X:e.clientX+scrl,Y:e.clientY+scrt}
+
 
 /*SYIROKTHB
 Since the sys/fs.js module should have no concept of graphical objects,
@@ -6021,7 +6074,7 @@ uses upon success, which triggers the move animations.
 	//Onto a folder icon's dropzone
 		if (loc) {//«
 
-			if (dest_path === DESK_PATH) make_new_desk_icon(dest_node);
+			if (dest_path === DESK_PATH) make_new_desk_icon(dest_node, use_pos);
 
 			if (icn.parWin !== desk && !icn.iconElem.showing) {
 				rm_from_icons(icn);
@@ -6060,7 +6113,7 @@ Desk.make_all_icons() with the new node
 		else if (dest_win == desk) {//«
 			if (!icn.iconElem.showing) {
 				rm_from_icons(icn);
-				make_new_desk_icon(dest_node);
+				make_new_desk_icon(dest_node, use_pos);
 				return;
 			}
 
@@ -6178,7 +6231,6 @@ Desk.make_all_icons() with the new node, and the option to only
 	icn.shake();
 	rm_from_icons(icn);
 };//»
-
 const rm_from_icons = icn => {//«
 	if (!do_copy && icn.unobserve) icn.unobserve();
 	let idx = _ICONS.indexOf(icn);
@@ -6616,21 +6668,26 @@ const get_icons_by_path = (patharg, extarg) => {//«
 	let arr = get_desk_icons();
 	let ret = [];
 	patharg = patharg.regpath();
+//log(arr);
+// FSNRMTUJ
+cwarn(`PATHARG: ${patharg} ${extarg}`);
 	for (let icn of arr) {
 		if (!icn) {
 			continue;
 		}
 		let ext = icn.ext;
-		let namepath = (icn.path + "/" + icn.name).regpath();
+//		let namepath = (icn.path + "/" + icn.name).regpath();
+		let namepath = `${icn.path}/${icn.name}`.regpath();
+log(`NAMEPATH: ${namepath} ${ext}`);
 		if (namepath == patharg) {
 			if (extarg) {
 				if (ext === extarg) ret.push(icn);
-			} else if (!ext) ret.push(icn);
+			} 
+			else if (!ext) ret.push(icn);
 		}
 	}
 	return ret;
 };
-this.get_icons_by_path = get_icons_by_path;
 //»
 
 const save_icon_editing = async() => {//«
@@ -8185,7 +8242,9 @@ for (let win of wins) {
 }
 
 
-}//»
+}
+this.rm_icons_and_update_wins = rm_icons_and_update_wins;
+//»
 
 const check_name_exists = async(str, which, usepath) => {//«
 	let path;

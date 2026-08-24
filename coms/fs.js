@@ -1587,8 +1587,11 @@ const com_mv = class extends Com{//«
 		if (!args.length) return;
 		let have_error = false;
 //NDMTKYI
-const done_cb = (oldpath, newpath) =>{
+const done_cb = async (oldpath, newpath) =>{
 log(`DONE: ${oldpath} -> ${newpath}`);
+if (!Desk) return;
+await Desk.rm_icons_and_update_wins(oldpath, newpath);
+Desk.make_all_icons(await newpath.toNode());
 };
 const no_move_cb = path =>{
 cwarn(`NOMV: ${path}`);
@@ -1635,9 +1638,13 @@ const com_cp = class extends Com{//«
 		if (!args.length) return;
 		let have_error = false;
 //WJTLDUTJ
-const done_cb = (oldpath, newpath) =>{
-log(`CP_DONE: ${oldpath} -> ${newpath}`);
+
+const done_cb = async (oldpath, newpath) =>{
+log(`CP DONE: ${oldpath} -> ${newpath}`);
+if (!Desk) return;
+Desk.make_all_icons(await newpath.toNode());
 };
+
 const no_move_cb = path =>{
 cwarn(`CP_NOMV: ${path}`);
 };
