@@ -455,6 +455,15 @@ writing to them, which means they don't (yet) technically exist.
 »*/
 
 // Notes
+
+/* 8/24/26: Long break and now back!?!
+
+Hopefully, the foundational layer dealing with dynamical icons (e.g. adding,
+deleting, moving, copying) is conceptually figure out, and we can start
+meditating on doing all the extension/modification type stuff such as exists
+in this file.
+
+*/
 /* 8/6/26: Back here  «
 
 Its close to a month since I restarted my work on this concept. Since the

@@ -20,16 +20,6 @@ in the code.)
 
 »*/
 
-/*XXX BUG BUG BUG: 8/23/26 (FIXED???) XXX«
-
-
-In move_icons, when the "moved" icon is in a folder window, the icon *ALWAYS*
-disappears, no matter the destination (it seems(.
-
-@IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
-
-»*/
-
 
 /* 8/24/26: ARE WE FINISHED WITH "ICON ACCOUNTING" YET???  «
 
@@ -108,6 +98,15 @@ ARE WE DONE W/ THE CLEANUP LOGIC @ZNRUTKGTJ???
 
 //OLD BUGS/NOTES«
 
+/*XXX BUG BUG BUG: 8/23/26 (FIXED???) XXX«
+
+
+In move_icons, when the "moved" icon is in a folder window, the icon *ALWAYS*
+disappears, no matter the destination (it seems(.
+
+@IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
+
+»*/
 /* BUG BUG BUG BUG: "Ghost Icons" appeared after moving them «
 
 ON 8/2/26
