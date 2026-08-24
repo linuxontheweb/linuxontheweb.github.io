@@ -29,16 +29,26 @@ disappears, no matter the destination (it seems(.
 @IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
 
 »*/
-/* 8/24/26: Something weird happening when trying to clean up icons...«
-after com_mv
-In cleanup_deleted_icons, we are calling get_icons_by_path @ENTKYOYJD
-But in there, the icons we get from get_desk_icons @FSNRMTUJ does not show
-the properties of the old icon, even though the old icon is still plainly
-there. I guess this implies that the icon's node was already switched out, or
-rather than the node itself was updated. So we need to iterate through all
-of the icon containers (desktop, folders) with the given path, and then iterate
-through all the names.
 
+
+/* 8/24/26: ARE WE FINISHED WITH "ICON ACCOUNTING" YET???  «
+
+We will need to get a nice test suite working to ensure that all possible
+combinations/permutations of icon updating is finished.
+
+
+THE FOLLOWING ISSUE SHOULD BE FIXED: We are locating icons (for deletion) by
+way of getting all physical containers (via get_wins_by_path), then getting the
+associated icon arrays, and then matching the icons in these with the
+fullname's of the icons with the name part of the path as returned by
+String.toParNodeAndName().
+
+FIXED!?!: Something weird happening when trying to clean up icons, after com_mv
+In cleanup_deleted_icons, we are calling get_icons_by_path @ENTKYOYJD. But in
+there, the icons we get from get_desk_icons @FSNRMTUJ does not show the
+properties of the old icon, even though the old icon is still plainly there. I
+guess this implies that the icon's node was already switched out, or rather
+than the node itself was updated in sys/fs.js:comMv. 
 
 »*/
 /*8/23/26: Icon update stuff «
