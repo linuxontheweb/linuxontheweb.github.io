@@ -5923,10 +5923,16 @@ the names against the given name.
 
 */
 	let arr = await fullpath.toParNodeAndName();
-	if (!arr) return cerr("NO ARR RETURNED!?!i?");
+	if (!arr) {
+cerr("NO ARR RETURNED!?!i?");
+		return;
+	}
 	let parnode = arr[0];
 	let name = arr[1];
-	if (!(parnode && name)) return cerr("NO PAR/NAME@@@");
+	if (!(parnode && name)) {
+cerr("NO PAR/NAME!?!");
+		return 
+	}
 	let wins = get_wins_by_path(parnode.fullpath, {getDesk: true});
 	for (let win of wins){
 		let icons;
@@ -5936,6 +5942,8 @@ the names against the given name.
 			if (icn && icn.fullname === name) {
 				if (icn.cancel_func) icn.cancel_func();
 				icn.del();
+// Since there can't be more than 1 icon per name, we can break
+				break;
 			}
 		}
 	}
