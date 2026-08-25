@@ -1,5 +1,7 @@
 (()=>{"use strict";
-/*README«
+//README«
+
+/*Old«
 
 The LOTW file system is implemented here. IndexedDB is used to define the
 structure of the file system, while the origin-private file system (OPFS) API
@@ -19,7 +21,6 @@ let node = await fname.toNode({cwd: path});
 //If the file exists, an instance of FSNode (defined @FSNODEDEF) will be returned.
 
 »*/
-
 /* PATTERN FOR CREATING NEW FILE NODE TYPES W/ ARBITRARY data/getBlob/setBlob«
 
 @YSXBPMNF
@@ -53,6 +54,20 @@ let my_node = new FileNode(my_name, my_par, {
 	data
 });
 _dir_update(1, par, my_node);
+
+»*/
+
+//»
+
+/* 8/24/26: BACK TO PUSHING ICONS INTO FSNode.icons «
+
+Data kept here: @SRKTOYKHM
+
+... and then deleting ALL of these when successfully doing rm and mv
+operations.
+
+I think we can say that this is all about accountancy for the purpose of icon
+*deletion*. But there is one problem: when moving an icon.
 
 »*/
 /* 8/6/26: Stop passing icons through comMv! «
@@ -1206,7 +1221,11 @@ return THROW("WHAT IS THIS NAME????");
 		this.#mntPar = par.mntPar;
 		this.#type = this.#mntPar.type;
 	}
-	this.icons = [];
+
+
+// SRKTOYKHM
+	this.icons = []; // <--- USE THIS FOR QUICK RM/DEL NODE OPS!!!
+
 	this.#delNode = opts.delNode || del_node;
 	this.#data = opts.data;
 }//»
@@ -1735,18 +1754,17 @@ const THROW = mess =>{throw new Error(mess);}
 // Filesystem ops «
 
 
-const do_move = async(from_node, newName, toDir)=>{//«
-	if (util.newPathIsBad(from_node.fullpath, `${toDir.fullpath}/${newName}`)) return;
+const do_move = async(src_node, dest_name, dest_par)=>{//«
+	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
 //Need to update this to allow for moving/renaming arbitrary node types 
 //within the same directory type
-	let id = from_node.id;
-	let par = from_node.par;
-	let from_par_id = par.id;
-	let to_par_id = toDir.id;
-	let savename;
-	if (newName && (newName !== from_node.name)){
-		savename = newName;
-	}
+	let src_id = src_node.id;
+	let src_par = src_node.par;
+	let src_par_id = src_par.id;
+	let dest_par_id = dest_par.id;
+	let use_dest_name;
+	if (dest_name && (dest_name !== src_node.name)) use_dest_name = dest_name;
+	
 
 // This logic is supposed to result in the fact that save_blob === null means
 // that we are mv'ing a dir.
@@ -1756,46 +1774,48 @@ const do_move = async(from_node, newName, toDir)=>{//«
 // OIKFBJKB: NEEDS TO BE FULLY GENERIC
 
 /*«
-if (from_node.type === toDir.type && from_node.canDoSimpleMove) {
+if (src_node.type === dest_par.type && src_node.canDoSimpleMove) {
 // Just need the id of the new parent dir, and the new node name
-	await from_node.simpleMove(to_par_id, savename);
+	await src_node.simpleMove(dest_par_id, use_dest_name);
 }
 else {
 //Get blob if isFile and do remove
 }
 »*/
-	if (from_node.type == OP_FS_TYPE) {
-		if (toDir.type == OP_FS_TYPE) {
-			if (!await db.moveNode(id, from_par_id, to_par_id, savename)) {
+	if (src_node.type == OP_FS_TYPE) {
+		if (dest_par.type == OP_FS_TYPE) {
+			if (!await db.moveNode(src_id, src_par_id, dest_par_id, use_dest_name)) {
 cerr("db.moveNode: WHYFBSJ!?!?!");
 				return 
 			}
 		}
 		else {
-			if (from_node.isFile) save_blob = await from_node.blob;
-			if (!await db.removeNode(id, from_par_id)) {
+			if (src_node.isFile) save_blob = await src_node.blob;
+			if (!await db.removeNode(src_id, src_par_id)) {
 cerr("db.removeNo: YUREFJKK!?!?!");
 				return;
 			}
 		}
 	}
-//	else save_blob = await from_node.blob;
-	else if (from_node.isFile) save_blob = await from_node.blob;
+//	else save_blob = await src_node.blob;
+	else if (src_node.isFile) save_blob = await src_node.blob;
 
-	_dir_update(2, par, from_node);
+	_dir_update(2, src_par, src_node); // Delete src_node from src_par
 
-	let to_node;
-	if (save_blob !== null) { // file node
-		to_node = mk_dir_kid(toDir, newName, {isFile: true});
-		await to_node.setValue(save_blob);
+	let dest_node;
+	if (src_node.isFile) {
+//	if (save_blob === null) {
+		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
+		if (save_blob) await dest_node.setValue(save_blob);
 	}
-	else { // dir node
-		to_node = from_node;
-		_node_update(1, to_node, newName);
-		_node_update(2, to_node, toDir);
+	else {
+		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
+//		dest_node = src_node;
+		_node_update(1, dest_node, dest_name); // Set: dest_node.#name
+		_node_update(2, dest_node, dest_par); // Set: dest_node.#par
 	}
-	_dir_update(1, toDir, to_node);
-	return to_node;
+	_dir_update(1, dest_par, dest_node); // Add dest_node to dest_par
+	return dest_node;
 
 };//»
 const do_copy = async(from_node, newName, toDir) => {//«
@@ -2261,6 +2281,7 @@ for (let arr of mvarr) {//«
 	let dest_path;
 	let real_dest_path;
 
+	let dest_node_rv;
 //»
 
 	if (dest_arg_node) {//«
@@ -2353,7 +2374,9 @@ cerr("UKFHJKD");
 
 //		if (!(src_node = await src_node.copy(dest_name, dest_par_node, {noMakeIcon: !!dom_objects}))){
 //		if (!await do_copy(src_node, dest_name, dest_par_node, {noMakeIcon: !!dom_objects})){
-		if (!await do_copy(src_node, dest_name, dest_par_node)){
+
+		dest_node_rv = await do_copy(src_node, dest_name, dest_par_node);
+		if (!dest_node_rv){
 			if (no_move_cb) no_move_cb(src_path);
 			werr(`could not copy from ${src_path} to ${dest_path}`);
 			continue;
@@ -2371,7 +2394,11 @@ if (NS.Desk && !dom_objects){
 	else {//«
 
 //WYRHTIYK
-		if (!await do_move(src_node, dest_name, dest_par_node)){
+cwarn(`I know the following values are different, I am still trying to figure out why. Until then, we will live with the consequent error in done_cb.`);
+log(`SRC IN ${src_node.fullpath}`);
+	 	dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
+log(`SRC OUT ${src_node.fullpath}`);
+		if (!dest_node_rv){
 			if (no_move_cb) no_move_cb(src_path);
 			werr(`could not move from ${src_path} to ${dest_path}`);
 			continue;
@@ -2387,7 +2414,8 @@ if (NS.Desk && !dom_objects){
 
 // Move this logic into the above 2 slots«
 	if (done_cb) {
-		done_cb(src_path, real_dest_path);
+		done_cb(src_node, dest_node_rv);
+//		done_cb(src_path, real_dest_path);
 	}
 	if (test_icons) await util.sleep(1000);
 

@@ -20,6 +20,23 @@ in the code.)
 
 »*/
 
+/*8/25/26 Back to pushing icons onto Nodes «
+
+@sys/fs.js:SRKTOYKHM
+
+Then just add a delIcons method to call icn.del on each of them when
+the time is right. The icn.del operation checks @SHEJSRBTJ that the 
+iconElem is still attached to its parentNode before proceeding, meaning
+that it shouldn't hurt anything to call it multiple times,
+
+The main issue we are dealing with is *deleting* icons. 
+
+I think we are going to need to remove the icon from the associated
+FSNode's icon list @WEHJRITJ, and place it into the list of 
+
+
+
+»*/
 
 /* 8/24/26: ARE WE FINISHED WITH "ICON ACCOUNTING" YET???  «
 
@@ -5867,7 +5884,7 @@ on(do_add){//«
 	this.isOn = true;
 }//»
 del(){//«
-	if (!this.iconElem.parentNode) return;
+	if (!this.iconElem.parentNode) return;// SHEJSRBTJ
 	this.clearFromStorage(null,1);
 	this.iconElem._del();
 };//»
@@ -6063,7 +6080,17 @@ the arg for the following two functions should merely be a path.
 */
 let icon_obj = {};
 
-const done_cb = async (oldpath, newpath) => {//«
+/* Should we not define this like:
+
+const done_cb = async (src_node, dest_node) => {
+//...
+}
+
+... ???
+*/
+
+const done_cb = async (src_node, dest_node) => {//«
+//const done_cb = async (oldpath, newpath) => {//
 const get_icon_copy = () => {//«
 	let newicn = new Icon(icn.node,{parApp: icn.parApp});
 	newicn.parWin = icn.parWin;
@@ -6071,6 +6098,10 @@ const get_icon_copy = () => {//«
 	elm._pos="fixed";
 	return newicn;
 };//»
+
+const oldpath = src_node.fullpath;
+const newpath = dest_node.fullpath;
+cwarn(`DONE: ${oldpath} -> ${newpath}`);
 
 /*
 For every icon that we need to move/copy, this is the callback the shell
@@ -6083,13 +6114,12 @@ uses upon success, which triggers the move animations.
 		let scrl = desk.scrollLeft;
 		let scrt = desk.scrollTop;
 
-		let dest_node = await `${dest_path}/${icn.fullname}`.toNode();
+//		let dest_node = await `${dest_path}/${icn.fullname}`.toNode();
 	//	if (!node.icons.includes(icn)) node.icons.push(icn);
 		
 		let rect = icn.iconElem._gbcr();
 
-	//Onto a folder icon's dropzone
-		if (loc) {//«
+		if (loc) {// Onto a folder icon (the icon disappears) «
 
 			if (dest_path === DESK_PATH) make_new_desk_icon(dest_node, use_pos);
 
@@ -6125,9 +6155,7 @@ Desk.make_all_icons() with the new node
 				}
 			});
 		}//»
-
-	//Onto the desktop: get location from 'e', passed into the desktop's ondrop event handler
-		else if (dest_win == desk) {//«
+		else if (dest_win == desk) {// On the desktop (use 'e' for drop location) «
 			if (!icn.iconElem.showing) {
 				rm_from_icons(icn);
 				make_new_desk_icon(dest_node, use_pos);
@@ -6138,9 +6166,9 @@ Desk.make_all_icons() with the new node
 
 			if (do_copy) mv_icn = get_icon_copy();
 			else {
-				mv_icn = icn;
-//log(mv_icn.show);
-//mv_icn.show && mv_icn.show();
+				mv_icn = icn; 
+// WEHJRITJ
+// Remove from src_node
 			}
 			mv_icn.iconElem._loc(rect.left+scrl, rect.top+scrt);
 			desk._add(mv_icn.iconElem);
@@ -6168,10 +6196,8 @@ Desk.make_all_icons() with the new node, and the option to only
 				}
 			});
 		}//»
-
-	// Onto a folder main window, from the desktop or another folder. 
-	// The folder automatically places it
-		else {//«
+		else {// On folder window «
+// The folder automatically places it
 			let mv_icn;
 			const cb = () => {//«
 				rm_from_icons(icn);
@@ -6346,7 +6372,7 @@ _ICONS=good;
 let orig_win = _ICONS[0].parWin;
 paths.push(dest_path);
 
-/* Weird kludge, using `CP_ICONS`«
+/* Weird old kludge, using `CP_ICONS`«
 if (do_copy){
 
 let CP_ICONS = [];
