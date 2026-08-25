@@ -1587,15 +1587,15 @@ const com_mv = class extends Com{//«
 		if (!args.length) return;
 		let have_error = false;
 //NDMTKYI
-const done_cb = async (oldpath, newpath) =>{
-log(`DONE: ${oldpath} -> ${newpath}`);
-if (!Desk) return;
-await Desk.rm_icons_and_update_wins(oldpath, newpath);
-Desk.make_all_icons(await newpath.toNode());
-};
-const no_move_cb = path =>{
+		const done_cb = async (src_node, dest_node) =>{//«
+			if (!Desk) return;
+			src_node.delIcons();
+			await Desk.update_win_paths(src_node.fullpath, dest_node.fullpath);
+			Desk.make_all_icons(dest_node);
+		};//»
+		const no_move_cb = path =>{//«
 cwarn(`NOMV: ${path}`);
-};
+		};//»
 
 		await fsapi.comMv(args, {
 			if_cp: false, 
@@ -1639,15 +1639,14 @@ const com_cp = class extends Com{//«
 		let have_error = false;
 //WJTLDUTJ
 
-const done_cb = async (oldpath, newpath) =>{
-log(`CP DONE: ${oldpath} -> ${newpath}`);
-if (!Desk) return;
-Desk.make_all_icons(await newpath.toNode());
-};
+		const done_cb = async (src_node, dest_node) =>{//«
+			Desk && Desk.make_all_icons(dest_node);
+		};//»
 
-const no_move_cb = path =>{
+		const no_move_cb = path =>{//«
 cwarn(`CP_NOMV: ${path}`);
-};
+		};//»
+
 		await fsapi.comMv(args, {
 			if_cp: true, 
 			if_recur: !!this.opts.r, 

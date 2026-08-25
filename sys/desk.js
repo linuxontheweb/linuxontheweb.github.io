@@ -20,7 +20,7 @@ in the code.)
 
 »*/
 
-/*8/25/26 Back to pushing icons onto Nodes «
+/*8/25/26: EZ Maintanence: Back to pushing icons onto Nodes !?!?! «
 
 @sys/fs.js:SRKTOYKHM
 
@@ -34,6 +34,13 @@ The main issue we are dealing with is *deleting* icons.
 I think we are going to need to remove the icon from the associated
 FSNode's icon list @WEHJRITJ, and place it into the list of 
 
+
+Still need to meditate on the exact mechanism of updating the visible
+icons:
+
+@EHTJTMYIH: Folder icon 
+@DNMRHTJY: Desktop
+@HTYSIRKYF: Folder window
 
 
 »*/
@@ -6119,7 +6126,7 @@ uses upon success, which triggers the move animations.
 		let scrt = desk.scrollTop;
 
 //		let dest_node = await `${dest_path}/${icn.fullname}`.toNode();
-	//	if (!node.icons.includes(icn)) node.icons.push(icn);
+//		if (!node.icons.includes(icn)) node.icons.push(icn);
 		
 		let rect = icn.iconElem._gbcr();
 
@@ -6146,15 +6153,19 @@ uses upon success, which triggers the move animations.
 				scale: 0.25,
 				fade: true, 
 				cb:async () => {
+					src_node.delIcons(icn);
 					rm_from_icons(icn);
 					if (!do_copy) icn.del();
 /*
 Since the only moved icon has been removed, we are free to call
 Desk.make_all_icons() with the new node
 */
-					Desk.make_all_icons(await newpath.toNode());
-					if (!do_copy) rm_icons_and_update_wins(oldpath, newpath);
-
+Desk.make_all_icons(await newpath.toNode());
+if (!do_copy) {
+// EHTJTMYIH
+//	rm_icons_and_update_wins(oldpath, newpath);
+	update_win_paths(oldpath, newpath);
+}
 
 				}
 			});
@@ -6182,6 +6193,7 @@ Desk.make_all_icons() with the new node
 				create: do_copy,
 				pos:{X:e.clientX+scrl,Y:e.clientY+scrt},
 				cb:()=>{
+					src_node.delIcons(icn);
 					rm_from_icons(icn);
 					mv_icn.iconElem._op=1;
 //					mv_icn.iconElem._dis="";
@@ -6193,10 +6205,14 @@ Since the only moved icon has been relocated to the desktop, we need to call
 Desk.make_all_icons() with the new node, and the option to only
 */
 
-					for (let win of get_wins_by_path(dest_path)) {
-						add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
-					}
-					if (!do_copy) rm_icons_and_update_wins(oldpath, newpath);
+for (let win of get_wins_by_path(dest_path)) {
+	add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
+}
+if (!do_copy) {
+// DNMRHTJY
+//	rm_icons_and_update_wins(oldpath, newpath);
+	update_win_paths(oldpath, newpath);
+}
 				}
 			});
 		}//»
@@ -6204,6 +6220,7 @@ Desk.make_all_icons() with the new node, and the option to only
 // The folder automatically places it
 			let mv_icn;
 			const cb = () => {//«
+				src_node.delIcons(icn);
 				rm_from_icons(icn);
 				if (dest_win.isShowing && dest_win.fullpath === dest_path) {
 					mv_icn.iconElem.style.transform = "";
@@ -6220,11 +6237,15 @@ Desk.make_all_icons() with the new node, and the option to only
 				}
 
 				if (dest_path === DESK_PATH) place_icon_in_desk_slot(new Icon(dest_node, {parApp: Desk}), {create: true});
-				for (let win of get_wins_by_path(dest_path)) {
-					if (win === dest_win) continue;
-					add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
-				}
-				if (!do_copy) rm_icons_and_update_wins(oldpath, newpath)
+for (let win of get_wins_by_path(dest_path)) {
+	if (win === dest_win) continue;
+	add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
+}
+if (!do_copy) {
+// HTYSIRKYF
+//	rm_icons_and_update_wins(oldpath, newpath)
+	update_win_paths(oldpath, newpath);
+}
 
 			};//»
 
@@ -6466,6 +6487,9 @@ return new Promise((res, rej) => {
 	let time = d * 1 / factor;
 	if (time > 0.5) time = 0.5;
 	else if (time < 0.15) time = 0.15;
+
+//time*=5;
+
 	iconelm.style.transform = "";
 	let str = `transform ${time}s ease 0s`;
 //	if (if_fade_out) str += `,opacity ${time}s ease 0s`;
@@ -8260,13 +8284,9 @@ window.onfocus=(e)=>{//«
 		if (w.app && w.app.onwinfocus) w.app.onwinfocus();
 	}
 };//»
-
+/*
 const rm_icons_and_update_wins = async (oldpath, newpath) => {//«
 
-/* ZNRUTKGTJ
-Is this totally correct already? Do we need to worry about the minutae from
-the different cases above?
-*/
 
 // Delete icons (these are cheap)
 cleanup_deleted_icons(oldpath);
@@ -8291,6 +8311,24 @@ for (let win of wins) {
 
 }
 this.rm_icons_and_update_wins = rm_icons_and_update_wins;
+//»
+*/
+const update_win_paths = async (oldpath, newpath) => {//«
+
+let node = await newpath.toNode();
+if (!node){
+cerr(`NO NODE FOUND FOR PATH: <${newpath}>!?!?!?`);
+return;
+}
+let wins = get_wins_by_path(oldpath);
+for (let win of wins) {
+	_win_update(3, win, node);
+	win.title = node.baseName;
+}
+
+}
+this.update_win_paths = update_win_paths;
+//this.rm_icons_and_update_wins = rm_icons_and_update_wins;
 //»
 
 const check_name_exists = async(str, which, usepath) => {//«
