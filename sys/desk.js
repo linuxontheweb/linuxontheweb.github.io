@@ -5378,9 +5378,6 @@ constructor(node, opts={}){//«
 	this.elem = elem;
 	this.node = node;
 
-// WEYITJGMH
-//	this.ref = ref;
-
 	this.makeDOMElem();
 	this.setApp();
 	this.setImg();
@@ -5388,14 +5385,16 @@ constructor(node, opts={}){//«
 	this.addDOMListeners();
 
 //XBCIOHFK
-//	if (!node.fake) node.icons.push(this);
-
 	if (observer) {//«
 		this.unobserve=()=>{
 			observer.unobserve(this.iconElem);
 			delete this.unobserve;
 		};
 	}//»
+
+	if (!node.fake) {
+		node.icons.push(this);
+	}
 
 }//»
 
@@ -6080,16 +6079,21 @@ the arg for the following two functions should merely be a path.
 */
 let icon_obj = {};
 
-/* Should we not define this like:
 
-const done_cb = async (src_node, dest_node) => {
-//...
-}
 
-... ???
-*/
 
 const done_cb = async (src_node, dest_node) => {//«
+
+
+/* 
+
+Now that we are doing a node-based callback, we can call methods on the nodes,
+such as (in the case of moving to a different folder location, which everything
+in this callback necessarily does) rmAllIcons.
+
+*/
+
+
 //const done_cb = async (oldpath, newpath) => {//
 const get_icon_copy = () => {//«
 	let newicn = new Icon(icn.node,{parApp: icn.parApp});

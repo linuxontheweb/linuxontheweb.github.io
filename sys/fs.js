@@ -1278,6 +1278,18 @@ get fullpath(){//«
 	str = arr.join("/");
 	return `/${str}`.regpath();
 }//»
+delIcons(keepIcn){//«
+	if (keepIcn) {
+		for (let icn of this.icons) {
+			if (icn !== keepIcn) icn.del();
+		}
+		this.icons = [keepIcn];
+	}
+	else {
+		for (let icn of this.icons) icn.del();
+		this.icons = [];
+	}
+}//»
 get size(){return this.#size;}
 get par(){return this.#par;}
 get mntPar(){return this.#mntPar;}
@@ -2394,10 +2406,7 @@ if (NS.Desk && !dom_objects){
 	else {//«
 
 //WYRHTIYK
-cwarn(`I know the following values are different, I am still trying to figure out why. Until then, we will live with the consequent error in done_cb.`);
-log(`SRC IN ${src_node.fullpath}`);
 	 	dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
-log(`SRC OUT ${src_node.fullpath}`);
 		if (!dest_node_rv){
 			if (no_move_cb) no_move_cb(src_path);
 			werr(`could not move from ${src_path} to ${dest_path}`);
