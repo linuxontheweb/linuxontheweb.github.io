@@ -1793,7 +1793,6 @@ log(arr);
 };//»
 const populate_fbase_user_dir = async (user_dir) => {//«
 // e.g. /mnt/users/user123/
-if (!cur_user) return;
 /*«
 
 Should add FileNode's (status, bio, etc) here, so that the 
@@ -1815,76 +1814,73 @@ tryGetKid(name):
 
 »*/
 
-//cwarn(`POPULATE USER: ${uid}`);
-let uid = user_dir.getData("fbaseUid");
-let prof = user_dir.getData("fbaseProf");
+	if (!cur_user) return;
 
-for (let k in prof) {//«
-// These are stored as "files" in user_dir
-	let node = new FileNode(k, user_dir, {
-//		type: FBASE_USER_DIR_FS_TYPE,
-		type: FBASE_RTDB_FS_TYPE,
-		data: {
-			fbaseUid: uid,
-		},
-		getBlob: ()=>{
-			return new Blob([prof[k]]);
-		},
-		setBlob: (val)=>{
-if (cur_user && cur_user.uid === uid) {
+	let uid = user_dir.getData("fbaseUid");
+	let prof = user_dir.getData("fbaseProf");
+
+	for (let k in prof) {//«
+	// These are stored as "files" in user_dir
+		let node = new FileNode(k, user_dir, {
+			type: FBASE_RTDB_FS_TYPE,
+			data: {
+				fbaseUid: uid,
+			},
+			getBlob: ()=>{
+				return new Blob([prof[k]]);
+			},
+			setBlob: (val)=>{
+	if (cur_user && cur_user.uid === uid) {
 cwarn(`SO YEW WANNA SET ${k}??? ARE YOU THE USER?`);
 log("VAL", val);
-}
-		}
-	});
-	_dir_update(1, user_dir, node);
-}//»
-let pub = new DirNode("pub", user_dir, {//«
-	type: FBASE_USER_GRP_FS_TYPE,
-	data: {
-		fbaseUid: uid,
-		fbaseGrpId: PUB_DIR_ID,
-	},
-getBlob: (node) => {
-cwarn("USERGRP.getBlob", node);
-},
-setBlob: (node, val) => {
-cwarn("USERGRP.setBlob", node);
-log(val);
-},
-	popDir: populate_fbase_user_grp_dir,
-	tryGetKid: try_get_fbase_user_grp_kid,
-	perm: true // HEREPUBPERM
-});
-_dir_update(1, user_dir, pub);
-//_node_update(2, pub, user_dir); // Set par // NO! THIS IS SET IN THE CONSTRUCTOR, DUMMY!!!
-_node_update(3, pub, 2); // Id
-//»
-if (uid === cur_user.uid){//«
-	let prv = new DirNode("prv", user_dir, {
+	}
+			}
+		});
+		_dir_update(1, user_dir, node);
+	}//»
+	let pub = new DirNode("pub", user_dir, {//«
 		type: FBASE_USER_GRP_FS_TYPE,
 		data: {
 			fbaseUid: uid,
-			fbaseGrpId: PRV_DIR_ID,
+			fbaseGrpId: PUB_DIR_ID,
 		},
-getBlob: (node) => {
-cwarn("USERGRP.getBlob", node);
-},
-setBlob: (node, val) => {
-cwarn("USERGRP.setBlob", node);
-log(val);
-},
 		popDir: populate_fbase_user_grp_dir,
 		tryGetKid: try_get_fbase_user_grp_kid,
-		perm: true // HEREPRVPERM
+		perm: true, // HEREPUBPERM
+		getBlob: (node) => {//«
+cwarn("USERGRP.getBlob", node);
+		},//»
+		setBlob: (node, val) => {//«
+cwarn("USERGRP.setBlob", node);
+log(val);
+		},//»
 	});
-	_dir_update(1, user_dir, prv); // Add kid
-//	_node_update(2, prv, user_dir); // Set par
-	_node_update(3, prv, 1); // Id HEREPRVRV
-}//»
+	_dir_update(1, user_dir, pub);
+	_node_update(3, pub, PUB_DIR_ID); // Id
+//»
+	if (uid === cur_user.uid){//«
+		let prv = new DirNode("prv", user_dir, {
+			type: FBASE_USER_GRP_FS_TYPE,
+			data: {
+				fbaseUid: uid,
+				fbaseGrpId: PRV_DIR_ID,
+			},
+			popDir: populate_fbase_user_grp_dir,
+			tryGetKid: try_get_fbase_user_grp_kid,
+			perm: true, // HEREPRVPERM
+			getBlob: (node) => {//«
+cwarn("USERGRP.getBlob", node);
+			},//»
+			setBlob: (node, val) => {//«
+cwarn("USERGRP.setBlob", node);
+log(val);
+			},//»
+		});
+		_dir_update(1, user_dir, prv); // Add kid
+		_node_update(3, prv, PRV_DIR_ID); // Id HEREPRVRV
+	}//»
 
-//cwarn(`CHECK FOR OTHER GROUPS (uid: ${uid})`);
-_dir_update(3, user_dir, true); // done
+	_dir_update(3, user_dir, true); // done
 
 };//»
 const populate_fbase_users = async (users_dir) => {//«

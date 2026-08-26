@@ -1685,18 +1685,6 @@ cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
 	return new Blob([]);
 
 }//»
-get buffer(){//«
-//	if(!this.okGet())return;
-if (this.useMemBlob) return this.memBlob.buffer;
-//let blob = await this.#getBlob(this);
-//return blob_to_ret_val(blob, {buffer: true});
-return(async()=>{
-let getter = this.getBlob;
-let blob = await getter(this);
-return blob_to_ret_val(blob, {buffer: true});
-})();
-//	return this.#getBlob(this,{buffer:true});
-}//»
 getBlob(){//«
 	if (this.#getBlob) return this.#getBlob(this);
 	if (this.mntPar.getBlob) return this.mntPar.getBlob(this);
@@ -1706,6 +1694,15 @@ setBlob(val, opts){//«
 	if (this.#setBlob) return this.#setBlob(this, val, opts);
 	if (this.mntPar.setBlob) return this.mntPar.setBlob(this, val, opts);
 	return set_local_blob(this, val, opts)
+}//»
+
+get buffer(){//«
+	if (this.useMemBlob) return this.memBlob.buffer;
+	return(async()=>{
+		let getter = this.getBlob;
+		let blob = await getter(this);
+		return blob_to_ret_val(blob, {buffer: true});
+	})();
 }//»
 get bytes(){//«
 	if (this.useMemBlob) return util.toBytes(this.memBlob);
@@ -1746,7 +1743,8 @@ get file(){//«
 	if (this.useMemBlob) return this.memBlob;
 	return this.getBlob();
 }//»
-get ext(){let arr = getNameExt(this.name);if (arr[1]) return arr[1];return "";}
+
+
 get baseName(){//«
 	let arr = getNameExt(this.name);
 	if (arr[1]) return arr[0];
@@ -1754,6 +1752,7 @@ get baseName(){//«
 }//»
 get ext(){//«
 	return getNameExt(this.name)[1] || null;
+//	return getNameExt(this.name)[1] || ""; // This would imply that there *is* and extension
 }//»
 get appName(){//«
 //cwarn(`name: ${this.name}`);
