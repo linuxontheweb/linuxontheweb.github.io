@@ -1,5 +1,7 @@
 (()=>{"use strict";const MODNAME="fs.fbase";
 
+//Docs/Schema «
+
 /* Firebase Docs «
 
 
@@ -43,6 +45,7 @@ and child_removed events for items that drop out of it so that the total number
 stays at 100.
 
 »*/
+
 /* Schema «
 
 
@@ -454,7 +457,7 @@ writing to them, which means they don't (yet) technically exist.
 
 »*/
 
-// Notes
+//»
 
 /* 8/26/26: Now *really* back ?!?!?«
 
@@ -479,14 +482,23 @@ let q = fbase_db_mod.query(ref, c1, c2);
 
 let snap = await fbase_db_mod.get(q);
 
-if (!snap.exists()){
 @WEJKRLJS
+if (!snap.exists()){
+// BARF!!!
 return;
 }
 
 This should be considered an "EXISTENTIAL" ISSUE, meaning that the site
 maintainer/administrator has not actually done the first thing to initialize
 the backend.
+
+So we can:
+
+Do a "touch" on "LOTW/prof/$uid"
+
+newData.hasChildren(['updated', 'name', 'picture']))
+
+
 
 »*/
 
@@ -1643,6 +1655,8 @@ let fbase_auth;
 const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
 let users_cache_node;
 
+let first_auth_change = false;
+
 //»
 //Funcs «
 
@@ -1654,6 +1668,17 @@ catch(e){
 cerr(e);
 //	return e;
 }
+};//»
+const UPDATE = async(ref, obj)=>{//«
+
+try {
+	await fbase_db_mod.update(ref, obj);
+	return true;
+}
+catch(e){
+	return e;
+}
+
 };//»
 
 
@@ -1912,11 +1937,60 @@ constructor(arg){//«
 cwarn(`MAKE <${MODNAME}>`);
 }//»
 
-#authChangeCb(val){//«
+async #authChangeCb(val){//«
 
 //cwarn("AUTH CHANGE!!!");
 //log(val);
 cur_user = val;
+if (cur_user && !first_auth_change){
+first_auth_change = true;
+
+/* Try to get  our profile at
+
+*/
+log(cur_user);
+let uid = cur_user.uid;
+let uid_path = `LOTW/prof/${uid}`;
+let updated_path = `${uid_path}/updated`;
+//log(`GET REF: ${uid_path}`);
+let updated_ref = fbase_db_mod.ref(fbase_db, updated_path);
+//log(ref);
+let snap = await GET(updated_ref);
+//log(snap);
+if (!snap){
+cwarn("GET FAILED");
+return;
+}
+if (snap.exists()) {
+//log("GOT THE SNAP!");
+
+log("LAST UPDATED", snap.val());
+	return;
+}
+
+
+cwarn(`NEED TO INITIALIZE USER: ${uid} !!!`);
+
+let ref = fbase_db_mod.ref(fbase_db, "LOTW");
+let obj = {};
+obj[`prof/${uid}`] = {
+	updated: fbase_db_mod.serverTimestamp(),
+	name: cur_user.displayName, 
+	picture: cur_user.photoURL,
+};
+obj[`user/${uid}/nextGrpId`] = 3;
+//log(obj);
+
+let rv = await UPDATE(ref, obj);
+
+if (rv !== true){
+cwarn("THERE WAS A PROBLEM INITIALIZING THE USER PROFILE!!!");
+}
+
+//log(rv);
+
+
+}
 
 }//»
 
