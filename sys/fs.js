@@ -94,6 +94,16 @@ prv.fullpath // -> '/mnt/fbase/slartibartfast/prv'
 
 prv.mntPar.fullpath // -> '/mnt/fbase/slartibartfast'
 
+When trying to create files on our new file system (FBASE_USER_GRP_FS_TYPE),
+there is a difference between doing redirects and calling touch. When
+doing redirects, the shell (I assume) is always calling the OP_FS_TYPE
+methods, before there is an attempt to do it according to the "spec" of
+the actual file system. I'm not sure why both ways of doing it are
+being attempted. Nevertheless, we should try to iterate FIRST with
+the canonical touch/save functions, and then only look into the 
+redirection modality.
+
+
 »*/
 /* 8/24/26: BACK TO PUSHING ICONS INTO FSNode.icons «
 
