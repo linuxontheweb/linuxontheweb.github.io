@@ -82,6 +82,18 @@ FIXED @XRUIOPKGH
 Anything else that does this sort of copying needs to do this, but I
 am at a loss and to anything other than `do_move` that might do so. 
 
+
+When giving a type, for the DirNode constructor, the nodes mntPar is
+*supposed* to be the node itself, per @WEBRJTIOX, but when creating
+the 'prv' and 'pub' DirNode's in fbase.js, it doesn't seem to hold true
+because in the console:
+
+prv = await "/mnt/fbase/slartibartfast/prv".toNode()
+
+prv.fullpath // -> '/mnt/fbase/slartibartfast/prv'
+
+prv.mntPar.fullpath // -> '/mnt/fbase/slartibartfast'
+
 »*/
 /* 8/24/26: BACK TO PUSHING ICONS INTO FSNode.icons «
 
@@ -838,7 +850,8 @@ const PERSISTENT_BACKEND_FS_TYPES = [ OP_FS_TYPE ];
 
 const {
 //	qObj
-	test_icons
+	test_icons,
+	mnt_fbase,
 } = globals.qObj;
 
 //»
@@ -1262,14 +1275,16 @@ return THROW("WHAT IS THIS NAME????");
 }
 	this.#name = name;
 	this.#par = par;
+
 	if (opts.type) { 
-		this.#mntPar = this;
+		this.#mntPar = this; // WEBRJTIOX
 		this.#type = opts.type;
 	}
 	else {
 		this.#mntPar = par.mntPar;
 		this.#type = this.#mntPar.type;
 	}
+
 
 
 // SRKTOYKHM
@@ -1731,12 +1746,6 @@ get file(){//«
 	if (this.useMemBlob) return this.memBlob;
 	return this.getBlob();
 }//»
-/*
-get file(){//«
-let getter = this.getBlob;
-return getter(this);
-}//»
-*/
 get ext(){let arr = getNameExt(this.name);if (arr[1]) return arr[1];return "";}
 get baseName(){//«
 	let arr = getNameExt(this.name);
@@ -2879,9 +2888,9 @@ const init = async () => { //«
 	await mkDir("/var","appdata");
 	await make_dev_tree();
 	mount_tree("site", SITE_FS_TYPE);
-/*
+///*
 //ESHFKNOI
-if (globals.dev_mode){//«
+if (globals.dev_mode && mnt_fbase){//«
 
 let mnt = mount_tree("mnt", MNT_FS_TYPE);
 _dir_update(3, mnt, true);
@@ -2895,7 +2904,7 @@ cwarn("Could not init: fs.fbase");
 }
 
 }//»
-*/
+//*/
 	return true;
 };//»
 

@@ -1857,7 +1857,8 @@ log(val);
 	perm: true // HEREPUBPERM
 });
 _dir_update(1, user_dir, pub);
-_node_update(3, pub, 2);
+//_node_update(2, pub, user_dir); // Set par // NO! THIS IS SET IN THE CONSTRUCTOR, DUMMY!!!
+_node_update(3, pub, 2); // Id
 //»
 if (uid === cur_user.uid){//«
 	let prv = new DirNode("prv", user_dir, {
@@ -1877,12 +1878,13 @@ log(val);
 		tryGetKid: try_get_fbase_user_grp_kid,
 		perm: true // HEREPRVPERM
 	});
-	_dir_update(1, user_dir, prv);
-	_node_update(3, prv, 1); // HEREPRVRV
+	_dir_update(1, user_dir, prv); // Add kid
+//	_node_update(2, prv, user_dir); // Set par
+	_node_update(3, prv, 1); // Id HEREPRVRV
 }//»
 
 //cwarn(`CHECK FOR OTHER GROUPS (uid: ${uid})`);
-_dir_update(3, user_dir, true);
+_dir_update(3, user_dir, true); // done
 
 };//»
 const populate_fbase_users = async (users_dir) => {//«
