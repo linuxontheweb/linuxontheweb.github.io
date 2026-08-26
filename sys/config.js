@@ -63,6 +63,7 @@ if (srch) {
 return obj;
 })();
 //»
+
 //FS«
 
 //const PROJECT_ROOT_MOUNT_NAME = "this";
@@ -74,13 +75,35 @@ if (qObj.branch && !(/^[a-zA-Z]\w*$/.test(qObj.branch))){
 const FS_PREF = qObj.branch || DEF_BRANCH_NAME;
 //const FS_PREF=DEF_BRANCH_NAME;
 
-const OP_FS_TYPE= "fs", // Origin-Private
+const OP_FS_TYPE= "opfs", // Origin-Private
 	DEV_FS_TYPE= "dev", // Any immediate child of /dev 
 	SHM_FS_TYPE= "shm", // Shared memory (volatile), /dev/shm
 	SITE_FS_TYPE = "site", // Files on the main backend (read-only)
-	MNT_FS_TYPE = "mnt"; // Maybe this should be called 'ALT_FS_TYPE'
+	MNT_FS_TYPE = "mnt",
+
+	FBASE_RTDB_FS_TYPE = "fb-rtdb",
+	FBASE_USERS_FS_TYPE = "fb-users"; // Maybe this should be called 'ALT_FS_TYPE'
  
 //const USERS_TYPE = "users";
+
+const LOCAL_MNT_FS_TYPES = [
+    OP_FS_TYPE, 
+	SITE_FS_TYPE, 
+	DEV_FS_TYPE, 
+	SHM_FS_TYPE, 
+	MNT_FS_TYPE
+];
+
+// These never need to call `await dir.loadKids()`.
+const ALWAYS_DONE_DIR_FS_TYPES = [
+	SHM_FS_TYPE
+];
+
+const PERSISTENT_BACKEND_FS_TYPES = [ 
+	OP_FS_TYPE, 
+	FBASE_RTDB_FS_TYPE 
+];
+
 
 // Node types
 const FILE_NODE_TYPE="f",
@@ -586,7 +609,14 @@ fs: {
 	SHM_FS_TYPE,
 	SITE_FS_TYPE,
 	DEV_FS_TYPE,
+	FBASE_RTDB_FS_TYPE,
+//	FBASE_USER_FS_TYPE,
+	FBASE_USERS_FS_TYPE,
 //	USERS_TYPE,
+
+	LOCAL_MNT_FS_TYPES,
+	ALWAYS_DONE_DIR_FS_TYPES,
+	PERSISTENT_BACKEND_FS_TYPES,
 
 	FILE_NODE_TYPE,
 	DIR_NODE_TYPE,

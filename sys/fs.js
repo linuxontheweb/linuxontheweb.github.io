@@ -58,13 +58,29 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
-/* 8/26/26: !!! BUG BUG BUG BUG BUG BUG BUG !!! «
+
+/* 8/26/26: Back to extending the fs  «
+
+Need a concept of filesystem types that have a persistent backend schema,
+such as OP_FS_TYPE.
+
+
+NOW: Want to uncomment the mount of FBASE_RTDB_FS_TYPE in the init phase? 
+
+
+
+!!! BUG BUG BUG !!! (FIXED???)
 
 After mv'ing a file node, the scr_node.id property somehow mysteriously
 vanishes @MXFBNRHOL.
 
 IT'S BECAUSE WE ARE COPYING THE NODES VIA MK_DIR_KID (), BUT NOT PUTTING
 THE id PROPERTY ONTO IT.
+
+FIXED @XRUIOPKGH
+
+Anything else that does this sort of copying needs to do this, but I
+am at a loss and to anything other than `do_move` that might do so. 
 
 »*/
 /* 8/24/26: BACK TO PUSHING ICONS INTO FSNode.icons «
@@ -787,6 +803,11 @@ const {
 	SITE_FS_TYPE,
 	DEV_FS_TYPE,
 	MNT_FS_TYPE,
+	FBASE_RTDB_FS_TYPE,
+
+    LOCAL_MNT_FS_TYPES,
+    ALWAYS_DONE_DIR_FS_TYPES,
+    PERSISTENT_BACKEND_FS_TYPES,
 
 // File system "node" types
 
@@ -801,9 +822,19 @@ const {
 } = globals.fs;
 
 
-const LOCAL_MNT_TYPES = [ OP_FS_TYPE, SITE_FS_TYPE, DEV_FS_TYPE, SHM_FS_TYPE, MNT_FS_TYPE ];
+/*
+These file systems are always guaranteed to *not* depend on working
+internet access in order to succeed.
+*/
+/*
+const LOCAL_MNT_FS_TYPES = [ 
+	OP_FS_TYPE, SITE_FS_TYPE, DEV_FS_TYPE, SHM_FS_TYPE, MNT_FS_TYPE 
+];
 
 const ALWAYS_DONE_DIR_TYPES = [SHM_FS_TYPE];
+
+const PERSISTENT_BACKEND_FS_TYPES = [ OP_FS_TYPE ];
+*/
 
 const {
 //	qObj
@@ -1368,7 +1399,7 @@ constructor(name, par, opts = {}) {//«
 	this.#kids = {};
 	this.#moveLocks = [];
 /*
-	if (opts.type && !LOCAL_MNT_TYPES.includes(opts.type)) {//«
+	if (opts.type && !LOCAL_MNT_FS_TYPES.includes(opts.type)) {//«
 //UDLMDHEK
 if (!(isFunc(opts.popDir) && isFunc(opts.tryGetKid))){
 return THROW(`NEED 'popDir' and 'tryGetKid' IN DIRNODE CONSTRUCTOR (type:${opts.type})!!!`);
@@ -1408,7 +1439,7 @@ cwarn(`mkNewFile(${name}): NOOP (TYPE: ${par.type})`);
 	this.#mkDir = opts.mkDir || ((name, opts={}) =>{return mkDir(this, name, opts);})
 	this.#mkNewFile = opts.mkNewFile || ((name, opts={})=>{return touchFile(this, name, opts);})
 
-	if (ALWAYS_DONE_DIR_TYPES.includes(par.type)){
+	if (ALWAYS_DONE_DIR_FS_TYPES.includes(par.type)){
 		this.#done = true;
 	}
 //log(par.type);
@@ -1670,13 +1701,16 @@ get json(){//«
 	return (async ()=>{
 		let txt = await this.text;
 		if (!isStr(txt)) return;
+		let rv;
 		try{
-			return JSON.parse(txt)
+			rv = JSON.parse(txt);
 		}
 		catch(e){
 cwarn(`CAUGHT: ${this.fullpath}`);
 cerr(e);
+return;
 		}
+		return rv;
 	})();
 }//»
 get file(){//«
@@ -1857,7 +1891,9 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 	}
 
 	_dir_update(1, dest_par, dest_node); // Add dest_node to dest_par
-	_node_update(3, dest_node, src_id); // Set: dest_node.#id
+
+// XRUIOPKGH
+	_node_update(3, dest_node, src_id); // Set: dest_node.#id on dest_node (copy)
 
 	return dest_node;
 
@@ -2825,7 +2861,7 @@ const init = async () => { //«
 	await mkDir("/var","appdata");
 	await make_dev_tree();
 	mount_tree("site", SITE_FS_TYPE);
-/*
+///*
 //ESHFKNOI
 if (globals.dev_mode){//«
 
@@ -2834,14 +2870,14 @@ _dir_update(3, mnt, true);
 await util.loadMod("fs.fbase");
 let mod = new LOTW.mods["fs.fbase"](export_obj);
 // Need to pass in the par DirNode, i.e. /mnt
-cwarn("SKIPPING '/mnt' INIT");
+//cwarn("SKIPPING '/mnt' INIT");
 // Need to update the schema
-//if (!await mod.init(mnt)){
-//cwarn("Could not init: fs.fbase");
-//}
+if (!await mod.init(mnt)){
+cwarn("Could not init: fs.fbase");
+}
 
 }//»
-*/
+//*/
 	return true;
 };//»
 

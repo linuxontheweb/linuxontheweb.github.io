@@ -456,24 +456,49 @@ writing to them, which means they don't (yet) technically exist.
 
 // Notes
 
-/* 8/24/26: Long break and now back!?!
+/* 8/26/26: Now *really* back ?!?!?«
 
-Hopefully, the foundational layer dealing with dynamical icons (e.g. adding,
-deleting, moving, copying) is conceptually figure out, and we can start
-meditating on doing all the extension/modification type stuff such as exists
-in this file.
+I've had *tons* of meditation upon (as well as doing *plenty* of work on)
+everything related to the dynamics of nodes and dependencies thereof (Icons).
 
-*/
-/* 8/6/26: Back here  «
+Now I am back to thinking in terms of the *assumption* of basically working
+mechanisms of a browser-based OS, such that we can now extend the functionality
+via...
 
-Its close to a month since I restarted my work on this concept. Since the
-last entry here (2+ weeks ago), I've been needed to fully refactor and clean up
-the file system primitives, so that everything that is essential is kept on
-FSNode's, and stateless functions are generally not used.
+Okay, how to do the initial making of a user profile?
 
-What I'm close to working out is a robust method for plugging domain-specific
-logic into the system via "mount points" somewhere in the file system's tree
-structure.
+
+RIGHT NOW THE BLOCKING POINT IS:
+
+populate_fbase_users:
+
+let ref = fbase_db_mod.ref(fbase_db, "LOTW/prof");
+let c1 = fbase_db_mod.orderByChild('updated');
+let c2 =fbase_db_mod.limitToLast(25);
+let q = fbase_db_mod.query(ref, c1, c2);
+
+let snap = await fbase_db_mod.get(q);
+
+if (!snap.exists()){
+@WEJKRLJS
+return;
+}
+
+This should be considered an "EXISTENTIAL" ISSUE, meaning that the site
+maintainer/administrator has not actually done the first thing to initialize
+the backend.
+
+»*/
+
+// Old Notes «
+
+/* 7/21/26 - 8/25/26: NICE BIG BREAK... «
+
+... inclluding a 10-day stint at Meridian, engaged in such activities
+as explicitly threating a certain officer of a certain state. I'm not
+saying it was the right thing to do, I'm just saying it was what it was.
+
+PERIOD.
 
 »*/
 /* 7/20/26: WHAT ABOUT mkDir and mkNewFile?  «
@@ -491,9 +516,6 @@ nextNodeId: kept under $grpid
 
 
 »*/
-
-// Old Notes «
-
 /* 7/19/26: Write to user/$uid/group/$grpid/lastUpdate instead of using "sessId"  «
 
 To indicate to other devices that their own versions might be out-of-sync 
@@ -1117,6 +1139,18 @@ const UID = () => {
 }
 
 »*/
+/* 7/6/26: Back here  «
+
+Its close to a month since I restarted my work on this concept. Since the
+last entry here (1+ weeks ago), I've been needed to fully refactor and clean up
+the file system primitives, so that everything that is essential is kept on
+FSNode's, and stateless functions are generally not used.
+
+What I'm close to working out is a robust method for plugging domain-specific
+logic into the system via "mount points" somewhere in the file system's tree
+structure.
+
+»*/
 /*10/20/25: NEED TO RESET THE SCHEMA: «
 
 Just added 'blobId' to indexOn for /LOTW/$ghid/node This way we can see if
@@ -1554,19 +1588,38 @@ logic in coms/fs.js (for file moving, copying, etc).
 //»
 
 // Imports «
-const {globals} = LOTW;
-const{
-isArr,
-isNum,
-isStr,
-isEOF,
-isErr,
-log,
-jlog,
-cwarn,
-cerr
-}=LOTW.api.util;
-const { appUrl, authUrl, dbUrl } = globals.firebase;
+//const {globals} = LOTW;
+const { // api.util «
+	isArr,
+	isNum,
+	isStr,
+	isEOF,
+	isErr,
+	log,
+	jlog,
+	cwarn,
+	cerr
+} = LOTW.api.util;//»
+
+// globals
+
+const {// fs (FBASE_RTDB_FS_TYPE, NODE_TYPE's) «
+    FBASE_RTDB_FS_TYPE,
+	FBASE_USERS_FS_TYPE,
+// File system "node" types
+
+    FILE_NODE_TYPE,
+    DIR_NODE_TYPE,
+    LINK_NODE_TYPE,
+    BAD_LINK_NODE_TYPE,
+    NULL_BLOB_NODE_TYPE,
+
+} = LOTW.globals.fs;//»
+const { // firebase «
+	appUrl, 
+	authUrl, 
+	dbUrl 
+} = LOTW.globals.firebase;//»
 
 //»
 // Var «
@@ -1709,7 +1762,8 @@ let prof = user_dir.getData("fbaseProf");
 for (let k in prof) {//«
 // These are stored as "files" in user_dir
 	let node = new FileNode(k, user_dir, {
-		type: FBASE_USER_DIR_FS_TYPE,
+//		type: FBASE_USER_DIR_FS_TYPE,
+		type: FBASE_RTDB_FS_TYPE,
 		data: {
 			fbaseUid: uid,
 		},
@@ -1775,8 +1829,8 @@ if (!old_obj) old_obj = {};
 let ref = fbase_db_mod.ref(fbase_db, "LOTW/prof");
 
 // Constraints
-let c1 = orderByChild('updated');  // Or: 'votes', etc.
-let c2 = limitToLast(25);
+let c1 = fbase_db_mod.orderByChild('updated');  // Or: 'votes', etc.
+let c2 =fbase_db_mod.limitToLast(25);
 let q = fbase_db_mod.query(ref, c1, c2);
 
 let snap;
@@ -1790,6 +1844,7 @@ cerr(e);
 }
 
 if (!snap.exists()) {
+// WEJKRLJS
 cwarn("GOT !snap.exists()!!!");
 return;
 }
@@ -1817,7 +1872,8 @@ for (let uid in old_obj) {
 		use_name = `${use_name}${iter}`;
 	}
 	let dir = new DirNode(use_name, users_dir, {
-		type: FBASE_USER_DIR_FS_TYPE,
+//		type: FBASE_USER_DIR_FS_TYPE,
+		type: FBASE_RTDB_FS_TYPE,
 		popDir: populate_fbase_user_dir,
 		tryGetKid: async (name)=>{
 /*
@@ -1890,7 +1946,7 @@ return false;
 }
 
 
-fbase_app = fbase_app_mod.initializeApp(globals.firebase.config);
+fbase_app = fbase_app_mod.initializeApp(LOTW.globals.firebase.config);
 fbase_db = fbase_db_mod.getDatabase(fbase_app);
 fbase_auth = fbase_auth_mod.getAuth(fbase_app);
 fbase_auth_mod.onAuthStateChanged(fbase_auth, val=>{this.#authChangeCb(val);});
@@ -1913,6 +1969,15 @@ return true;
 
 }//»
 
+
+
+
+
+
+
+
+
+//OLD«
 
 /*OLD DB SCHEMA«
 
@@ -4232,6 +4297,8 @@ const firebaseConfig = {
 	appId: "1:668423415088:web:979b40c704cab2322ed4f5"
 };
 »*/
+
+//»
 
 //»
 
