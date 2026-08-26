@@ -511,7 +511,7 @@ I guess we need to instantiate both of these first
 
 @HOPORNKER:
 
-at DirNode.populate_fbase_user_grp (fbase.js?v=7998040:1765:22)
+at DirNode.populate_fbase_user_grp_dir (fbase.js?v=7998040:1765:22)
 at DirNode.loadKids (fs.js:1461:20)
 at do_path (shell.js?v=2349283:3034:14)
 at async com_ls.run (shell.js?v=2349283:3112:3)
@@ -520,6 +520,11 @@ at async com_ls.run (shell.js?v=2349283:3112:3)
 @UKHFAJFUE: Could not initialize all of the fields in the different
 user fs groups, e.g. 'prv' and 'pub'.
 
+
+As regards setting front-end permissions for the user directories, we are simply
+setting them to ALWAYS TRUE (i.e., @HEREPUBPERM and @HEREPRVPERM), because we
+are never assuming *anything* about backend logic here in the frontend. Everyone
+is welcome, per frontend customs, to *try* to do anything they want to the backend.
 »*/
 
 // Old Notes «
@@ -1703,7 +1708,6 @@ catch(e){
 
 };//»
 
-
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
 if (!cur_user) return;
@@ -1730,8 +1734,9 @@ log(arr[0]);
 
 };//»
 
-const populate_fbase_user_grp = async (node) => {//«
+const populate_fbase_user_grp_dir = async (dir) => {//«
 // e.g. /mnt/users/user123/pub/, and all subdirs thereof
+// dir
 if (!cur_user) return;
 
 // The FileNode's will implement:
@@ -1753,10 +1758,9 @@ return snap.val();
 */
 
 // 
-let uid = node.getData('fbaseUid');
-let grpid = node.getData('fbaseGrpId');
-//log(node);
-let parid = node.id; // HEJRKTKT: UNDEFINED HARHARHAR
+let uid = dir.getData('fbaseUid');
+let grpid = dir.getData('fbaseGrpId');
+let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
 cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
@@ -1764,13 +1768,21 @@ let c1 = fbase_db_mod.orderByChild('parId');
 let c2 = fbase_db_mod.equalTo(parid);
 let q = fbase_db_mod.query(ref, c1, c2); // HOPORNKER
 let snap = await GET(q);
-if (!(snap && snap.exists())) return;
+if (!snap){
+cerr("NO SNAP!?!?!");
+return;
+}
+if (!snap.exists()) {
+cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
+_dir_update(3, dir, true); // Set dir.#done = true
+	return;
+}
 let arr = snap.val();
 
 /*
 Where do the fbase nodeId's go?
 	- The same slot as the node id's for OP_FS_TYPE: 
-		_node_update(3, node, fbase_node_id)
+		_node_update(3, dir, fbase_node_id)
 	- in data.fbaseNodeId?
 */
 
@@ -1796,7 +1808,7 @@ Then when we *do* implement user groups, we need to search in
 grpDefs (@OLSHGTNSJ), and also return those.
 
 All DirNode's should be proper *groups*, implementing:
-popDir: populate_fbase_user_grp
+popDir: populate_fbase_user_grp_dir
 tryGetKid(name): 
 	await user_dir.loadKids(); // Calls populate_fbase_user_dir (if needed)
 	return user_dir.getKid(name)
@@ -1833,11 +1845,19 @@ let pub = new DirNode("pub", user_dir, {//«
 		fbaseUid: uid,
 		fbaseGrpId: PUB_DIR_ID,
 	},
-	popDir: populate_fbase_user_grp,
-	tryGetKid: try_get_fbase_user_grp_kid
+getBlob: (node) => {
+cwarn("USERGRP.getBlob", node);
+},
+setBlob: (node, val) => {
+cwarn("USERGRP.setBlob", node);
+log(val);
+},
+	popDir: populate_fbase_user_grp_dir,
+	tryGetKid: try_get_fbase_user_grp_kid,
+	perm: true // HEREPUBPERM
 });
 _dir_update(1, user_dir, pub);
-_node_update(3, pub, 2); //HEREPUBUB
+_node_update(3, pub, 2);
 //»
 if (uid === cur_user.uid){//«
 	let prv = new DirNode("prv", user_dir, {
@@ -1846,8 +1866,16 @@ if (uid === cur_user.uid){//«
 			fbaseUid: uid,
 			fbaseGrpId: PRV_DIR_ID,
 		},
-		popDir: populate_fbase_user_grp,
-		tryGetKid: try_get_fbase_user_grp_kid
+getBlob: (node) => {
+cwarn("USERGRP.getBlob", node);
+},
+setBlob: (node, val) => {
+cwarn("USERGRP.setBlob", node);
+log(val);
+},
+		popDir: populate_fbase_user_grp_dir,
+		tryGetKid: try_get_fbase_user_grp_kid,
+		perm: true // HEREPRVPERM
 	});
 	_dir_update(1, user_dir, prv);
 	_node_update(3, prv, 1); // HEREPRVRV

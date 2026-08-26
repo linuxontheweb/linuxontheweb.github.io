@@ -1387,6 +1387,8 @@ class DirNode extends FSNode {//«
 #mkDir;
 #mkNewFile;
 #done;
+#getBlob;
+#setBlob;
 //»
 constructor(name, par, opts = {}) {//«
 	super(name, par, opts);
@@ -1398,6 +1400,8 @@ constructor(name, par, opts = {}) {//«
 	this.#sys = opts.sys;
 	this.#kids = {};
 	this.#moveLocks = [];
+	this.#getBlob = opts.getBlob;
+	this.#setBlob = opts.setBlob;
 /*
 	if (opts.type && !LOCAL_MNT_FS_TYPES.includes(opts.type)) {//«
 //UDLMDHEK
@@ -1522,7 +1526,8 @@ return;
 
 	return this.#mkNewFile(name, opts);
 }//»
-
+get getBlob (){return this.#getBlob;}
+get setBlob (){return this.#setBlob;}
 get done(){return this.#done;}
 static {
 //HISLKFNF
@@ -1577,8 +1582,8 @@ constructor(name, par, opts={}) {//«
 	super(name, par);
 	this.#lock = {};
 
-	this.#getBlob = opts.getBlob || get_local_blob;
-	this.#setBlob = opts.setBlob || set_local_blob;
+	this.#getBlob = opts.getBlob;
+	this.#setBlob = opts.setBlob;
 
 }//»
 get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
@@ -1595,19 +1600,18 @@ async getValue(opts={}){//«
 //	if (!this.okGet()) return;
 // return this.#blobGetter(this.opts);
 //	return get_blob(this, opts);
-	return this.#getBlob(this, opts);
+//	return this.#getBlob(this, opts);
+	let getter = this.getBlob;
+	return getter(this, opts);
 }//»
 async setValue(val, opts={}){//«
-//	if (!this.okSet()) return;
 	let blob = toBlob(val);
 	if (!blob){
 cerr("Unknown value", val);
 		return;
 	}
-//log(this.#setBlob);
-	return this.#setBlob(this, blob, opts);
+	return this.setBlob(blob, opts);
 }//»
-
 write(val, opts){return this.setValue(val, opts);}
 unlockFile(){//«
 	delete LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];
@@ -1669,33 +1673,38 @@ cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
 get buffer(){//«
 //	if(!this.okGet())return;
 if (this.useMemBlob) return this.memBlob.buffer;
+//let blob = await this.#getBlob(this);
+//return blob_to_ret_val(blob, {buffer: true});
 return(async()=>{
-let blob = await this.#getBlob(this);
+let getter = this.getBlob;
+let blob = await getter(this);
 return blob_to_ret_val(blob, {buffer: true});
 })();
 //	return this.#getBlob(this,{buffer:true});
 }//»
-get blob(){//«
-//	if(!this.okGet())return;
-	if (this.useMemBlob) return this.memBlob;
-	return this.#getBlob(this);
-//	return this.#getBlob(this,{blob:true});
+getBlob(){//«
+	if (this.#getBlob) return this.#getBlob(this);
+	if (this.mntPar.getBlob) return this.mntPar.getBlob(this);
+	return get_local_blob(this)
+}//»
+setBlob(val, opts){//«
+	if (this.#setBlob) return this.#setBlob(this, val, opts);
+	if (this.mntPar.setBlob) return this.mntPar.setBlob(this, val, opts);
+	return set_local_blob(this, val, opts)
 }//»
 get bytes(){//«
-//	if(!this.okGet())return;
 	if (this.useMemBlob) return util.toBytes(this.memBlob);
 	return(async()=>{
-		return blob_to_ret_val(await this.#getBlob(this), {bytes: true});
+		let blob = await this.getBlob();
+		return blob_to_ret_val(blob, {bytes: true});
 	})();
-//	return this.#getBlob(this,{bytes:true});
 }//»
 get text(){//«
-//	if(!this.okGet())return;
 	if (this.useMemBlob) return util.toStr(this.memBlob);
 	return(async()=>{
-		return blob_to_ret_val(await this.#getBlob(this), {text: true});
+		let blob = await this.getBlob();
+		return blob_to_ret_val(blob, {text: true});
 	})();
-//	return this.#getBlob(this,{text:true});
 }//»
 get json(){//«
 	return (async ()=>{
@@ -1714,12 +1723,20 @@ return;
 		return rv;
 	})();
 }//»
-get file(){//«
-//if (!this.okGet()) return;
-	return this.#getBlob(this);
-//	return this.#getBlob(this,{getFileOnly:true});
+get blob(){//«
+	if (this.useMemBlob) return this.memBlob;
+	return this.getBlob();
 }//»
-
+get file(){//«
+	if (this.useMemBlob) return this.memBlob;
+	return this.getBlob();
+}//»
+/*
+get file(){//«
+let getter = this.getBlob;
+return getter(this);
+}//»
+*/
 get ext(){let arr = getNameExt(this.name);if (arr[1]) return arr[1];return "";}
 get baseName(){//«
 	let arr = getNameExt(this.name);
@@ -2862,7 +2879,7 @@ const init = async () => { //«
 	await mkDir("/var","appdata");
 	await make_dev_tree();
 	mount_tree("site", SITE_FS_TYPE);
-///*
+/*
 //ESHFKNOI
 if (globals.dev_mode){//«
 
@@ -2878,7 +2895,7 @@ cwarn("Could not init: fs.fbase");
 }
 
 }//»
-//*/
+*/
 	return true;
 };//»
 
