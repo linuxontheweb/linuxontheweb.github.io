@@ -1838,6 +1838,7 @@ log("VAL", val);
 		});
 		_dir_update(1, user_dir, node);
 	}//»
+log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 	let pub = new DirNode("pub", user_dir, {//«
 		type: FBASE_USER_GRP_FS_TYPE,
 		data: {
@@ -2035,7 +2036,6 @@ cwarn("THERE WAS A PROBLEM INITIALIZING THE USER PROFILE!!!");
 }//»
 
 //»
-
 
 LOTW.mods[MODNAME] = class {//«
 

@@ -106,6 +106,9 @@ I think we can say that this is all about accountancy for the purpose of icon
 *deletion*. But there is one problem: when moving an icon.
 
 »*/
+
+// Notes«
+
 /* 8/6/26: Stop passing icons through comMv! «
 
 For the 2 callbacks @WURBTMYJ (done_cb and no_move_cb), just call them with the
@@ -151,9 +154,6 @@ This is less "powerful" than String.toNode({mkFile: true}), because
 @EJUPMNHGU
 
 »*/
-
-// Notes«
-
 /* 7/31/26: During comMv, let's make dest folder 'isMoveLocked' «
 
 @MNASYRGK:
@@ -1259,8 +1259,8 @@ class FSNode {//«
 //NDITPLOI
 //#root; // Bad
 #data;
-#mntPar; // OK
-#type;
+//#mntPar; // OK
+//#type;
 #blobId;
 #id;
 #par;
@@ -1275,16 +1275,17 @@ return THROW("WHAT IS THIS NAME????");
 }
 	this.#name = name;
 	this.#par = par;
-
-	if (opts.type) { 
-		this.#mntPar = this; // WEBRJTIOX
-		this.#type = opts.type;
-	}
-	else {
-		this.#mntPar = par.mntPar;
-		this.#type = this.#mntPar.type;
-	}
-
+	this._type = opts.type;
+/*
+//	if (opts.type) { 
+//		this.#mntPar = this; // WEBRJTIOX
+//		this.#type = opts.type;
+//	}
+//	else {
+//		this.#mntPar = par.mntPar;
+//		this.#type = this.#mntPar.type;
+//	}
+*/
 
 
 // SRKTOYKHM
@@ -1292,6 +1293,10 @@ return THROW("WHAT IS THIS NAME????");
 
 	this.#delNode = opts.delNode || del_node;
 	this.#data = opts.data;
+
+	this._getBlob = opts.getBlob;
+	this._setBlob = opts.setBlob;
+
 }//»
 mkIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
 delIcons(keepIcn){//«
@@ -1360,8 +1365,30 @@ get fullpath(){//«
 }//»
 get size(){return this.#size;}
 get par(){return this.#par;}
-get mntPar(){return this.#mntPar;}
-get type(){return this.#type;}
+/*
+//get mntPar(){return this.#mntPar;}
+//get type(){return this.#type;}
+*/
+
+get type(){//«
+	let cur = this;
+	while (cur.isRoot !== true) {
+		let t = cur._type;
+		if (isStr(t)) return t;
+		cur = cur.par;
+	}
+	return "root";
+}//»
+get mntPar(){//«
+	let cur = this;
+	while (cur.isRoot !== true) {
+		let t = cur._type;
+		if (isStr(t)) return cur;
+		cur = cur.par;
+	}
+	return root;
+}//»
+
 get name(){	return this.#name;}
 get ext(){ return null; }
 get id(){	return this.#id;}
@@ -1402,7 +1429,7 @@ class DirNode extends FSNode {//«
 #mkDir;
 #mkNewFile;
 #done;
-#getBlob;
+//#getBlob;
 #setBlob;
 //»
 constructor(name, par, opts = {}) {//«
@@ -1415,8 +1442,12 @@ constructor(name, par, opts = {}) {//«
 	this.#sys = opts.sys;
 	this.#kids = {};
 	this.#moveLocks = [];
-	this.#getBlob = opts.getBlob;
-	this.#setBlob = opts.setBlob;
+//	this.#getBlob = opts.getBlob;
+//	this.#setBlob = opts.setBlob;
+
+//	this._getBlob = opts.getBlob;
+//	this._setBlob = opts.setBlob;
+
 /*
 	if (opts.type && !LOCAL_MNT_FS_TYPES.includes(opts.type)) {//«
 //UDLMDHEK
@@ -1541,8 +1572,8 @@ return;
 
 	return this.#mkNewFile(name, opts);
 }//»
-get getBlob (){return this.#getBlob;}
-get setBlob (){return this.#setBlob;}
+//get getBlob (){return this.#getBlob;}
+//get setBlob (){return this.#setBlob;}
 get done(){return this.#done;}
 static {
 //HISLKFNF
@@ -1586,8 +1617,8 @@ class FileNode extends FSNode {//«
 
 //SKMTNHGM
 // Private «
-#getBlob;
-#setBlob;
+//#getBlob;
+//#setBlob;
 
 #lock;
 #entry;
@@ -1597,8 +1628,10 @@ constructor(name, par, opts={}) {//«
 	super(name, par);
 	this.#lock = {};
 
-	this.#getBlob = opts.getBlob;
-	this.#setBlob = opts.setBlob;
+//	this.#getBlob = opts.getBlob;
+//	this._getBlob = opts.getBlob;
+//	this.#setBlob = opts.setBlob;
+//	this._setBlob = opts.setBlob;
 
 }//»
 get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
@@ -1686,13 +1719,20 @@ cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
 
 }//»
 getBlob(){//«
-	if (this.#getBlob) return this.#getBlob(this);
-	if (this.mntPar.getBlob) return this.mntPar.getBlob(this);
+	if (this._getBlob) return this._getBlob(this);
+	if (this.mntPar._getBlob) return this.mntPar._getBlob(this);
 	return get_local_blob(this)
 }//»
 setBlob(val, opts){//«
-	if (this.#setBlob) return this.#setBlob(this, val, opts);
-	if (this.mntPar.setBlob) return this.mntPar.setBlob(this, val, opts);
+	if (this._setBlob) {
+cwarn(`Got this._setBlob`);
+		return this._setBlob(this, val, opts);
+	}
+	if (this.mntPar._setBlob) {
+cwarn(`Got this.mntPar._setBlob`);
+		return this.mntPar._setBlob(this, val, opts);
+	}
+cwarn(`Default: set_local_blob`);
 	return set_local_blob(this, val, opts)
 }//»
 
