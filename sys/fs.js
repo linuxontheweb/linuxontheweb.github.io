@@ -58,7 +58,15 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
+/* 8/26/26: !!! BUG BUG BUG BUG BUG BUG BUG !!! «
 
+After mv'ing a file node, the scr_node.id property somehow mysteriously
+vanishes @MXFBNRHOL.
+
+IT'S BECAUSE WE ARE COPYING THE NODES VIA MK_DIR_KID (), BUT NOT PUTTING
+THE id PROPERTY ONTO IT.
+
+»*/
 /* 8/24/26: BACK TO PUSHING ICONS INTO FSNode.icons «
 
 Data kept here: @SRKTOYKHM
@@ -874,7 +882,16 @@ getByPath(path, if_key_only){//«
 }//»
 _getById(id){//«
 	return new Promise((Y,N)=>{
-		let req = this.getStore().get(id);
+		let req 
+		try {
+			req = this.getStore().get(id);
+		}
+		catch(e){
+cerr(e);
+cwarn(`DIAGNOSING store.get(id): store.get(${id})`);
+			Y();
+			return;
+		}
 		req.onerror=(e)=>{
 			cerr(e);
 			Y();
@@ -1059,6 +1076,7 @@ async setNodeData(nodeid, data){//«
 }//»
 
 async moveNode(id, fromId, toId, newName){//«
+//cwarn(`moveNode: ${id}`);
 	let node = await this._getById(id);
 	let parr = node.path.split("/");
 	if (fromId !== toId) {
@@ -1246,16 +1264,16 @@ else {
 	}
 }//»
 async del(opts={}){//«
-	if (!this.#delNode(this)) return;
+	if (!this.#delNode(this)) return false;
+// OLD Desk stuff «
 //	if (NS.Desk) {
 //		NS.Desk.cleanup_deleted_wins_and_icons(this.fullpath);
 //cwarn(`Not calling cleanup_deleted_wins_and_icons(${this.fullpath})`);
-//	}
+//	}»
 	_dir_update(2, this.par, this);
 	return true;
 }//»
 canRm(opts={}){//«
-//	let obj = this;
 	let rtype = this.type;
 	let path = this.fullpath;
 	if (this.appName !== FOLDER_APP) {//«
@@ -1775,6 +1793,13 @@ const do_move = async(src_node, dest_name, dest_par)=>{//«
 //Need to update this to allow for moving/renaming arbitrary node types 
 //within the same directory type
 	let src_id = src_node.id;
+//log(`MOVE src_id: ${src_id}`);
+if (!src_id){
+//MXFBNRHOL
+cerr("NO ID IN THE src_node");
+log(src_node);
+return;
+}
 	let src_par = src_node.par;
 	let src_par_id = src_par.id;
 	let dest_par_id = dest_par.id;
@@ -1830,7 +1855,10 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 		_node_update(1, dest_node, dest_name); // Set: dest_node.#name
 		_node_update(2, dest_node, dest_par); // Set: dest_node.#par
 	}
+
 	_dir_update(1, dest_par, dest_node); // Add dest_node to dest_par
+	_node_update(3, dest_node, src_id); // Set: dest_node.#id
+
 	return dest_node;
 
 };//»
