@@ -82,8 +82,8 @@ const OP_FS_TYPE= "opfs", // Origin-Private
 	MNT_FS_TYPE = "mnt",
 
 	FBASE_RTDB_FS_TYPE = "fb-rtdb",
+    FBASE_USER_GRP_FS_TYPE = "fb-user-grp",
 	FBASE_USERS_FS_TYPE = "fb-users"; // Maybe this should be called 'ALT_FS_TYPE'
- 
 //const USERS_TYPE = "users";
 
 const LOCAL_MNT_FS_TYPES = [

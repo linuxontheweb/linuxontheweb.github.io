@@ -1701,6 +1701,7 @@ get json(){//«
 	return (async ()=>{
 		let txt = await this.text;
 		if (!isStr(txt)) return;
+//log(`txt: <${txt}> (${txt.length})`);
 		let rv;
 		try{
 			rv = JSON.parse(txt);

@@ -55,7 +55,7 @@ stays at 100.
 	".write": false,
 	"LOTW": {
 		"prof": {
-			".indexOn": ["updated"],
+			".indexOn": ["updated"], 
 			".read": "auth != null",
 			"$uid": {
 				".write": "auth != null && auth.uid === $uid",
@@ -68,7 +68,7 @@ stays at 100.
 						newData.hasChildren(['updated', 'bio'])
 					))",
 				"updated": {
-					".validate": "newData.isNumber()"
+					".validate": "newData.isNumber()" 
 				},
 				"name": {
 					".validate": "newData.isString() && 
@@ -94,14 +94,6 @@ stays at 100.
 		"user": {
 			"$uid": {
 				".write": "auth != null && auth.uid === $uid",
-				"nextNodeId": {
-					".read": "auth != null && auth.uid === $uid",
-					".validate": "newData.isNumber() && 
-						(
-							(data.exists() && newData.val() === data.val() + 1) || 
-							(!data.exists() && newData.val() === 1)
-						)"
-				},
 				"nextGrpId": {
 					".read": "auth != null && auth.uid === $uid",
 					".validate": "newData.isNumber() && 
@@ -119,7 +111,7 @@ stays at 100.
 							".validate": "newData.isString() && 
 								newData.val().length > 1 && 
 								newData.val().length < 16 && 
-								newData.val().matches(/^[a-z][_a-zA-Z0-9]+$/)"
+								newData.val().matches(/^[_a-zA-Z][_a-zA-Z0-9]+$/)"
 						},
 						"desc": {
 							".validate": "newData.isString() && 
@@ -132,11 +124,20 @@ stays at 100.
 				},
 				"group": {
 					"$grpid": {
+						".validate": "$grpid.matches(/^\\d+$/)",
 						"members": {
 							".read": "auth != null && auth.uid === $uid",
 							"$memid": {
 								".validate": "newData.isBoolean()"
 							}
+						},
+						"nextNodeId": {
+							".read": "auth != null && auth.uid === $uid",
+							".validate": "newData.isNumber() && 
+								(
+									(data.exists() && newData.val() === data.val() + 1) || 
+									(!data.exists() && newData.val() === 1)
+								)"
 						},
 						"lastUpdate": {
 							".read": "auth != null && (
@@ -499,6 +500,25 @@ Do a "touch" on "LOTW/prof/$uid"
 newData.hasChildren(['updated', 'name', 'picture']))
 
 
+
+validation.ts:122 Uncaught (in promise) Error: equalTo failed: value argument
+contains undefined in property:
+ - LOTW.user.FgiH6QEFncUo10iF7BekOYC4DTj2.group.1.nodes
+ - LOTW.user.FgiH6QEFncUo10iF7BekOYC4DTj2.group.2.nodes
+
+I guess we need to instantiate both of these first 
+
+
+@HOPORNKER:
+
+at DirNode.populate_fbase_user_grp (fbase.js?v=7998040:1765:22)
+at DirNode.loadKids (fs.js:1461:20)
+at do_path (shell.js?v=2349283:3034:14)
+at async com_ls.run (shell.js?v=2349283:3112:3)
+
+
+@UKHFAJFUE: Could not initialize all of the fields in the different
+user fs groups, e.g. 'prv' and 'pub'.
 
 »*/
 
@@ -1618,6 +1638,8 @@ const { // api.util «
 const {// fs (FBASE_RTDB_FS_TYPE, NODE_TYPE's) «
     FBASE_RTDB_FS_TYPE,
 	FBASE_USERS_FS_TYPE,
+	FBASE_USER_GRP_FS_TYPE,
+
 // File system "node" types
 
     FILE_NODE_TYPE,
@@ -1733,13 +1755,14 @@ return snap.val();
 // 
 let uid = node.getData('fbaseUid');
 let grpid = node.getData('fbaseGrpId');
-let parid = node.id;
+//log(node);
+let parid = node.id; // HEJRKTKT: UNDEFINED HARHARHAR
 cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('parId');
 let c2 = fbase_db_mod.equalTo(parid);
-let q = fbase_db_mod.query(ref, c1, c2);
+let q = fbase_db_mod.query(ref, c1, c2); // HOPORNKER
 let snap = await GET(q);
 if (!(snap && snap.exists())) return;
 let arr = snap.val();
@@ -1814,6 +1837,7 @@ let pub = new DirNode("pub", user_dir, {//«
 	tryGetKid: try_get_fbase_user_grp_kid
 });
 _dir_update(1, user_dir, pub);
+_node_update(3, pub, 2); //HEREPUBUB
 //»
 if (uid === cur_user.uid){//«
 	let prv = new DirNode("prv", user_dir, {
@@ -1826,9 +1850,10 @@ if (uid === cur_user.uid){//«
 		tryGetKid: try_get_fbase_user_grp_kid
 	});
 	_dir_update(1, user_dir, prv);
+	_node_update(3, prv, 1); // HEREPRVRV
 }//»
 
-cwarn(`CHECK FOR OTHER GROUPS (uid: ${uid})`);
+//cwarn(`CHECK FOR OTHER GROUPS (uid: ${uid})`);
 _dir_update(3, user_dir, true);
 
 };//»
@@ -1924,31 +1949,13 @@ await users_cache_node.setValue(JSON.stringify(old_obj));
 
 };//»
 
-//»
+const get_last_updated_or_create_profile = async () => {//«
 
+if (!cur_user){
+cerr(`CALLED get_last_updated_or_create_profile W/ NO CUR_USER!?!?!?`);
+return;
+}
 
-LOTW.mods[MODNAME] = class {//«
-
-constructor(arg){//«
-	DirNode = arg.DirNode;
-	FileNode = arg.FileNode;
-	_node_update = arg.nodeUpdate;
-	_dir_update = arg.dirUpdate;
-cwarn(`MAKE <${MODNAME}>`);
-}//»
-
-async #authChangeCb(val){//«
-
-//cwarn("AUTH CHANGE!!!");
-//log(val);
-cur_user = val;
-if (cur_user && !first_auth_change){
-first_auth_change = true;
-
-/* Try to get  our profile at
-
-*/
-log(cur_user);
 let uid = cur_user.uid;
 let uid_path = `LOTW/prof/${uid}`;
 let updated_path = `${uid_path}/updated`;
@@ -1962,9 +1969,7 @@ cwarn("GET FAILED");
 return;
 }
 if (snap.exists()) {
-//log("GOT THE SNAP!");
-
-log("LAST UPDATED", snap.val());
+//log("LAST UPDATED", snap.val());
 	return;
 }
 
@@ -1979,7 +1984,20 @@ obj[`prof/${uid}`] = {
 	picture: cur_user.photoURL,
 };
 obj[`user/${uid}/nextGrpId`] = 3;
-//log(obj);
+
+
+// UKHFAJFUE
+// Trying these gives permission denied!?!?!
+
+obj[`user/${uid}/group/1/nextNodeId`] = 1;
+obj[`user/${uid}/group/1/nodes`] = {};
+obj[`user/${uid}/group/1/blobs`] = {};
+
+obj[`user/${uid}/group/2/nextNodeId`] = 1;
+obj[`user/${uid}/group/2/nodes`] = {};
+obj[`user/${uid}/group/2/blobs`] = {};
+
+log(obj);
 
 let rv = await UPDATE(ref, obj);
 
@@ -1988,8 +2006,27 @@ cwarn("THERE WAS A PROBLEM INITIALIZING THE USER PROFILE!!!");
 }
 
 //log(rv);
+}//»
+
+//»
 
 
+LOTW.mods[MODNAME] = class {//«
+
+constructor(arg){//«
+	DirNode = arg.DirNode;
+	FileNode = arg.FileNode;
+	_node_update = arg.nodeUpdate;
+	_dir_update = arg.dirUpdate;
+cwarn(`MAKE <${MODNAME}>`);
+}//»
+
+#authChangeCb(val){//«
+
+cur_user = val;
+if (cur_user && !first_auth_change){
+	first_auth_change = true;
+	get_last_updated_or_create_profile();
 }
 
 }//»
