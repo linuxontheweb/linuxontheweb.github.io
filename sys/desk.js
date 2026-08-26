@@ -20,6 +20,13 @@ in the code.)
 
 »*/
 
+/*8/26/26: Icons maintenance: looking pretty good!?! «
+
+It seems that create/move is working well, but I still need to test
+the rm (rmdir) functions
+
+»*/
+
 /*8/25/26: EZ Maintanence: Back to pushing icons onto Nodes !?!?! «
 
 @sys/fs.js:SRKTOYKHM
@@ -44,7 +51,6 @@ icons:
 
 
 »*/
-
 /* 8/24/26: ARE WE FINISHED WITH "ICON ACCOUNTING" YET???  «
 
 We will need to get a nice test suite working to ensure that all possible
@@ -89,7 +95,7 @@ III. @SJRKSNRN: Need to really thing about done_cb. Do we really//«
 want to keep the old icons around? I think we should:
 a) await the animation promises
 b) delete the old (animated) icons
-c) call node.mkAllIcons
+c) call node.mkIcons
 //»
 
 // !!! FINAL ICON DEL/MAKE LOGIC !!! «
@@ -6112,7 +6118,7 @@ const get_icon_copy = () => {//«
 
 const oldpath = src_node.fullpath;
 const newpath = dest_node.fullpath;
-cwarn(`DONE: ${oldpath} -> ${newpath}`);
+//cwarn(`DONE: ${oldpath} -> ${newpath}`);
 
 /*
 For every icon that we need to move/copy, this is the callback the shell
@@ -7133,7 +7139,12 @@ const delete_selected_files = async which => {//«
 		if (!ret) return;
 		let errprompt;
 		let errors = [];
-		await fsapi.doFsRm(arr, mess=>{errors.push(mess);});
+		await fsapi.doFsRm(arr, 
+			{
+				done_cb: node => { node.delIcons(); },
+				no_rm_cb: mess => { errors.push(mess); }
+			}
+		);
 		icon_array_off(8);
 		if (usewin!==desk){
 			usewin.app.reload();

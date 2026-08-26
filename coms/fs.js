@@ -1,5 +1,20 @@
 (()=>{"use strict";const LIBNAME="fs";
 
+/* 8/26/26: Need done_cb's for... ? «
+
+
+For deletion:
+  - com_rm: @SEHJKRBTM
+  - com_rmdir: @ERITLYJK
+... just need to put delIcons?
+
+
+
+For creation (just added newnode.mkIcons()):
+  - com_symln: @GEYRURJT
+  - com_ln: @KSBRHSXBF 
+
+»*/
 /*8/23/26: Added done_cb and no_move_cb to com_mv and com_cp «
 cp: @WJTLDUTJ 
 mv: @NDMTKYI
@@ -138,11 +153,7 @@ const{
 	MOUNT_TYPE,
 	USERS_TYPE
 }=globals.fs;
-const{
-	TEXT_EDITOR_APP,
-	LINK_APP,
-	FOLDER_APP,
-}=globals.app;
+//const{ FOLDER_APP }=globals.app;
 const fsapi = fsMod.api;
 const widgets = NS.api.widgets;
 const{E_SUC, E_ERR} = SHELL_ERROR_CODES;
@@ -962,7 +973,8 @@ screen never shows.
 		}//»
 		else {//«
 			if (node.isWriteLocked) return this.no(`${path}: is locked by another application`);
-			if (node.appName === FOLDER_APP) return this.no(`${fullpath}: is a directory`);
+			if (node.isDir) return this.no(`${fullpath}: is a directory`);
+//			if (node.appName === FOLDER_APP) return this.no(`${fullpath}: is a directory`);
 			val = await node.text;
 			if (!isStr(val)){
 cwarn("Here are the contents...");
@@ -1214,7 +1226,8 @@ async init(){//«
 		if (!node) {
 			return this.no(`${fullpath}: no such file or directory`);
 		}
-		if (node.appName === FOLDER_APP) {
+		if (node.isDir) {
+//		if (node.appName === FOLDER_APP) {
 			return this.no(`${fullpath}: is a directory`);
 		}
 //		let val = await node.getValue({text:true});
@@ -1545,7 +1558,8 @@ async run(){
 		let fname = arr.pop();
 		let parpath = arr.join("/");
 		let parnode = await parpath.toNode();
-		if (!(parnode && parnode.appName === FOLDER_APP)) {
+		if (!(parnode && parnode.isDir)) {
+//		if (!(parnode && parnode.appName === FOLDER_APP)) {
 			err(`${parpath}: Not a directory`);
 			continue; 
 		}
@@ -1559,7 +1573,7 @@ async run(){
 		}
 		let newnode = await parnode.mkNewFile(fname);
 		if (!newnode) err(`${fullpath}: The file could not be created`);
-		newnode.mkAllIcons();
+		newnode.mkIcons();
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1706,7 +1720,7 @@ async run(){
 		}
 		let newdir = await parnode.mkDir(fname);
 		if (!newdir) err(`${fullpath}: the directory could not be created`);
-		newdir.mkAllIcons();
+		newdir.mkIcons();
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1726,12 +1740,31 @@ static getOpts(){//«
 async run(){
 	let{args,term}=this;
 	let have_error=false;
-	const err=(mess)=>{if(!mess)return;have_error=true;this.err(mess);};
+	const err = mess => {//«
+		if (!mess) {
+cerr("NO MESSAGE IN ERR CB!?!?");
+			return;
+		}
+		have_error=true;
+		this.err(mess);
+	};//»
+	const done_cb = node => {
+cwarn(`RMDIR DONE: ${node.fullpath}`);
+node.delIcons();
+	};
 	if (!args.length) {
 		err("missing operand");
 	}
 	else {
-		await fsapi.doFsRm(args, err, {CWD: this.env.cwd.cwd, FULLDIRS: false, dirsOnly: true});
+//		await fsapi.doFsRm(args, err, {
+		await fsapi.doFsRm(args, {
+			no_rm_cb : err,
+			done_cb,
+			CWD: this.env.cwd.cwd,
+			FULLDIRS: false,
+			dirsOnly: true
+		});
+// ERITLYJK
 	}
 
 	have_error?this.no():this.ok();	
@@ -1744,7 +1777,18 @@ async run(){
 	let{args,term, env, opts}=this;
 	let have_error=false;
 	let is_recur = (opts.recursive || opts.R || opts.r);
-	const err=(mess)=>{if(!mess)return;have_error=true;this.err(mess);};
+	const err = mess =>{//«
+		if (!mess) {
+cerr("No mess in the err cb!?!?!");
+			return;
+		}
+		have_error=true;
+		this.err(mess);
+	};//»
+	const done_cb = node => {
+cwarn(`RM DONE: ${node.fullpath}`);
+node.delIcons();
+	};
 	if (!args.length) {
 		err("missing operand");
 	}
@@ -1763,13 +1807,22 @@ async run(){
 				err(`${path}: no such file or directory`);
 				continue;
 			}
-			if (!is_recur && node.appName===FOLDER_APP){
+			if (!is_recur && node.isDir){
+//			if (!is_recur && node.appName===FOLDER_APP){
 				err(`${path}: is a directory`);
 				continue;
 			}
 			okargs.push(node.fullpath);
 		}
-		await fsapi.doFsRm(okargs, err, {CWD: cwd, FULLDIRS: is_recur});
+//		await fsapi.doFsRm(okargs, err, {
+
+		await fsapi.doFsRm(okargs, {
+			no_rm_cb: err,
+			done_cb,
+			CWD: cwd, 
+			FULLDIRS: is_recur
+		});
+// SEHJKRBTM
 	}
 	have_error?this.no():this.ok();	
 }
@@ -1801,7 +1854,8 @@ async run(){
 	if (!target_node) {
 		return err("the target does not exist");
 	}
-	if (target_node.type != OP_FS_TYPE || target_node.appName === FOLDER_APP){
+	if (target_node.type != OP_FS_TYPE || target_node.isDir){
+//	if (target_node.type != OP_FS_TYPE || target_node.appName === FOLDER_APP){
 		return err("the link cannot be created");
 	}
 	let blobid = target_node.blobId;
@@ -1825,7 +1879,8 @@ async run(){
 	let parpath = arr.join("/");
 	let parnode = await parpath.toNode();
 
-	if (!(parnode && parnode.appName === FOLDER_APP)) {
+	if (!(parnode && parnode.isDir)) {
+//	if (!(parnode && parnode.appName === FOLDER_APP)) {
 		return err(`${parpath}: not a directory`);
 	}
 	if (parnode.type !== OP_FS_TYPE) {
@@ -1834,6 +1889,7 @@ async run(){
 	if (!parnode.perm) return err(`${path}: permission denied`);
 	let newnode = await parnode.mkHardLink(fname, blobid);
 	if (!newnode) return err(`${path}: the link could not be created`);
+	newnode.mkIcons(); // KSBRHSXBF
 	this.suc(`${fname} -> blobId(${blobid})`);
 	this.ok();
 }
@@ -1859,12 +1915,14 @@ async run(){
 	let fname = arr.pop();
 	let parpath = arr.join("/");
 	let parnode = await parpath.toNode();
-	if (!(parnode && parnode.appName === FOLDER_APP)) return err(`${parpath}: not a directory`);
+	if (!(parnode && parnode.isDir)) return err(`${parpath}: not a directory`);
+//	if (!(parnode && parnode.appName === FOLDER_APP)) return err(`${parpath}: not a directory`);
 	if (parnode.type !== OP_FS_TYPE) return err(`${fullpath}: the parent directory is not of type '${OP_FS_TYPE}'`);
 	if (!parnode.perm) return err(`${path}: permission denied`);
 	
 	let newnode = await parnode.mkSymLink(fname, target, normPath(target, this.env.cwd.cwd));
 	if (!newnode) return err(`${path}: the link could not be created`);
+	newnode.mkIcons(); // GEYRURJT
 	this.suc(`${fname} -> ${target}`);
 	this.ok();
 }
@@ -2057,14 +2115,14 @@ dl: com_dl,
 less:com_less,
 mkdir: com_mkdir,
 rmdir: com_rmdir,
-mv:com_mv,
-cp:com_cp,
-rm:com_rm,
-symln:com_symln,
-ln:com_ln,
-vim:com_vim,
+mv: com_mv,
+cp: com_cp,
+rm: com_rm,
+symln: com_symln,
+ln: com_ln,
+vim: com_vim,
 vimtest: com_vimtest,
-touch:com_touch,
+touch: com_touch,
 
 }//»
 

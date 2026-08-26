@@ -1646,7 +1646,7 @@ if (!node){
 
 	node = await parnode.mkNewFile(nm);
 	if (!node) return `${use_fname}: could not create the new file`;
-	node.mkAllIcons();
+	node.mkIcons();
 }
 if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file 1234`;
 return true;

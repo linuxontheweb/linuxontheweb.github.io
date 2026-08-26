@@ -1229,14 +1229,30 @@ return THROW("WHAT IS THIS NAME????");
 	this.#delNode = opts.delNode || del_node;
 	this.#data = opts.data;
 }//»
-mkAllIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
+mkIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
+delIcons(keepIcn){//«
+	if (keepIcn) {
+		for (let icn of this.icons) {
+			if (icn !== keepIcn) icn.del();
+else {
+//cwarn("KEEP", icn);
+}
+		}
+		this.icons = [keepIcn];
+	}
+	else {
+		for (let icn of this.icons) icn.del();
+		this.icons = [];
+	}
+}//»
 async del(opts={}){//«
 	if (!this.#delNode(this)) return;
-	if (NS.Desk) {
+//	if (NS.Desk) {
 //		NS.Desk.cleanup_deleted_wins_and_icons(this.fullpath);
-cwarn(`Not calling cleanup_deleted_wins_and_icons(${this.fullpath})`);
-	}
+//cwarn(`Not calling cleanup_deleted_wins_and_icons(${this.fullpath})`);
+//	}
 	_dir_update(2, this.par, this);
+	return true;
 }//»
 canRm(opts={}){//«
 //	let obj = this;
@@ -1277,21 +1293,6 @@ get fullpath(){//«
 	while (!arr[0] && arr.length) arr.shift();
 	str = arr.join("/");
 	return `/${str}`.regpath();
-}//»
-delIcons(keepIcn){//«
-	if (keepIcn) {
-		for (let icn of this.icons) {
-			if (icn !== keepIcn) icn.del();
-else {
-//cwarn("KEEP", icn);
-}
-		}
-		this.icons = [keepIcn];
-	}
-	else {
-		for (let icn of this.icons) icn.del();
-		this.icons = [];
-	}
 }//»
 get size(){return this.#size;}
 get par(){return this.#par;}
@@ -1957,18 +1958,23 @@ const getPathByDirId=async(idarg)=>{//«
 	return "/"+path.join("/");
 };//»
 
-const doFsRm=async(args, errcb, opts={})=>{//«
-	let{dirsOnly}=opts;
+const doFsRm = async(args, opts={})=>{//«
+//const doFsRm = async(args, errcb, opts={})=>{
+
+let { done_cb, no_rm_cb, dirsOnly } = opts;
+//	let{dirsOnly}=opts;
 	let cwd = opts.CWD;
 	let arr = [];
 	let no_error = true;
-	if (!errcb){
-		errcb = mess =>{cerr(mess);};
+	if (!no_rm_cb){
+		no_rm_cb = mess =>{
+			cerr(mess);
+		};
 	}
 	for (let path of args){
 		let node = await path.toNode({cwd});
 		if (!node) {
-			errcb(`could not stat: ${path}`);
+			no_rm_cb(`could not stat: ${path}`);
 			continue;
 		}
 
@@ -1980,17 +1986,9 @@ const doFsRm=async(args, errcb, opts={})=>{//«
 			else is_empty = !node.haveKids;
 		}
 		let rv = node.canRm({isEmpty: is_empty, doFullDirs: opts.FULLDIRS || opts.fullDirs});
-/*«
-		let node = await check_ok_rm(
-			normPath(path, cwd), 
-			errcb, 
-			is_root, 
-			do_full_dirs
-		);
-»*/
 		if (rv !== true) {//«
 			if (isStr(rv)){
-				errcb(rv);
+				no_rm_cb(rv);
 				no_error = false;
 				continue;
 			}
@@ -2001,7 +1999,7 @@ log(rv);
 		}//»
 		if (dirsOnly && !node.isDir){
 //		if (dirsOnly && node.appName!==FOLDER_APP){
-			errcb(`${node.fullpath}: not a directory`);
+			no_rm_cb(`${node.fullpath}: not a directory`);
 			no_error = false;
 			continue;
 		}
@@ -2009,7 +2007,14 @@ log(rv);
 	}
 	for (let node of arr) {
 //		if (!await delete_fobj(obj, opts)) no_error = false;
-		if (!await node.del(opts)) no_error = false;
+		if (!await node.del(opts)) {
+cwarn("GOT ERROR!?!?!?!");
+			no_error = false;
+		}
+		else {
+cwarn(`CALL DONE_CB: ${node.fullpath}`);
+			done_cb(node);
+		}
 	}
 	return no_error;
 };//»
