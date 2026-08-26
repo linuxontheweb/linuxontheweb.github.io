@@ -1706,6 +1706,7 @@ async run(){
 		}
 		let newdir = await parnode.mkDir(fname);
 		if (!newdir) err(`${fullpath}: the directory could not be created`);
+		newdir.mkAllIcons();
 	}
 	have_error?this.no():this.ok();	
 }

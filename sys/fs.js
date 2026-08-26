@@ -1282,6 +1282,9 @@ delIcons(keepIcn){//«
 	if (keepIcn) {
 		for (let icn of this.icons) {
 			if (icn !== keepIcn) icn.del();
+else {
+//cwarn("KEEP", icn);
+}
 		}
 		this.icons = [keepIcn];
 	}
@@ -2496,10 +2499,11 @@ log(rv);
 	}//»
 	let bid = node.blobId;
 	if (!bid){
-cerr("No node.blobId!?!?!?", node);
-		return EB;
+		await node.getRealBlobId();
+		bid = node.blobId;
+cwarn(`No node.blobId (${node.fullpath}, got real id: ${bid}`);
 	}
-	if (bid===NULL_BLOB_NODE_TYPE) return EB;
+	else if (bid===NULL_BLOB_NODE_TYPE) return EB;
 	let ent = await get_blob_entry(`${bid}`);
 	if (!ent) {
 cerr(`NO ENTRY: ${bid}`);
@@ -2623,22 +2627,6 @@ const mkDir = async(pararg, name, opts={})=>{//«
 	}
 	else parobj = pararg;
 	let fullpath = `${parobj.fullpath}/${name}`;
-/*«
-	let parpath;
-
-	if (isObj(parpatharg)) parpath = parpatharg.fullpath;
-	else parpath = parpatharg;
-	if (name===null||name===undefined){
-		let arr = parpath.split("/");
-		name = arr.pop();
-		parpath = arr.join("/");
-	}
-	let fullpath = `${parpath}/${name}`.regpath();
-	let parobj = await path_to_node(parpath);
-	if (!parobj) return;
-»*/
-//	let no_db = false;
-
 	let typ = parobj.type;
 	if (await path_to_node(fullpath)){//«
 //		let kid = parobj.kids[name];
@@ -2655,23 +2643,11 @@ cerr(`WHY IS THERE NO parobj.kids[${name}] in mkDir AFTER SUCCESSFULLY GETTING P
 		id = await db.createNode(name, DIR_NODE_TYPE, parid);
 		if (!id) return cerr("DEYBGJTU");
 	}
-//	else if (typ === USERS_TYPE){
-//		id = await globals.funcs["netfs.fbMkdir"](parpath, parobj.id, name);
-//		if (!id) return cerr("INVALID VALUE FROM fbMkdir");
-//log("parobj.APPDATA?", parobj.appData);
-//		kid = mk_dir_kid(parobj, name, {isDir: true, appData: parobj.appData});
+//	else {
 //	}
-//	kid.id = id;
 	kid = mk_dir_kid(parobj, name, {isDir: true, perm: opts.perm});
 	_node_update(3, kid, id);
 	_dir_update(1, parobj, kid);
-	if (NS.Desk && !opts.noMakeIcon) {
-//		NS.Desk.make_icon_if_new(kid);
-
-cwarn(`Not calling make_icon_if_new w/ new node:`);
-log(kid);
-
-	}
 	return kid;
 
 };
