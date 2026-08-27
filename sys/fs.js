@@ -59,7 +59,11 @@ _dir_update(1, par, my_node);
 
 //»
 
-/*8/27/26: Just stay in these notes, for the time being «
+/*8/27/26: BUG BUG BUG «
+
+We need to implement mkNewFile (and mkDir) @DSJKRLTKJ
+Just put it in the constructor of FSNode @TEIDJKSDM.
+
 
 Mainly here and in mods/fs/fbase.js, with changes that result from
 *extreme* understanding and good existential feelings.
@@ -1292,17 +1296,6 @@ return THROW("WHAT IS THIS NAME????");
 	this.#name = name;
 	this.#par = par;
 	this._type = opts.type;
-/*
-//	if (opts.type) { 
-//		this.#mntPar = this; // WEBRJTIOX
-//		this.#type = opts.type;
-//	}
-//	else {
-//		this.#mntPar = par.mntPar;
-//		this.#type = this.#mntPar.type;
-//	}
-*/
-
 
 // SRKTOYKHM
 	this.icons = []; // <--- USE THIS FOR QUICK RM/DEL NODE OPS!!!
@@ -1312,6 +1305,10 @@ return THROW("WHAT IS THIS NAME????");
 
 	this._getBlob = opts.getBlob;
 	this._setBlob = opts.setBlob;
+
+// TEIDJKSDM
+	this._mkNewFile = opts.mkNewFile;
+	this._mkDir = opts.mkDir;
 
 }//»
 mkIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
@@ -1404,6 +1401,54 @@ get mntPar(){//«
 	}
 	return root;
 }//»
+getBlob(){//«
+	if (this._getBlob) return this._getBlob(this);
+	if (this.mntPar._getBlob) return this.mntPar._getBlob(this);
+	return get_local_blob(this)
+}//»
+setBlob(val, opts){//«
+	if (this._setBlob) {
+//cwarn(`Got this._setBlob`);
+		return this._setBlob(this, val, opts);
+	}
+	if (this.mntPar._setBlob) {
+//cwarn(`Got this.mntPar._setBlob`);
+		return this.mntPar._setBlob(this, val, opts);
+	}
+//cwarn(`Default: set_local_blob`);
+	return set_local_blob(this, val, opts)
+}//»
+mkDir(name, opts={}){//«
+if (name.match(/\x2f/)){
+cerr(`INVALID NAME IN MKDIR: ${name} (SLASH DETECTED)`);
+return;
+}
+cwarn("MAKE SURE THIS IS THE RIGHT THING IN FSNode.mkDir (patterned off getBlob/setBlob) !!!!!");
+	if (this._mkDir) return this._mkDir(this, name, opts);
+	if (this.mntPar._mkDir) return this.mntPar._mkDir(this, name, opts);
+	return mkDir(this, name, opts)
+//	this.#mkDir = (name, opts={})=>{return mkDir(this, name, opts);};
+
+}//»
+mkNewFile(name, opts={}){//«
+if (name.match(/\x2f/)){
+cerr(`INVALID NAME IN MKNEWFILE: ${name} (SLASH DETECTED)`);
+return;
+}
+cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
+
+	if (this._mkNewFile) {
+log("Got: this._mkNewFile");
+		return this._mkNewFile(this, name, opts);
+	}
+	if (this.mntPar._mkNewFile) {
+log("Got: mntPar._mkNewFile");
+		return this.mntPar._mkNewFile(this, name, opts);
+	}
+log("Got: default: touchFile");
+	return touchFile(this, name, opts)
+
+}//»
 
 get name(){	return this.#name;}
 get ext(){ return null; }
@@ -1442,8 +1487,8 @@ class DirNode extends FSNode {//«
 #moveLocks;
 #popDir;
 #tryGetKid;
-#mkDir;
-#mkNewFile;
+//#mkDir;
+//#mkNewFile;
 #done;
 //#getBlob;
 #setBlob;
@@ -1458,11 +1503,6 @@ constructor(name, par, opts = {}) {//«
 	this.#sys = opts.sys;
 	this.#kids = {};
 	this.#moveLocks = [];
-//	this.#getBlob = opts.getBlob;
-//	this.#setBlob = opts.setBlob;
-
-//	this._getBlob = opts.getBlob;
-//	this._setBlob = opts.setBlob;
 
 /*
 	if (opts.type && !LOCAL_MNT_FS_TYPES.includes(opts.type)) {//«
@@ -1502,8 +1542,9 @@ cwarn(`mkNewFile(${name}): NOOP (TYPE: ${par.type})`);
 
 	this.#popDir = opts.popDir || populate_dirobj;
 	this.#tryGetKid = opts.tryGetKid || try_get_fs_kid;
-	this.#mkDir = opts.mkDir || ((name, opts={}) =>{return mkDir(this, name, opts);})
-	this.#mkNewFile = opts.mkNewFile || ((name, opts={})=>{return touchFile(this, name, opts);})
+
+// DSJKRLTKJ
+//	this.#mkNewFile = opts.mkNewFile || ((name, opts={})=>{return touchFile(this, name, opts);})
 
 	if (ALWAYS_DONE_DIR_FS_TYPES.includes(par.type)){
 		this.#done = true;
@@ -1573,6 +1614,7 @@ get isEmpty(){ return db.checkEmpty(this.id); }
 getKid(name){return this.#kids[name];}
 mkHardLink(name, blobid){return make_hard_link(this, name, blobid);}
 mkSymLink(name, target, fullpath){return make_sym_link(this, name, target, fullpath);}
+/*
 mkDir(name, opts={}){//«
 if (name.match(/\x2f/)){
 cerr(`INVALID NAME IN MKDIR: ${name} (SLASH DETECTED)`);
@@ -1588,6 +1630,7 @@ return;
 
 	return this.#mkNewFile(name, opts);
 }//»
+*/
 //get getBlob (){return this.#getBlob;}
 //get setBlob (){return this.#setBlob;}
 get done(){return this.#done;}
@@ -1733,23 +1776,6 @@ cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
 }
 	return new Blob([]);
 
-}//»
-getBlob(){//«
-	if (this._getBlob) return this._getBlob(this);
-	if (this.mntPar._getBlob) return this.mntPar._getBlob(this);
-	return get_local_blob(this)
-}//»
-setBlob(val, opts){//«
-	if (this._setBlob) {
-cwarn(`Got this._setBlob`);
-		return this._setBlob(this, val, opts);
-	}
-	if (this.mntPar._setBlob) {
-cwarn(`Got this.mntPar._setBlob`);
-		return this.mntPar._setBlob(this, val, opts);
-	}
-cwarn(`Default: set_local_blob`);
-	return set_local_blob(this, val, opts)
 }//»
 
 get buffer(){//«

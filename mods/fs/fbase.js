@@ -460,6 +460,18 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/* BUG BUG BUG«
+
+This is simply restatement of the note of 7/20/26.
+We need to implement mkNewFile and mkDir:
+in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
+
+WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
+
+
+
+»*/
+
 /* 8/27/26: Developing a theory of the fbase fs «
 
 4 different kinds of directories:
@@ -469,10 +481,11 @@ MNT_FS_TYPE (a list of "mounted" dirs):
 MNT_FS_TYPE: The type of /mnt itself. This is wholly a "local" type whose
 contents depend on calls such as in step #2 below.
 Always fully populated, only system level JS can currently update this, but
-we may eventually implement a mount command.
+we may eventually implement mount/unmount commands.
 //»
 
-FBASE_USERS_FS_TYPE (a list of fbase users: they had to log in):
+FBASE_USERS_FS_TYPE (a list of fbase users: they at least had to log into
+Google while in LOTW):
 2) Mount '/mnt/fbase' in init @WYRHTKGH//«
 FBASE_USERS_FS_TYPE: Nothing but the listing of users goes in here
 Populating of this directory means choosing from the listing of users
@@ -480,7 +493,7 @@ returned from LOTW/prof. It may be possible to "continue" populating this
 by searching for users based on additional/expanded criteria.
 //»
 
-FBASE_USER_MAIN_FS_TYPE (a list of profile files and group directories, 
+FBASE_USER_MAIN_FS_TYPE (a list of profile files, group directories, 
 and possibly more):
 3) Mount '/mnt/fbase/<a_username>' in populate_fbase_users @YFKMYOGJT «
 FBASE_USER_MAIN_FS_TYPE: The "base" user directory, which keeps the
@@ -488,10 +501,10 @@ separate "group" directories ('pub', 'prv', etc.) as well as "profile" files
 like 'name', 'picture', etc, and maybe even 'status'. Once this is populated,
 this probably shouldn't need to be repopulated. Caveat: there might be additional
 dir_groups's added (or removed) since when the directory was first mounted.
-WE DON'T CURRENTLY SUPPORT THE MOUNTING OF ARBITRARY GROUP DIRECTORIES, WE
-CURRENTLY SUPPORT ONLY 'PUB' AND 'PRV'. To support the mounting of arbitrary
-groups, we will need to query the path: 'LOTW/user/$uid/grpDefs', to get
-the following array:
+WE DON'T CURRENTLY SUPPORT THE MOUNTING OF ARBITRARY MEMBER-BASED DIRECTORIES, WE
+CURRENTLY SUPPORT ONLY 'PUB' (WORLD READABLE) AND 'PRV' (OWNER READABLE). To 
+support the mounting of arbitrary groups, we will need to query the path: 
+'LOTW/user/$uid/grpDefs', to get the following array:
 [
 	{
 		<grp_id_1>: { name_1, desc_1 } 
@@ -506,7 +519,7 @@ administrator command library, e.g. at coms/fbase.js.
 
 //»
 
-FBASE_USER_GRP_FS_TYPE (each is a kind of root/sovereign filesystem):
+FBASE_USER_GRP_FS_TYPE (each is a kind of "sovereign" root filesystem):
 4) Mount '/mnt/fbase/<a_username>/<dir_group>' in populate_fbase_user_dir «
 @YGJDPLKIU
 FBASE_USER_GRP_FS_TYPE: The individual "groups" with their various backend
@@ -521,9 +534,9 @@ populated.
 What sorts of interface mechanisms do we want for this?
 Obviously: a command library at coms/fbase.js should suffice.
 
-It should verify that /mnt/fbase is mounted and in working order.
+The library should verify that /mnt/fbase is mounted and in working order.
 If not, it should allow for the mounting of it, as well as whatever
-diagnostics/maintenance might be needed for it.
+diagnostics/maintenance might be needed for its well-oiled usage.
 
 
 //»*/
@@ -1792,7 +1805,7 @@ log(`NODE PATH: ${path}`);
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('path');
 let c2 = fbase_db_mod.equalTo(path);
-let c3 = limitToFirst(1);
+let c3 = fbase_db_mod.limitToFirst(1);
 let q = fbase_db_mod.query(ref, c1, c2, c3);
 let snap = await GET(q);
 if (!(snap && snap.exists())) return;
@@ -1917,13 +1930,21 @@ log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 		popDir: populate_fbase_user_grp_dir,
 		tryGetKid: try_get_fbase_user_grp_kid,
 		perm: true, // HEREPUBPERM
-		getBlob: (node) => {//«
+		getBlob: async (node) => {//«
 cwarn("USERGRP.getBlob", node);
+return new Blob(["This is the thing in the time of the place!!!"]);
 		},//»
-		setBlob: (node, val) => {//«
+		setBlob: async (node, val) => {//«
 cwarn("USERGRP.setBlob", node);
 log(val);
+return {size: 1234};
 		},//»
+		mkDir: (parnode, name, opts)=>{
+cwarn(`parnode.mkDir (pub) ${name}!!!`);
+		},
+		mkNewFile: (parnode, name, opts)=>{
+cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
+		}
 	});
 	_dir_update(1, user_dir, pub);
 	_node_update(3, pub, PUB_DIR_ID); // Id
@@ -1945,6 +1966,16 @@ cwarn("USERGRP.getBlob", node);
 cwarn("USERGRP.setBlob", node);
 log(val);
 			},//»
+
+// EURKSDNR
+			mkDir: (parnode, name, opts)=>{//«
+cwarn(`parnode.mkDir (prv) ${name}!!!`);
+
+			},//»
+			mkNewFile: (parnode, name, opts)=>{//«
+cwarn(`parnode.mkNewFile (prv) ${name}!!!`);
+
+			}//»
 		});
 		_dir_update(1, user_dir, prv); // Add kid
 		_node_update(3, prv, PRV_DIR_ID); // Id HEREPRVRV

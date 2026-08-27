@@ -2063,23 +2063,8 @@ cerr(e);
 		}
 	}
 	let node;
-	if (!edit_fobj) {//«
-		let rv = await usepath.toParNodeAndName();
-		if (!(rv && rv[0] && rv[1])) {
-			stat_err(`${usepath}: resolution failed`);
-			return;
-		}
-		let parnode = rv[0];
-		let name = rv[1];
-		let obj = await parnode.mkNewFile(name);
-		if (!obj){
-			stat_err(`${usepath}: could not create the file`);
-			return;
-		}
-		if (await obj.setValue(val)) node = obj;
+	if (edit_fobj) {//«
 
-	}//»
-	else {//«
 		let par = edit_fobj.par;
 		if (!par.perm){
 			stat_err("Permission denied");
@@ -2088,6 +2073,26 @@ cerr(e);
 		if (await edit_fobj.setValue(val)){
 			node = edit_fobj;
 		}
+
+	}//»
+	else {//«
+
+		let rv = await usepath.toParNodeAndName();
+		if (!(rv && rv[0] && rv[1])) {
+			stat_err(`${usepath}: resolution failed`);
+			return;
+		}
+		let parnode = rv[0];
+		let name = rv[1];
+		let obj = await parnode.mkNewFile(name);
+cwarn("MKNEWFILE");
+log(obj);
+		if (!obj){
+			stat_err(`${usepath}: could not create the file`);
+			return;
+		}
+		if (await obj.setValue(val)) node = obj;
+
 	}//»
 	return write_cb_func(node);
 }

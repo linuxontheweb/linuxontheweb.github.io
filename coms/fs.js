@@ -1572,7 +1572,10 @@ async run(){
 			continue;
 		}
 		let newnode = await parnode.mkNewFile(fname);
-		if (!newnode) err(`${fullpath}: The file could not be created`);
+		if (!newnode) {
+			err(`${fullpath}: The file could not be created`);
+			continue;
+		}
 		newnode.mkIcons();
 	}
 	have_error?this.no():this.ok();	
@@ -1719,7 +1722,10 @@ async run(){
 			continue;
 		}
 		let newdir = await parnode.mkDir(fname);
-		if (!newdir) err(`${fullpath}: the directory could not be created`);
+		if (!newdir) {
+			err(`${fullpath}: the directory could not be created`);
+			continue;
+		}
 		newdir.mkIcons();
 	}
 	have_error?this.no():this.ok();	
