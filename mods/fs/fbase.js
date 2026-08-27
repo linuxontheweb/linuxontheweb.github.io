@@ -460,6 +460,25 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/* 8/27/26: Meaning of the the various FS types«
+
+1) Mount '/mnt' in sys/fs.js:
+MNT_FS_TYPE: The type of /mnt itself (local).
+
+2) Mount '/mnt/fbase' in init @WYRHTKGH
+FBASE_USERS_FS_TYPE: Nothing but the listing of users goes in here
+
+3) Mount '/mnt/fbase/<ausername>' in populate_fbase_users @YFKMYOGJT 
+FBASE_USER_MAIN_FS_TYPE: The "base" user directory, which keeps the
+separate "group" directories ('pub', 'prv', etc.) as well as "profile" files
+like 'name', 'picture', etc, and maybe even 'status'.
+
+4) Mount '/mnt/fbase/<ausername>/<dir_group>' in populate_fbase_user_dir
+@YGJDPLKIU
+FBASE_USER_GRP_FS_TYPE: The individual "groups" with their various backend
+r/w permissions. In the front-end, these (currently) default to dir.perm = true.
+
+»*/
 /* 8/26/26: Now *really* back ?!?!?«
 
 I've had *tons* of meditation upon (as well as doing *plenty* of work on)
@@ -1640,8 +1659,8 @@ const { // api.util «
 
 // globals
 
-const {// fs (FBASE_RTDB_FS_TYPE, NODE_TYPE's) «
-    FBASE_RTDB_FS_TYPE,
+const {// fs (FBASE_USER_MAIN_FS_TYPE, NODE_TYPE's) «
+    FBASE_USER_MAIN_FS_TYPE,
 	FBASE_USERS_FS_TYPE,
 	FBASE_USER_GRP_FS_TYPE,
 
@@ -1822,7 +1841,7 @@ tryGetKid(name):
 	for (let k in prof) {//«
 	// These are stored as "files" in user_dir
 		let node = new FileNode(k, user_dir, {
-			type: FBASE_RTDB_FS_TYPE,
+			type: FBASE_USER_MAIN_FS_TYPE,
 			data: {
 				fbaseUid: uid,
 			},
@@ -1839,6 +1858,7 @@ log("VAL", val);
 		_dir_update(1, user_dir, node);
 	}//»
 log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
+// YGJDPLKIU
 	let pub = new DirNode("pub", user_dir, {//«
 		type: FBASE_USER_GRP_FS_TYPE,
 		data: {
@@ -1948,9 +1968,10 @@ for (let uid in old_obj) {
 		while (users_dir.getKid(`${use_name}${iter}`)) iter++;
 		use_name = `${use_name}${iter}`;
 	}
+// YFKMYOGJT
 	let dir = new DirNode(use_name, users_dir, {
 //		type: FBASE_USER_DIR_FS_TYPE,
-		type: FBASE_RTDB_FS_TYPE,
+		type: FBASE_USER_MAIN_FS_TYPE,
 		popDir: populate_fbase_user_dir,
 		tryGetKid: async (name)=>{
 /*
