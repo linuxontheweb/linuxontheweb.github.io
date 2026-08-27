@@ -65,3 +65,7 @@ are as follows.
 	nmap <enter> za
 
 In command mode, the Enter key is used to toggle between open and closed folds.
+
+## Alternative Google Drive link
+
+https://drive.google.com/drive/folders/1XLebvgGQbR6mt_wc86QGH-oElLjcDNvr

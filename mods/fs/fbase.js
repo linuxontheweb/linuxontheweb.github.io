@@ -460,27 +460,54 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/* 8/27/26: Meaning of the the various FS types«
+/* 8/27/26: Developing a theory of the fbase fs «
 
-1) Mount '/mnt' in sys/fs.js:
+4 different kinds of directories:
+
+MNT_FS_TYPE (a list of "mounted" dirs):
+1) Mount '/mnt' in sys/fs.js://«
 MNT_FS_TYPE: The type of /mnt itself. This is wholly a "local" type whose
 contents depend on calls such as in step #2 below.
-Always fully populated.
+Always fully populated, only system level JS can currently update this, but
+we may eventually implement a mount command.
+//»
 
-2) Mount '/mnt/fbase' in init @WYRHTKGH
+FBASE_USERS_FS_TYPE (a list of fbase users: they had to log in):
+2) Mount '/mnt/fbase' in init @WYRHTKGH//«
 FBASE_USERS_FS_TYPE: Nothing but the listing of users goes in here
 Populating of this directory means choosing from the listing of users
 returned from LOTW/prof. It may be possible to "continue" populating this
 by searching for users based on additional/expanded criteria.
+//»
 
-3) Mount '/mnt/fbase/<a_username>' in populate_fbase_users @YFKMYOGJT 
+FBASE_USER_MAIN_FS_TYPE (a list of profile files and group directories, 
+and possibly more):
+3) Mount '/mnt/fbase/<a_username>' in populate_fbase_users @YFKMYOGJT «
 FBASE_USER_MAIN_FS_TYPE: The "base" user directory, which keeps the
 separate "group" directories ('pub', 'prv', etc.) as well as "profile" files
 like 'name', 'picture', etc, and maybe even 'status'. Once this is populated,
 this probably shouldn't need to be repopulated. Caveat: there might be additional
 dir_groups's added (or removed) since when the directory was first mounted.
+WE DON'T CURRENTLY SUPPORT THE MOUNTING OF ARBITRARY GROUP DIRECTORIES, WE
+CURRENTLY SUPPORT ONLY 'PUB' AND 'PRV'. To support the mounting of arbitrary
+groups, we will need to query the path: 'LOTW/user/$uid/grpDefs', to get
+the following array:
+[
+	{
+		<grp_id_1>: { name_1, desc_1 } 
+	},
+	{
+		<grp_id_2>: { name_2, desc_2 } 
+	},
+	...
+]
+But in order to do *this*, we will probably want a dedicated fbase filesystem
+administrator command library, e.g. at coms/fbase.js.
 
-4) Mount '/mnt/fbase/<a_username>/<dir_group>' in populate_fbase_user_dir
+//»
+
+FBASE_USER_GRP_FS_TYPE (each is a kind of root/sovereign filesystem):
+4) Mount '/mnt/fbase/<a_username>/<dir_group>' in populate_fbase_user_dir «
 @YGJDPLKIU
 FBASE_USER_GRP_FS_TYPE: The individual "groups" with their various backend
 r/w permissions. In the front-end, these (currently) default to dir.perm = true.
@@ -488,8 +515,19 @@ These should work exactly as (the standard, local) OP_FS_TYPE in the LOTW system
 in terms of populating the full directories with 'ls' and trying to get single
 "kids" when requesting single files when the directories are not (yet) fully
 populated.
+//»
 
-»*/
+
+What sorts of interface mechanisms do we want for this?
+Obviously: a command library at coms/fbase.js should suffice.
+
+It should verify that /mnt/fbase is mounted and in working order.
+If not, it should allow for the mounting of it, as well as whatever
+diagnostics/maintenance might be needed for it.
+
+
+//»*/
+
 /* 8/26/26: Now *really* back ?!?!?«
 
 I've had *tons* of meditation upon (as well as doing *plenty* of work on)
