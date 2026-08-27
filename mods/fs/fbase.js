@@ -463,20 +463,31 @@ writing to them, which means they don't (yet) technically exist.
 /* 8/27/26: Meaning of the the various FS types«
 
 1) Mount '/mnt' in sys/fs.js:
-MNT_FS_TYPE: The type of /mnt itself (local).
+MNT_FS_TYPE: The type of /mnt itself. This is wholly a "local" type whose
+contents depend on calls such as in step #2 below.
+Always fully populated.
 
 2) Mount '/mnt/fbase' in init @WYRHTKGH
 FBASE_USERS_FS_TYPE: Nothing but the listing of users goes in here
+Populating of this directory means choosing from the listing of users
+returned from LOTW/prof. It may be possible to "continue" populating this
+by searching for users based on additional/expanded criteria.
 
-3) Mount '/mnt/fbase/<ausername>' in populate_fbase_users @YFKMYOGJT 
+3) Mount '/mnt/fbase/<a_username>' in populate_fbase_users @YFKMYOGJT 
 FBASE_USER_MAIN_FS_TYPE: The "base" user directory, which keeps the
 separate "group" directories ('pub', 'prv', etc.) as well as "profile" files
-like 'name', 'picture', etc, and maybe even 'status'.
+like 'name', 'picture', etc, and maybe even 'status'. Once this is populated,
+this probably shouldn't need to be repopulated. Caveat: there might be additional
+dir_groups's added (or removed) since when the directory was first mounted.
 
-4) Mount '/mnt/fbase/<ausername>/<dir_group>' in populate_fbase_user_dir
+4) Mount '/mnt/fbase/<a_username>/<dir_group>' in populate_fbase_user_dir
 @YGJDPLKIU
 FBASE_USER_GRP_FS_TYPE: The individual "groups" with their various backend
 r/w permissions. In the front-end, these (currently) default to dir.perm = true.
+These should work exactly as (the standard, local) OP_FS_TYPE in the LOTW system,
+in terms of populating the full directories with 'ls' and trying to get single
+"kids" when requesting single files when the directories are not (yet) fully
+populated.
 
 »*/
 /* 8/26/26: Now *really* back ?!?!?«
@@ -2080,6 +2091,7 @@ if (cur_user && !first_auth_change){
 
 get curUser(){return cur_user;}
 
+// par_node: the dir node for '/mnt'
 async init(par_node) {//«
 
 users_cache_node = await FBASE_USERS_CACHE_PATH.toNode({mkFile: true});
@@ -2119,7 +2131,7 @@ let fbase_dir = new DirNode("fbase", par_node, {
 		return fbase_dir.getKid(name);
 	}
 });
-_dir_update(1, par_node, fbase_dir);
+_dir_update(1, par_node, fbase_dir); // Add kid
 
 return true;
 

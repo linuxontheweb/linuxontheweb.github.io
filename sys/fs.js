@@ -59,6 +59,12 @@ _dir_update(1, par, my_node);
 
 //»
 
+/*8/27/26: Just stay in these notes, for the time being «
+
+Mainly here and in mods/fs/fbase.js, with changes that result from
+*extreme* understanding and good existential feelings.
+
+»*/
 /* 8/26/26: Back to extending the fs  «
 
 Need a concept of filesystem types that have a persistent backend schema,
