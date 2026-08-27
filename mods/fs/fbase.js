@@ -462,13 +462,37 @@ writing to them, which means they don't (yet) technically exist.
 
 /* BUG BUG BUG«
 
+
+Let's just want to pull down the nextNodeId just before
+doing the given operation, in order to reduce the complexity inherent
+in keeping state sync'ed for no good earthly reason.
+
+Call await NEXT_NODE_ID(<dir_id>);
+@YURJKFHFN
+
+
 This is simply restatement of the note of 7/20/26.
 We need to implement mkNewFile and mkDir:
 in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
 
 WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
 
+So let's start this journey by thinking analytically.
 
+First, we need to see if the given nodes exist. So we need to 
+fully populate the dirobj and see if a FSNode with the given name
+already exists.
+
+If not, we are free to create the given node (file or dir) with the
+nextNodeId. In case we are using the wrong id, we need to resync to
+the backend.
+
+But we should have already sync'ed w/ the backend somewhere during
+initialization!!!
+
+
+So how do we pull down the nextNodeId?
+path = 'LOTW/user/$uid/group/$grpId/nextNodeId'
 
 »*/
 
@@ -1748,7 +1772,7 @@ const PRV_DIR_ID = 1;
 const PUB_DIR_ID = 2;
 
 let cur_user;
-let next_node_id;
+let next_node_ids;
 let next_grp_id;
 
 let DirNode, FileNode, _node_update, _dir_update;
@@ -1787,6 +1811,13 @@ catch(e){
 	return e;
 }
 
+};//»
+const REF = path => { return fbase_db_mod.ref(fbase_db, path); };
+const NEXT_NODE_ID = async(dirid) => {//«
+	if (!cur_user) return;
+	// YURJKFHFN
+	cwarn(`Need nextNodeId from: ${path}`);
+	return GET(REF(`LOTW/user/${cur_user.uid}/group/${dirid}/nextNodeId`));
 };//»
 
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
@@ -2132,6 +2163,10 @@ let rv = await UPDATE(ref, obj);
 if (rv !== true){
 cwarn("THERE WAS A PROBLEM INITIALIZING THE USER PROFILE!!!");
 }
+
+// UOEOWEKRJ
+next_node_ids = [1, 2]; // As long as we subtract 1 from the group id's
+//next_node_ids = [undefined, 1, 2]; // Without substracting
 
 //log(rv);
 }//»
