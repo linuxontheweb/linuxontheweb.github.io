@@ -460,43 +460,13 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/* BUG BUG BUG: 8/27/26«
+/*
 
+Fos mkNewFile: is @HDJSAKRNT right?!?!?!
 
-Let's just want to pull down the nextNodeId just before
-doing the given operation, in order to reduce the complexity inherent
-in keeping state sync'ed for no good earthly reason.
+*/
 
-Call await NEXT_NODE_ID(<dir_id>);
-@YURJKFHFN
-
-
-This is simply restatement of the note of 7/20/26.
-We need to implement mkNewFile and mkDir:
-in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
-
-WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
-
-So let's start this journey by thinking analytically.
-
-First, we need to see if the given nodes exist. So we need to 
-fully populate the dirobj and see if a FSNode with the given name
-already exists.
-
-If not, we are free to create the given node (file or dir) with the
-nextNodeId. In case we are using the wrong id, we need to resync to
-the backend.
-
-But we should have already sync'ed w/ the backend somewhere during
-initialization!!!
-
-
-So how do we pull down the nextNodeId?
-path = 'LOTW/user/$uid/group/$grpId/nextNodeId'
-
-»*/
-
-/* 8/27/26: Developing a theory of the fbase fs «
+/* 8/27/26: Developing a NICE WORKFLOW... «
 
 4 different kinds of directories:
 
@@ -561,6 +531,27 @@ Obviously: a command library at coms/fbase.js should suffice.
 The library should verify that /mnt/fbase is mounted and in working order.
 If not, it should allow for the mounting of it, as well as whatever
 diagnostics/maintenance might be needed for its well-oiled usage.
+
+
+Now, how to create a new file @HEREMKNEW?
+We need to:
+let obj = {};
+let path = `LOTW/user/$uid/group/$grpId`;
+obj["nextNodeId"] = next_node_id;
+let parId = 123 //...;
+let path = `${parId}/${name}`;
+let type = FILE_NODE_TYPE;
+let blobId = NULL_FBASE_RTDB_BLOB; // standard null blob
+obj[`nodes/${next_node_id}`] = {
+	parId,
+	path,
+	type,
+	blobId
+};
+
+For "real" blobIds, let's just use huge numbers (like the millisecond timestamp).
+Those values are not as "important" as the node values because they are completely
+"owned" by the nodes.
 
 
 //»*/
@@ -634,6 +625,41 @@ is welcome, per frontend customs, to *try* to do anything they want to the backe
 
 // Old Notes «
 
+/* BUG BUG BUG: 8/27/26«
+
+
+Let's just want to pull down the nextNodeId just before
+doing the given operation, in order to reduce the complexity inherent
+in keeping state sync'ed for no good earthly reason.
+
+Call await NEXT_NODE_ID(<dir_id>);
+@YURJKFHFN
+
+
+This is simply restatement of the note of 7/20/26.
+We need to implement mkNewFile and mkDir:
+in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
+
+WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
+
+So let's start this journey by thinking analytically.
+
+First, we need to see if the given nodes exist. So we need to 
+fully populate the dirobj and see if a FSNode with the given name
+already exists.
+
+If not, we are free to create the given node (file or dir) with the
+nextNodeId. In case we are using the wrong id, we need to resync to
+the backend.
+
+But we should have already sync'ed w/ the backend somewhere during
+initialization!!!
+
+
+So how do we pull down the nextNodeId?
+path = 'LOTW/user/$uid/group/$grpId/nextNodeId'
+
+»*/
 /* 7/21/26 - 8/25/26: NICE BIG BREAK... «
 
 ... inclluding a 10-day stint at Meridian, engaged in such activities
@@ -1768,6 +1794,8 @@ const { // firebase «
 //»
 // Var «
 
+const NULL_FBASE_RTDB_BLOB = 0;
+
 const PRV_DIR_ID = 1;
 const PUB_DIR_ID = 2;
 
@@ -1812,7 +1840,9 @@ catch(e){
 }
 
 };//»
-const REF = path => { return fbase_db_mod.ref(fbase_db, path); };
+const REF = path => {//«
+	return fbase_db_mod.ref(fbase_db, path); 
+};//»
 const VAL = snap => {//«
 	if (!snap){
 cerr("NO SNAP");
@@ -2009,7 +2039,6 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 			tryGetKid: try_get_fbase_user_grp_kid,
 			perm: true, // HEREPRVPERM
 
-//HEREPRVFNS
 getBlob: (node) => {//«
 
 cwarn("USERGRP.getBlob", node);
@@ -2034,12 +2063,50 @@ log(`mkDir: GOT next_id: ${next_id}`);
 
 },//»
 
+//HEREMKNEW
 mkNewFile: async (parnode, name, opts)=>{//«
+
+if (!cur_user) return;
+
+let next_id;
+{
 	let snap = await NEXT_NODE_ID(PRV_DIR_ID);
 	let rv = VAL(snap);
-	if (!rv) return;
-	let next_id = rv;
+	if (!isNum(rv)) {
+		return;
+	}
+	next_id = rv;
+}
+
 log(`mkNew: GOT next_id: ${next_id}`);
+
+/*HDJSAKRNT
+{//«
+
+
+let parId = parnode.id;
+let path = `${parId}/${name}`;
+
+let obj = {};
+obj["nextNodeId"] = next_id;
+let type = FILE_NODE_TYPE;
+let blobId = NULL_FBASE_RTDB_BLOB; // standard null blob
+obj[`nodes/${next_id}`] = {
+	parId,
+	path,
+	type,
+	blobId
+};
+
+
+let ref = REF(`LOTW/user/${cur_user.uid}/group/$${PRV_DIR_ID}`);
+let rv = await UPDATE(ref, obj);
+cwarn("mkNewFile: UPDATE RV:");
+log(rv);
+
+
+}//»
+*/
 
 }//»
 
