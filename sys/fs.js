@@ -1423,7 +1423,7 @@ if (name.match(/\x2f/)){
 cerr(`INVALID NAME IN MKDIR: ${name} (SLASH DETECTED)`);
 return;
 }
-cwarn("MAKE SURE THIS IS THE RIGHT THING IN FSNode.mkDir (patterned off getBlob/setBlob) !!!!!");
+//cwarn("MAKE SURE THIS IS THE RIGHT THING IN FSNode.mkDir (patterned off getBlob/setBlob) !!!!!");
 	if (this._mkDir) return this._mkDir(this, name, opts);
 	if (this.mntPar._mkDir) return this.mntPar._mkDir(this, name, opts);
 	return mkDir(this, name, opts)
@@ -1435,7 +1435,7 @@ if (name.match(/\x2f/)){
 cerr(`INVALID NAME IN MKNEWFILE: ${name} (SLASH DETECTED)`);
 return;
 }
-cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
+//cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
 
 	if (this._mkNewFile) {
 log("Got: this._mkNewFile");

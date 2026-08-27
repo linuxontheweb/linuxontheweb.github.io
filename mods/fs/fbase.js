@@ -460,7 +460,7 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/* BUG BUG BUG«
+/* BUG BUG BUG: 8/27/26«
 
 
 Let's just want to pull down the nextNodeId just before
@@ -1813,10 +1813,21 @@ catch(e){
 
 };//»
 const REF = path => { return fbase_db_mod.ref(fbase_db, path); };
+const VAL = snap => {//«
+	if (!snap){
+cerr("NO SNAP");
+		return;
+	}
+	if (!snap.exists()){
+cerr("!SNAP.EXISTS()");
+		return;
+	}
+	return snap.val();
+};//»
 const NEXT_NODE_ID = async(dirid) => {//«
 	if (!cur_user) return;
 	// YURJKFHFN
-	cwarn(`Need nextNodeId from: ${path}`);
+//	cwarn(`Need nextNodeId from: ${path}`);
 	return GET(REF(`LOTW/user/${cur_user.uid}/group/${dirid}/nextNodeId`));
 };//»
 
@@ -1826,12 +1837,12 @@ if (!cur_user) return;
 let uid = par.getData('fbaseUid');
 let grpid = par.getData('fbaseGrpId');
 let parid = par.id;
-cwarn(`TRY GET '${name}':  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
+//cwarn(`TRY GET '${name}':  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 /*
 Construct the path via the parent node's nodeId
 */
 let path = `${parid}/${name}`;
-log(`NODE PATH: ${path}`);
+log(`TRY_GET_KID: ${path}`);
 
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('path');
@@ -1839,9 +1850,16 @@ let c2 = fbase_db_mod.equalTo(path);
 let c3 = fbase_db_mod.limitToFirst(1);
 let q = fbase_db_mod.query(ref, c1, c2, c3);
 let snap = await GET(q);
-if (!(snap && snap.exists())) return;
-let arr = snap.val();
+let arr = VAL(snap);
+if (!arr) {
+cwarn("DID NOT GET!");
+	return;
+}
+//if (!(snap && snap.exists())) return;
+//let arr = snap.val();
 // Make a FileNode or DirNode
+
+log("GOT KID!!!");
 log(arr[0]);
 
 };//»
@@ -1970,10 +1988,10 @@ cwarn("USERGRP.setBlob", node);
 log(val);
 return {size: 1234};
 		},//»
-		mkDir: (parnode, name, opts)=>{
+		mkDir: async (parnode, name, opts)=>{
 cwarn(`parnode.mkDir (pub) ${name}!!!`);
 		},
-		mkNewFile: (parnode, name, opts)=>{
+		mkNewFile: async (parnode, name, opts)=>{
 cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 		}
 	});
@@ -1990,23 +2008,41 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 			popDir: populate_fbase_user_grp_dir,
 			tryGetKid: try_get_fbase_user_grp_kid,
 			perm: true, // HEREPRVPERM
-			getBlob: (node) => {//«
+
+//HEREPRVFNS
+getBlob: (node) => {//«
+
 cwarn("USERGRP.getBlob", node);
-			},//»
-			setBlob: (node, val) => {//«
+
+},//»
+
+setBlob: (node, val) => {//«
+
 cwarn("USERGRP.setBlob", node);
 log(val);
-			},//»
+
+},//»
 
 // EURKSDNR
-			mkDir: (parnode, name, opts)=>{//«
-cwarn(`parnode.mkDir (prv) ${name}!!!`);
+mkDir: async (parnode, name, opts)=>{//«
 
-			},//»
-			mkNewFile: (parnode, name, opts)=>{//«
-cwarn(`parnode.mkNewFile (prv) ${name}!!!`);
+	let snap = await NEXT_NODE_ID(PRV_DIR_ID);
+	let rv = VAL(snap);
+	if (!rv) return;
+	let next_id = rv;
+log(`mkDir: GOT next_id: ${next_id}`);
 
-			}//»
+},//»
+
+mkNewFile: async (parnode, name, opts)=>{//«
+	let snap = await NEXT_NODE_ID(PRV_DIR_ID);
+	let rv = VAL(snap);
+	if (!rv) return;
+	let next_id = rv;
+log(`mkNew: GOT next_id: ${next_id}`);
+
+}//»
+
 		});
 		_dir_update(1, user_dir, prv); // Add kid
 		_node_update(3, prv, PRV_DIR_ID); // Id HEREPRVRV
