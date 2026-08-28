@@ -1648,7 +1648,7 @@ if (!node){
 	if (!node) return `${use_fname}: could not create the new file`;
 	node.mkIcons();
 }
-if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file 1234`;
+if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file`;
 return true;
 
 }//»

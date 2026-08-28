@@ -1773,17 +1773,18 @@ const { // api.util «
 // globals
 
 const {// fs (FBASE_USER_MAIN_FS_TYPE, NODE_TYPE's) «
-    FBASE_USER_MAIN_FS_TYPE,
-	FBASE_USERS_FS_TYPE,
-	FBASE_USER_GRP_FS_TYPE,
+FBASE_USER_MAIN_FS_TYPE,
+FBASE_USERS_FS_TYPE,
+FBASE_USER_GRP_FS_TYPE,
 
 // File system "node" types
 
-    FILE_NODE_TYPE,
-    DIR_NODE_TYPE,
-    LINK_NODE_TYPE,
-    BAD_LINK_NODE_TYPE,
-    NULL_BLOB_NODE_TYPE,
+FILE_NODE_TYPE,
+DIR_NODE_TYPE,
+LINK_NODE_TYPE,
+
+//BAD_LINK_NODE_TYPE,
+//NULL_BLOB_NODE_TYPE,
 
 } = LOTW.globals.fs;//»
 const { // firebase «
@@ -1820,6 +1821,15 @@ let first_auth_change = false;
 
 //»
 //Funcs «
+
+const blobTo64 = (blob) => {//«
+	return new Promise((Y, N) => {
+		let r = new FileReader();
+		r.readAsDataURL(blob);
+		r.onloadend = () => {Y(r.result.split(',')[1]);};
+		r.onerror = (e) => Y();
+	});
+};//»
 
 const GET = async(arg)=>{//«
 try {
@@ -1891,7 +1901,34 @@ cwarn("DID NOT GET!");
 // Make a FileNode or DirNode
 
 log("GOT KID!!!");
-log(arr[0]);
+log(arr);
+
+// This loop would only be infinite if the array were empty, which it should never be
+let node;
+for (let i=0; ; i++){ //«
+	if (!arr[i]) continue;
+	let obj = arr[i];
+	let typ = obj.type;
+	let parid = obj.parId;
+	let name = (obj.path.split("/"))[1];
+//cwarn(`MAKE NODE(${i}) WITH:`);
+//log(obj);
+	if (typ === FILE_NODE_TYPE){
+		node = new FileNode(name, par);
+		_node_update(4, node, obj.blobId);
+	}
+	else if (typ === DIR_NODE_TYPE){
+		node = new DirNode(name, par);
+	}
+	else{
+cerr(`WHAT NODE TYPE??? ${typ}`); // Is this a symlink?
+		return;
+	}
+	_node_update(3, node, i); // node.#id is the iterator
+	break; // We found want we want!
+}//»
+_dir_update(1, par, node); // Add to par.#kids
+return node;
 
 };//»
 
@@ -1942,7 +1979,6 @@ let arr = snap.val();
 for (let i=0; i < arr.length; i++){
 let obj = arr[i];
 if (!obj) continue;
-
 let node;
 let name = (obj.path.split("/"))[1];
 if (obj.type === FILE_NODE_TYPE){
@@ -1957,12 +1993,10 @@ cwarn(`WHAT TYPE IS THIS OBJ(${obj.type})???`);
 log(obj);
 return;
 }
+_node_update(3, node, i); // node.#id is the iterator
 _dir_update(1, dir, node);
-
-
+log(node);
 }
-//cwarn("GOT VAL");
-//log(val);
 
 /*
 Where do the fbase nodeId's go?
@@ -2074,15 +2108,45 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 
 getBlob: (node) => {//«
 
+if (!cur_user) return;
 cwarn("USERGRP.getBlob", node);
-if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
+//if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
+if (node.blobId === 0) return new Blob([]);
 return new Blob([`PLACEHOLDER FOR BLOBID: ${node.blobId}`]);
 },//»
 
-setBlob: (node, val) => {//«
+setBlob: async (node, blob) => {//«
+
+if (!cur_user) return;
 
 cwarn("USERGRP.setBlob", node);
-log(val);
+let val = await blobTo64(blob);
+log(`B64 LENGTH: ${val.length}`);
+let bid = node.blobId;
+let obj = {};
+//if (bid === 0 || bid === NULL_BLOB_NODE_TYPE) {
+if (bid === 0) {
+bid = (new Date()).getTime(); // milliseconds
+cwarn(`New blobId: ${bid}`);
+	obj[`nodes/${node.id}/blobId`] = bid;
+}
+else{
+cwarn("JUST UPDATE THE BLOB");
+}
+obj[`blobs/${bid}/contents`] = val;
+let path = `LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`;
+log("SET THIS OBJ TO: PATH = <${path}>");
+log(obj);
+
+let ref = REF(path);
+
+let rv = await UPDATE(ref, obj);
+if (rv !== true){
+cwarn("COULD NOT SET THE BLOB VALUE!!!");
+return;
+}
+
+return blob;
 
 },//»
 
@@ -2155,7 +2219,8 @@ cerr("COULD NOT CREATE THE NEW FILE");
 	}
 
 	let node = new FileNode(name, parnode);
-	_node_update(4, node, NULL_BLOB_NODE_TYPE); // Set node.#blobId
+//	_node_update(4, node, NULL_BLOB_NODE_TYPE); // Set node.#blobId
+	_node_update(4, node, 0); // Set node.#blobId
 	_dir_update(1, parnode, node); // Set parnode.#kids[name]
 	return node;
 
