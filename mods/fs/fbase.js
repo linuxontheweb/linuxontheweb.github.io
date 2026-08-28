@@ -278,11 +278,11 @@ Remove newlines with:
 				},//»
 				"status": {//«
 					".validate": "newData.isString() && 
-						newData.val().length < 100"
+						newData.val().length < 250"
 				},//»
 				"bio": {//«
 					".validate": "newData.isString() && 
-						newData.val().length < 1000"
+						newData.val().length < 2500"
 				},//»
 				"$other": {//«
 					".validate": false
@@ -460,40 +460,13 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/* BUG BUG BUG
+/*8/28/26 Working notes «
 
-@WWEURKTOX
-
-cd ../prv
-touch HAR
-echo blah 123 > HAR
-
-ERROR: Could not set the blob value because `node.id` in
-
-	obj[`nodes/${node.id}/blobId`] = bid;
-
-... was undefined! (but now it actually works), after doing the necessary
-node_update.
-
-Now the only problem seems to be that we need to reload everything before
-the new content "takes". Otherwise, we get the same null blob. This must
-be an issue with setBlob, not properly updating to the new blob_id.
-
-
-
-*/
-
-// mkNewFile: is @HDJSAKRNT right?!?!?!
-
-/*8/28/26  Generalize the "prv: directory «
-We've done much work getting the "prv" directory to work, @OERUTJSKF,
-and now it is high time to look into generalizing everything so the
-same program text will work in *any* directory, whether subdirectories
-of "prv", or any other main/root directories (with other permissions).
-
+Now want to think about a command library for status and bio.
+No! Just want to make sure status and bio are also in the
+FBASE_USER_MAIN_FS_TYPE dir.
 
 »*/
-
 /* 8/27/26: Developing a NICE WORKFLOW... «
 
 4 different kinds of directories:
@@ -2221,6 +2194,8 @@ tryGetKid(name):
 
 	if (!cur_user) return;
 
+log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
+
 	let uid = user_dir.getData("fbaseUid");
 	let prof = user_dir.getData("fbaseProf");
 
@@ -2243,7 +2218,7 @@ log("VAL", val);
 		});
 		_dir_update(1, user_dir, node);
 	}//»
-log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
+//log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 // YGJDPLKIU
 
 	let mk_dir_func_pub = gen_mk_dir(PUB_DIR_ID);
@@ -2346,6 +2321,8 @@ for (let uid in new_obj) old_obj[uid] = new_obj[uid];
 for (let uid in old_obj) {
 	let prof = old_obj[uid];
 // Also: picture, status, bio, updated[, votes]
+	if (!prof['status']) prof['status'] = "[status goes here]";
+	if (!prof['bio']) prof['bio'] = "[bio goes here]";
 	let name = prof.name;
 	let use_name = name.replace(/\s+/, "").toLowerCase();
 

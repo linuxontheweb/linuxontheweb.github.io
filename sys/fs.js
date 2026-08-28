@@ -1677,14 +1677,8 @@ class FileNode extends FSNode {//«
 #memBlob;
 //»
 constructor(name, par, opts={}) {//«
-	super(name, par);
+	super(name, par, opts);
 	this.#lock = {};
-
-//	this.#getBlob = opts.getBlob;
-//	this._getBlob = opts.getBlob;
-//	this.#setBlob = opts.setBlob;
-//	this._setBlob = opts.setBlob;
-
 }//»
 get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
 async getRealBlobId(){//«
@@ -1849,8 +1843,8 @@ class LinkNode extends FSNode {//«
 
 #symLink;
 #appName;
-constructor(name, par){//«
-	super(name, par);
+constructor(name, par, opts={}){//«
+	super(name, par, opts);
 	this.#appName = LINK_APP;
 //	this.isLink = true;
 }//»
