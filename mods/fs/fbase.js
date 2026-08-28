@@ -2201,79 +2201,74 @@ tryGetKid(name):
 »*/
 
 	if (!cur_user) return;
-
 log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
-
 	let uid = user_dir.getData("fbaseUid");
 	let prof = user_dir.getData("fbaseProf");
-
 	for (let k in prof) {//«
-	// These are stored as "files" in user_dir
+// These are stored as "files" in user_dir
 		let node = new FileNode(k, user_dir, {
 			type: FBASE_USER_MAIN_FS_TYPE,
 			data: {
 				fbaseUid: uid,
 			},
 // MSUYIOPLJ
-			getBlob: (node)=>{
-//cwarn("WHY ISN'T THIS getBlob BEING CALLED????");
-				return new Blob([prof[k]]);
-			},
-			setBlob: async (node, blob)=>{
-	if (cur_user && cur_user.uid === uid) {
-if (k === "status" || k === "bio" ) {//«
+			getBlob: (node)=>{ return new Blob([prof[k]]); },
+			setBlob: async (node, blob)=>{//«
+				if (cur_user && cur_user.uid === uid) {
+					if (k === "status" || k === "bio" ) {//«
 
 cwarn(`TRY SET ${k}`);
 log(node);
-//log("VAL", val);
-	let path = `LOTW/prof/${cur_user.uid}`;
-	let ref = REF(path);
-	let obj = {};
-	let str = await toStr(blob);
-	obj[`${k}`] = str;
-	let rv = await UPDATE(ref, obj);
-	if (rv !== true){
+						let path = `LOTW/prof/${cur_user.uid}`;
+						let ref = REF(path);
+						let obj = {};
+						let str = await toStr(blob);
+						obj[`${k}`] = str;
+						let rv = await UPDATE(ref, obj);
+						if (rv !== true){
 cerr(`COULD NOT UPDATE PATH: ${path}`);
-		return;
-	}
-	prof[k] = str; // Just cache this for easy retrieval
-	return blob;
-}//»
-else {//«
-
+							return;
+						}
+						prof[k] = str; // Just cache this for easy retrieval
+						return blob;
+					}//»
+					else {//«
 cwarn(`NOT SETTING CONSTANT VALUE: ${k}`);
-
-}//»
-	}
-			}
+// This gets printed in red by the shell when trying to redirect to one of these
+// "constant" files.
+return `fbase.js: not setting constant value: '${k}'`;
+					}//»
+				}
+			}//»
 		});
 		_dir_update(1, user_dir, node);
 	}//»
 //log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 // YGJDPLKIU
-
-	let mk_dir_func_pub = gen_mk_dir(PUB_DIR_ID);
-	let mk_new_file_func_pub = gen_mk_new_file(PUB_DIR_ID);
-	let get_blob_func_pub = gen_get_blob(PUB_DIR_ID);
-	let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
-	let pub = new DirNode("pub", user_dir, {//«
-		type: FBASE_USER_GRP_FS_TYPE,
-		data: {
-			fbaseUid: uid,
-			fbaseGrpId: PUB_DIR_ID,
-		},
-		popDir: populate_fbase_user_grp_dir,
-		tryGetKid: try_get_fbase_user_grp_kid,
-		perm: true, // HEREPUBPERM
-		getBlob: get_blob_func_pub,
-		setBlob: set_blob_func_pub,
-		mkDir: mk_dir_func_pub,
-		mkNewFile: mk_new_file_func_pub
-	});
-	_dir_update(1, user_dir, pub);
-	_node_update(3, pub, PUB_DIR_ID); // Id
-//»
-	if (uid === cur_user.uid){// "prv" «
+	{// Mount "pub" for everyone «
+		let mk_dir_func_pub = gen_mk_dir(PUB_DIR_ID);
+		let mk_new_file_func_pub = gen_mk_new_file(PUB_DIR_ID);
+		let get_blob_func_pub = gen_get_blob(PUB_DIR_ID);
+		let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
+		let pub = new DirNode("pub", user_dir, {//«
+			type: FBASE_USER_GRP_FS_TYPE,
+			data: {
+				fbaseUid: uid,
+				fbaseGrpId: PUB_DIR_ID,
+			},
+			popDir: populate_fbase_user_grp_dir,
+			tryGetKid: try_get_fbase_user_grp_kid,
+			perm: true, // HEREPUBPERM
+			getBlob: get_blob_func_pub,
+			setBlob: set_blob_func_pub,
+			mkDir: mk_dir_func_pub,
+			mkNewFile: mk_new_file_func_pub
+		});
+		_dir_update(1, user_dir, pub);
+		_node_update(3, pub, PUB_DIR_ID); // Id
+	//»
+	}//»
+	if (uid === cur_user.uid) {// Mount "prv" for the cur_user «
 // OERUTJSKF
 		let mk_dir_func_prv = gen_mk_dir(PRV_DIR_ID);
 		let mk_new_file_func_prv = gen_mk_new_file(PRV_DIR_ID);

@@ -190,6 +190,12 @@ This seems to be the way to go.
 
 »*/
 
+/*8/28/26: RETURN AN ERROR STRING FROM setValue/setBlob  «
+
+Am now returning a string from setBlob in mods/fs/fbase.js,
+so we are now checking for that condition @ENMSDRJKT.
+
+»*/
 /*8/23/26: Need to call Desk.make_all_icons with redirect creation...  «
 
 
@@ -1648,7 +1654,11 @@ if (!node){
 	if (!node) return `${use_fname}: could not create the new file`;
 	node.mkIcons();
 }
-if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file`;
+let rv = await node.setValue(val, {append: op === ">>"})
+// ENMSDRJKT
+if (isStr(rv)) return rv;
+else if (!rv) return `${use_fname}: could not write to the file`;
+//if (!await node.setValue(val, {append: op === ">>"})) return `${use_fname}: could not write to the file`;
 return true;
 
 }//»
