@@ -460,12 +460,37 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/* BUG BUG BUG
+
+@WWEURKTOX
+
+cd ../prv
+touch HAR
+echo blah 123 > HAR
+
+ERROR: Could not set the blob value because `node.id` in
+
+	obj[`nodes/${node.id}/blobId`] = bid;
+
+... was undefined! (but now it actually works), after doing the necessary
+node_update.
+
+Now the only problem seems to be that we need to reload everything before
+the new content "takes". Otherwise, we get the same null blob. This must
+be an issue with setBlob, not properly updating to the new blob_id.
+
+
+
+*/
 
 // mkNewFile: is @HDJSAKRNT right?!?!?!
 
-/*8/28/26 Get setBlob to work «
+/*8/28/26  Generalize the "prv: directory «
+We've done much work getting the "prv" directory to work, @OERUTJSKF,
+and now it is high time to look into generalizing everything so the
+same program text will work in *any* directory, whether subdirectories
+of "prv", or any other main/root directories (with other permissions).
 
-USERGRP.setBlob
 
 »*/
 
@@ -1873,6 +1898,168 @@ const NEXT_NODE_ID = async(dirid) => {//«
 	return GET(REF(`LOTW/user/${cur_user.uid}/group/${dirid}/nextNodeId`));
 };//»
 
+// Group-specific generator functions for mkDir and mkNewFile
+const gen_mk_dir = (grp_id) => {//«
+
+return async (parnode, name, opts)=>{
+
+if (!cur_user) return;
+
+//let snap = await NEXT_NODE_ID(PRV_DIR_ID);
+let snap = await NEXT_NODE_ID(grp_id);
+let rv = VAL(snap);
+if (!isNum(rv)) {
+	return;
+}
+let next_id = rv;
+
+log(`mkDir: GOT next_id: ${next_id}`);
+
+
+let obj = {};
+obj["nextNodeId"] = next_id + 1;
+obj[`nodes/${next_id}`] = {
+	parId: parnode.id,
+	path: `${parnode.id}/${name}`,
+	type: DIR_NODE_TYPE, 
+};
+
+
+rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
+if (rv !== true){
+cerr("COULD NOT CREATE THE NEW DIR");
+	return;
+}
+
+let node = new DirNode(name, parnode);
+_dir_update(1, parnode, node); // Set parnode.#kids[name]
+return node;
+
+}
+
+};//»
+const gen_mk_new_file = (grp_id) => {//«
+
+return async (parnode, name, opts)=>{
+
+	if (!cur_user) return;
+
+	let snap = await NEXT_NODE_ID(grp_id);
+	let rv = VAL(snap);
+	if (!isNum(rv)) {
+		return;
+	}
+	let next_id = rv;
+
+log(`mkNew: GOT next_id: ${next_id}`);
+
+	//HDJSAKRNT 
+
+	let obj = {};
+	obj["nextNodeId"] = next_id + 1;
+	obj[`nodes/${next_id}`] = {
+		parId: parnode.id,
+		path: `${parnode.id}/${name}`,
+		type: FILE_NODE_TYPE, // Just change this to DIR_NODE_TYPE to make a directory
+		blobId: NULL_FBASE_RTDB_BLOB
+	};
+
+
+	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
+	if (rv !== true){
+cerr("COULD NOT CREATE THE NEW FILE");
+		return;
+	}
+
+	let node = new FileNode(name, parnode);
+	_node_update(3, node, next_id); // Set node.#id
+	_node_update(4, node, 0); // Set node.#blobId
+	_dir_update(1, parnode, node); // Set parnode.#kids[name]
+	return node;
+
+}
+
+
+};//»
+const gen_get_blob = (grp_id) =>{//«
+
+return async (node) => {
+
+if (!cur_user) return;
+cwarn("USERGRP.getBlob", node);
+//if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
+if (node.blobId === 0) return new Blob([]);
+
+/* WEHRJSGRHJ
+
+//HOW TO GET THE BLOB???
+
+*/
+let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
+cwarn(`PATH: <${path}>`);
+let snap =  await GET(REF(path));
+if (!snap) {
+cerr("NOSNAP");
+	return;
+}
+let val = VAL(snap);
+if (!(val && val.contents)) {
+cerr("NO SNAP VAL.contents");
+	return;
+}
+let str = atob(val.contents);
+return new Blob([str]);
+
+}
+
+};//»
+const gen_set_blob = (grp_id) =>{//«
+
+return async (node, blob) => {
+
+if (!cur_user) return;
+
+// SBRYRKTH
+cwarn("USERGRP.setBlob", node);
+let val = await blobTo64(blob);
+log(`B64 LENGTH: ${val.length}`);
+let bid = node.blobId;
+let obj = {};
+//if (bid === 0 || bid === NULL_BLOB_NODE_TYPE) {
+let need_update = false;
+if (bid === 0) {
+bid = (new Date()).getTime(); // milliseconds
+cwarn(`New blobId: ${bid}`);
+
+// WWEURKTOX
+// undefined ----vvvvvvv !?!?! 
+	obj[`nodes/${node.id}/blobId`] = bid;
+need_update = true;
+}
+else{
+cwarn("JUST UPDATE THE BLOB");
+}
+obj[`blobs/${bid}/contents`] = val;
+let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
+log(`SET THIS OBJ TO: PATH = <${path}>`);
+log(obj);
+
+let ref = REF(path);
+
+let rv = await UPDATE(ref, obj);
+if (rv !== true){
+cwarn("COULD NOT SET THE BLOB VALUE!!!");
+return;
+}
+if (need_update){
+_node_update(4, node, bid);
+}
+return blob;
+
+}
+
+};//»
+
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
 if (!cur_user) return;
@@ -2058,6 +2245,11 @@ log("VAL", val);
 	}//»
 log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 // YGJDPLKIU
+
+	let mk_dir_func_pub = gen_mk_dir(PUB_DIR_ID);
+	let mk_new_file_func_pub = gen_mk_new_file(PUB_DIR_ID);
+	let get_blob_func_pub = gen_get_blob(PUB_DIR_ID);
+	let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
 	let pub = new DirNode("pub", user_dir, {//«
 		type: FBASE_USER_GRP_FS_TYPE,
 		data: {
@@ -2067,26 +2259,20 @@ log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 		popDir: populate_fbase_user_grp_dir,
 		tryGetKid: try_get_fbase_user_grp_kid,
 		perm: true, // HEREPUBPERM
-		getBlob: async (node) => {//«
-cwarn("USERGRP.getBlob", node);
-return new Blob(["This is the thing in the time of the place!!!"]);
-		},//»
-		setBlob: async (node, val) => {//«
-cwarn("USERGRP.setBlob", node);
-log(val);
-return {size: 1234};
-		},//»
-		mkDir: async (parnode, name, opts)=>{
-cwarn(`parnode.mkDir (pub) ${name}!!!`);
-		},
-		mkNewFile: async (parnode, name, opts)=>{
-cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
-		}
+		getBlob: get_blob_func_pub,
+		setBlob: set_blob_func_pub,
+		mkDir: mk_dir_func_pub,
+		mkNewFile: mk_new_file_func_pub
 	});
 	_dir_update(1, user_dir, pub);
 	_node_update(3, pub, PUB_DIR_ID); // Id
 //»
 	if (uid === cur_user.uid){// "prv" «
+// OERUTJSKF
+		let mk_dir_func_prv = gen_mk_dir(PRV_DIR_ID);
+		let mk_new_file_func_prv = gen_mk_new_file(PRV_DIR_ID);
+		let get_blob_func_prv = gen_get_blob(PRV_DIR_ID);
+		let set_blob_func_prv = gen_set_blob(PRV_DIR_ID);
 		let prv = new DirNode("prv", user_dir, {
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
@@ -2096,154 +2282,14 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 			popDir: populate_fbase_user_grp_dir,
 			tryGetKid: try_get_fbase_user_grp_kid,
 			perm: true, // HEREPRVPERM
-
-getBlob: async (node) => {//«
-
-if (!cur_user) return;
-cwarn("USERGRP.getBlob", node);
-//if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
-if (node.blobId === 0) return new Blob([]);
-
-/* WEHRJSGRHJ
-
-//HOW TO GET THE BLOB???
-
-*/
-let path = `LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}/blobs/${node.blobId}`;
-cwarn(`PATH: <${path}>`);
-let snap =  await GET(REF(path));
-if (!snap) {
-cerr("NOSNAP");
-	return;
-}
-let val = VAL(snap);
-if (!(val && val.contents)) {
-cerr("NO SNAP VAL.contents");
-	return;
-}
-let str = atob(val.contents);
-return new Blob([str]);
-
-},//»
-
-setBlob: async (node, blob) => {//«
-
-if (!cur_user) return;
-
-// SBRYRKTH
-cwarn("USERGRP.setBlob", node);
-let val = await blobTo64(blob);
-log(`B64 LENGTH: ${val.length}`);
-let bid = node.blobId;
-let obj = {};
-//if (bid === 0 || bid === NULL_BLOB_NODE_TYPE) {
-
-if (bid === 0) {
-bid = (new Date()).getTime(); // milliseconds
-cwarn(`New blobId: ${bid}`);
-	obj[`nodes/${node.id}/blobId`] = bid;
-}
-else{
-cwarn("JUST UPDATE THE BLOB");
-}
-obj[`blobs/${bid}/contents`] = val;
-let path = `LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`;
-log(`SET THIS OBJ TO: PATH = <${path}>`);
-log(obj);
-
-let ref = REF(path);
-
-let rv = await UPDATE(ref, obj);
-if (rv !== true){
-cwarn("COULD NOT SET THE BLOB VALUE!!!");
-return;
-}
-
-return blob;
-
-},//»
-
-// EURKSDNR
-mkDir: async (parnode, name, opts)=>{//«
-
-if (!cur_user) return;
-
-let snap = await NEXT_NODE_ID(PRV_DIR_ID);
-let rv = VAL(snap);
-if (!isNum(rv)) {
-	return;
-}
-let next_id = rv;
-
-log(`mkDir: GOT next_id: ${next_id}`);
-
-
-let obj = {};
-obj["nextNodeId"] = next_id + 1;
-obj[`nodes/${next_id}`] = {
-	parId: parnode.id,
-	path: `${parnode.id}/${name}`,
-	type: DIR_NODE_TYPE, 
-};
-
-
-rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`), obj);
-if (rv !== true){
-cerr("COULD NOT CREATE THE NEW DIR");
-	return;
-}
-
-let node = new DirNode(name, parnode);
-_dir_update(1, parnode, node); // Set parnode.#kids[name]
-return node;
-
-},//»
-
-//HEREMKNEW
-mkNewFile: async (parnode, name, opts)=>{//«
-
-	if (!cur_user) return;
-
-	let snap = await NEXT_NODE_ID(PRV_DIR_ID);
-	let rv = VAL(snap);
-	if (!isNum(rv)) {
-		return;
-	}
-	let next_id = rv;
-
-log(`mkNew: GOT next_id: ${next_id}`);
-
-	//HDJSAKRNT 
-
-	let obj = {};
-	obj["nextNodeId"] = next_id + 1;
-	obj[`nodes/${next_id}`] = {
-		parId: parnode.id,
-		path: `${parnode.id}/${name}`,
-		type: FILE_NODE_TYPE, // Just change this to DIR_NODE_TYPE to make a directory
-		blobId: NULL_FBASE_RTDB_BLOB
-	};
-
-
-	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`), obj);
-	if (rv !== true){
-cerr("COULD NOT CREATE THE NEW FILE");
-		return;
-	}
-
-	let node = new FileNode(name, parnode);
-//	_node_update(4, node, NULL_BLOB_NODE_TYPE); // Set node.#blobId
-	_node_update(4, node, 0); // Set node.#blobId
-	_dir_update(1, parnode, node); // Set parnode.#kids[name]
-	return node;
-
-}//»
-
+			getBlob: get_blob_func_prv,
+			setBlob: set_blob_func_prv,
+			mkDir: mk_dir_func_prv,
+			mkNewFile: mk_new_file_func_prv,
 		});
 		_dir_update(1, user_dir, prv); // Add kid
 		_node_update(3, prv, PRV_DIR_ID); // Id HEREPRVRV
 	}//»
-
 	_dir_update(3, user_dir, true); // done
 
 };//»
