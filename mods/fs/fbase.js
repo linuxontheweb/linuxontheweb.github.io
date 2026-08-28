@@ -463,8 +463,9 @@ writing to them, which means they don't (yet) technically exist.
 
 // mkNewFile: is @HDJSAKRNT right?!?!?!
 
-/*8/28/26 Cool. «
+/*8/28/26 Get setBlob to work «
 
+USERGRP.setBlob
 
 »*/
 
@@ -1944,16 +1945,6 @@ if (!cur_user) return;
 // 	- *this* method for popDir
 //	- a method for tryGetKid that looks up particular nodes by the exact key.
 
-/*
-async getDirList(ghid, parId){//«
-let ref = REF(`LOTW/${ghid}/nodes`);
-let c1 = orderByChild('parId');
-let c2 = equalTo(parId);
-let q = query(ref, c1, c2);
-let snap = await GET(q);
-return snap.val();
-}//»
-*/
 
 // 
 let uid = dir.getData('fbaseUid');
@@ -2106,25 +2097,47 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 			tryGetKid: try_get_fbase_user_grp_kid,
 			perm: true, // HEREPRVPERM
 
-getBlob: (node) => {//«
+getBlob: async (node) => {//«
 
 if (!cur_user) return;
 cwarn("USERGRP.getBlob", node);
 //if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
 if (node.blobId === 0) return new Blob([]);
-return new Blob([`PLACEHOLDER FOR BLOBID: ${node.blobId}`]);
+
+/* WEHRJSGRHJ
+
+//HOW TO GET THE BLOB???
+
+*/
+let path = `LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}/blobs/${node.blobId}`;
+cwarn(`PATH: <${path}>`);
+let snap =  await GET(REF(path));
+if (!snap) {
+cerr("NOSNAP");
+	return;
+}
+let val = VAL(snap);
+if (!(val && val.contents)) {
+cerr("NO SNAP VAL.contents");
+	return;
+}
+let str = atob(val.contents);
+return new Blob([str]);
+
 },//»
 
 setBlob: async (node, blob) => {//«
 
 if (!cur_user) return;
 
+// SBRYRKTH
 cwarn("USERGRP.setBlob", node);
 let val = await blobTo64(blob);
 log(`B64 LENGTH: ${val.length}`);
 let bid = node.blobId;
 let obj = {};
 //if (bid === 0 || bid === NULL_BLOB_NODE_TYPE) {
+
 if (bid === 0) {
 bid = (new Date()).getTime(); // milliseconds
 cwarn(`New blobId: ${bid}`);
@@ -2135,7 +2148,7 @@ cwarn("JUST UPDATE THE BLOB");
 }
 obj[`blobs/${bid}/contents`] = val;
 let path = `LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`;
-log("SET THIS OBJ TO: PATH = <${path}>");
+log(`SET THIS OBJ TO: PATH = <${path}>`);
 log(obj);
 
 let ref = REF(path);

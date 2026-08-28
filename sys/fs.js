@@ -59,14 +59,7 @@ _dir_update(1, par, my_node);
 
 //»
 
-/*8/27/26: BUG BUG BUG «
-
-We need to implement mkNewFile (and mkDir) @DSJKRLTKJ
-Just put it in the constructor of FSNode @TEIDJKSDM.
-
-
-Mainly here and in mods/fs/fbase.js, with changes that result from
-*extreme* understanding and good existential feelings.
+/* 8/28/26: USERGRP.setBlob? «
 
 »*/
 /* 8/26/26: Back to extending the fs  «
