@@ -337,10 +337,10 @@ Remove newlines with:
 						"nextNodeId": {//«
 							".read": "auth != null && auth.uid === $uid",
 							".validate": "newData.isNumber() && //«
-								(
-									(data.exists() && newData.val() === data.val() + 1) || 
-									(!data.exists() && newData.val() === 1)
-								)"//»
+							(
+							(data.exists() && newData.val() === data.val() + 1) || 
+							(!data.exists() && newData.val() === 1)
+							)"//»
 						},//»
 						"lastUpdate": {//«
 							".read": "auth != null && (//«
@@ -460,11 +460,13 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*
 
-Fos mkNewFile: is @HDJSAKRNT right?!?!?!
+// mkNewFile: is @HDJSAKRNT right?!?!?!
 
-*/
+/*8/28/26 Cool. «
+
+
+»*/
 
 /* 8/27/26: Developing a NICE WORKFLOW... «
 
@@ -555,7 +557,6 @@ Those values are not as "important" as the node values because they are complete
 
 
 //»*/
-
 /* 8/26/26: Now *really* back ?!?!?«
 
 I've had *tons* of meditation upon (as well as doing *plenty* of work on)
@@ -1932,12 +1933,36 @@ if (!snap){
 cerr("NO SNAP!?!?!");
 return;
 }
+_dir_update(3, dir, true); // Set dir.#done = true
 if (!snap.exists()) {
 cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
-_dir_update(3, dir, true); // Set dir.#done = true
 	return;
 }
 let arr = snap.val();
+for (let i=0; i < arr.length; i++){
+let obj = arr[i];
+if (!obj) continue;
+
+let node;
+let name = (obj.path.split("/"))[1];
+if (obj.type === FILE_NODE_TYPE){
+	node = new FileNode(name, dir);
+	_node_update(4, node, obj.blobId);
+}
+else if (obj.type === DIR_NODE_TYPE){
+	node = new DirNode(name, dir);
+}
+else {
+cwarn(`WHAT TYPE IS THIS OBJ(${obj.type})???`);
+log(obj);
+return;
+}
+_dir_update(1, dir, node);
+
+
+}
+//cwarn("GOT VAL");
+//log(val);
 
 /*
 Where do the fbase nodeId's go?
@@ -1946,9 +1971,17 @@ Where do the fbase nodeId's go?
 	- in data.fbaseNodeId?
 */
 
+/*
 cwarn("GOT NODES");
-log(arr);
-
+for (let obj of arr) {
+//«
+//	parId: parnode.id,
+//	path: `${parnode.id}/${name}`,
+//	type: FILE_NODE_TYPE, // Just change this to DIR_NODE_TYPE to make a directory
+//	blobId: NULL_FBASE_RTDB_BLOB
+//»
+}
+*/
 
 };//»
 const populate_fbase_user_dir = async (user_dir) => {//«
@@ -2028,7 +2061,7 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 	_dir_update(1, user_dir, pub);
 	_node_update(3, pub, PUB_DIR_ID); // Id
 //»
-	if (uid === cur_user.uid){//«
+	if (uid === cur_user.uid){// "prv" «
 		let prv = new DirNode("prv", user_dir, {
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
@@ -2042,7 +2075,8 @@ cwarn(`parnode.mkNewFile (pub) ${name}!!!`);
 getBlob: (node) => {//«
 
 cwarn("USERGRP.getBlob", node);
-
+if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
+return new Blob([`PLACEHOLDER FOR BLOBID: ${node.blobId}`]);
 },//»
 
 setBlob: (node, val) => {//«
@@ -2055,58 +2089,75 @@ log(val);
 // EURKSDNR
 mkDir: async (parnode, name, opts)=>{//«
 
-	let snap = await NEXT_NODE_ID(PRV_DIR_ID);
-	let rv = VAL(snap);
-	if (!rv) return;
-	let next_id = rv;
+if (!cur_user) return;
+
+let snap = await NEXT_NODE_ID(PRV_DIR_ID);
+let rv = VAL(snap);
+if (!isNum(rv)) {
+	return;
+}
+let next_id = rv;
+
 log(`mkDir: GOT next_id: ${next_id}`);
+
+
+let obj = {};
+obj["nextNodeId"] = next_id + 1;
+obj[`nodes/${next_id}`] = {
+	parId: parnode.id,
+	path: `${parnode.id}/${name}`,
+	type: DIR_NODE_TYPE, 
+};
+
+
+rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`), obj);
+if (rv !== true){
+cerr("COULD NOT CREATE THE NEW DIR");
+	return;
+}
+
+let node = new DirNode(name, parnode);
+_dir_update(1, parnode, node); // Set parnode.#kids[name]
+return node;
 
 },//»
 
 //HEREMKNEW
 mkNewFile: async (parnode, name, opts)=>{//«
 
-if (!cur_user) return;
+	if (!cur_user) return;
 
-let next_id;
-{
 	let snap = await NEXT_NODE_ID(PRV_DIR_ID);
 	let rv = VAL(snap);
 	if (!isNum(rv)) {
 		return;
 	}
-	next_id = rv;
-}
+	let next_id = rv;
 
 log(`mkNew: GOT next_id: ${next_id}`);
 
-/*HDJSAKRNT
-{//«
+	//HDJSAKRNT 
+
+	let obj = {};
+	obj["nextNodeId"] = next_id + 1;
+	obj[`nodes/${next_id}`] = {
+		parId: parnode.id,
+		path: `${parnode.id}/${name}`,
+		type: FILE_NODE_TYPE, // Just change this to DIR_NODE_TYPE to make a directory
+		blobId: NULL_FBASE_RTDB_BLOB
+	};
 
 
-let parId = parnode.id;
-let path = `${parId}/${name}`;
+	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${PRV_DIR_ID}`), obj);
+	if (rv !== true){
+cerr("COULD NOT CREATE THE NEW FILE");
+		return;
+	}
 
-let obj = {};
-obj["nextNodeId"] = next_id;
-let type = FILE_NODE_TYPE;
-let blobId = NULL_FBASE_RTDB_BLOB; // standard null blob
-obj[`nodes/${next_id}`] = {
-	parId,
-	path,
-	type,
-	blobId
-};
-
-
-let ref = REF(`LOTW/user/${cur_user.uid}/group/$${PRV_DIR_ID}`);
-let rv = await UPDATE(ref, obj);
-cwarn("mkNewFile: UPDATE RV:");
-log(rv);
-
-
-}//»
-*/
+	let node = new FileNode(name, parnode);
+	_node_update(4, node, NULL_BLOB_NODE_TYPE); // Set node.#blobId
+	_dir_update(1, parnode, node); // Set parnode.#kids[name]
+	return node;
 
 }//»
 
