@@ -466,6 +466,13 @@ Now want to think about a command library for status and bio.
 No! Just want to make sure status and bio are also in the
 FBASE_USER_MAIN_FS_TYPE dir.
 
+@MSUYIOPLJ
+
+The problem is that for:
+/mnt/fbase/<username>/<prof_key>, there is neither a node._getBlob
+defined *or* a node.mntPar._getBlob, and so we default to get_local_blob.
+
+
 »*/
 /* 8/27/26: Developing a NICE WORKFLOW... «
 
@@ -1763,6 +1770,7 @@ const { // api.util «
 	isStr,
 	isEOF,
 	isErr,
+	toStr,
 	log,
 	jlog,
 	cwarn,
@@ -2206,13 +2214,36 @@ log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
 			data: {
 				fbaseUid: uid,
 			},
-			getBlob: ()=>{
+// MSUYIOPLJ
+			getBlob: (node)=>{
+//cwarn("WHY ISN'T THIS getBlob BEING CALLED????");
 				return new Blob([prof[k]]);
 			},
-			setBlob: (val)=>{
+			setBlob: async (node, blob)=>{
 	if (cur_user && cur_user.uid === uid) {
-cwarn(`SO YEW WANNA SET ${k}??? ARE YOU THE USER?`);
-log("VAL", val);
+if (k === "status" || k === "bio" ) {//«
+
+cwarn(`TRY SET ${k}`);
+log(node);
+//log("VAL", val);
+	let path = `LOTW/prof/${cur_user.uid}`;
+	let ref = REF(path);
+	let obj = {};
+	let str = await toStr(blob);
+	obj[`${k}`] = str;
+	let rv = await UPDATE(ref, obj);
+	if (rv !== true){
+cerr(`COULD NOT UPDATE PATH: ${path}`);
+		return;
+	}
+	prof[k] = str; // Just cache this for easy retrieval
+	return blob;
+}//»
+else {//«
+
+cwarn(`NOT SETTING CONSTANT VALUE: ${k}`);
+
+}//»
 	}
 			}
 		});
