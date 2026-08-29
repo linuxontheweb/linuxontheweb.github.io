@@ -83,6 +83,36 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 »*/
 
+/* BUG BUG BUG: «
+
+This *should* output a single quote
+  - $ echo $'\x27' 
+
+This *does* output a double quote:
+  - $ echo $'\x22'
+
+Every other ascii char seems to be correctly output as well.
+
+So where does this substitution happen?
+
+- @IOEJRKRN
+
+»*/
+
+/*8/28/26: RETURN AN ERROR STRING FROM setValue/setBlob  «
+
+Am now returning a string from setBlob in mods/fs/fbase.js,
+so we are now checking for that condition @ENMSDRJKT.
+
+»*/
+/*8/23/26: Need to call Desk.make_all_icons with redirect creation...  «
+
+
+
+»*/
+
+//Notes/BUGs«
+//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
 /* BUGGY: Detecting "ambiguous redirect": filename expansion must result in 1 field «
 
 For Stdin/Stdout filenames:
@@ -190,16 +220,12 @@ This seems to be the way to go.
 
 »*/
 
-/*8/28/26: RETURN AN ERROR STRING FROM setValue/setBlob  «
+/*FIXED BUG @MFLOUYTW???«
 
-Am now returning a string from setBlob in mods/fs/fbase.js,
-so we are now checking for that condition @ENMSDRJKT.
+We needed to perform tilde expansion here so that the following command works:
+$ ~/my_script.sh 
 
-»*/
-/*8/23/26: Need to call Desk.make_all_icons with redirect creation...  «
-
-
-
+@TWEJKDLJ: This is how we did it for Stdin.setValue (also used dsSQuoteExpansion)
 »*/
 /* 7/22/26: Need to refactor Stdout.write? «
 
@@ -279,17 +305,6 @@ get changes there to take effect, it is not enough to reload this
 module (the shell) with r_CA. If you are running a command in a
 command library (like 'fs'), you also need to reload the command
 library itself with r_CAS.
-»*/
-
-//Notes«
-//Old notes in the linuxontheweb/doc repo, in dev/TERMINAL and dev/SHELL
-
-/*FIXED BUG @MFLOUYTW???«
-
-We needed to perform tilde expansion here so that the following command works:
-$ ~/my_script.sh 
-
-@TWEJKDLJ: This is how we did it for Stdin.setValue (also used dsSQuoteExpansion)
 »*/
 /*12/15/25: util.fetch: New way of doing fetch (@SLPOFIUTY), so that try/catch isn't needed, «
 and everything that is not an 'ok' response is returned as an Error.
@@ -2705,19 +2720,30 @@ const com_cat = class extends Com{//«
 
 	}//»
 };//»
+
 const com_pipe = class extends Com{//«
 	async run() {//«
 		let prepend = this.args.length ? this.args.join(" ") : "";
 		let rv;
 		while (true){
 			rv = await this.readStdinChunk();
-			if (isEOF(rv)){
-				return this.ok();
-			}
+			if (isEOF(rv)) return this.ok();
 			this.out(`${prepend}${rv}`);
 		}
 	}//»
 };//»
+
+const com_decuri = class extends Com{//«
+	async run() {//«
+		let rv;
+		while (true){
+			rv = await this.readStdinChunk();
+			if (isEOF(rv)) return this.ok();
+			this.out(`${decodeURIComponent(rv)}`);
+		}
+	}//»
+};//»
+
 const com_read = class extends Com{//«
 static getOpts(){
 	return {
@@ -3432,6 +3458,7 @@ this.builtins={//«
 gh: com_gh,
 cat: com_cat,
 pipe: com_pipe,
+decuri: com_decuri,
 continue: com_loopctrl,
 break: com_loopctrl,
 shift: com_shift,
@@ -3597,7 +3624,15 @@ for (let ent of this.val){
 		curfield += '"'+await ent.expand(shell, opts)+'"';
 	}
 	else if (ent instanceof SQuote || ent instanceof DSQuote){
-		curfield += `'${ent.toString()}'`;
+		let s = ent.toString();
+// IOEJRKRN
+/*
+
+This hack turns embedded single quotes into their "URI encoded" versions.
+
+*/
+		s = s.replace(/\x27/g, "%27");
+		curfield += `'${s}'`;
 	}
 	else{
 //JDHFKGK
@@ -3616,6 +3651,7 @@ quoteRemoval(){//«
 	let s='';
 	let qtyp;
 	let arr = this.val;
+//log(arr);
 	for (let l=0; l < arr.length; l++){
 		let c = arr[l];
 		if (qtyp !== "'" && c==="\\" && (arr[l+1]==="'"||arr[l+1]==='"')){
@@ -3738,7 +3774,6 @@ const SQuote = class extends Sequence{//«
 }//»
 const DSQuote = class extends Sequence{//«
 expand(){
-//cwarn("EXPAND DSQUOTE!");
 let wrd = this.val;
 if (!wrd){
 cwarn("WHAT THE HELL IS HERE????");
@@ -3792,6 +3827,8 @@ else if (ch=='x'){//«
 	let next2 = arr[i+2];
 		if (next2 &&next2.match(/[0-9a-fA-F]/)){
 			c = eval( '"\\x' + next + next2 + '"' );
+//log(`\\x${next}${next2}: <${c}>`);
+
 			i+=2;
 		}
 		else{
@@ -3827,6 +3864,7 @@ else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch
 //escaped.
 
 //}//»
+//	if (c) out.push(c);
 	if (c) out.push(c);
 	else out.push(ch);
 	}
@@ -7557,7 +7595,10 @@ cancel(){//«
 error(mess){this.#term.response(mess, {isErr: true});}
 warn(mess){this.#term.response(mess, {isWrn: true});}
 response(val,opts){this.#term.response(val, opts);this.#term.scrollIntoView();this.#term.refresh();}
-async readLine(use_prompt, opts){return ln;}
+async readLine(use_prompt, opts){
+	let ln = await this.#term.readLine(use_prompt, opts);
+	return ln;
+}
 get screenW(){return this.#term.w;}
 get homeDir(){return this.#term.getHomedir();}
 get history(){return this.#term.history.join("\n");}
