@@ -461,7 +461,16 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/* 8/29/26: Effectively finished «
+
+
+/* 8/29/26: backendDelNode «
+
+@IREJNFMNJ: Just want to remove the given node. So just set the
+node value to null.
+
+
+
+Effectively finished
 
 Just come back in here for
 
@@ -2054,16 +2063,26 @@ return blob;
 
 };//»
 
+// IREJNFMNJ
 const gen_del_node = (grp_id) => {//«
 
 return async (node)=>{
 
-cwarn(`BACKEND_DEL_NODE FOR GRP: ${grp_id}`);
-log(node);
-cwarn("Randomly generating a real return value...");
-if (Math.random() < 0.5) return false;
+if (!cur_user) return;
 
-return true;
+let node_id = node.id;
+
+cwarn(`BACKEND_DEL_NODE FOR GRP: ${grp_id}, node: ${node_id}`);
+log(node);
+
+let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
+let ref = REF(path);
+let obj = {};
+obj[`${node_id}`] = null;
+
+let rv = await UPDATE(ref, obj);
+
+return rv;
 
 };
 
