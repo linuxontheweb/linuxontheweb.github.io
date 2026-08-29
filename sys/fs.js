@@ -59,7 +59,11 @@ _dir_update(1, par, my_node);
 
 //»
 
-/* 8/28/26: USERGRP.setBlob? «
+/* 8/29/26: Hello, world! «
+
+Not much to say at this point other than that. I mainly just want to
+refactor what I already have, generalize it, and use the result to
+create various other types of file system mounts.
 
 »*/
 /* 8/26/26: Back to extending the fs  «
@@ -2956,23 +2960,17 @@ const init = async () => { //«
 	await mkDir("/var","appdata");
 	await make_dev_tree();
 	mount_tree("site", SITE_FS_TYPE);
-///*
 //ESHFKNOI
-if (globals.dev_mode && mnt_fbase){//«
-
-let mnt = mount_tree("mnt", MNT_FS_TYPE);
-_dir_update(3, mnt, true);
-await util.loadMod("fs.fbase");
-let mod = new LOTW.mods["fs.fbase"](export_obj);
-// Need to pass in the par DirNode, i.e. /mnt
-//cwarn("SKIPPING '/mnt' INIT");
-// Need to update the schema
-if (!await mod.init(mnt)){
+	let mnt = mount_tree("mnt", MNT_FS_TYPE);
+	_dir_update(3, mnt, true);
+	if (mnt_fbase){//«
+//		if (globals.dev_mode && mnt_fbase){
+		await util.loadMod("fs.fbase");
+		let mod = new LOTW.mods["fs.fbase"](export_obj);
+		if (!await mod.init(mnt)){
 cwarn("Could not init: fs.fbase");
-}
-
-}//»
-//*/
+		}
+	}//»
 	return true;
 };//»
 
