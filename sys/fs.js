@@ -59,7 +59,7 @@ _dir_update(1, par, my_node);
 
 //»
 
-/* 8/29/26: Hello, world! «
+/* 8/29/26: ? «
 
 Not much to say at this point other than that. I mainly just want to
 refactor what I already have, generalize it, and use the result to
@@ -832,12 +832,15 @@ const {
 	SITE_FS_TYPE,
 	DEV_FS_TYPE,
 	MNT_FS_TYPE,
+
+	FBASE_USER_GRP_FS_TYPE,
+
 //	FBASE_RTDB_FS_TYPE,
 
     LOCAL_MNT_FS_TYPES,
     ALWAYS_DONE_DIR_FS_TYPES,
     PERSISTENT_BACKEND_FS_TYPES,
-
+	RM_OK_FS_TYPES,
 // File system "node" types
 
 	FILE_NODE_TYPE,
@@ -1297,7 +1300,6 @@ return THROW("WHAT IS THIS NAME????");
 // SRKTOYKHM
 	this.icons = []; // <--- USE THIS FOR QUICK RM/DEL NODE OPS!!!
 
-	this.#delNode = opts.delNode || del_node;
 	this.#data = opts.data;
 
 	this._getBlob = opts.getBlob;
@@ -1306,6 +1308,9 @@ return THROW("WHAT IS THIS NAME????");
 // TEIDJKSDM
 	this._mkNewFile = opts.mkNewFile;
 	this._mkDir = opts.mkDir;
+
+	this._backendDelNode = opts.backendDelNode;
+//	this.#delNode = opts.delNode || del_node;
 
 }//»
 mkIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
@@ -1325,7 +1330,8 @@ else {
 	}
 }//»
 async del(opts={}){//«
-	if (!this.#delNode(this)) return false;
+//	if (!this.#delNode(this)) return false;
+	if (!await del_node(this)) return false;
 // OLD Desk stuff «
 //	if (NS.Desk) {
 //		NS.Desk.cleanup_deleted_wins_and_icons(this.fullpath);
@@ -1338,8 +1344,9 @@ canRm(opts={}){//«
 	let rtype = this.type;
 	let path = this.fullpath;
 	if (this.appName !== FOLDER_APP) {//«
-		if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE||rtype===IDB_DATA_TYPE)){
-			return `${path}: not (currently) handling fs type: '${rtype}'`;
+//		if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE)){
+		if (!RM_OK_FS_TYPES.includes(rtype)){
+			return `${this.name}: not (currently) handling fs type: '${rtype}'`;
 		}
 		if (!this.par.perm) return `${path}: permission denied`;
 		else if (this.isWriteLocked) return `${path} is "write locked"`;
@@ -1444,6 +1451,23 @@ log("Got: mntPar._mkNewFile");
 	}
 log("Got: default: touchFile");
 	return touchFile(this, name, opts)
+
+}//»
+backendDelNode(){//«
+//cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
+// This is called *inside* of del_node...
+	if (this._backendDelNode) {
+log("Got: this._backendDelNode");
+		return this._backendDelNode(this);
+	}
+	if (this.mntPar._backendDelNode) {
+log("Got: mntPar._backendDelNode");
+		return this.mntPar._backendDelNode(this);
+	}
+THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelNode!?!?!");
+
+// So calling del_node here might lead to infinite loops.
+
 
 }//»
 
@@ -2175,7 +2199,7 @@ cwarn("GOT ERROR!?!?!?!");
 			no_error = false;
 		}
 		else {
-cwarn(`CALL DONE_CB: ${node.fullpath}`);
+//cwarn(`CALL DONE_CB: ${node.fullpath}`);
 			done_cb(node);
 		}
 	}
@@ -2183,13 +2207,18 @@ cwarn(`CALL DONE_CB: ${node.fullpath}`);
 };//»
 
 const del_node = async (node) => {//«
-//	let node = this;
-//	const OK_TYPES=[OP_FS_TYPE, SHM_FS_TYPE, IDB_DATA_TYPE];
-	const OK_TYPES=[OP_FS_TYPE, SHM_FS_TYPE];
-	if (!OK_TYPES.includes(node.type)) {
-cerr("delete_fobjs:DELETE type:" + node.type + "!?!?!?!?!?");
+	let typ = node.type;
+//	const OK_TYPES=[OP_FS_TYPE, SHM_FS_TYPE];
+//	if (!OK_TYPES.includes(node.type)) {
+	if (!RM_OK_FS_TYPES.includes(typ)) {
+cerr(`NOT DELETING NODE.TYPE: <${typ}> `);
 		return;
 	}
+	if (typ === FBASE_USER_GRP_FS_TYPE){
+cwarn(`NEED TO CALL SPECIAL DEL_NODE FUNCTION FOR: ${FBASE_USER_GRP_FS_TYPE}`);
+return node.backendDelNode();
+	}
+
 	let path = node.fullpath;
 	if (node.sys) {
 cerr("Not removing toplevel");
@@ -2207,7 +2236,7 @@ cwarn(`Deleting:`, kid);
 	let id = node.id;
 	let parid = node.par.id;
 	if (!(id&&parid)) {
-		if (node.type==SHM_FS_TYPE) {}
+		if (typ==SHM_FS_TYPE) {}
 		else {
 cerr(`NO ID && PARID???`);
 log(node);

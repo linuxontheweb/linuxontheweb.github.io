@@ -461,6 +461,18 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/* 8/29/26: Effectively finished «
+
+Just come back in here for
+
+1) Getting rm/mv to work properly (all creation stuff should probably work).
+- I supposed we are just going to unlink (remove nodes), rather than removing blobs.
+
+2) Getting *specific* functions to work 
+
+3) If I am really in the mood for refactoring/generalizing
+
+»*/
 /*8/28/26 Working notes «
 
 Now want to think about a command library for status and bio.
@@ -2042,6 +2054,21 @@ return blob;
 
 };//»
 
+const gen_del_node = (grp_id) => {//«
+
+return async (node)=>{
+
+cwarn(`BACKEND_DEL_NODE FOR GRP: ${grp_id}`);
+log(node);
+cwarn("Randomly generating a real return value...");
+if (Math.random() < 0.5) return false;
+
+return true;
+
+};
+
+};//»
+
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
 if (!cur_user) return;
@@ -2155,7 +2182,6 @@ return;
 }
 _node_update(3, node, i); // node.#id is the iterator
 _dir_update(1, dir, node);
-log(node);
 }
 
 /*
@@ -2251,6 +2277,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 		let mk_new_file_func_pub = gen_mk_new_file(PUB_DIR_ID);
 		let get_blob_func_pub = gen_get_blob(PUB_DIR_ID);
 		let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
+		let del_node_func_pub = gen_del_node(PUB_DIR_ID);
 		let pub = new DirNode("pub", user_dir, {//«
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
@@ -2263,7 +2290,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 			getBlob: get_blob_func_pub,
 			setBlob: set_blob_func_pub,
 			mkDir: mk_dir_func_pub,
-			mkNewFile: mk_new_file_func_pub
+			mkNewFile: mk_new_file_func_pub,
+			backendDelNode: del_node_func_pub
 		});
 		_dir_update(1, user_dir, pub);
 		_node_update(3, pub, PUB_DIR_ID); // Id
@@ -2275,6 +2303,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 		let mk_new_file_func_prv = gen_mk_new_file(PRV_DIR_ID);
 		let get_blob_func_prv = gen_get_blob(PRV_DIR_ID);
 		let set_blob_func_prv = gen_set_blob(PRV_DIR_ID);
+		let del_node_func_prv = gen_del_node(PRV_DIR_ID);
 		let prv = new DirNode("prv", user_dir, {
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
@@ -2288,6 +2317,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 			setBlob: set_blob_func_prv,
 			mkDir: mk_dir_func_prv,
 			mkNewFile: mk_new_file_func_prv,
+			backendDelNode: del_node_func_prv
 		});
 		_dir_update(1, user_dir, prv); // Add kid
 		_node_update(3, prv, PRV_DIR_ID); // Id HEREPRVRV
