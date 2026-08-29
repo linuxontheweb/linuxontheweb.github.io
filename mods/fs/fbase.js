@@ -49,6 +49,7 @@ stays at 100.
 /* Schema «
 
 
+
 {
 "rules": {
 	".read": false,
@@ -80,11 +81,11 @@ stays at 100.
 				},
 				"status": {
 					".validate": "newData.isString() && 
-						newData.val().length < 100"
+						newData.val().length < 250"
 				},
 				"bio": {
 					".validate": "newData.isString() && 
-						newData.val().length < 1000"
+						newData.val().length < 2500"
 				},
 				"$other": {
 					".validate": false
@@ -134,10 +135,10 @@ stays at 100.
 						"nextNodeId": {
 							".read": "auth != null && auth.uid === $uid",
 							".validate": "newData.isNumber() && 
-								(
-									(data.exists() && newData.val() === data.val() + 1) || 
-									(!data.exists() && newData.val() === 1)
-								)"
+							(
+							(data.exists() && newData.val() === data.val() + 1) || 
+							(!data.exists() && newData.val() === 1)
+							)"
 						},
 						"lastUpdate": {
 							".read": "auth != null && (
