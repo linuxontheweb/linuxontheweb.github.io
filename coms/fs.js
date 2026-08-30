@@ -1766,8 +1766,8 @@ node.delIcons();
 		await fsapi.doFsRm(args, {
 			no_rm_cb : err,
 			done_cb,
-			CWD: this.env.cwd.cwd,
-			FULLDIRS: false,
+			cwd: this.env.cwd.cwd,
+			doFullDirs: false,
 			dirsOnly: true
 		});
 // ERITLYJK
@@ -1792,8 +1792,7 @@ cerr("No mess in the err cb!?!?!");
 		this.err(mess);
 	};//»
 	const done_cb = node => {
-cwarn(`RM DONE: ${node.fullpath}`);
-node.delIcons();
+		node.delIcons();
 	};
 	if (!args.length) {
 		err("missing operand");
@@ -1825,8 +1824,8 @@ node.delIcons();
 		await fsapi.doFsRm(okargs, {
 			no_rm_cb: err,
 			done_cb,
-			CWD: cwd, 
-			FULLDIRS: is_recur
+			cwd, 
+			doFullDirs: is_recur
 		});
 // SEHJKRBTM
 	}

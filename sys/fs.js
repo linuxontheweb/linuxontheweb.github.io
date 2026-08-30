@@ -59,11 +59,20 @@ _dir_update(1, par, my_node);
 
 //»
 
-/* 8/29/26: ? «
+/* 8/30/26: Not much to worry about «
 
-Not much to say at this point other than that. I mainly just want to
-refactor what I already have, generalize it, and use the result to
-create various other types of file system mounts.
+I mainly just want to refactor what I already have, generalize it, and use the
+result to create various other types of file system mounts.
+
+I just really want to ensure all of the method extension pathways are sound,
+but especially that the "node delete" pathway makes sense.
+
+I know we start with doFsRm. First we call canRm, then node.del(opts)
+@OJNDMFJGH. 
+
+In del_node (@EHRJTKML), we should pack all of the different cases 
+(OP_FS_TYPE, SHM_FS_TYPE, FBASE_USER_GRP_FS_TYPE) into a single 
+invocation of `node.backendDelNode()`.
 
 »*/
 /* 8/26/26: Back to extending the fs  «
@@ -1330,13 +1339,7 @@ else {
 	}
 }//»
 async del(opts={}){//«
-//	if (!this.#delNode(this)) return false;
 	if (!await del_node(this)) return false;
-// OLD Desk stuff «
-//	if (NS.Desk) {
-//		NS.Desk.cleanup_deleted_wins_and_icons(this.fullpath);
-//cwarn(`Not calling cleanup_deleted_wins_and_icons(${this.fullpath})`);
-//	}»
 	_dir_update(2, this.par, this);
 	return true;
 }//»
@@ -1367,44 +1370,7 @@ canRm(opts={}){//«
 
 }//»
 getData(key){if (!this.#data) return; return this.#data[key];}
-get fullpath(){//«
-	let str = this.name;
-	let curobj = this;
-	while (true) {
-		if (curobj && curobj.par) str = `${curobj.par.name}/${str}`;
-		else break;
-		curobj = curobj.par;
-	}
-	let arr = str.split("/");
-	while (!arr[0] && arr.length) arr.shift();
-	str = arr.join("/");
-	return `/${str}`.regpath();
-}//»
-get size(){return this.#size;}
-get par(){return this.#par;}
-/*
-//get mntPar(){return this.#mntPar;}
-//get type(){return this.#type;}
-*/
 
-get type(){//«
-	let cur = this;
-	while (cur.isRoot !== true) {
-		let t = cur._type;
-		if (isStr(t)) return t;
-		cur = cur.par;
-	}
-	return "root";
-}//»
-get mntPar(){//«
-	let cur = this;
-	while (cur.isRoot !== true) {
-		let t = cur._type;
-		if (isStr(t)) return cur;
-		cur = cur.par;
-	}
-	return root;
-}//»
 getBlob(){//«
 	if (this._getBlob) return this._getBlob(this);
 	if (this.mntPar._getBlob) return this.mntPar._getBlob(this);
@@ -1471,6 +1437,40 @@ THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelN
 
 }//»
 
+//Getters: name|par|ext|id|blobId|fullpath|...«
+get fullpath(){//«
+	let str = this.name;
+	let curobj = this;
+	while (true) {
+		if (curobj && curobj.par) str = `${curobj.par.name}/${str}`;
+		else break;
+		curobj = curobj.par;
+	}
+	let arr = str.split("/");
+	while (!arr[0] && arr.length) arr.shift();
+	str = arr.join("/");
+	return `/${str}`.regpath();
+}//»
+get size(){return this.#size;}
+get par(){return this.#par;}
+get type(){//«
+	let cur = this;
+	while (cur.isRoot !== true) {
+		let t = cur._type;
+		if (isStr(t)) return t;
+		cur = cur.par;
+	}
+	return "root";
+}//»
+get mntPar(){//«
+	let cur = this;
+	while (cur.isRoot !== true) {
+		let t = cur._type;
+		if (isStr(t)) return cur;
+		cur = cur.par;
+	}
+	return root;
+}//»
 get name(){	return this.#name;}
 get ext(){ return null; }
 get id(){	return this.#id;}
@@ -1481,6 +1481,7 @@ get blobId(){return this.#blobId;}
 get isFile(){return false;}
 get isDir(){return false;}
 get isLink(){return false;}
+//»
 
 static {//«
 _node_update = (which, node, val) => {
@@ -1496,7 +1497,6 @@ default: THROW(`WHAT WHICH IS THIS: ${which}`);
 }//»
 
 }//»
-
 class DirNode extends FSNode {//«
 //JDPEIO
 // Private «
@@ -1515,62 +1515,23 @@ class DirNode extends FSNode {//«
 #setBlob;
 //»
 constructor(name, par, opts = {}) {//«
+
 	super(name, par, opts);
 	this.#appName = FOLDER_APP;
-	if (isBool(opts.perm) || isStr(opts.perm)){
-		this.#perm = opts.perm;
-	}
+	if (isBool(opts.perm) || isStr(opts.perm)) this.#perm = opts.perm;
 	this.#readOnly = opts.readOnly;
 	this.#sys = opts.sys;
-	this.#kids = {};
-	this.#moveLocks = [];
-
-/*
-	if (opts.type && !LOCAL_MNT_FS_TYPES.includes(opts.type)) {//«
-//UDLMDHEK
-if (!(isFunc(opts.popDir) && isFunc(opts.tryGetKid))){
-return THROW(`NEED 'popDir' and 'tryGetKid' IN DIRNODE CONSTRUCTOR (type:${opts.type})!!!`);
-}
-		this.#popDir = opts.popDir;
-		this.#tryGetKid = opts.tryGetKid;
-
-if (isFunc(opts.mkDir)){//«
-	this.#mkDir = opts.mkDir;
-}
-else{
-this.#mkDir=(par, name)=>{
-cwarn(`mkDir(${name}): NOOP (TYPE: ${par.type})`);
-};
-}//»
-
-if (isFunc(opts.mkNewFile)){//«
-	this.#mkNewFile = opts.mkNewFile;
-}
-else{
-this.#mkNewFile=(par, name)=>{
-cwarn(`mkNewFile(${name}): NOOP (TYPE: ${par.type})`);
-};
-}//»
-
-	}//»
-	else {//«
-		this.#popDir = populate_dirobj;
-		this.#tryGetKid = try_get_fs_kid;
-		this.#mkDir = (name, opts={})=>{return mkDir(this, name, opts);};
-		this.#mkNewFile = (name, opts={})=>{return touchFile(this, name, opts);};
-	}//»
-*/
 
 	this.#popDir = opts.popDir || populate_dirobj;
 	this.#tryGetKid = opts.tryGetKid || try_get_fs_kid;
 
-// DSJKRLTKJ
-//	this.#mkNewFile = opts.mkNewFile || ((name, opts={})=>{return touchFile(this, name, opts);})
-
 	if (ALWAYS_DONE_DIR_FS_TYPES.includes(par.type)){
 		this.#done = true;
 	}
-//log(par.type);
+
+	this.#kids = {};
+	this.#moveLocks = [];
+
 }//»
 tryGetKid(nm){ return this.#tryGetKid(this, nm); }
 rmMoveLock(lockarg){//«
@@ -1585,7 +1546,6 @@ rmMoveLock(lockarg){//«
 addMoveLock(lockarg){this.#moveLocks.push(lockarg);}
 async loadKids(opts={}) {//«
 	if (this.done && !opts.force) return;
-//	await populate_dirobj(this, opts);
 	await this.#popDir(this, opts);
 }//»
 async _getKids(opts={}) {//«
@@ -1593,12 +1553,10 @@ async _getKids(opts={}) {//«
 	if (!this.#done) await this.#popDir(this, opts);
 	return Object.values(this.#kids);
 }//»
-//get moveLocks(){return this.#moveLocks;}
 get isDir(){return true;}
 get nameList() {return Object.keys(this.#kids);}
 get kidList(){return Object.values(this.#kids);}
 get length() {return Object.keys(this.#kids).length;}
-//get isRoot(){return this.#isRoot;}
 get appName(){return this.#appName;}
 get haveKids(){return Object.keys(this.#kids).length > 0;}
 get list(){return this._getKids();}
@@ -1635,25 +1593,6 @@ get isEmpty(){ return db.checkEmpty(this.id); }
 getKid(name){return this.#kids[name];}
 mkHardLink(name, blobid){return make_hard_link(this, name, blobid);}
 mkSymLink(name, target, fullpath){return make_sym_link(this, name, target, fullpath);}
-/*
-mkDir(name, opts={}){//«
-if (name.match(/\x2f/)){
-cerr(`INVALID NAME IN MKDIR: ${name} (SLASH DETECTED)`);
-return;
-}
-	return this.#mkDir(name, opts);
-}//»
-mkNewFile(name, opts={}){//«
-if (name.match(/\x2f/)){
-cerr(`INVALID NAME IN MKNEWFILE: ${name} (SLASH DETECTED)`);
-return;
-}
-
-	return this.#mkNewFile(name, opts);
-}//»
-*/
-//get getBlob (){return this.#getBlob;}
-//get setBlob (){return this.#setBlob;}
 get done(){return this.#done;}
 static {
 //HISLKFNF
@@ -1893,21 +1832,18 @@ _set_sym_link = (node, val) => {node.#symLink = val;};
 
 }//»
 
-//TWKMJORH
+// This gets passed into the constructors of alterative file systems types
+const export_obj = { DirNode, FileNode, nodeUpdate: _node_update, dirUpdate: _dir_update };
 
+//TWKMJORH
+//is(Node|Dir|File)«
 const isNode=n=>{return (n instanceof FileNode || n instanceof DirNode || n instanceof LinkNode);};
 util.isNode = isNode;
 const isDir=n=>{return (n instanceof DirNode || n instanceof RootDirNode);};
 util.isDir = isDir;
 const isFile=n=>{return (n instanceof FileNode);};
 util.isFile = isFile;
-
-// This gets passed into the constructors of (usually network-based) 
-// alterative file systems types
-
-const export_obj = {
-	DirNode, FileNode, nodeUpdate: _node_update, dirUpdate: _dir_update
-};
+//»
 
 //»
 
@@ -2148,9 +2084,7 @@ const getPathByDirId=async(idarg)=>{//«
 const doFsRm = async(args, opts={})=>{//«
 //const doFsRm = async(args, errcb, opts={})=>{
 
-let { done_cb, no_rm_cb, dirsOnly } = opts;
-//	let{dirsOnly}=opts;
-	let cwd = opts.CWD;
+	let { done_cb, no_rm_cb, dirsOnly, cwd } = opts;
 	let arr = [];
 	let no_error = true;
 	if (!no_rm_cb){
@@ -2172,7 +2106,7 @@ let { done_cb, no_rm_cb, dirsOnly } = opts;
 			if (!node.done) is_empty = await node.isEmpty;
 			else is_empty = !node.haveKids;
 		}
-		let rv = node.canRm({isEmpty: is_empty, doFullDirs: opts.FULLDIRS || opts.fullDirs});
+		let rv = node.canRm({isEmpty: is_empty, doFullDirs: opts.doFullDirs });
 		if (rv !== true) {//«
 			if (isStr(rv)){
 				no_rm_cb(rv);
@@ -2185,7 +2119,6 @@ log(rv);
 			return;
 		}//»
 		if (dirsOnly && !node.isDir){
-//		if (dirsOnly && node.appName!==FOLDER_APP){
 			no_rm_cb(`${node.fullpath}: not a directory`);
 			no_error = false;
 			continue;
@@ -2193,64 +2126,42 @@ log(rv);
 		arr.push(node);
 	}
 	for (let node of arr) {
-//		if (!await delete_fobj(obj, opts)) no_error = false;
-		if (!await node.del(opts)) {
-cwarn("GOT ERROR!?!?!?!");
-			no_error = false;
+// OJNDMFJGH
+		if (await del_node(node)) {
+			_dir_update(2, node.par, node);// Remove the child
+			done_cb(node);
 		}
 		else {
-//cwarn(`CALL DONE_CB: ${node.fullpath}`);
-			done_cb(node);
+			no_error = false;
 		}
 	}
 	return no_error;
 };//»
 
 const del_node = async (node) => {//«
-	let typ = node.type;
-//	const OK_TYPES=[OP_FS_TYPE, SHM_FS_TYPE];
-//	if (!OK_TYPES.includes(node.type)) {
-	if (!RM_OK_FS_TYPES.includes(typ)) {
-cerr(`NOT DELETING NODE.TYPE: <${typ}> `);
-		return;
-	}
-	if (typ === FBASE_USER_GRP_FS_TYPE){
-cwarn(`NEED TO CALL SPECIAL DEL_NODE FUNCTION FOR: ${FBASE_USER_GRP_FS_TYPE}`);
-return node.backendDelNode();
-	}
-
-	let path = node.fullpath;
-	if (node.sys) {
-cerr("Not removing toplevel");
-		return;
-	}
-//	if (node.appName===FOLDER_APP){
-	if (node.isDir){
+	if (node.isDir){//«
 		await node.loadKids();
 		let kids = node.kidList;
+		let not_deleted = 0;
 		for (let kid of kids){
-cwarn(`Deleting:`, kid);
-			await kid.del(opts);
+cwarn(`Recursive delete: ${kid.fullpath}`);
+			if (!await kid.del(opts)) not_deleted++;
 		}
-	}
-	let id = node.id;
-	let parid = node.par.id;
-	if (!(id&&parid)) {
-		if (typ==SHM_FS_TYPE) {}
-		else {
-cerr(`NO ID && PARID???`);
+		if (not_deleted){
+cerr(`Could not delete ${not_deleted} kids in the directory: ${node.fullpath}`);
 log(node);
-log(node.par);
-cerr(`Could not remove: ${node.fullpath}`);
-			return;
+			return false;
 		}
-	}
-	if (!await db.removeNode(id, parid)) {
-cerr("FRYNBSJ");
-		return 
-	}
-//WMNJUGFNH
-	return true;
+	}//»
+// EHRJTKML
+	switch (node.type){//«
+		case OP_FS_TYPE: return db.removeNode(node.id, node.par.id); 
+		case FBASE_USER_GRP_FS_TYPE: return node.backendDelNode();
+		case SHM_FS_TYPE: return true;
+		default:
+cwarn(`WHAT TYPE IN del_node: ${node.type}`);
+			return false;
+	}//»
 };//»
 
 const clearStorage = async ()=>{//«
