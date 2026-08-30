@@ -70,8 +70,8 @@ but especially that the "node delete" pathway makes sense.
 I know we start with doFsRm. First we call canRm, then node.del(opts)
 @OJNDMFJGH. 
 
-In del_node (@EHRJTKML), we should pack all of the different cases 
-(OP_FS_TYPE, SHM_FS_TYPE, FBASE_USER_GRP_FS_TYPE) into a single 
+In del_node (@EHRJTKML), for maximal genericity, we should pack all of the
+different cases (OP_FS_TYPE, SHM_FS_TYPE, FBASE_USER_GRP_FS_TYPE) into a single
 invocation of `node.backendDelNode()`.
 
 »*/
@@ -1419,6 +1419,7 @@ log("Got: default: touchFile");
 	return touchFile(this, name, opts)
 
 }//»
+/*
 backendDelNode(){//«
 //cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
 // This is called *inside* of del_node...
@@ -1436,7 +1437,27 @@ THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelN
 
 
 }//»
+*/
+backendDelNode(){//«
+//cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
+// This is called *inside* of del_node...
+	if (this.type === SHM_FS_TYPE) return true;
+	if (this.type === OP_FS_TYPE) return db.removeNode(this.id, this.par.id); 
 
+	if (this._backendDelNode) {
+log("Got: this._backendDelNode");
+		return this._backendDelNode(this);
+	}
+	if (this.mntPar._backendDelNode) {
+log("Got: mntPar._backendDelNode");
+		return this.mntPar._backendDelNode(this);
+	}
+THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelNode!?!?!");
+
+// So calling del_node here might lead to infinite loops.
+
+
+}//»
 //Getters: name|par|ext|id|blobId|fullpath|...«
 get fullpath(){//«
 	let str = this.name;
@@ -2153,6 +2174,8 @@ log(node);
 			return false;
 		}
 	}//»
+	return node.backendDelNode();
+/*«
 // EHRJTKML
 	switch (node.type){//«
 		case OP_FS_TYPE: return db.removeNode(node.id, node.par.id); 
@@ -2162,6 +2185,7 @@ log(node);
 cwarn(`WHAT TYPE IN del_node: ${node.type}`);
 			return false;
 	}//»
+»*/
 };//»
 
 const clearStorage = async ()=>{//«
