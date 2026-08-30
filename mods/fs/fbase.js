@@ -461,8 +461,9 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/*8/30/26: «
 
-
+»*/
 /* 8/29/26: backendDelNode «
 
 @IREJNFMNJ: Just want to remove the given node. So just set the
@@ -2018,32 +2019,48 @@ return new Blob([str]);
 };//»
 const gen_set_blob = (grp_id) =>{//«
 
-return async (node, blob) => {
+return async (node, blob, opts) => {
 
 if (!cur_user) return;
 
+let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
 // SBRYRKTH
-cwarn("USERGRP.setBlob", node);
-let val = await blobTo64(blob);
-log(`B64 LENGTH: ${val.length}`);
+cwarn("USERGRP.setBlob", node, opts);
+
+//log(`B64 LENGTH: ${val.length}`);
 let bid = node.blobId;
 let obj = {};
-//if (bid === 0 || bid === NULL_BLOB_NODE_TYPE) {
 let need_update = false;
-if (bid === 0) {
+if (bid === 0) {//«
+// Append is ignored in this case
 bid = (new Date()).getTime(); // milliseconds
 cwarn(`New blobId: ${bid}`);
 
 // WWEURKTOX
 // undefined ----vvvvvvv !?!?! 
 	obj[`nodes/${node.id}/blobId`] = bid;
-need_update = true;
+	need_update = true;
+}//»
+else if (opts.append){//«
+cwarn("APPEND TO OLD BLOB");
+	let get_path = `${path}/blobs/${bid}`;
+	let get_ref = REF(get_path);
+	let rv = await GET(get_ref);
+	let orig_val = VAL(rv);
+	if (!(orig_val && orig_val.contents)){
+cwarn("COULD NOT GET THE ORIGINAL BLOB FOR APPENDING!!!");
+		return;
+	}
+	blob = new Blob([atob(orig_val.contents), blob]);
+
+}//»
+else {
+cwarn("UPDATE W/NEW VALUE");
 }
-else{
-cwarn("JUST UPDATE THE BLOB");
-}
-obj[`blobs/${bid}/contents`] = val;
-let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
+
+
+obj[`blobs/${bid}/contents`] = await blobTo64(blob);
+
 log(`SET THIS OBJ TO: PATH = <${path}>`);
 log(obj);
 

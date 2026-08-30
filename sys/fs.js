@@ -59,7 +59,7 @@ _dir_update(1, par, my_node);
 
 //»
 
-/* 8/30/26: Not much to worry about «
+/* 8/30/26: Study, refactor, generalize, etc «
 
 I mainly just want to refactor what I already have, generalize it, and use the
 result to create various other types of file system mounts.
@@ -1441,7 +1441,10 @@ THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelN
 backendDelNode(){//«
 //cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
 // This is called *inside* of del_node...
-	if (this.type === SHM_FS_TYPE) return true;
+	if (this.type === SHM_FS_TYPE) {
+// /dev/shm (Shared memory) has no backend, so this is a no-op
+		return true;
+	}
 	if (this.type === OP_FS_TYPE) return db.removeNode(this.id, this.par.id); 
 
 	if (this._backendDelNode) {
