@@ -2362,7 +2362,9 @@ return `fbase.js: not setting constant value: '${k}'`;
 
 };//»
 const populate_fbase_users = async (users_dir) => {//«
+
 // e.g. /mnt/users/
+//log(cur_user);
 if (!cur_user) return;
 
 // First, if using cache check for the existence of FBASE_USERS_CACHE_PATH
@@ -2407,10 +2409,11 @@ return;
 
 let new_obj = snap.val();
 for (let uid in new_obj) old_obj[uid] = new_obj[uid];
-
+//log(old_obj);
 // Add the kids, using the data option:
 // const opts={data: {fbaseUid: uid}};
 // These are all DirNode's...
+
 for (let uid in old_obj) {
 	let prof = old_obj[uid];
 // Also: picture, status, bio, updated[, votes]
@@ -2418,7 +2421,7 @@ for (let uid in old_obj) {
 	if (!prof['bio']) prof['bio'] = "[bio goes here]";
 	let name = prof.name;
 	let use_name = name.replace(/\s+/g, "").toLowerCase();
-
+//cwarn(`${use_name}`);
 	// If 'use_name' already exists as a dirname in /mnt/fbase/, then 
 	// just add numbers to the end of it.
 
@@ -2432,21 +2435,26 @@ for (let uid in old_obj) {
 //		type: FBASE_USER_DIR_FS_TYPE,
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
-		tryLoadKid: async (name)=>{
+		tryLoadKid: async (name)=>{//«
 /*
 Since the names of the dirs are currently arbitrarily given, then it makes no
 sense to have a literal system of looking up users based on predetermined
 dirnames.
 */
+//cwarn(`TRY LOAD KID: ${name}`);
 			await dir.loadKids();
 			return dir.getKid(name);
-		},
+		},//»
 		data: {
 			fbaseUid: uid,
 			fbaseProf: prof
 		},
 	});
 	_dir_update(1, users_dir, dir);
+
+let got = users_dir.getKid(use_name);
+log(`111 ${users_dir.fullpath}  ${use_name}: ${!!got}`);
+
 }
 
 // Call _dir_update() for setting done=true
@@ -2579,7 +2587,9 @@ let fbase_dir = new DirNode("fbase", par_node, {
 	type: FBASE_USERS_FS_TYPE,
 	loadKids: populate_fbase_users,
 	tryLoadKid: async (name)=>{
-		await fbase_dir.loadKids(); // dir.done is checked in loadKids()
+//cwarn("HIHIHI");
+//		await fbase_dir.loadKids(); // dir.done is checked in loadKids()
+		await populate_fbase_users(fbase_dir);
 		return fbase_dir.getKid(name);
 	}
 });

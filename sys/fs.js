@@ -2079,7 +2079,10 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 		else {//«
 			if (!curpar.done) {
 				let kid = await curpar.tryLoadKid(nm); //SHMYILYHG
-				if (!kid) return null;
+				if (!kid) {
+					kid = curpar.getKid(nm);
+					if (!kid) return null;
+				}
 				_dir_update(1, curpar, kid);
 				curpar = kid;
 			}
@@ -2102,6 +2105,10 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 	node = curpar.getKid(fname);
 	if (node||curpar.done) return maybe_done();
 	node = await curpar.tryLoadKid(fname);//BSGDUGTJK
+	if (!node) {
+		node = curpar.getKid(fname);
+	}
+//log(`222 ${curpar.fullpath}  ${fname}: ${!!node}`);
 	if (!node) return null;
 	_dir_update(1, curpar, node);
 	return maybe_done();
