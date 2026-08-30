@@ -59,7 +59,21 @@ _dir_update(1, par, my_node);
 
 //»
 
-/* 8/30/26: Study, refactor, generalize, etc «
+/* 8/30/26: Ideas «
+
+Claim: that there are 7 basic primities for any possible file system
+operations:
+
+3 for FileNodes: The given node already exists
+  - getBlob/setBlob
+  - backendDelNode
+
+4 for DirNodes: The given nodes need to be created or cached into memory 
+as children
+  - mkNewFile/mkDir: A node may be created
+  - tryLoadKid: A node may be cached
+  - loadKids: Many nodes may be cached
+
 
 I mainly just want to refactor what I already have, generalize it, and use the
 result to create various other types of file system mounts.
@@ -73,6 +87,7 @@ I know we start with doFsRm. First we call canRm, then node.del(opts)
 In del_node (@EHRJTKML), for maximal genericity, we should pack all of the
 different cases (OP_FS_TYPE, SHM_FS_TYPE, FBASE_USER_GRP_FS_TYPE) into a single
 invocation of `node.backendDelNode()`.
+
 
 »*/
 /* 8/26/26: Back to extending the fs  «
@@ -355,7 +370,7 @@ But, if hasRm=true, then we *can* do move's, but only via the cp_and_rm path.
 /* 7/20/26: Just made mkDir and mkNewFile on DirNode's  «
 
 These need to be passed in as args for alternative FS types,
-the same as w/ popDir, tryGetKid, getBlob, and setBlob.
+the same as w/ popDir, tryLoadKid, getBlob, and setBlob.
 
 
 
@@ -411,7 +426,7 @@ There we will:
    - e.g. /mnt/fbase
 
 Then when path_to_node is called on the children, the appropriate
-versions of popDir and tryGetKid will be called, which use the
+versions of popDir and tryLoadKid will be called, which use the
 FileNode/DirNode constructors to export the various "primitive" (db-centric) 
 fs methods into this module.
 
@@ -479,11 +494,11 @@ manually invoking (via CLI) the same init functions that were registered
 to the system in /mods/fs/net.js, and were called (but failed) during fs.init.
 
 »*/
-/*7/7/26: Now: Put a tryGetKid method on DirNode? «
+/*7/7/26: Now: Put a tryLoadKid method on DirNode? «
 
 For every file system type that is not in LOCAL_MNT_TYPES, we now require:
 	- FileNode to implement getBlob and setBlob (@SGJTPOL)
-	- DirNode to implement popDir and tryGetKid (@UDLMDHEK)
+	- DirNode to implement popDir and tryLoadKid (@UDLMDHEK)
 
 This is in anticipation of fully integrating the various REMOTE_FS_TYPE's
 of mounted file systems into LOTW.
@@ -1530,8 +1545,8 @@ class DirNode extends FSNode {//«
 #readOnly;
 #appName;
 #moveLocks;
-#popDir;
-#tryGetKid;
+#loadKids;
+#tryLoadKid;
 //#mkDir;
 //#mkNewFile;
 #done;
@@ -1546,8 +1561,8 @@ constructor(name, par, opts = {}) {//«
 	this.#readOnly = opts.readOnly;
 	this.#sys = opts.sys;
 
-	this.#popDir = opts.popDir || populate_dirobj;
-	this.#tryGetKid = opts.tryGetKid || try_get_fs_kid;
+	this.#loadKids = opts.loadKids || populate_dirobj;
+	this.#tryLoadKid = opts.tryLoadKid || try_get_fs_kid;
 
 	if (ALWAYS_DONE_DIR_FS_TYPES.includes(par.type)){
 		this.#done = true;
@@ -1557,7 +1572,7 @@ constructor(name, par, opts = {}) {//«
 	this.#moveLocks = [];
 
 }//»
-tryGetKid(nm){ return this.#tryGetKid(this, nm); }
+tryLoadKid(nm){ return this.#tryLoadKid(this, nm); }
 rmMoveLock(lockarg){//«
 	let locks = this.#moveLocks;
 	for (let i=0; i < locks.length; i++){
@@ -1570,11 +1585,11 @@ rmMoveLock(lockarg){//«
 addMoveLock(lockarg){this.#moveLocks.push(lockarg);}
 async loadKids(opts={}) {//«
 	if (this.done && !opts.force) return;
-	await this.#popDir(this, opts);
+	await this.#loadKids(this, opts);
 }//»
 async _getKids(opts={}) {//«
 //	if (!this.#done) await populate_dirobj(this, opts);
-	if (!this.#done) await this.#popDir(this, opts);
+	if (!this.#done) await this.#loadKids(this, opts);
 	return Object.values(this.#kids);
 }//»
 get isDir(){return true;}
@@ -2063,7 +2078,7 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 		if (gotkid) curpar = gotkid;
 		else {//«
 			if (!curpar.done) {
-				let kid = await curpar.tryGetKid(nm); //SHMYILYHG
+				let kid = await curpar.tryLoadKid(nm); //SHMYILYHG
 				if (!kid) return null;
 				_dir_update(1, curpar, kid);
 				curpar = kid;
@@ -2086,7 +2101,7 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 	if (!curpar.isDir) return maybe_done();
 	node = curpar.getKid(fname);
 	if (node||curpar.done) return maybe_done();
-	node = await curpar.tryGetKid(fname);//BSGDUGTJK
+	node = await curpar.tryLoadKid(fname);//BSGDUGTJK
 	if (!node) return null;
 	_dir_update(1, curpar, node);
 	return maybe_done();
@@ -2488,7 +2503,7 @@ for (let arr of mvarr) {//«
 
 //		if (NS.Desk && !dom_objects) NS.Desk.make_icon_if_new(await path_to_node(newpath));
 		winf(`Created: ${newpath}`);
-		if (!src_node.done) await popDir(src_node);
+		if (!src_node.done) await loadKids(src_node);
 		let arr = [];	
 		let kids = src_node.kidList;
 		for (let k of kids) arr.push(k.fullpath);
@@ -2708,7 +2723,7 @@ const write_blob = async(fent, blob, opts={}) => {//«
 //»
 
 const make_hard_link = async(parobj, name, blobid) =>{//«
-	if (!parobj.done) await popDir(parobj);
+	if (!parobj.done) await loadKids(parobj);
 	let got = parobj.getKid(name);
 	if (got) return got;
 
@@ -2728,7 +2743,7 @@ const touchFile = async(parobj, name, opts={})=>{//«
 
 	if (globals.read_only)return;
 
-	if (!parobj.done) await popDir(parobj);
+	if (!parobj.done) await loadKids(parobj);
 	let gotkid = parobj.getKid(name);
 	if (gotkid) return gotkid;
 	let parid = parobj.id;
@@ -2880,8 +2895,8 @@ const mk_user_dirs = async () => { //«
 		await mkDir("/home", cur_user, {noMakeIcon: true, perm: cur_user});
 //		await mkDir(home_path, "Desktop", {root: true, noMakeIcon: true});
 		await mkDir(home_path, "Desktop", { noMakeIcon: true});
-		await popDirByPath('/home');
-		await popDirByPath(home_path);
+		await loadKidsByPath('/home');
+		await loadKidsByPath(home_path);
 	} catch (e) {
 cerr(e);
 		return;
@@ -2968,8 +2983,8 @@ log(opts);
 }
 //»
 
-const popDir = (dirobj, opts = {}) => {return populate_dirobj(dirobj, opts);};
-const popDirByPath=(patharg, opts={})=>{return populate_dirobj_by_path(patharg, opts);};
+const loadKids = (dirobj, opts = {}) => {return populate_dirobj(dirobj, opts);};
+const loadKidsByPath=(patharg, opts={})=>{return populate_dirobj_by_path(patharg, opts);};
 
 const populate_dirobj_by_path = async(patharg, opts={}) => {//«
 	let obj = await path_to_node(patharg);
@@ -3357,7 +3372,7 @@ cerr(`Can't construct the path: ${par.fullpath}/${nm}/`);
 		if (!node) return;
 	}//»
 	if (opts.doPopDir && node.isDir===true){
-		await popDir(node, opts);
+		await loadKids(node, opts);
 	}
 	return node;
 };//»

@@ -3101,12 +3101,14 @@ if (!node.done){
 		}
 		dir_arr = dir_arr.sort();
 
+//log(dir_arr);
 		if (is_term) {//«
 			for (let nm of dir_arr){
 				if (nm.match(/\x20/)){
 					nm=`'${nm}'`;
 				}
 				let n = node.getKid(nm);
+//if (!n) continue;
 				if (n.isDir === true) {
 					types.push(DIR_NODE_TYPE);
 				}

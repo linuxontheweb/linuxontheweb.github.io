@@ -926,7 +926,7 @@ const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
 includes options for:
 	- type (FBASE_USERS_FS_TYPE == "fbase-users")
 	- popDir (populate_fbase_users)
-	- tryGetKid(name): 
+	- tryLoadKid(name): 
 		await users_dir.loadKids(); 
 		return users_dir.getKid(name);
 
@@ -1845,7 +1845,7 @@ let fbase_db;
 let fbase_auth;
 
 const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
-let users_cache_node;
+//let users_cache_node;
 
 let first_auth_change = false;
 
@@ -2175,7 +2175,7 @@ if (!cur_user) return;
 //	- setBlob
 // The DirNode's will implement: 
 // 	- *this* method for popDir
-//	- a method for tryGetKid that looks up particular nodes by the exact key.
+//	- a method for tryLoadKid that looks up particular nodes by the exact key.
 
 
 // 
@@ -2257,7 +2257,7 @@ grpDefs (@OLSHGTNSJ), and also return those.
 
 All DirNode's should be proper *groups*, implementing:
 popDir: populate_fbase_user_grp_dir
-tryGetKid(name): 
+tryLoadKid(name): 
 	await user_dir.loadKids(); // Calls populate_fbase_user_dir (if needed)
 	return user_dir.getKid(name)
 
@@ -2320,8 +2320,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 				fbaseUid: uid,
 				fbaseGrpId: PUB_DIR_ID,
 			},
-			popDir: populate_fbase_user_grp_dir,
-			tryGetKid: try_get_fbase_user_grp_kid,
+			loadKids: populate_fbase_user_grp_dir,
+			tryLoadKid: try_get_fbase_user_grp_kid,
 			perm: true, // HEREPUBPERM
 			getBlob: get_blob_func_pub,
 			setBlob: set_blob_func_pub,
@@ -2346,8 +2346,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 				fbaseUid: uid,
 				fbaseGrpId: PRV_DIR_ID,
 			},
-			popDir: populate_fbase_user_grp_dir,
-			tryGetKid: try_get_fbase_user_grp_kid,
+			loadKids: populate_fbase_user_grp_dir,
+			tryLoadKid: try_get_fbase_user_grp_kid,
 			perm: true, // HEREPRVPERM
 			getBlob: get_blob_func_prv,
 			setBlob: set_blob_func_prv,
@@ -2371,9 +2371,9 @@ if (!cur_user) return;
 // {uid1: {name, picture, status, bio, updated, votes, ...}, uid2: {...}, ...}
 
 //let cache_node = await FBASE_USERS_CACHE_PATH.toNode();
-let old_obj = await users_cache_node.json; 
-if (!old_obj) old_obj = {};
-
+//let old_obj = await users_cache_node.json; 
+//if (!old_obj) old_obj = {};
+let old_obj = {};
 // This will return DirNode's of type: FBASE_USER_DIR_FS_TYPE,
 // who will need to provide a popDir method like:
 // populate_fbase_user_dir
@@ -2417,7 +2417,7 @@ for (let uid in old_obj) {
 	if (!prof['status']) prof['status'] = "[status goes here]";
 	if (!prof['bio']) prof['bio'] = "[bio goes here]";
 	let name = prof.name;
-	let use_name = name.replace(/\s+/, "").toLowerCase();
+	let use_name = name.replace(/\s+/g, "").toLowerCase();
 
 	// If 'use_name' already exists as a dirname in /mnt/fbase/, then 
 	// just add numbers to the end of it.
@@ -2431,8 +2431,8 @@ for (let uid in old_obj) {
 	let dir = new DirNode(use_name, users_dir, {
 //		type: FBASE_USER_DIR_FS_TYPE,
 		type: FBASE_USER_MAIN_FS_TYPE,
-		popDir: populate_fbase_user_dir,
-		tryGetKid: async (name)=>{
+		loadKids: populate_fbase_user_dir,
+		tryLoadKid: async (name)=>{
 /*
 Since the names of the dirs are currently arbitrarily given, then it makes no
 sense to have a literal system of looking up users based on predetermined
@@ -2452,7 +2452,7 @@ dirnames.
 // Call _dir_update() for setting done=true
 _dir_update(3, users_dir, true);
 
-await users_cache_node.setValue(JSON.stringify(old_obj));
+//await users_cache_node.setValue(JSON.stringify(old_obj));
 
 };//»
 
@@ -2545,14 +2545,14 @@ get curUser(){return cur_user;}
 
 // par_node: the dir node for '/mnt'
 async init(par_node) {//«
-
+/*
 users_cache_node = await FBASE_USERS_CACHE_PATH.toNode({mkFile: true});
 
 if (!users_cache_node){
 cerr(`Could not get.create: ${FBASE_USERS_CACHE_PATH}`);
 return;
 }
-
+*/
 //cwarn("GOT", FBASE_USERS_CACHE_PATH);
 //log(users_cache_node);
 
@@ -2577,8 +2577,8 @@ fbase_auth_mod.onAuthStateChanged(fbase_auth, val=>{this.#authChangeCb(val);});
 
 let fbase_dir = new DirNode("fbase", par_node, {
 	type: FBASE_USERS_FS_TYPE,
-	popDir: populate_fbase_users,
-	tryGetKid: async (name)=>{
+	loadKids: populate_fbase_users,
+	tryLoadKid: async (name)=>{
 		await fbase_dir.loadKids(); // dir.done is checked in loadKids()
 		return fbase_dir.getKid(name);
 	}
