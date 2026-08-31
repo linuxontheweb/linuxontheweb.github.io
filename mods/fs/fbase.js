@@ -2074,6 +2074,9 @@ return;
 if (need_update){
 _node_update(4, node, bid);
 }
+
+_node_update(5, node, blob.size);
+
 return blob;
 
 }
@@ -2276,13 +2279,21 @@ log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
 			},
 // MSUYIOPLJ
 			getBlob: (node)=>{ return new Blob([prof[k]]); },
-			setBlob: async (node, blob)=>{//«
+			setBlob: async (node, blob, opts)=>{//«
 				if (cur_user && cur_user.uid === uid) {
 					if (k === "status" || k === "bio" ) {//«
 
 cwarn(`TRY SET ${k}`);
 log(node);
 						let path = `LOTW/prof/${cur_user.uid}`;
+
+if (opts.append){//«
+cwarn("APPEND TO OLD BLOB");
+
+	blob = new Blob([prof[k], blob]);
+
+}//»
+
 						let ref = REF(path);
 						let obj = {};
 						let str = await toStr(blob);
@@ -2293,6 +2304,7 @@ cerr(`COULD NOT UPDATE PATH: ${path}`);
 							return;
 						}
 						prof[k] = str; // Just cache this for easy retrieval
+						_node_update(5, node, blob.size);
 						return blob;
 					}//»
 					else {//«
@@ -2322,7 +2334,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 			},
 			loadKids: populate_fbase_user_grp_dir,
 			tryLoadKid: try_get_fbase_user_grp_kid,
-			perm: true, // HEREPUBPERM
+			perm: true,
 			getBlob: get_blob_func_pub,
 			setBlob: set_blob_func_pub,
 			mkDir: mk_dir_func_pub,
@@ -2433,6 +2445,7 @@ for (let uid in old_obj) {
 // YFKMYOGJT
 	let dir = new DirNode(use_name, users_dir, {
 //		type: FBASE_USER_DIR_FS_TYPE,
+		perm: true,
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
 		tryLoadKid: async (name)=>{//«

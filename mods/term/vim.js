@@ -1995,11 +1995,6 @@ const edit_save = async(if_nostat, com_opts={})=>{//«
 				Term.curEditNode = edit_fobj;
 				edit_fobj.lockFile();
 			}
-			if (Desk) {
-//				Desk.make_icon_if_new(node);
-cwarn(`Not calling make_icon_if_new, w/ new node:`);
-log(node);
-			}
 			if (!if_nostat) {
 				if (write_err) stat_message_type = STAT_ERR;
 				stat_message = `${edit_fname} ${numlines+add_splice_lines}L, ${node.size}C written${write_err}`;
