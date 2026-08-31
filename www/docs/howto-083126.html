@@ -1,0 +1,213 @@
+<html>
+<head>
+</head>
+<body>
+<b>
+by Dennis Kane<br>
+August 31, 2026
+</b>
+
+<hr><hr>
+<center>
+<h3>*** INTRODUCTION ***</h3>
+</center>
+
+<hr>
+
+<p>
+To get the following "machinery" to work, every millisecond of the past 15 years has been necessary, whether for the purposes of active development, or for forgetting everything I thought had been important, followed by taking maybe a half-year off, and then starting over with a renewed spirit, and having absorbed important, perhaps somewhat painful lessons.
+
+<p>
+I just recently found out that Google has a dedicated AI overview for my project when the search term is "linuxontheweb" (all-one-word). That is a major cause for joy in my book because I spend so much time yelling that term into the void of the busy street corners of the college town I inhabit, taking special care that everyone realizes that Linux on the Web should indeed be understood as existing in the form of all-one-word.
+
+<p>
+Instead of exhaustively reading through everything below, you might want to send the following information through Google's AI mode, to get a higher-level perspective of what I'm trying to say. Then, if you so wish, you can continue to try parsing it all at your own leisure.
+
+<p>
+This is a very rough working prototype for a basic way to keep in touch through the LOTW shell (via writing to shared files that may double as status update messages, etc). Here are the steps.
+
+
+<hr><hr>
+
+<p>
+<center>
+<h3>
+*** STEP-BY-STEP INSTRUCTIONS ***
+</h3>
+</center>
+
+<hr>
+
+<p>
+1) Go to the following URL and log in to Google:
+
+<p>
+&nbsp;&nbsp;  - <a href="https://linuxontheweb.github.io/login">
+https://linuxontheweb.github.io/login
+</a>
+
+<hr>
+
+<p>
+2) Upon successful login, go to the following URL:
+
+<p>
+&nbsp;&nbsp;  - <a href="https://linuxontheweb.github.io/desk?mnt_fbase=1">
+https://linuxontheweb.github.io/desk?mnt_fbase=1
+</a>
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;The part at the end ("mnt_fbase=1") is like a "system flag", which tells the system that you want to use the experimental Firebase (backend database) features.
+
+
+<hr>
+<p>
+3) Open the Terminal application, using one of these methods.
+
+<p>
+&nbsp;&nbsp;  - Click `Begin =&gt; Terminal`
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;  - Or use the shortcut by pressing Alt+t
+
+
+<hr>
+<p>
+4) At the Terminal prompt, enter the following command
+
+<p>
+&nbsp;&nbsp;  - <code>cd /mnt/fbase</code>
+&nbsp;&nbsp;
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;This changes the working directory to the experimental Firebase "mounted" directory.
+
+
+
+<hr>
+<p>
+5) Enter the following command: 
+
+<p>
+&nbsp;&nbsp;  - <code>ls</code>
+&nbsp;&nbsp;
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;You should see at least 2 "user directories".
+
+
+<hr>
+<p>
+6) Enter the following command: 
+
+<p>
+&nbsp;&nbsp;   - <code>cd slartibartfast</code>
+&nbsp;&nbsp;
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;This changes you into my personal user directory. You don't need to type the entire name. Typing "cd sla", followed by the Tab key, should "auto-complete" the "sla" to "slartibartfast". Then hit Enter after it has completed the full command.
+
+
+<hr>
+<p>
+7) Enter the following command: 
+
+<p>
+&nbsp;&nbsp;  - <code>ls</code>
+&nbsp;&nbsp;
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;You will see several files (colored in gray, e.g. "bio" and "name") and at least 1 subdirectory (colored in blue, e.g. "pub")
+
+
+<hr>
+<p>
+8) You can inspect the files with the "cat" command ("less" also works, but you need to type "q" to escape from it). So to see the contents of the "status" command, type
+
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;  - <code>cat status </code>
+&nbsp;&nbsp;
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;  or
+&nbsp;&nbsp;
+&nbsp;&nbsp;<p>
+&nbsp;&nbsp;  - <code>less status</code> (followed by "q" after you are finished)
+
+
+<hr>
+<p>
+9) In order to write to your updateable files (i.e. "status" and "bio"), the most straightforward option is to "cd" into your own user directory (with the steps indicated above) and do one of the following:
+
+
+<p>
+&nbsp;&nbsp;  a) unquoted echo w/ redirect:
+ 
+<p>
+&nbsp;&nbsp;     - <code>echo   Hello   these   spaces   are   ignored   &gt; status</code>
+
+
+<p>
+&nbsp;&nbsp;  b) double-quoted echo w/ redirect and shell variable substitution:
+
+<p>
+&nbsp;&nbsp;    - <code>echo " I  am  '$USER'  and  these   spaces   are   preserved   "  &gt; status  </code>
+
+
+<p>
+&nbsp;&nbsp;  c) single-quoted echo w/ redirect and *no* shell variable substitution:
+
+<p>
+&nbsp;&nbsp;    - <code>echo '"$USER" will not be replaced  and   these   spaces   are   preserved   ' &gt; status</code>
+
+
+<p>
+&nbsp;&nbsp;  d) dollar-single-quoted echo w/ redirect, *no* shell variable substitution, and escape-style character interpolation:
+
+<p>
+&nbsp;&nbsp;    - <code>echo $'\x22$USER\x22 will not be replaced\nThis is line 2\n\nThis is line 4' &gt; status</code>
+
+
+<p>
+&nbsp;&nbsp;  e) replace the above "clobbering" redirect ('&gt;') with the non-clobbering variant ('&gt;&gt;') in order to perform file appending:
+
+<p>
+&nbsp;&nbsp;    - <code>echo This line gets appended to the end of my bio &gt;&gt; bio</code>
+
+<hr>
+
+<p>
+Note: In general, to write to a given file in the file system, you only need to supply the full path on the command line:
+
+<p>
+&nbsp;&nbsp;    - <code>echo "No matter where I am in the file system, doing this should probably work" &gt; /home/me/Desktop/my_file.txt</code>
+
+
+<hr><hr>
+
+
+<p>
+<center>
+<h3>
+*** SYSTEM DESCRIPTION ***
+</h3>
+</center>
+
+<hr>
+
+<p>
+The "bio" file is meant to be a (somewhat) permanent, relatively long statement of your life and long-term dreams, up to 2,500 characters in length.
+
+<p>
+The "status" file tells your immediate "life status", sort of like when you are updating your current thoughts on Facebook or Twitter, and can only be up to 250 characters.
+
+<p>
+Both of those files ("bio" and "status") are "owner writable" and "world readable", which means that only the specific logged-in user (whose name is used as the name of the directory) can update them, while any logged-in user can view them. The other files ("name", "picture", etc.) can not be changed: the system itself sets these values based on your logged-in credentials.
+
+<p>
+All of these files are considered elements of one's "profile", any are readable by any user who is logged into the system with Google.
+
+<p>
+The subdirectories of the user directories are a different matter. If you are inside your own user directory, you should see a subdirectory called "prv" (in addition to "pub"). The main difference when it comes to these subdirectories is the permissions for reading the files within them. For both of these directories, only the owner can modify them by creating or editing files. In the "prv" directory, nobody else can read the files, while every logged-in user can read the files in "pub". For that matter, nobody else should be able to even *see* anyone else's "prv" subdirectory, but the question of whether any individual subdirectories can technically be *seen* is different from the much more important question of a) whether their listings (including file and subdirectory names) can been seen, and b) whether the *contents* of their listings (i.e. sub-listings or actual file contents) can be seen. In other words, files should tend to be kept "hidden away" in the "prv" subdirectory for a very good reason, i.e. related to the "secret sauce" of one's personal life. 
+
+<p>
+Everything that exists in the Firebase backend database is meant to be seamlessly integrated with the singular Linux-like file system, which is used, largely, for purposes of local, scratch, quasi-persistent file storage: you should assume that the browser might, at any time, "evict" these files and folders, if it determines that your computer is running out of disk space. This issue of fundamental browser-centric impermanence is perhaps the main reason why LOTW should be seen as a solution for *experimental* work rather than for the main work that one absolutely needs to get by in their everyday lives.
+
+<p>
+Important: you need to ensure that you have successfully logged in with Google (in step 1 above) in order to get any use out of the features described herein.
+
+</body>
+</html>
