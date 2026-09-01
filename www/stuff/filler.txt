@@ -1,0 +1,19 @@
+So, here's something I would like to have if you think it is possible. I will
+describe it by telling you about something I did with my own software. I did
+this back in the old, old days in FORTH on our TRS-80 computer no less. I had
+various UI applications that had forms with fields to fill out, so I created a
+background "form-filler" process (i.e., play function):
+
+a script file (or array) that contained data to fill out (appear to type) into
+the respective fields,
+
+a "player" function that would advance through the script one field of data at
+a time, 
+
+a "typer" that would type the data characters into the field at a speed that
+was human readable, and
+
+it would "hit" the enter/submit button (or the CR) to advance to the result.
+
+There may or may not have been a pause(t) script item, or pause key, to allow a
+viewer to think before advancing the play function.

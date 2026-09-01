@@ -2309,9 +2309,9 @@ cwarn("APPEND TO OLD BLOB");
 }//»
 
 						let str = await toStr(blob);
-let max = MAX_FILE_SIZE_MAP[k];
-let diff = blob.size - max;
-if (diff > 0) return `cannot save: ${diff} too many characters!`;
+						let max = MAX_FILE_SIZE_MAP[k];
+						let diff = blob.size - max;
+						if (diff > 0) return `cannot save: ${diff} too many characters!`;
 
 						let ref = REF(path);
 						let obj = {};

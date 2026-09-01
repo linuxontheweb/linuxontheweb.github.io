@@ -1210,7 +1210,7 @@ cwarn("BLOCKED");
 
 }//»
 
-//FSNode«
+//FS/File/Dir/Link Node classes«
 
 const LOCKED_BLOBS = {};
 

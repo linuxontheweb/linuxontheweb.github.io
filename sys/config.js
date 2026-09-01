@@ -164,6 +164,7 @@ const SHELL_ERROR_CODES={
 
 const APPLICATIONS_MENU = [//«
 	"Text\xa0Editor","TextEdit",
+	"Form\xa0Filler", "dev.FormFiller",
 	"Unicode\xa0Symbols", "util.Unicoder",
 	"Your\xa0App\xa0Here", "dev.YourApp",
 	"Any\xa0Other", 0,
