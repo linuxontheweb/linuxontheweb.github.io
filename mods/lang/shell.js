@@ -1658,12 +1658,12 @@ if (!parnode){
 if (!parnode.writeable) {
 	return `${use_fname}: read only`;
 }
+if (!parnode.perm) {
+	return `${use_fname}: permission denied`;
+}
 
 // Simplify this by creating the node if needed, like above
 if (!node){
-	if (!parnode.perm) {
-		return `${use_fname}: permission denied`;
-	}
 
 	node = await parnode.mkNewFile(nm);
 	if (!node) return `${use_fname}: could not create the new file`;

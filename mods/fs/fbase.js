@@ -461,6 +461,14 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/*9/1/26: Hard work done?
+Just needs beta-testing?
+*/
+/*8/31/26 Just added `perm: true` to the FBASE_USER_MAIN_FS_TYPE type DirNode «
+
+@UOIONWEJR
+
+»*/
 /*8/30/26: «
 
 »*/
@@ -2444,8 +2452,7 @@ for (let uid in old_obj) {
 	}
 // YFKMYOGJT
 	let dir = new DirNode(use_name, users_dir, {
-//		type: FBASE_USER_DIR_FS_TYPE,
-		perm: true,
+		perm: true, // UOIONWEJR
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
 		tryLoadKid: async (name)=>{//«
