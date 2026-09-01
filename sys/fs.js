@@ -59,6 +59,10 @@ _dir_update(1, par, my_node);
 
 //»
 
+/* 9/1/26:«
+
+
+»*/
 /* 8/30/26: Ideas «
 
 Claim: that there are 7 basic primities for any possible file system
@@ -1301,10 +1305,7 @@ class FSNode {//«
 
 //Private «
 //NDITPLOI
-//#root; // Bad
 #data;
-//#mntPar; // OK
-//#type;
 #blobId;
 #id;
 #par;
@@ -1434,25 +1435,6 @@ log("Got: default: touchFile");
 	return touchFile(this, name, opts)
 
 }//»
-/*
-backendDelNode(){//«
-//cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
-// This is called *inside* of del_node...
-	if (this._backendDelNode) {
-log("Got: this._backendDelNode");
-		return this._backendDelNode(this);
-	}
-	if (this.mntPar._backendDelNode) {
-log("Got: mntPar._backendDelNode");
-		return this.mntPar._backendDelNode(this);
-	}
-THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelNode!?!?!");
-
-// So calling del_node here might lead to infinite loops.
-
-
-}//»
-*/
 backendDelNode(){//«
 //cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
 // This is called *inside* of del_node...
@@ -1536,6 +1518,166 @@ default: THROW(`WHAT WHICH IS THIS: ${which}`);
 }//»
 
 }//»
+
+class FileNode extends FSNode {//«
+
+//SKMTNHGM
+// Private «
+#lock;
+#entry;
+#memBlob;
+//»
+constructor(name, par, opts={}) {//«
+	super(name, par, opts);
+	this.#lock = {};
+}//»
+get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
+async getRealBlobId(){//«
+	let bid = get_blob_id();
+	_node_update(4, this, bid);
+	if (!await db.setNodeBlobID(this.id, bid)) {
+cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
+		return;
+	}
+	return true;
+}//»
+async getValue(opts={}){//«
+	let getter = this.getBlob;
+	return getter(this, opts);
+}//»
+async setValue(val, opts={}){//«
+	let blob = toBlob(val);
+	if (!blob){
+cerr("Unknown value", val);
+		return;
+	}
+	return this.setBlob(blob, opts);
+}//»
+write(val, opts){return this.setValue(val, opts);}
+unlockFile(){//«
+	delete LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];
+	let par = this.par;
+	while (par){
+		if (!par.perm) break;
+		par.rmMoveLock(this.#lock);
+		par = par.par;
+	}
+}//»
+async lockFile(){//«
+	if (this.blobId === NULL_BLOB_NODE_TYPE){
+		await this.getRealBlobId();
+	}
+	LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`] = true;
+	let par = this.par;
+	while (par){
+		if (!par.perm) break;
+		par.addMoveLock(this.#lock);
+		par = par.par;
+	}
+}//»
+async _getEntry(){//«
+	if (this.#entry) return this.#entry;
+	let id = this.blobId;
+	if (id === NULL_BLOB_NODE_TYPE){
+		id = get_blob_id();
+		_node_update(4, this, id);
+	}
+	else if (this.type==SHM_FS_TYPE) return;
+	else if (!Number.isFinite(id)) {
+cerr(`The node does not have a valid blobId: ${id}`);
+log(this);
+		return;
+	}
+	let ent = await get_blob_entry(id);
+	this.#entry = ent;
+	return ent;
+}//»
+
+get writeable(){ return this.par.writeable; }
+get isFile(){return true;}
+get entry(){return this._getEntry();}
+get useMemBlob(){return this.type === SHM_FS_TYPE;}
+get memBlob(){//«
+	if (this.#memBlob) return this.#memBlob;
+
+if (!this.useMemBlob) {
+cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
+}
+	return new Blob([]);
+
+}//»
+
+get buffer(){//«
+	if (this.useMemBlob) return this.memBlob.buffer;
+	return(async()=>{
+		let getter = this.getBlob;
+		let blob = await getter(this);
+		return blob_to_ret_val(blob, {buffer: true});
+	})();
+}//»
+get bytes(){//«
+	if (this.useMemBlob) return util.toBytes(this.memBlob);
+	return(async()=>{
+		let blob = await this.getBlob();
+		return blob_to_ret_val(blob, {bytes: true});
+	})();
+}//»
+get text(){//«
+	if (this.useMemBlob) return util.toStr(this.memBlob);
+	return(async()=>{
+		let blob = await this.getBlob();
+		return blob_to_ret_val(blob, {text: true});
+	})();
+}//»
+get json(){//«
+	return (async ()=>{
+		let txt = await this.text;
+		if (!isStr(txt)) return;
+		let rv;
+		try{
+			rv = JSON.parse(txt);
+		}
+		catch(e){
+cwarn(`CAUGHT: ${this.fullpath}`);
+cerr(e);
+return;
+		}
+		return rv;
+	})();
+}//»
+get blob(){//«
+	if (this.useMemBlob) return this.memBlob;
+	return this.getBlob();
+}//»
+get file(){//«
+	if (this.useMemBlob) return this.memBlob;
+	return this.getBlob();
+}//»
+
+get baseName(){//«
+	let arr = getNameExt(this.name);
+	if (arr[1]) return arr[0];
+	return this.name;
+}//»
+get ext(){//«
+	return getNameExt(this.name)[1] || null;
+//	return getNameExt(this.name)[1] || ""; // This would imply that there *is* and extension
+}//»
+get appName(){//«
+	let arr = getNameExt(this.name);
+	if (arr[1]) return util.extToApp(arr[1]);
+	return "";
+}//»
+
+static {//«
+
+_set_mem_blob = (node, blob)=>{
+	node.#memBlob = blob;
+}
+
+}//»
+
+}//»
 class DirNode extends FSNode {//«
 //JDPEIO
 // Private «
@@ -1547,11 +1689,9 @@ class DirNode extends FSNode {//«
 #moveLocks;
 #loadKids;
 #tryLoadKid;
-//#mkDir;
-//#mkNewFile;
 #done;
 //#getBlob;
-#setBlob;
+//#setBlob;
 //»
 constructor(name, par, opts = {}) {//«
 
@@ -1669,180 +1809,6 @@ cerr(`'${dir.fullpath}/${val.name}': DOES NOT EXIST`);
 };//»
 
 }
-
-}//»
-class FileNode extends FSNode {//«
-
-//SKMTNHGM
-// Private «
-//#getBlob;
-//#setBlob;
-
-#lock;
-#entry;
-#memBlob;
-//»
-constructor(name, par, opts={}) {//«
-	super(name, par, opts);
-	this.#lock = {};
-}//»
-get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
-async getRealBlobId(){//«
-	let bid = get_blob_id();
-	_node_update(4, this, bid);
-	if (!await db.setNodeBlobID(this.id, bid)) {
-cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
-		return;
-	}
-	return true;
-}//»
-async getValue(opts={}){//«
-//	if (!this.okGet()) return;
-// return this.#blobGetter(this.opts);
-//	return get_blob(this, opts);
-//	return this.#getBlob(this, opts);
-	let getter = this.getBlob;
-	return getter(this, opts);
-}//»
-async setValue(val, opts={}){//«
-	let blob = toBlob(val);
-	if (!blob){
-cerr("Unknown value", val);
-		return;
-	}
-	return this.setBlob(blob, opts);
-}//»
-write(val, opts){return this.setValue(val, opts);}
-unlockFile(){//«
-	delete LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];
-//	delete LOCKED_BLOBS[this.blobId];
-	let par = this.par;
-	while (par){
-//		if (par.isRoot) break;
-		if (!par.perm) break;
-		par.rmMoveLock(this.#lock);
-		par = par.par;
-	}
-}//»
-async lockFile(){//«
-	if (this.blobId === NULL_BLOB_NODE_TYPE){
-		await this.getRealBlobId();
-	}
-	LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`] = true;
-	let par = this.par;
-	while (par){
-//		if (par.isRoot) break;
-		if (!par.perm) break;
-//		par.moveLocks.push(this.#lock);
-		par.addMoveLock(this.#lock);
-		par = par.par;
-	}
-}//»
-async _getEntry(){//«
-	if (this.#entry) return this.#entry;
-//	if (!this.okGet()) return;
-	let id = this.blobId;
-	if (id === NULL_BLOB_NODE_TYPE){
-		id = get_blob_id();
-		_node_update(4, this, id);
-	}
-	else if (this.type==SHM_FS_TYPE) return;
-	else if (!Number.isFinite(id)) {
-cerr(`The node does not have a valid blobId: ${id}`);
-log(this);
-		return;
-	}
-	let ent = await get_blob_entry(id);
-	this.#entry = ent;
-	return ent;
-}//»
-
-get writeable(){ return this.par.writeable; }
-get isFile(){return true;}
-get entry(){return this._getEntry();}
-get useMemBlob(){return this.type === SHM_FS_TYPE;}
-get memBlob(){//«
-	if (this.#memBlob) return this.#memBlob;
-
-if (!this.useMemBlob) {
-cerr(`WHY ACCESS node.memBlob IF !node.useMemBlob?!?!`);
-}
-	return new Blob([]);
-
-}//»
-
-get buffer(){//«
-	if (this.useMemBlob) return this.memBlob.buffer;
-	return(async()=>{
-		let getter = this.getBlob;
-		let blob = await getter(this);
-		return blob_to_ret_val(blob, {buffer: true});
-	})();
-}//»
-get bytes(){//«
-	if (this.useMemBlob) return util.toBytes(this.memBlob);
-	return(async()=>{
-		let blob = await this.getBlob();
-		return blob_to_ret_val(blob, {bytes: true});
-	})();
-}//»
-get text(){//«
-	if (this.useMemBlob) return util.toStr(this.memBlob);
-	return(async()=>{
-		let blob = await this.getBlob();
-		return blob_to_ret_val(blob, {text: true});
-	})();
-}//»
-get json(){//«
-	return (async ()=>{
-		let txt = await this.text;
-		if (!isStr(txt)) return;
-//log(`txt: <${txt}> (${txt.length})`);
-		let rv;
-		try{
-			rv = JSON.parse(txt);
-		}
-		catch(e){
-cwarn(`CAUGHT: ${this.fullpath}`);
-cerr(e);
-return;
-		}
-		return rv;
-	})();
-}//»
-get blob(){//«
-	if (this.useMemBlob) return this.memBlob;
-	return this.getBlob();
-}//»
-get file(){//«
-	if (this.useMemBlob) return this.memBlob;
-	return this.getBlob();
-}//»
-
-
-get baseName(){//«
-	let arr = getNameExt(this.name);
-	if (arr[1]) return arr[0];
-	return this.name;
-}//»
-get ext(){//«
-	return getNameExt(this.name)[1] || null;
-//	return getNameExt(this.name)[1] || ""; // This would imply that there *is* and extension
-}//»
-get appName(){//«
-//cwarn(`name: ${this.name}`);
-	let arr = getNameExt(this.name);
-	if (arr[1]) return util.extToApp(arr[1]);
-	return "";
-}//»
-
-static {//«
-
-_set_mem_blob = (node, blob)=>{
-	node.#memBlob = blob;
-}
-
-}//»
 
 }//»
 class LinkNode extends FSNode {//«

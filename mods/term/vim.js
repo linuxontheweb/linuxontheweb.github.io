@@ -2057,6 +2057,7 @@ cerr(e);
 			write_err = " (bad JSON)";
 		}
 	}
+//	let rv;
 	let node;
 	if (edit_fobj) {//«
 
@@ -2065,14 +2066,18 @@ cerr(e);
 			stat_err("Permission denied");
 			return;
 		}
-		if (await edit_fobj.setValue(val)){
+		if (rv = await edit_fobj.setValue(val)){
+			if (isStr(rv)) return stat_warn(rv);
+//log("RV", rv);
+//stat_warn("TESTING SET_VALUE W/ ERROR");
+//return;
 			node = edit_fobj;
 		}
 
 	}//»
 	else {//«
 
-		let rv = await usepath.toParNodeAndName();
+		rv = await usepath.toParNodeAndName();
 		if (!(rv && rv[0] && rv[1])) {
 			stat_err(`${usepath}: resolution failed`);
 			return;
@@ -2086,7 +2091,10 @@ log(obj);
 			stat_err(`${usepath}: could not create the file`);
 			return;
 		}
-		if (await obj.setValue(val)) node = obj;
+		if (rv = await obj.setValue(val)) {
+			if (isStr(rv)) return stat_warn(rv);
+			node = obj;
+		}
 
 	}//»
 	return write_cb_func(node);

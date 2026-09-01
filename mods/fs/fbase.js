@@ -461,8 +461,10 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*9/1/26: Hard work done?
+/*9/1/26: Put a too many chars message for status and bio
 Just needs beta-testing?
+
+
 */
 /*8/31/26 Just added `perm: true` to the FBASE_USER_MAIN_FS_TYPE type DirNode «
 
@@ -2273,6 +2275,10 @@ tryLoadKid(name):
 	return user_dir.getKid(name)
 
 »*/
+const MAX_FILE_SIZE_MAP = {
+"status": 250,
+"bio": 2500
+};
 
 	if (!cur_user) return;
 log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
@@ -2294,7 +2300,7 @@ log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
 cwarn(`TRY SET ${k}`);
 log(node);
 						let path = `LOTW/prof/${cur_user.uid}`;
-
+//return "SO YOU WANT TO SAVE THIS????";
 if (opts.append){//«
 cwarn("APPEND TO OLD BLOB");
 
@@ -2302,9 +2308,13 @@ cwarn("APPEND TO OLD BLOB");
 
 }//»
 
+						let str = await toStr(blob);
+let max = MAX_FILE_SIZE_MAP[k];
+let diff = blob.size - max;
+if (diff > 0) return `cannot save: ${diff} too many characters!`;
+
 						let ref = REF(path);
 						let obj = {};
-						let str = await toStr(blob);
 						obj[`${k}`] = str;
 						let rv = await UPDATE(ref, obj);
 						if (rv !== true){
