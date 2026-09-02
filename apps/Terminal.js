@@ -1,12 +1,13 @@
 (()=>{"use strict";const APPNAME="Terminal";
+/*9/2/26: Want to allow instant auto-completion of folders + slashes...
 
+*/
 /* 8/4/26: First real use of String.toNode({mkFile: true})«
 
 Now when getting the shell history file node (@SHEJTNYKD), all of the necessary
 subfolders will be created (namely, ~/.history).
 
 »*/
-
 /*6/10/26: How to enable printing again on the same line?«
 
 This is like updating a status line.
@@ -1857,16 +1858,18 @@ async doContents(contents, use_dir, tok, arr_pos){//«
 			str+=gotch;
 			handle_chars+=gotch;
 		}
-//log(type === LINK_APP);
-		if (type==FOLDER_APP) {
-			if (!handle_chars.length) handle_chars = "/";
+
+		if (type==FOLDER_APP) {//«
+			if (handle_chars.length) handle_chars += "/";
+			else handle_chars = "/";
+
 			let node = await `${use_dir}/${str}`.toNode();
 			if (node) await node.loadKids();
-		}
-		else if (type=="appDir"||type=="libDir"){
+		}//»
+		else if (type=="appDir"||type=="libDir"){//«
 			handle_chars+=".";
-		}
-		else if (type==LINK_APP) {
+		}//»
+		else if (type==LINK_APP) {//«
 //log(contents);
 			let link = contents[0][2];
 			if (!link){
@@ -1892,13 +1895,13 @@ cwarn("WHAT DOES THIS MEAN: !contents[0][2]?!?!?!?");
 					}
 				}
 			}
-		}
-		else {
+		}//»
+		else {//«
 			if (!this.lines[this.cy()][this.x]) {
 				handle_chars+=" ";
 			}
-		}
-//		if (this.ssh_server) return this.ssh_server.send(JSON.stringify({chars: handle_chars}));
+		}//»
+
 		for (let c of handle_chars) this.handleLetterPress(c);
 	}//»
 	else if (contents.length > 1) {//«

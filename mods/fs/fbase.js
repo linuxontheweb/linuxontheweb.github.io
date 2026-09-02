@@ -461,11 +461,11 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*9/1/26: Put a too many chars message for status and bio
-Just needs beta-testing?
+/*9/2/26: How to "protect" a directory that takes a while to be populated?  «
 
+Here we are seeing those duplicates @CVXOERHJN
 
-*/
+»*/
 /*8/31/26 Just added `perm: true` to the FBASE_USER_MAIN_FS_TYPE type DirNode «
 
 @UOIONWEJR
@@ -1859,6 +1859,7 @@ const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
 
 let first_auth_change = false;
 
+let is_populating_users = false;
 //»
 //Funcs «
 
@@ -2281,7 +2282,7 @@ const MAX_FILE_SIZE_MAP = {
 };
 
 	if (!cur_user) return;
-log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
+//log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
 	let uid = user_dir.getData("fbaseUid");
 	let prof = user_dir.getData("fbaseProf");
 	for (let k in prof) {//«
@@ -2336,7 +2337,6 @@ return `fbase.js: not setting constant value: '${k}'`;
 		});
 		_dir_update(1, user_dir, node);
 	}//»
-//log(`TYPE: ${FBASE_USER_GRP_FS_TYPE}`);
 // YGJDPLKIU
 	{// Mount "pub" for everyone «
 		let mk_dir_func_pub = gen_mk_dir(PUB_DIR_ID);
@@ -2394,23 +2394,11 @@ return `fbase.js: not setting constant value: '${k}'`;
 const populate_fbase_users = async (users_dir) => {//«
 
 // e.g. /mnt/users/
-//log(cur_user);
 if (!cur_user) return;
+if (is_populating_users) return;
+is_populating_users = true;
 
-// First, if using cache check for the existence of FBASE_USERS_CACHE_PATH
-
-// I am guessing the returned values come in the form of:
-// {uid1: {name, picture, status, bio, updated, votes, ...}, uid2: {...}, ...}
-
-//let cache_node = await FBASE_USERS_CACHE_PATH.toNode();
-//let old_obj = await users_cache_node.json; 
-//if (!old_obj) old_obj = {};
 let old_obj = {};
-// This will return DirNode's of type: FBASE_USER_DIR_FS_TYPE,
-// who will need to provide a popDir method like:
-// populate_fbase_user_dir
-
-// If not, run a query based on certain index values
 
 let ref = fbase_db_mod.ref(fbase_db, "LOTW/prof");
 
@@ -2435,13 +2423,10 @@ cwarn("GOT !snap.exists()!!!");
 return;
 }
 
-// If a cache exists, merge the returned profiles with the existing ones
 
 let new_obj = snap.val();
 for (let uid in new_obj) old_obj[uid] = new_obj[uid];
-//log(old_obj);
-// Add the kids, using the data option:
-// const opts={data: {fbaseUid: uid}};
+
 // These are all DirNode's...
 
 for (let uid in old_obj) {
@@ -2457,11 +2442,12 @@ for (let uid in old_obj) {
 
 	if (users_dir.getKid(use_name)) {
 		let iter=1;
+// CVXOERHJN
 		while (users_dir.getKid(`${use_name}${iter}`)) iter++;
 		use_name = `${use_name}${iter}`;
 	}
 // YFKMYOGJT
-	let dir = new DirNode(use_name, users_dir, {
+	let dir = new DirNode(use_name, users_dir, {//«
 		perm: true, // UOIONWEJR
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
@@ -2479,14 +2465,14 @@ dirnames.
 			fbaseUid: uid,
 			fbaseProf: prof
 		},
-	});
+	});//»
 	_dir_update(1, users_dir, dir);
 
 }
 
 _dir_update(3, users_dir, true); // users_dir.#done = true
 
-//await users_cache_node.setValue(JSON.stringify(old_obj));
+is_populating_users = false;
 
 };//»
 
