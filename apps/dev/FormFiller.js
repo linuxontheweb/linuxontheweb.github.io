@@ -1,29 +1,64 @@
 (()=>{"use strict";const APPNAME="dev.FormFiller";
-/*
+/*9/2/26: What is the "real" focused app? FormFilled 
 
 */
+/*9/1/26«
+
+Need to look into the "child win" concept in the desktop. I want the form
+to be a child window, but I want this *child* window to not accept handler
+keys. We need to put a flag on all windows that aren't meant to accept
+key input.
+
+
+*//*»*/
+
+
+const {
+log,
+cwarn,
+cerr,
+} = LOTW.api.util;
+
 LOTW.apps[APPNAME] = class {
 	constructor(Win){
+		Win.eatsAllKeys = true;
 		this.Win = Win;
-	}
-	onappinit(){
-		this.Win.Main.innerHTML='<center><h1>Form filler prototype</h1></center>';
 	}
 	onblur(){
 	//Handle window blur event
 	}
 	onfocus(){
 	//Handle window focus event
-console.warn(`Focused!`);
 	}
 	onkill(){
 	//Handle window "kill" event
-console.warn(`Closed!`);
+		this.childWin.doClose();
 	}
-	onkeydown(e){
+	onkeydown(e, sym){
 	//Handle key down
-console.log(`Got: ${e.key}`);
+//console.log(`Got: ${e.key}`);
+log(sym);
 	}
+
+async onappinit(){
+
+this.Win.Main.innerHTML='<center><h1>Form filler prototype</h1></center>';
+
+let chwin = await LOTW.Desk.open_app_window("dev.FormFilled", {
+    winArgs: { 
+		WID: 300,
+		HGT: 300,
+		childWinArg: { 
+			win: this.Win,
+			noKill: true 
+		} 
+	}
+});
+this.childWin = chwin;
+
+
+}
+
 }
 
 })();

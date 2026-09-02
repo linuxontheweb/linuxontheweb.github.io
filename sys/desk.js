@@ -20,13 +20,141 @@ in the code.)
 
 »*/
 
+/* 9/2/26: Why does onkeydown pass stuff like:«
+_C _A _S???
+Does this really work: @DBNRURKT ??
+»*/
+/* 9/1/26: pass-keys-thru windows ? «
+
+Want to have a "child window" that is a win.#childWinThatStaysInFocus, which
+"passes-thru" all key events to a parent window, which stays on the bottom.
+
+
+
+childWinThatStaysInFocus essentials:
+
+// Open the window«
+@BDFNMFH is where we are initially opening a window to be used as the child 
+window (i.e. childWinThatStaysInFocus). 
+
+open_new_window(await globals.user.home_path.toNode(), {
+	winArgs: { childWinArg: { ext, win, cb } }
+});
+//»
+//Window.constructor«
+@WMNSDJRU in the Window constructor
+if (winargs.childWinArg) {
+	this.childWinArg = winargs.childWinArg;
+	_win_update(1, winargs.childWinArg.win, this);
+	this.bottomWin = winargs.childWinArg.win; // Good name!
+}
+
+Let's call it "bottomWin":
+Don't want to call it parWin or parentWindow because that idiom is used
+a lot in the desktop interface logic.
+//»
+//Window.on "hand-off" to the child«
+@UIERJKSDJ is the important part in window.on, which "hands off" to the
+given child window.
+//»
+//if this.bottomWin.eatsAllKeys: «
+
+Now for the parent of childWinThatStaysInFocus, we need a property that
+says: "I devour all key events".
+Done @YOIJOLNJ ???
+
+//»
+
+»*/
+
+//OLD BUGS/NOTES«
+
+/*XXX BUG BUG BUG: 8/23/26 (FIXED???) XXX«
+
+
+In move_icons, when the "moved" icon is in a folder window, the icon *ALWAYS*
+disappears, no matter the destination (it seems(.
+
+@IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
+
+»*/
+/* BUG BUG BUG BUG: "Ghost Icons" appeared after moving them «
+
+ON 8/2/26
+
+AFTER CREATING A FOLDER ON THE DESKTOP VIA THE CONTEXT MENU:
+	- calling make_new_icon(desk, FOLDER_APP)
+
+I then tried to move 2 icons into it (by using the keyboard to
+move them directly onto the new icon), which seemed to worked, based on
+the animation.
+
+But then what happened (I think) is that I tried to move the new folder
+icon on the desktop (just changing the location), and the 2 icons that
+I'd moved *into* it suddenly popped back onto the screen (with half
+opacity), together w/ the following error:
+
+util.js:42 The icon was not in the icons array!
+
+But upon reloading the desktop, these icons were no longer there.
+
+So I guess this was a matter of icons that were not "cleaned up" by
+the move_icons operation.
+
+There seemed to be nothing "systemically incorrect" about this, it was
+just a matter of "ghost icons" suddenly appearing, seemingly "out of the blue".
+
+»*/
+/* BUGGY BUGGY BUGGY «
+
+After making the changes on 7/26/26
+
+THE LINK ICONS ARE BEING CONFUSED FOR THE REAL ICONS, DURING 
+DESKTOP MOVE OPERATIONS! OR RATHER: THEY SEEMED TO BE GETTING CONFUSED!!!
+
+Need to play around with creating links and moving them around to make
+sure that it is only the actual link icons that are being affected.
+
+On the Desktop, I had a regular file and then a link that linked to it.
+
+First, when moving the link, it seemed that the file moved, but the link
+didn't.  This seemed to happen a couple of times, and then I couldn't reproduce
+the issue anymore.
+
+»*/
+/* BUG BUG BUG (PROBABLY FIXED) «
+
+WHEN SAVING TO THE DESKTOP VIA SAVE_AS, THE SYSTEM THINKS THERE
+IS AN ICON THAT ISN'T REALLY THERE, AND THE NEW ICON NEVER SHOWS UP.
+
+This happens during the call to WRITEFILE @BDSVFHSK.
+
+After about a trillion hours of debugging, the offending culprit is
+the call to icn.del() in move_icon_by_path: @TEJKBTBHJ. This calls:
+	- clearFromStorage
+	- icn.iconElem._del.
+
+ALL OF THIS JUST GOES TO SHOW THAT THERE IS A ***TON*** OF LOGIC THAT WEAVES
+TOGETHER VARIOUS PARADIGMS OF MORE-OR-LESS SYSTEMIC THINKING, USING VARIOUS
+SORTS OF OBJECTS THAT HAVE OCCURRED OVER THE PAST ~14 YEARS!!!
+
+
+TypeError: fullname.match is not a function
+    at getNameExt (util.js:83:15)
+    at get appName (fs.js:1628:25)
+    at Icon.setApp (desk.js:5597:16)
+    at new Icon (desk.js:5272:7)
+    at Object.make_icon_if_new (desk.js:7080:22)
+    at touchFile (fs.js:2789:41)
+
+»*/
+
 /*8/26/26: Icons maintenance: looking pretty good!?! «
 
 It seems that create/move is working well, but I still need to test
 the rm (rmdir) functions
 
 »*/
-
 /*8/25/26: EZ Maintanence: Back to pushing icons onto Nodes !?!?! «
 
 @sys/fs.js:SRKTOYKHM
@@ -125,89 +253,6 @@ _TODO_: Desktop drop
 ARE WE DONE W/ THE CLEANUP LOGIC @ZNRUTKGTJ???
 
 »*/
-
-//OLD BUGS/NOTES«
-
-/*XXX BUG BUG BUG: 8/23/26 (FIXED???) XXX«
-
-
-In move_icons, when the "moved" icon is in a folder window, the icon *ALWAYS*
-disappears, no matter the destination (it seems(.
-
-@IRURMNFH: Is `icn.unobserve()` the *ONLY* thing I need to do? 
-
-»*/
-/* BUG BUG BUG BUG: "Ghost Icons" appeared after moving them «
-
-ON 8/2/26
-
-AFTER CREATING A FOLDER ON THE DESKTOP VIA THE CONTEXT MENU:
-	- calling make_new_icon(desk, FOLDER_APP)
-
-I then tried to move 2 icons into it (by using the keyboard to
-move them directly onto the new icon), which seemed to worked, based on
-the animation.
-
-But then what happened (I think) is that I tried to move the new folder
-icon on the desktop (just changing the location), and the 2 icons that
-I'd moved *into* it suddenly popped back onto the screen (with half
-opacity), together w/ the following error:
-
-util.js:42 The icon was not in the icons array!
-
-But upon reloading the desktop, these icons were no longer there.
-
-So I guess this was a matter of icons that were not "cleaned up" by
-the move_icons operation.
-
-There seemed to be nothing "systemically incorrect" about this, it was
-just a matter of "ghost icons" suddenly appearing, seemingly "out of the blue".
-
-»*/
-/* BUGGY BUGGY BUGGY «
-
-After making the changes on 7/26/26
-
-THE LINK ICONS ARE BEING CONFUSED FOR THE REAL ICONS, DURING 
-DESKTOP MOVE OPERATIONS! OR RATHER: THEY SEEMED TO BE GETTING CONFUSED!!!
-
-Need to play around with creating links and moving them around to make
-sure that it is only the actual link icons that are being affected.
-
-On the Desktop, I had a regular file and then a link that linked to it.
-
-First, when moving the link, it seemed that the file moved, but the link
-didn't.  This seemed to happen a couple of times, and then I couldn't reproduce
-the issue anymore.
-
-»*/
-/* BUG BUG BUG (PROBABLY FIXED) «
-
-WHEN SAVING TO THE DESKTOP VIA SAVE_AS, THE SYSTEM THINKS THERE
-IS AN ICON THAT ISN'T REALLY THERE, AND THE NEW ICON NEVER SHOWS UP.
-
-This happens during the call to WRITEFILE @BDSVFHSK.
-
-After about a trillion hours of debugging, the offending culprit is
-the call to icn.del() in move_icon_by_path: @TEJKBTBHJ. This calls:
-	- clearFromStorage
-	- icn.iconElem._del.
-
-ALL OF THIS JUST GOES TO SHOW THAT THERE IS A ***TON*** OF LOGIC THAT WEAVES
-TOGETHER VARIOUS PARADIGMS OF MORE-OR-LESS SYSTEMIC THINKING, USING VARIOUS
-SORTS OF OBJECTS THAT HAVE OCCURRED OVER THE PAST ~14 YEARS!!!
-
-
-TypeError: fullname.match is not a function
-    at getNameExt (util.js:83:15)
-    at get appName (fs.js:1628:25)
-    at Icon.setApp (desk.js:5597:16)
-    at new Icon (desk.js:5272:7)
-    at Object.make_icon_if_new (desk.js:7080:22)
-    at touchFile (fs.js:2789:41)
-
-»*/
-
 /* 8/7/26: Simplifying the concept of move/copy callbacks «
 @SYIROKTHB are: done_cb and no_move_cb. In order to make the core fs module
 maximally simple, that logic should call these functions with the relevant
@@ -260,7 +305,7 @@ windows, via nothing but function names.
 2) open_window_by_node
 
 
-@EJTJHKTMY: There is a separate 'saver' that goes into the window
+@EJTJHKTMY: There is a separate 'childWinArg' that goes into the window
 constructor, meanwhile there is a 'winargs' with the bottomPad
 property set.
 
@@ -3073,10 +3118,15 @@ constructor(num){//«
 
 }//»
 keyDown(e,kstr,mod_str){//«
+	if (kstr.match(/^_/)) return; // DBNRURKT
 	if (!CWIN) return;
 	let is_full=CWIN.isFullscreen;
 	let is_max=CWIN.isMaxed;
 	let cobj = CWIN.app;
+
+// YOIJOLNJ
+	if (CWIN.bottomWin && CWIN.bottomWin.eatsAllKeys) cobj = CWIN.bottomWin.app
+
 	if (!cobj) return;
 	if (!(cobj.overrides && cobj.overrides[kstr])){//«
 //Unless your app explicitly overrides them, the system intercepts the <arrow>_S
@@ -3153,6 +3203,7 @@ return;
 		return;
 	}
 	if (cobj.onkeydown) cobj.onkeydown(e, kstr, mod_str);
+
 }//»
 keyUp(e){//«
 	if (!CWIN) return;
@@ -3267,7 +3318,7 @@ class Window {//«
 #winArgs;
 #childWins;
 #ownedBy;
-#saveFolder;
+#childWinThatStaysInFocus;
 //»
 constructor(arg){//«
 	this.#isBusy = false;
@@ -3302,18 +3353,21 @@ constructor(arg){//«
 	this.workspaceNum = current_workspace_num;
 
 	this.#app = {onresize:NOOP};
-//	this.appName = app;
-//	this.type = "window";
+
 	if (arg.appArgs) this.#noSave = true;
 	else this.#noSave = false;
 
 	arg.topWin = this;
 
-	if (winargs.saver) {
-		this.bottomPad = SAVEAS_BOTTOM_HGT;
-		this.saver = winargs.saver;
-// 'this' window object becomes arg.saver.win.#saveFolder
-		_win_update(1, winargs.saver.win, this);
+//WMNSDJRU
+	if (winargs.childWinArg) {
+//		this.bottomPad = SAVEAS_BOTTOM_HGT;
+		this.childWinArg = winargs.childWinArg;
+// 'this' window object becomes arg.childWinArg.win.#childWinThatStaysInFocus
+		_win_update(1, winargs.childWinArg.win, this);
+		this.bottomWin = winargs.childWinArg.win;
+		this.bottomPad = winargs.childWinArg.botPad;
+		this.noKill = winargs.childWinArg.noKill;
 	}
 
 	this.makeDOMElem(arg);
@@ -3415,7 +3469,6 @@ makeDOMElem(arg){//«
 	else if (winargs.WID === "100%") usew = winw();
 	else usew = defwinargs.WID;
 
-//	let botpad = winargs.bottomPad;
 	let botpad = this.bottomPad;
 	if (isFin(winargs.HGT)) useh = winargs.HGT;
 	else if (winargs.HGT === "100%") useh = winh();
@@ -3562,6 +3615,8 @@ makeDOMElem(arg){//«
 		this.doClose();
 	};
 	close.onclick=()=>{
+		if (this.noKill) return;
+
 		if (check_cwin_owned(this)) return;
 		if (check_win_is_dirty(this)) return;
 //		doclose();
@@ -3975,11 +4030,11 @@ setWinArgs(args){//«
 		if (this.overdiv) this.overdiv.style.zIndex = ++HI_WIN_Z;
 	};//»
 	on(opts={}){//«
-		if (this.#saveFolder){
+		if (this.#childWinThatStaysInFocus){// UIERJKSDJ
 			setTimeout(()=>{
-				if (!this.#saveFolder) return; // Cancelled
-				this.#saveFolder.up();
-				this.#saveFolder.on();
+				if (!this.#childWinThatStaysInFocus) return; // Cancelled
+				this.#childWinThatStaysInFocus.up();
+				this.#childWinThatStaysInFocus.on();
 			}, 0);
 			return;
 		}
@@ -4038,7 +4093,6 @@ cwarn(`window_on(): NO WINOBJ for this`, this);
 		}
 		if (this.isScrollable) this.main.focus();
 		if (this.isMinimized) this.taskbarButton.onmousedown();
-//		if (this.childWin) this.childWin.on();
 		CWIN = this;
 		this.setLayout(workspace.layoutMode); 
 	};//»
@@ -4761,7 +4815,7 @@ if (!node) {
 
 this.#node = node;
 this.title = name;
-this.#saveFolder = undefined;
+this.#childWinThatStaysInFocus = undefined;
 let rv = await this._doSaveFile(val);
 if (Number.isFinite(rv)) node.lockFile();
 return rv;
@@ -4861,13 +4915,13 @@ _win_update = (which, win, val) => {
 switch (which) {
 
 case 1: { 
-	win.#saveFolder = val; 
+	win.#childWinThatStaysInFocus = val; 
 	break;
 }
 case 2: {
-	if (!win.#saveFolder) return;
-	win.#saveFolder.forceKill();
-	win.#saveFolder = undefined;
+	if (!win.#childWinThatStaysInFocus) return;
+	win.#childWinThatStaysInFocus.forceKill();
+	win.#childWinThatStaysInFocus = undefined;
 	break;
 }
 case 3: {
@@ -6630,7 +6684,7 @@ const open_window_by_icon = async(icn, opts={}) => {//«
 	if (!force) {//«
 		if (raise_open_win_by_path(node.fullpath)) return;
 		if (node.isDir && icn.parWin !== desk && (folders_open_in_same_window ||
-				icn.parWin.saver)) {
+				icn.parWin.childWinArg)) {
 // This means we are going to reuse the icon's parent window
 			let parwin = icn.parWin;
 			_win_update(3, parwin, node);
@@ -7603,11 +7657,13 @@ const open_window_by_app_name = async(appname, opts={}) => {//«
 	}
 	let win = new Window({
 		appName: appname,
+		winArgs: opts.winArgs,
 		appArgs: opts.appArgs || {}
 	});
 	await win.loadApp();
 	return win;
 };
+this.open_app_window = open_window_by_app_name;
 api.openApp=open_window_by_app_name;
 /*«
 api.openApp = (appname, opts={}) => {
@@ -7639,7 +7695,8 @@ const open_new_window = async (node, opts={}) => {//«
 		viewOnly,
 	});
 	return await win.loadApp();
-}//»
+}
+//»
 const open_window_by_node = async(node, opts={}) => {//«
 //const open_window_by_node = async(node, useapp) => {
 	let useapp = opts.altApp;
@@ -8264,7 +8321,7 @@ const save_as = (win, ext)=>{//«
 return new Promise(async(Y,N)=>{
 
 const cb = async (fwin, savename)=>{//«
-	_win_update(2, win); // Kill/Delete win.#saveFolder
+	_win_update(2, win); // Kill/Delete win.#childWinThatStaysInFocus
 	if (!fwin) Y({});
 	else Y({parNode: fwin.app.node, name: savename.trim()});
 	CWIN = null;
@@ -8272,8 +8329,14 @@ const cb = async (fwin, savename)=>{//«
 	win.on();
 };//»
 
+//BDFNMFH
 open_new_window(await globals.user.home_path.toNode(), {
-	winArgs: { saver: { ext, win, cb } }
+	winArgs: { childWinArg: { 
+	botPad: SAVEAS_BOTTOM_HGT,
+	ext, 
+	win, 
+	cb 
+} }
 });
 
 });
@@ -8790,7 +8853,7 @@ cwarn("There was an unattached icon in ICONS!");
 				}
 			}
 		}//»
-		if (cwin && cwin.saver && sym.match(/^TAB_S?$/)){
+		if (cwin && cwin.childWinArg && sym.match(/^TAB_S?$/)){
 			e.preventDefault();
 			cobj.onkeydown(e, sym, mod_str);
 			return;
@@ -9594,7 +9657,7 @@ const open_folder_win = (name, path, winargs, saverarg, prevpaths) => {//«
 		fullpath:()=>{(path + "/" + name).regpath()}
 	};
 //	icn.winArgs = winargs;
-	return open_new_window(icn, {saver: saverarg, prevPaths: prevpaths});
+	return open_new_window(icn, {childWinArg: saverarg, prevPaths: prevpaths});
 }//»
 const get_desk_icon_array = () => {//«
 	let icons;

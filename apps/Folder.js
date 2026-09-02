@@ -35,7 +35,6 @@ const {fs}=NS.api;
 
 LOTW.apps[APPNAME] = function(Win) {
 
-
 //Var«
 
 const {Main, Desk, statusBar: status_bar} = Win;
@@ -52,6 +51,19 @@ let save_as_ext;
 const thisApp = this;
 
 let _win_update;
+
+let save_input;
+let tab_order;
+let prev_paths;
+
+let is_loading = false;
+let drag_timeout;
+let dir;
+//let kids;
+let curnum;
+let observer;
+
+this.show_hidden = false;
 
 //»
 
@@ -105,24 +117,6 @@ statbar._add(cur_div);
 statbar._add(num_div);
 
 //»
-
-//Var«
-
-let save_input;
-let tab_order;
-let prev_paths;
-
-let is_loading = false;
-let drag_timeout;
-let dir;
-//let kids;
-let curnum;
-let observer;
-
-this.show_hidden = false;
-
-//»
-
 //Funcs«
 
 //Util«
@@ -158,9 +152,9 @@ const handle_save_tab=s=>{//«
 const do_save = ()=>{//«
 
 //EJMNCYLKIFB
-	if (!Win.saver) return;
-	Win.saver.cb(Win);
-	Win.saver=null;
+	if (!Win.childWinArg) return;
+	Win.childWinArg.cb(Win);
+	Win.childWinArg=null;
 
 };//»
 
@@ -190,7 +184,6 @@ cerr("KNOOWOWOWOW NEWWEWEWE NODEDEDE FORRRRR NEWPAHTHT", newpath);
 	this.setTitle();
 
 };//»
-
 const go_forth=async()=>{//«
 	if (!prev_paths) return;
 	let goto_path = prev_paths.shift();
@@ -209,7 +202,6 @@ cerr("HOWOWOWOW NONODE FOROROR GOTOPATHAHTAHT", goto_path);
 	await reload();
 	this.setTitle();
 };//»
-
 const load_dir=()=>{//«
 
 let typ = dir.type;
@@ -300,7 +292,6 @@ end_blob_stream, but we should do it upon start_blob_stream.
 	is_loading = false;
 
 }//»
-
 const make_save_dom = ()=>{//«
 if (picker_mode){
 return;
@@ -315,10 +306,10 @@ sp._fs=18;
 sp.innerHTML="Save As:\xa0";
 let inp = mk('input');
 let ext;
-if (Win.saver.ext) {
+if (Win.childWinArg.ext) {
 	ext = mk('span');
 	ext._marl = 2;
-	ext.innerHTML = `.<i>${Win.saver.ext}</i>`;
+	ext.innerHTML = `.<i>${Win.childWinArg.ext}</i>`;
 }
 inp.type="text";
 inp.id = `${Win.id}_save_input`;
@@ -349,11 +340,11 @@ Win._save_escape_cb=()=>{
 	savebut.disabled = false;
 };
 savebut.onclick=()=>{
-	Win.saver.cb(Win, inp.value);
+	Win.childWinArg.cb(Win, inp.value);
 	savebut.disabled = true;
 };
 canbut.onclick=()=>{
-	Win.saver.cb();
+	Win.childWinArg.cb();
 	savebut.disabled = true;
 };
 
@@ -367,7 +358,6 @@ botdiv._add(savebut);
 tab_order = [inp, savebut, canbut];
 
 };//»
-
 const reload = async()=>{//«
 //const reload = async(newpath)=>{
 	if (is_loading) return;
@@ -394,13 +384,12 @@ const reload = async()=>{//«
 };
 this.reload=reload;
 //»
-
 const init=(if_reinit)=>{//«
 
 return new Promise(async(Y,N)=>{
-	if (Win.saver) {
-//log("EXT",Win.saver.ext);
-		save_as_ext = Win.saver.ext;
+	if (Win.childWinArg) {
+//log("EXT",Win.childWinArg.ext);
+		save_as_ext = Win.childWinArg.ext;
 		make_save_dom();
 	}
 	if (!path) {
@@ -464,7 +453,7 @@ this.getContext=()=>{//«
 		"Folder",()=>{Desk.make_new_icon(Win, FOLDER_APP)},
 		"Text File"
 	];  
-	if (Win.saver) choices.push(null);
+	if (Win.childWinArg) choices.push(null);
 	else choices.push(()=>{Desk.make_new_icon(Win, "Text")});
 	let arr = [
 		"New",
@@ -514,13 +503,10 @@ else if (s=="s_"||s=="s_C") do_save();
 this.onkill = () => {icondv._del();}
 this.onresize = () => {cur_div.style.maxWidth = `${Main.clientWidth - MAX_WID_DIFF}px`;}
 this.onappinit=(opts={})=>{//«
-//this.onappinit=(arg, prevpaths)=>{
 	Win.makeScrollable();
-//	prev_paths = prevpaths;
 	_win_update = opts.winUpdate;
 	path = Win.fullpath;
 	Win.title = Win.name;
-//log(path);
 	if (!path) cerr("No path in onappinit!");
 	init();
 };//»

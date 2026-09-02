@@ -3397,9 +3397,9 @@ async run(){
 	if (this.args.length){
 		this.out(JSON.stringify({app: this.args.shift()}));
 	}
-	else {
-		this.out((await util.getList("/site/apps/")).join("\n"));
-	}
+//	else {
+//		this.out((await util.getList("/site/apps/")).join("\n"));
+//	}
 	this.ok();
 }
 

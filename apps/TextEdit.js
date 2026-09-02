@@ -60,13 +60,6 @@ let focused = false;
 
 let area = make('textarea');
 area.id = `textarea_${Win.id}`;
-area.onfocus=()=>{
-	if (!topwin.saveFolder) return
-	topwin.off();
-	topwin.saveFolder.on();
-};
-//area.style.caretShape="block";
-
 win.area = area;
 
 win._over="hidden";
@@ -111,17 +104,6 @@ this.overrides = {//«
 	'b_CAS': 1
 };//»
 this.onfocus = ()=>{//«
-/*
-	if (topwin.saveFolder){
-		topwin.off();
-		setTimeout(()=>{
-			if (!topwin.saveFolder) return;
-			topwin.saveFolder.up();
-			topwin.saveFolder.on();
-		},0);
-		return;
-	}
-*/
 	if (modified) return;
 	focused = true;
 	if (win.area) {
