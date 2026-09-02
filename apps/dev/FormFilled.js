@@ -69,6 +69,7 @@ LOTW.apps[APPNAME] = class {//«
 	}/*»*/
 togglePaused(){//«
 	paused = !paused;
+this.pauseBut.innerHTML = paused ? "Resume" : "Pause";
 }//»
 makeDOM(){//«
 let {Main} = this.Win;
@@ -129,7 +130,8 @@ makePauseButton(){//«
 	Main._add(but);
 	but.onclick = ()=>{//«
 		paused = !paused;
-log(`PAUSED: ${paused}`);
+//log(`PAUSED: ${paused}`);
+this.pauseBut.innerHTML = paused ? "Resume" : "Pause";
 	};//»
 
 }//»
