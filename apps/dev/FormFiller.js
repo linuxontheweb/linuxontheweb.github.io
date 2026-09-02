@@ -21,6 +21,7 @@ cerr,
 
 LOTW.apps[APPNAME] = class {
 	constructor(Win){
+Win.title = APPNAME;
 		Win.eatsAllKeys = true;
 		this.Win = Win;
 	}
@@ -38,23 +39,39 @@ LOTW.apps[APPNAME] = class {
 	//Handle key down
 //console.log(`Got: ${e.key}`);
 log(sym);
+if (sym === "\x20_"){
+
+//log(!!this.childWin.app.togglePaused);
+
+this.childWin.app.togglePaused();
+
+}
+
 	}
 
 async onappinit(){
 
-this.Win.Main.innerHTML='<center><h1>Form filler prototype</h1></center>';
+this.Win.Main.innerHTML=`
+<center>
+<h1>Form filler App</h1>
+<h3>Spacebar toggles pause!</h3>
+(Note: treat this window as a background window)
+</center>
+`;
 
 let chwin = await LOTW.Desk.open_app_window("dev.FormFilled", {
     winArgs: { 
 		WID: 300,
-		HGT: 300,
+		HGT: 250,
 		childWinArg: { 
 			win: this.Win,
 			noKill: true 
 		} 
 	}
 });
+//log(chwin);
 this.childWin = chwin;
+//log(this.childApp);
 
 
 }
