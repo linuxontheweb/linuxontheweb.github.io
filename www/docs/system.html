@@ -1,375 +1,720 @@
-DEVELOPER'S INTRODUCTION
+<html>
+<head>
+<title>
+</title>
+</head>
+<body>
 
+<h1>
+DEVELOPER'S INTRODUCTION
+</h1>
+
+<p>
 The system is called "Linux on the Web" (LOTW).  It is a thick JS client, which
 runs in modern web browsers, and has full access to modern Web APIs.
 
+<p>
 The system's state is kept on the global browser object: `window.LOTW`.
 
+<p>
 Constants:
 
-
+<p>
 PR: System root directory, e.g. "/home/bob/my_system/"
+<br>
 APPS: Path for the application logic of windowed apps: $PR/apps/
+<br>
 COMS: Path for shell command libraries: $PR/coms/
+<br>
 MODS: Path for generic code: $PR/mods/
+<br>
 SYS_CFG: System config file: $PR/sys/config.js
+<br>
 SHELL: POSIX shell implementation: $MODS/lang/shell.js
+<br>
 DESK: Desktop implementation: $PR/sys/desk.js
+<br>
 
+<p>
 The above paths represent the backend files that implement the system itself
 
+<p>
 In its normal operation, the system (applications or commands) may write to
 file paths that *look like* those above (e.g. ~/Desktop/MyApp.app or ~/.env),
 but they must be considered frontend files (stored via Web APIs) with no
 relation to the backend system.
 
 
+<p>
 Coding style:
 
-const my_func = (arg1) => { // Pure stateless functions
+<p>
+const my_func = (arg1) =&gt; { // Pure stateless functions
+<br>
 //...
+<br>
 };
 
+<p>
 class myClass { // Pure stateful objects
+<br>
 //...
+<br>
 }
 
 
+<p>
 /* Do not use this syntax: it is a strange mixture of the 2 pure forms above
+<br>
 function my_func(){
+<br>
 //...
+<br>
 }
+<br>
 */
 
 
+<p>
 There are two ways to hook user-facing code into the system: Windowed
 applications and Shell commands.
 
+<h2>
 I. Windowed Applications (Apps)
+</h2>
 
+<p>
 The code for these are kept in $APPS
+<p>
 Apps are custom classes, which are kept in files with the following form:
 
+<p>
 *FILE_BEGIN*
-(()=>{"use strict";
+<br>
+(()=&gt;{"use strict";
+<br>
 const APPNAME = "path.to.AppName"; // File location: $APPS/path/to/AppName.js
+<br>
 
+<br>
 // Helper code here...
 
+<br>
 class App {
 
+<br>
+<br>
 constructor(Win){
+<br>
 this.Win = Win; // Handle to a system `Window` object
+<br>
 this.Main = Win.Main; // The Window's client area (an HTML div element)
 
+<br>
+<br>
 /* See onloadfile below
+<br>
+<br>
 Other choices in Win.fmts are:
+<br>
 - TYPED_U8: Uint8Array (default)
+<br>
 - BLOB: Blob
+<br>
 - ARR_BUFF: ArrayBuffer
+<br>
 - PARSED_OR_ERR: try to run the file's contents through JSON.parse, or return the caught Error
+<br>
 */
+<br>
 this.loadFmt = Win.fmts.TEXT; // String
 
+<br>
+<br>
 this.makeDOM();
+<br>
+<br>
 
 }
+<br>
 makeDOM(){
+<br>
 // Dynamically generate and style the Window's visible area
+<br>
 // All graphical event handlers (mouse and touch) must be implemented here
+<br>
 }
+<br>
 meth1(){
+<br>
 }
+<br>
 meth2(){
+<br>
 }
+<br>
 meth3(){
+<br>
 }
+<br>
 getContext(){
+<br>
+<br>
 
 // Dynamically generate the choices for the app's context menu and return 
+<br>
 // them to the system to be rendered
+<br>
+<br>
 
 /*
+<br>
 In practice, the spaces in the strings below should be *non-breaking spaces*
+<br>
 */
+<br>
+<br>
 
 return [ // Main menu
-	"Save...", ()=>{this.saveFile()},
-	"Choice 1", ()=>{this.meth1()},
-	"Choice 2", [ // Submenu
-		"Sub choice 1", ()=>{this.meth2()},
-		"Sub choice 2", ()=>{this.meth3()},
-	]
+<br>
+&nbsp;&nbsp;	"Save...", ()=&gt;{this.saveFile()},
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;	"Choice 1", ()=&gt;{this.meth1()},
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;	"Choice 2", [ // Submenu
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;		"Sub choice 1", ()=&gt;{this.meth2()},
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;		"Sub choice 2", ()=&gt;{this.meth3()},
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;	]
+<br>
 ];
+<br>
+<br>
 
 }
+<br>
 async getValue(){
+<br>
 let val;
+<br>
 // Serialize the application state here...
+<br>
 return val;
+<br>
 }
+<br>
 async saveFile(){
+<br>
+<br>
 
 let ext = "myext"; // Placeholder for how the app's file extension is determined
+<br>
 let rv = await this.Win.saveFile(ext);
+<br>
 if (Number.isFinite(rv)) {
+<br>
 	// Success
+<br>
 }
+<br>
 
-} onescape(){
-//When the app is in an escapable mode, return true Otherwise, let the system
-//window manager take control by returning false
-} onfocus(){
+} 
+<br>
+onescape(){
+<br>
+// When the app is in an escapable mode, return true Otherwise, let the system
+<br>
+// window manager take control by returning false
+<br>
+} 
+<br>
+onfocus(){
+<br>
 // The Window is now focused
-} onblur(){
+<br>
+} 
+<br>
+onblur(){
+<br>
 // The Window is now blurred
-} onkill(){
+<br>
+} 
+<br>
+onkill(){
+<br>
 // The Window object is being deleted. Application cleanup logic goes here
-} onappinit(appargs={}){
-/*Called by the system when an app is:
-1) in its "New File" (unsaved) state 2) not saveable, i.e. a media player
+<br>
+} 
+<br>
+onappinit(appargs={}){
+<br>
+/* Called by the system when an app is:
+<br>
+1) in its "New File" (unsaved) state 
+<br>
+2) not saveable, i.e. a media player
+<br>
 */
-} onloadfile(val){
-/*Called by the system when a file's icon is activated 
+<br>
+} 
+<br>
+onloadfile(val){
+<br>
+/* Called by the system when a file's icon is activated 
+<br>
 In this case, `val` will be a JS string, given our format preference given in
+<br>
 the constructor
+<br>
 */
-} onkeydown(e, sym){
+<br>
+} 
+<br>
+onkeydown(e, sym){
+<br>
 /* 
+<br>
 1) e: the keydown event object. e.preventDefault may be called to prevent
+<br>
 unwanted behavior
+<br>
+<br>
 
 2) sym: a string-like version of the event, such as:
+<br>
+<br>
 
 a_: unmodified 'a' key
+<br>
 a_S: Shift + 'a'
+<br>
 a_C: Ctrl + 'a'
+<br>
 a_A: Alt + 'a'
-
-Modifier "precedence" is: C < A < S, giving these possible combinations:
+<br>
+<br>
+Modifier "precedence" is: C &lt; A &lt; S, giving these possible combinations:
+<br>
 a_CA, a_CS, a_AS, a_CAS
+<br>
+<br>
 
 When a key represents a function or non-printable character, it is capitalized
+<br>
 as such:
+<br>
+<br>
 
 ENTER,
+<br>
 BACK,
+<br>
 DEL,
-SPACE,
+<br>
 PGUP,
+<br>
 PGDOWN,
+<br>
 HOME,
+<br>
 END
+<br>
+<br>
 
 */
+<br>
 }
+<br>
+<br>
 
 }
+<br>
+<br>
 
 LOTW.apps[APPNAME] = App; // Export the app to the system
+<br>
 })();
+<br>
 *FILE_END*
+<br>
 
+<br>
 Application authors may want to register a file extension with the system, with
 these 2 steps: 
 
+<br>
 1) Locate the `EXT_TO_APP_MAP` object in $SYS_CFG. The keys are the (lowercase)
 extensions and the values are the "fully-qualified app names" (using the same
 dotted notation format in $APPNAME above). For example:
 
+<br>
+<br>
 const EXT_TO_APP_MAP = {
-txt: "TextEdit", // .txt -> $APPS/TextEdit.js
-html: "util.HTML", // .html -> $APPS/util/HTML.js
-myext: "dev.MyApp" // .myext -> $APPS/dev/MyApp.js
+<br>
+txt: "TextEdit", // .txt -&gt; $APPS/TextEdit.js
+<br>
+html: "util.HTML", // .html -&gt; $APPS/util/HTML.js
+<br>
+myext: "dev.MyApp" // .myext -&gt; $APPS/dev/MyApp.js
+<br>
 }
 
+<br>
+<br>
 2) Locate the `APP_NAME_TO_ICON` object in $SYS_CFG. The keys are the "simple"
 app names (not fully-qualified). The values are the number-only portions of the
 Unicode values, encoded in hex. For example:
 
+<br>
+<br>
 const APP_NAME_TO_ICON = {
-TextEdit: "1f4dd", // i.e. "\u{1f4dd}" -> 📝 (Paper and pencil icon)
+<br>
+TextEdit: "1f4dd", // i.e. "\u{1f4dd}" -&gt; 📝 (Paper and pencil icon)
+<br>
 HTML: "1f310", // 🌐
+<br>
 MyApp: "1f680" // 🚀
+<br>
 }
+<br>
 
+<br>
+<br>
 
 There are several methods for launching applications in "New File" states (i.e.
 without a file icon to double-click in the interface)
+<br>
+<br>
 
 1) Menu-driven:
 
+<br>
+<br>
 In $SYS_CFG, locate `APPLICATIONS_MENU`, which looks like:
+<br>
 const APPLICATIONS_MENU = [ // JS Array
+<br>
 "Text Editor", "TextEdit",
+<br>
 "Your App", "path.to.YourApp"
+<br>
 ];
+<br>
+<br>
 
 An option for "Your App" will then appear in the `Applications` submenu of the
 main system menu. 
 
+<br>
+<br>
 2) Keyboard-driven:
 
+<br>
+<br>
 In $DESK, search for the string "SHORTCUTS1" or "SHORTCUTS2", depending on
 whether you want to give any focused windows the chance to consume the given
 keydown event. To associate a "sym" with an application, add a case clause to
 the relevant switch statement, for example:
+<br>
+<br>
 
 switch(sym) {
+<br>
 //...
+<br>
 case "m_CAS": return open_app("path.to.MyApp");
+<br>
 //...
+<br>
 }
+<br>
+<br>
 
 3) Icon-driven: 
+<br>
+<br>
 
 Run the following command in the terminal to generate an icon on the desktop
 (or any other writable path):
+<br>
+<br>
 
-`appicon path.to.MyApp > ~/Desktop/MyApp.app`
+`appicon path.to.MyApp &gt; ~/Desktop/MyApp.app`
 
+<br>
 ... when the icon is activated, the system will attempt to load an application
 at $APPS/path/to/MyApp.js. Note: while the name of the icon may be arbitrary
 (MyApp *or* Whatever, etc), the `.app` extension is necessary.
 
+<br>
+<h2>
 II. Shell Commands
+</h2>
 
+<br>
 Most developers will implement their shell commands in separate files within
 $COMS, but they may also be kept as "builtins" in $SHELL.
 
+<br>
+<br>
 The files kept in $COMS are "command libraries", and look like:
+<br>
+<br>
 
 *FILE_BEGIN*
-(()=>{"use strict";
+<br>
+(()=&gt;{"use strict";
+<br>
 const LIBNAME="path.to.mycomlib"; // File location: $COMS/path/to/mycomlib.js
+<br>
+<br>
 
 const globals = LOTW.globals;
+<br>
 const {
+<br>
 ShellMod,
+<br>
 // Other imports here
+<br>
 } = globals;
+<br>
 const {
+<br>
 Com // Base command class to be extended
+<br>
 } = ShellMod.comClasses;
+<br>
+<br>
 
 // Helper code here...
 
+<br>
+<br>
 
 /*
 
+<br>
+<br>
 Commands return only when the `end` method of the `Com` class is called. The
 numerical value is the error code that is returned to the shell. `ok` and `no`
 are convenience methods that take an optional string argument to be printed to
 the terminal (colored green or red), with `end` called internally (returning
 E_SUC or E_ERR).
+<br>
+<br>
 
 */
+<br>
 class com_mycom extends Com {
+<br>
 static getOpts(){
+<br>
 //This tells the shell how to parse the user-supplied args
-return {
-	SHORT: {// Short options
-		a: 1, // No arg: '-a'
-		b: 2, // Opt arg: '-b true' or '-b'
-		c: 3 // Req arg: '-c "hello 123"'
-	},
-	LONG: { // Long options
-		all: 1, // No arg: '--all'  
-		bin: 2, // Opt arg: '--bin=true' or '--bin'
-		chars: 3 // Req arg: '--chars="hello 123"'
-	}
+<br>
+&nbsp;&nbsp;return {
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;	SHORT: {// Short options
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		a: 1, // No arg: '-a'
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		b: 2, // Opt arg: '-b true' or '-b'
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		c: 3 // Req arg: '-c "hello 123"'
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;	},
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;	LONG: { // Long options
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		all: 1, // No arg: '--all'  
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		bin: 2, // Opt arg: '--bin=true' or '--bin'
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		chars: 3 // Req arg: '--chars="hello 123"'
+&nbsp;&nbsp;&nbsp;&nbsp;<br>
+&nbsp;&nbsp;&nbsp;&nbsp;	}
+&nbsp;&nbsp;<br>
+&nbsp;&nbsp;}
+<br>
 }
-}
+<br>
 async init(){
+<br>
 // Load assets, parse user-supplied args and opts, etc
+<br>
 // The `run` method will only be called by the shell after awaiting this method
+<br>
 const {args, opts} = this;
+<br>
 /* 
+<br>
+<br>
 
 args: an array of strings
+<br>
+<br>
 
-opts: an object that maps `opt -> val`, such that `val` is one of:
+opts: an object that maps `opt -&gt; val`, such that `val` is one of:
+<br>
+<br>
 
 1) String: user-supplied arg value
+<br>
 2) Boolean: true
+<br>
+<br>
 
 Using the above getOpts example:
+<br>
+<br>
 
 `mycom --all file.txt hello -b there world --chars="something smart" -- -z`
 
+<br>
+<br>
 ...gives:
+<br>
 args: ["file.txt", "hello", "world", "-z"]
 
+<br>
+<br>
 opts: {
+<br>
 all: true,
+<br>
 b: "there",
+<br>
 chars: "something smart"
+<br>
 }
+<br>
+<br>
 
 Note: without the '--', '-z' would have been interpreted as an option, and
 would have caused a shell error, since 'z' was not "declared" by the object
 returned from getOpts.
 
+<br>
+<br>
 */
+<br>
+<br>
 
 }
+<br>
 async run(){
+<br>
 // Run the main code.
+<br>
 // This will not be called if the command was terminated by `init`, 
+<br>
 // i.e. if `end`, `ok` or `no` was called there 
+<br>
 
 // These get printed to the terminal with helpful colors
+<br>
 this.inf("Info msg..."); // Blue
+<br>
 this.suc("Success msg..."); // Green
+<br>
 this.wrn("Warning msg..."); // Yellow
+<br>
 this.err("Error msg..."); // Red
+<br>
+<br>
 
 // Sent into pipes, redirected to files, captured by command subs, or 
+<br>
 // printed to the terminal
+<br>
 this.out("Write to stdout");
+<br>
+<br>
 
 // *Any* data type may be sent into pipes, but the receiving command should 
+<br>
 // be expecting the given type
+<br>
 
 let myobj = new myClass();
+<br>
 await myobj.doIt(1234);
+<br>
 this.out(myobj);
+<br>
+<br>
 
 // Return success
+<br>
 // Only the first invocation of `this.end` has any effect
+<br>
 this.ok(); // Calls `this.end(E_SUC)` w/ no message
+<br>
+<br>
 
 // prints the helpful message and calls `this.end(E_ERR)`
-//this.no("You should have done X Y Z!"); 
+<br>
+// this.no("You should have done X Y Z!"); 
+<br>
+<br>
 
 }
+<br>
+<br>
 
 }
+<br>
+<br>
 
 const coms = {
+<br>
 mycom: com_mycom
+<br>
 // Other commands here
+<br>
 };
+<br>
+<br>
 
-const onkill = ()=>{
+const onkill = ()=&gt;{
+<br>
 // Command libraries may need to be "killed" when they are being developed. 
+<br>
 // Cleanup logic goes here.
+<br>
 };
+<br>
+<br>
 
 LOTW.coms[LIBNAME] = {coms, onkill}; // Export the library to the system.
+<br>
 })();
+<br>
 *FILE_END*
+<br>
+<br>
 
 To access the above command (`mycom`) in the system shell, the command library:
 `path.to.mycomlib` must be imported into the terminal's environment like such:
 
+<br>
+<br>
 `import path.to.mycomlib`
 
+<br>
+<br>
 Or to auto-import command libraries, create a file in ~/.env with the following
 line:
+<br>
+<br>
 
 `IMPORT_COM_LIBS=fs,path.to.mycomlib`
 
+<br>
+<br>
 ... and when a terminal is opened, the system will attempt to import the
 command libraries at: $COMS/fs.js and $COMS/path/to/mycomlib.js
-
+</body>
+</html>

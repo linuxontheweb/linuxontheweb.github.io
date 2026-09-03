@@ -1,32 +1,23 @@
-(()=>{"use strict";const LIBNAME="extra";
+(()=>{"use strict";const LIBNAME="dev.extra";
 
-/*EVERYTHING HERE NEEDS TO BE UPDATED TO THE NEW STYLE LIKE IN COM_WALT (no more term_error)
+/*BUG BUG BUG
 
-e.g: 
+What is the correct way to make a file and then write to it?
+@SOPORFMK
 
-const com_what = async(args, opts){
-    let {inpipe, term} = opts;
-
-	if (fatal) return {err: "Some one-liner"}
-
-	//or if many bad messages:
-	let err = [];
-	if (this_bad) err.push("This is bad");
-
-	if (that_bad) err.push("That is bad");
-
-	//Sending output
-	let out = [];
-
-	for (blah of whatever){
-		//do stuff
-		out.push(some_output_line);
-	}
-
-	return {err, out};
+Use: 
+let node = await outpath.toNode({mkFile: true})
+if (!node){
+cerr(`Could not make: ${outpath}`);
+return;
+}
+if (!await node.setValue(blob)){
+cerr(`Could not save to: ${outpath}`);
+return;
 }
 
 */
+
 //«
 //import { util, api as capi } from "util";
 //import { globals } from "config";
@@ -61,14 +52,19 @@ const term_out=(term, arg)=>{//«
 };//»
 
 const validate_out_path = async(outpath)=>{//«
-	if (await pathToNode(outpath)) return `${outpath}: the file exists`;
+//	if (await pathToNode(outpath)) return `${outpath}: the file exists`;
+	if (await outpath.toNode()) return `${outpath}: the file exists`;
 	let arr = outpath.split("/");
 	arr.pop();
 	let parpath = arr.join("/");
-	let parnode = await pathToNode(parpath);
+//	let parnode = await pathToNode(parpath);
+	let parnode = await parpath.toNode();
 	if (!parnode) return `${parpath}: The directory doesn't exist`;
-//	if (! await fsapi.checkDirPerm(parnode)){
-	if (!parnode.okWrite){
+	if (!parnode.writeable){
+//	if (!parnode.okWrite){
+		return `${parpath}: read-only file system`;
+	}
+	if (!parnode.perm){
 		return `${parpath}: permission denied`;
 	}
 	return true;
@@ -90,8 +86,25 @@ cancel(){//«
 		let blob = new Blob(this.#recordedChunks, {
 			type: "video/webm"
 		});
-		let bytes = await util.toBytes(blob);
-		await fsapi.writeFile(this.#outPath, bytes);
+//		let bytes = await util.toBytes(blob);
+
+// SOPORFMK
+//		await fsapi.writeFile(this.#outPath, bytes);
+
+let node = await this.#outPath.toNode({mkFile: true})/*«*/
+if (node){
+	if (!await node.setValue(blob)){
+cerr(`Could not save to: ${outpath}`);
+	}
+	node.mkIcons()
+}
+else {
+
+cerr(`Could not make new file: ${outpath}`);
+
+}
+/*»*/
+
 
 //		let mod = await util.getMod("util.webmparser");
 //		let rv = await mod.coms.remux(this.term, bytes);
@@ -753,10 +766,11 @@ return write_to_redir(term, blob, redir)
 };//»
 */
 const coms = {//«
-//	webmcat: com_webmcat,
-//	remux: com_remux,
 	bindwin: com_bindwin,
 	record: com_record,
+
+//	webmcat: com_webmcat,
+//	remux: com_remux,
 //	wasm: com_wasm,
 //	walt: com_walt,
 };//»

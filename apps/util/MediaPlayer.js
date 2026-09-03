@@ -89,8 +89,14 @@ this.onkill=()=>{//«
 };//»
 this.onkeydown=(e,k)=>{//«
 	if (k=="\x20_"){//«
-		if (vid.paused) vid.play();
-		else vid.pause();
+		if (vid.paused) {
+cwarn("PLAY");
+			vid.play();
+		}
+		else {
+cwarn("PAUSE");
+			vid.pause();
+		}
 	}//»
 	else if (k=="ENTER_"){//«
 		use_height_dim = !use_height_dim;

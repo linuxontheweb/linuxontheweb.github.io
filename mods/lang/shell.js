@@ -83,22 +83,20 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 »*/
 
-/* BUG BUG BUG: «
 
-This *should* output a single quote
-  - $ echo $'\x27' 
+/* 9/3/26: BUGGY: How to handle optional args for short options!?!«
+The arg is used only if the option uses and equals sign.
+(Even if it is a single char option):
 
-This *does* output a double quote:
-  - $ echo $'\x22'
+if options (2)
+mycom -h 1 2 3// Does not take the 1
+mycom -h=1 2 3// Takes the 1
 
-Every other ascii char seems to be correctly output as well.
+Need to get @NSDIORKL to work right
 
-So where does this substitution happen?
-
-- @IOEJRKRN
+Let's use the opttest command @CBNCMDJF
 
 »*/
-
 /*8/28/26: RETURN AN ERROR STRING FROM setValue/setBlob  «
 
 Am now returning a string from setBlob in mods/fs/fbase.js,
@@ -217,6 +215,21 @@ await Shell.allExpansions(arr)
 ... then test for arr.length here?
 
 This seems to be the way to go.
+
+»*/
+/* BUG BUG BUG: (MOSTLY FIXED) «
+
+This *should* output a single quote
+  - $ echo $'\x27' 
+
+This *does* output a double quote:
+  - $ echo $'\x22'
+
+Every other ascii char seems to be correctly output as well.
+
+So where does this substitution happen?
+
+- @IOEJRKRN
 
 »*/
 
@@ -1233,8 +1246,8 @@ const get_options = (args, com, opts={}) => {//«
 			let arr = marr[1].split("");
 			for (let j = 0; j < arr.length; j++) {
 				ch = arr[j];
-//				if (sopts[ch] === 2 || sopts[ch] === 3) {
 				if (!getall && (sopts[ch] === 2 || sopts[ch] === 3)) {
+//				if (!getall && sopts[ch] === 3) {
 					if (i === 0) obj[ch] = arr.slice(1).join("");
 					else err.push(`option: '${ch}' requires args`);
 				}
@@ -1259,6 +1272,7 @@ const get_options = (args, com, opts={}) => {//«
 				obj[ch] = true;
 				args.splice(i, 1);
 			} 
+/*
 			else if (sopts[ch] === 2) {
 //				err.push(`option: '${ch}' is an optional arg`);
 				args.splice(i, 1);
@@ -1267,6 +1281,7 @@ const get_options = (args, com, opts={}) => {//«
 				}
 				else obj[ch] = true;
 			} 
+*/
 			else if (sopts[ch] === 3) {
 				if (!args[i + 1]) err.push(`option: '${ch}' requires an arg`);
 				obj[ch] = args[i + 1];
@@ -1277,6 +1292,12 @@ const get_options = (args, com, opts={}) => {//«
 				args.splice(i, 1);
 			}
 		}//»
+
+/*//NSDIORKL
+		else if (marr = args[i].match(/^-([a-zA-Z0-9])=(.+)$/)) {//«
+
+		}//»
+*/
 
 //Long opts
 		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=(.+)$/)) {//«
@@ -2574,6 +2595,27 @@ run(){
 
 const Com = SimpleCommand;
 
+//CBNCMDJF
+const com_opttest = class extends Com{//«
+static getOpts(){
+return {
+s: {
+1: 1,
+2: 2,
+3: 3
+},
+l: {
+one: 1,
+two: 2,
+three: 3
+}
+}
+}
+	run(){
+		this.ok();
+	}
+}//»
+
 const com_devtest = class extends Com{//«
 init(){
 }
@@ -3457,6 +3499,7 @@ let win = await Desk.open_file_by_path(node.fullpath);//COMMENTED OUT IN COM_OPE
 */
 
 this.builtins={//«
+opttest: com_opttest,
 gh: com_gh,
 cat: com_cat,
 pipe: com_pipe,
