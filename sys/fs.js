@@ -59,6 +59,7 @@ _dir_update(1, par, my_node);
 
 //»
 
+
 /* 9/1/26:«
 
 
@@ -1629,10 +1630,12 @@ get text(){//«
 		return blob_to_ret_val(blob, {text: true});
 	})();
 }//»
+
 get json(){//«
 	return (async ()=>{
 		let txt = await this.text;
 		if (!isStr(txt)) return;
+		if (!txt) return;
 		let rv;
 		try{
 			rv = JSON.parse(txt);
@@ -1891,6 +1894,7 @@ const do_move = async(src_node, dest_name, dest_par)=>{//«
 //Need to update this to allow for moving/renaming arbitrary node types 
 //within the same directory type
 	let src_id = src_node.id;
+	let src_blob_id = src_node.blobId;
 //log(`MOVE src_id: ${src_id}`);
 if (!src_id){
 //MXFBNRHOL
@@ -1945,7 +1949,9 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 	if (src_node.isFile) {
 //	if (save_blob === null) {
 		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
-		if (save_blob) await dest_node.setValue(save_blob);
+		if (save_blob) {
+			await dest_node.setValue(save_blob);
+		}
 	}
 	else {
 		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
@@ -1958,6 +1964,7 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 
 // XRUIOPKGH
 	_node_update(3, dest_node, src_id); // Set: dest_node.#id on dest_node (copy)
+	_node_update(4, dest_node, src_blob_id); // Set: dest_node.#blobId on dest_node (copy)
 
 	return dest_node;
 
@@ -2202,6 +2209,7 @@ const no_move_all = () => {//«
 //							  BAD IDEA ---->vvvvvvvvvvv
 //let { exports, if_recur, if_cp, if_force, dom_objects } = opts;
 let { exports, if_recur, if_cp, if_force } = opts;
+if (!exports) exports = {};
 
 //Imports from the calling environment (shell or desktop) «
 
@@ -2624,7 +2632,7 @@ log(rv);
 	if (!bid){
 		await node.getRealBlobId();
 		bid = node.blobId;
-cwarn(`No node.blobId (${node.fullpath}, got real id: ${bid}`);
+cwarn(`No node.blobId (${node.fullpath}), got real id: ${bid}`);
 	}
 	else if (bid===NULL_BLOB_NODE_TYPE) return EB;
 	let ent = await get_blob_entry(`${bid}`);

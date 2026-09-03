@@ -5664,12 +5664,14 @@ if (!e.isFake) nopropdef(e);
 if (have_window_cycle) return;
 let menu = [//«
 "Properties",()=>{show_node_props(node);},
+/*
 "Rename", () => {
 	setTimeout(() => {
 		this.nodelete = true;
 		init_icon_editing(this);
 	}, 25);
-}, 
+},
+*/ 
 "Delete", () => {delete_selected_files(this);}
 ];//»
 let open_opts=["Binary\xa0Viewer", ()=>{open_window_by_icon(this,{altApp: DEF_BIN_APP});}];

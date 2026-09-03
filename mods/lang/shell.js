@@ -94,6 +94,16 @@ mycom -h=1 2 3// Takes the 1
 
 Need to get @NSDIORKL to work right
 
+
+
+The 2nd arg of Get_options is UNUSED!!!
+
+
+
+
+
+
+
 Let's use the opttest command @CBNCMDJF
 
 »*/
@@ -1196,67 +1206,72 @@ const make_sh_err_com = (name, mess, com_env)=>{//«
 	return com;
 };//»
 
-const get_options = (args, com, opts={}) => {//«
-	const getlong = opt => {//«
-		let re = new RegExp("^" + opt);
-		let numhits = 0;
-		let okkey;
-		for (let k of lkeys) {
-			if (re.exec(k)) {
-				numhits++;
-				okkey = k;
-			}
+const get_long_opt = (opt, lkeys, err) => {//«
+	let re = new RegExp(`^${opt}`);
+	let numhits = 0;
+	let okkey;
+	for (let k of lkeys) {
+		if (re.exec(k)) {
+			numhits++;
+			okkey = k;
 		}
-		if (!numhits) {
-			err.push(`invalid option: '${opt}'`);
-			return null;
-		} 
-		else if (numhits == 1) return okkey;
-		else {
-			err.push(`option '${opt}' has multiple hits`);
-			return null;
-		}
-	};//»
-	let err = [];
-	let sopts = opts.short || opts.SHORT || opts.s;
-	let lopts = opts.long || opts.LONG || opts.l;
+	}
+	if (!numhits) {
+		err.push(`invalid option: '${opt}'`);
+		return null;
+	} 
+	else if (numhits == 1) return okkey;
+	else {
+		err.push(`option '${opt}' has multiple hits`);
+		return null;
+	}
+};//»
+const get_options = (args, opts={}) => {//«
+
+	let sopts = opts.short || opts.SHORT || opts.s || {};
+	let lopts = opts.long || opts.LONG || opts.l || {};
 	let getall = opts.ALL;
-//	let getall = true;
+
+	let lkeys = Object.keys(lopts);
+
+	let err = [];
 	let obj = {};
-	let arg_start = null;
-	let arg_end = null;
-	let arg1, arg2;
+
 	let marr;
 	let ch;
 	let ret;
-	if (!sopts) sopts = {};
-	if (!lopts) lopts = {};
-	let lkeys = Object.keys(lopts);
 	for (let i = 0; i < args.length;) {
-		if (isObj(args[i])) {
+
+		if (isObj(args[i])) {//«
 			i++;
 			continue;
-		}
-		if (args[i].toString() == "--") {
+		}//»
+
+		if (args[i].toString() == "--") {//«
 			args.splice(i, 1);
 			return [obj, err];
-		}
-//Short opts
+		}//»
+
+//Short opts, possibly many in one string
 		else if (marr = args[i].match(/^-([a-zA-Z0-9][a-zA-Z0-9]+)$/)) {//«
 			let arr = marr[1].split("");
 			for (let j = 0; j < arr.length; j++) {
 				ch = arr[j];
-				if (!getall && (sopts[ch] === 2 || sopts[ch] === 3)) {
-//				if (!getall && sopts[ch] === 3) {
-					if (i === 0) obj[ch] = arr.slice(1).join("");
+				if (!getall && sopts[ch] === 3) {
+					if (j === 0) {
+						obj[ch] = arr.slice(1).join("");
+						break;
+					}
 					else err.push(`option: '${ch}' requires args`);
 				}
-				else if (getall || sopts[ch] === 1) obj[ch] = true;
+				else if (getall || sopts[ch] === 1 || sopts[ch] === 2) obj[ch] = true;
 				else if (!sopts[ch]) err.push(`invalid option: '${ch}'`);
 				else err.push(`option: '${ch}' has an invalid option definition: ${sopts[ch]}`);
 			}
 			args.splice(i, 1);
 		}//»
+
+// A single short opt
 		else if (marr = args[i].match(/^-([a-zA-Z0-9])$/)) {//«
 			ch = marr[1];
 			if (getall){
@@ -1268,11 +1283,12 @@ const get_options = (args, com, opts={}) => {//«
 				err.push(`invalid option: '${ch}'`);
 				args.splice(i, 1);
 			} 
-			else if (sopts[ch] === 1) {
+			else if (sopts[ch] === 1 || sopts[ch] === 2) {
+//			else if (sopts[ch] === 1) {
 				obj[ch] = true;
 				args.splice(i, 1);
 			} 
-/*
+/*«
 			else if (sopts[ch] === 2) {
 //				err.push(`option: '${ch}' is an optional arg`);
 				args.splice(i, 1);
@@ -1281,7 +1297,7 @@ const get_options = (args, com, opts={}) => {//«
 				}
 				else obj[ch] = true;
 			} 
-*/
+»*/
 			else if (sopts[ch] === 3) {
 				if (!args[i + 1]) err.push(`option: '${ch}' requires an arg`);
 				obj[ch] = args[i + 1];
@@ -1293,29 +1309,41 @@ const get_options = (args, com, opts={}) => {//«
 			}
 		}//»
 
-/*//NSDIORKL
+//NSDIORKL
 		else if (marr = args[i].match(/^-([a-zA-Z0-9])=(.+)$/)) {//«
-
+			ch = marr[1];
+			args.splice(i, 1);
+			if (sopts[ch] === 1){
+				err.push(`options: '${ch}' requires no arg`);
+			}
+			else if (sopts[ch] === 2 || sopts[ch] == 3){
+				obj[ch] = marr[2];
+			}
+			else {
+				err.push(`option: '${ch}' has an invalid option definition: ${sopts[ch]}`);
+			}
 		}//»
-*/
+
 
 //Long opts
+// Has an arg
 		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=(.+)$/)) {//«
-let lopt = marr[1];
-if (lopts[lopt] === 1){
-err.push(`option '${lopt}' requires no arg`);
-}
-//			if (getall || (ret = getlong(marr[1]))) {
-else {
-			if (getall || (ret = getlong(lopt))) {
-				if (getall) ret = lopt;
-				obj[ret] = marr[2];
+			let lopt = marr[1];
+			if (lopts[lopt] === 1){
+				err.push(`option '${lopt}' requires no arg`);
 			}
-}
-args.splice(i, 1);
+			else {
+				if (getall || (ret = get_long_opt(lopt, lkeys, err))) {
+					if (getall) ret = lopt;
+					obj[ret] = marr[2];
+				}
+			}
+			args.splice(i, 1);
 		}//»
+
+// No immediate arg, so it can be defined, but be a null value
 		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)=$/)) {//«
-			if (getall || (ret = getlong(marr[1]))) {
+			if (getall || (ret = get_long_opt(marr[1], lkeys, err))) {
 				if (getall) ret = marr[1];
 				obj[ret] = args[i + 1];
 				if (args[i + 1]) args.splice(i + 1, 2);
@@ -1323,25 +1351,40 @@ args.splice(i, 1);
 			} 
 			else args.splice(i, 1);
 		}//»
+
+// No arg at all
 		else if (marr = args[i].match(/^--([a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {//«
-			if (getall || (ret = getlong(marr[1]))) {
+			if (getall || (ret = get_long_opt(marr[1], lkeys, err))) {
 				if (getall) ret = marr[1];
-				if (getall || (lopts[marr[1]] === 1 || lopts[marr[1]] === 2)) obj[ret] = true;
-				else if (lopts[marr[1]] === 3) err.push(`long option: '${marr[1]}' requires an arg`);
-				else if (lopts[marr[1]]) err.push(`long option: '${marr[1]}' has an invalid option definition: ${lopts[marr[1]]}`);
-				else if (!lopts[marr[1]]) err.push(`invalid long option: '${marr[1]}`);
+				if (getall || (lopts[marr[1]] === 1 || lopts[marr[1]] === 2)) {
+					obj[ret] = true;
+				}
+				else if (lopts[marr[1]] === 3) {
+					err.push(`long option: '${marr[1]}' requires an arg`);
+				}
+				else if (lopts[marr[1]]) {
+					err.push(`long option: '${marr[1]}' has an invalid option definition: ${lopts[marr[1]]}`);
+				}
+				else if (!lopts[marr[1]]) {
+					err.push(`invalid long option: '${marr[1]}`);
+				}
 				args.splice(i, 1);
 			} 
 			else args.splice(i, 1);
 		}//»
+
+// Error
 		else if (marr = args[i].match(/^(---+[a-zA-Z0-9][-a-zA-Z0-9]+)$/)) {//«
 			err.push(`invalid option: '${marr[1]}'`);
 			args.splice(i, 1);
 		}//»
+
 		else i++;
+
 	}
 	return [obj, err];
 }//»
+
 const add_to_env = (arr, env, opts={})=>{//«
 	let {if_export} = opts;
 	let marr;
@@ -2597,21 +2640,23 @@ const Com = SimpleCommand;
 
 //CBNCMDJF
 const com_opttest = class extends Com{//«
-static getOpts(){
-return {
-s: {
-1: 1,
-2: 2,
-3: 3
-},
-l: {
-one: 1,
-two: 2,
-three: 3
-}
-}
-}
+static getOpts(){//«
+	return {
+		s: {
+			1: 1,
+			2: 2,
+			3: 3
+		},
+		l: {
+			one: 1,
+			two: 2,
+			three: 3
+		}
+	}
+}//»
 	run(){
+log("GOTOPTS");
+log(this.opts);
 		this.ok();
 	}
 }//»
@@ -7206,7 +7251,7 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 //OEORMSRU
 	if (gotopts === true) com_opts = {};
 	else {
-		rv = get_options(arr, usecomword, gotopts);
+		rv = get_options(arr, gotopts);
 		if (rv[1]&&rv[1][0]) {
 			return make_sh_err_com(comword, rv[1][0], com_env);
 		}
