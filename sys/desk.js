@@ -2205,7 +2205,7 @@ const TASKBAR_BOR_WID="1px";
 const TASKBAR_BOR_STY='solid';
 const TASKBAR_BOR=`1px solid #555`;
 const MIN_WIN_LIN_GRAD  =`linear-gradient(90deg, rgba(${TASK_BAR_COL_RGB},0) 90%, rgba(${TASK_BAR_COL_RGB},1) 97%)`;
-let OVERLAYOP = "0.5";
+let OVERLAYOP = "0.825";
 let TASKBAR_OP=1;
 
 //In Folder.js, Main._pad= 5. We need this value here so the icon selection cursor will line up right.
@@ -2492,9 +2492,20 @@ set_desk_bgcol();
 //»
 	overlay=(()=>{//«
 		let fakediv = make('div');
-		fakediv.innerHTML = '<div style="opacity: '+OVERLAYOP+';border-radius: 15px; font-size: xx-large; padding: 0.2em 0.5em; position: fixed; -webkit-user-select: none; transition: opacity 180ms ease-in; color: rgb(16, 16, 16); background-color: rgb(240, 240, 240); font-family: monospace;"></div>';
+		fakediv.innerHTML = `<div 
+style="
+color: #111; 
+background-color: #ccc; 
+border-radius: 15px; 
+font-size: xx-large; 
+padding: 0.2em 0.5em; 
+position: fixed; 
+user-select: none; 
+font-family: monospace;
+"></div>`;
 		return fakediv.childNodes[0];
 	})();
+	overlay._op = OVERLAYOP;
 	overlay._z=CG_Z+1;
 //»
 	desk._add(CG);

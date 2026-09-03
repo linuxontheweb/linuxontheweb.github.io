@@ -461,7 +461,7 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*9/2/26: How to "protect" a directory that takes a while to be populated?  «
+/*8/2/26: How to "protect" a directory that takes a while to be populated?  «
 
 Here we are seeing those duplicates @CVXOERHJN
 
@@ -471,9 +471,9 @@ Here we are seeing those duplicates @CVXOERHJN
 @UOIONWEJR
 
 »*/
-/*8/30/26: «
 
-»*/
+// Old Notes «
+
 /* 8/29/26: backendDelNode «
 
 @IREJNFMNJ: Just want to remove the given node. So just set the
@@ -596,6 +596,41 @@ Those values are not as "important" as the node values because they are complete
 
 
 //»*/
+/* BUG BUG BUG: 8/27/26«
+
+
+Let's just want to pull down the nextNodeId just before
+doing the given operation, in order to reduce the complexity inherent
+in keeping state sync'ed for no good earthly reason.
+
+Call await NEXT_NODE_ID(<dir_id>);
+@YURJKFHFN
+
+
+This is simply restatement of the note of 7/20/26.
+We need to implement mkNewFile and mkDir:
+in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
+
+WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
+
+So let's start this journey by thinking analytically.
+
+First, we need to see if the given nodes exist. So we need to 
+fully populate the dirobj and see if a FSNode with the given name
+already exists.
+
+If not, we are free to create the given node (file or dir) with the
+nextNodeId. In case we are using the wrong id, we need to resync to
+the backend.
+
+But we should have already sync'ed w/ the backend somewhere during
+initialization!!!
+
+
+So how do we pull down the nextNodeId?
+path = 'LOTW/user/$uid/group/$grpId/nextNodeId'
+
+»*/
 /* 8/26/26: Now *really* back ?!?!?«
 
 I've had *tons* of meditation upon (as well as doing *plenty* of work on)
@@ -661,44 +696,6 @@ As regards setting front-end permissions for the user directories, we are simply
 setting them to ALWAYS TRUE (i.e., @HEREPUBPERM and @HEREPRVPERM), because we
 are never assuming *anything* about backend logic here in the frontend. Everyone
 is welcome, per frontend customs, to *try* to do anything they want to the backend.
-»*/
-
-// Old Notes «
-
-/* BUG BUG BUG: 8/27/26«
-
-
-Let's just want to pull down the nextNodeId just before
-doing the given operation, in order to reduce the complexity inherent
-in keeping state sync'ed for no good earthly reason.
-
-Call await NEXT_NODE_ID(<dir_id>);
-@YURJKFHFN
-
-
-This is simply restatement of the note of 7/20/26.
-We need to implement mkNewFile and mkDir:
-in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
-
-WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
-
-So let's start this journey by thinking analytically.
-
-First, we need to see if the given nodes exist. So we need to 
-fully populate the dirobj and see if a FSNode with the given name
-already exists.
-
-If not, we are free to create the given node (file or dir) with the
-nextNodeId. In case we are using the wrong id, we need to resync to
-the backend.
-
-But we should have already sync'ed w/ the backend somewhere during
-initialization!!!
-
-
-So how do we pull down the nextNodeId?
-path = 'LOTW/user/$uid/group/$grpId/nextNodeId'
-
 »*/
 /* 7/21/26 - 8/25/26: NICE BIG BREAK... «
 
