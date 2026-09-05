@@ -3,7 +3,7 @@
 <title>
 </title>
 </head>
-<body>
+<body style="background-color: #000; color: #ccc;  font-family: monospace">
 
 <h1>
 DEVELOPER'S INTRODUCTION
@@ -14,7 +14,32 @@ The system is called "Linux on the Web" (LOTW).  It is a thick JS client, which
 runs in modern web browsers, and has full access to modern Web APIs.
 
 <p>
-The system's state is kept on the global browser object: `window.LOTW`.
+The system's volatile state is kept on the global browser object: `window.LOTW`.
+
+<p>
+It should be assumed that persistent storage works primarily via a 
+shell accessible, POSIX-like file abstraction layer that uses the 
+origin-private file system API (OPFS) as the physical storage backend.
+The  file system's directory structure is stored via
+indexedDb. This database-centric indirection enables the implementation of
+symbolic links as well as hard links in the LOTW file system, making it
+largely compliant with the published POSIX specifications.
+
+<p>
+
+There are certain persistent storage use-cases that use the localStorage API,
+but these are generally of no interest to system users, or even most developers
+for that matter.  Saving the graphical locations of icons as they exist on the
+LOTW desktop is one example of using the (extremely simple) localStorage API.
+
+<p>
+
+All GUI elements in LOTW are constructed by hand-crafted (vanilla) JS code,
+such as document.createElement and parentNode.appendChild.  Only in the case of
+the development of windowed applications must developers worry about the
+construction of their own GUI elements. It is up to the developer to ensure
+that GUI-heavy frameworks (like React, Angular, etc.) are compatible with the
+underlying LOTW system.
 
 <p>
 Constants:
@@ -64,15 +89,17 @@ class myClass { // Pure stateful objects
 
 
 <p>
-/* Do not use this syntax: it is a strange mixture of the 2 pure forms above
+// Do not generally use this syntax: it is a strange mixture of the 
 <br>
-function my_func(){
+// 2 pure forms above
+<br>
+function my_func(){ // Confusing!
 <br>
 //...
 <br>
 }
 <br>
-*/
+
 
 
 <p>
@@ -98,7 +125,7 @@ const APPNAME = "path.to.AppName"; // File location: $APPS/path/to/AppName.js
 
 <br>
 // Helper code here...
-
+<br>
 <br>
 class App {
 
@@ -224,9 +251,9 @@ if (Number.isFinite(rv)) {
 <br>
 onescape(){
 <br>
-// When the app is in an escapable mode, return true Otherwise, let the system
+// When the app is in an escapable mode, return true. 
 <br>
-// window manager take control by returning false
+// Otherwise, let the system window manager take control by returning false
 <br>
 } 
 <br>
@@ -444,10 +471,12 @@ Run the following command in the terminal to generate an icon on the desktop
 `appicon path.to.MyApp &gt; ~/Desktop/MyApp.app`
 
 <br>
-... when the icon is activated, the system will attempt to load an application
+<br>
+... then when the icon is activated, the system will attempt to load an application
 at $APPS/path/to/MyApp.js. Note: while the name of the icon may be arbitrary
 (MyApp *or* Whatever, etc), the `.app` extension is necessary.
 
+<br>
 <br>
 <h2>
 II. Shell Commands
@@ -520,7 +549,7 @@ static getOpts(){
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		a: 1, // No arg: '-a'
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
-&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		b: 2, // Opt arg: '-b true' or '-b'
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		b: 2, // Opt arg: '-b=true' or '-b'
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>
 &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;		c: 3 // Req arg: '-c "hello 123"'
 &nbsp;&nbsp;&nbsp;&nbsp;<br>
@@ -556,7 +585,7 @@ args: an array of strings
 <br>
 <br>
 
-opts: an object that maps `opt -&gt; val`, such that `val` is one of:
+opts: an object that maps `opt =&gt; val`, such that `val` is one of:
 <br>
 <br>
 
@@ -570,7 +599,7 @@ Using the above getOpts example:
 <br>
 <br>
 
-`mycom --all file.txt hello -b there world --chars="something smart" -- -z`
+`mycom --all file.txt hello -b=there world --chars="something smart" -- -z`
 
 <br>
 <br>
@@ -642,7 +671,7 @@ let myobj = new myClass();
 <br>
 await myobj.doIt(1234);
 <br>
-this.out(myobj);
+this.out(myobj); // Are we in a pipe that expects an instance of myClass?
 <br>
 <br>
 
@@ -689,6 +718,7 @@ const onkill = ()=&gt;{
 <br>
 
 LOTW.coms[LIBNAME] = {coms, onkill}; // Export the library to the system.
+<br>
 <br>
 })();
 <br>

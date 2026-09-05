@@ -20,6 +20,11 @@ in the code.)
 
 »*/
 
+/*9/4/26: BUGGY ICONS MOVED TO DESKTOP ARE NOT GETTING SAVED?
+
+Where is the part in move_icons?
+
+*/
 /* 9/2/26: Why does onkeydown pass stuff like:«
 _C _A _S???
 Does this really work: @DBNRURKT ??
@@ -498,8 +503,8 @@ Need to get a fundamental handle on how icons are created and deleted.
 
 Is sys/fs.js, we have:
 
-_dir_update(1, dir, node); // addition
-_dir_update(2, dir, node); // deletion
+_dir_update(DIR_UPDATE_ADD, dir, node); // addition
+_dir_update(DIR_UPDATE_DEL, dir, node); // deletion
 
 I'm thinking is that *all* graphical updates should be done there.
 
@@ -773,6 +778,7 @@ const {//«
 } = NS.api.util;//»
 
 //»
+
 
 //Desk«
 
@@ -2437,7 +2443,10 @@ set_desk_bgcol();
 	desk_imgdiv._op = DEF_BG_IMG_OP;
 	desk_imgdiv.id="bg_image_div";
 
-	if (!qObj.nobgimg) desk_imgdiv.style.backgroundImage=`url("${BACKGROUND_IMAGE_URL}")`;
+	if (!qObj.nobgimg) {
+		desk_imgdiv.style.backgroundImage=`url("${BACKGROUND_IMAGE_URL}")`;
+	}
+//log
 //	if (!dev_mode&&!qObj.bgcol) body.style.backgroundImage = DEF_DESK_GRADIENT;
 //	if (!qObj.bgcol) body.style.backgroundImage = DEF_DESK_GRADIENT;
 
@@ -4807,7 +4816,7 @@ if (!parNode.perm) {
 }
 
 await parNode.loadKids();
-if (!parNode.done){
+if (!parNode.loadKidsDone){
 	poperr(`${path}: could not populate the parent folder`);
 	return;
 }
@@ -5664,14 +5673,14 @@ if (!e.isFake) nopropdef(e);
 if (have_window_cycle) return;
 let menu = [//«
 "Properties",()=>{show_node_props(node);},
-/*
+///*
 "Rename", () => {
 	setTimeout(() => {
 		this.nodelete = true;
 		init_icon_editing(this);
 	}, 25);
 },
-*/ 
+///*/ 
 "Delete", () => {delete_selected_files(this);}
 ];//»
 let open_opts=["Binary\xa0Viewer", ()=>{open_window_by_icon(this,{altApp: DEF_BIN_APP});}];
@@ -5745,13 +5754,8 @@ makeDOMElem(){//«
 	wrapper.iconElem=d;
 
 	let label = d.childNodes[1];
-//	label._bgcol = "#000";
-//log(label);
 	label._over="hidden";
 	label.iconElem = d;
-//log(`NAME: ${name}`);
-//	label.title = name;
-//	label._z = 100;
 	this.label = label;
 	this.nameSpan = label.childNodes[0];
 
@@ -5809,18 +5813,10 @@ setApp(){//«
 	
 }//»
 setImg(){//«
-	let{wrapper, useNode: usenode}=this;
+	let{wrapper, ext}=this;
 	let ext_div="";
-	let ext, ext_text;
-	if (usenode && usenode.ext) {
-		ext = usenode.ext.toLowerCase();
-		if (TEXT_EXTENSIONS.includes(ext)) {
-			ext_text = ext;
-		}
-	}
-//	this.ext = ext;
-	if (ext_text){
-		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;">${ext_text}</div>`;
+	if (TEXT_EXTENSIONS.includes(ext)) {
+		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;">${ext}</div>`;
 	}
 	let ch = getAppIcon(this.useAppName||this.appName,{html:true});
 	wrapper.innerHTML = `${ext_div}<span class="iconi" style="min-width:48px;text-align:center;font-size:38px;position:relative;">${ch}</span>`;
@@ -5889,15 +5885,6 @@ addOverlay(){//«
 	return overdiv;
 };
 //»
-/*
-openWin(){//«
-	return new Promise((Y,N)=>{
-//		if (this.win) return Y(this.win);
-//		open_window_by_icon(icn, {winCb: Y});
-		open_window_by_icon(this);
-	});
-};//»
-*/
 openWin(){return open_window_by_icon(this);}
 addLink(){//«
 	let if_broken = !this.ref;
@@ -6005,7 +5992,7 @@ log(`${verb}: localStorage["${k}"] = ${val}`);
 }
 
 }
-save(){saveToStorage();}
+save(){this.saveToStorage();}
 //»
 get linkfullpath(){if (this.ref) return this.ref.fullpath;return this.node.fullpath;}
 get fullpath(){return this.node.fullpath;}
@@ -6053,24 +6040,6 @@ cerr("NO PAR/NAME!?!");
 		}
 	}
 };//»
-
-/*
-const cleanup_deleted_icons = path => {//«
-let namearr = getNameExt(path, null, true);
-let usepath = `${namearr[0]}/${namearr[1]}`;
-let useext = namearr[2];
-//cwarn(`GETBYPATH ${usepath} ${useext}`);
-
-// ENTKYOYJD
-let icons = get_icons_by_path(usepath, useext || null);
-log(`GOT: ${icons.length}`);
-for (let icn of icons) {
-//log(icn);
-	if (icn.cancel_func) icn.cancel_func();
-	icn.del();
-}  
-}//»
-*/
 
 const toggle_icon_display = () => {//«
 	if (!dev_mode) return;
@@ -6269,23 +6238,16 @@ if (!do_copy) {
 					src_node.delIcons(icn);
 					rm_from_icons(icn);
 					mv_icn.iconElem._op=1;
-//					mv_icn.iconElem._dis="";
 					mv_icn.node = dest_node;
 					delete mv_icn.disabled;
-
-/*
-Since the only moved icon has been relocated to the desktop, we need to call
-Desk.make_all_icons() with the new node, and the option to only
-*/
-
-for (let win of get_wins_by_path(dest_path)) {
-	add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
-}
-if (!do_copy) {
+					mv_icn.save();
+					for (let win of get_wins_by_path(dest_path)) {
+						add_icon_to_folder_win(new Icon(dest_node, {parApp: win.app}), win);
+					}
+					if (!do_copy) {
 // DNMRHTJY
-//	rm_icons_and_update_wins(oldpath, newpath);
-	update_win_paths(oldpath, newpath);
-}
+						update_win_paths(oldpath, newpath);
+					}
 				}
 			});
 		}//»
@@ -6422,6 +6384,10 @@ let did_reset = false;
 let do_copy = false;
 
 let from_node = await _ICONS[0].fullpath.toNode({getLink: true});
+if (!from_node) {
+cwarn("GOT NO FROM_NODE FROM ICONS[0]:", _ICONS[0].fullpath);
+return;
+}
 let paths = [];
 let good = [];
 let dest_node = await dest_path.toNode();
@@ -6875,9 +6841,10 @@ const save_icon_editing = async() => {//«
 			delete CEDICN._savetext;
 		}
 		if (newname){
-			update_all_paths(oldpath, newpath);
+			CEDICN.node = await newpath.toNode();
 			CEDICN.setWindowName();
 			CEDICN.updateDOMElement();
+			update_all_paths(oldpath, newpath);
 		}
 		else CEDICN.setLabelName();
 		

@@ -1823,6 +1823,15 @@ LINK_NODE_TYPE,
 //BAD_LINK_NODE_TYPE,
 //NULL_BLOB_NODE_TYPE,
 
+NODE_UPDATE_NAME,
+NODE_UPDATE_PAR,
+NODE_UPDATE_ID,
+NODE_UPDATE_BLOB_ID,
+NODE_UPDATE_SIZE,
+
+DIR_UPDATE_ADD,
+DIR_UPDATE_DEL,
+
 } = LOTW.globals.fs;//»
 const { // firebase «
 	appUrl, 
@@ -1944,7 +1953,7 @@ cerr("COULD NOT CREATE THE NEW DIR");
 }
 
 let node = new DirNode(name, parnode);
-_dir_update(1, parnode, node); // Set parnode.#kids[name]
+_dir_update(DIR_UPDATE_ADD, parnode, node); // Set parnode.#kids[name]
 return node;
 
 }
@@ -1984,9 +1993,9 @@ cerr("COULD NOT CREATE THE NEW FILE");
 	}
 
 	let node = new FileNode(name, parnode);
-	_node_update(3, node, next_id); // Set node.#id
-	_node_update(4, node, 0); // Set node.#blobId
-	_dir_update(1, parnode, node); // Set parnode.#kids[name]
+	_node_update(NODE_UPDATE_ID, node, next_id); // Set node.#id
+	_node_update(NODE_UPDATE_BLOB_ID, node, 0); // Set node.#blobId
+	_dir_update(DIR_UPDATE_ADD, parnode, node); // Set parnode.#kids[name]
 	return node;
 
 }
@@ -2080,10 +2089,10 @@ cwarn("COULD NOT SET THE BLOB VALUE!!!");
 return;
 }
 if (need_update){
-_node_update(4, node, bid);
+_node_update(NODE_UPDATE_BLOB_ID, node, bid);
 }
 
-_node_update(5, node, blob.size);
+_node_update(NODE_UPDATE_SIZE, node, blob.size);
 
 return blob;
 
@@ -2159,7 +2168,7 @@ for (let i=0; ; i++){ //«
 //log(obj);
 	if (typ === FILE_NODE_TYPE){
 		node = new FileNode(name, par);
-		_node_update(4, node, obj.blobId);
+		_node_update(NODE_UPDATE_BLOB_ID, node, obj.blobId);
 	}
 	else if (typ === DIR_NODE_TYPE){
 		node = new DirNode(name, par);
@@ -2168,10 +2177,10 @@ for (let i=0; ; i++){ //«
 cerr(`WHAT NODE TYPE??? ${typ}`); // Is this a symlink?
 		return;
 	}
-	_node_update(3, node, i); // node.#id is the iterator
+	_node_update(NODE_UPDATE_ID, node, i); // node.#id is the iterator
 	break; // We found want we want!
 }//»
-_dir_update(1, par, node); // Add to par.#kids
+_dir_update(DIR_UPDATE_ADD, par, node); // Add to par.#kids
 return node;
 
 };//»
@@ -2204,7 +2213,10 @@ if (!snap){
 cerr("NO SNAP!?!?!");
 return;
 }
-_dir_update(3, dir, true); // Set dir.#done = true
+
+dir.loadKidsDone = true;
+
+
 if (!snap.exists()) {
 cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
 	return;
@@ -2217,7 +2229,7 @@ let node;
 let name = (obj.path.split("/"))[1];
 if (obj.type === FILE_NODE_TYPE){
 	node = new FileNode(name, dir);
-	_node_update(4, node, obj.blobId);
+	_node_update(NODE_UPDATE_BLOB_ID, node, obj.blobId);
 }
 else if (obj.type === DIR_NODE_TYPE){
 	node = new DirNode(name, dir);
@@ -2227,28 +2239,10 @@ cwarn(`WHAT TYPE IS THIS OBJ(${obj.type})???`);
 log(obj);
 return;
 }
-_node_update(3, node, i); // node.#id is the iterator
-_dir_update(1, dir, node);
+_node_update(NODE_UPDATE_ID, node, i); // node.#id is the iterator
+_dir_update(DIR_UPDATE_ADD, dir, node);
 }
 
-/*
-Where do the fbase nodeId's go?
-	- The same slot as the node id's for OP_FS_TYPE: 
-		_node_update(3, dir, fbase_node_id)
-	- in data.fbaseNodeId?
-*/
-
-/*
-cwarn("GOT NODES");
-for (let obj of arr) {
-//«
-//	parId: parnode.id,
-//	path: `${parnode.id}/${name}`,
-//	type: FILE_NODE_TYPE, // Just change this to DIR_NODE_TYPE to make a directory
-//	blobId: NULL_FBASE_RTDB_BLOB
-//»
-}
-*/
 
 };//»
 const populate_fbase_user_dir = async (user_dir) => {//«
@@ -2320,7 +2314,7 @@ cerr(`COULD NOT UPDATE PATH: ${path}`);
 							return;
 						}
 						prof[k] = str; // Just cache this for easy retrieval
-						_node_update(5, node, blob.size);
+						_node_update(NODE_UPDATE_SIZE, node, blob.size);
 						return blob;
 					}//»
 					else {//«
@@ -2332,7 +2326,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 				}
 			}//»
 		});
-		_dir_update(1, user_dir, node);
+		_dir_update(DIR_UPDATE_ADD, user_dir, node);
 	}//»
 // YGJDPLKIU
 	{// Mount "pub" for everyone «
@@ -2356,8 +2350,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 			mkNewFile: mk_new_file_func_pub,
 			backendDelNode: del_node_func_pub
 		});
-		_dir_update(1, user_dir, pub);
-		_node_update(3, pub, PUB_DIR_ID); // Id
+		_dir_update(DIR_UPDATE_ADD, user_dir, pub);
+		_node_update(NODE_UPDATE_ID, pub, PUB_DIR_ID); // Id
 	//»
 	}//»
 	if (uid === cur_user.uid) {// Mount "prv" for the cur_user «
@@ -2382,10 +2376,11 @@ return `fbase.js: not setting constant value: '${k}'`;
 			mkNewFile: mk_new_file_func_prv,
 			backendDelNode: del_node_func_prv
 		});
-		_dir_update(1, user_dir, prv); // Add kid
-		_node_update(3, prv, PRV_DIR_ID); // Id HEREPRVRV
+		_dir_update(DIR_UPDATE_ADD, user_dir, prv); // Add kid
+		_node_update(NODE_UPDATE_ID, prv, PRV_DIR_ID); // Id HEREPRVRV
 	}//»
-	_dir_update(3, user_dir, true); // done
+
+	user_dir.loadKidsDone = true;
 
 };//»
 const populate_fbase_users = async (users_dir) => {//«
@@ -2463,11 +2458,11 @@ dirnames.
 			fbaseProf: prof
 		},
 	});//»
-	_dir_update(1, users_dir, dir);
+	_dir_update(DIR_UPDATE_ADD, users_dir, dir);
 
 }
 
-_dir_update(3, users_dir, true); // users_dir.#done = true
+users_dir.loadKidsDone = true;
 
 is_populating_users = false;
 
@@ -2602,7 +2597,7 @@ let fbase_dir = new DirNode("fbase", par_node, {
 		return fbase_dir.getKid(name);
 	}
 });
-_dir_update(1, par_node, fbase_dir); // Add kid
+_dir_update(DIR_UPDATE_ADD, par_node, fbase_dir); // Add kid
 
 return true;
 

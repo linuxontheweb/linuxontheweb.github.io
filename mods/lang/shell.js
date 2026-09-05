@@ -3156,7 +3156,7 @@ async run(){//«
 //		let list = await node.list;
 		await node.loadKids();
 
-if (!node.done){
+if (!node.loadKidsDone){
 	this.err(`${node.fullpath}: could not populate the directory`);
 	return;
 

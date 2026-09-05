@@ -15,7 +15,7 @@ const {//«
 //	modequit,
 //	quit_new_screen,
 	h,
-	tabdiv
+	renderDiv
 } = Term;//»
 this.comName = "less";
 const less = this;
@@ -183,13 +183,13 @@ cwarn("GOT INVALID colobj", obj);
 //	Term.updateStatLines([stat_str]);
 /*
 	if (this.minHeight && this.h < this.minHeight){
-		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
+		renderDiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
 	}
 	else {
-		tabdiv.innerHTML = outarr.join("\n");
+		renderDiv.innerHTML = outarr.join("\n");
 	}
 */
-	tabdiv.innerHTML = outarr.join("\n");
+	renderDiv.innerHTML = outarr.join("\n");
 
 };
 this.render = render;

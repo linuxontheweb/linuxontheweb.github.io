@@ -413,22 +413,22 @@ wrapdiv._fw = this.fw;
 wrapdiv._ff = this.ff;
 wrapdiv.style.whiteSpace = "pre";
 //»
-let tabdiv = make('div');//«
-tabdiv.id="termtabdiv_"+this.winid;
-tabdiv.style.userSelect = "text"
-tabdiv._w="100%";
-tabdiv._pos="absolute";
-tabdiv.onmousedown=(e)=>{
+let renderDiv = make('div');//«
+//renderDiv.id="termrenderdiv_"+this.winid;
+renderDiv.style.userSelect = "text"
+renderDiv._w="100%";
+renderDiv._pos="absolute";
+renderDiv.onmousedown=(e)=>{
 	this.downEvt=e;
 };
-tabdiv.onmouseup=e=>{//«
+renderDiv.onmouseup=e=>{//«
 	if (!this.downEvt) return;
 	let d = util.dist(e.clientX,e.clientY,this.downEvt.clientX, this.downEvt.clientY);
 	if (d < 10) return;
 //	focus_or_copy();
 	this.focusOrCopy();
 };//»
-tabdiv.onclick=e=>{//«
+renderDiv.onclick=e=>{//«
 	e.stopPropagation();
 	if (this.dblClickTimeout){
 		clearTimeout(this.dblClickTimeout);
@@ -443,15 +443,15 @@ tabdiv.onclick=e=>{//«
 		this.focusOrCopy();
 	},500);
 };//»
-tabdiv.ondblclick = e => {//«
+renderDiv.ondblclick = e => {//«
 	e.stopPropagation();
 	this.dblClickTimeout = setTimeout(()=>{
 		this.focusOrCopy();
 	}, 500);
 };//»
-tabdiv._loc(0,0);
-tabdiv.style.tabSize = this.tabSize;
-wrapdiv.tabdiv = tabdiv;
+renderDiv._loc(0,0);
+renderDiv.style.tabSize = this.tabSize;
+wrapdiv.renderDiv = renderDiv;
 //»
 let bgdiv = make('div');
 bgdiv._w="100%";
@@ -508,11 +508,11 @@ overdiv.onmousemove = e=>{//«
 //»
 
 wrapdiv.appendChild(bgdiv);
-wrapdiv.appendChild(tabdiv);
+wrapdiv.appendChild(renderDiv);
 main.appendChild(wrapdiv);
 
-this.tabSize = parseInt(tabdiv.style.tabSize);
-this.tabdiv = tabdiv;
+this.tabSize = parseInt(renderDiv.style.tabSize);
+this.renderDiv = renderDiv;
 this.bgdiv = bgdiv;
 this.wrapdiv = wrapdiv;
 //this.statdiv = statdiv;
@@ -729,7 +729,7 @@ cwarn(`Invalid arg to setTabSize: '${arg}'`);
 		return;
 	}
 	if (n==0||n>this.maxTabSize) return;
-	this.tabdiv.style.tabSize = n;
+	this.renderDiv.style.tabSize = n;
 	this.tabSize = n;
 	return true;
 }
@@ -997,18 +997,18 @@ return;
 
 	}//»
 	if (this.minHeight && this.h < this.minHeight){
-		this.tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
+		this.renderDiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
 	}
 	else {
-		this.tabdiv.innerHTML = outarr.join("\n");
+		this.renderDiv.innerHTML = outarr.join("\n");
 	}
 }//»
 resetXScroll(){//«
-	this.tabdiv._x=0;
+	this.renderDiv._x=0;
 }//»
 setXScroll(ln, usex){//«
-	const{tabdiv}=this;
-	tabdiv._x=0;
+	const{renderDiv}=this;
+	renderDiv._x=0;
 	if (!ln.length) return;
 	let x_wid;
 	if (ln.match(/[^\t]\t/)){//«
@@ -1059,7 +1059,7 @@ There are embedded tabs here, so we have to do this the hard way
 	let diff = scrw - x_wid;
 //log(dx, scrw);
 	while(diff < cellw){
-		tabdiv._x-=dx;
+		renderDiv._x-=dx;
 		diff += dx;
 	}
 }//»
@@ -1107,7 +1107,7 @@ cerr("What is the array size different from the numStatLines????");
 
 getGrid(){//«
 
-	const{tabdiv, wrapdiv}=this;
+	const{renderDiv, wrapdiv}=this;
 	if (!(wrapdiv._w&&wrapdiv._h)) {
 		if (this.Win.killed) return;
 cerr("DIMS NOT SET");
@@ -1121,17 +1121,17 @@ cerr("DIMS NOT SET");
 	while (true) {
 		if (this.Win.killed) return;
 		str+=usech;
-		tabdiv.innerHTML = str;
-		if (tabdiv.scrollWidth > wrapdiv._w) {
-			tabdiv.innerHTML = usech.repeat(str.length-1);
-			wrapdiv._w = tabdiv.clientWidth;
+		renderDiv.innerHTML = str;
+		if (renderDiv.scrollWidth > wrapdiv._w) {
+			renderDiv.innerHTML = usech.repeat(str.length-1);
+			wrapdiv._w = renderDiv.clientWidth;
 			this.nCols = str.length - 1;
 			break;
 		}
 		iter++;
 		if (iter > 1000) {
 log(wrapdiv);
-			cwarn("INFINITE LOOP ALERT DOING WIDTH: " + tabdiv.scrollWidth + " > " + this.w);
+			cwarn("INFINITE LOOP ALERT DOING WIDTH: " + renderDiv.scrollWidth + " > " + this.w);
 			return 
 		}
 	}
@@ -1144,12 +1144,12 @@ log(wrapdiv);
 	str = usech;
 	iter = 0;
 	while (true) {
-		tabdiv.innerHTML = str;
-		if (tabdiv.scrollHeight > wrapdiv._h) {
+		renderDiv.innerHTML = str;
+		if (renderDiv.scrollHeight > wrapdiv._h) {
 			let newarr = str.split("\n");
 			newarr.pop();
-			tabdiv.innerHTML = newarr.join("\n");
-			wrapdiv._h = tabdiv.clientHeight;
+			renderDiv.innerHTML = newarr.join("\n");
+			wrapdiv._h = renderDiv.clientHeight;
 			this.nRows = newarr.length;
 			break;
 		}
@@ -1157,10 +1157,10 @@ log(wrapdiv);
 		iter++;
 		if (iter > 1000) {
 log(wrapdiv);
-			return cwarn("INFINITE LOOP ALERT DOING HEIGHT: " + tabdiv.scrollHeight + " > " + this.h);
+			return cwarn("INFINITE LOOP ALERT DOING HEIGHT: " + renderDiv.scrollHeight + " > " + this.h);
 		}
 	}
-	tabdiv.innerHTML="";
+	renderDiv.innerHTML="";
 	wrapdiv._over="hidden";
 }
 //»
@@ -1216,19 +1216,19 @@ setBgRows(){//«
 }//»
 resize(opts={}) {//«
 	if (this.Win.killed) return;
-	const{actor, tabdiv, wrapdiv, main}=this;
+	const{actor, renderDiv, wrapdiv, main}=this;
 	let {isInit}=opts;
 	wrapdiv._w = main._w;
 	wrapdiv._h = main._h;
 	let oldw = this.w;
 	let oldh = this.h;
 	this.nCols=this.nRows=0;
-	tabdiv._dis="";
+	renderDiv._dis="";
 	wrapdiv._bgcol=this.bgCol;
 	main._bgcol=this.bgCol;
 	this.getGrid();
 	if (this.nCols < this.minTermWid){
-		tabdiv._dis="none";
+		renderDiv._dis="none";
 		wrapdiv._bgcol="#400";
 		main._bgcol="#400";
 		this.isLocked = true;
@@ -3250,9 +3250,9 @@ onresize(){this.resize();}
 xScrollTerminal(opts={}){//«
 
 	let {amt, toRightEdge, toLeftEdge} = opts;
-	let _x = tabdiv._x;
-	let cw = tabdiv.clientWidth;
-	let sw = tabdiv.scrollWidth;
+	let _x = renderDiv._x;
+	let cw = renderDiv.clientWidth;
+	let sw = renderDiv.scrollWidth;
 	let xdiff;
 	let usex = null;
 	if (amt) xdiff = amt;
@@ -3275,9 +3275,9 @@ xScrollTerminal(opts={}){//«
 	if (xdiff){
 		_x+=xdiff;
 		if (_x > 0) _x = 0;
-		tabdiv._x = _x;
+		renderDiv._x = _x;
 	}
-	else if (usex !== null) tabdiv._x = usex;
+	else if (usex !== null) renderDiv._x = usex;
 	else {
 	return cwarn("x_scroll_terminal: nothing to do!!!");
 	}
@@ -3368,7 +3368,7 @@ quitNewScreen(screen, opts={}){//«
 	if (!screen.funcs) screen.funcs = {};
 	this.onescape = screen.funcs.onescape;
 	this.onreload = screen.funcs.onreload;
-	this.tabdiv._x = 0;
+	this.renderDiv._x = 0;
 
 	if (old_actor&&old_actor.cb) {
 		old_actor.cb(!opts.reload);
@@ -3376,7 +3376,7 @@ quitNewScreen(screen, opts={}){//«
 }//»
 render(opts={}){//«
 
-	const{tabdiv, actor}=this;
+	const{renderDiv, actor}=this;
 //Var«
 
 	let stat_x;
@@ -3537,7 +3537,7 @@ throw new Error("Weird condition detected in visual mark mode involving curnum (
 		}//»
 		else if (is_folded){//Folded row«
 //This marker is reserved as the first character for folded rows
-			if (tabdiv._x) arr=[];
+			if (renderDiv._x) arr=[];
 			else {
 				arr[0]=`<span style="color:${this.rowFoldColor};">${arr[0]}`
 				arr[arr.length-1]=`${arr[arr.length-1]}</span>`;
@@ -3749,10 +3749,10 @@ else mess = "-- REPLACE --";
 	}//»
 
 	if (this.minHeight && this.h < this.minHeight){
-		tabdiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
+		renderDiv.innerHTML=`<center><span style="background-color:#f00;color:#fff;">Min height: ${this.minHeight}</span></center>`;
 	}
 	else {
-		tabdiv.innerHTML = outarr.join("\n");
+		renderDiv.innerHTML = outarr.join("\n");
 	}
 }//»
 fmtLs(arr, lens, ret, types, color_ret, col_arg){//«

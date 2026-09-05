@@ -404,7 +404,7 @@ cwarn("No path given (Win._fullpath)");
 		else cwarn("Opening in 'app mode'");
 		return;
 	}
-	if (!dir.done) {
+	if (!dir.loadKidsDone) {
 		_stat_num("Getting entries...");
 		await dir.loadKids();
 	}

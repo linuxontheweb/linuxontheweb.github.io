@@ -1,4 +1,8 @@
 (()=>{"use strict";const MODNAME="term.vim";
+
+/*9/4/26: Escape w/ Ctrl+C«
+How about simply @SPREMJBN???
+»*/
 /*6/14/26: Just removed all syntax-highlighting, which as hardcoded into«
 this file, for JS-only purposes. If I'm going to support syntax highlighting
 in the future, it will be closer to the "real" vim way of treating each
@@ -381,6 +385,7 @@ const NUM=(v)=>Number.isFinite(v);
 
 //»
 
+
 LOTW.mods[MODNAME] = function(Term) {
 
 //Vim«
@@ -391,12 +396,12 @@ this.comName="vim";
 const{
 	topwin,
 	Desk,
-	tabdiv
+	renderDiv
 } = Term;
 let{ w, h } = Term;
 
 const cur_dir = Term.env.cwd.cwd;
-const never_render= !tabdiv;
+const never_render= !renderDiv;
 
 //let{
 //w,h, cursor_id, mainWin
@@ -751,7 +756,7 @@ return THROW("Weird condition detected in visual mark mode involving curnum (cur
 		}//»
 		else if (is_folded){//Folded row«
 //This marker is reserved as the first character for folded rows
-			if (tabdiv._x) arr=[];
+			if (renderDiv._x) arr=[];
 			else {
 //Term.rowFoldColor = "rgb(160,160,255)";
 				arr[0]=`<span style="color:rgb(160,160,255);">${arr[0]}`
@@ -907,7 +912,7 @@ log(obj);
 		stat_str = `<span>${str}</span>`;
 	}//»
 	outarr.push(stat_str);
-	tabdiv.innerHTML = outarr.join("\n");
+	renderDiv.innerHTML = outarr.join("\n");
 
 };
 this.render = render;
@@ -7175,6 +7180,13 @@ keydown_iter++;
 
 	if (sym.match(/^_[CAS]+$/)) return;
 	num_escapes=0;
+
+// SPREMJBN
+	if (sym == "c_C"){
+		vim.onescape();
+		return;
+	}
+
 	if (e && PREV_DEF_SYMS.includes(sym)) e.preventDefault();
 	if (sym.match(/^[\x20-\x7f]_S?$/)) {
 		if (mode===LINE_WRAP_MODE){

@@ -1,5 +1,16 @@
 (()=>{"use strict";const LIBNAME="fs";
 
+/* 9/4/26: A little buggy«
+When mv'ing by only changing the name of a desktop icon, the old icon
+gets deleted and a new one (usually) gets put at a different grid location,
+as close to grid loc 0 as possible.
+
+See: @HFJGKTMS
+
+It will seem to be overly complex if we really do anything to change the
+current behavior. IT ISN'T REALLY A BUG AT ALL!
+
+»*/
 /* 8/26/26: Need done_cb's for... ? «
 
 
@@ -1606,6 +1617,7 @@ const com_mv = class extends Com{//«
 //NDMTKYI
 		const done_cb = async (src_node, dest_node) =>{//«
 			if (!Desk) return;
+//HFJGKTMS
 			src_node.delIcons();
 			await Desk.update_win_paths(src_node.fullpath, dest_node.fullpath);
 			Desk.make_all_icons(dest_node);
