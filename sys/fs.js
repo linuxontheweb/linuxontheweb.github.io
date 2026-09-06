@@ -59,13 +59,31 @@ _dir_update(1, par, my_node);
 
 //»
 
+/* 9/5/26 BUG BUG BUG«
+
+When mv'ing from SHM_FS_TYPE to OP_FS_TYPE, there is a complaint about *something* not having a valid
+blobId.
+
+REPODUCE:
+
+
+cd /dev/shm
+echo hi > 1
+mv 1 ~/Desktop
+
+LET'S JUST DISABLE THE IDEA OF 'MV' BETWEEN DIFFERENT FILE TYPES:
+THE USER CAN DO CP-THEN-RM.
+
+»*/
 /*9/4/26: Reaffirming a major issue in do_move:«
+
+ACTUALLY: Everything move a simple rename. We also happen to be renaming the
+"path" part to the new parent's id.
 
 Need to get fully generic at do_move: 
 @OIKFBJKB
 
-This is actually very wrong because there is no test for a simple
-rename operation.
+
 
 »*/
 /* 8/30/26: Ideas «
@@ -874,6 +892,8 @@ const {
     ALWAYS_DONE_DIR_FS_TYPES,
     PERSISTENT_BACKEND_FS_TYPES,
 	RM_OK_FS_TYPES,
+	UPDATE_FULLPATH_OK_FS_TYPES,
+
 // File system "node" types
 
 	FILE_NODE_TYPE,
@@ -913,6 +933,7 @@ const PERSISTENT_BACKEND_FS_TYPES = [ OP_FS_TYPE ];
 
 const {
 //	qObj
+	new_move,
 	test_icons,
 	mnt_fbase,
 } = globals.qObj;
@@ -1350,7 +1371,8 @@ return THROW("WHAT IS THIS NAME????");
 	this._mkDir = opts.mkDir;
 
 	this._backendDelNode = opts.backendDelNode;
-//	this.#delNode = opts.delNode || del_node;
+
+	this._backendUpdateFullPath = opts.backendUpdateFullPath;
 
 }//»
 mkIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
@@ -1453,11 +1475,17 @@ log("Got: default: touchFile");
 backendDelNode(){//«
 //cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
 // This is called *inside* of del_node...
-	if (this.type === SHM_FS_TYPE) {
+let typ = this.type;
+if (!RM_OK_FS_TYPES.includes(typ)){
+cwarn(`WHAT TYPE IS BEING PASSED TO backendDelNode: ${typ}`);
+	return;
+}
+
+	if (typ === SHM_FS_TYPE) {
 // /dev/shm (Shared memory) has no backend, so this is a no-op
 		return true;
 	}
-	if (this.type === OP_FS_TYPE) return db.removeNode(this.id, this.par.id); 
+	if (typ === OP_FS_TYPE) return db.removeNode(this.id, this.par.id); 
 
 	if (this._backendDelNode) {
 log("Got: this._backendDelNode");
@@ -1471,6 +1499,36 @@ THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelN
 
 // So calling del_node here might lead to infinite loops.
 
+}//»
+backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name){//«
+
+let typ = this.type;
+
+if (!UPDATE_FULLPATH_OK_FS_TYPES.includes(typ)){
+cwarn(`WHAT TYPE IS BEING PASSED TO backendUpdateFullPath: ${typ}`);
+	return;
+}
+
+if (typ === SHM_FS_TYPE) {
+// /dev/shm (Shared memory) has no backend, so this is a no-op
+	return true;
+}
+
+if (typ === OP_FS_TYPE) return db.moveNode(src_id, src_par_id, dest_par_id, use_dest_name); 
+
+if (this._backendUpdateFullPath) {
+log("Got: this._backendUpdateFullPath");
+//	return this._backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name);
+	return this._backendUpdateFullPath(this, src_id, src_par_id, dest_par_id, use_dest_name);
+
+}
+if (this.mntPar._backendUpdateFullPath) {
+log("Got: mntPar._backendUpdateFullPath");
+//	return this.mntPar._backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name);
+	return this.mntPar._backendUpdateFullPath(this, src_id, src_par_id, dest_par_id, use_dest_name);
+}
+
+THROW("CALLED backendUpdateFullPath WITHOUT this._backendUpdateFullPath or mntPar._backendUpdateFullPath!?!?!");
 
 }//»
 //Getters: name|par|ext|id|blobId|fullpath|...«
@@ -1918,6 +1976,76 @@ const THROW = mess =>{throw new Error(mess);}
 
 // Filesystem ops «
 
+/*
+
+const do_rename = async (src_node, dest_name){
+
+};
+
+*/
+
+
+
+const new_do_move = async(src_node, dest_name, dest_par)=>{//«
+log("HELLO?");
+	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
+	let src_id = src_node.id;
+	let src_blob_id = src_node.blobId;
+	let src_par = src_node.par;
+	let src_par_id = src_par.id;
+	let dest_par_id = dest_par.id;
+	let use_dest_name;
+	if (dest_name && (dest_name !== src_node.name)) use_dest_name = dest_name;
+	let save_blob = null;
+
+if (src_node.type === dest_par.type) {//«
+cwarn("INTRA-TYPE MOVE");
+	let typ = src_node.type;
+
+	if (typ === OP_FS_TYPE || typ == FBASE_USER_GRP_FS_TYPE){
+
+		if (!await src_node.backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name)) {
+cerr("backendUpdateFullPath: FAIL");
+			return;
+		}
+
+	}
+	else{
+cwarn("No backend uodate needed");
+	}
+}//»
+else if (src_node.isFile){//«
+	save_blob = await src_node.blob;
+	if (!await src_node.backendDelNode()){
+cerr("backendDelNode: FAIL");
+		return;
+	}
+}//»
+
+	_dir_update(DIR_UPDATE_DEL, src_par, src_node); // Delete src_node from src_par
+
+	let dest_node;
+	if (src_node.isFile) {
+		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
+		if (save_blob) {
+			await dest_node.setValue(save_blob);
+		}
+	}
+	else {
+		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
+		_node_update(NODE_UPDATE_NAME, dest_node, dest_name); // Set: dest_node.#name
+		_node_update(NODE_UPDATE_PAR, dest_node, dest_par); // Set: dest_node.#par
+	}
+
+	_dir_update(DIR_UPDATE_ADD, dest_par, dest_node); // Add dest_node to dest_par
+
+// XRUIOPKGH
+	_node_update(NODE_UPDATE_ID, dest_node, src_id); // Set: dest_node.#id on dest_node (copy)
+	_node_update(NODE_UPDATE_BLOB_ID, dest_node, src_blob_id); // Set: dest_node.#blobId on dest_node (copy)
+
+	return dest_node;
+
+};//»
 
 const do_move = async(src_node, dest_name, dest_par)=>{//«
 	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
@@ -1926,12 +2054,17 @@ const do_move = async(src_node, dest_name, dest_par)=>{//«
 	let src_id = src_node.id;
 	let src_blob_id = src_node.blobId;
 //log(`MOVE src_id: ${src_id}`);
+/*
 if (!src_id){
+if (!src_id){
+
 //MXFBNRHOL
+
 cerr("NO ID IN THE src_node");
 log(src_node);
 return;
 }
+*/
 	let src_par = src_node.par;
 	let src_par_id = src_par.id;
 	let dest_par_id = dest_par.id;
@@ -2000,6 +2133,7 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 	return dest_node;
 
 };//»
+
 const do_copy = async(from_node, newName, toDir) => {//«
 //	let node = this;
 	let newpath = `${toDir.fullpath}/${newName}`;
@@ -2356,6 +2490,7 @@ for (let arg of args){//«
 		continue;
 	}//»
 
+
 	if (!if_cp && src_node.isRoot) {//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `skipping root directory`);
@@ -2378,6 +2513,10 @@ for (let arg of args){//«
 //No moving of folders that contain files that are actively being edited
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `${src_path}: move-locked`);
+	}//»
+	else if (!if_cp && src_node.type !== dest_par_node.type){//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr(`refusing to 'mv' between different fs types (${src_node.type} -> ${dest_par_node.type})`);
 	}//»
 	else if (if_cp && src_node.isDir){//«
 		if (if_recur) {
@@ -2455,6 +2594,10 @@ for (let arr of mvarr) {//«
 	let real_dest_path;
 
 	let dest_node_rv;
+
+
+	let is_rename = src_node.par === dest_par_node;
+
 //»
 
 	if (dest_arg_node) {//«
@@ -2565,9 +2708,21 @@ if (NS.Desk && !dom_objects){
 
 	}//»
 	else {//«
+/*
+if (is_rename){
+
+cwarn(`Simple rename from ${src_node.name} => ${dest_name} !!!`);
+
+}
+*/
 
 //WYRHTIYK
-	 	dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
+		if (new_move) {
+	 		dest_node_rv = await new_do_move(src_node, dest_name, dest_par_node);
+		}
+		else{
+	 		dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
+		}
 		if (!dest_node_rv){
 			if (no_move_cb) no_move_cb(src_path);
 			werr(`could not move from ${src_path} to ${dest_path}`);

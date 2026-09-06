@@ -1,7 +1,8 @@
 (()=>{"use strict";const APPNAME="Terminal";
-/*9/2/26: Want to allow instant auto-completion of folders + slashes...
 
-*/
+/*9/2/26: Want to allow instant auto-completion of folders + slashes...«
+Done: @MNSHRJIKS
+»*/
 /* 8/4/26: First real use of String.toNode({mkFile: true})«
 
 Now when getting the shell history file node (@SHEJTNYKD), all of the necessary
@@ -49,7 +50,7 @@ trick.  But if you are working on a screen-based module (like vim), the
 above shortcut will reload *that* instead of the terminal itself.
 
 To reload the shell module instead, see @DYUHJTK.  To reload a specific
-command library see @XOLMQPO (RELOAD_LIB must be set in your working
+command library see @XOLMQPO (RELOAD_COM_LIB must be set in your working
 environment).
 
 To "auto import" command libraries, define IMPORT_COM_LIBS in ~/.env,
@@ -561,9 +562,9 @@ async reloadLib(){//«
 cwarn("Not dev_mode");
 		return;
 	}
-	let lib = this.env.vars.RELOAD_LIB;
+	let lib = this.env.vars.RELOAD_COM_LIB;
 	if (!lib) {
-		this.doOverlay(`RELOAD_LIB: not defined`);
+		this.doOverlay(`RELOAD_COM_LIB: not defined`);
 		return;
 	}
 	this.doOverlay(`Reload: ${lib}`);
@@ -1860,7 +1861,7 @@ async doContents(contents, use_dir, tok, arr_pos){//«
 		}
 
 		if (type==FOLDER_APP) {//«
-			if (handle_chars.length) handle_chars += "/";
+			if (handle_chars.length) handle_chars += "/";//MNSHRJIKS
 			else handle_chars = "/";
 
 			let node = await `${use_dir}/${str}`.toNode();

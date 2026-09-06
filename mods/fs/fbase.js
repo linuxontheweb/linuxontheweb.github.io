@@ -461,7 +461,19 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*8/2/26: How to "protect" a directory that takes a while to be populated?  «
+/*!!! IMPORTANT: TEST WITH THIS URL !!!
+
+http://localhost:8000/desk/?new_move=1&mnt_fbase=1
+
+
+*/
+
+/*9/5/26: Need to implement backendUpdateFullPath: «
+
+Just like we did backendDelNode.
+
+»*/
+/*9/2/26: How to "protect" a directory that takes a while to be populated?  «
 
 Here we are seeing those duplicates @CVXOERHJN
 
@@ -2125,6 +2137,49 @@ return rv;
 
 };//»
 
+const gen_update_fullpath = (grp_id) => {//«
+
+return async (node, id, fromId, toId, newName)=>{
+/* This is the code for OP_FS_TYPE. How to adapt it to FBASE_USER_GRP_FS_TYPE?«
+
+let node = await this._getById(id);
+let parr = node.path.split("/");
+if (fromId !== toId) {
+	node.parId = toId;
+}
+let usename = newName || parr[1];
+node.path=`${toId}/${usename}`;
+if (!await this.putById(id, node)) return;
+return true;
+
+»*/
+if (!cur_user) return;
+
+/*
+A "node" in the backend is:
+type, blobId, parId, path
+*/
+
+let nodeobj = {//«
+	type: node.type,
+	blobId: node.blobId,
+	parId: toId,
+	path: `${toId}/${newName}`,
+};//»
+
+//let ref =`LOTW/user/${uid}/group/${grpid}/nodes`);
+let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
+let ref = REF(path);
+let obj = {};
+obj[`${id}`] = nodeobj;
+let rv = await UPDATE(ref, obj);
+
+return rv;
+
+};
+
+};//»
+
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
 if (!cur_user) return;
@@ -2335,6 +2390,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 		let get_blob_func_pub = gen_get_blob(PUB_DIR_ID);
 		let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
 		let del_node_func_pub = gen_del_node(PUB_DIR_ID);
+		let update_fullpath_func_pub = gen_update_fullpath(PUB_DIR_ID);
+
 		let pub = new DirNode("pub", user_dir, {//«
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
@@ -2348,7 +2405,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 			setBlob: set_blob_func_pub,
 			mkDir: mk_dir_func_pub,
 			mkNewFile: mk_new_file_func_pub,
-			backendDelNode: del_node_func_pub
+			backendDelNode: del_node_func_pub,
+			backendUpdateFullPath: update_fullpath_func_pub
 		});
 		_dir_update(DIR_UPDATE_ADD, user_dir, pub);
 		_node_update(NODE_UPDATE_ID, pub, PUB_DIR_ID); // Id
@@ -2361,6 +2419,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 		let get_blob_func_prv = gen_get_blob(PRV_DIR_ID);
 		let set_blob_func_prv = gen_set_blob(PRV_DIR_ID);
 		let del_node_func_prv = gen_del_node(PRV_DIR_ID);
+		let update_fullpath_func_prv = gen_update_fullpath(PRV_DIR_ID);
 		let prv = new DirNode("prv", user_dir, {
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
@@ -2374,7 +2433,8 @@ return `fbase.js: not setting constant value: '${k}'`;
 			setBlob: set_blob_func_prv,
 			mkDir: mk_dir_func_prv,
 			mkNewFile: mk_new_file_func_prv,
-			backendDelNode: del_node_func_prv
+			backendDelNode: del_node_func_prv,
+			backendUpdateFullPath: update_fullpath_func_prv
 		});
 		_dir_update(DIR_UPDATE_ADD, user_dir, prv); // Add kid
 		_node_update(NODE_UPDATE_ID, prv, PRV_DIR_ID); // Id HEREPRVRV

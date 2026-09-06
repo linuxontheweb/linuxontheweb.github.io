@@ -451,10 +451,10 @@ this.updatePrevPaths = () => {//«
 this.getContext=()=>{//«
 	let choices = [
 		"Folder",()=>{Desk.make_new_icon(Win, FOLDER_APP)},
-		"Text File"
+//		"Text File"
 	];  
-	if (Win.childWinArg) choices.push(null);
-	else choices.push(()=>{Desk.make_new_icon(Win, "Text")});
+//	if (Win.childWinArg) choices.push(null);
+//	else choices.push(()=>{Desk.make_new_icon(Win, "Text")});
 	let arr = [
 		"New",
 		choices
