@@ -3157,10 +3157,11 @@ async run(){//«
 		await node.loadKids();
 
 if (!node.loadKidsDone){
+cwarn("ls: !DONE");
 	this.err(`${node.fullpath}: could not populate the directory`);
 	return;
-
 }
+
 		let list = node.kidList;
 		dir_was_last = true;
 		let names=[];

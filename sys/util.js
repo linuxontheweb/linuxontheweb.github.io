@@ -525,12 +525,8 @@ getList: async(path)=>{//«
 	let pathlen = path.length;
 	let out=[];
 	const getlist = (dir)=>{
-		let kids = dir.kids;
-		let keys = Object.keys(dir.kids);
-		for (let k of keys){
-			if (k.match(/^\./)) continue;
-			let kid = kids[k];
-			if (kid.kids) getlist(kid);
+		for (let kid of dir.kidList){
+			if (kid.isDir) getlist(kid);
 			else {
 				out.push(kid.fullpath.substr(pathlen).replace(/\.js$/,"").replace(/\x2f/g, "."));
 			}

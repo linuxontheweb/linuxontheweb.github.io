@@ -58,7 +58,9 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
-
+/*
+@BNSDAUIU: Convert this way to the new way
+*/
 /* 9/5/26 BUG BUG BUG«
 
 When mv'ing from SHM_FS_TYPE to OP_FS_TYPE, there is a complaint about *something* not having a valid
@@ -66,13 +68,16 @@ blobId.
 
 REPODUCE:
 
-
 cd /dev/shm
 echo hi > 1
 mv 1 ~/Desktop
 
 LET'S JUST DISABLE THE IDEA OF 'MV' BETWEEN DIFFERENT FILE TYPES:
 THE USER CAN DO CP-THEN-RM.
+
+But /dev/shm never has *any kind* of a blobId, so this error makes perfect sense. Maybe we
+can give all SHM_TYPES the same blobId as in touchFile.
+ the same blobId as in touchFile
 
 »*/
 /*9/4/26: Reaffirming a major issue in do_move:«
@@ -1431,14 +1436,11 @@ getBlob(){//«
 }//»
 setBlob(val, opts){//«
 	if (this._setBlob) {
-//cwarn(`Got this._setBlob`);
 		return this._setBlob(this, val, opts);
 	}
 	if (this.mntPar._setBlob) {
-//cwarn(`Got this.mntPar._setBlob`);
 		return this.mntPar._setBlob(this, val, opts);
 	}
-//cwarn(`Default: set_local_blob`);
 	return set_local_blob(this, val, opts)
 }//»
 mkDir(name, opts={}){//«
@@ -1785,8 +1787,13 @@ constructor(name, par, opts = {}) {//«
 	this.#readOnly = opts.readOnly;
 	this.#sys = opts.sys;
 
-	this.#loadKids = opts.loadKids || populate_dirobj;
-	this.#tryLoadKid = opts.tryLoadKid || try_get_fs_kid;
+//BNSDAUIU
+
+//	this.#loadKids = opts.loadKids || populate_dirobj;
+//	this.#tryLoadKid = opts.tryLoadKid || try_get_fs_kid;
+
+	this._loadKids = opts.loadKids;
+	this._tryLoadKid = opts.tryLoadKid;
 
 	if (ALWAYS_DONE_DIR_FS_TYPES.includes(par.type)){
 		this.#done = true;
@@ -1796,7 +1803,6 @@ constructor(name, par, opts = {}) {//«
 	this.#moveLocks = [];
 
 }//»
-tryLoadKid(nm){ return this.#tryLoadKid(this, nm); }
 rmMoveLock(lockarg){//«
 	let locks = this.#moveLocks;
 	for (let i=0; i < locks.length; i++){
@@ -1807,13 +1813,29 @@ rmMoveLock(lockarg){//«
 	}
 }//»
 addMoveLock(lockarg){this.#moveLocks.push(lockarg);}
-async loadKids(opts={}) {//«
+tryLoadKid(nm){ 
+	if (this._tryLoadKid) {
+		return this._tryLoadKid(this, nm);
+	}
+	if (this.mntPar._tryLoadKid) {
+		return this.mntPar._tryLoadKid(this, nm);
+	}
+	return try_get_fs_kid(this, nm)
+}
+loadKids(opts={}) {//«
 	if (this.loadKidsDone && !opts.force) return;
-	await this.#loadKids(this, opts);
+	if (this._loadKids) {
+		return this._loadKids(this, opts);
+	}
+	if (this.mntPar._loadKids) {
+		return this.mntPar._loadKids(this, opts);
+	}
+	return populate_dirobj(this, opts)
 }//»
 async _getKids(opts={}) {//«
 //	if (!this.#done) await populate_dirobj(this, opts);
-	if (!this.#done) await this.#loadKids(this, opts);
+//	if (!this.#done) await this.#loadKids(this, opts);
+	if (!this.loadKidsDone) await this.loadKids(opts);
 	return Object.values(this.#kids);
 }//»
 get isDir(){return true;}
@@ -2516,7 +2538,7 @@ for (let arg of args){//«
 	}//»
 	else if (!if_cp && src_node.type !== dest_par_node.type){//«
 		if (no_move_cb) no_move_cb(src_path);
-		werr(`refusing to 'mv' between different fs types (${src_node.type} -> ${dest_par_node.type})`);
+		werr(`refusing to 'mv' between different fs types (${src_node.type} => ${dest_par_node.type})`);
 	}//»
 	else if (if_cp && src_node.isDir){//«
 		if (if_recur) {
@@ -2919,7 +2941,7 @@ const touchFile = async(parobj, name, opts={})=>{//«
 	}
 
 	let kid = mk_dir_kid(parobj, name,{ isFile: true });
-	if (!is_shm) {
+	if (!is_shm) {//BDNSDUOW
 		_node_update(NODE_UPDATE_BLOB_ID, kid, NULL_BLOB_NODE_TYPE);
 	}
 	_node_update(NODE_UPDATE_ID, kid, id);
@@ -3161,12 +3183,12 @@ const populate_dirobj = async(dirobj, opts = {}) => {//«
 if (dirobj.type === SITE_FS_TYPE){
 	return populate_site_dir(dirobj, opts);
 }
-cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
-log(dirobj);
+//cwarn(`Got unknown dirobj.type = ${dirobj.type}`);
+//log(dirobj);
 		}
 		else{
-cwarn(`Got dirobj.sys = false: ${dirobj.type}`);
-log(dirobj);
+//cwarn(`Got dirobj.sys = false: ${dirobj.type}`);
+//log(dirobj);
 		}
 		
 	}

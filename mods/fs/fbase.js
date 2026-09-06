@@ -461,13 +461,14 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*!!! IMPORTANT: TEST WITH THIS URL !!!
+/*9/6/26 BUG BUG BUG«
 
-http://localhost:8000/desk/?new_move=1&mnt_fbase=1
+populate_fbase_user_grp_dir: Not called for subfolders of the prv/ (and pub/).
+
+@YBNMDAOJ
 
 
-*/
-
+»*/
 /*9/5/26: Need to implement backendUpdateFullPath: «
 
 Just like we did backendDelNode.
@@ -2240,7 +2241,9 @@ return node;
 
 };//»
 
+//YBNMDAOJ
 const populate_fbase_user_grp_dir = async (dir) => {//«
+
 // e.g. /mnt/users/user123/pub/, and all subdirs thereof
 // dir
 if (!cur_user) return;
@@ -2254,8 +2257,10 @@ if (!cur_user) return;
 
 
 // 
-let uid = dir.getData('fbaseUid');
-let grpid = dir.getData('fbaseGrpId');
+//let uid = dir.getData('fbaseUid');
+//let grpid = dir.getData('fbaseGrpId');
+let uid = dir.mntPar.getData('fbaseUid');
+let grpid = dir.mntPar.getData('fbaseGrpId');
 let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
 cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
@@ -2270,7 +2275,7 @@ return;
 }
 
 dir.loadKidsDone = true;
-
+log("POP: DONE");
 
 if (!snap.exists()) {
 cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
@@ -2444,11 +2449,14 @@ return `fbase.js: not setting constant value: '${k}'`;
 
 };//»
 const populate_fbase_users = async (users_dir) => {//«
-
 // e.g. /mnt/users/
+if(users_dir.loadKidsDone) return;
 if (!cur_user) return;
 if (is_populating_users) return;
 is_populating_users = true;
+
+// = true;
+//log("DOPOP");
 
 let old_obj = {};
 
