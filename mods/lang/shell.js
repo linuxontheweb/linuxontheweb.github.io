@@ -3157,7 +3157,6 @@ async run(){//«
 		await node.loadKids();
 
 if (!node.loadKidsDone){
-cwarn("ls: !DONE");
 	this.err(`${node.fullpath}: could not populate the directory`);
 	return;
 }

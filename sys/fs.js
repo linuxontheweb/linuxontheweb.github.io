@@ -1463,14 +1463,14 @@ return;
 //cwarn("PUT THE RIGHT THING IN FSNode.mkNewFile  (patterned off getBlob/setBlob) !!!!!");
 
 	if (this._mkNewFile) {
-log("Got: this._mkNewFile");
+//log("Got: this._mkNewFile");
 		return this._mkNewFile(this, name, opts);
 	}
 	if (this.mntPar._mkNewFile) {
-log("Got: mntPar._mkNewFile");
+//log("Got: mntPar._mkNewFile");
 		return this.mntPar._mkNewFile(this, name, opts);
 	}
-log("Got: default: touchFile");
+//log("Got: default: touchFile");
 	return touchFile(this, name, opts)
 
 }//»
@@ -1490,11 +1490,9 @@ cwarn(`WHAT TYPE IS BEING PASSED TO backendDelNode: ${typ}`);
 	if (typ === OP_FS_TYPE) return db.removeNode(this.id, this.par.id); 
 
 	if (this._backendDelNode) {
-log("Got: this._backendDelNode");
 		return this._backendDelNode(this);
 	}
 	if (this.mntPar._backendDelNode) {
-log("Got: mntPar._backendDelNode");
 		return this.mntPar._backendDelNode(this);
 	}
 THROW("CALLED backendDelNode WITHOUT this._backendDelNode or mntPar._backendDelNode!?!?!");
@@ -1519,14 +1517,10 @@ if (typ === SHM_FS_TYPE) {
 if (typ === OP_FS_TYPE) return db.moveNode(src_id, src_par_id, dest_par_id, use_dest_name); 
 
 if (this._backendUpdateFullPath) {
-log("Got: this._backendUpdateFullPath");
-//	return this._backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name);
 	return this._backendUpdateFullPath(this, src_id, src_par_id, dest_par_id, use_dest_name);
 
 }
 if (this.mntPar._backendUpdateFullPath) {
-log("Got: mntPar._backendUpdateFullPath");
-//	return this.mntPar._backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name);
 	return this.mntPar._backendUpdateFullPath(this, src_id, src_par_id, dest_par_id, use_dest_name);
 }
 
@@ -1796,7 +1790,8 @@ constructor(name, par, opts = {}) {//«
 	this._tryLoadKid = opts.tryLoadKid;
 
 	if (ALWAYS_DONE_DIR_FS_TYPES.includes(par.type)){
-		this.#done = true;
+//		this.#done = true;
+		this.loadKidsDone = true;
 	}
 
 	this.#kids = {};
@@ -1912,10 +1907,10 @@ cerr(`'${dir.fullpath}/${val.name}': DOES NOT EXIST`);
 // val.rmIcons();
 		break;
 	}	
-	case 3: { // done
-		dir.#done = val;
-		break;
-	}
+//	case 3: { // done
+//		dir.#done = val;
+//		break;
+//	}
 	default: THROW(`UNKNOWN OP ${which}`);
 }
 

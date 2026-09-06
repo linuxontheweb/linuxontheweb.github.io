@@ -1985,7 +1985,7 @@ return async (parnode, name, opts)=>{
 	}
 	let next_id = rv;
 
-log(`mkNew: GOT next_id: ${next_id}`);
+//log(`mkNew: GOT next_id: ${next_id}`);
 
 	//HDJSAKRNT 
 
@@ -2020,7 +2020,7 @@ const gen_get_blob = (grp_id) =>{//«
 return async (node) => {
 
 if (!cur_user) return;
-cwarn("USERGRP.getBlob", node);
+//cwarn("USERGRP.getBlob", node);
 //if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
 if (node.blobId === 0) return new Blob([]);
 
@@ -2030,7 +2030,7 @@ if (node.blobId === 0) return new Blob([]);
 
 */
 let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
-cwarn(`PATH: <${path}>`);
+//cwarn(`PATH: <${path}>`);
 let snap =  await GET(REF(path));
 if (!snap) {
 cerr("NOSNAP");
@@ -2055,7 +2055,7 @@ if (!cur_user) return;
 
 let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
 // SBRYRKTH
-cwarn("USERGRP.setBlob", node, opts);
+//cwarn("USERGRP.setBlob", node, opts);
 
 //log(`B64 LENGTH: ${val.length}`);
 let bid = node.blobId;
@@ -2064,7 +2064,7 @@ let need_update = false;
 if (bid === 0) {//«
 // Append is ignored in this case
 bid = (new Date()).getTime(); // milliseconds
-cwarn(`New blobId: ${bid}`);
+//cwarn(`New blobId: ${bid}`);
 
 // WWEURKTOX
 // undefined ----vvvvvvv !?!?! 
@@ -2091,8 +2091,8 @@ cwarn("UPDATE W/NEW VALUE");
 
 obj[`blobs/${bid}/contents`] = await blobTo64(blob);
 
-log(`SET THIS OBJ TO: PATH = <${path}>`);
-log(obj);
+//log(`SET THIS OBJ TO: PATH = <${path}>`);
+//log(obj);
 
 let ref = REF(path);
 
@@ -2262,7 +2262,7 @@ if (!cur_user) return;
 let uid = dir.mntPar.getData('fbaseUid');
 let grpid = dir.mntPar.getData('fbaseGrpId');
 let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
-cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
+//cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('parId');
@@ -2275,10 +2275,10 @@ return;
 }
 
 dir.loadKidsDone = true;
-log("POP: DONE");
+//log("POP: DONE");
 
 if (!snap.exists()) {
-cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
+//cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
 	return;
 }
 let arr = snap.val();
@@ -2608,7 +2608,7 @@ constructor(arg){//«
 	FileNode = arg.FileNode;
 	_node_update = arg.nodeUpdate;
 	_dir_update = arg.dirUpdate;
-cwarn(`MAKE <${MODNAME}>`);
+//cwarn(`MAKE <${MODNAME}>`);
 }//»
 
 #authChangeCb(val){//«
