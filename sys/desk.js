@@ -20,9 +20,8 @@ in the code.)
 
 »*/
 
-/*9/4/26: BUGGY ICONS MOVED TO DESKTOP ARE NOT GETTING SAVED?
-
-Where is the part in move_icons?
+/*9/4/26: Change the boundWins hotkey to Alt+Shift+<num>
+@UUIRNFJM
 
 */
 /* 9/2/26: Why does onkeydown pass stuff like:«
@@ -8923,8 +8922,9 @@ cwarn("document.activeElement !== cwin.Main !?!?!");
 		}
 	}//»
 
-//	if (marr = sym.match(/^([1-9])_AS$/)){
-	if (marr = sym.match(/^([1-9])_A$/)){
+//UUIRNFJM
+	if (marr = sym.match(/^([1-9])_AS$/)){
+//	if (marr = sym.match(/^([1-9])_A$/)){
 		return raise_bound_win(marr[1]);
 	}
 //SHORTCUTS1

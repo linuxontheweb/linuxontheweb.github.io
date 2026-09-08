@@ -1767,8 +1767,7 @@ cerr("NO MESSAGE IN ERR CB!?!?");
 		this.err(mess);
 	};//»
 	const done_cb = node => {
-cwarn(`RMDIR DONE: ${node.fullpath}`);
-node.delIcons();
+		node.delIcons();
 	};
 	if (!args.length) {
 		err("missing operand");

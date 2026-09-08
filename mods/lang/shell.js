@@ -83,7 +83,49 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 »*/
 
+/* 9/8/26: «
 
+echo blah >> /dev/shm/what
+echo blah >> /dev/shm/what
+echo blah >> /dev/shm/what
+
+Keeps getting overwritten!
+
+
+Loop w/ echo to pipe has too many chars and lines 
+
+This is a problem with echo that should not add newlines into a pipe.
+FIXED?!?
+
+
+Assignments: field splitting and quote removal bugfixes 
+
+@UWEQJKDMN, we were previously doing (for some weird reason...):
+if (isAssign){
+	tok.val=tok.fields.join("\n");
+}
+
+The only time that newlines are kept is like this:
+
+echo prepend"`ls`"postpend
+
+When this is assigned, it is always put onto 1 line.
+
+
+THIS IS WRONG:
+HI="'11'" && echo $HI 
+11
+
+Why no inner quotes?
+
+@WUSLRJT, we have a weird bugfix that depends on strings vs arrays in 
+quoteRemoval. Why are there strings? Those are in assignments only.
+
+The big point seems to be that if assigments are never meant to be printed, then
+they must be passed through faithfully.
+
+
+»*/
 /* 9/3/26: BUGGY: How to handle optional args for short options!?!«
 The arg is used only if the option uses and equals sign.
 (Even if it is a single char option):
@@ -1405,8 +1447,6 @@ cwarn(`add_to_env: SKIPPING COMMENT: ${use}`);
 next();
 continue;
 		}
-//log(use.toString());
-//		marr = this.var.assignRE.exec(use.toString());
 		marr = ASSIGN_RE.exec(use.toString());
 		if (!marr){
 			if (!if_export) break;
@@ -1417,14 +1457,12 @@ continue;
 			}
 		}
 		which = marr[1];
-//		if (this.var.noSetEnvVars.includes(which)){
 		if (NO_SET_ENV_VARS.includes(which)){
 			err.push(`sh: ${which}: cannot set the constant environment variable`);
 			next();
 			continue;
 		}
 		assigns[which]=marr[3];
-//		env[which]=marr[3];
 		next();
 	}
 	for (let k in assigns){
@@ -2247,7 +2285,6 @@ async run(){
 		cwd: sdup(this.opts.env.cwd),
 		coms: sdup(this.opts.env.coms)
 	};
-//log(this.opts);
 	let rv = await this.shell.executeStatements(this.list, opts, this);
 	if (this.isScript && isObj(rv) && rv.abortScript === true){
 		rv = E_ERR;
@@ -2623,6 +2660,716 @@ this.comClasses={Com: SimpleCommand,NoCom,ErrCom};
 
 //»
 
+//Token Classes (Words, Quotes, Subs)«
+
+const Sequence = class {//«
+	constructor(start){
+//		this.par = par;
+//		this.env = env;
+		this.val = [];
+		this.start = start;
+//How about a start line?
+	}
+}//»
+const Newlines = class extends Sequence{//«
+	get isNLs(){ return true; }
+//	toString(){ return "newline"; }
+	toString(){ 
+		if (Number.isFinite(this.num)) return "\n".repeat(this.num);
+		else return "\n"; 
+	}
+}//»
+class Spaces extends Sequence{
+//	get isSpaces(){ return true; }
+	toString(){
+		return this.val.join("");
+	}
+}
+class HeredocOPChars extends Sequence{
+	toString(){
+		return this.val.join("");
+	}
+}
+const Word = class extends Sequence{//«
+async expandSubs(shell, opts={}){//«
+/*«
+Here we need a concept of "fields".
+
+- Everything is a ComSub or BQuote will get expanded into as many fields as
+  the lines that it returns.
+
+- Everything else gets treated as a string that either starts the first
+  field or gets concatenated onto the current field.
+
+- DQuote is a special string that must resolve internal expansions.
+
+»*/
+const fields = [];
+let curfield="";
+for (let ent of this.val){
+
+	if (ent instanceof BQuote || ent instanceof ComSub || ent instanceof ParamSub){//«
+//The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
+		let rv = await ent.expand(shell, opts);
+		if (rv) {
+			let arr;
+//YRTHSJLS
+			arr = rv.split(/[\x20\n\t]+/);
+			if (arr.length) {
+				curfield+=arr.shift();
+				if (arr.length) {
+					fields.push(curfield);
+					let last = arr.pop();
+					fields.push(...arr);
+					curfield = last || "";
+				}
+			}
+		}
+	}//»
+	else if (ent instanceof MathSub){
+//resolve and start or append to curfield, since this can only return 1 (possibly empty) value
+		curfield += await ent.expand(shell, opts);
+	}
+	else if (ent instanceof DQuote){
+		curfield += '"'+await ent.expand(shell, opts)+'"';
+	}
+	else if (ent instanceof SQuote || ent instanceof DSQuote){
+		let s = ent.toString();
+// IOEJRKRN
+/*
+
+This hack turns embedded single quotes into their "URI encoded" versions.
+
+*/
+		s = s.replace(/\x27/g, "%27");
+		curfield += `'${s}'`;
+	}
+	else{
+//JDHFKGK
+//This might me a '\"' that gets turned into '"', which gets removed by quote removal
+		if (ent instanceof String && ent.escaped && (ent=="'"||ent=='"')){
+			curfield += `\\${ent}`;
+		}
+		else curfield += ent.toString();
+	}
+}
+
+if (curfield) fields.push(curfield);
+this.fields = fields;
+}//»
+quoteRemoval(){//«
+	let s='';
+	let qtyp;
+	let arr = this.val;
+
+//WUSLRJT
+if (typeof arr === "string"){
+
+// Why does this condition exist? And why does it seem to work when dealing with:
+// $ HI="'11'" && echo $HI 
+// This seems to be the case for assignments only.
+
+	this.val = [...arr];
+	return;
+}
+	for (let l=0; l < arr.length; l++){
+		let c = arr[l];
+		if (qtyp !== "'" && c==="\\" && (arr[l+1]==="'"||arr[l+1]==='"')){
+			s+=arr[l+1];
+			l++;
+			continue;
+		}
+		if (c==='"'||c==="'") {
+			if (c===qtyp){
+				qtyp=null;
+				continue;
+			}
+			else if (!qtyp){
+				qtyp = c;
+				continue;
+			}
+		}
+		s+=c.toString();
+	}
+	this.val = [...s];
+}//»
+tildeExpansion(){//«
+	const {val} = this;
+	let parts = this.assignmentParts;
+	let home_path = globals.user.HOME_PATH;
+	let home_path_len = home_path.length;
+	if (!parts){
+		if (val[0]!=="~") return;
+		if (val.length===1 || val[1]==="/"){
+			val.splice(0, 1, ...home_path);
+		}
+		return;
+	}
+	let pos = parts[1];
+	for (let i=pos; i < val.length; i++){
+		if (i===pos&&val[pos]==="~"&&val[pos+1]=="/"){
+			val.splice(pos, 1, ...home_path);
+			i+=home_path_len;
+		}
+		else if (val[i]===":" && val[i+1]==="~"){
+			if (!val[i+2]){
+				val.splice(i+1, 1, ...home_path);
+				return;
+			}
+			else if (val[i+2]=="/"){
+				val.splice(i+1, 1, ...home_path);
+				i+=home_path_len+2;
+			}
+		}
+	}
+}//»
+dsSQuoteExpansion(){//«
+	for (let ent of this.val){
+		if (ent instanceof DSQuote) ent.expand();
+	}
+}//»
+get isAssignment(){//«
+	let eq_pos = this.val.indexOf("=");
+	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
+	let pre_eq_arr = this.val.slice(0, eq_pos);
+	let first = pre_eq_arr.shift();
+	return (typeof first === "string" && first.match(/^[_a-zA-Z]$/));
+}//»
+get assignmentParts(){//«
+	let eq_pos = this.val.indexOf("=");
+	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
+	let pre_eq_arr = this.val.slice(0, eq_pos);
+	let first = pre_eq_arr.shift();
+	if (!(typeof first === "string" && first.match(/^[_a-zA-Z]$/))) return null;
+	let assign_word = first;
+
+	for (let ch of pre_eq_arr){
+		if (!(typeof ch === "string" && ch.match(/^[_a-zA-Z0-9]$/))) return null;
+		assign_word+=ch;
+	}
+	return [assign_word, eq_pos+1];
+}//»
+get isWord(){return true;}
+dup(){//«
+	let word = new Word(this.start);
+	let arr = word.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return word;
+}//»
+toString(){return this.val.join("");}
+get isChars(){//«
+	let chars = this.val;
+	for (let ch of chars) {
+		if (!isStr(ch)) return false;
+	}
+	return true;
+}//»
+get isSimple(){//«
+	for (let ent of this.val){
+		if (ent instanceof DQuote){
+			for (let ent2 of ent.val){
+				if (!isStr(ent2)) return false;
+			}
+		}
+		else if (!(isStr(ent)||(ent instanceof SQuote)||(ent instanceof DSQuote))) return false;
+	}
+	return true;
+}//»
+
+}//»
+const SQuote = class extends Sequence{//«
+	expand(){
+		return this.toString();
+	}
+	dup(){
+		return this;
+	}
+	toString(){
+		return this.val.join("");
+	}
+}//»
+const DSQuote = class extends Sequence{//«
+expand(){
+let wrd = this.val;
+if (!wrd){
+cwarn("WHAT THE HELL IS HERE????");
+log(tok);
+return tok;
+}
+let arr = wrd;
+let out = [];
+for (let i=0; i < arr.length; i++){//«
+	let ch = arr[i];
+	let next = arr[i+1];
+	if (ch.escaped){
+	let c;
+//switch(ch){//«
+//\" yields a <quotation-mark> (double-quote) character, but note that
+//<quotation-mark> can be included unescaped.
+if  (ch=='"') {c='"';}
+//\' yields an <apostrophe> (single-quote) character.
+//else if (ch=="'") { c="'";}
+
+//\\ yields a <backslash> character.
+else if (ch=='\\') { c='\\';}
+
+//\a yields an <alert> character.
+else if (ch=='a') { c='\x07';}
+
+//\b yields a <backspace> character.
+else if (ch=='b') { c='\x08';}
+
+//\e yields an <ESC> character.
+else if (ch=='e') { c='\x1b';}
+
+//\f yields a <form-feed> character.
+else if (ch=='f') { c='\x0c';}
+
+//\n yields a <newline> character.
+else if (ch=='n') { c='\n';}
+
+//\r yields a <carriage-return> character.
+else if (ch=='r') { c='\x0d';}
+
+//\t yields a <tab> character.
+else if (ch=='t') { c='\t';}
+
+//\v yields a <vertical-tab> character.
+else if (ch=='v') { c='\x0b';}
+
+else if (ch=='x'){//«
+//\xXX yields the byte whose value is the hexadecimal value XX (one or more hexadecimal digits). If more than two hexadecimal digits follow \x, the results are unspecified.
+	if (next&&next.match(/[0-9a-fA-F]/)){
+	let next2 = arr[i+2];
+		if (next2 &&next2.match(/[0-9a-fA-F]/)){
+			c = eval( '"\\x' + next + next2 + '"' );
+//log(`\\x${next}${next2}: <${c}>`);
+
+			i+=2;
+		}
+		else{
+			c = eval( '"\\x0' + next + '"' );
+			i++;
+		}
+	}
+}//»
+
+//\ddd yields the byte whose value is the octal value ddd (one to three octal digits).
+else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){//«
+	let s = ch;
+//Array.includes tests for strict equality, so escaped chars will not match...
+	if (next&&OCTAL_CHARS.includes(next)){
+		s+=next;
+		let next2 = arr[i+2];
+		if (next2&&OCTAL_CHARS.includes(next2)){
+			s+=next2;
+			i+=2;
+		}
+		else i++;
+		c = eval( '"\\x' + (parseInt(s, 8).toString(16).padStart(2, "0")) + '"' );
+	}
+}//»
+
+//The behavior of an unescaped <backslash> immediately followed by any other
+//character, including <newline>, is unspecified.
+
+//\cX yields the control character listed in the Value column of Values for
+//cpio c_mode Field in the OPERANDS section of the stty utility when X is one
+//of the characters listed in the ^c column of the same table, except that \c\\
+//yields the <FS> control character since the <backslash> character has to be
+//escaped.
+
+//}//»
+//	if (c) out.push(c);
+	if (c) out.push(c);
+	else out.push(ch);
+	}
+	else{
+		out.push(ch);
+	}
+}//»
+this.val = out;
+//log("OUT",out.join(""));
+return out.join("");
+}
+
+dup(){
+	return this;
+}
+toString(){
+return this.val.join("");
+}
+}//»
+
+const DQuote = class extends Sequence{//«
+
+dup(){//«
+	let dq = new DQuote(this.start, this.par, this.env);
+	let arr = dq.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return dq;
+}//»
+async expand(shell, opts={}){//This returns a string (with possible embedded newlines)«
+let out = [];
+let curword="";
+let vals = this.val;
+for (let ent of vals){
+	if (ent.expand){//This cannot be another DQuote
+		if (curword){
+			out.push(curword);
+			curword="";
+		}
+		out.push(await ent.expand(shell, opts));
+	}
+	else if (!isStr(ent)){
+cwarn("HERE IS ENT!!!!");
+log(ent);
+throw new Error("WWWWWTFFFFF IS ENT!?!?!");
+	}
+	else{
+		curword+=ent.toString();
+	}
+}
+if (curword) out.push(curword);
+//log(out);
+//return out.join("\n");
+return out.join("");
+
+}//»
+toString(){
+	return this.val.join("");
+}
+}//»
+
+const BQuote = class extends Sequence{//«
+//Collect everything in a string...
+expand(shell, opts){
+//log(`CWD ${opts.env.cwd.cwd}`);
+	return shell.expandComsub(this, opts);
+}
+dup(){//«
+//log(this);
+	let bq = new BQuote(this.start, this.par, this.env);
+	let arr = bq.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	bq.raw = this.raw;//WKLMUJK
+	return bq;
+}//»
+toString(){
+	return `\`${this.val.join("")}\``;
+}
+}//»
+//XMKJDHE
+const ShellName = class extends Sequence{//«
+	toString(){
+		return this.val.join("");
+	}
+	dup(){
+		let nm = new ShellName(this.start);
+		nm.val = this.val;
+		return nm;
+	}	
+}//»
+const ShellNum = class extends Sequence{//«
+	toString(){
+		return this.val.join("");
+	}
+	dup(){
+		let num = new ShellNum(this.start);
+		num.val = this.val;
+		return num;
+	}	
+}//»
+const ParamSub = class extends Sequence{//«
+
+//KLSDHSKD
+async expand(shell, com_opts, opts={}){//«
+
+//if opts.isMath, then we can substitute "0" for non-existent things
+	const{env, scriptName, scriptArgs}=com_opts;
+const vars = env.vars;
+/*We can have:
+1) isSym: Single char (SPECIAL_SYMBOLS)
+2) isNum: ShellNum
+3) ShellName
+  - Plain (isPlain)
+  - isSubstitute (subName, haveColon, subWord, subType)
+  - isStrRep (subName, repWord, repType)
+*/
+	let s;
+//if (this.isPlain||this.isSubstitute||this.isStrRep) s = this.toString();
+
+if (this.isSym){//«
+	s = this.val[0];
+	if (s==="0"){
+		return scriptName||"sh";
+	}
+	if (s==="@"||s==="*") {
+		if (!scriptName) return "";
+		return scriptArgs.join(" ");
+	}
+	if (s==="#") {
+		if (!scriptName) return 0;
+		return scriptArgs.length+"";
+	}
+	return s;
+
+}//»
+if (this.isNum){//«
+	let num = parseInt(this.val.join(""));
+	if (num===0){
+		return scriptName||"sh";
+	}
+	if (!scriptName) return "";
+	return scriptArgs[parseInt(num)-1]||"";
+}//»
+	if (this.subName) s = this.subName.toString();
+	else {
+log(this);
+		throw new Error(`UNKNOWN SUBSTITUTION TYPE!!!`);
+	}
+	let marr;
+	if (s.match(/^[_a-zA-Z]/)){
+		if (opts.isMath) return env.vars[s]||"0";
+if (this.isSubstitute){//«
+//log(this.subType, !!this.haveColon);
+
+let have_colon = !!this.haveColon;
+let subType = this.subType;
+let is_set = Object.keys(env.vars).includes(s);
+let is_null;
+
+let wrd = this.subWord;
+await wrd.expandSubs(shell, com_opts);
+let newval =  new String(wrd.fields.join(" "));
+//EANFJLPM
+let subval;
+if (is_set){
+	subval = env.vars[s];
+	is_null = !subval;
+}
+if (is_set && !is_null){
+	if (subType==="+") return newval;
+	return subval;
+}
+
+if (subType==="?"){//«
+	if (!is_set || (is_null&&have_colon)){
+//		throw new Error(`sh: ${s}: ${newval}`);
+		throw new ShellError(`sh: ${s}: ${newval}`);
+	}
+	return "";
+}//»
+else if (subType==="="){//«
+	if (!is_set || (is_null&&have_colon)) {
+		env.vars[s]=newval;
+		return newval;
+	}
+	return "";
+}//»
+else if (subType==="-"){//«
+	if (!is_set || (is_null&&have_colon)) {
+		return newval;
+	}	
+	return "";
+}//»
+else if (subType==="+"){//«
+	if (!is_set || (is_null&&have_colon)) return "";
+	return newval;
+}//»
+else{//«
+	throw new Error(`!!! SHOULD NOT GET HERE SJDBFBS !!!`);
+}//»
+
+}//»
+else if (this.isStrRep){//«
+let val = env.vars[s];
+if (!val) return "";
+
+let typ = this.repType;
+let wrd = this.repWord;
+if (!wrd) return val;
+//TZKOPKHD
+await wrd.expandSubs(shell, com_opts);
+let str = wrd.fields.join(" ");
+str = str.replace(/[\x22\x27]/g,"");
+let patarr = str.split("");
+let is_non_greedy = typ.length==1;
+let a = [];
+let is_rev = typ.match(/%/);
+
+for (let ch of patarr){
+	if (ch==="."){
+		a.push('\\.');
+	}
+	else if (ch==="*"){
+		if (is_non_greedy) a.push('.*?');
+		else a.push('.*');
+
+	}
+	else if (ch==="?"){
+		a.push('.');
+	}
+	else {
+//		if (ch==="[" && is_rev) a.push("]");//«
+//		else if (ch==="]" && is_rev) a.push("[");
+//		else a.push(ch);//»
+		a.push(ch);
+	}
+}
+let useval = val;
+let usepat = a.join("");
+/*«
+if (is_rev){
+	useval = val.split("").reverse().join("");
+	usepat = a.reverse().join("");
+}
+else{
+	useval = val;
+	usepat = a.join("");
+}
+»*/
+let re;
+let patstr;
+if (is_rev) patstr = `${usepat}$`;
+else patstr = `^${usepat}`;
+
+try{
+//log(`^${usepat}`);
+//	re = new RegExp(`^${usepat}`);
+	re = new RegExp(patstr);
+}
+catch(e){
+cwarn(`invalid regex detected: "${patstr}"`);
+return val;
+}
+let marr = re.exec(useval);
+if (marr && marr[0].length){
+if (is_rev){
+	useval = useval.slice(0, useval.length - marr[0].length);
+}
+else{
+	useval = useval.slice(marr[0].length);
+}
+//	useval = useval.slice(marr[0].length);
+return useval;
+//	if (is_rev) return useval.split("").reverse().join("");
+//	else return useval;
+}
+else return val;
+
+}//»
+		return env.vars[s]||"";
+	}
+cwarn("HERE IS THE WEIRD PARAM SUB...");
+log(s);
+//throw new Error(`sh: bad substitution: $\{${s}\}`);
+throw new ShellError(`sh: bad substitution: $\{${s}\}`);
+//throw new Error("WHAT KIND OF PARAM SUB IS THIS???");
+}//»
+dup(){//«
+	let param = new ParamSub(this.start);
+
+	if (this.isSym) param.isSym=true;
+	else if (this.isNum) param.isNum=true;
+	else if (this.isSubstitute){
+		param.isSubstitute = true;
+		param.haveColon = this.haveColon;
+		param.subType = this.subType;
+//SBRILSMF
+		param.subWord = this.subWord;//Need to duplicate with this.subWord.dup()???
+	}
+	else if (this.isStrRep){
+		param.isStrRep = true;
+		param.repType = this.repType;
+		param.repWord = this.repWord;//Need to duplicate with this.repWord.dup()???
+	}
+
+	param.subName = this.subName;
+	let arr = param.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return param;
+}//»
+toString(){
+	return `\${${this.val.join("")}}`;
+}
+
+}//»
+const ComSub = class extends Sequence{//«
+expand(shell, opts){
+	return shell.expandComsub(this, opts);
+}
+dup(){//«
+	let com = new ComSub(this.start, this.par, this.env);
+	let arr = com.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	com.raw = this.raw;//JDPLUI
+	return com;
+}//»
+toString(){
+	return `$(${this.val.join("")})`;
+}
+}//»
+const MathSub = class extends Sequence{//«
+
+async expand(shell, opts={}){//«
+//WMFHJRK
+	if (!await util.loadMod("util.math")) {
+//cerr("could not load the math module");
+throw new ShellError("could not load the math module");
+	}
+	let s='';
+	let vals = this.val;
+	for (let ent of vals){
+		if (ent.expand) s+=await ent.expand(shell, opts, {isMath: true});
+		else s+=ent.toString();
+	}
+
+	let math = new NS.mods["util.math"]();
+	try{
+		return math.eval(s)+"";
+	}
+	catch(e){
+//		err(`math expansion: ${e.message}`);
+cerr(e);
+		return "";
+	}
+}//»
+dup(){//«
+	let math = new MathSub(this.start, this.par, this.env);
+	let arr = math.val;
+	for (let ent of this.val){
+		if (isStr(ent)) arr.push(ent);
+		else arr.push(ent.dup());
+	}
+	return math;
+}//»
+toString(){
+	return `$((${this.val.join("")}))`;
+}
+
+}//»
+this.seqClasses={
+	Sequence, Newlines, Word, SQuote, DSQuote, DQuote, BQuote, ParamSub, ComSub, MathSub
+}
+
+//»
+
 //Builtins    (ls, cd, echo, etc...)«
 {
 /*«
@@ -2637,6 +3384,67 @@ run(){
 //BUILTINS
 
 const Com = SimpleCommand;
+
+const com_randname = class extends Com{//«
+static getOpts(){/* « */
+return {
+s:{
+c: 3
+},
+l: {
+count: 3
+}
+}
+}/* » */
+async run(){/* « */
+//const {}
+let def_cnt = 4;
+let max_cnt = 16;
+let cnt_opt = this.opts.count || this.opts.c;
+
+let cnt;
+if (cnt_opt) {
+	cnt = cnt_opt.ppi();
+	if (!Number.isFinite(cnt)){
+		return this.no(`invalid count option: ${cnt_opt}`);
+	}
+	if (cnt > max_cnt){
+		return this.no(`invalid count option: ${cnt_opt} (MAX_CNT=${max_cnt})`);
+	}
+}
+else cnt = def_cnt;
+
+let pararg = this.args.shift();
+if (!pararg) pararg = this.env.cwd.cwd;
+let parnode = await pararg.toNode({cwd: this.env.cwd.cwd});
+if (!(parnode && parnode.isDir)){
+	return this.no(`${pararg}: not a directory`);
+}
+await parnode.loadKids();
+
+let name_str;
+let iter = 0;
+let max_iter = 1000;
+while (true) {
+	iter++;
+	if (iter > max_iter){
+		return this.no(`breaking the loop: MAX_ITER=${max_iter}`);
+	}
+	name_str = "";
+	for (let i=0; i < cnt; i++){
+		let n = Math.floor(Math.random() * 52);
+		if (n < 26) n+=65;
+		else n+=71
+		name_str += String.fromCharCode(n);
+	}
+	if (!parnode.getKid(name_str)) break;
+}
+this.out(name_str);
+this.ok();
+//this.ok(`${name_str}`);
+
+}/* » */
+};//»
 
 //CBNCMDJF
 const com_opttest = class extends Com{//«
@@ -3043,9 +3851,11 @@ const com_echo = class extends Com{//«
 		return {s: {n: 1}};
 	}
 	async run(){
-		let nl = this.opts.n ? "":"\n";
+		let nl="";
+		if (this.haveRedirOut && !this.opts.n) nl = "\n";
+//		let nl = this.opts.n ? "":"\n";
+
 		let str = new String(this.args.join(" ")+nl);
-//		let str = new String(this.args.join(" "));
 		str.noChomp = true;
 		this.out(str);
 		this.ok();
@@ -3285,31 +4095,6 @@ const com_false = class extends Com{//«
 		this.no(mess);
 	}
 }//»
-const com_cd = class extends Com{//«
-init(){
-	if (!this.args.length) {
-		this.args.push(this.shell.homeDir);
-	}
-}
-async run(){
-	let {args} = this;
-	if (args.length > 1) return this.no("too many arguments");
-	let res;
-	let got_dir;
-	let saypath = args[0];
-	let regpath = normPath(saypath, this.env.cwd.cwd);
-//	let ret = await fsapi.pathToNode(regpath);
-	let ret = await regpath.toNode();
-	if (!ret) return this.no(`${saypath}: no such file or directory`);
-	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: not a directory`);
-	got_dir = regpath;
-	if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
-	this.env.cwd.cwd = got_dir;
-	this.env.vars.PWD = got_dir;
-	this.ok();
-}
-}
-//»
 const com_app = class extends Com{//«
 
 async run(){
@@ -3338,6 +4123,31 @@ const com_hist = class extends Com{//«
 		this.ok();
 	}
 }//»
+const com_cd = class extends Com{//«
+init(){
+	if (!this.args.length) {
+		this.args.push(this.shell.homeDir);
+	}
+}
+async run(){
+	let {args} = this;
+	if (args.length > 1) return this.no("too many arguments");
+	let res;
+	let got_dir;
+	let saypath = args[0];
+	let regpath = normPath(saypath, this.env.cwd.cwd);
+//	let ret = await fsapi.pathToNode(regpath);
+	let ret = await regpath.toNode();
+	if (!ret) return this.no(`${saypath}: no such file or directory`);
+	if (ret.appName != FOLDER_APP) return this.no(`${saypath}: not a directory`);
+	got_dir = regpath;
+	if (!got_dir.match(/^\x2f/)) got_dir = `/${got_dir}`;
+	this.env.cwd.cwd = got_dir;
+	this.env.vars.PWD = got_dir;
+	this.ok();
+}
+}
+//»
 const com_pwd = class extends Com{//«
 	run(){
 		this.out(this.env.cwd.cwd);
@@ -3545,6 +4355,7 @@ let win = await Desk.open_file_by_path(node.fullpath);//COMMENTED OUT IN COM_OPE
 
 this.builtins={//«
 opttest: com_opttest,
+randname: com_randname,
 gh: com_gh,
 cat: com_cat,
 pipe: com_pipe,
@@ -3640,705 +4451,6 @@ const ErrorHandler = class {
 	};//»
 
 };//»
-//Token Classes (Words, Quotes, Subs)«
-
-const Sequence = class {//«
-	constructor(start){
-//		this.par = par;
-//		this.env = env;
-		this.val = [];
-		this.start = start;
-//How about a start line?
-	}
-}//»
-const Newlines = class extends Sequence{//«
-	get isNLs(){ return true; }
-//	toString(){ return "newline"; }
-	toString(){ 
-		if (Number.isFinite(this.num)) return "\n".repeat(this.num);
-		else return "\n"; 
-	}
-}//»
-class Spaces extends Sequence{
-//	get isSpaces(){ return true; }
-	toString(){
-		return this.val.join("");
-	}
-}
-class HeredocOPChars extends Sequence{
-	toString(){
-		return this.val.join("");
-	}
-}
-const Word = class extends Sequence{//«
-async expandSubs(shell, opts={}){//«
-/*«
-Here we need a concept of "fields".
-
-- Everything is a ComSub or BQuote will get expanded into as many fields as
-  the lines that it returns.
-
-- Everything else gets treated as a string that either starts the first
-  field or gets concatenated onto the current field.
-
-- DQuote is a special string that must resolve internal expansions.
-
-»*/
-const fields = [];
-let curfield="";
-for (let ent of this.val){
-
-	if (ent instanceof BQuote || ent instanceof ComSub || ent instanceof ParamSub){//«
-//The first result appends to curfield, the rest do: fields.push(curfield) and set: curfield=""
-		let rv = await ent.expand(shell, opts);
-		if (rv) {
-			let arr;
-//YRTHSJLS
-			arr = rv.split(/[\x20\n\t]+/);
-			if (arr.length) {
-				curfield+=arr.shift();
-				if (arr.length) {
-					fields.push(curfield);
-					let last = arr.pop();
-					fields.push(...arr);
-					curfield = last || "";
-				}
-			}
-		}
-	}//»
-	else if (ent instanceof MathSub){
-//resolve and start or append to curfield, since this can only return 1 (possibly empty) value
-		curfield += await ent.expand(shell, opts);
-	}
-	else if (ent instanceof DQuote){
-		curfield += '"'+await ent.expand(shell, opts)+'"';
-	}
-	else if (ent instanceof SQuote || ent instanceof DSQuote){
-		let s = ent.toString();
-// IOEJRKRN
-/*
-
-This hack turns embedded single quotes into their "URI encoded" versions.
-
-*/
-		s = s.replace(/\x27/g, "%27");
-		curfield += `'${s}'`;
-	}
-	else{
-//JDHFKGK
-//This might me a '\"' that gets turned into '"', which gets removed by quote removal
-		if (ent instanceof String && ent.escaped && (ent=="'"||ent=='"')){
-			curfield += `\\${ent}`;
-		}
-		else curfield += ent.toString();
-	}
-}
-
-if (curfield) fields.push(curfield);
-this.fields = fields;
-}//»
-quoteRemoval(){//«
-	let s='';
-	let qtyp;
-	let arr = this.val;
-//log(arr);
-	for (let l=0; l < arr.length; l++){
-		let c = arr[l];
-		if (qtyp !== "'" && c==="\\" && (arr[l+1]==="'"||arr[l+1]==='"')){
-			s+=arr[l+1];
-			l++;
-			continue;
-		}
-		if (c==='"'||c==="'") {
-			if (c===qtyp){
-				qtyp=null;
-				continue;
-			}
-			else if (!qtyp){
-				qtyp = c;
-				continue;
-			}
-		}
-		s+=c.toString();
-	}
-//WUSLRJT
-	this.val = [...s];
-}//»
-tildeExpansion(){//«
-	const {val} = this;
-	let parts = this.assignmentParts;
-	let home_path = globals.user.HOME_PATH;
-	let home_path_len = home_path.length;
-	if (!parts){
-		if (val[0]!=="~") return;
-		if (val.length===1 || val[1]==="/"){
-			val.splice(0, 1, ...home_path);
-		}
-		return;
-	}
-	let pos = parts[1];
-	for (let i=pos; i < val.length; i++){
-		if (i===pos&&val[pos]==="~"&&val[pos+1]=="/"){
-			val.splice(pos, 1, ...home_path);
-			i+=home_path_len;
-		}
-		else if (val[i]===":" && val[i+1]==="~"){
-			if (!val[i+2]){
-				val.splice(i+1, 1, ...home_path);
-				return;
-			}
-			else if (val[i+2]=="/"){
-				val.splice(i+1, 1, ...home_path);
-				i+=home_path_len+2;
-			}
-		}
-	}
-}//»
-dsSQuoteExpansion(){//«
-	for (let ent of this.val){
-		if (ent instanceof DSQuote) ent.expand();
-	}
-}//»
-get isAssignment(){//«
-	let eq_pos = this.val.indexOf("=");
-	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
-	let pre_eq_arr = this.val.slice(0, eq_pos);
-	let first = pre_eq_arr.shift();
-	return (typeof first === "string" && first.match(/^[_a-zA-Z]$/));
-}//»
-get assignmentParts(){//«
-	let eq_pos = this.val.indexOf("=");
-	if (eq_pos <= 0) return false;//-1 means no '=' and 0 means it is at the start
-	let pre_eq_arr = this.val.slice(0, eq_pos);
-	let first = pre_eq_arr.shift();
-	if (!(typeof first === "string" && first.match(/^[_a-zA-Z]$/))) return null;
-	let assign_word = first;
-
-	for (let ch of pre_eq_arr){
-		if (!(typeof ch === "string" && ch.match(/^[_a-zA-Z0-9]$/))) return null;
-		assign_word+=ch;
-	}
-	return [assign_word, eq_pos+1];
-}//»
-get isWord(){return true;}
-dup(){//«
-	let word = new Word(this.start);
-	let arr = word.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return word;
-}//»
-toString(){return this.val.join("");}
-get isChars(){//«
-	let chars = this.val;
-	for (let ch of chars) {
-		if (!isStr(ch)) return false;
-	}
-	return true;
-}//»
-get isSimple(){//«
-	for (let ent of this.val){
-		if (ent instanceof DQuote){
-			for (let ent2 of ent.val){
-				if (!isStr(ent2)) return false;
-			}
-		}
-		else if (!(isStr(ent)||(ent instanceof SQuote)||(ent instanceof DSQuote))) return false;
-	}
-	return true;
-}//»
-
-}//»
-const SQuote = class extends Sequence{//«
-	expand(){
-		return this.toString();
-	}
-	dup(){
-		return this;
-	}
-	toString(){
-		return this.val.join("");
-	}
-}//»
-const DSQuote = class extends Sequence{//«
-expand(){
-let wrd = this.val;
-if (!wrd){
-cwarn("WHAT THE HELL IS HERE????");
-log(tok);
-return tok;
-}
-let arr = wrd;
-let out = [];
-for (let i=0; i < arr.length; i++){//«
-	let ch = arr[i];
-	let next = arr[i+1];
-	if (ch.escaped){
-	let c;
-//switch(ch){//«
-//\" yields a <quotation-mark> (double-quote) character, but note that
-//<quotation-mark> can be included unescaped.
-if  (ch=='"') {c='"';}
-//\' yields an <apostrophe> (single-quote) character.
-//else if (ch=="'") { c="'";}
-
-//\\ yields a <backslash> character.
-else if (ch=='\\') { c='\\';}
-
-//\a yields an <alert> character.
-else if (ch=='a') { c='\x07';}
-
-//\b yields a <backspace> character.
-else if (ch=='b') { c='\x08';}
-
-//\e yields an <ESC> character.
-else if (ch=='e') { c='\x1b';}
-
-//\f yields a <form-feed> character.
-else if (ch=='f') { c='\x0c';}
-
-//\n yields a <newline> character.
-else if (ch=='n') { c='\n';}
-
-//\r yields a <carriage-return> character.
-else if (ch=='r') { c='\x0d';}
-
-//\t yields a <tab> character.
-else if (ch=='t') { c='\t';}
-
-//\v yields a <vertical-tab> character.
-else if (ch=='v') { c='\x0b';}
-
-else if (ch=='x'){//«
-//\xXX yields the byte whose value is the hexadecimal value XX (one or more hexadecimal digits). If more than two hexadecimal digits follow \x, the results are unspecified.
-	if (next&&next.match(/[0-9a-fA-F]/)){
-	let next2 = arr[i+2];
-		if (next2 &&next2.match(/[0-9a-fA-F]/)){
-			c = eval( '"\\x' + next + next2 + '"' );
-//log(`\\x${next}${next2}: <${c}>`);
-
-			i+=2;
-		}
-		else{
-			c = eval( '"\\x0' + next + '"' );
-			i++;
-		}
-	}
-}//»
-
-//\ddd yields the byte whose value is the octal value ddd (one to three octal digits).
-else if(ch=="0"|| ch=="1"|| ch=="2"|| ch=="3"|| ch=="4"|| ch=="5"|| ch=="6"|| ch=="7"){//«
-	let s = ch;
-//Array.includes tests for strict equality, so escaped chars will not match...
-	if (next&&OCTAL_CHARS.includes(next)){
-		s+=next;
-		let next2 = arr[i+2];
-		if (next2&&OCTAL_CHARS.includes(next2)){
-			s+=next2;
-			i+=2;
-		}
-		else i++;
-		c = eval( '"\\x' + (parseInt(s, 8).toString(16).padStart(2, "0")) + '"' );
-	}
-}//»
-
-//The behavior of an unescaped <backslash> immediately followed by any other
-//character, including <newline>, is unspecified.
-
-//\cX yields the control character listed in the Value column of Values for
-//cpio c_mode Field in the OPERANDS section of the stty utility when X is one
-//of the characters listed in the ^c column of the same table, except that \c\\
-//yields the <FS> control character since the <backslash> character has to be
-//escaped.
-
-//}//»
-//	if (c) out.push(c);
-	if (c) out.push(c);
-	else out.push(ch);
-	}
-	else{
-		out.push(ch);
-	}
-}//»
-this.val = out;
-//log("OUT",out.join(""));
-return out.join("");
-}
-
-dup(){
-	return this;
-}
-toString(){
-return this.val.join("");
-}
-}//»
-
-const DQuote = class extends Sequence{//«
-
-dup(){//«
-	let dq = new DQuote(this.start, this.par, this.env);
-	let arr = dq.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return dq;
-}//»
-async expand(shell, opts={}){//This returns a string (with possible embedded newlines)«
-let out = [];
-let curword="";
-let vals = this.val;
-for (let ent of vals){
-	if (ent.expand){//This cannot be another DQuote
-		if (curword){
-			out.push(curword);
-			curword="";
-		}
-		out.push(await ent.expand(shell, opts));
-	}
-	else if (!isStr(ent)){
-cwarn("HERE IS ENT!!!!");
-log(ent);
-throw new Error("WWWWWTFFFFF IS ENT!?!?!");
-	}
-	else{
-		curword+=ent.toString();
-	}
-}
-if (curword) out.push(curword);
-//log(out);
-//return out.join("\n");
-return out.join("");
-
-}//»
-toString(){
-	return this.val.join("");
-}
-}//»
-
-const BQuote = class extends Sequence{//«
-//Collect everything in a string...
-expand(shell, opts){
-	return shell.expandComsub(this, opts);
-}
-dup(){//«
-//log(this);
-	let bq = new BQuote(this.start, this.par, this.env);
-	let arr = bq.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	bq.raw = this.raw;//WKLMUJK
-	return bq;
-}//»
-toString(){
-	return `\`${this.val.join("")}\``;
-}
-}//»
-//XMKJDHE
-const ShellName = class extends Sequence{//«
-	toString(){
-		return this.val.join("");
-	}
-	dup(){
-		let nm = new ShellName(this.start);
-		nm.val = this.val;
-		return nm;
-	}	
-}//»
-const ShellNum = class extends Sequence{//«
-	toString(){
-		return this.val.join("");
-	}
-	dup(){
-		let num = new ShellNum(this.start);
-		num.val = this.val;
-		return num;
-	}	
-}//»
-const ParamSub = class extends Sequence{//«
-
-//KLSDHSKD
-async expand(shell, com_opts, opts={}){//«
-
-//if opts.isMath, then we can substitute "0" for non-existent things
-	const{env, scriptName, scriptArgs}=com_opts;
-const vars = env.vars;
-/*We can have:
-1) isSym: Single char (SPECIAL_SYMBOLS)
-2) isNum: ShellNum
-3) ShellName
-  - Plain (isPlain)
-  - isSubstitute (subName, haveColon, subWord, subType)
-  - isStrRep (subName, repWord, repType)
-*/
-	let s;
-//if (this.isPlain||this.isSubstitute||this.isStrRep) s = this.toString();
-
-if (this.isSym){//«
-	s = this.val[0];
-	if (s==="0"){
-		return scriptName||"sh";
-	}
-	if (s==="@"||s==="*") {
-		if (!scriptName) return "";
-		return scriptArgs.join(" ");
-	}
-	if (s==="#") {
-		if (!scriptName) return 0;
-		return scriptArgs.length+"";
-	}
-	return s;
-
-}//»
-if (this.isNum){//«
-	let num = parseInt(this.val.join(""));
-	if (num===0){
-		return scriptName||"sh";
-	}
-	if (!scriptName) return "";
-	return scriptArgs[parseInt(num)-1]||"";
-}//»
-	if (this.subName) s = this.subName.toString();
-	else {
-log(this);
-		throw new Error(`UNKNOWN SUBSTITUTION TYPE!!!`);
-	}
-	let marr;
-	if (s.match(/^[_a-zA-Z]/)){
-		if (opts.isMath) return env.vars[s]||"0";
-if (this.isSubstitute){//«
-//log(this.subType, !!this.haveColon);
-
-let have_colon = !!this.haveColon;
-let subType = this.subType;
-let is_set = Object.keys(env.vars).includes(s);
-let is_null;
-
-let wrd = this.subWord;
-await wrd.expandSubs(shell, com_opts);
-let newval =  new String(wrd.fields.join(" "));
-//EANFJLPM
-let subval;
-if (is_set){
-	subval = env.vars[s];
-	is_null = !subval;
-}
-if (is_set && !is_null){
-	if (subType==="+") return newval;
-	return subval;
-}
-
-if (subType==="?"){//«
-	if (!is_set || (is_null&&have_colon)){
-//		throw new Error(`sh: ${s}: ${newval}`);
-		throw new ShellError(`sh: ${s}: ${newval}`);
-	}
-	return "";
-}//»
-else if (subType==="="){//«
-	if (!is_set || (is_null&&have_colon)) {
-		env.vars[s]=newval;
-		return newval;
-	}
-	return "";
-}//»
-else if (subType==="-"){//«
-	if (!is_set || (is_null&&have_colon)) {
-		return newval;
-	}	
-	return "";
-}//»
-else if (subType==="+"){//«
-	if (!is_set || (is_null&&have_colon)) return "";
-	return newval;
-}//»
-else{//«
-	throw new Error(`!!! SHOULD NOT GET HERE SJDBFBS !!!`);
-}//»
-
-}//»
-else if (this.isStrRep){//«
-let val = env.vars[s];
-if (!val) return "";
-
-let typ = this.repType;
-let wrd = this.repWord;
-if (!wrd) return val;
-//TZKOPKHD
-await wrd.expandSubs(shell, com_opts);
-let str = wrd.fields.join(" ");
-str = str.replace(/[\x22\x27]/g,"");
-let patarr = str.split("");
-let is_non_greedy = typ.length==1;
-let a = [];
-let is_rev = typ.match(/%/);
-
-for (let ch of patarr){
-	if (ch==="."){
-		a.push('\\.');
-	}
-	else if (ch==="*"){
-		if (is_non_greedy) a.push('.*?');
-		else a.push('.*');
-
-	}
-	else if (ch==="?"){
-		a.push('.');
-	}
-	else {
-//		if (ch==="[" && is_rev) a.push("]");//«
-//		else if (ch==="]" && is_rev) a.push("[");
-//		else a.push(ch);//»
-		a.push(ch);
-	}
-}
-let useval = val;
-let usepat = a.join("");
-/*«
-if (is_rev){
-	useval = val.split("").reverse().join("");
-	usepat = a.reverse().join("");
-}
-else{
-	useval = val;
-	usepat = a.join("");
-}
-»*/
-let re;
-let patstr;
-if (is_rev) patstr = `${usepat}$`;
-else patstr = `^${usepat}`;
-
-try{
-//log(`^${usepat}`);
-//	re = new RegExp(`^${usepat}`);
-	re = new RegExp(patstr);
-}
-catch(e){
-cwarn(`invalid regex detected: "${patstr}"`);
-return val;
-}
-let marr = re.exec(useval);
-if (marr && marr[0].length){
-if (is_rev){
-	useval = useval.slice(0, useval.length - marr[0].length);
-}
-else{
-	useval = useval.slice(marr[0].length);
-}
-//	useval = useval.slice(marr[0].length);
-return useval;
-//	if (is_rev) return useval.split("").reverse().join("");
-//	else return useval;
-}
-else return val;
-
-}//»
-		return env.vars[s]||"";
-	}
-cwarn("HERE IS THE WEIRD PARAM SUB...");
-log(s);
-//throw new Error(`sh: bad substitution: $\{${s}\}`);
-throw new ShellError(`sh: bad substitution: $\{${s}\}`);
-//throw new Error("WHAT KIND OF PARAM SUB IS THIS???");
-}//»
-dup(){//«
-	let param = new ParamSub(this.start);
-
-	if (this.isSym) param.isSym=true;
-	else if (this.isNum) param.isNum=true;
-	else if (this.isSubstitute){
-		param.isSubstitute = true;
-		param.haveColon = this.haveColon;
-		param.subType = this.subType;
-//SBRILSMF
-		param.subWord = this.subWord;//Need to duplicate with this.subWord.dup()???
-	}
-	else if (this.isStrRep){
-		param.isStrRep = true;
-		param.repType = this.repType;
-		param.repWord = this.repWord;//Need to duplicate with this.repWord.dup()???
-	}
-
-	param.subName = this.subName;
-	let arr = param.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return param;
-}//»
-toString(){
-	return `\${${this.val.join("")}}`;
-}
-
-}//»
-const ComSub = class extends Sequence{//«
-expand(shell, opts){
-	return shell.expandComsub(this, opts);
-}
-dup(){//«
-	let com = new ComSub(this.start, this.par, this.env);
-	let arr = com.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	com.raw = this.raw;//JDPLUI
-	return com;
-}//»
-toString(){
-	return `$(${this.val.join("")})`;
-}
-}//»
-const MathSub = class extends Sequence{//«
-
-async expand(shell, opts={}){//«
-//WMFHJRK
-	if (!await util.loadMod("util.math")) {
-//cerr("could not load the math module");
-throw new ShellError("could not load the math module");
-	}
-	let s='';
-	let vals = this.val;
-	for (let ent of vals){
-		if (ent.expand) s+=await ent.expand(shell, opts, {isMath: true});
-		else s+=ent.toString();
-	}
-
-	let math = new NS.mods["util.math"]();
-	try{
-		return math.eval(s)+"";
-	}
-	catch(e){
-//		err(`math expansion: ${e.message}`);
-cerr(e);
-		return "";
-	}
-}//»
-dup(){//«
-	let math = new MathSub(this.start, this.par, this.env);
-	let arr = math.val;
-	for (let ent of this.val){
-		if (isStr(ent)) arr.push(ent);
-		else arr.push(ent.dup());
-	}
-	return math;
-}//»
-toString(){
-	return `$((${this.val.join("")}))`;
-}
-
-}//»
-this.seqClasses={
-	Sequence, Newlines, Word, SQuote, DSQuote, DQuote, BQuote, ParamSub, ComSub, MathSub
-}
-
-//»
 //Scanner«
 
 //These 2 functions are "holdover" logic from esprima, which seems too "loose" for 
@@ -6578,6 +6690,10 @@ constructor(termarg){//«
 //fatal(mess){throw new Error(mess);}
 fatal(mess){throw new ShellError(mess);}
 async expandComsub(tok, opts){//«
+
+//log(this.env.cwd);
+//log(opts.env.cwd);
+
 //XLMJHU [Fixed] NO tok.raw when the BQuote/ComSub is inside of a function 
 	let arr = tok.raw.split("");   //Should use the raw here!!!
 	let s = '';
@@ -6604,12 +6720,12 @@ async expandComsub(tok, opts){//«
 //TRYHERE
 	try{
 		let rv = await this.execute(s, {
-//XMSKSLEO
 			mainParser: this.parser.mainParser,
 			subLines: sub_lines,
-			env: sdup(this.env),
-//			shell: this,
-//			term: this.#term
+
+//XMSKSLEO
+//			env: sdup(this.env), // NO!!!!!!
+			env: sdup(opts.env),
 		});
 		return sub_lines.join("\n");
 	}
@@ -7022,8 +7138,6 @@ else if (red==="<<"){
 return stdin;
 }//»
 async allExpansions(arr, shopts={}, opts={}){//«
-//log(`IN: ${arr.length}`);
-//log(arr[1].val[0]);
 const{env,scriptName,scriptArgs} = shopts;
 const{isAssign}=opts;
 for (let k=0; k < arr.length; k++){//«
@@ -7036,7 +7150,6 @@ if (!isAssign) {
 for (let k=0; k < arr.length; k++){//curlies«
 let tok = arr[k];
 if (tok.isWord) {
-//	let rv = curly_expansion(tok, 0);
 	let rv = this.curlyExpansion(tok, 0);
 	if (rv !== tok){
 		arr.splice(k, 1, ...rv);
@@ -7059,7 +7172,9 @@ for (let k=0; k < arr.length; k++){//field splitting«
 	let tok = arr[k];
 	if (tok.isWord) {
 		if (isAssign){
-			tok.val=tok.fields.join("\n");
+// UWEQJKDMN
+//			tok.val=tok.fields.join("\n");
+			tok.val=tok.fields.join(" ");
 		}
 		else {
 			let{start} = tok;
@@ -7259,6 +7374,9 @@ async makeCommand({assigns=[], name, args=[]}, opts, parentCommand){//«
 	}
 //TRYHERE
 	try{//«new Com
+
+// KJMKLDWES: This is GOOD!
+//log(`${usecomword}: ${com_env.env.cwd.cwd}`);
 		comobj = new com(usecomword, arr, com_opts, com_env, parentCommand);
 		return comobj;
 	}
@@ -7322,13 +7440,22 @@ async makeScriptCom(com_ast, comopts, parentCommand){//«
 	comopts.scriptArgs = simp_com.args;
 //SAKROAP
 	delete comopts.isInteractive;
-	com = await this.makeCompoundCommand({type: 'subshell', redirs:[], compound_command: {compound_list: {trm: rv}}}, comopts)
+	com = await this.makeCompoundCommand({
+		type: 'subshell',
+		redirs:[],
+		compound_command: {
+			compound_list: {
+				trm: rv
+			}
+		}
+	}, comopts)
 	com.isScript = true;
 	return com;
 }//»
 async executePipeline(pipe, loglist, loglist_iter, opts, parentCommand, in_background){//«
 	let lastcomcode;
 	let {stdin: optStdin, env}=opts;
+
 	let pipelist = pipe.pipe;
 	if (!pipelist){
 		return `sh: pipeline list not found!`;

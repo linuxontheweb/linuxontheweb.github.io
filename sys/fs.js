@@ -61,6 +61,11 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
+
+/*9/8/26: /dev/shm does NOT respect the append flag (FIXED)«
+@UEWIWENM
+»*/
+
 /* 9/5/26 BUG BUG BUG«
 
 When mv'ing from SHM_FS_TYPE to OP_FS_TYPE, there is a complaint about *something* not having a valid
@@ -2773,6 +2778,10 @@ return true;
 
 const set_local_blob = async (node, blob, opts={}) => {//«
 	if (node.useMemBlob) {
+
+// NEED APPEND HERE! UEWIWENM
+		if (opts.append) blob = new Blob([await node.blob, blob]);
+
 		_set_mem_blob(node, blob);
 		_node_update(NODE_UPDATE_SIZE, node, blob.size);
 		return {size: blob.size};
