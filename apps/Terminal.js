@@ -532,9 +532,7 @@ async execute(str, opts={}){//«
 	str = str.replace(/\x7f/g, "");
 	await this.curShell.execute(str, {
 		env: this.env,
-//		term: this,
 		isInteractive: true,
-//		shell: this.curShell,
 		heredocScanner:eof=>{return this.heredocScanner(eof);},
 	});
 	let save_str;

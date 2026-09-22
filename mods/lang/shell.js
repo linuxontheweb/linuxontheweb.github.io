@@ -83,6 +83,31 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 »*/
 
+/*9/22/26: need this badsub error
+cat <<eof
+`ls'
+eof
+-bash: bad substitution: no closing "`" in `ls'
+
+
+We say:
+sh: unterminated quote: "'"
+
+Why are we talking about the single quote in this heredoc?
+
+
+cat <<eof
+`ls"
+eof
+
+We say:
+sh: unterminated quote: """
+
+
+We need to know that we are in a backquote that is in a heredoc, and nor complain about the normal
+quotes
+
+*/
 /* 9/8/26: «
 
 echo blah >> /dev/shm/what
@@ -2664,8 +2689,6 @@ this.comClasses={Com: SimpleCommand,NoCom,ErrCom};
 
 const Sequence = class {//«
 	constructor(start){
-//		this.par = par;
-//		this.env = env;
 		this.val = [];
 		this.start = start;
 //How about a start line?
@@ -4611,7 +4634,7 @@ scanComments() {//«
 	}
 };//»
 
-async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
+async scanQuote(par, which, in_backquote, in_heredoc, cont_quote, use_start){//«
 //log("scanQuote", which, this.index);
 // If we are in double-quotes or back-quotes, we need to check for:
 // 2) '$(': scanComSub
@@ -4716,15 +4739,19 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 			//else is_bq: the character is in "free space" (no backslashes show up)
 			out.push(ch);
 		}//»
-		else if (is_bq && (ch==='"'||ch==="'")){//«
+		else if (is_bq && !in_heredoc && (ch==='"'||ch==="'")){//«
 			this.index=cur;
 			rv = await this.scanQuote(quote, ch, true);
+
+/*
+If this is in a heredoc, we don't treat these as quotes
+*/
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
 			else if (isStr(rv)) this.throwUnexpectedToken(rv);
 			out.push(rv);
 			cur = this.index;
 		}//»
-		else if (is_bq && ch==="$" && this.source[cur+1]==="'"){//«
+		else if (is_bq && !in_heredoc && ch==="$" && this.source[cur+1]==="'"){//«
 			this.index=cur;//DPORUTIH
 			rv = await this.scanQuote(quote, "$", true);
 			if (rv===null)  this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -4746,7 +4773,7 @@ async scanQuote(par, which, in_backquote, cont_quote, use_start){//«
 //				throw new Error("EOF");
 				throw new ShellError("EOF");
 			}
-			return await this.scanQuote(par, which, in_backquote, quote, start);
+			return await this.scanQuote(par, which, in_backquote, in_heredoc, quote, start);
 		}
 		return null;
 	}
@@ -5201,8 +5228,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 
 	let start = this.index;
 	let rv;
-	let start_line_number = this.lineNumber;
-	let start_line_start = this.lineStart;
 	let word = new Word(start);
 	let wordarr = word.val;
 	let is_plain_chars = true;
@@ -5214,11 +5239,11 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		let next2 = this.source[this.index+2];
 		if (ch==="\\"){//«
 			if (!next1) {//«
+				this.source.pop();
+				this.length--;
 				if (this.isInteractive){
 //We treat the escape character as if it doesn't exist, and everything continues on the same line
 //with the ps1 prompt
-					this.source.pop();
-					this.length--;
 					await this.more(true);
 					continue;
 				}
@@ -5229,11 +5254,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 				}
 			}//»
 			else if (next1 === "\n") {//«
-				if (this.isInteractive){
-//Newlines *are* added in interactive mode when calling 'await this.more()' while
-//scanning a string that was not terminated.
-					throw new Error("HOW IS THERE AN ACTUAL NEWLINE CHARACTER WHILE WE ARE INTERACTIVE?!?!");
-				}
 //In a script, just treat the 2 character sequence <escape> <newline> as if they don't exist
 				this.index+=2;
 				continue;
@@ -5266,12 +5286,11 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 			continue;
 		}//»
 		else if (ch==='`' || (!in_heredoc && ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'))){//«
-//		else if ((ch==="$"&&next1==="'")||ch==="'"||ch==='"'||ch==='`'){
 			is_plain_chars = false;
 			if (ch==="`" && in_backquote){
 				this.throwUnexpectedToken("unexpected EOF reached");
 			}
-			rv = await this.scanQuote(word, ch, in_backquote);
+			rv = await this.scanQuote(word, ch, in_backquote, in_heredoc);
 			if (rv===null) {
 				if (ch=="'"){
 					this.throwUnexpectedToken(`unterminated quote: "${ch}"`);
@@ -5299,7 +5318,6 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 		}//»
 		else if (is_param && ch==="}") break;//WUEHSKR
 		else if (ch==="\n"||ch==="\x20"||ch==="\t") {//«
-//		else if (ch==="\n"||ch===" "||ch==="\t") {
 			if (is_param){
 				return this.unexp("whitespace token", BADSUB);
 			}
@@ -5361,14 +5379,11 @@ log(wrd);
 			word.isCommandStart = true;
 		}
 	}
-//cwarn("DONE");
-//log(start, this.index);
-//log(this.source);
 	word.raw = this.source.slice(start, this.index).join("");
-//log(word);
 	return word;
 }//»
-scanNewlines(par, env){//«
+scanNewlines(){//«
+//scanNewlines(par, env){
 //scanNewlines(par, env, heredoc_flag){
 
 	let start = this.index;
@@ -5462,19 +5477,20 @@ let ch = this.source[this.index];
 // We never do this because we are always entering single lines from the
 // interactive terminal or sending them through one-by-one via ScriptCom.
 
-//if (ch==="\n") return this.scanNewlines(null, this.env, heredoc_flag);
-if (ch==="\n") return this.scanNewlines(null, this.env);
+if (ch==="\n") return this.scanNewlines(); //Returns Newlines
 
 /*EJRKSNRM
 If in a heredoc, and we have a space, we need to preserve them with:
 this.scanSpaces()
 */
-if (ch==="\x20" && in_heredoc) return this.scanSpaces();
+
+if (ch==="\x20" && in_heredoc) return this.scanSpaces(); // Returns Spaces
 if (OPERATOR_CHARS.includes(ch)) {
 	if (in_heredoc) {
 // Suck up all the shell metacharacters that might cause scanOperator
 // to complain
-		return this.scanHeredocOpChars();
+// 
+		return this.scanHeredocOpChars(); // Any of |&;<>()
 	}
 	return this.scanOperator();
 }
