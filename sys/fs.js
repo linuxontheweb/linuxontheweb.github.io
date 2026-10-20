@@ -61,9 +61,24 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
-/*10/20/26«
+/*10/20/26: Proper updating an empty ("touched") file to a real blobId«
 
 In FileSaver, we did touchFile, but never got a real blob id.
+
+
+What is an "entry"?
+
+	FileSystemFileHandle {kind: 'file', name: 'XYZ.txt'}
+
+We then get a writer from it like:
+
+	let writer = await fEnt.createWritable({keepExistingData: true});
+
+Then we write:
+
+	await writer.seek(curpos);
+	await writer.write(slice);
+	await writer.close();
 
 Calling: `await node.entry` (@TUAKSMFMB) simply calls the method FileNode._getEntry.
 
@@ -3434,7 +3449,7 @@ fObj = node;
 cwarn("ARE WE GETTING REAL BLOB ID?");
 //TUAKSMFMB
 fEnt = await node.entry;
-//log("ENTRY",fEnt);
+log("ENTRY",fEnt);
 fObj.lockFile();
 cb(fObj);
 
