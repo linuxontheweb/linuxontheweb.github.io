@@ -61,7 +61,16 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
+/*10/20/26«
 
+In FileSaver, we did touchFile, but never got a real blob id.
+
+Calling: `await node.entry` (@TUAKSMFMB) simply calls the method FileNode._getEntry.
+
+FileNode._getEntry should have been calling FileNode.getRealBlobId
+(if the `blobId === NULL_BLOB_NODE_TYPE`), so I just added that in @ASNRINFKN.
+
+»*/
 /*9/8/26: /dev/shm does NOT respect the append flag (FIXED)«
 @UEWIWENM
 »*/
@@ -1662,8 +1671,10 @@ async _getEntry(){//«
 	if (this.#entry) return this.#entry;
 	let id = this.blobId;
 	if (id === NULL_BLOB_NODE_TYPE){
-		id = get_blob_id();
-		_node_update(NODE_UPDATE_BLOB_ID, this, id);
+//ASNRINFKN
+		await this.getRealBlobId();
+		id = this.blobId;
+log(`Updated to real blobId: ${id}`);
 	}
 	else if (this.type==SHM_FS_TYPE) return;
 	else if (!Number.isFinite(id)) {
@@ -3414,12 +3425,14 @@ if (!node) return cb(null, `${fullpath}, Could not create the file`);
 //log(node);
 //log(node.entry);
 
-
-await node.getRealBlobId();
+//DASNDIF
+//await node.getRealBlobId();
 
 if (!(node&&node.entry)) return cb(null, `${fullpath}, Could not get the file entry`);
 
 fObj = node;
+cwarn("ARE WE GETTING REAL BLOB ID?");
+//TUAKSMFMB
 fEnt = await node.entry;
 //log("ENTRY",fEnt);
 fObj.lockFile();
