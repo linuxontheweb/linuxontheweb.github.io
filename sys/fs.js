@@ -3271,9 +3271,9 @@ par.loadKidsDone = true;
 //»
 //Util«
 
-/*
-//let FILE_SAVER_SLICE_SZ = 1 * MB;
-let FILE_SAVER_SLICE_SZ = 10;
+///*
+let FILE_SAVER_SLICE_SZ = 1 * MB;
+//let FILE_SAVER_SLICE_SZ = 10;
 //Used only by Desk.save_dropped_files«
 const FileSaver=function(){//«
 
@@ -3406,11 +3406,22 @@ if (parobj.getKid(fname)) return cb(null,`${fname}: the name is already taken`);
 //The existence of an icon causes save_dropped_files to fail. That operation
 //requires that an icon with a position is created.
 
-let node = await saveFsByPath(fullpath, null, {getEntry: true, noMakeIcon: true});//FileSaver.set_fent
+//let node = await saveFsByPath(fullpath, null, {getEntry: true, noMakeIcon: true});//FileSaver.set_fent
+
+let node = await touchFile(parobj, fname);
+
+if (!node) return cb(null, `${fullpath}, Could not create the file`);
+//log(node);
+//log(node.entry);
+
+
+await node.getRealBlobId();
+
 if (!(node&&node.entry)) return cb(null, `${fullpath}, Could not get the file entry`);
 
 fObj = node;
 fEnt = await node.entry;
+//log("ENTRY",fEnt);
 fObj.lockFile();
 cb(fObj);
 
@@ -3444,7 +3455,7 @@ this.cancel = (cb) => {//«
 }
 this.FileSaver=FileSaver;
 //»
-*/
+//*/
 
 const event_to_files = (e) => {//«
 	var dt = e.dataTransfer;

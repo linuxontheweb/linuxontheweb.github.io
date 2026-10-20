@@ -8157,7 +8157,62 @@ const get_desk_context=()=>{//«
 //Saving«
 
 //Called via "real/outer" OS file drop event(ChromeOS,Windows,etc)
-/*
+
+const make_icon = async(name, where, opts={}) => {//«
+
+//«
+
+//Only called in the desktop via save_dropped_files, with opts.pos
+//
+//Otherwise, it is on called at the end of:
+//		
+//	const move_icon_by_path = (frompath, topath, app, opts = {}) => 
+//
+//Those who call this with opts are:
+//fs.com_mv, with opts={node, icon, win}
+//save_from_local with opts={icon, win}
+
+//»
+
+	let {ext, node, icon: oldicon} = opts;
+
+	let fullname;
+	if (ext) fullname = `${name}.${ext}`;
+	else fullname = name;
+
+	let path;
+	if (where == desk) path = DESK_PATH;
+	else path = `${where.path}/${where.name}`;
+
+	let fullpath = `${path}/${fullname}`;
+
+	let icons;
+	if (where === desk) icons = desk_icons;
+	else icons = get_win_icon_array(where);
+	for (let icn of icons){
+		if (icn && icn.fullname === fullname) {
+//DBFHGKT
+cwarn(`Make_icon: Already have an icon named: ${fullname}`);
+log(where);
+log(icn);
+			return;
+		}
+	}
+
+	if (!node) {
+cerr("Make_icon: !!!!! No node given!!!!!");
+cwarn("THIS IS A BAD ERROR, BUT SEE IF THE FAKE NODE WORKS ANYWAYS...");
+		node = {name:fullname, baseName: name, ext, fullpath};
+log(node);
+		node.kids = (oldicon && oldicon.appName === FOLDER_APP);
+	}
+	let icn = new Icon(node, {parApp: where.app});
+	if (where===desk) place_icon_in_desk_slot(icn, {pos: opts.pos, create: true});
+	else add_icon_to_folder_win(icn, where);
+	return icn;
+}
+//»
+
 const save_dropped_files = (e_or_list, where) => {//«
 cwarn("save");
 log(e_or_list);
@@ -8242,6 +8297,7 @@ cerr(mess);
 			let fname = parts.pop();
 // UGGRKGTJD
 			let curicon = await make_icon(fname, where, {pos: usepos, ext: ext, node: fObj});
+//let curicon = make_new_desk_icon();
 			curicon.disabled=true;
 			curicon.addOverlay();
 			let odiv = curicon.overdiv;
@@ -8268,8 +8324,8 @@ cerr(mess);
 }
 
 //»
-*/
 
+/*
 const save_dropped_files = (e_or_list, where) => {//«
 
 let pos, files;
@@ -8291,7 +8347,7 @@ log(files);
 
 
 };//»
-
+*/
 //Opens a folder in "Save As..." mode
 //DWEUNFKL
 
@@ -9402,60 +9458,6 @@ return arr;
 /* Old «
 
 //SNEJRUTK
-const make_icon = async(name, where, opts={}) => {//«
-
-//«
-
-//Only called in the desktop via save_dropped_files, with opts.pos
-//
-//Otherwise, it is on called at the end of:
-//		
-//	const move_icon_by_path = (frompath, topath, app, opts = {}) => 
-//
-//Those who call this with opts are:
-//fs.com_mv, with opts={node, icon, win}
-//save_from_local with opts={icon, win}
-
-//»
-
-	let {ext, node, icon: oldicon} = opts;
-
-	let fullname;
-	if (ext) fullname = `${name}.${ext}`;
-	else fullname = name;
-
-	let path;
-	if (where == desk) path = DESK_PATH;
-	else path = `${where.path}/${where.name}`;
-
-	let fullpath = `${path}/${fullname}`;
-
-	let icons;
-	if (where === desk) icons = desk_icons;
-	else icons = get_win_icon_array(where);
-	for (let icn of icons){
-		if (icn && icn.fullname === fullname) {
-//DBFHGKT
-cwarn(`Make_icon: Already have an icon named: ${fullname}`);
-log(where);
-log(icn);
-			return;
-		}
-	}
-
-	if (!node) {
-cerr("Make_icon: !!!!! No node given!!!!!");
-cwarn("THIS IS A BAD ERROR, BUT SEE IF THE FAKE NODE WORKS ANYWAYS...");
-		node = {name:fullname, baseName: name, ext, fullpath};
-log(node);
-		node.kids = (oldicon && oldicon.appName === FOLDER_APP);
-	}
-	let icn = new Icon(node, {parApp: where.app});
-	if (where===desk) place_icon_in_desk_slot(icn, {pos: opts.pos, create: true});
-	else add_icon_to_folder_win(icn, where);
-	return icn;
-}
-//»
 const move_icon_by_path = async (frompath, topath, app, opts = {}) => {//«
 //return new Promise(async(Y,N)=>{
 	const doend=()=>{//«

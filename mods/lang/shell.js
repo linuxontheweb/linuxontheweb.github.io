@@ -83,7 +83,16 @@ this.out("This gets sent to pipes, command substitutions or stdout");
 
 »*/
 
-/*9/22/26: need this badsub error
+/*9/22/26: «
+
+There are 3 calls to Scanner.more @HDSJKRHJS
+1) @SBFKLRMK at the end of scanQuote
+2) @IOJENMNM at the end of scanSub
+3) @MJASHBRJ near top of scanWord (line continuation)
+
+
+
+need this badsub error
 cat <<eof
 `ls'
 eof
@@ -107,7 +116,10 @@ sh: unterminated quote: """
 We need to know that we are in a backquote that is in a heredoc, and nor complain about the normal
 quotes
 
-*/
+
+BASICALLY FIXED BY TRACKING IN_HEREDOC IN THE QUOTE SCANNER
+
+»*/
 /* 9/8/26: «
 
 echo blah >> /dev/shm/what
@@ -4476,6 +4488,7 @@ const ErrorHandler = class {
 };//»
 //Scanner«
 
+// Var «
 //These 2 functions are "holdover" logic from esprima, which seems too "loose" for 
 //typical shell scripting purposes
 const isWhiteSpace = (cp) => {//«
@@ -4526,6 +4539,8 @@ const RESERVED_START_WORDS = [//«
 
 const EOF_Type = 1;
 
+//»
+
 const Scanner = class {
 
 constructor(code, opts={}, handler) {//«
@@ -4546,6 +4561,7 @@ eof() {//«
 eol(){//«
 	return this.isInteractive && (this.index >= this.length);
 }//»
+//HDSJKRHJS
 async more(no_nl){//«
 	if (!this.eol()){
 		throw new Error("more() was call, but NOT at eol()");
@@ -4769,6 +4785,7 @@ If this is in a heredoc, we don't treat these as quotes
 	if (ch !== end_quote) {
 		if (this.eol()){
 			quote.val = out;
+//SBFKLRMK
 			if (!await this.more()){
 //				throw new Error("EOF");
 				throw new ShellError("EOF");
@@ -4979,6 +4996,7 @@ this.index = cur;
 
 if (this.eol()){
 	sub.val = out;
+//IOJENMNM
 	await this.more();
 	return await this.scanSub(par, {
 		isMath: is_math, 
@@ -5005,8 +5023,8 @@ scanOperator(){//«
 		obj.isSubStart = true;
 		obj.isCommandStart = true;
 		++this.index;
-		break;
-	case ')':
+		break;//»
+	case ')'://«
 		obj.isSubEnd = true;
 		obj.isPatListEnd = true;
 		++this.index;
@@ -5244,6 +5262,8 @@ or in double quotes or in themselves ("`" must be escaped to be "inside of" itse
 				if (this.isInteractive){
 //We treat the escape character as if it doesn't exist, and everything continues on the same line
 //with the ps1 prompt
+// The true flag means we don't insert a newline
+//MJASHBRJ
 					await this.more(true);
 					continue;
 				}
@@ -5595,7 +5615,6 @@ nextTok(){//«
 	return this.tokens[this.tokNum];
 }//»
 async scanNextTok() {//«
-//async scanNextTok(heredoc_flag) {
 	let token = this.lookahead;
 //NFMSHFKG
 	if (!this.isHeredoc) {
@@ -6657,39 +6676,6 @@ log(next);
 
 }//»
 
-/*
-dumpTokens(){//«
-
-let toks = this.tokens;
-let tok = toks[this.tokNum];
-
-while(tok){
-	if (isNLs(tok)){
-//cwarn("NL");
-		this.tokNum++;
-		while (isNLs(toks[this.tokNum])) {
-			this.tokNum++;
-		}
-	}
-	else {
-		if (tok.isWord){
-			log(tok.toString());
-		}
-		else{
-			if (tok.isHeredoc){
-				cwarn(`HEREDOC (${tok.delim}): ${(tok.value.slice(0,10)+"..."+tok.value.slice(tok.value.length-10, tok.value.length)).split("\n").join("\\n")}`);
-			}
-			else {
-				cwarn(tok[tok.type]);
-			}
-		}
-		this.tokNum++;
-	}
-	tok=toks[this.tokNum];
-}
-
-}//»
-*/
 
 };
 
@@ -7774,6 +7760,7 @@ return;
 }
 		let ast = await parser.compile();
 		if (!ast) return;
+
 		let statements=[];
 		for (let compcoms of ast.program.complete_commands){
 			let list = compcoms.complete_command.list;

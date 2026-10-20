@@ -614,6 +614,8 @@ app: {
 	ALL_EXTENSIONS_RE,
 	EXT_TO_APP_MAP,
 },
+audio:{
+},
 css:{
 	desk:{
 		BACKGROUND_IMAGE_URL,

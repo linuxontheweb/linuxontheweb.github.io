@@ -1,4 +1,4 @@
-
+(()=>{"use strict";const LIBNAME="dev.template";
 //Imports«
 
 //const{globals, Desk}=LOTW;
@@ -18,5 +18,8 @@ const coms = {//«
 	template: com_template,
 }//»
 
-export {coms};
+//export {coms};
+LOTW.coms[LIBNAME] = {coms};
+
+})();
 
