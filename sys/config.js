@@ -551,7 +551,7 @@ const VIM_MODES={
 };
 //»
 //Firebase«
-/*
+///*
 const FIREBASE_CONFIG = {
     apiKey: "AIzaSyCEEMw3b1_bWj-OxM9oMKlKhkTTWxbIhlI",
     authDomain: "linuxontheweb.firebaseapp.com",
@@ -561,7 +561,8 @@ const FIREBASE_CONFIG = {
     messagingSenderId: "668423415088",
     appId: "1:668423415088:web:979b40c704cab2322ed4f5"
 };
-*/
+//*/
+/*
 const FIREBASE_CONFIG = {
 	apiKey: "AIzaSyBHEN5WDUFgeA-CfP-KHUrFG3_ZJruylEw",
 	authDomain: "lotw-v001.firebaseapp.com",
@@ -571,6 +572,7 @@ const FIREBASE_CONFIG = {
 	messagingSenderId: "686644388229",
 	appId: "1:686644388229:web:8f5e3b119def6b69cfe4ec"
 };
+*/
 const FIREBASE_BASE_URL = "https://www.gstatic.com/firebasejs/12.16.0";
 const FIREBASE_APP_URL = `${FIREBASE_BASE_URL}/firebase-app.js`;
 const FIREBASE_AUTH_URL = `${FIREBASE_BASE_URL}/firebase-auth.js`;

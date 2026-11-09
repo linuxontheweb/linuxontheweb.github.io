@@ -461,6 +461,24 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
+/*BUGFIX: 11/9/26
+@HDSJNMJK: We need to do:
+let uid = par.mntPar.getData('fbaseUid');
+AND
+let grpid = par.mntPar.getData('fbaseGrpId');
+
+INSTEAD OF par.getData('...');
+
+*/
+/*11/8/26«
+
+Switch back to main google account for firebase.
+
+Put the new database schema in there.
+
+Test out the schemam
+
+»*/
 /*9/6/26 BUG BUG BUG«
 
 populate_fbase_user_grp_dir: Not called for subfolders of the prv/ (and pub/).
@@ -2183,26 +2201,46 @@ return rv;
 
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
+//let uid = dir.mntPar.getData('fbaseUid');
 if (!cur_user) return;
-let uid = par.getData('fbaseUid');
-let grpid = par.getData('fbaseGrpId');
+
+// MAKE SURE WE ARE DOING THIS FOR ALL OF THEM!!!
+// HDSJNMJK->vvvvvvvvvvvvvvvvvvvvvvvvv
+let uid = par.mntPar.getData('fbaseUid');
+if (!uid) {
+cerr("NO UID FROM par.getData('fbaseUid')!!!");
+log(par);
+cwarn("HERE IS par.getData");
+log(par.getData);
+return;
+}
+//let grpid = par.getData('fbaseGrpId');
+let grpid = par.mntPar.getData('fbaseGrpId');
 let parid = par.id;
 //cwarn(`TRY GET '${name}':  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 /*
 Construct the path via the parent node's nodeId
 */
 let path = `${parid}/${name}`;
-log(`TRY_GET_KID: ${path}`);
+cwarn(`TRY_GET_KID: ${path}`);
 
-let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
+//let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
+//let c1 = fbase_db_mod.orderByChild('parId');
+//let c2 = fbase_db_mod.equalTo(parid);
+let ref_path = `LOTW/user/${uid}/group/${grpid}/nodes`;
+log(`REF_PATH  <${ref_path}>`);
+let ref = fbase_db_mod.ref(fbase_db, ref_path);
+//let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('path');
 let c2 = fbase_db_mod.equalTo(path);
 let c3 = fbase_db_mod.limitToFirst(1);
+//log(ref, c1, c2, c3);
 let q = fbase_db_mod.query(ref, c1, c2, c3);
+//log(q);
 let snap = await GET(q);
 let arr = VAL(snap);
 if (!arr) {
-cwarn("DID NOT GET!");
+cerr("DID NOT GET!");
 	return;
 }
 //if (!(snap && snap.exists())) return;
@@ -2243,7 +2281,7 @@ return node;
 
 //YBNMDAOJ
 const populate_fbase_user_grp_dir = async (dir) => {//«
-
+cwarn("POPULATE USER_GRP_DIR");
 // e.g. /mnt/users/user123/pub/, and all subdirs thereof
 // dir
 if (!cur_user) return;
@@ -2255,13 +2293,16 @@ if (!cur_user) return;
 // 	- *this* method for popDir
 //	- a method for tryLoadKid that looks up particular nodes by the exact key.
 
-
+log(dir);
 // 
 //let uid = dir.getData('fbaseUid');
 //let grpid = dir.getData('fbaseGrpId');
 let uid = dir.mntPar.getData('fbaseUid');
+//log(`UID: ${uid}`);
 let grpid = dir.mntPar.getData('fbaseGrpId');
+//log(`GRPID: ${grpid}`);
 let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
+//log(`PARID: ${parid}`);
 //cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
@@ -2269,6 +2310,7 @@ let c1 = fbase_db_mod.orderByChild('parId');
 let c2 = fbase_db_mod.equalTo(parid);
 let q = fbase_db_mod.query(ref, c1, c2); // HOPORNKER
 let snap = await GET(q);
+log("GOT SNAP?", snap);
 if (!snap){
 cerr("NO SNAP!?!?!");
 return;
@@ -2282,6 +2324,15 @@ if (!snap.exists()) {
 	return;
 }
 let arr = snap.val();
+if (!isArr(arr)) {
+	let keys = Object.keys(arr);
+	let new_arr = [];
+	for (let i=0; i < keys.length; i++){
+		let key = keys[i];
+		new_arr[parseInt(key)] = arr[key];
+	}
+	arr = new_arr;
+}
 for (let i=0; i < arr.length; i++){
 let obj = arr[i];
 if (!obj) continue;
@@ -2299,6 +2350,7 @@ cwarn(`WHAT TYPE IS THIS OBJ(${obj.type})???`);
 log(obj);
 return;
 }
+cwarn("NEW NODE", node);
 _node_update(NODE_UPDATE_ID, node, i); // node.#id is the iterator
 _dir_update(DIR_UPDATE_ADD, dir, node);
 }
@@ -2448,17 +2500,21 @@ return `fbase.js: not setting constant value: '${k}'`;
 	user_dir.loadKidsDone = true;
 
 };//»
+//Just the list of user names
 const populate_fbase_users = async (users_dir) => {//«
 // e.g. /mnt/users/
+log("POPULATE /mnt/fbase");
 if(users_dir.loadKidsDone) return;
-if (!cur_user) return;
+if (!cur_user) {
+cwarn("NOT LOGGED IN.");
+	return;
+}
 if (is_populating_users) return;
 is_populating_users = true;
 
 // = true;
 //log("DOPOP");
 
-let old_obj = {};
 
 let ref = fbase_db_mod.ref(fbase_db, "LOTW/prof");
 
@@ -2484,6 +2540,8 @@ return;
 }
 
 
+
+let old_obj = {};
 let new_obj = snap.val();
 for (let uid in new_obj) old_obj[uid] = new_obj[uid];
 
@@ -2507,26 +2565,27 @@ for (let uid in old_obj) {
 		use_name = `${use_name}${iter}`;
 	}
 // YFKMYOGJT
-	let dir = new DirNode(use_name, users_dir, {//«
+	let user_dir = new DirNode(use_name, users_dir, {//«
 		perm: true, // UOIONWEJR
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
-		tryLoadKid: async (name)=>{//«
+		tryLoadKid: async (arg1, arg2)=>{//«
 /*
 Since the names of the dirs are currently arbitrarily given, then it makes no
 sense to have a literal system of looking up users based on predetermined
 dirnames.
 */
-//cwarn(`TRY LOAD KID: ${name}`);
-			await dir.loadKids();
-			return dir.getKid(name);
+cwarn(`TRY LOAD KID:`);
+log(arg2)
+			await user_dir.loadKids();
+//			return user_dir.getKid(name);
 		},//»
 		data: {
 			fbaseUid: uid,
 			fbaseProf: prof
 		},
 	});//»
-	_dir_update(DIR_UPDATE_ADD, users_dir, dir);
+	_dir_update(DIR_UPDATE_ADD, users_dir, user_dir);
 
 }
 
@@ -2655,18 +2714,17 @@ fbase_auth_mod.onAuthStateChanged(fbase_auth, val=>{this.#authChangeCb(val);});
 
 //WYRHTKGH
 
-let fbase_dir = new DirNode("fbase", par_node, {
+let users_dir = new DirNode("fbase", par_node, {
 	type: FBASE_USERS_FS_TYPE,
 	loadKids: populate_fbase_users,
 	tryLoadKid: async (name)=>{
-//cwarn("HIHIHI");
-//		await fbase_dir.loadKids(); // dir.done is checked in loadKids()
-		await populate_fbase_users(fbase_dir);
-		return fbase_dir.getKid(name);
+		await users_dir.loadKids(); // The dir.loadKidsDone flag is checked in loadKids()
+//		await populate_fbase_users(users_dir);
+		return users_dir.getKid(name);
 	}
 });
-_dir_update(DIR_UPDATE_ADD, par_node, fbase_dir); // Add kid
-
+_dir_update(DIR_UPDATE_ADD, par_node, users_dir); // Add kid
+//log(users_dir);
 return true;
 
 }//»

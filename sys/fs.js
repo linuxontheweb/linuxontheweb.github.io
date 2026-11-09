@@ -63,6 +63,9 @@ _dir_update(1, par, my_node);
 */
 /*10/20/26: Proper updating an empty ("touched") file to a real blobId«
 
+Normally, we are checking for NULL_BLOB_NODE_TYPE in set_local_blob.
+But in FileSaver, we are implenting our own writer function.
+
 In FileSaver, we did touchFile, but never got a real blob id.
 
 
@@ -74,7 +77,7 @@ We then get a writer from it like:
 
 	let writer = await fEnt.createWritable({keepExistingData: true});
 
-Then we write:
+Then we write (this is also mainly what write_blob does):
 
 	await writer.seek(curpos);
 	await writer.write(slice);
@@ -880,17 +883,10 @@ const {
 	log,
 	cwarn,
 	cerr,
-	strNum,
-	isDef,
-	isArr,
-	isObj,
 	isNum,
 	isInt,
 	isStr,
 	isBool,
-	isFunc,
-	isEOF,
-	isErr,
 	getNameExt,
 	getFullPath,
 	normPath,

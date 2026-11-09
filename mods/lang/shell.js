@@ -3420,8 +3420,167 @@ run(){
 
 const Com = SimpleCommand;
 
+const com_tryget = class extends Com{
+init(){
+}
+async run(){/* « */
+
+
+let which_path = this.args.shift();
+if (!which_path) return this.no("NEED A DB PATH!");
+
+
+const { //«
+    appUrl,
+    authUrl,
+    dbUrl
+} = LOTW.globals.firebase;//»
+let fbase_app_mod = await import(appUrl);
+let fbase_auth_mod = await import(authUrl);
+let fbase_db_mod = await import(dbUrl);
+
+let fbase_app = fbase_app_mod.initializeApp(LOTW.globals.firebase.config);
+let fbase_db = fbase_db_mod.getDatabase(fbase_app);
+
+let fbase_auth = fbase_auth_mod.getAuth(fbase_app);
+
+
+fbase_auth_mod.onAuthStateChanged(fbase_auth, async cur_user=>{
+
+
+const GET = async(arg)=>{//«
+try {
+    return await fbase_db_mod.get(arg);
+}
+catch(e){
+cerr(e);
+//  return e;
+}
+};//»
+const REF = path => {return fbase_db_mod.ref(fbase_db, path);};
+
+
+
+if (!cur_user){
+this.no("NO CUR_USER");
+return;
+}
+const uid = cur_user.uid;
+
+/*
+const try_get_fbase_user_grp_kid = async (par, name) => {//«
+
+if (!cur_user) return;
+let uid = par.getData('fbaseUid');
+let grpid = par.getData('fbaseGrpId');
+let parid = par.id;
+//cwarn(`TRY GET '${name}':  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
+let path = `${parid}/${name}`;
+cwarn(`TRY_GET_KID: ${path}`);
+
+let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
+let c1 = fbase_db_mod.orderByChild('path');
+let c2 = fbase_db_mod.equalTo(path);
+let c3 = fbase_db_mod.limitToFirst(1);
+//log(ref, c1, c2, c3);
+let q = fbase_db_mod.query(ref, c1, c2, c3);
+//log(q);
+let snap = await GET(q);
+let arr = VAL(snap);
+if (!arr) {
+cerr("DID NOT GET!");
+	return;
+}
+//if (!(snap && snap.exists())) return;
+//let arr = snap.val();
+// Make a FileNode or DirNode
+
+log("GOT KID!!!");
+log(arr);
+
+// This loop would only be infinite if the array were empty, which it should never be
+let node;
+for (let i=0; ; i++){ //«
+	if (!arr[i]) continue;
+	let obj = arr[i];
+	let typ = obj.type;
+	let parid = obj.parId;
+	let name = (obj.path.split("/"))[1];
+//cwarn(`MAKE NODE(${i}) WITH:`);
+//log(obj);
+	if (typ === FILE_NODE_TYPE){
+		node = new FileNode(name, par);
+		_node_update(NODE_UPDATE_BLOB_ID, node, obj.blobId);
+	}
+	else if (typ === DIR_NODE_TYPE){
+		node = new DirNode(name, par);
+	}
+	else{
+cerr(`WHAT NODE TYPE??? ${typ}`); // Is this a symlink?
+		return;
+	}
+	_node_update(NODE_UPDATE_ID, node, i); // node.#id is the iterator
+	break; // We found want we want!
+}//»
+_dir_update(DIR_UPDATE_ADD, par, node); // Add to par.#kids
+return node;
+
+};//»
+*/
+
+
+//let path = `${parid}/${name}`;
+let grpid = 1;
+
+let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
+let c1 = fbase_db_mod.orderByChild('path');
+let c2 = fbase_db_mod.equalTo(which_path);
+let c3 = fbase_db_mod.limitToFirst(1);
+//log(ref, c1, c2, c3);
+let q = fbase_db_mod.query(ref, c1, c2, c3);
+let snap = await fbase_db_mod.get(q);
+if (!snap){
+this.no("NO SNAP");
+return;
+}
+log(snap);
+if (!snap.exists()){
+this.no("!SNAP.EXISTS() ");
+return;
+}
+let val = snap.val();
+
+log(val);
+//log(snap);
+
+//let snap = await GET(q);
+//cwarn("GOT QUERY");
+//log(q);
+
+
+
+//this.out(`UID: ${uid}`);
+this.ok();
+
+
+;});
+
+//log(fbase_app);
+//log(fbase_db);
+//log(appUrl);
+//log(dbUrl);
+/*
+let which = this.args.shift();
+if (!which) return this.no("NEED A DB PATH!");
+this.out(which);
+this.ok();
+*/
+}/* » */
+}
+
+/*
 const com_randname = class extends Com{//«
-static getOpts(){/* « */
+static getOpts(){// «
 return {
 s:{
 c: 3
@@ -3430,8 +3589,8 @@ l: {
 count: 3
 }
 }
-}/* » */
-async run(){/* « */
+}// »
+async run(){//«
 //const {}
 let def_cnt = 4;
 let max_cnt = 16;
@@ -3478,8 +3637,9 @@ this.out(name_str);
 this.ok();
 //this.ok(`${name_str}`);
 
-}/* » */
+}// »
 };//»
+*/
 
 //CBNCMDJF
 const com_opttest = class extends Com{//«
@@ -4390,7 +4550,8 @@ let win = await Desk.open_file_by_path(node.fullpath);//COMMENTED OUT IN COM_OPE
 
 this.builtins={//«
 opttest: com_opttest,
-randname: com_randname,
+tryget: com_tryget,
+//randname: com_randname,
 gh: com_gh,
 cat: com_cat,
 pipe: com_pipe,
