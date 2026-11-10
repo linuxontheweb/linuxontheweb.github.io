@@ -140,14 +140,7 @@ stays at 100.
 							)"
 						},
 						"lastUpdate": {
-							".read": "auth != null && (
-								($grpid === '1' && auth.uid === $uid) || 
-								($grpid === '2') || 
-								(auth.uid === $uid ||
-									root.child('LOTW').child('user').child($uid).
-									child('group').child($grpid).child('members').
-									child(auth.uid).val() === true)
-								)",
+							".read": "auth != null",
 							".validate": "newData.hasChildren(['sessId', 'timestamp', 'desc'])",
 							"sessId":{
 								".validate": "newData.isString() && newData.val().length < 16"
@@ -164,14 +157,7 @@ stays at 100.
 						},
 						"nodes": {
 							".indexOn": ["parId", "path", "blobId"],
-							".read": "auth != null && (
-								($grpid === '1' && auth.uid === $uid) || 
-								($grpid === '2') || 
-								(auth.uid === $uid ||
-									root.child('LOTW').child('user').child($uid).
-									child('group').child($grpid).child('members').
-									child(auth.uid).val() === true)
-								)",
+							".read": "auth != null",
 							"$nodeid": {
 								".validate": "data.exists() || 
 									newData.hasChildren(['parId', 'type', 'path'])",
@@ -195,14 +181,7 @@ stays at 100.
 							}
 						},
 						"blobs": {
-							".read": "auth != null && (
-								($grpid === '1' && auth.uid === $uid) || 
-								($grpid === '2') || 
-								(auth.uid === $uid ||
-									root.child('LOTW').child('user').child($uid).
-									child('group').child($grpid).child('members').
-									child(auth.uid).val() === true)
-								)",
+							".read": "auth != null",
 							"$blobid": {
 								".validate": "newData.hasChildren(['contents'])",
 								"meta": {
@@ -236,7 +215,6 @@ stays at 100.
 	}
 }
 }
-
 
 
 »*/
@@ -458,6 +436,10 @@ Need to get rid of the complex '.read' conditions that look like:
 and change them to simply:
 
 ".read": "auth != null" 
+
+Now that this is done, the code should JUST WORK, even if there is still
+some complexity (e.g. in the schema rules) related to concepts like group 
+members.
 
 */
 /*BUG 11/10/26 «
