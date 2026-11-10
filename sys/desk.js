@@ -5763,7 +5763,7 @@ async setLinkedApp(){//«
 //GRYUOTHH
 	let ref = await this.node.linkedNode;
 	if (ref){
-		if (ref.ext) this.ext = ref.ext.toLowerCase();
+//		if (ref.ext) this.ext = ref.ext.toLowerCase();
 		this.app = ref.appName;
 		this.appName = this.app;
 		this.ref = ref;
@@ -7690,6 +7690,7 @@ const open_window_by_node = async(node, opts={}) => {//«
 		}
 		return open_window_by_app_name(obj.app, {appArgs: obj.args});
 	}
+cwarn("OPEN NEW WINDOW", node);
 	win = await open_new_window(node, opts);
 	if (!win) return;
 	let val = await win.iconValFmt();

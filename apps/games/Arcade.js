@@ -311,6 +311,8 @@ const init_wasm=async(wasm, jsmod, bytes, namearg)=>{//«
 
 //const load_init=(bytes,name,ext)=>{
 const load_init=(bytes,arg)=>{//«
+cwarn("LOAD_INIT");
+log(bytes);
 //log(bytes, name, ext);
 //let name = arg.name;
 //let ext = 

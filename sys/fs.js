@@ -1444,7 +1444,14 @@ canRm(opts={}){//«
 	}//»
 
 // Folders...
-	if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE)) return `not removing directory type: '${rtype}': ${path}`;
+//	if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE)) {
+	if (!(rtype==OP_FS_TYPE||rtype==SHM_FS_TYPE||rtype==FBASE_USER_GRP_FS_TYPE)) {
+//log(rtype, FBASE_USER_GRP_FS_TYPE);
+//if (rtype === FBASE_USER_GRP_FS_TYPE){
+//cwarn(`NEED TO ALLOW RM'ING EMPTY FBASE_USER_GRP_FS_TYPE (${FBASE_USER_GRP_FS_TYPE})`);
+//}
+		return `not removing directory type: '${rtype}': ${path}`;
+	}
 	if (NS.Desk && (path == globals.user.desk_path)) return `not removing the working desktop path: ${path}`;
 	if (this.par.isRoot) return `not removing toplevel directory: ${path}`;
 	if (this.isMoveLocked) return `${path}: is "move locked"`;

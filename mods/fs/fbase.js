@@ -343,14 +343,7 @@ Remove newlines with:
 							)"//»
 						},//»
 						"lastUpdate": {//«
-							".read": "auth != null && (//«
-								($grpid === '1' && auth.uid === $uid) || 
-								($grpid === '2') || 
-								(auth.uid === $uid ||
-									root.child('LOTW').child('user').child($uid).
-									child('group').child($grpid).child('members').
-									child(auth.uid).val() === true)
-								)",//»
+							".read": "auth != null",
 							".validate": "newData.hasChildren(['sessId', 'timestamp', 'desc'])",
 							"sessId":{//«
 								".validate": "newData.isString() && newData.val().length < 16"
@@ -367,14 +360,7 @@ Remove newlines with:
 						},//»
 						"nodes": {//«
 							".indexOn": ["parId", "path", "blobId"],
-							".read": "auth != null && (//«
-								($grpid === '1' && auth.uid === $uid) || 
-								($grpid === '2') || 
-								(auth.uid === $uid ||
-									root.child('LOTW').child('user').child($uid).
-									child('group').child($grpid).child('members').
-									child(auth.uid).val() === true)
-								)",//»
+							".read": "auth != null",
 							"$nodeid": {//«
 								".validate": "data.exists() || 
 									newData.hasChildren(['parId', 'type', 'path'])",
@@ -398,14 +384,7 @@ Remove newlines with:
 							}//»
 						},//»
 						"blobs": {//«
-							".read": "auth != null && (//«
-								($grpid === '1' && auth.uid === $uid) || 
-								($grpid === '2') || 
-								(auth.uid === $uid ||
-									root.child('LOTW').child('user').child($uid).
-									child('group').child($grpid).child('members').
-									child(auth.uid).val() === true)
-								)",//»
+							".read": "auth != null",
 							"$blobid": {//«
 								".validate": "newData.hasChildren(['contents'])",
 								"meta": {//«
@@ -459,10 +438,50 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*BUG 11/10/26 
+/*11/10/26
+
+Let's just get rid of the complexity by making all files children of 
+world readable 'pub/'.
+
+Just switched the id for 'pub/' to 1, and for 'prv/' to 2.
+Need to get rid of the complex '.read' conditions that look like:
+
+".read": "auth != null && (//«
+	($grpid === '1' && auth.uid === $uid) || 
+	($grpid === '2') || 
+	(auth.uid === $uid ||
+		root.child('LOTW').child('user').child($uid).
+		child('group').child($grpid).child('members').
+		child(auth.uid).val() === true)
+	)",//»
+
+and change them to simply:
+
+".read": "auth != null" 
+
+*/
+/*BUG 11/10/26 «
+
+@UOENADNDM
+
+The parnode's of the "root" nodes (e.g. prv/ and pub/) should have id's of (something like),
+0 in the children's path.
+
+If we look at the db for OP_FS_TYPE, we see the root nodes have parId 0 and their
+fullpaths look like: 0/def. We need to do the same thing for the 
+
+The nextNodeId's should *NOT* be kept inside of the various branches.
+They should be global to all of the branches, just like with the
+normal filesystem database.
+
+So we need to change the schema and update the logic that uses/increments
+the nextNodeId's.
+
+
+
+
 
 Starting from scratch, if we make a dir in prv, it has itself as a parent
-
 
 FIXED: 
 WHY DO WE HAVE !data.exists HERE?
@@ -475,7 +494,7 @@ This seems to cause the update operation @MSNFJRJKDH to fail.
 },//»
 
 
-*/
+»*/
 /*BUG (FIXED): 11/9/26«
 
 We can't do persistent mv's and we are getting an undefined key in blobs.
@@ -533,6 +552,8 @@ Here we are seeing those duplicates @CVXOERHJN
 /*8/31/26 Just added `perm: true` to the FBASE_USER_MAIN_FS_TYPE type DirNode «
 
 @UOIONWEJR
+
+But WHY was this done?
 
 »*/
 
@@ -1908,8 +1929,8 @@ const { // firebase «
 
 const NULL_FBASE_RTDB_BLOB = 0;
 
-const PRV_DIR_ID = 1;
-const PUB_DIR_ID = 2;
+const PRV_DIR_ID = 2;
+const PUB_DIR_ID = 1;
 
 let cur_user;
 let next_node_ids;
@@ -2058,9 +2079,9 @@ return async (parnode, name, opts)=>{
 		blobId: NULL_FBASE_RTDB_BLOB
 	};
 cwarn("MK_NEW_FILE");
-
+//UOENADNDM
 if (next_id == parnode.id){
-cwarn(`Why does next_id(${next_id}) === parId(${parnode.id})???`);
+cerr(`Why does next_id(${next_id}) === parId(${parnode.id})???`);
 return;
 }
 //cwarn(`Does next_id(${next_id}) === parId (${parnode.id})???`);
@@ -2108,9 +2129,27 @@ if (!(val && val.contents)) {
 cerr("NO SNAP VAL.contents");
 	return;
 }
+//log(val.contents);
+/*
 let str = atob(val.contents);
-return new Blob([str]);
+let blob = new Blob([str]);
+//log("STR.length,"str.length);
+//log(blob);
+//return new Blob([str]);
+//SAHJNMUI
+if (str.length !== blob.size){
+cerr(`STR.LENGTH(${str.length}) !== BLOB.SIZE(${blob.size})`);
+}
+*/
 
+let binary_str = atob(val.contents);
+let len = binary_str.length;
+let bytes = new Uint8Array(len);
+for (let i = 0; i < len; i++) bytes[i] = binary_str.charCodeAt(i);
+let blob = new Blob([bytes]);
+cwarn("Testing for data integrity...");
+log(blob.size === binary_str.length);
+return blob;
 }
 
 };//»
@@ -2561,6 +2600,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 		_node_update(NODE_UPDATE_ID, pub, PUB_DIR_ID); // Id
 	//»
 	}//»
+/*
 	if (uid === cur_user.uid) {// Mount "prv" for the cur_user «
 // OERUTJSKF
 		let mk_dir_func_prv = gen_mk_dir(PRV_DIR_ID);
@@ -2588,7 +2628,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 		_dir_update(DIR_UPDATE_ADD, user_dir, prv); // Add kid
 		_node_update(NODE_UPDATE_ID, prv, PRV_DIR_ID); // Id HEREPRVRV
 	}//»
-
+*/
 	user_dir.loadKidsDone = true;
 
 };//»
@@ -2658,7 +2698,8 @@ for (let uid in old_obj) {
 	}
 // YFKMYOGJT
 	let user_dir = new DirNode(use_name, users_dir, {//«
-		perm: true, // UOIONWEJR
+//		perm: true, // UOIONWEJR
+		perm: false, // But users shouldn't be able to make new nodes
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
 		tryLoadKid: async (arg1, arg2)=>{//«
