@@ -416,7 +416,7 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*11/10/26
+/*11/10/26 Concept simplification«
 
 Let's just get rid of the complexity by making all files children of 
 world readable 'pub/'.
@@ -441,7 +441,7 @@ Now that this is done, the code should JUST WORK, even if there is still
 some complexity (e.g. in the schema rules) related to concepts like group 
 members.
 
-*/
+»*/
 /*BUG 11/10/26 «
 
 @UOENADNDM
@@ -2104,12 +2104,13 @@ let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
 let snap =  await GET(REF(path));
 if (!snap) {
 cerr("NOSNAP");
-	return;
+	return new Blob([]);
 }
 let val = VAL(snap);
 if (!(val && val.contents)) {
 cerr("NO SNAP VAL.contents");
-	return;
+	return new Blob([]);
+//	return;
 }
 //log(val.contents);
 /*

@@ -61,7 +61,13 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
-/*11/10/26 Issue in do_move:
+/*11/10/26 
+
+@ASKLEMOEM there was an undefined returned here with a null blob file in the FBASE
+pub/ directory. So if there really isn't anything there to be gotten, then it
+is the same if we return an empty string.
+
+Issue in do_move:
 @SJEKLROKJR We are calling setValue on the dest_node that we just created, but
 we haven't set the blob_id yet.
 */
@@ -1742,6 +1748,12 @@ get text(){//«
 	if (this.useMemBlob) return util.toStr(this.memBlob);
 	return(async()=>{
 		let blob = await this.getBlob();
+//cwarn("IS THERE A BLOB HERE?", blob);
+//ASKLEMOEM
+if (!blob) {
+cwarn("NO BLOB RETURNED FROM node.getBlob(), so just returning empty string");
+	return "";
+}
 		return blob_to_ret_val(blob, {text: true});
 	})();
 }//»
@@ -2907,6 +2919,10 @@ cerr(`NO ENTRY: ${bid}`);
 
 const get_data_from_fs_file=(file,format,start,end)=>{//«
 	return new Promise(async(Y,N)=>{
+//if (!file) return N("File arg not given!");
+//if (!file) {
+//	return Y(new Blob([], {type: "blob"}));
+//}	
 		const OK_FORMATS=["blob","bytes","text","binarystring","dataurl","arraybuffer"];
 		const def_format="arraybuffer";
 		if (!format) {
