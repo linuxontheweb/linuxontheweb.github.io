@@ -49,7 +49,6 @@ stays at 100.
 /* Schema «
 
 
-
 {
 "rules": {
 	".read": false,
@@ -179,14 +178,13 @@ stays at 100.
 								"parId": {
 									".validate": "newData.isNumber()"
 								},
+								"type": {
+									".validate": "newData.isString() && 
+										newData.val().length < 5"
+								},
 								"path": {
 									".validate": "newData.isString() && 
 										newData.val().length < 100"
-								},
-								"type": {
-									".validate": "!data.exists() && 
-										newData.isString() && 
-										newData.val().length < 5"
 								},
 								"blobId": {
 									".validate": "newData.isNumber()"
@@ -238,6 +236,7 @@ stays at 100.
 	}
 }
 }
+
 
 
 »*/
@@ -382,14 +381,13 @@ Remove newlines with:
 								"parId": {//«
 									".validate": "newData.isNumber()"
 								},//»
+								"type": {//«
+									".validate": "newData.isString() && 
+										newData.val().length < 5"
+								},//»
 								"path": {//«
 									".validate": "newData.isString() && 
 										newData.val().length < 100"
-								},//»
-								"type": {//«
-									".validate": "!data.exists() && 
-										newData.isString() && 
-										newData.val().length < 5"
 								},//»
 								"blobId": {//«
 									".validate": "newData.isNumber()"
@@ -461,7 +459,42 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*BUGFIX: 11/9/26
+/*BUG 11/10/26 
+
+Starting from scratch, if we make a dir in prv, it has itself as a parent
+
+
+FIXED: 
+WHY DO WE HAVE !data.exists HERE?
+This seems to cause the update operation @MSNFJRJKDH to fail.
+
+"type": {//«
+	".validate": "!data.exists() && 
+		newData.isString() && 
+		newData.val().length < 5"
+},//»
+
+
+*/
+/*BUG (FIXED): 11/9/26«
+
+We can't do persistent mv's and we are getting an undefined key in blobs.
+Maybe we got this when trying to do a mv operation. It looks like 'cp' might be working
+but 'mv' is not working right.
+
+Starting from scratch in the 'prv' directory, we do:
+  $ touch ONE
+...and we see the new blob w/ blobId = 0
+
+Then we do:
+
+$ mv ONE ONE.mv
+... and we get an undefined blob while our node still has the same path (1/ONE).
+
+
+
+
+Fixed:
 @HDSJNMJK: We need to do:
 let uid = par.mntPar.getData('fbaseUid');
 AND
@@ -469,7 +502,7 @@ let grpid = par.mntPar.getData('fbaseGrpId');
 
 INSTEAD OF par.getData('...');
 
-*/
+»*/
 /*11/8/26«
 
 Switch back to main google account for firebase.
@@ -1963,19 +1996,26 @@ let rv = VAL(snap);
 if (!isNum(rv)) {
 	return;
 }
-let next_id = rv;
+//let next_id = rv;
+let next_id = rv + 1;
 
-log(`mkDir: GOT next_id: ${next_id}`);
+//log(`mkDir: GOT next_id: ${next_id}`);
+cwarn("MK_NEW_DIR");
+if (next_id == parnode.id){
+// This means an infinite loop
+cwarn(`Why does next_id(${next_id}) === parId(${parnode.id})???`);
+return;
+}
 
 
 let obj = {};
-obj["nextNodeId"] = next_id + 1;
+//obj["nextNodeId"] = next_id + 1;
+obj["nextNodeId"] = next_id;
 obj[`nodes/${next_id}`] = {
 	parId: parnode.id,
 	path: `${parnode.id}/${name}`,
 	type: DIR_NODE_TYPE, 
 };
-
 
 rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
 if (rv !== true){
@@ -1985,6 +2025,7 @@ cerr("COULD NOT CREATE THE NEW DIR");
 
 let node = new DirNode(name, parnode);
 _dir_update(DIR_UPDATE_ADD, parnode, node); // Set parnode.#kids[name]
+_node_update(NODE_UPDATE_ID, node, next_id);
 return node;
 
 }
@@ -2001,21 +2042,29 @@ return async (parnode, name, opts)=>{
 	if (!isNum(rv)) {
 		return;
 	}
-	let next_id = rv;
+	let next_id = rv+1;
 
 //log(`mkNew: GOT next_id: ${next_id}`);
 
 	//HDJSAKRNT 
 
 	let obj = {};
-	obj["nextNodeId"] = next_id + 1;
+//	obj["nextNodeId"] = next_id + 1;
+	obj["nextNodeId"] = next_id;
 	obj[`nodes/${next_id}`] = {
 		parId: parnode.id,
 		path: `${parnode.id}/${name}`,
 		type: FILE_NODE_TYPE, // Just change this to DIR_NODE_TYPE to make a directory
 		blobId: NULL_FBASE_RTDB_BLOB
 	};
+cwarn("MK_NEW_FILE");
 
+if (next_id == parnode.id){
+cwarn(`Why does next_id(${next_id}) === parId(${parnode.id})???`);
+return;
+}
+//cwarn(`Does next_id(${next_id}) === parId (${parnode.id})???`);
+//log(obj);
 
 	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
 	if (rv !== true){
@@ -2077,11 +2126,15 @@ let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
 
 //log(`B64 LENGTH: ${val.length}`);
 let bid = node.blobId;
+cwarn("gen_set_blob");
+log(node);
+
 let obj = {};
 let need_update = false;
-if (bid === 0) {//«
+//if (!bid) {//«
+if (bid === 0) {
 // Append is ignored in this case
-bid = (new Date()).getTime(); // milliseconds
+	bid = (new Date()).getTime(); // milliseconds
 //cwarn(`New blobId: ${bid}`);
 
 // WWEURKTOX
@@ -2104,9 +2157,10 @@ cwarn("COULD NOT GET THE ORIGINAL BLOB FOR APPENDING!!!");
 }//»
 else {
 cwarn("UPDATE W/NEW VALUE");
+log(blob);
 }
 
-
+cwarn(`HAVE BLOB ID: ${bid}`);
 obj[`blobs/${bid}/contents`] = await blobTo64(blob);
 
 //log(`SET THIS OBJ TO: PATH = <${path}>`);
@@ -2159,6 +2213,11 @@ return rv;
 const gen_update_fullpath = (grp_id) => {//«
 
 return async (node, id, fromId, toId, newName)=>{
+//cwarn("ARGS", node, id, fromId, toId, newName);
+// We are moving into a directory:
+// $ mv mkfile somedir/
+if (newName === undefined) newName = node.name;
+
 /* This is the code for OP_FS_TYPE. How to adapt it to FBASE_USER_GRP_FS_TYPE?«
 
 let node = await this._getById(id);
@@ -2173,26 +2232,53 @@ return true;
 
 »*/
 if (!cur_user) return;
-
 /*
 A "node" in the backend is:
 type, blobId, parId, path
 */
-
+//log(node);
+let node_type;
+//if (node.isFile) node_type = "f";
+if (node.isFile) node_type = FILE_NODE_TYPE;
+//else if (node.isDir) node_type = "d";
+else if (node.isDir) node_type = DIR_NODE_TYPE;
+else {
+cerr("Unknown type: NOT isFile or isDir");
+return;
+}
 let nodeobj = {//«
-	type: node.type,
-	blobId: node.blobId,
+//EHJKEMIO
+//	type: node.type,// WHAT IS THIS DOING BEING: 'fb-user-grp'???
+	type: node_type,// WHAT IS THIS DOING BEING: 'fb-user-grp'???
+//	blobId: node.blobId,
 	parId: toId,
 	path: `${toId}/${newName}`,
 };//»
+
+if (node.blobId){
+nodeobj.blobId = node.blobId;
+}
+
+/*
+"type": {//«
+	".validate": "!data.exists() && 
+		newData.isString() && 
+		newData.val().length < 5"
+},//»
+*/
 
 //let ref =`LOTW/user/${uid}/group/${grpid}/nodes`);
 let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
 let ref = REF(path);
 let obj = {};
+//log(`path: ${path}`);
+//log(`id: ${id}`);
 obj[`${id}`] = nodeobj;
+log(`UPDATE PATH: ${path}`);
+log(obj);
+//MSNFJRJKDH
 let rv = await UPDATE(ref, obj);
-
+log("WHAT IS RV?", rv);
 return rv;
 
 };
@@ -2281,7 +2367,7 @@ return node;
 
 //YBNMDAOJ
 const populate_fbase_user_grp_dir = async (dir) => {//«
-cwarn("POPULATE USER_GRP_DIR");
+//cwarn("POPULATE USER_GRP_DIR");
 // e.g. /mnt/users/user123/pub/, and all subdirs thereof
 // dir
 if (!cur_user) return;
@@ -2293,7 +2379,7 @@ if (!cur_user) return;
 // 	- *this* method for popDir
 //	- a method for tryLoadKid that looks up particular nodes by the exact key.
 
-log(dir);
+//log(dir);
 // 
 //let uid = dir.getData('fbaseUid');
 //let grpid = dir.getData('fbaseGrpId');
@@ -2302,15 +2388,21 @@ let uid = dir.mntPar.getData('fbaseUid');
 let grpid = dir.mntPar.getData('fbaseGrpId');
 //log(`GRPID: ${grpid}`);
 let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
+if (!parid){
+cerr("NO dir.id:", parid);
+log(dir);
+return;
+}
 //log(`PARID: ${parid}`);
 //cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('parId');
+//cwarn("HI parId", parid);
 let c2 = fbase_db_mod.equalTo(parid);
 let q = fbase_db_mod.query(ref, c1, c2); // HOPORNKER
 let snap = await GET(q);
-log("GOT SNAP?", snap);
+//log("GOT SNAP?", snap);
 if (!snap){
 cerr("NO SNAP!?!?!");
 return;
@@ -2350,7 +2442,7 @@ cwarn(`WHAT TYPE IS THIS OBJ(${obj.type})???`);
 log(obj);
 return;
 }
-cwarn("NEW NODE", node);
+//cwarn("NEW NODE", node);
 _node_update(NODE_UPDATE_ID, node, i); // node.#id is the iterator
 _dir_update(DIR_UPDATE_ADD, dir, node);
 }
@@ -2575,8 +2667,8 @@ Since the names of the dirs are currently arbitrarily given, then it makes no
 sense to have a literal system of looking up users based on predetermined
 dirnames.
 */
-cwarn(`TRY LOAD KID:`);
-log(arg2)
+//cwarn(`TRY LOAD KID:`);
+//log(arg2)
 			await user_dir.loadKids();
 //			return user_dir.getKid(name);
 		},//»

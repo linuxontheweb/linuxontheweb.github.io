@@ -61,6 +61,10 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
+/*11/10/26 Issue in do_move:
+@SJEKLROKJR We are calling setValue on the dest_node that we just created, but
+we haven't set the blob_id yet.
+*/
 /*10/20/26: Proper updating an empty ("touched") file to a real blobId«
 
 Normally, we are checking for NULL_BLOB_NODE_TYPE in set_local_blob.
@@ -2030,8 +2034,7 @@ const do_rename = async (src_node, dest_name){
 
 
 
-const new_do_move = async(src_node, dest_name, dest_par)=>{//«
-log("HELLO?");
+const do_move = async(src_node, dest_name, dest_par)=>{//«
 	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
 	let src_id = src_node.id;
 	let src_blob_id = src_node.blobId;
@@ -2091,15 +2094,14 @@ cerr("backendDelNode: FAIL");
 
 };//»
 
-const do_move = async(src_node, dest_name, dest_par)=>{//«
+const OLD_do_move = async(src_node, dest_name, dest_par)=>{//«
+cwarn("HELLO do_move");
 	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
 //Need to update this to allow for moving/renaming arbitrary node types 
 //within the same directory type
 	let src_id = src_node.id;
 	let src_blob_id = src_node.blobId;
-//log(`MOVE src_id: ${src_id}`);
 /*
-if (!src_id){
 if (!src_id){
 
 //MXFBNRHOL
@@ -2149,15 +2151,27 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 		}
 	}
 //	else save_blob = await src_node.blob;
-	else if (src_node.isFile) save_blob = await src_node.blob;
+	else if (src_node.type === dest_par.type){
+cwarn(`src_node.type(${src_node.type}) === dest_par.type(${dest_par.type})`);
+
+	}
+	else if (src_node.isFile) {
+		save_blob = await src_node.blob;
+log("src_node.blob", save_blob);
+	}
 
 	_dir_update(DIR_UPDATE_DEL, src_par, src_node); // Delete src_node from src_par
 
+
+// Just changed this logic below on 11/10/26
+/*
 	let dest_node;
 	if (src_node.isFile) {
 //	if (save_blob === null) {
 		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
 		if (save_blob) {
+log("dest_node.setValue");
+//SJEKLROKJR
 			await dest_node.setValue(save_blob);
 		}
 	}
@@ -2167,12 +2181,23 @@ cerr("db.removeNo: YUREFJKK!?!?!");
 		_node_update(NODE_UPDATE_NAME, dest_node, dest_name); // Set: dest_node.#name
 		_node_update(NODE_UPDATE_PAR, dest_node, dest_par); // Set: dest_node.#par
 	}
+*/
+
+	let dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
+	_node_update(NODE_UPDATE_NAME, dest_node, dest_name); // Set: dest_node.#name
+	_node_update(NODE_UPDATE_PAR, dest_node, dest_par); // Set: dest_node.#par
+
 
 	_dir_update(DIR_UPDATE_ADD, dest_par, dest_node); // Add dest_node to dest_par
 
 // XRUIOPKGH
 	_node_update(NODE_UPDATE_ID, dest_node, src_id); // Set: dest_node.#id on dest_node (copy)
 	_node_update(NODE_UPDATE_BLOB_ID, dest_node, src_blob_id); // Set: dest_node.#blobId on dest_node (copy)
+
+if (src_node.isFile && save_blob){
+
+	await dest_node.setValue(save_blob);
+}
 
 	return dest_node;
 
