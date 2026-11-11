@@ -7690,7 +7690,6 @@ const open_window_by_node = async(node, opts={}) => {//«
 		}
 		return open_window_by_app_name(obj.app, {appArgs: obj.args});
 	}
-cwarn("OPEN NEW WINDOW", node);
 	win = await open_new_window(node, opts);
 	if (!win) return;
 	let val = await win.iconValFmt();

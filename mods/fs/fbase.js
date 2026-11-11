@@ -94,111 +94,58 @@ stays at 100.
 		"user": {
 			"$uid": {
 				".write": "auth != null && auth.uid === $uid",
-				"nextGrpId": {
-					".read": "auth != null && auth.uid === $uid",
-					".validate": "newData.isNumber() && 
+				"www": {
+					"nextNodeId": {
+						".read": "auth != null && auth.uid === $uid",
+						".validate": "newData.isNumber() && 
 						(
-							(data.exists() && newData.val() === data.val() + 1) || 
-							(!data.exists() && newData.val() === 3)
+						(data.exists() && newData.val() === data.val() + 1) || 
+						(!data.exists() && newData.val() === 1)
 						)"
-				},
-				"grpDefs": {
-					".read": "auth != null",
-					"$grpid": {
-						".validate": "$grpid.matches(/^\\d+$/) && 
-							newData.hasChildren(['name', 'desc'])",
-						"name": {
-							".validate": "newData.isString() && 
-								newData.val().length > 1 && 
-								newData.val().length < 16 && 
-								newData.val().matches(/^[_a-zA-Z][_a-zA-Z0-9]+$/)"
-						},
-						"desc": {
-							".validate": "newData.isString() && 
-								newData.val().length < 100"
-						},
-						"$other": {
-							".validate": false
-						}
-					}
-				},
-				"group": {
-					"$grpid": {
-						".validate": "$grpid.matches(/^\\d+$/)",
-						"members": {
-							".read": "auth != null && auth.uid === $uid",
-							"$memid": {
-								".validate": "newData.isBoolean()"
-							}
-						},
-						"nextNodeId": {
-							".read": "auth != null && auth.uid === $uid",
-							".validate": "newData.isNumber() && 
-							(
-							(data.exists() && newData.val() === data.val() + 1) || 
-							(!data.exists() && newData.val() === 1)
-							)"
-						},
-						"lastUpdate": {
-							".read": "auth != null",
-							".validate": "newData.hasChildren(['sessId', 'timestamp', 'desc'])",
-							"sessId":{
-								".validate": "newData.isString() && newData.val().length < 16"
-							},
-							"timestamp":{
+					},
+					"nodes": {
+						".indexOn": ["parId", "path", "blobId"],
+						".read": "auth != null",
+						"$nodeid": {
+							".validate": "data.exists() || 
+								newData.hasChildren(['parId', 'type', 'path'])",
+							"parId": {
 								".validate": "newData.isNumber()"
 							},
-							"desc":{
-								".validate": "newData.isString() && newData.val().length < 100"
+							"type": {
+								".validate": "newData.isString() && 
+									newData.val().length < 5"
 							},
-							"$other":{
+							"path": {
+								".validate": "newData.isString() && 
+									newData.val().length < 100"
+							},
+							"blobId": {
+								".validate": "newData.isNumber()"
+							},
+							"$other": {
 								".validate": false
 							}
-						},
-						"nodes": {
-							".indexOn": ["parId", "path", "blobId"],
-							".read": "auth != null",
-							"$nodeid": {
-								".validate": "data.exists() || 
-									newData.hasChildren(['parId', 'type', 'path'])",
-								"parId": {
-									".validate": "newData.isNumber()"
-								},
-								"type": {
-									".validate": "newData.isString() && 
-										newData.val().length < 5"
-								},
-								"path": {
-									".validate": "newData.isString() && 
-										newData.val().length < 100"
-								},
-								"blobId": {
-									".validate": "newData.isNumber()"
-								},
-								"$other": {
-									".validate": false
-								}
-							}
-						},
-						"blobs": {
-							".read": "auth != null",
-							"$blobid": {
-								".validate": "newData.hasChildren(['contents'])",
-								"meta": {
-									".validate": true
-								},
-								"contents": {
-									".validate": "newData.isString() && 
-										newData.val().length < 100000"
-								},
-								"$other": {
-									".validate": false
-								}
-							}
-						},
-						"$other": {
-							".validate": false
 						}
+					},
+					"blobs": {
+						".read": "auth != null",
+						"$blobid": {
+							".validate": "newData.hasChildren(['contents'])",
+							"meta": {
+								".validate": true
+							},
+							"contents": {
+								".validate": "newData.isString() && 
+									newData.val().length < 100000"
+							},
+							"$other": {
+								".validate": false
+							}
+						}
+					},
+					"$other": {
+						".validate": false
 					}
 				},
 				"$other": {
@@ -215,6 +162,7 @@ stays at 100.
 	}
 }
 }
+
 
 
 »*/
@@ -270,116 +218,58 @@ Remove newlines with:
 		"user": {// User data is organized into "access groups" «
 			"$uid": {
 				".write": "auth != null && auth.uid === $uid",
-// Group numbers ($grpid) «
-// Group 1: private, owner readable
-// Group 2: public, authenticated user readable
-// Groups 3+: member readable: members are in users/$uid/groups/$grpid/members 
-//»
-				"nextGrpId": {//«
-					".read": "auth != null && auth.uid === $uid",
-					".validate": "newData.isNumber() && //«
+				"www": {//«
+					"nextNodeId": {//«
+						".read": "auth != null && auth.uid === $uid",
+						".validate": "newData.isNumber() && //«
 						(
-							(data.exists() && newData.val() === data.val() + 1) || 
-							(!data.exists() && newData.val() === 3)
+						(data.exists() && newData.val() === data.val() + 1) || 
+						(!data.exists() && newData.val() === 1)
 						)"//»
-				},//»
-				"grpDefs": {//«
-					".read": "auth != null",
-					"$grpid": {//«
-						".validate": "$grpid.matches(/^\\d+$/) && 
-							newData.hasChildren(['name', 'desc'])",
-						"name": {//«
-							".validate": "newData.isString() && 
-								newData.val().length > 1 && 
-								newData.val().length < 16 && 
-								newData.val().matches(/^[_a-zA-Z][_a-zA-Z0-9]+$/)"
-						},//»
-						"desc": {//«
-							".validate": "newData.isString() && 
-								newData.val().length < 100"
-						},//»
-						"$other": {//«
-							".validate": false
-						}//»
-					}//»
-				},//»
-				"group": {//«
-					"$grpid": {//«
-						".validate": "$grpid.matches(/^\\d+$/)",
-						"members": {//«
-							".read": "auth != null && auth.uid === $uid",
-							"$memid": {
-								".validate": "newData.isBoolean()"
-							}
-						},//»
-						"nextNodeId": {//«
-							".read": "auth != null && auth.uid === $uid",
-							".validate": "newData.isNumber() && //«
-							(
-							(data.exists() && newData.val() === data.val() + 1) || 
-							(!data.exists() && newData.val() === 1)
-							)"//»
-						},//»
-						"lastUpdate": {//«
-							".read": "auth != null",
-							".validate": "newData.hasChildren(['sessId', 'timestamp', 'desc'])",
-							"sessId":{//«
-								".validate": "newData.isString() && newData.val().length < 16"
-							},//»
-							"timestamp":{//«
+					},//»
+					"nodes": {//«
+						".indexOn": ["parId", "path", "blobId"],
+						".read": "auth != null",
+						"$nodeid": {//«
+							".validate": "data.exists() || 
+								newData.hasChildren(['parId', 'type', 'path'])",
+							"parId": {//«
 								".validate": "newData.isNumber()"
 							},//»
-							"desc":{//«
-								".validate": "newData.isString() && newData.val().length < 100"
+							"type": {//«
+								".validate": "newData.isString() && 
+									newData.val().length < 5"
 							},//»
-							"$other":{//«
+							"path": {//«
+								".validate": "newData.isString() && 
+									newData.val().length < 100"
+							},//»
+							"blobId": {//«
+								".validate": "newData.isNumber()"
+							},//»
+							"$other": {//«
 								".validate": false
 							}//»
-						},//»
-						"nodes": {//«
-							".indexOn": ["parId", "path", "blobId"],
-							".read": "auth != null",
-							"$nodeid": {//«
-								".validate": "data.exists() || 
-									newData.hasChildren(['parId', 'type', 'path'])",
-								"parId": {//«
-									".validate": "newData.isNumber()"
-								},//»
-								"type": {//«
-									".validate": "newData.isString() && 
-										newData.val().length < 5"
-								},//»
-								"path": {//«
-									".validate": "newData.isString() && 
-										newData.val().length < 100"
-								},//»
-								"blobId": {//«
-									".validate": "newData.isNumber()"
-								},//»
-								"$other": {//«
-									".validate": false
-								}//»
-							}//»
-						},//»
-						"blobs": {//«
-							".read": "auth != null",
-							"$blobid": {//«
-								".validate": "newData.hasChildren(['contents'])",
-								"meta": {//«
-									".validate": true
-								},//»
-								"contents": {//«
-									".validate": "newData.isString() && 
-										newData.val().length < 100000"
-								},//»
-								"$other": {//«
-									".validate": false
-								}//»
-							}//»
-						},//»
-						"$other": {//«
-							".validate": false
 						}//»
+					},//»
+					"blobs": {//«
+						".read": "auth != null",
+						"$blobid": {//«
+							".validate": "newData.hasChildren(['contents'])",
+							"meta": {//«
+								".validate": true
+							},//»
+							"contents": {//«
+								".validate": "newData.isString() && 
+									newData.val().length < 100000"
+							},//»
+							"$other": {//«
+								".validate": false
+							}//»
+						}//»
+					},//»
+					"$other": {//«
+						".validate": false
 					}//»
 				},//»
 				"$other": {//«
@@ -416,7 +306,10 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*11/10/26 Concept simplification«
+/*11/11/26: Should we get rid of every trace of groups?«
+
+»*/
+/*11/10/26: Concept simplification«
 
 Let's just get rid of the complexity by making all files children of 
 world readable 'pub/'.
@@ -442,7 +335,7 @@ some complexity (e.g. in the schema rules) related to concepts like group
 members.
 
 »*/
-/*BUG 11/10/26 «
+/*BUG: 11/10/26 «
 
 @UOENADNDM
 
@@ -1913,9 +1806,9 @@ const NULL_FBASE_RTDB_BLOB = 0;
 
 const PRV_DIR_ID = 2;
 const PUB_DIR_ID = 1;
+const PUB_DIR_NAME = "www";
 
 let cur_user;
-let next_node_ids;
 let next_grp_id;
 
 let DirNode, FileNode, _node_update, _dir_update;
@@ -1927,7 +1820,7 @@ let fbase_app;
 let fbase_db;
 let fbase_auth;
 
-const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
+//const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
 //let users_cache_node;
 
 let first_auth_change = false;
@@ -1983,7 +1876,8 @@ const NEXT_NODE_ID = async(dirid) => {//«
 	if (!cur_user) return;
 	// YURJKFHFN
 //	cwarn(`Need nextNodeId from: ${path}`);
-	return GET(REF(`LOTW/user/${cur_user.uid}/group/${dirid}/nextNodeId`));
+//	return GET(REF(`LOTW/user/${cur_user.uid}/group/${dirid}/nextNodeId`));
+	return GET(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nextNodeId`));
 };//»
 
 // Group-specific generator functions for mkDir and mkNewFile
@@ -2020,7 +1914,8 @@ obj[`nodes/${next_id}`] = {
 	type: DIR_NODE_TYPE, 
 };
 
-rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
+//rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
+rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
 if (rv !== true){
 cerr("COULD NOT CREATE THE NEW DIR");
 	return;
@@ -2069,7 +1964,8 @@ return;
 //cwarn(`Does next_id(${next_id}) === parId (${parnode.id})???`);
 //log(obj);
 
-	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
+//	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
+	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
 	if (rv !== true){
 cerr("COULD NOT CREATE THE NEW FILE");
 		return;
@@ -2099,7 +1995,8 @@ if (node.blobId === 0) return new Blob([]);
 //HOW TO GET THE BLOB???
 
 */
-let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
+//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
+let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/blobs/${node.blobId}`;
 //cwarn(`PATH: <${path}>`);
 let snap =  await GET(REF(path));
 if (!snap) {
@@ -2142,7 +2039,8 @@ return async (node, blob, opts) => {
 
 if (!cur_user) return;
 
-let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
+//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
+let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`;
 // SBRYRKTH
 //cwarn("USERGRP.setBlob", node, opts);
 
@@ -2219,7 +2117,8 @@ let node_id = node.id;
 cwarn(`BACKEND_DEL_NODE FOR GRP: ${grp_id}, node: ${node_id}`);
 log(node);
 
-let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
+//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
+let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
 obj[`${node_id}`] = null;
@@ -2290,7 +2189,8 @@ nodeobj.blobId = node.blobId;
 */
 
 //let ref =`LOTW/user/${uid}/group/${grpid}/nodes`);
-let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
+//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
+let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
 //log(`path: ${path}`);
@@ -2335,7 +2235,8 @@ cwarn(`TRY_GET_KID: ${path}`);
 //let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 //let c1 = fbase_db_mod.orderByChild('parId');
 //let c2 = fbase_db_mod.equalTo(parid);
-let ref_path = `LOTW/user/${uid}/group/${grpid}/nodes`;
+//let ref_path = `LOTW/user/${uid}/group/${grpid}/nodes`;
+let ref_path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
 log(`REF_PATH  <${ref_path}>`);
 let ref = fbase_db_mod.ref(fbase_db, ref_path);
 //let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
@@ -2418,7 +2319,8 @@ return;
 //log(`PARID: ${parid}`);
 //cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
-let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
+//let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
+let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`);
 let c1 = fbase_db_mod.orderByChild('parId');
 //cwarn("HI parId", parid);
 let c2 = fbase_db_mod.equalTo(parid);
@@ -2562,8 +2464,7 @@ return `fbase.js: not setting constant value: '${k}'`;
 		let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
 		let del_node_func_pub = gen_del_node(PUB_DIR_ID);
 		let update_fullpath_func_pub = gen_update_fullpath(PUB_DIR_ID);
-
-		let pub = new DirNode("pub", user_dir, {//«
+		let pub = new DirNode(PUB_DIR_NAME, user_dir, {//«
 			type: FBASE_USER_GRP_FS_TYPE,
 			data: {
 				fbaseUid: uid,
@@ -2615,9 +2516,9 @@ return `fbase.js: not setting constant value: '${k}'`;
 	user_dir.loadKidsDone = true;
 
 };//»
-//Just the list of user names
 const populate_fbase_users = async (users_dir) => {//«
-// e.g. /mnt/users/
+//Just the list of user names
+// e.g. /mnt/fbase/
 log("POPULATE /mnt/fbase");
 if(users_dir.loadKidsDone) return;
 if (!cur_user) {
@@ -2745,20 +2646,21 @@ obj[`prof/${uid}`] = {
 	name: cur_user.displayName, 
 	picture: cur_user.photoURL,
 };
-obj[`user/${uid}/nextGrpId`] = 3;
+//obj[`user/${uid}/nextGrpId`] = 3;
 
 
 // UKHFAJFUE
 // Trying these gives permission denied!?!?!
 
-obj[`user/${uid}/group/1/nextNodeId`] = 1;
-obj[`user/${uid}/group/1/nodes`] = {};
-obj[`user/${uid}/group/1/blobs`] = {};
+obj[`user/${uid}/${PUB_DIR_NAME}/nextNodeId`] = 1;
+obj[`user/${uid}/${PUB_DIR_NAME}/nodes`] = {};
+obj[`user/${uid}/${PUB_DIR_NAME}/blobs`] = {};
 
+/*
 obj[`user/${uid}/group/2/nextNodeId`] = 1;
 obj[`user/${uid}/group/2/nodes`] = {};
 obj[`user/${uid}/group/2/blobs`] = {};
-
+*/
 log(obj);
 
 let rv = await UPDATE(ref, obj);
@@ -2768,8 +2670,6 @@ cwarn("THERE WAS A PROBLEM INITIALIZING THE USER PROFILE!!!");
 }
 
 // UOEOWEKRJ
-next_node_ids = [1, 2]; // As long as we subtract 1 from the group id's
-//next_node_ids = [undefined, 1, 2]; // Without substracting
 
 //log(rv);
 }//»
