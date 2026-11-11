@@ -708,7 +708,9 @@ const get_blocks_from_cluster=(clust)=>{//«
 //»
 
 const video_init = async ()=>{//«
+cwarn("VIDEO_INIT!!!");
 	viddur = vid.duration;
+log(`viddir: ${viddur}`);
 //log(vid.playbackRate);
 //KLIOPMDS
 //vid.playbackRate = 0.125;
@@ -2427,6 +2429,7 @@ this.onescape=()=>{//«
 	return false;
 };//»
 this.onappinit=async arg=>{//«
+cwarn("Video Cutter!");
 	if (arg.reInit) arg = arg.reInit;
 	url = arg.url;
 	node = arg.node;

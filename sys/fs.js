@@ -3679,6 +3679,29 @@ _.toText = async function(opts = {}) {/*«*/
 _.hasTextExt = function(opts={}){let ext = this.split(".").pop();return TEXT_EXTENSIONS.includes(ext);}
 _.toLines=function(opts={}){opts.lines = true;return this.toText(opts);}
 _.toBytes=async function(opts={}){let node=await this.toNode(opts);if(node)return node.bytes;};
+_.toByteSlice=async function(start, end, opts={}){//«
+	if (!(isNum(start) && isNum(end) && start >= 0 && start < end)){
+cerr("Invaild args to toByteSlice");
+		return;
+	}
+	let node = await this.toNode(opts);
+	if (!(node && node.isFile)){
+cwarn(`${this}: not a file, aborting`);
+		return;
+	}
+	let ent = await node.entry;
+	if (!ent){
+cwarn("No entry found, aborting");
+		return;
+	}
+	let file = await ent.getFile();
+	if (!file){
+cerr("No file returned from the entry");
+		return;
+	}
+	return get_data_from_fs_file(file,"bytes", start, end);
+
+};//»
 _.toBuffer=async function(opts={}){let node=await this.toNode(opts);if(node) return node.buffer;};
 _.toBlob=async function(opts={}){//«
 	let node = await this.toNode(opts);

@@ -98,7 +98,7 @@ Remove newlines with:
 				}//»
 			}//»
 		},//»
-		"user": {// User data is organized into "access groups" «
+		"user": {// User data is public and lives in their 'www/' folder  «
 			"$uid": {
 				".write": "auth != null && auth.uid === $uid",
 				"www": {//«
@@ -166,21 +166,6 @@ Remove newlines with:
 	}//»
 }
 }//»
-
-»*/
-/* Workflow «
-
-1) Check for existence of prof/$uid/updated
-
-If not, get profile, and do:
-let ref = fbase_db_mod.ref(fbase_db, "LOTW");
-let obj = {};
-obj[`prof/${uid}`] = {updated, name, picture};
-obj[`user/${uid}/nextGrpId`] = 3;
-update(ref, obj);
-
-2) We might have *mounted* the user group dirs without ever actually
-writing to them, which means they don't (yet) technically exist.
 
 »*/
 
@@ -445,8 +430,7 @@ if (!isNum(rv)) {
 //let next_id = rv;
 let next_id = rv + 1;
 
-//log(`mkDir: GOT next_id: ${next_id}`);
-cwarn("MK_NEW_DIR");
+log(`mk_dir: GOT next_id: ${next_id}`);
 if (next_id == parnode.id){
 // This means an infinite loop
 cwarn(`Why does next_id(${next_id}) === parId(${parnode.id})???`);
@@ -463,8 +447,6 @@ obj[`nodes/${next_id}`] = {
 	type: DIR_NODE_TYPE, 
 };
 
-//rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
-//rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
 rv = await UPDATE(REF(`LOTW/user/${uid}/${PUB_DIR_NAME}`), obj);
 if (rv !== true){
 cerr("COULD NOT CREATE THE NEW DIR");
@@ -489,10 +471,7 @@ cwarn(`GOT UID: ${uid}`);
 		return;
 	}
 	let next_id = rv+1;
-
-//log(`mkNew: GOT next_id: ${next_id}`);
-
-	//HDJSAKRNT 
+log(`mk_new_file: GOT next_id: ${next_id}`);
 
 	let obj = {};
 //	obj["nextNodeId"] = next_id + 1;
@@ -509,12 +488,7 @@ if (next_id == parnode.id){
 cerr(`Why does next_id(${next_id}) === parId(${parnode.id})???`);
 return;
 }
-//cwarn(`Does next_id(${next_id}) === parId (${parnode.id})???`);
-//log(obj);
 
-//	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
-//  THIS IS BAD !!!! ----------------vvvvvvvvvvvvvv
-//	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
 	rv = await UPDATE(REF(`LOTW/user/${uid}/${PUB_DIR_NAME}`), obj);
 	if (rv !== true){
 cerr("COULD NOT CREATE THE NEW FILE");
@@ -530,8 +504,6 @@ cerr("COULD NOT CREATE THE NEW FILE");
 }//»
 const get_blob = async (node) => {//«
 if (!cur_user) return;
-//cwarn("USERGRP.getBlob", node);
-//if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
 if (node.blobId === 0) return new Blob([]);
 
 /* WEHRJSGRHJ
@@ -539,11 +511,9 @@ if (node.blobId === 0) return new Blob([]);
 //HOW TO GET THE BLOB???
 
 */
-//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
 
 let uid = node.mntPar.getData('fbaseUid');
 cwarn(`GOT UID: ${uid}`);
-//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/blobs/${node.blobId}`;
 let path = `LOTW/user/${uid}/${PUB_DIR_NAME}/blobs/${node.blobId}`;
 //cwarn(`PATH: <${path}>`);
 let snap =  await GET(REF(path));
@@ -570,13 +540,7 @@ if (!cur_user) return;
 
 let uid = node.mntPar.getData('fbaseUid');
 cwarn(`GOT UID: ${uid}`);
-//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
-//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`;
 let path = `LOTW/user/${uid}/${PUB_DIR_NAME}`;
-// SBRYRKTH
-//cwarn("USERGRP.setBlob", node, opts);
-
-//log(`B64 LENGTH: ${val.length}`);
 let bid = node.blobId;
 cwarn("gen_set_blob");
 log(node);
@@ -641,9 +605,6 @@ let node_id = node.id;
 
 let uid = node.mntPar.getData('fbaseUid');
 cwarn(`GOT UID: ${uid}`);
-
-//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
-//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
 let path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
@@ -679,7 +640,6 @@ let nodeobj = {//«
 
 if (node.blobId) nodeobj.blobId = node.blobId;
 
-//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
 let path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
@@ -693,7 +653,6 @@ return rv;
 
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
-//let uid = dir.mntPar.getData('fbaseUid');
 if (!cur_user) return;
 
 // MAKE SURE WE ARE DOING THIS FOR ALL OF THEM!!!
@@ -708,10 +667,8 @@ return;
 }
 let parid = par.id;
 let path = `${parid}/${name}`;
-cwarn(`TRY_GET_KID: ${path}`);
 
 let ref_path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
-log(`REF_PATH  <${ref_path}>`);
 let ref = fbase_db_mod.ref(fbase_db, ref_path);
 let c1 = fbase_db_mod.orderByChild('path');
 let c2 = fbase_db_mod.equalTo(path);
@@ -723,8 +680,6 @@ if (!arr) {
 cerr("DID NOT GET!");
 	return;
 }
-//if (!(snap && snap.exists())) return;
-//let arr = snap.val();
 // Make a FileNode or DirNode
 
 // This loop would only be infinite if the array were empty, which it should never be
@@ -768,7 +723,6 @@ if (!cur_user) return;
 // 	- *this* method for popDir
 //	- a method for tryLoadKid that looks up particular nodes by the exact key.
 
-//log(dir);
 // 
 let uid = dir.mntPar.getData('fbaseUid');
 let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
