@@ -2276,9 +2276,7 @@ let ICON_DIM = 44,
 	min_win_width = 140,
 	min_win_hgt = 50
 
-let	window_boxshadow = "3px 3px 20px rgba(255,255,255,0.10)",
-//	window_boxshadow = "",
-	window_boxshadow_hold;
+let	window_boxshadow = "3px 3px 20px rgba(255,255,255,0.10)";
 
 let folder_grid_start_x = 20,
 	folder_grid_start_y = 5,
@@ -3421,6 +3419,19 @@ constructor(arg){//«
 }//»
 
 //Methods«
+saveFlash(){
+cwarn("FLASH THE BACKGROUND HERE");
+
+
+//if (!this.noShadow) this.winElem.style.boxShadow = window_boxshadow;
+this._boxShadowHold = this.winElem.style.boxShadow;
+
+this.winElem.style.boxShadow = "6px 6px 40px rgba(127,255,127,0.75)";
+setTimeout(()=>{
+	this.winElem.style.boxShadow = this._boxShadowHold;
+}, 500);
+
+}
 resize(){//«
 	this.sbcr();
 	this.statusBar.resize();
