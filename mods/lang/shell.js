@@ -1797,7 +1797,10 @@ if (!parnode){
 if (!parnode.writeable) {
 	return `${use_fname}: read only`;
 }
-if (!parnode.perm) {
+if (node && node.perm === true){
+cwarn("NODE PERM IS TRUE!!!");
+}
+else if (!parnode.perm) {
 	return `${use_fname}: permission denied`;
 }
 

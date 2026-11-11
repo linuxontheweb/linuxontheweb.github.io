@@ -61,7 +61,10 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
-/*11/10/26 
+/*11/11/26: Need to do permissions at the granular file level, rather than only at
+the directory level.
+*/
+/*11/10/26 «
 
 @ASKLEMOEM there was an undefined returned here with a null blob file in the FBASE
 pub/ directory. So if there really isn't anything there to be gotten, then it
@@ -70,7 +73,7 @@ is the same if we return an empty string.
 Issue in do_move:
 @SJEKLROKJR We are calling setValue on the dest_node that we just created, but
 we haven't set the blob_id yet.
-*/
+»*/
 /*10/20/26: Proper updating an empty ("touched") file to a real blobId«
 
 Normally, we are checking for NULL_BLOB_NODE_TYPE in set_local_blob.
@@ -1646,9 +1649,11 @@ class FileNode extends FSNode {//«
 #lock;
 #entry;
 #memBlob;
+#perm;
 //»
 constructor(name, par, opts={}) {//«
 	super(name, par, opts);
+	this.#perm = opts.perm;
 	this.#lock = {};
 }//»
 get isWriteLocked(){return LOCKED_BLOBS[`${OP_FS_TYPE}-${this.blobId}`];}
@@ -1714,7 +1719,7 @@ log(this);
 	this.#entry = ent;
 	return ent;
 }//»
-
+get perm(){ return this.#perm; }
 get writeable(){ return this.par.writeable; }
 get isFile(){return true;}
 get entry(){return this._getEntry();}
@@ -1858,7 +1863,7 @@ rmMoveLock(lockarg){//«
 	}
 }//»
 addMoveLock(lockarg){this.#moveLocks.push(lockarg);}
-tryLoadKid(nm){ 
+tryLoadKid(nm){ //«
 	if (this._tryLoadKid) {
 		return this._tryLoadKid(this, nm);
 	}
@@ -1866,7 +1871,7 @@ tryLoadKid(nm){
 		return this.mntPar._tryLoadKid(this, nm);
 	}
 	return try_get_fs_kid(this, nm)
-}
+}//»
 loadKids(opts={}) {//«
 	if (this.loadKidsDone && !opts.force) return;
 	if (this._loadKids) {

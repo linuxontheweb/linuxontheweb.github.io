@@ -1,5 +1,14 @@
 (()=>{"use strict";const MODNAME="term.vim";
+/*11/11/26: BUG!!!
 
+When trying to write to an unwritable file location via "Save As:", the y coordinate
+in the bottom right corner is NaN.
+
+See @EUIONMHJK: What is the `hold_x` value?
+
+Answer: There is no hold_x value anymore.
+
+*/
 /*9/4/26: Escape w/ Ctrl+C«
 How about simply @SPREMJBN???
 »*/
@@ -507,7 +516,7 @@ if (!histories){
 this.command_history = histories.command;
 this.search_history = histories.search;
 let WRAP_LENGTH = 85;
-let NUM_ESCAPES_TO_ESCAPE=2;
+let NUM_ESCAPES_TO_ESCAPE=1;
 
 let NO_CTRL_N=false;
 let hist_iter=0;
@@ -2067,7 +2076,8 @@ cerr(e);
 	if (edit_fobj) {//«
 
 		let par = edit_fobj.par;
-		if (!par.perm){
+		if (edit_fobj.perm === true){}
+		else if (!par.perm){
 			stat_err("Permission denied");
 			return;
 		}
@@ -2111,12 +2121,19 @@ const err=s=>{//«
 	stat_message = s;
 	try_revert();
 	stat_message_type = STAT_ERR;
-	x = this.hold_x;
+//	x = this.hold_x;
+/*EUIONMHJK
+this.hold_x is undefined, and causes the editor to basically crash. So what is the
+real hold_x value? There is no hold_x! It just works without it.
+*/
+	is_saving = false;
 	render({},82);
 };//»
 const checkok = () =>{//«
 	if (!parobj.writeable) return `${parobj.fullpath}: read only`;
-	if (!parobj.perm) return `${parobj.fullpath}: permission denied`;
+	if (!parobj.perm) {
+		return `${parobj.fullpath}: permission denied`;
+	}
 	return true;
 }; //» 
 const save_ok = () => {//«
@@ -2129,7 +2146,11 @@ const save_ok = () => {//«
 	edit_ftype = rtype;
 	edit_save();
 };//»
-
+if (!name){
+stat_warn("Cancelled!");
+is_saving = false;
+return;
+}
 if (!name.match(/^[-/a-z0-9_~.]+$/i)) {//«
 	stat_message = "Invalid characters in the name (want /^[-/a-z0-9_~.]$/i)";
 	try_revert();
@@ -2148,7 +2169,10 @@ let parobj = await pardir.toNode();
 if (!parobj) return err(`${pardir}: directory not found`);
 let rtype;
 let rv = checkok();
-if (isStr(rv)) return err(rv);
+if (isStr(rv)) {
+//cwarn("GOT HERE 10101");
+	return err(rv);
+}
 //MDOPILKL
 let gotkid = parobj.getKid(fname);
 if (!gotkid) {
@@ -7335,6 +7359,9 @@ mode_hold = undefined;
 		return true;
 	}
 	num_escapes = 0;
+cwarn("AT BOTTOM OF ONESCAPE");
+	stat_message = "";
+	render();
 	return true;
 };
 //this.onescape = onescape;

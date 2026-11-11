@@ -4776,10 +4776,23 @@ cwarn(`Using app: '${winapp}'`);
 }//»
 async _doSaveFile(val){//«
 	let node = this.#node;
+/*
 	if (!node.writeable){
 		popup("Read only!");
 		return;
 	}
+*/
+	let parnode = node.par;
+	if (!parnode.writeable) {
+		return `${use_fname}: read only`;
+	}
+	if (node.perm === true){
+		cwarn("NODE PERM IS TRUE!!!");
+	}
+	else if (!parnode.perm) {
+		return `${use_fname}: permission denied`;
+	}
+
 	let rv = await node.write(val);
 	if (!(rv && Number.isFinite(rv.size))) {
 		poperr("Could not save the file");

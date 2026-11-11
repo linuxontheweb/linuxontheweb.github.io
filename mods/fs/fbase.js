@@ -186,12 +186,22 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*11/11/26: BUG BUG BUG«
+/*11/11/26:«
+
+Need to change it back to false permission.
+
+
 First, we got rid of references to "groups", like `grpid`, etc
+
+BUG (FIXED)
 
 But now, when we try to make files in another person's 'www/' folder,
 it looks liks it was made in that folder, but it actually makes it
 in ours.
+
+IT'S BECAUSE WE WERE FORMING THE REF PATHS W/ CUR_USER.UID RATHER THAN
+THE UID FROM THE NODE, GOTTEN LIKE:
+let uid = node.mntPar.getData("fbaseUid")
 
 »*/
 
@@ -838,7 +848,9 @@ tryLoadKid(name):
 	let prof = user_dir.getData("fbaseProf");
 	for (let k in prof) {//«
 // These are stored as "files" in user_dir
-		let node = new FileNode(k, user_dir, {
+//		let node = new FileNode(k, user_dir, {
+		let node = new FileNode(`${k}.txt`, user_dir, {
+			perm: true,
 			type: FBASE_USER_MAIN_FS_TYPE,
 			data: {
 				fbaseUid: uid,
@@ -973,8 +985,8 @@ for (let uid in old_obj) {
 	}
 // YFKMYOGJT
 	let user_dir = new DirNode(use_name, users_dir, {//«
-		perm: true, // UOIONWEJR
-//		perm: false, // Cannot update status and bio unless this is true
+//		perm: true, // UOIONWEJR
+		perm: false, // Cannot update status and bio unless this is true
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
 		tryLoadKid: async (arg1, arg2)=>{//«
