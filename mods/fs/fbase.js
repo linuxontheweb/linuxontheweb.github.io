@@ -855,8 +855,15 @@ tryLoadKid(name):
 			data: {
 				fbaseUid: uid,
 			},
-// MSUYIOPLJ
-			getBlob: (node)=>{ return new Blob([prof[k]]); },
+			getBlob: async (node)=>{ 
+cwarn(`CALL getBlob for ${k}`);
+				let ref = fbase_db_mod.ref(fbase_db, `LOTW/prof/${uid}/${k}`);
+				let snap = await GET(ref);
+				let val = VAL(snap);
+				if (isStr(val)) return new Blob([val]);
+				return new Blob([""]);
+//				return new Blob([prof[k]]); 
+			},
 			setBlob: async (node, blob, opts)=>{//«
 				if (cur_user && cur_user.uid === uid) {
 					if (k === "status" || k === "bio" ) {//«
@@ -957,8 +964,6 @@ if (!snap.exists()) {
 cwarn("GOT !snap.exists()!!!");
 return;
 }
-
-
 
 let old_obj = {};
 let new_obj = snap.val();
