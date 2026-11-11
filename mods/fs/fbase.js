@@ -49,126 +49,6 @@ stays at 100.
 
 »*/
 
-/* Schema «
-
-
-{
-"rules": {
-	".read": false,
-	".write": false,
-	"LOTW": {
-		"prof": {
-			".indexOn": ["updated"], 
-			".read": "auth != null",
-			"$uid": {
-				".write": "auth != null && auth.uid === $uid",
-				".validate": "(!data.exists() && 
-					newData.hasChildren(['updated', 'name', 'picture'])) || 
-					(data.exists() && (
-						newData.hasChildren(['updated', 'name']) || 
-						newData.hasChildren(['updated', 'picture']) || 
-						newData.hasChildren(['updated', 'status']) || 
-						newData.hasChildren(['updated', 'bio'])
-					))",
-				"updated": {
-					".validate": "newData.isNumber()" 
-				},
-				"name": {
-					".validate": "newData.isString() && 
-						newData.val() === auth.token.name"
-				},
-				"picture": {
-					".validate": "newData.isString() && 
-						newData.val() === auth.token.picture"
-				},
-				"status": {
-					".validate": "newData.isString() && 
-						newData.val().length < 250"
-				},
-				"bio": {
-					".validate": "newData.isString() && 
-						newData.val().length < 2500"
-				},
-				"$other": {
-					".validate": false
-				}
-			}
-		},
-		"user": {
-			"$uid": {
-				".write": "auth != null && auth.uid === $uid",
-				"www": {
-					"nextNodeId": {
-						".read": "auth != null && auth.uid === $uid",
-						".validate": "newData.isNumber() && 
-						(
-						(data.exists() && newData.val() === data.val() + 1) || 
-						(!data.exists() && newData.val() === 1)
-						)"
-					},
-					"nodes": {
-						".indexOn": ["parId", "path", "blobId"],
-						".read": "auth != null",
-						"$nodeid": {
-							".validate": "data.exists() || 
-								newData.hasChildren(['parId', 'type', 'path'])",
-							"parId": {
-								".validate": "newData.isNumber()"
-							},
-							"type": {
-								".validate": "newData.isString() && 
-									newData.val().length < 5"
-							},
-							"path": {
-								".validate": "newData.isString() && 
-									newData.val().length < 100"
-							},
-							"blobId": {
-								".validate": "newData.isNumber()"
-							},
-							"$other": {
-								".validate": false
-							}
-						}
-					},
-					"blobs": {
-						".read": "auth != null",
-						"$blobid": {
-							".validate": "newData.hasChildren(['contents'])",
-							"meta": {
-								".validate": true
-							},
-							"contents": {
-								".validate": "newData.isString() && 
-									newData.val().length < 100000"
-							},
-							"$other": {
-								".validate": false
-							}
-						}
-					},
-					"$other": {
-						".validate": false
-					}
-				},
-				"$other": {
-					".validate": false
-				}
-			}
-		},
-		"$other": {
-			".validate": false
-		}
-	},
-	"$other": {
-		".validate": false
-	}
-}
-}
-
-
-
-»*/
 /*Schema w/ folds and comments «
 
 Take out commented lines with:
@@ -259,9 +139,6 @@ Remove newlines with:
 						".read": "auth != null",
 						"$blobid": {//«
 							".validate": "newData.hasChildren(['contents'])",
-							"meta": {//«
-								".validate": true
-							},//»
 							"contents": {//«
 								".validate": "newData.isString() && 
 									newData.val().length < 100000"
@@ -309,8 +186,13 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*11/11/26: Getting rid of every trace of groups«
-For example, references to `grpid`, etc
+/*11/11/26: BUG BUG BUG«
+First, we got rid of references to "groups", like `grpid`, etc
+
+But now, when we try to make files in another person's 'www/' folder,
+it looks liks it was made in that folder, but it actually makes it
+in ours.
+
 »*/
 
 //Notes«
@@ -542,6 +424,9 @@ const NEXT_NODE_ID = async() => {//«
 const mk_dir = async (parnode, name, opts)=>{//«
 if (!cur_user) return;
 
+let uid = parnode.mntPar.getData('fbaseUid');
+cwarn(`GOT UID: ${uid}`);
+
 let snap = await NEXT_NODE_ID();
 let rv = VAL(snap);
 if (!isNum(rv)) {
@@ -569,7 +454,8 @@ obj[`nodes/${next_id}`] = {
 };
 
 //rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
-rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
+//rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
+rv = await UPDATE(REF(`LOTW/user/${uid}/${PUB_DIR_NAME}`), obj);
 if (rv !== true){
 cerr("COULD NOT CREATE THE NEW DIR");
 	return;
@@ -583,6 +469,9 @@ return node;
 }//»
 const mk_new_file = async (parnode, name, opts)=>{//«
 	if (!cur_user) return;
+
+	let uid = parnode.mntPar.getData('fbaseUid');
+cwarn(`GOT UID: ${uid}`);
 
 	let snap = await NEXT_NODE_ID();
 	let rv = VAL(snap);
@@ -614,7 +503,9 @@ return;
 //log(obj);
 
 //	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/group/${grp_id}`), obj);
-	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
+//  THIS IS BAD !!!! ----------------vvvvvvvvvvvvvv
+//	rv = await UPDATE(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`), obj);
+	rv = await UPDATE(REF(`LOTW/user/${uid}/${PUB_DIR_NAME}`), obj);
 	if (rv !== true){
 cerr("COULD NOT CREATE THE NEW FILE");
 		return;
@@ -639,7 +530,11 @@ if (node.blobId === 0) return new Blob([]);
 
 */
 //let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/blobs/${node.blobId}`;
-let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/blobs/${node.blobId}`;
+
+let uid = node.mntPar.getData('fbaseUid');
+cwarn(`GOT UID: ${uid}`);
+//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/blobs/${node.blobId}`;
+let path = `LOTW/user/${uid}/${PUB_DIR_NAME}/blobs/${node.blobId}`;
 //cwarn(`PATH: <${path}>`);
 let snap =  await GET(REF(path));
 if (!snap) {
@@ -663,8 +558,11 @@ return blob;
 const set_blob = async (node, blob, opts) => {//«
 if (!cur_user) return;
 
+let uid = node.mntPar.getData('fbaseUid');
+cwarn(`GOT UID: ${uid}`);
 //let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
-let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`;
+//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}`;
+let path = `LOTW/user/${uid}/${PUB_DIR_NAME}`;
 // SBRYRKTH
 //cwarn("USERGRP.setBlob", node, opts);
 
@@ -731,8 +629,12 @@ if (!cur_user) return;
 
 let node_id = node.id;
 
+let uid = node.mntPar.getData('fbaseUid');
+cwarn(`GOT UID: ${uid}`);
+
 //let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
-let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
+//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
+let path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
 obj[`${node_id}`] = null;
@@ -744,9 +646,14 @@ return rv;
 };//»
 const update_fullpath = async (node, id, fromId, toId, newName)=>{//«
 
-if (newName === undefined) newName = node.name;
 
 if (!cur_user) return;
+
+if (newName === undefined) newName = node.name;
+
+let uid = node.mntPar.getData('fbaseUid');
+cwarn(`GOT UID: ${uid}`);
+
 let node_type;
 if (node.isFile) node_type = FILE_NODE_TYPE;
 else if (node.isDir) node_type = DIR_NODE_TYPE;
@@ -762,7 +669,8 @@ let nodeobj = {//«
 
 if (node.blobId) nodeobj.blobId = node.blobId;
 
-let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
+//let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
+let path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
 obj[`${id}`] = nodeobj;
@@ -1065,8 +973,8 @@ for (let uid in old_obj) {
 	}
 // YFKMYOGJT
 	let user_dir = new DirNode(use_name, users_dir, {//«
-//		perm: true, // UOIONWEJR
-		perm: false, // But users shouldn't be able to make new nodes
+		perm: true, // UOIONWEJR
+//		perm: false, // Cannot update status and bio unless this is true
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
 		tryLoadKid: async (arg1, arg2)=>{//«
@@ -1229,7 +1137,6 @@ return true;
 }//»
 
 }//»
-
 
 
 })();
