@@ -1,5 +1,8 @@
 (()=>{"use strict";const MODNAME="fs.fbase";
 
+const PUB_DIR_NAME = "www";
+const PUB_DIR_ID = 1;
+
 //Docs/Schema «
 
 /* Firebase Docs «
@@ -306,9 +309,12 @@ writing to them, which means they don't (yet) technically exist.
 
 //»
 
-/*11/11/26: Should we get rid of every trace of groups?«
-
+/*11/11/26: Getting rid of every trace of groups«
+For example, references to `grpid`, etc
 »*/
+
+//Notes«
+
 /*11/10/26: Concept simplification«
 
 Let's just get rid of the complexity by making all files children of 
@@ -353,9 +359,6 @@ So we need to change the schema and update the logic that uses/increments
 the nextNodeId's.
 
 
-
-
-
 Starting from scratch, if we make a dir in prv, it has itself as a parent
 
 FIXED: 
@@ -386,8 +389,6 @@ $ mv ONE ONE.mv
 ... and we get an undefined blob while our node still has the same path (1/ONE).
 
 
-
-
 Fixed:
 @HDSJNMJK: We need to do:
 let uid = par.mntPar.getData('fbaseUid');
@@ -404,1349 +405,6 @@ Switch back to main google account for firebase.
 Put the new database schema in there.
 
 Test out the schemam
-
-»*/
-/*9/6/26 BUG BUG BUG«
-
-populate_fbase_user_grp_dir: Not called for subfolders of the prv/ (and pub/).
-
-@YBNMDAOJ
-
-
-»*/
-/*9/5/26: Need to implement backendUpdateFullPath: «
-
-Just like we did backendDelNode.
-
-»*/
-/*9/2/26: How to "protect" a directory that takes a while to be populated?  «
-
-Here we are seeing those duplicates @CVXOERHJN
-
-»*/
-/*8/31/26 Just added `perm: true` to the FBASE_USER_MAIN_FS_TYPE type DirNode «
-
-@UOIONWEJR
-
-But WHY was this done?
-
-»*/
-
-// Old Notes «
-
-/* 8/29/26: backendDelNode «
-
-@IREJNFMNJ: Just want to remove the given node. So just set the
-node value to null.
-
-
-
-Effectively finished
-
-Just come back in here for
-
-1) Getting rm/mv to work properly (all creation stuff should probably work).
-- I supposed we are just going to unlink (remove nodes), rather than removing blobs.
-
-2) Getting *specific* functions to work 
-
-3) If I am really in the mood for refactoring/generalizing
-
-»*/
-/*8/28/26 Working notes «
-
-Now want to think about a command library for status and bio.
-No! Just want to make sure status and bio are also in the
-FBASE_USER_MAIN_FS_TYPE dir.
-
-@MSUYIOPLJ
-
-The problem is that for:
-/mnt/fbase/<username>/<prof_key>, there is neither a node._getBlob
-defined *or* a node.mntPar._getBlob, and so we default to get_local_blob.
-
-
-»*/
-/* 8/27/26: Developing a NICE WORKFLOW... «
-
-4 different kinds of directories:
-
-MNT_FS_TYPE (a list of "mounted" dirs):
-1) Mount '/mnt' in sys/fs.js://«
-MNT_FS_TYPE: The type of /mnt itself. This is wholly a "local" type whose
-contents depend on calls such as in step #2 below.
-Always fully populated, only system level JS can currently update this, but
-we may eventually implement mount/unmount commands.
-//»
-
-FBASE_USERS_FS_TYPE (a list of fbase users: they at least had to log into
-Google while in LOTW):
-2) Mount '/mnt/fbase' in init @WYRHTKGH//«
-FBASE_USERS_FS_TYPE: Nothing but the listing of users goes in here
-Populating of this directory means choosing from the listing of users
-returned from LOTW/prof. It may be possible to "continue" populating this
-by searching for users based on additional/expanded criteria.
-//»
-
-FBASE_USER_MAIN_FS_TYPE (a list of profile files, group directories, 
-and possibly more):
-3) Mount '/mnt/fbase/<a_username>' in populate_fbase_users @YFKMYOGJT «
-FBASE_USER_MAIN_FS_TYPE: The "base" user directory, which keeps the
-separate "group" directories ('pub', 'prv', etc.) as well as "profile" files
-like 'name', 'picture', etc, and maybe even 'status'. Once this is populated,
-this probably shouldn't need to be repopulated. Caveat: there might be additional
-dir_groups's added (or removed) since when the directory was first mounted.
-WE DON'T CURRENTLY SUPPORT THE MOUNTING OF ARBITRARY MEMBER-BASED DIRECTORIES, WE
-CURRENTLY SUPPORT ONLY 'PUB' (WORLD READABLE) AND 'PRV' (OWNER READABLE). To 
-support the mounting of arbitrary groups, we will need to query the path: 
-'LOTW/user/$uid/grpDefs', to get the following array:
-[
-	{
-		<grp_id_1>: { name_1, desc_1 } 
-	},
-	{
-		<grp_id_2>: { name_2, desc_2 } 
-	},
-	...
-]
-But in order to do *this*, we will probably want a dedicated fbase filesystem
-administrator command library, e.g. at coms/fbase.js.
-
-//»
-
-FBASE_USER_GRP_FS_TYPE (each is a kind of "sovereign" root filesystem):
-4) Mount '/mnt/fbase/<a_username>/<dir_group>' in populate_fbase_user_dir «
-@YGJDPLKIU
-FBASE_USER_GRP_FS_TYPE: The individual "groups" with their various backend
-r/w permissions. In the front-end, these (currently) default to dir.perm = true.
-These should work exactly as (the standard, local) OP_FS_TYPE in the LOTW system,
-in terms of populating the full directories with 'ls' and trying to get single
-"kids" when requesting single files when the directories are not (yet) fully
-populated.
-//»
-
-
-What sorts of interface mechanisms do we want for this?
-Obviously: a command library at coms/fbase.js should suffice.
-
-The library should verify that /mnt/fbase is mounted and in working order.
-If not, it should allow for the mounting of it, as well as whatever
-diagnostics/maintenance might be needed for its well-oiled usage.
-
-
-Now, how to create a new file @HEREMKNEW?
-We need to:
-let obj = {};
-let path = `LOTW/user/$uid/group/$grpId`;
-obj["nextNodeId"] = next_node_id;
-let parId = 123 //...;
-let path = `${parId}/${name}`;
-let type = FILE_NODE_TYPE;
-let blobId = NULL_FBASE_RTDB_BLOB; // standard null blob
-obj[`nodes/${next_node_id}`] = {
-	parId,
-	path,
-	type,
-	blobId
-};
-
-For "real" blobIds, let's just use huge numbers (like the millisecond timestamp).
-Those values are not as "important" as the node values because they are completely
-"owned" by the nodes.
-
-
-//»*/
-/* BUG BUG BUG: 8/27/26«
-
-
-Let's just want to pull down the nextNodeId just before
-doing the given operation, in order to reduce the complexity inherent
-in keeping state sync'ed for no good earthly reason.
-
-Call await NEXT_NODE_ID(<dir_id>);
-@YURJKFHFN
-
-
-This is simply restatement of the note of 7/20/26.
-We need to implement mkNewFile and mkDir:
-in FBASE_USER_GRP_FS_TYPE @YGJDPLKIU.
-
-WE JUST NEED TO IMPLEMENT mkDir (mkdir) and mkNewFile (touch) @EURKSDNR!!!
-
-So let's start this journey by thinking analytically.
-
-First, we need to see if the given nodes exist. So we need to 
-fully populate the dirobj and see if a FSNode with the given name
-already exists.
-
-If not, we are free to create the given node (file or dir) with the
-nextNodeId. In case we are using the wrong id, we need to resync to
-the backend.
-
-But we should have already sync'ed w/ the backend somewhere during
-initialization!!!
-
-
-So how do we pull down the nextNodeId?
-path = 'LOTW/user/$uid/group/$grpId/nextNodeId'
-
-»*/
-/* 8/26/26: Now *really* back ?!?!?«
-
-I've had *tons* of meditation upon (as well as doing *plenty* of work on)
-everything related to the dynamics of nodes and dependencies thereof (Icons).
-
-Now I am back to thinking in terms of the *assumption* of basically working
-mechanisms of a browser-based OS, such that we can now extend the functionality
-via...
-
-Okay, how to do the initial making of a user profile?
-
-
-RIGHT NOW THE BLOCKING POINT IS:
-
-populate_fbase_users:
-
-let ref = fbase_db_mod.ref(fbase_db, "LOTW/prof");
-let c1 = fbase_db_mod.orderByChild('updated');
-let c2 =fbase_db_mod.limitToLast(25);
-let q = fbase_db_mod.query(ref, c1, c2);
-
-let snap = await fbase_db_mod.get(q);
-
-@WEJKRLJS
-if (!snap.exists()){
-// BARF!!!
-return;
-}
-
-This should be considered an "EXISTENTIAL" ISSUE, meaning that the site
-maintainer/administrator has not actually done the first thing to initialize
-the backend.
-
-So we can:
-
-Do a "touch" on "LOTW/prof/$uid"
-
-newData.hasChildren(['updated', 'name', 'picture']))
-
-
-
-validation.ts:122 Uncaught (in promise) Error: equalTo failed: value argument
-contains undefined in property:
- - LOTW.user.FgiH6QEFncUo10iF7BekOYC4DTj2.group.1.nodes
- - LOTW.user.FgiH6QEFncUo10iF7BekOYC4DTj2.group.2.nodes
-
-I guess we need to instantiate both of these first 
-
-
-@HOPORNKER:
-
-at DirNode.populate_fbase_user_grp_dir (fbase.js?v=7998040:1765:22)
-at DirNode.loadKids (fs.js:1461:20)
-at do_path (shell.js?v=2349283:3034:14)
-at async com_ls.run (shell.js?v=2349283:3112:3)
-
-
-@UKHFAJFUE: Could not initialize all of the fields in the different
-user fs groups, e.g. 'prv' and 'pub'.
-
-
-As regards setting front-end permissions for the user directories, we are simply
-setting them to ALWAYS TRUE (i.e., @HEREPUBPERM and @HEREPRVPERM), because we
-are never assuming *anything* about backend logic here in the frontend. Everyone
-is welcome, per frontend customs, to *try* to do anything they want to the backend.
-»*/
-/* 7/21/26 - 8/25/26: NICE BIG BREAK... «
-
-... inclluding a 10-day stint at Meridian, engaged in such activities
-as explicitly threating a certain officer of a certain state. I'm not
-saying it was the right thing to do, I'm just saying it was what it was.
-
-PERIOD.
-
-»*/
-/* 7/20/26: WHAT ABOUT mkDir and mkNewFile?  «
-
-***WE STILL NEED TO IMPLEMENT THOSE BASIC FUNCTIONS***
-
-Should we not implement them as methods on the given parent DirNode's,
-which take a name (e.g. no internal slashes allowed) as argument?
-
-This is just a minor "update" to the current way, which takes the parents
-as the first arg to mkDir and touchFile (which should be renamed to mkNewFile).
-
-nextNodeId: kept under $grpid
-/user/$uid/group/$grpid/nextNodeId
-
-
-»*/
-/* 7/19/26: Write to user/$uid/group/$grpid/lastUpdate instead of using "sessId"  «
-
-To indicate to other devices that their own versions might be out-of-sync 
-with the backend, just have listeners on: 
-'user/$uid/group/$grpid/lastUpdate', which can include:
-	- sessId: a random, locally generated id string
-	- timestamp: serverTimestamp()
-	- desc: textual description up to 100 chars
-
-THE POINT BEING THAT I'M SICK OF THINKING OF SUPER SECRET THINGS (LIKE SESSION
-IDS) THAT ARE SUPPOSEDLY CAPABLE OF MAKING *EVERYTHING* WORK "PERFECTLY", AS
-LONG AS YOU "STICK WITH THE PROGRAM".
-
-We can *always* write to this during every structure-changing update (not
-simply updating the contents of a file), and all stale sessions will know that
-they are invalid, and we can 
-
-	- force a resync by wiping out the child nodes, and removing the done property
-	- refuse to do any writing until the resync is done
-
-
-So now the only complex validations are the reads in:
-
-user/$uid/group/$grpid/[lastUpdate|nodes|blobs]:
-
-auth != null && (
-	($grpid === '1' && auth.uid === $uid) ||  // private: owner only
-	($grpid === '2') || // public: the world
-	(auth.uid === $uid || // owner or member
-		root.child('LOTW').child('user').child($uid).
-		child($grpid).child('members').
-		child(auth.uid).val() === true)
-	)
-
-»*/
-/* 7/18/26: Rule cascading, "outer" vs "inner" rules, etc «
-
-My use case is this. I am implementing randomized "session ids" in the client,
-so that the same logged in user will have different ids for different devices,
-and I don't want the programmatic interface to have any way of "stealing" the
-ids of other sessions, even if they all technically "belong" to the same user.
-So I am marking the ids as unreadable to the application, even as the security
-rules perform validation based on their values.
-
-//«
-Your strategy of locking down .read access while using internal rule validation
-is an excellent, highly secure approach for isolating device sessions. Firebase
-security rules will perfectly enforce this because their internal "root power"
-reading capabilities do not leak back to the application layer.Since your goal
-is to prevent a compromised client or programmatic interface from "stealing" or
-brute-forcing other active session IDs belonging to the same user, you must
-structure your rules and data paths to avoid common Firebase
-pitfalls.Recommended Security Rules ArchitectureTo completely isolate these
-sessions, organize your database path by nesting the session data under the
-user's ID, and strictly enforce auth.uid alongside write-only permissions.
-
-{
-  "rules": {
-    "user_sessions": {
-      "$uid": {
-        // Enforce that a user can only access their own session tree
-        ".write": "auth !== null && auth.uid === $uid",
-        // Prevent listing all session IDs under this user
-        ".read": false, 
-        
-        "$session_id": {
-          // Optional: Allow the client to read its OWN specific session data if it already knows its randomized ID
-          ".read": "auth !== null && auth.uid === $uid",
-          // The client can create or update its own session slot
-          ".write": "auth !== null && auth.uid === $uid",
-          // Enforce business logic using internal data snapshots
-          ".validate": "newData.hasChildren(['device_token', 'last_active'])"
-        }
-      }
-    }
-  }
-}
-
-Critical Security Mechanics for Your Use Case
-
-No List (Shallow) Leaks: By setting .read: false at the $uid level, you prevent
-a client from issuing a once() or on() query on /user_sessions/YOUR_USER_ID.
-The Firebase server will instantly reject the request, ensuring the client can
-never pull a list of other active $session_id keys.
-
-Direct Path Knowledge Requirement: If you choose to set .read: true deeper at
-the $session_id level, a client can only read data if it already knows its
-exact, randomized cryptographic ID (e.g., /user_sessions/$uid/$session_id). It
-cannot fish for other sessions because Firebase Realtime Database rules do not
-filter data—they are all-or-nothing for the exact path requested.
-
-Validation Isolation: Your other database paths can safely use
-root.child('user_sessions').child(auth.uid).child(newData.child('session_id').val()).exists()
-to verify a session is valid. The rules engine handles this entirely
-server-side.
-
-Mitigating the "Blind Write" Risk
-
-Because a user has .write: true under their $uid path, a compromised client
-could technically attempt a "blind write" attack by guessing a random string
-and trying to overwrite or delete a session ID slot (e.g., sending a delete
-request to a guessed path).
-
-To prevent a client from destroying or altering another device's session data
-blindly, use a create-only validation rule to protect existing slots:
-
-"$session_id": {
-
-  // Prevent overwriting/deleting existing session slot unless explicitly allowed
-  
-  ".validate": "!data.exists() && newData.hasChildren(['created_at'])"
-}
-//»
-
-
-
-Tell me more about all this stuff.
-
-//«
-Realtime Database rules have a distinct logical landscape, and mastering the
-shift from broad queries to atomic path operations is usually the exact moment
-developers unlock its full security potential.
-
-To cement this lesson completely, here is the exact mental model of how the
-Firebase engine treats "outer" (shallow) paths versus "inner" (nested) paths
-during client requests.
-
-1. The Cascading Rule: "Read Permissions Flow Down"
-
-In Firebase Realtime Database, .read and .write rules are top-down. If you
-grant permission at a parent node, you cannot revoke it at a child node.
-
-The Trap: If you put .read: true at /users, a client can read all data for
-every user. Putting .read: false inside /users/$uid will do absolutely nothing.
-
-The Rule: Permission cascades. Once access is granted, it is unlocked for
-everything underneath it.
-
-
-2. The Query Rule: "Rules Are Not Filters"
-
-This is the "outer" rule behavior that catches most developers off guard. When
-a client attaches a listener or runs a query on an outer path, Firebase checks
-the rule only at that exact outer path.
-
-The Behavior: If a client requests db.ref('user_sessions/user123'), Firebase
-checks the .read rule at user_sessions/user123.
-
-The Result: If that specific path is .read: false, Firebase rejects the entire
-request immediately with "Permission Denied." It will not scan the inner
-children to see if some of them are marked true. Firebase requires permission
-for the entire chunk of data you are asking for.
-
-
-3. The Atomic Path Rule: "Direct Knowledge Access"
-
-This is the "inner" rule behavior you are leveraging for your session
-isolation.
-
-The Behavior: If the outer path is .read: false, but an inner path like
-user_sessions/user123/session_abc123 is .read: true, the client can still
-access the data—but only if it requests that exact atomic path directly.
-
-The Result: 
-Running db.ref('user_sessions/user123/session_abc123').once('value') will succeed
-perfectly. Because the client provided the exact key, Firebase bypasses the
-blocked outer node and evaluates the rule directly at that specific inner node.
-
-
-Summary Checklist for Your Architecture
-
-Operation Type	Target Path						Outer Rule 				Inner Rule 				Result
-												(user_sessions/$uid)	($session_id)	
-
-List/Query		/user_sessions/user123			.read: false			Not evaluated			❌ Blocked (Protects other sessions)
-
-Atomic Read		/user_sessions/user123/guess125	.read: false			.read: true (if exists)	❌ Blocked (If guess is wrong)
-
-Atomic Read		/user_sessions/user123/actualId	.read: false			.read: true				Allowed (Device knows its own ID)
-
-Rule Validation	Internal Server					Bypasses completely		Uses Root Power			Allowed (Reads any data instantly)
-//»
-
-»*/
-/* 7/17/26: Need to update the schema, so that nodes and blobs are in $grpid «
-
-We are currently only validating the sessId fields with updates/additions to:
-	- $grpid/nodes 
-	- $grpid/blobs
-
-... but not:
-	- $grpid/members
-
-
-
-»*/
-/* 7/15/26: HOW TO DEWEMPT «
-
-NO "USERNAMES": They are like vestigal tails.
-
-
-Need a local (JSON) cache of user profiles, returned from queries 
-to the users schema @SHYTUYOK:
-
-const FBASE_USERS_CACHE_PATH = "/var/cache/fbase/users";
-
-
-@WYRHTKGH: The init phase of this module needs to return a DirNode
-(to the caller in sys/fs.js, which will "physically" mount it) that 
-includes options for:
-	- type (FBASE_USERS_FS_TYPE == "fbase-users")
-	- popDir (populate_fbase_users)
-	- tryLoadKid(name): 
-		await users_dir.loadKids(); 
-		return users_dir.getKid(name);
-
-
-
-
-
-
-
-This popDir will then need to create DirNodes that have their own popDir
-methods, in order to mount the various permission-levels, whether:
-
-(type FBASE_USER_DIR_FS_TYPE == "fbase-user-dir")
-	- profile files: e.g. /mnt/fbase/<username>/status
-	- private (groupId=1): e.g. /mnt/fbase/<username>/prv
-	- public (groupId=2): e.g. /mnt/fbase/<username>/pub
-	- group (groupId=3+): e.g. /mnt/fbase/<username>/mygroup
-
-Those DirNode's, will in turn have there own "standard" popDir methods,
-based simply on the groupId's in question.
-
-(type FBASE_USER_GRP_FS_TYPE == "fbase-user-grp")
-
-
-
-»*/
-/* 7/14/26: System for looking up users «
-
-No need to do username updating.
-In fact, no need to implement "usernames".
-
-We don't even need a username->uid mapping
-
-If the only user lookup procedure is a query(), like such:
-
-let c1 = orderByChild('time');
-let c2 = limitToLast(num_recent_stats);
-let ref = REF("LOTW/status");
-let q = query(ref, c1, c2);
-... then the very fact that we are using indexes means that the actual 
-keys are irrelevant.
-
-SO: ALL WE REALLY NEED TO DO IS indexOn:
-//SHYTUYOK
-"users": {
-	".indexOn": ["votes", "updated"],
-	".read" : "auth != null",
-	"$uid": {
-		".write" : "auth != null && auth.uid === $uid",
-		"name": {
-// user.displayName
-			".validate": "newData.isString() && newData.val() === auth.token.name"
-		},
-		"picture":{
-//user.photoURL
-			".validate": "newData.isString() && newData.val() === auth.token.picture"
-		},
-		"status":{
-			".validate": "newData.isString() && newData.length <= 100"
-		}
-		"bio":{
-			".validate": "newData.isString() && newData.length <= 1000"
-		},
-		"updated": {
-			".validate": "newData().isNumber()"
-		},
-		"votes": 123
-	},
-	"uid_xyz789": {
-		"name": "Bob Jones",
-		"status": "[How I'm doing now]",
-		"bio": "Designer.",
-		"picture": "https://...".
-		"updated": 134567890,
-		"vores": 1
-	}
-}
-
-
-auth object structure:
-
-{
-  "uid": "string",
-  "provider": "string", 
-  "token": {
-    "aud": "string",
-    "auth_time": "number", // initial login time
-    "exp": "number",
-    "firebase": {
-      "identities": {
-        "email": ["string"],
-        "google.com": ["string"],
-        "facebook.com": ["string"]
-      },
-      "sign_in_provider": "string" // auth.provider
-    },
-    "iat": "number",
-    "iss": "string",
-    "sub": "string",
-    "email": "string",
-    "email_verified": "boolean",
-    "name": "string",
-    "picture": "string",
-    "phone_number": "string"
-  }
-}
-
-curuser.displayName == auth.token.name
-curuser.email == auth.token.email
-curuser.photoURL == auth.token.picture
-
-
-»*/
-/* 7/13/26: Starting fresh with a strict class-based mindset «
-
-STARTING ANEW: We are now in: mods/fs/fbase.js
-
-LOTW.globals.firebase:
-{
-	config : {apiKey, authDomain, databaseURL, projectId, appId, ...},
-	appUrl, authUrl, dbUrl 
-}
-
-
-How to store extra info do we need on fs nodes:
-
-
-Before, we seemed to keep the github id's in an (public) appData object
-on the parent DirNode's.
-
-Let's change this to a generic private field called #data, which can get
-passed via the constructor's opts,
-new DirNode(name, par, {
-	data: { // Stored in node.#data
-		fbaseUid:"..."
-	}
-});
-
-Then we if we need external access, can have a getData(which) that does:
-return this.#data[which].
-
-JUST ADDED THIS ONTO FSNode.
-
-
-»*/
-/* 7/12/26: Let's start with public and private filesystems «
-Then, think about how to implement groups, like below
-
-$uid: {
-	sessId:{},
-	curSessId:{},
-	nextGroupId:{
-// Start with 3
-		".validate": "newData.isNumber() && (
-			(!data.exists() && newData().val()===3) || 
-			(data.exists() && newData().val() == data.val()+1)
-		)"
-	},
-	nextNodeId:{},
-//OLSHGTNSJ
-	grpDefs: {
-		".read": "auth != null",
-		".write": "auth != null && auth.uid === $uid",
-		"$grpid": {
-			name: {
-				".validate" : " [Match: /Some pattern here/] "
-			},
-			tags: {
-				"$tagid": {
-					".validate": "$tagid.matches(/.../)"
-				}
-			},
-			members: {
-				uid_abcdefg: true,
-				// ...
-			},
-			"$other": {
-				".validate": false
-			}
-		}
-	},
-	group: {
-		".write": "auth != null && auth.uid === $uid",
-		"1": { // Private: owner r/w
-			".read": "auth != null && auth.uid === $uid",
-			nodes:{},
-			blobs:{},
-			"$other": {
-				".validate": false
-			}
-		},
-		"2": { // Public: owner r/w, world read
-			".read": "auth != null",
-			nodes:{},
-			blobs:{},
-			"$other": {
-				".validate": false
-			}
-		},
-		"$grpid": { // Group: owner r/w, group member read
-			".read": "auth != null && (
-				auth.uid === $uid || 
-root.child('LOTW').child($uid).child('grpDefs').child($grpid).child('members').
-														child(auth.uid).exists()
-			)",
-			"nodes":{},
-			"blobs":{},
-			"$other": {
-				".validate": false
-			}
-		}
-	}
-}
-
-"your_collection": {
-  "$keyname": {
-    ".validate": "$keyname.matches(/^prefix_[a-zA-Z0-9]+$/) && newData.val().matches(/^[a-zA-Z0-9_.-]+$/)"
-  }
-}
-
-Note on Escaping: If you ever need to use a backslash in your RegEx inside a
-JSON rule string (like \d for digits), you have to escape the backslash for
-JSON compliance, resulting in a double backslash: \\d.
-
-»*/
-/* 7/11/26: Thinking about the simplest possible user id scheme «
-
-
-I'm really just contemplating the ways to devise the most dead simple method of
-implementing a users schema. To access another user's readable data, a logged
-in user will need to know whatever "user id" permanently identifies the given
-user. There should be a way for users to arbitrarily change their current
-usernames so that the new one points to the permanent user id.
-
-
-To map mutable usernames to permanent user IDs efficiently in Firebase Realtime
-Database, the standard and most performant pattern is to use a reverse lookup
-index.Because Firebase lacks native relational joins, you create a dedicated
-database node that acts as a pointer map. This gives you an O(1) constant-time
-lookup without needing to scan your entire database or use complex logic.
-
-The Recommended Schema
-
-You split your data into two main nodes: one for the core user profiles (keyed
-by permanent IDs) and one for the username registry (keyed by the mutable
-usernames).
-
-{
-  "users": {
-    "uid_abc123": {
-      "username": "coder_99",
-      "displayName": "Alice Smith",
-      "bio": "Hello world!"
-    },
-    "uid_xyz789": {
-      "username": "pixel_art",
-      "displayName": "Bob Jones",
-      "bio": "Designer."
-    }
-  },
-  "usernames": {
-    "coder_99": "uid_abc123",
-    "pixel_art": "uid_xyz789"
-  }
-}
-
-How a User Looks Up Another User
-
-To find a user by their current username, your application performs a quick
-two-step read:
-
-1) Fetch the value at usernames/coder_99. This returns the permanent ID: 
-"uid_abc123".
-
-2) Fetch the profile at users/uid_abc123.
-
-The "Dead Simple" Username Change (Atomic Write)
-
-To allow a user to arbitrarily change their username, you must perform three
-actions simultaneously
-
-1) Ensure the new username is not already taken.
-2) Write the new username to the user's permanent profile.
-3) Delete the old username from the registry so someone else can claim it.
-
-You can achieve this in a single, atomic server request using update() combined
-with database security rules. This completely bypasses the need for server-side
-counters, increments, or transactions.
-
-
-The Client-Side Code:
-
-import { ref, update } from "firebase/database";
-
-async function changeUsername(uid, oldUsername, newUsername) {
-  const updates = {};
-  
-  // 1. Claim the new username in the registry
-  updates[`usernames/${newUsername}`] = uid;
-  
-  // 2. Free up the old username
-  updates[`usernames/${oldUsername}`] = null;
-  
-  // 3. Update the permanent profile
-  updates[`users/${uid}/username`] = newUsername;
-
-  // Execute all three changes atomically on the server
-  await update(ref(db), updates);
-}
-
-The "Free" Validation via Security Rules
-
-To make sure a user cannot accidentally steal someone else's username during
-this update, you enforce uniqueness directly in your Firebase Security Rules.
-The server evaluates these rules instantly before committing the write.
-
-{
-  "rules": {
-    "usernames": {
-      "$username": {
-        // Only allow writing if the username is completely empty (not taken),
-        // OR if the current authenticated user already owns this specific mapping.
-        ".write": "!data.exists() || data.val() === auth.uid",
-        ".validate": "newData.val() === auth.uid"
-      }
-    },
-    "users": {
-      "$uid": {
-        // Users can only edit their own permanent profile node
-        ".write": "auth != null && auth.uid === $uid"
-      }
-    }
-  }
-}
-
-Why this beats server-side IDs
-
-No Race Conditions: If two users try to claim "superstar" at the exact same
-millisecond, the security rules guarantee that whichever request hits the
-server first wins. The second request is rejected instantly.
-
-Completely URL-Safe: Because the usernames node uses the username as the key,
-your client-side routing becomes incredibly simple (e.g., fetching
-usernames/my_username to load a profile page).
-
-
-
-TO STOP DELETION
-// 1. Must be empty OR owned by the user
-// 2. AND the incoming data MUST exist (blocks 'null' deletes)
-".write": "(!data.exists() || data.val() === auth.uid) && newData.exists()",
-".validate": "newData.val() === auth.uid"
-
-
-»*/
-/*7/10/26: Turn this file into a module to be loaded by init in sys/fs.js «
-
-Put this in something like mods/fs/fbase.js
-
-First: since we are using the single login method from /login, get rid of
-that stuff in here. If the user logs out from there, onAuthStateChanged will
-be called, and we will not be able to interact with the back end because
-only authenticated users can read.
-
-Get handles to FileNode and DirNode.
-
-Export getBlob and setBlob in FileNode constructor.
-Export popDir and tryGet kid in DirNode constructor.
-
-
-AS LONG AS WE ALSO EXPORT db-CHANGING PRIMITIVES LIKE: 
-	- mkEmptyFile
-	- mkDir
-	- renameNode // change name only
-	- mvNode // change parent node (this implies a simple, bookmark operation
-														for updating the path)
-	- delNode (dir's must be empty)
-
-
-... then all of the private functions should stay where there are.
-
-
-THE ABOVE POINT MAKES THE FOLLOWING STATEMENT UNTRUE:
-??? We will receive handles to _node_update and _dir_update to enable
-updating the private fields ???
-
-
-
-We can DYNAMICALLY IMPORT from firebase urls via:
-
-let FB_BASE = "https://www.gstatic.com/firebasejs/12.6.0";
-let FB_APP_URL = `${FB_BASE}/firebase-app.js`;
-let FB_DB_URL = `${FB_BASE}/firebase-database.js`;
-
-let mod = await import(FB_APP_URL);
-... then presumably, the exported methods are attached directly to
-the mod object.
-
-
-
-
-For getting the UID VALUE, I'm not sure if the following is correct or not...
-there might be *another* UID somewhere on the cur_user object which is used for
-the 'auth.uid' parts in the database schema.
-
-const UID = () => {
-	if (cur_user && cur_user.providerData) return cur_user.providerData[0].uid;
-}
-
-»*/
-/* 7/6/26: Back here  «
-
-Its close to a month since I restarted my work on this concept. Since the
-last entry here (1+ weeks ago), I've been needed to fully refactor and clean up
-the file system primitives, so that everything that is essential is kept on
-FSNode's, and stateless functions are generally not used.
-
-What I'm close to working out is a robust method for plugging domain-specific
-logic into the system via "mount points" somewhere in the file system's tree
-structure.
-
-»*/
-/*10/20/25: NEED TO RESET THE SCHEMA: «
-
-Just added 'blobId' to indexOn for /LOTW/$ghid/node This way we can see if
-there are ever 0 nodes attached to a given blob, in case we want to keep the
-blobs around for any reason, regardless of whether they are linked to any
-nodes.
-
-»*/
-/*10/17/25: Need to export a try_get_kid sort of function so that «
-
-path_to_node in sys/fs.js can do the same type of path resolution mechanism 
-as for OP_FS_TYPE nodes.
-
-- getUsersNodeByNameAndPar
-
-So now we should be able to resolve multi-path paths (e.g.
-/users/guyhar123/dir1/dir2/dir3/dir4/file.txt) by querying only for the nodes
-of the constituent directories in the path (dir1, dir2, dir3, dir4), rather
-than for their full listings.
-
-We might eventually do a lookup map that associates paths with their node ids.
-
-»*/
-/*10/16/25: Put 'status' back into the db.«
-
-Now we should integrate everything from 2 days ago with:
-
-	- the github login name fetching/storing (use this in the constructor of 
-		NetFsDB)
-
-	- Set the initial status update along with setting everything else 
-		(msg: "hi", time: serverTimestamp())
-
-	- Mount the users directory with the same logic as before 
-		(query for most recent status updates)
-
-»*/
-/*10/15/25: How to discover other user's home directories?«
-
-- Reimplement the (~100 char) status thing, like before?
-- Maybe a "rank" (or "points") field, so the top N users may be queried.
-- Below we have a groups structure that can be used to authorize the writes of, 
-  e.g. "administrative" users
-
-"groups": {
-	"admin": {
-		".read": false,
-		".write": "auth != null && auth.provider === 'github' && 
-				auth.token.firebase.identities['github.com'][0] === 7414094",
-		$ghid: {
-			".validate": "newData.isBoolean()"
-		}
-	}
-},
-"status": {
-	".indexOn": ["time", "rank"],
-	"$ghid": {
-		".read": "auth != null",
-		".validate": "newData.hasChildren(['time', 'name']) || newData.hasChildren(['rank'])",
-		"time": {
-			".validate": "newData.isNumber()",
-			".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-		},
-		"msg": {
-			".validate":"newData.isString() && newData.val().length < 100",
-			".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-		},
-		"name": {
-			".validate":"newData.isString() && newData.val().length <= 39",
-			".write": "auth != null && auth.provider === 'github' && auth.token.firebase.identities['github.com'][0] === $ghid",
-		},
-		"rank": { // Only users in the admin group can write
-			".validate": "newData.isNumber()",
-			".write": "auth != null && auth.provider === 'github' && 
-						root.child('LOTW').child('groups').child('admin')
-						.child(auth.token.firebase.identities['github.com'][0]) === true",
-		},
-		"$other": {
-			".validate": false
-		}
-	}
-}
-
-»*/
-/*10/14/25: Reducing the complexity of the 3-step process of initializing a remote user directory.«
-
-in the new db schema, I just checked for '!data.exists()' in the appropriate places
-so that we can now do a one-step initialization process like:
-
-let session_id = get_session_id();
-let next_node_id = 1;
-const base_path = `LOTW/${ghid}`;
-update(base_path, {
-	[`sessIds/${session_id}`]: true,
-	curSessId: session_id, // Added: !data.exists()
-	nextNodeId: {
-		nodeId: next_node_id, // (!data.exists() && newData.val() === 1)
-		sessId: session_id // Added: !data.exists()
-	}
-});
-
-Now let's create 2 commends:
-1) chkfbdb
-2) mkfbdb
-
-Now we have the 2 main variables (sessId and nextNodeId) as the initialization variables 
-of a 'NetFsDB' object. So now the idea is to add methods to this object to make
-it look like the system 'FsDb' object.
-
-
-
-»*/
-/*10/13/25: I want a tidy database object (something like 'FsDb' in sys/fs.js):«
-
-After commenting out the entirety of the last version of this file, I decided to
-use the onAuthStateChanged callback via the same "global" way as the 
-onValue('.info/connected') callback.
-
-I also wanted to get rid of the gui interface aspects of logging in (i.e.
-buttons with logos on them). If they want to go that route, the dedicated
-/login url can be used for that purpose.
-
-Since we should support MULTIPLE github logins from the same LOTW instance, we
-should namespace the session ids (either in localStorage or /var/appdata) via
-the (persistent numerical) github user ids.
-
-Now the question is simple: SHOULD AN INSTANCE OF NetFsDB BE TIED TO A SINGLE
-(NUMERICAL) GITHUB ID? Should any NetFsDB instance indeed exist if no remote
-directory has even been set up yet?  If there is no session id, does/should
-this *guarantee* that there is no database on the backend? Regardless, we just
-need to check for: LOTW/$GHID/nextNodeId/nodeId (Number >= 1).
-
-Now when setting it up:
-let session_id = get_session_id();
-let next_node_id = 1;
-const base_path = `LOTW/${ghid}`;
-
-1)
-update(base_path, {
-	[`sessIds/${session_id}`]: true, //This must always work upon database creation
-})
-
-2) The given session_id must be registered in the sessIds table (from step 1).
-update(base_path, {
-	curSessId: session_id
-});
-
-3) The sessId field must be the same as the db's value of curSessId (from step 3).
-update(base_path, {
-	nextNodeId: {
-		sessId: session_id,
-		nodeId: next_node_id
-	}
-});
-
-4) If step 1 succeeds and step 2 or 3 fails, then we seem to have an inconsistent state,
-and we'll need to triage the situation and abort these steps.
-
-5) Otherwise, if all steps have succeeded, save session_id in localStorage, e.g.:
-  - localStorage.setValue(`fbase-sess_id-github:${ghid}`, session_id).
-
-»*/
-
-/*10/11/25: The urgency is arising. First, we'll delete everything from «
-the firebase datastore, and replace the security rules, whole cloth, with our
-new ones (the DB SCHEMA). Then we'll put this file in another location, and
-start it over again. We are going to need to clean up the logic that we've
-recently added to sys/fs.js. The plan is to do a 1:1 mapping of the (indexedDB)
-database logic used in sys/fs.js.
-
-Way more than that stupid crap (below) about hardware APIs there is a need of a
-central location for, and common interface into all of the various ways of
-interacting, computationally-speaking, with the wider world.
-
-»*/
-/*10/9/25: The fundamental idea I am having is to do only what is necessary «
-
-to support an "ecosystem" that is centered around web-client-centric scripting
-languages.
-
-One of the more telling outcomes will/should be the increasing usage of (web-based) hardware
-APIs, as opposed to DOM APIs.
-
-»*/
-/*10/7/25: Overall workflow «
-
-1. Load the net.fs library (this module)
-2. Get the current user object
-  - If not found, the user can only proceed by logging in
-3. Once logged in, check that a remote user directory has been set up. 
-  - If none exists, the user must create one.
-4. Check for the session id ($sid) in local storage.
-  - If not found, call create_session_id() until an unused one is found, 
-	and set it in local storage.
-5. Call set_session_id() with the value of $sid.
-6. Perform remote fs operations.
-
-  - If these fail with permission denied (on one's own directory), this most
-    likely means that another session has called set_session_id. Report this
-	(likely) error condition, and inform the user that they must manually reset 
-	the session id to continue.
-
-»*/
-/*10/6/25: Persistent session ids, create_new_file() example «
-
-64^4 = 16,777,216 // SESS_ID_BYTE_LEN = 3
-64^8 = 281,474,976,710,656 // SESS_ID_BYTE_LEN = 6
-
-Let's do persistent 24 bit session ids (4 chars, ~16M  possible). This is
-instead of jumping through all the hoops of constantly changing them. Only upon
-the first usage of the database in a client instance (local database
-initialization) do we need to secure a unique id. We just need to keep a little
-bit of local state, such as an object in e.g. APPDATA_PATH/netfs/sessId.
-
-
-const SESS_ID_BYTE_LEN = 3; // 4 ascii chars long
-const get_sess_id = () => {
-let sess_id = (crypto.getRandomValues(new Uint8Array(SESS_ID_BYTE_LEN))).toBase64()
-		.replace(/\+/g, '-')
-		.replace(/\x2f/g, '_')
-		.replace(/=+$/, '');
-	return sess_id;
-};
-
-
-Now we can do these 2 operations in a row, wrapped in a Promise:
-1) get_next_id
-2) increment_next_id
-
-We know that if another session id is set between these 2 steps, then
-increment_next_id won't work, and we won't have any gaps in the ids.
-
-Or increment_next_id rather gets put into an update operation, which creates a new
-node:
-
-const create_new_file = async (par_id, name, bytes) => {
-
-	let node_id = await get_next_node_id(); // Use this as the blob_id: they're in different "tables"
-	let update_obj = {
-		nodes: {
-			[node_id]: {
-				type: "f",
-				parId: par_id,
-				blobId: node_id,
-				path: `${par_id}/${name}`
-			}
-		},
-		blobs: {
-			[node_id]: {
-				contents: bytes.toBase64(),
-				meta: {
-					//...
-				}
-			}
-		},
-		nextNodeId: increment(1)
-	};
-	await update("/$ghid", update_obj); // If this fails, no incrementing is done
-
-};
-
-
-»*/
-/*10/5/25: Session ids«
-
-Let's get a crypto-secure 24bit value as Base64 (4 ascii characters), and call
-set_session which updates:
-
-"$ghid": {
-
-session_id: {
-	'.validate": "newData.isString() && newData.val().length >= 4"
-},
-old_session_ids: { // Possibly this
-	".validate": "!root.child($ghid).child('old_session_ids')[newData.val()]"
-},
-nodes:{
-	"$nodeid": {
-		".validate": "newData.child('session_id').val() === root.child($ghid).child('session_id') && <other validation logic here>";
-	}
-},
-blobs:{...}
-
-}
-
-
-If we are paranoid, we can use old_session_ids, which forces us to
-never reuse an old one. So then the update will be like:
-
-let sess_id = get_random_bytes(3).toBase64().replace(/=+^/,"");
-update(ghid, {
-	session_id: sess_id,
-	old_session_ids[sess_id]: true
-});
-//Now we have an effective "lock"
-
-If sess_id already exists in old_session_ids, then this will fail and we will need to repeat
-this process. So we create session ids either upon initialization of our user database, or
-upon failure. We can always store the session id, and read it back upon reloading the page.
-
-Using 24 bit session ids (16,777,216 possibilities), the string lengths are always 4.
-
-Going down to 16 bit session ids (65,536 possibilities), the strings lengths are always 3.
-So 24 bit seems to be a rather good middle ground between string size and hash space.
-
-»*/
-/*10/4/25: New file node creation workflow«
-
-When creating a new file, we will do:
-
-1) push("/blobs/$ghid", {meta, contents}); // Save the file
-2) push("/nodes/$ghid", { parId, type, path, blobId: $newRef}) // Create the node with blobId=file's key
-
-The cases where we successfully create the new file but fail to create the node should be rare,
-since node creation is such a quick operation, being that nodes are such small objects.
-
-»*/
-/*10/3/25: RESOLVED: query()«
-
-If we need to call to get the next key, then we should implement our own keys:
-
-next_key: {
-	"$ghid": {
-		".write": "auth.ghid = $ghid",
-		".read": "auth.ghid = $ghid",
-		".validate": "newData.isNumber() && newData.val() > data.val()"
-	}
-}
-
-There should not be any harm in calling update/increment on the next_key.
-
-Also: there is no reason to do "blobs", if everything is meant to be stored here
-in this database as a string (rather than locally as a proper file with read/write 
-file stream methods.)
-
-query("/nodes/$ghid", orderByChild('path'),equalTo($pathname),limitToFirst(1))
-
-We might need to put the key field inside the node object, in case the key is
-not available to us upon getting it. 
-
-push(parRef, value?): 
-Generates a new child location using a unique key and returns its Reference.
-
-If you provide a value to push(), the value is written to the generated
-location. If you don't pass a value, nothing is written to the database and the
-child remains empty (but you can use the Reference elsewhere).
-
-»*/
-/*10/1/25: To mount /users, we need to have a cache of the last N statuses, «
-and check for the cache or get them. This gives us id->username mappings. Then
-we'll mount them with the usernames for the key names.
-
-We should put a appData field on FSNode, for use by the individual applications.
-»*/
-/*9/30/25: Let's use update (instead of runTransaction). We will always «
-check is_connected, and use a flag (e.g. "force-offline") to force updates 
-when it is false. This affects stuff like @NSBDHFUR, where there is (currently) 
-3 successive calls to run_transaction.
-»*/
-/*9/29/25: Just need to work out the details of how files/folders are represented«
-on the backend, and how they may be queried. Then we can package these functions
-into an api that can be exported to sys/fs.js, so that the NetNode may be finally
-in control of how everything flows through the lOTW system.
-
-"$uid":{
-	"1234567":{
-		type: "d",
-		size: 2,
-		list: {
-			vals: ["dir1", "file1.txt"],
-			details: [-1, 100],
-		},
-		kids: {
-			"ZmlsZTEudHh0" : {// key=sanitize("file1.txt")
-				type: "f",
-				size: 100,
-				created:  1234567890.
-				modified: 1234901234.
-				enc: "utf8",
-				value : "This is the thing in the time of the place of file1!?!?!"
-			},
-			"ZGlyMQ":{// key=sanitize("dir1")
-				type: "d",
-				size: <list.vals.length>,
-				list: {
-					vals: [...],
-					details: [...]
-				},
-				kids: {
-					//...
-				}
-			}
-		}
-	}
-}
-
-»*/
-/*9/28/25: ONLY DOING GITHUB AUTH«
-
-So a user can write to their directory at: e.g. for me /uids/7414094
-
-To map from username to id:
-https://api.github.com/users/linuxontheweb
-
-{
-	"login": "linuxontheweb",
-	"id": 7414094,
-	"url": "https://api.github.com/users/linuxontheweb",
-	"html_url": "https://github.com/linuxontheweb",
-	"name": "Dennis Kane",
-	//...
-}
-
-I don't want to even think about who a LOTW user is when it comes to computer
-development questions. The idea of having a github account is the one standard
-way we have of knowing who a user is along these lines. The idea of letting
-google "users" use the site effectively allows anonymous users, since google
-(especially now that there is no G+ anymore) has no way to look anybody up.
-
-
-»*/
-/*9/24/25: This library exists as a suite of tools for internet-based «
-filesystems, using backends like the Firebase Realtime Database. We will need
-to integrate with the logic in sys/fs.js in order to allow for getting
-directory listings.
-
-We might want to get `class FSNode` (from sys/fs.js) and extend it inside here.
-
-But we might want to spend some time looking at the interfaces for FSNode and
-all classes that extend it, in order to refactor it in order to simplify the
-logic in coms/fs.js (for file moving, copying, etc).
 
 »*/
 
@@ -1804,9 +462,6 @@ const { // firebase «
 
 const NULL_FBASE_RTDB_BLOB = 0;
 
-const PRV_DIR_ID = 2;
-const PUB_DIR_ID = 1;
-const PUB_DIR_NAME = "www";
 
 let cur_user;
 let next_grp_id;
@@ -1826,6 +481,12 @@ let fbase_auth;
 let first_auth_change = false;
 
 let is_populating_users = false;
+
+const MAX_FILE_SIZE_MAP = {
+"status": 250,
+"bio": 2500
+};
+
 //»
 //Funcs «
 
@@ -1838,6 +499,7 @@ const blobTo64 = (blob) => {//«
 	});
 };//»
 
+const REF = path => { return fbase_db_mod.ref(fbase_db, path); };
 const GET = async(arg)=>{//«
 try {
 	return await fbase_db_mod.get(arg);
@@ -1858,9 +520,6 @@ catch(e){
 }
 
 };//»
-const REF = path => {//«
-	return fbase_db_mod.ref(fbase_db, path); 
-};//»
 const VAL = snap => {//«
 	if (!snap){
 cerr("NO SNAP");
@@ -1872,23 +531,18 @@ cerr("!SNAP.EXISTS()");
 	}
 	return snap.val();
 };//»
-const NEXT_NODE_ID = async(dirid) => {//«
+const NEXT_NODE_ID = async() => {//«
 	if (!cur_user) return;
 	// YURJKFHFN
-//	cwarn(`Need nextNodeId from: ${path}`);
-//	return GET(REF(`LOTW/user/${cur_user.uid}/group/${dirid}/nextNodeId`));
 	return GET(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nextNodeId`));
 };//»
 
-// Group-specific generator functions for mkDir and mkNewFile
-const gen_mk_dir = (grp_id) => {//«
-
-return async (parnode, name, opts)=>{
-
+// These functions do all of the "basic" operations that are expected of the
+// LOTW filesystem
+const mk_dir = async (parnode, name, opts)=>{//«
 if (!cur_user) return;
 
-//let snap = await NEXT_NODE_ID(PRV_DIR_ID);
-let snap = await NEXT_NODE_ID(grp_id);
+let snap = await NEXT_NODE_ID();
 let rv = VAL(snap);
 if (!isNum(rv)) {
 	return;
@@ -1926,16 +580,11 @@ _dir_update(DIR_UPDATE_ADD, parnode, node); // Set parnode.#kids[name]
 _node_update(NODE_UPDATE_ID, node, next_id);
 return node;
 
-}
-
-};//»
-const gen_mk_new_file = (grp_id) => {//«
-
-return async (parnode, name, opts)=>{
-
+}//»
+const mk_new_file = async (parnode, name, opts)=>{//«
 	if (!cur_user) return;
 
-	let snap = await NEXT_NODE_ID(grp_id);
+	let snap = await NEXT_NODE_ID();
 	let rv = VAL(snap);
 	if (!isNum(rv)) {
 		return;
@@ -1977,14 +626,8 @@ cerr("COULD NOT CREATE THE NEW FILE");
 	_dir_update(DIR_UPDATE_ADD, parnode, node); // Set parnode.#kids[name]
 	return node;
 
-}
-
-
-};//»
-const gen_get_blob = (grp_id) =>{//«
-
-return async (node) => {
-
+}//»
+const get_blob = async (node) => {//«
 if (!cur_user) return;
 //cwarn("USERGRP.getBlob", node);
 //if (node.blobId === 0 || node.blobId === NULL_BLOB_NODE_TYPE) return new Blob([]);
@@ -2007,36 +650,17 @@ let val = VAL(snap);
 if (!(val && val.contents)) {
 cerr("NO SNAP VAL.contents");
 	return new Blob([]);
-//	return;
 }
-//log(val.contents);
-/*
-let str = atob(val.contents);
-let blob = new Blob([str]);
-//log("STR.length,"str.length);
-//log(blob);
-//return new Blob([str]);
-//SAHJNMUI
-if (str.length !== blob.size){
-cerr(`STR.LENGTH(${str.length}) !== BLOB.SIZE(${blob.size})`);
-}
-*/
 
 let binary_str = atob(val.contents);
 let len = binary_str.length;
 let bytes = new Uint8Array(len);
 for (let i = 0; i < len; i++) bytes[i] = binary_str.charCodeAt(i);
+//You can't binary_str directly into the Blob constructor
 let blob = new Blob([bytes]);
-cwarn("Testing for data integrity...");
-log(blob.size === binary_str.length);
 return blob;
-}
-
-};//»
-const gen_set_blob = (grp_id) =>{//«
-
-return async (node, blob, opts) => {
-
+}//»
+const set_blob = async (node, blob, opts) => {//«
 if (!cur_user) return;
 
 //let path = `LOTW/user/${cur_user.uid}/group/${grp_id}`;
@@ -2101,21 +725,11 @@ _node_update(NODE_UPDATE_SIZE, node, blob.size);
 
 return blob;
 
-}
-
-};//»
-
-// IREJNFMNJ
-const gen_del_node = (grp_id) => {//«
-
-return async (node)=>{
-
+}//»
+const del_node = async (node)=>{//«
 if (!cur_user) return;
 
 let node_id = node.id;
-
-cwarn(`BACKEND_DEL_NODE FOR GRP: ${grp_id}, node: ${node_id}`);
-log(node);
 
 //let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
 let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
@@ -2127,85 +741,37 @@ let rv = await UPDATE(ref, obj);
 
 return rv;
 
-};
-
 };//»
+const update_fullpath = async (node, id, fromId, toId, newName)=>{//«
 
-const gen_update_fullpath = (grp_id) => {//«
-
-return async (node, id, fromId, toId, newName)=>{
-//cwarn("ARGS", node, id, fromId, toId, newName);
-// We are moving into a directory:
-// $ mv mkfile somedir/
 if (newName === undefined) newName = node.name;
 
-/* This is the code for OP_FS_TYPE. How to adapt it to FBASE_USER_GRP_FS_TYPE?«
-
-let node = await this._getById(id);
-let parr = node.path.split("/");
-if (fromId !== toId) {
-	node.parId = toId;
-}
-let usename = newName || parr[1];
-node.path=`${toId}/${usename}`;
-if (!await this.putById(id, node)) return;
-return true;
-
-»*/
 if (!cur_user) return;
-/*
-A "node" in the backend is:
-type, blobId, parId, path
-*/
-//log(node);
 let node_type;
-//if (node.isFile) node_type = "f";
 if (node.isFile) node_type = FILE_NODE_TYPE;
-//else if (node.isDir) node_type = "d";
 else if (node.isDir) node_type = DIR_NODE_TYPE;
 else {
 cerr("Unknown type: NOT isFile or isDir");
 return;
 }
 let nodeobj = {//«
-//EHJKEMIO
-//	type: node.type,// WHAT IS THIS DOING BEING: 'fb-user-grp'???
-	type: node_type,// WHAT IS THIS DOING BEING: 'fb-user-grp'???
-//	blobId: node.blobId,
+	type: node_type,
 	parId: toId,
 	path: `${toId}/${newName}`,
 };//»
 
-if (node.blobId){
-nodeobj.blobId = node.blobId;
-}
+if (node.blobId) nodeobj.blobId = node.blobId;
 
-/*
-"type": {//«
-	".validate": "!data.exists() && 
-		newData.isString() && 
-		newData.val().length < 5"
-},//»
-*/
-
-//let ref =`LOTW/user/${uid}/group/${grpid}/nodes`);
-//let path = `LOTW/user/${cur_user.uid}/group/${grp_id}/nodes`;
 let path = `LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nodes`;
 let ref = REF(path);
 let obj = {};
-//log(`path: ${path}`);
-//log(`id: ${id}`);
 obj[`${id}`] = nodeobj;
-log(`UPDATE PATH: ${path}`);
-log(obj);
-//MSNFJRJKDH
 let rv = await UPDATE(ref, obj);
 log("WHAT IS RV?", rv);
 return rv;
 
-};
-
 };//»
+
 
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 
@@ -2222,30 +788,17 @@ cwarn("HERE IS par.getData");
 log(par.getData);
 return;
 }
-//let grpid = par.getData('fbaseGrpId');
-let grpid = par.mntPar.getData('fbaseGrpId');
 let parid = par.id;
-//cwarn(`TRY GET '${name}':  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
-/*
-Construct the path via the parent node's nodeId
-*/
 let path = `${parid}/${name}`;
 cwarn(`TRY_GET_KID: ${path}`);
 
-//let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
-//let c1 = fbase_db_mod.orderByChild('parId');
-//let c2 = fbase_db_mod.equalTo(parid);
-//let ref_path = `LOTW/user/${uid}/group/${grpid}/nodes`;
 let ref_path = `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`;
 log(`REF_PATH  <${ref_path}>`);
 let ref = fbase_db_mod.ref(fbase_db, ref_path);
-//let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let c1 = fbase_db_mod.orderByChild('path');
 let c2 = fbase_db_mod.equalTo(path);
 let c3 = fbase_db_mod.limitToFirst(1);
-//log(ref, c1, c2, c3);
 let q = fbase_db_mod.query(ref, c1, c2, c3);
-//log(q);
 let snap = await GET(q);
 let arr = VAL(snap);
 if (!arr) {
@@ -2256,9 +809,6 @@ cerr("DID NOT GET!");
 //let arr = snap.val();
 // Make a FileNode or DirNode
 
-log("GOT KID!!!");
-log(arr);
-
 // This loop would only be infinite if the array were empty, which it should never be
 let node;
 for (let i=0; ; i++){ //«
@@ -2267,8 +817,6 @@ for (let i=0; ; i++){ //«
 	let typ = obj.type;
 	let parid = obj.parId;
 	let name = (obj.path.split("/"))[1];
-//cwarn(`MAKE NODE(${i}) WITH:`);
-//log(obj);
 	if (typ === FILE_NODE_TYPE){
 		node = new FileNode(name, par);
 		_node_update(NODE_UPDATE_BLOB_ID, node, obj.blobId);
@@ -2304,36 +852,25 @@ if (!cur_user) return;
 
 //log(dir);
 // 
-//let uid = dir.getData('fbaseUid');
-//let grpid = dir.getData('fbaseGrpId');
 let uid = dir.mntPar.getData('fbaseUid');
-//log(`UID: ${uid}`);
-let grpid = dir.mntPar.getData('fbaseGrpId');
-//log(`GRPID: ${grpid}`);
 let parid = dir.id; // HEJRKTKT: UNDEFINED HARHARHAR
 if (!parid){
 cerr("NO dir.id:", parid);
 log(dir);
 return;
 }
-//log(`PARID: ${parid}`);
-//cwarn(`POPULATE:  uid: ${uid}  grpid: ${grpid}  parid: ${parid}`);
 
-//let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/group/${grpid}/nodes`);
 let ref = fbase_db_mod.ref(fbase_db, `LOTW/user/${uid}/${PUB_DIR_NAME}/nodes`);
 let c1 = fbase_db_mod.orderByChild('parId');
-//cwarn("HI parId", parid);
 let c2 = fbase_db_mod.equalTo(parid);
 let q = fbase_db_mod.query(ref, c1, c2); // HOPORNKER
 let snap = await GET(q);
-//log("GOT SNAP?", snap);
 if (!snap){
 cerr("NO SNAP!?!?!");
 return;
 }
 
 dir.loadKidsDone = true;
-//log("POP: DONE");
 
 if (!snap.exists()) {
 //cwarn("DOES THIS ALWAYS JUST MEAN EMPTY DIRECTORY");
@@ -2379,14 +916,6 @@ const populate_fbase_user_dir = async (user_dir) => {//«
 
 Should add FileNode's (status, bio, etc) here, so that the 
 owners of that profile can update theirs by writing to them.
-so getBlob/setBlob need to use the appropriate db methods
-
-Just need to check if uid === curuser.uid.
-If not, also add the "pub" dir (grpid == 2)
-If so, also add the "prv" dir (grpid == 1)
-
-Then when we *do* implement user groups, we need to search in 
-grpDefs (@OLSHGTNSJ), and also return those.
 
 All DirNode's should be proper *groups*, implementing:
 popDir: populate_fbase_user_grp_dir
@@ -2395,13 +924,8 @@ tryLoadKid(name):
 	return user_dir.getKid(name)
 
 »*/
-const MAX_FILE_SIZE_MAP = {
-"status": 250,
-"bio": 2500
-};
 
 	if (!cur_user) return;
-//log(`FBASE_USER_MAIN_FS_TYPE: <${FBASE_USER_MAIN_FS_TYPE}>`);
 	let uid = user_dir.getData("fbaseUid");
 	let prof = user_dir.getData("fbaseProf");
 	for (let k in prof) {//«
@@ -2457,69 +981,32 @@ return `fbase.js: not setting constant value: '${k}'`;
 		_dir_update(DIR_UPDATE_ADD, user_dir, node);
 	}//»
 // YGJDPLKIU
-	{// Mount "pub" for everyone «
-		let mk_dir_func_pub = gen_mk_dir(PUB_DIR_ID);
-		let mk_new_file_func_pub = gen_mk_new_file(PUB_DIR_ID);
-		let get_blob_func_pub = gen_get_blob(PUB_DIR_ID);
-		let set_blob_func_pub = gen_set_blob(PUB_DIR_ID);
-		let del_node_func_pub = gen_del_node(PUB_DIR_ID);
-		let update_fullpath_func_pub = gen_update_fullpath(PUB_DIR_ID);
-		let pub = new DirNode(PUB_DIR_NAME, user_dir, {//«
-			type: FBASE_USER_GRP_FS_TYPE,
-			data: {
-				fbaseUid: uid,
-				fbaseGrpId: PUB_DIR_ID,
-			},
-			loadKids: populate_fbase_user_grp_dir,
-			tryLoadKid: try_get_fbase_user_grp_kid,
-			perm: true,
-			getBlob: get_blob_func_pub,
-			setBlob: set_blob_func_pub,
-			mkDir: mk_dir_func_pub,
-			mkNewFile: mk_new_file_func_pub,
-			backendDelNode: del_node_func_pub,
-			backendUpdateFullPath: update_fullpath_func_pub
-		});
-		_dir_update(DIR_UPDATE_ADD, user_dir, pub);
-		_node_update(NODE_UPDATE_ID, pub, PUB_DIR_ID); // Id
-	//»
-	}//»
-/*
-	if (uid === cur_user.uid) {// Mount "prv" for the cur_user «
-// OERUTJSKF
-		let mk_dir_func_prv = gen_mk_dir(PRV_DIR_ID);
-		let mk_new_file_func_prv = gen_mk_new_file(PRV_DIR_ID);
-		let get_blob_func_prv = gen_get_blob(PRV_DIR_ID);
-		let set_blob_func_prv = gen_set_blob(PRV_DIR_ID);
-		let del_node_func_prv = gen_del_node(PRV_DIR_ID);
-		let update_fullpath_func_prv = gen_update_fullpath(PRV_DIR_ID);
-		let prv = new DirNode("prv", user_dir, {
-			type: FBASE_USER_GRP_FS_TYPE,
-			data: {
-				fbaseUid: uid,
-				fbaseGrpId: PRV_DIR_ID,
-			},
-			loadKids: populate_fbase_user_grp_dir,
-			tryLoadKid: try_get_fbase_user_grp_kid,
-			perm: true, // HEREPRVPERM
-			getBlob: get_blob_func_prv,
-			setBlob: set_blob_func_prv,
-			mkDir: mk_dir_func_prv,
-			mkNewFile: mk_new_file_func_prv,
-			backendDelNode: del_node_func_prv,
-			backendUpdateFullPath: update_fullpath_func_prv
-		});
-		_dir_update(DIR_UPDATE_ADD, user_dir, prv); // Add kid
-		_node_update(NODE_UPDATE_ID, prv, PRV_DIR_ID); // Id HEREPRVRV
-	}//»
-*/
+	// Mount the world-readable dir ("www")
+	let www_dir = new DirNode(PUB_DIR_NAME, user_dir, {//«
+		perm: true,// All permissions in this dir are implemented on the server side, where the database lives
+		type: FBASE_USER_GRP_FS_TYPE,
+		data: {
+			fbaseUid: uid,
+		},
+		loadKids: populate_fbase_user_grp_dir,
+		tryLoadKid: try_get_fbase_user_grp_kid,
+		getBlob: get_blob,
+		setBlob: set_blob,
+		mkDir: mk_dir,
+		mkNewFile: mk_new_file,
+		backendDelNode: del_node,
+		backendUpdateFullPath: update_fullpath
+	});
+	_dir_update(DIR_UPDATE_ADD, user_dir, www_dir);
+	_node_update(NODE_UPDATE_ID, www_dir, PUB_DIR_ID); // Id
+//»
+	
 	user_dir.loadKidsDone = true;
 
 };//»
 const populate_fbase_users = async (users_dir) => {//«
 //Just the list of user names
 // e.g. /mnt/fbase/
-log("POPULATE /mnt/fbase");
 if(users_dir.loadKidsDone) return;
 if (!cur_user) {
 cwarn("NOT LOGGED IN.");
@@ -2527,10 +1014,6 @@ cwarn("NOT LOGGED IN.");
 }
 if (is_populating_users) return;
 is_populating_users = true;
-
-// = true;
-//log("DOPOP");
-
 
 let ref = fbase_db_mod.ref(fbase_db, "LOTW/prof");
 
