@@ -61,9 +61,22 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
-/*11/11/26: Need to do permissions at the granular file level, rather than only at
-the directory level.
-*/
+/*11/11/26: Granular file-level perm's and String.toByteSlice«
+Need to do permissions at the granular file level, rather than only at
+the directory level. I think the checking is done in shell.js (Stdout.write) and
+in the desktop (Window.saveAs).
+
+@JDUHEKSBD: Just made a String.toByteSlice there which calls
+`get_data_from_fs_file(file,"bytes", start, end)`, which does all the efficient
+slicing under the hood, like this:
+
+	if (Number.isFinite(start)) {
+		if (file.slice) {
+			if (Number.isFinite(end)) file = file.slice(start, end);
+			else file = file.slice(start);
+		}
+	}
+»*/
 /*11/10/26 «
 
 @ASKLEMOEM there was an undefined returned here with a null blob file in the FBASE
@@ -2944,8 +2957,12 @@ cwarn("Format not given, defaulting to 'arraybuffer'");
 		};
 		if (Number.isFinite(start)) {
 			if (file.slice) {
-				if (Number.isFinite(end)) file = file.slice(start, end);
-				else file = file.slice(start);
+				if (Number.isFinite(end)) {
+					file = file.slice(start, end);
+				}
+				else {
+					file = file.slice(start);
+				}
 			}
 		}
 		if (format==="text") reader.readAsText(file);
@@ -3679,6 +3696,7 @@ _.toText = async function(opts = {}) {/*«*/
 _.hasTextExt = function(opts={}){let ext = this.split(".").pop();return TEXT_EXTENSIONS.includes(ext);}
 _.toLines=function(opts={}){opts.lines = true;return this.toText(opts);}
 _.toBytes=async function(opts={}){let node=await this.toNode(opts);if(node)return node.bytes;};
+//JDUHEKSBD
 _.toByteSlice=async function(start, end, opts={}){//«
 	if (!(isNum(start) && isNum(end) && start >= 0 && start < end)){
 cerr("Invaild args to toByteSlice");
