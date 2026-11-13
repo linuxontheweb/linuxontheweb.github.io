@@ -249,7 +249,8 @@ const IMAGE_EXTENSIONS=["jpg","gif","png","webp"];
 
 const TERMINAL_APP = "Terminal";
 const IMAGE_APP = "util.ImageView";
-const MEDIA_APP = "util.MediaPlayer";
+//const MEDIA_APP = "util.MediaPlayer";
+const MEDIA_APP = "dev.VideoCutter";
 //const MEDIA_EDIT_APP = "media.VideoCutter";
 const MEDIA_EDIT_APP = "dev.VideoCutter";
 //We are using "MEDIA" to refer either to individual video-based apps or to 

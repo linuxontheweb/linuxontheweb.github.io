@@ -215,9 +215,9 @@ rv = ebml_sz(rv, 0);
 let tracks_id_length = 4;
 let tracks_size_length = rv[1];
 let tracks_size = rv[0];
-tracks_bytes = await fs.readFile(fullpath, {binary: true, start: c, end: c + tracks_id_length + tracks_size_length + tracks_size});
-}
-//»
+tracks_bytes = await fs.readFile(fullpath, 
+{binary: true, start: c, end: c + tracks_id_length + tracks_size_length + tracks_size});
+}//»
 {//Cues«
 
 rv = get_section_pos_of_webm_file([0x1c,0x53,0xbb,0x6b], init_bytes);
@@ -237,9 +237,12 @@ let cues_id_length = 4;
 let cues_size_length = rv[1];
 let cues_size = rv[0];
 
-let cues_bytes = await fs.readFile(fullpath, {binary: true, start: c, end: c + cues_id_length + cues_size_length + cues_size});
+let cues_bytes = await fs.readFile(fullpath, {binary: true, start: c, 
+end: c + cues_id_length + cues_size_length + cues_size});
 let cues = parse_section(cues_bytes, SEGMENT)[1];
-if (!(cues[1].length == 4 && cues[1][0].match(/^CUETIME/) && cues[1][2].match(/^CUETRACKPOSITION/) && cues[1][3][0].match(/^CUETRACK/) && cues[1][3][2].match(/^CUECLUSTERPOSITION/))) return cerr("Unknown Cues format");
+if (!(cues[1].length == 4 && cues[1][0].match(/^CUETIME/) && 
+cues[1][2].match(/^CUETRACKPOSITION/) && cues[1][3][0].match(/^CUETRACK/) 
+&& cues[1][3][2].match(/^CUECLUSTERPOSITION/))) return cerr("Unknown Cues format");
 
 cues_arr=[];
 {
@@ -271,10 +274,7 @@ for (let i=0; i < tolen; i+=2){
 		cues_arr.push({time: cue2_time, pos: cue2_pos})
 		break;
 	}
-	else{
-		cues_arr.push({time: cue_time, pos: cue_pos})
-	}
-
+	else cues_arr.push({time: cue_time, pos: cue_pos})
 }
 orig_cues = JSON.parse(JSON.stringify(cues_arr));
 if (!cues_arr.length) {
@@ -331,13 +331,12 @@ if (end_cue) {
 	if (last_cluster_start >= last_byte){
 		last_byte = final_cue.pos;
 		if (last_cluster_start >= last_byte) {
-	return cerr(`INVALID LAST_CLUSTER_START(${last_cluster_start}) / LAST_BYTE(${last_byte})`);
+return cerr(`INVALID LAST_CLUSTER_START(${last_cluster_start}) / LAST_BYTE(${last_byte})`);
 		}
 	}
 }
-else{
-	last_cluster_start = first_cue.pos;
-}
+else last_cluster_start = first_cue.pos;
+
 
 
 //log(last_cluster_start, last_byte);
@@ -639,11 +638,11 @@ Y(blob);
 
 });
 };//»
-const PARSE = (term, bytes)=>{
+const PARSE = (term, bytes)=>{//«
 
 return parse_section(bytes, WebmTags);
 
-};
+};//»
 
 //Var«
 const NANOSECS_PER_SEC = 10**9;

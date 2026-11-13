@@ -1488,6 +1488,10 @@ canRm(opts={}){//«
 getData(key){if (!this.#data) return; return this.#data[key];}
 
 getBlob(){//«
+//log("WHAT IS THIS?", this);
+if (this===undefined){
+throw new Error("HOW IS THIS UNDEFINED???");
+}
 	if (this._getBlob) return this._getBlob(this);
 	if (this.mntPar._getBlob) return this.mntPar._getBlob(this);
 	return get_local_blob(this)
@@ -1679,10 +1683,7 @@ cerr(`(id=${this.id}): Could not set the new node value (blobId=${bid})`);
 	}
 	return true;
 }//»
-async getValue(opts={}){//«
-	let getter = this.getBlob;
-	return getter(this, opts);
-}//»
+async getValue(opts={}){ return this.getBlob(this, opts); }
 async setValue(val, opts={}){//«
 	let blob = toBlob(val);
 	if (!blob){
@@ -1755,6 +1756,7 @@ get buffer(){//«
 		return blob_to_ret_val(blob, {buffer: true});
 	})();
 }//»
+async byteSlice(start, end) { return get_data_from_fs_file(await this.blob, "bytes", start, end); }
 get bytes(){//«
 	if (this.useMemBlob) return util.toBytes(this.memBlob);
 	return(async()=>{

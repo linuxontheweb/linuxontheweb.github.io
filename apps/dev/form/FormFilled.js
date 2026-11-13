@@ -1,4 +1,4 @@
-(()=>{"use strict";const APPNAME="dev.FormFilled";
+(()=>{"use strict";const APPNAME="dev.form.FormFilled";
 /*9/2/26: The controlled form that simply exists for its graphical
 "look and feel". Every sort of functionaliy can be offloaded to
 the bottomWin (FormFiller).

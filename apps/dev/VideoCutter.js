@@ -1,5 +1,32 @@
 (()=>{"use strict";const APPNAME="dev.VideoCutter";
+const WEBMPARSER_MOD = "util.webmparser";
 
+/*11/13/26: I have no idea how this "works" (if it still works)«
+I am trying to put mods/util/webmparser.js to work.
+
+It is loaded by render_from_slices.
+webm_prep looks like the main place to load it.
+And get_clusters.
+
+try_render -> render_from_slices -> render_from_script
+
+Key presses:
+m: Automatically inserts numerical markers, which stay ordered.
+m_S: Get prompted for an alphabetic marker. 
+
+
+@WUROPSKMRN We have a CUESHASH returned from webm_prep, but when making use of
+it @ASMRKGMS, it is not in the correct format to yield integers that are used
+as the args of String.toByteSlice. The values of CUESHASH are Arrays of 2
+integers rather than integers. @YIOAMDKDK in webm_prep, this is how the
+elements of CUESHASH are created:
+
+	CUESHASH[tm1]=[seg_off+pos1, sz];
+
+We are doing a render from string: "ac" (a:8, c:20), and got a video of 9.07 seconds.
+But it should have been 12 seconds.
+
+»*/
 /*9/16/25: How about a "redraw ruler" command for when things seem to get stuck?«
 I am current editing a ~22 min long video, and there are times where not all the
 preview images are drawn. I'm just trying to understand why the rendering of
@@ -260,13 +287,12 @@ let CLEAR_CACHE_WHEN_MAGNIFYING = true;
 
 //Vars«
 
-const WEBMPARSER_MOD = "util.webmparser";
 
 let ALLOW_MOUSE_SCROLLING = false;
 
-//let USE_INIT_MARKS = true;
-let USE_INIT_MARKS = false;
-let INIT_MARKS=[[6,"a"],[23,"b"],[20,"c"],[40,"d"]];
+let USE_INIT_MARKS = true;
+//let USE_INIT_MARKS = false;
+let INIT_MARKS=[[8,"a"],[23,"b"],[20,"c"],[30,"d"]];
 
 let magnify_to_center = false;
 
@@ -708,9 +734,9 @@ const get_blocks_from_cluster=(clust)=>{//«
 //»
 
 const video_init = async ()=>{//«
-cwarn("VIDEO_INIT!!!");
+//cwarn("VIDEO_INIT!!!");
 	viddur = vid.duration;
-log(`viddir: ${viddur}`);
+cwarn(`vid.duration: ${viddur}`);
 //log(vid.playbackRate);
 //KLIOPMDS
 //vid.playbackRate = 0.125;
@@ -742,10 +768,10 @@ const seek = (tm)=>{//«
 	return new Promise((Y,N)=>{
 		v.onseeked = ()=>{
 			Y();
-log(`SEEK OUT: ${tm}`);
+//log(`SEEK OUT: ${tm}`);
 		};
 
-log(`SEEK IN: ${tm}`);
+//log(`SEEK IN: ${tm}`);
 		v.currentTime = tm;
 	});
 };//»
@@ -870,14 +896,20 @@ let SKHDTAGS = SEGKIDS["114d9b74"];
 let CUESTAGS = SEGKIDS["1c53bb6b"];
 
 //Get ebml bytes <ebml(Uint8Array)>«
-b = await node.getValue({start: 0, end: 5000});
+//log("GET VALUE");
+//log("NODE", node);
+//log("FULLPATH", node.fullpath);
+//b = await node.getValue({start: 0, end: 5000});
+b = await node.fullpath.toByteSlice(0, 5000);
 rv = ebml_sz(b, 4);
 c = rv[0]+rv[1];
 ebml = b.slice(0, c);
 //»
 
 //Get segment byte offset <seg_off(Int)>«
-if (!(b[c]==0x18&&b[c+1]==0x53&&b[c+2]==0x80&&b[c+3]==0x67)) return err("Segment ID not found");
+if (!(b[c]==0x18&&b[c+1]==0x53&&b[c+2]==0x80&&b[c+3]==0x67)) {
+	return cerr("Segment ID not found");
+}
 c+=4;
 rv = ebml_sz(b, c);
 seg_off = c = rv[1];
@@ -885,7 +917,7 @@ seg_off = c = rv[1];
 
 {//« Get byte off for cues <cues_pos(Int)> and tracks <tracks_pos(Int)>
 
-if (!(b[c]==0x11&&b[c+1]==0x4d&&b[c+2]==0x9b&&b[c+3]==0x74)) return err("Seekhead ID not found at expected position");
+if (!(b[c]==0x11&&b[c+1]==0x4d&&b[c+2]==0x9b&&b[c+3]==0x74)) return cerr("Seekhead ID not found at expected position");
 c+=4;
 rv = ebml_sz(b, c);
 c = rv[1];
@@ -903,27 +935,31 @@ for (let i=0; i < skhd.length; i+=2){
 
 }
 
-if (!(cues_pos||tracks_pos)) return err("Cues/Tracks not found");
+if (!(cues_pos||tracks_pos)) return cerr("Cues/Tracks not found");
 
 }//»
 
 //Get tracks bytes <tracks(Uint8Array)>«
 {
-let tracks_bytes = await node.getValue({start: tracks_pos, end: tracks_pos+20});
+//let tracks_bytes = await node.getValue({start: tracks_pos, end: tracks_pos+20});
+let tracks_bytes = await node.fullpath.toByteSlice(tracks_pos, tracks_pos+20);
 rv = ebml_sz(tracks_bytes, 4);
 let tracks_size = rv[0];
 c = tracks_pos +rv [1];
-tracks = await node.getValue({start: tracks_pos, end: c+tracks_size});
+//tracks = await node.getValue({start: tracks_pos, end: c+tracks_size});
+tracks = await node.fullpath.toByteSlice(tracks_pos, c+tracks_size);
 }
 //»
 
 //Create CUESHASH«
 {
-let cues_bytes = await node.getValue({start: cues_pos, end: cues_pos+20});
+//let cues_bytes = await node.getValue({start: cues_pos, end: cues_pos+20});
+let cues_bytes = await node.fullpath.toByteSlice(cues_pos, cues_pos+20);
 rv = ebml_sz(cues_bytes, 4);
 let cues_size = rv[0];
 c = cues_pos +rv[1];
-cues_bytes = await node.getValue({start: c, end: c+cues_size});
+//cues_bytes = await node.getValue({start: c, end: c+cues_size});
+cues_bytes = await node.fullpath.toByteSlice(c, c+cues_size);
 let cues = parse_section(cues_bytes, CUESTAGS);
 
 for (let i=0; i < cues.length; i+=2){
@@ -941,6 +977,7 @@ for (let i=0; i < cues.length; i+=2){
 	else if (pos1 < cues_pos){
 		sz = cues_pos - (pos1+seg_off);
 	}
+//YIOAMDKDK
 	CUESHASH[tm1]=[seg_off+pos1, sz];
 }
 
@@ -1039,12 +1076,18 @@ let new_cluster_times = [];
 let tot_time = 0;
 
 let { ebml, tracks, CUESHASH } = await webm_prep();
-
+//WUROPSKMRN
+//cwarn("CUESHASH");
+//log(CUESHASH);
 //»
+//log(CUESHASH);
+//return;
 
-/*FWPHUNKM
+//*FWPHUNKM
 {//«Check/Update the slices arg array to "snap" to close cluster boundaries
 cue_times = Object.keys(CUESHASH);
+//log(cue_times);
+//return;
 let clust_thresh_ms = SNAP_TO_CLUSTER_THRESH * 1000;//If SNAP_TO_CLUSTER_THRESH = 0.5s, this is 500 ms.
 for (let sl of slices) {
 	let cur_clust = [];
@@ -1065,7 +1108,7 @@ for (let sl of slices) {
 
 }
 //»
-*/
+//*/
 
 //«Chunk the render slices by inserting all cluster boundaries
 for (let sl of slices){
@@ -1107,13 +1150,39 @@ continue;
 			reencode = true;
 		}
 
-		let cluster_elem = await node.getValue({start: CUESHASH[use_m0], end: CUESHASH[m1]});
+//		let cluster_elem = await node.getValue({start: CUESHASH[use_m0], end: CUESHASH[m1]});
+
+//cwarn("WHAT CUESHASH VALUES?");
+
+//log(CUESHASH[use_m0], CUESHASH[m1]);
+//log("use_m0", use_m0, "m1", m1);
+if (!CUESHASH[m1]){
+cwarn("Break on bad CUESHASH value");
+//log("DUMP BAD CUESHASH");
+//log(CUESHASH);
+//return;
+break;
+}
+log(CUESHASH[use_m0][0], CUESHASH[m1][0]);
+//return;
+//ASMRKGMS
+//		let cluster_elem = await node.fullpath.toByteSlice(CUESHASH[use_m0], CUESHASH[m1]);
+		let cluster_elem = await node.fullpath.toByteSlice(CUESHASH[use_m0][0], CUESHASH[m1][0]);
+//cwarn("CLUSTER_ELEM");
+//log(cluster_elem);
+//return;
 		let cluster_bytes = mod.parse_section_flat(cluster_elem, SEGTAGS)[1];
+
+//cwarn("CLUSTER_BYTES");
+//log(cluster_bytes);
+//return;
 		let blocks=[];
 
 		{
 			let prevtm;
 			let block_elems = parse_section(cluster_bytes, CLUSTTAGS);
+//cwarn("BLOCK_ELEMS");
+//log(block_elems);
 			block_elems.shift();
 			block_elems.shift();
 			for (let i=0; i < block_elems.length; i+=2){
@@ -1301,10 +1370,8 @@ const render_from_script = str => {//«
 
 	let args = get_render_args_from_str(str);
 	if (!args) return;
-
 	let slices = get_render_slices(args, cerr);
 	if (!slices) return;
-
 	return render_from_slices(slices);
 
 };//»
@@ -1313,10 +1380,17 @@ const try_render = async()=>{//«
 	let nogood = false;
 	let rv = await wdg.popin(`Markers for to render it withem?`);
 	if (isStr(rv)) {
+log("CALL RENDER_FROM_SCRIPT...");
 		cur_output_file = await render_from_script(rv);
 if (cur_output_file) {
 cwarn("Output file");
-log(cur_output_file);
+//log(cur_output_file);
+let blob = new Blob([cur_output_file], {type: "video/webm"});
+let node = await "/home/me/Desktop/done.webm".toNode({mkFile: true});
+log(blob);
+let rv = await node.setValue(blob);
+log("RETURNED FROM node.setValue", rv);
+//log(node);
 }
 else{
 cwarn("No output");
@@ -2429,7 +2503,7 @@ this.onescape=()=>{//«
 	return false;
 };//»
 this.onappinit=async arg=>{//«
-cwarn("Video Cutter!");
+//cwarn("Video Cutter!");
 	if (arg.reInit) arg = arg.reInit;
 	url = arg.url;
 	node = arg.node;
@@ -2466,8 +2540,8 @@ this.onkeydown=(e,k)=>{//«
 //		set_timeline_images();
 //	}
 	else if (k=="r_"){
-		reset_timeline();
-//		try_render();
+//		reset_timeline();
+		try_render();
 //log(cur_images);
 //ruler.innerHTML = "";
 //draw_ruler();
