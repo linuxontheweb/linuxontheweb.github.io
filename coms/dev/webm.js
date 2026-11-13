@@ -1428,7 +1428,7 @@ let CUESTAGS = SEGKIDS["1c53bb6b"];
 //log("NODE", node);
 //log("FULLPATH", node.fullpath);
 //b = await node.getValue({start: 0, end: 5000});
-b = await node.fullpath.toByteSlice(0, 5000);
+b = await node.byteSlice(0, 5000);
 rv = ebml_sz(b, 4);
 c = rv[0]+rv[1];
 ebml = b.slice(0, c);
@@ -1540,24 +1540,25 @@ if (!(cues_pos||tracks_pos)) return cerr("Cues/Tracks not found");
 //Get tracks bytes <tracks(Uint8Array)>«
 {
 //let tracks_bytes = await node.getValue({start: tracks_pos, end: tracks_pos+20});
-let tracks_bytes = await node.fullpath.toByteSlice(tracks_pos, tracks_pos+20);
+let tracks_bytes = await node.byteSlice(tracks_pos, tracks_pos+20);
 rv = ebml_sz(tracks_bytes, 4);
 let tracks_size = rv[0];
 c = tracks_pos +rv [1];
 //tracks = await node.getValue({start: tracks_pos, end: c+tracks_size});
-tracks = await node.fullpath.toByteSlice(tracks_pos, c+tracks_size);
+tracks = await node.byteSlice(tracks_pos, c+tracks_size);
+//log(tracks);
 }
 //»
 
 //Create CUESHASH«
 {
 //let cues_bytes = await node.getValue({start: cues_pos, end: cues_pos+20});
-let cues_bytes = await node.fullpath.toByteSlice(cues_pos, cues_pos+20);
+let cues_bytes = await node.byteSlice(cues_pos, cues_pos+20);
 rv = ebml_sz(cues_bytes, 4);
 let cues_size = rv[0];
 c = cues_pos +rv[1];
 //cues_bytes = await node.getValue({start: c, end: c+cues_size});
-cues_bytes = await node.fullpath.toByteSlice(c, c+cues_size);
+cues_bytes = await node.byteSlice(c, c+cues_size);
 let cues = parse_section(cues_bytes, CUESTAGS);
 
 for (let i=0; i < cues.length; i+=2){
@@ -1591,6 +1592,7 @@ return { ebml, tracks, CUESHASH };
 
 //»
 
+
 //Commands«
 /*
 const com_webmdev = class extends Com {//«
@@ -1599,6 +1601,7 @@ async run(){//«
 //11/11/26:
 //Just seeing how to get a slice from a file. Just created a new String.prototype called:
 //toByteSlice.
+
 
 //Parse args//«
 	const {args} = this;
@@ -1638,7 +1641,7 @@ async run(){//«
 //EBML«
 	const DECENT_INIT_CHUNK = 20000;
 	//log(start, end);
-	let init_bytes = await file_arg.toByteSlice(0, DECENT_INIT_CHUNK, cwd);
+	let init_bytes = await file_arg.BtoByteSlice(0, DECENT_INIT_CHUNK, cwd);
 	if (!init_bytes) return this.no(`File not found`);
 	if (init_bytes.length !== DECENT_INIT_CHUNK) return this.no(`The file is not large enough to be a webm!`);
 
