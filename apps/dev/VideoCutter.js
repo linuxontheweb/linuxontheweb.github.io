@@ -27,6 +27,7 @@ We are doing a render from string: "ac" (a:8, c:20), and got a video of 9.07 sec
 But it should have been 12 seconds.
 
 »*/
+//Old Notes«
 /*9/16/25: How about a "redraw ruler" command for when things seem to get stuck?«
 I am current editing a ~22 min long video, and there are times where not all the
 preview images are drawn. I'm just trying to understand why the rendering of
@@ -278,21 +279,22 @@ NOW THE flush_right_edge() THING THAT I HAD COMMENTED OUT @SAJRHTGB SEEMS TO WOR
 ALL OF THE ISSUES CENTER AROUND THE PADDING GIMMICK @WJHGLVG.
 »*/
 //The numbers and sizes of the thumbnails are determined by this
-
+//»
 //let GRID_W = 125;
+
+let USE_INIT_MARKS = true;
+//let USE_INIT_MARKS = false;
+let INIT_MARKS=[[1,"a"],[2,"b"],[3,"c"],[4,"d"]];
+
+//Vars«
+
 let GRID_W = 175;
 let USE_TIMELINE_X = GRID_W / 4;
 let CLEAR_CACHE_WHEN_MAGNIFYING = true;
 //let USE_TIMELINE_X = 0;
 
-//Vars«
-
-
 let ALLOW_MOUSE_SCROLLING = false;
 
-let USE_INIT_MARKS = true;
-//let USE_INIT_MARKS = false;
-let INIT_MARKS=[[8,"a"],[23,"b"],[20,"c"],[30,"d"]];
 
 let magnify_to_center = false;
 
@@ -319,7 +321,7 @@ const {fs, widgets: wdg} = NS.api;
 //»
 
 LOTW.apps[APPNAME] = function(Win, Desk) {//«
-
+log(Win);
 //Var«
 
 let xLoc = 0;
@@ -2507,6 +2509,9 @@ this.onappinit=async arg=>{//«
 	if (arg.reInit) arg = arg.reInit;
 	url = arg.url;
 	node = arg.node;
+//log(node.fullpath);
+//log(node.baseName);
+	Win.title = node.baseName;
 	vid.src = arg.url;
 };//»
 this.onkill=()=>{//«

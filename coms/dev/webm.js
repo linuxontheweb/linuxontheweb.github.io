@@ -794,7 +794,6 @@ log(tohex(b.slice(c, c+20)));
 	return {sizes: sizes, times: times, data:b};
 };//»
 const get_section_pos_of_webm_file=(id, bytes)=>{//«
-
 	let a = bytes;
 	if (!(a[0]==0x1a&&a[1]==0x45&&a[2]==0xdf&&a[3]==0xa3)) return "EBML header not found";
 
@@ -1326,11 +1325,15 @@ while(1){
 return kids;
 };
 //»
-const ebml_sz = (buf, pos)=>{//«
+const ebml_sz = (buf, pos, if_log)=>{//«
 	let nb;
 	let b = buf[pos];
-
+//log(b);
 //xxxxxxxx
+if (if_log) {
+cwarn("EBML_SZ");
+log(`b1(${b})`);
+}
 	if (b&128) {nb = 1; b^=128;}
 	else if (b&64) {nb = 2;b^=64;}
 	else if (b&32) {nb = 3;b^=32;}
@@ -1341,6 +1344,13 @@ const ebml_sz = (buf, pos)=>{//«
 	else if (b&1) {nb = 8;b^=1;}
 	let str = "0x"+(b.toString(16));
 	let end = pos+nb;
+if (if_log) {
+log(`b2(${b})`);
+log(`nb(${nb})`);
+log(`str1(${str})`);
+log(`pos+1(${pos+1})`);
+log(`end(${end})`);
+}
 //	if (end>=buf.length) {
 //		cerr(`Invalid ebml size @${pos}`);
 //		return false;
@@ -1348,9 +1358,19 @@ const ebml_sz = (buf, pos)=>{//«
 	let ch; 
 	for (let i=pos+1; i < end; i++) {
 		ch = buf[i].toString(16);
+if (if_log){
+log("CH", ch);
+}
 		if (ch.length==1) ch = "0"+ch;
 		str = str + ch;
 	}   
+if (if_log) {
+log(`str2(${str})`);
+cwarn(`[${parseInt(str)}, ${end}]`);
+//let val = parseInt(str);
+//dump_hex_lines(buf.slice(pos, pos+20));
+//dump_hex_lines(buf.slice(end, end+val));
+}
 	return [parseInt(str), end]
 }
 //»
@@ -1413,6 +1433,7 @@ const webm_prep = async(node)=>{//«
 let ebml, tracks;
 let CUESHASH={};
 let seg_off, tracks_pos, cues_pos;
+let info_pos;
 let b,c,rv;
 
 //let mod = await util.getMod(WEBMPARSER_MOD);
@@ -1420,27 +1441,29 @@ let b,c,rv;
 //let {ebml_sz, dump_hex_lines, parse_section, parse_section_flat} = mod;
 
 let SEGKIDS = WebmTags.kids["18538067"].kids;
+//log(SEGKIDS);
 let SKHDTAGS = SEGKIDS["114d9b74"];
 let CUESTAGS = SEGKIDS["1c53bb6b"];
 
 //Get ebml bytes <ebml(Uint8Array)>«
-//log("GET VALUE");
-//log("NODE", node);
-//log("FULLPATH", node.fullpath);
-//b = await node.getValue({start: 0, end: 5000});
 b = await node.byteSlice(0, 5000);
+//log(b);
+//rv = ebml_sz(b, 4, true);
 rv = ebml_sz(b, 4);
+//log(rv);
 c = rv[0]+rv[1];
+//rv[0]: 
+//rv[1]: current position
 ebml = b.slice(0, c);
 /*ebml: 0-36
 1a 45 df a3 9f 42 86 81 01 42 f7 81 01 42 f2 81 04 42 f3 81 
 08 42 82 84 77 65 62 6d 42 87 81 04 42 85 81 02 
 */
-//dump_hex_lines(ebml);
-//cwarn("Dumped ebml above");
 
-let test_slice = b.slice(c, 150);
-/*test_slice: 36-300
+let test_slice = b.slice(c, 300);
+/*
+Bad: no segment length«
+test_slice: 36-300
 18 53 80 67 01 ff ff ff ff ff ff ff ec ec 00 00 00 00 00 00 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
@@ -1458,10 +1481,35 @@ vvInfo Idvv
 81 01 55 bb 81 01 1f 43 b6 75 01 00 00 00 00 03 8d 01 e7 81 
 00 a3 20 48 8a 81 00 00 80 70 5a 02 9d 01 2a 56 05 00 03 08 
 47 08 85 85
+//»
+
+Good//«
+vvSegmentvv
+18 53 80 67 01 00 00 00 00 06 ad a8 
+
+vvSeekheadv
+11 4d 9b 74 ba 4d bb 8b 
+53 ab 84 15 49 a9 66 53 ac 81 6e 4d bb 8b 53 ab 84 16 54 ae 
+6b 53 ac 81 93 4d bb 8b 53 ab 84 1f 43 b6 75 53 ac 81 d6 4d 
+bb 8d 53 ab 84 1c 53 bb 6b 53 ac 83 06 ad 86 ec ad 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 
+00 00 
+
+15 49 a9 66 a0 2a d7 b1 83 0f 42 40 44 89 84 46 0f de 
+0e 4d 80 86 43 68 72 6f 6d 65 57 41 86 43 68 72 6f 6d 65 16 
+54 ae 6b be ae bc d7 81 01 73 c5 87 fd 9f b9 1d e9 3b a3 83 
+81 01 55 ee 81 01 86 85 56 5f 56 50 38 e0 9f b0 82 05 56 ba 
+82 03 00 53 c0 81 01 55 b0 90 55 b1 81 01 55 b9 81 01 55 ba 
+81 01 55 bb 81 01 1f 43 b6 75 01 00 00 00 00 04 b4 5f e7 81 
+00 a3 20 51 1b 81 00 00 80 70 58 02 9d 01 2a 56 05 00 03 06 
+87 08 85 85
+//»
+
 */
 
 //dump_hex_lines(test_slice);
-//cwarn(`Dumped ${c} - 150 above`);
+//cwarn(`Dumped ${c} - 300 above`);
 //cwarn("Aborting");
 //return;
 //»
@@ -1471,6 +1519,7 @@ if (!(b[c]==0x18&&b[c+1]==0x53&&b[c+2]==0x80&&b[c+3]==0x67)) {
 	return cerr("Segment ID not found");
 }
 c+=4;
+//rv = ebml_sz(b, c, true);
 rv = ebml_sz(b, c);
 if (rv[0]===0xffffffffffffff){
 dump_hex_lines(b);
@@ -1478,11 +1527,16 @@ cerr("rv[0] from ebml_sz == 0xffffffffffffff");
 return;
 }
 //log(rv[0]);
+/*
+rv[0] is a very big number (437672). The file size is 437720. The difference is
+48. 
+The file size is: rv[0]+rv[1]
+*/
 seg_off = c = rv[1];
 //»
 
 {//« Get byte off for cues <cues_pos(Int)> and tracks <tracks_pos(Int)>
-log(`Seekhead at c(${c})?`);
+log(`Seekhead at c(${c})? ...`);
 if (!(b[c]==0x11&&b[c+1]==0x4d&&b[c+2]==0x9b&&b[c+3]==0x74)) {
 //log(b[c], b[c+1], b[c+2],b[c+3]);
 //log(c)
@@ -1491,6 +1545,7 @@ if (!(b[c]==0x11&&b[c+1]==0x4d&&b[c+2]==0x9b&&b[c+3]==0x74)) {
 	cerr("Seekhead ID not found at expected position");
 	return [b, c];
 }
+log("Yes!");
 /*
 11 4d 9b 74 40 3c 4d bb 8b 53 ab 84 15 49 a9 66 53 ac 81 e5 
 4d bb 8c 53 ab 84 16 54 ae 6b 53 ac 82 01 23 4d bb 8c 53 ab 
@@ -1499,10 +1554,13 @@ if (!(b[c]==0x11&&b[c+1]==0x4d&&b[c+2]==0x9b&&b[c+3]==0x74)) {
 */
 //dump_hex_lines(b.slice(c, c+80));
 c+=4;
+//rv = ebml_sz(b, c, true);
 rv = ebml_sz(b, c);
 c = rv[1];
 let skhd_bytes = b.slice(c,c+rv[0]);
 let skhd = parse_section(skhd_bytes, SKHDTAGS);
+//cwarn("SEEKHEAD");
+//dump_hex_lines(skhd_bytes);
 /*
 SEEKENTRY(4)
 0x 1549a966 Info
@@ -1528,13 +1586,17 @@ for (let i=0; i < skhd.length; i+=2){
 	if (id[0]==0x1c && id[1]==0x53 && id[2]==0xbb && id[3]==0x6b){
 		cues_pos = seg_off + toint(ent[3]);
 	}
-	if (id[0]==0x16 && id[1]==0x54 && id[2]==0xae && id[3]==0x6b){
+	else if (id[0]==0x16 && id[1]==0x54 && id[2]==0xae && id[3]==0x6b){
 		tracks_pos = seg_off + toint(ent[3]);
 	}
-
+	else if (id[0]==0x15 && id[1]==0x49 && id[2]==0xa9 && id[3]==0x66){
+		info_pos = seg_off + toint(ent[3]);
+	}
 }
 if (!(cues_pos||tracks_pos)) return cerr("Cues/Tracks not found");
-
+//if (!info_pos)
+//cwarn("INFO_POS");
+//log(info_pos);
 }//»
 
 //Get tracks bytes <tracks(Uint8Array)>«
@@ -1929,14 +1991,16 @@ return;
 let ebml = rv.ebml;
 let tracks = rv.tracks;
 let cues = rv.CUESHASH;
-//cwarn("ebml");
-//dump_hex_lines(ebml);
-//cwarn("tracks");
-//dump_hex_lines(tracks);
+/*
+cwarn("ebml");
+dump_hex_lines(ebml);
+cwarn("tracks");
+dump_hex_lines(tracks);
 //dump_hex_lines(tracks.slice(0, 100));
-//cwarn("cues");
-//log(cues);
-log(rv);
+cwarn("cues");
+log(cues);
+*/
+//log(rv);
 
 this.ok();
 

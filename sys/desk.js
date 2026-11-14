@@ -4677,6 +4677,86 @@ cwarn(`No script found for app: ${appName}`);
 	main.innerHTML="";
 	return this.loadApp();
 };//»
+async _doSaveFile(val){//«
+	let node = this.#node;
+/*
+	if (!node.writeable){
+		popup("Read only!");
+		return;
+	}
+*/
+	let parnode = node.par;
+	if (!parnode.writeable) {
+		return `${use_fname}: read only`;
+	}
+	if (node.perm === true){
+		cwarn("NODE PERM IS TRUE!!!");
+	}
+	else if (!parnode.perm) {
+		return `${use_fname}: permission denied`;
+	}
+
+	let rv = await node.write(val);
+	if (!(rv && Number.isFinite(rv.size))) {
+		poperr("Could not save the file");
+		return;
+	}
+	return rv.size;
+}//»
+async saveFile(ext){//«
+
+//const {app} = this;
+let app = this.#app;
+let val = await await app.getValue();
+
+if (this.#node) return this._doSaveFile(val);
+
+let {parNode, name} = await save_as(this, ext);
+if (!parNode) return; // Cancelled
+
+let path = parNode.fullpath;
+let fullname = name;
+if (ext) fullname += `.${ext}`;
+
+let fullpath = `${path}/${fullname}`;
+//if (ext) fullpath += `.${ext}`;
+
+if (!parNode.writeable){
+	popup("Read only!");
+	return;
+}
+if (!parNode.perm) {
+	poperr(`${path}: permission denied`);
+	return;
+}
+
+await parNode.loadKids();
+if (!parNode.loadKidsDone){
+	poperr(`${path}: could not populate the parent folder`);
+	return;
+}
+if (parNode.getKid(fullname)) {
+//if (await fullpath.toNode()) {
+	poperr(`${fullpath}: already exists`);
+	return 
+}
+//BDSVFHSK
+
+let node = await parNode.mkNewFile(fullname);
+if (!node) {
+	poperr(`${fullpath}: could not create the new file`);
+	return 
+}
+
+this.#node = node;
+this.title = name;
+this.#childWinThatStaysInFocus = undefined;
+let rv = await this._doSaveFile(val);
+if (Number.isFinite(rv)) node.lockFile();
+return rv;
+
+}//»
+
 loadApp(){//Old make_app«
 //DIOLMTNY
 
@@ -4785,86 +4865,6 @@ cwarn(`Using app: '${winapp}'`);
 
 
 }//»
-async _doSaveFile(val){//«
-	let node = this.#node;
-/*
-	if (!node.writeable){
-		popup("Read only!");
-		return;
-	}
-*/
-	let parnode = node.par;
-	if (!parnode.writeable) {
-		return `${use_fname}: read only`;
-	}
-	if (node.perm === true){
-		cwarn("NODE PERM IS TRUE!!!");
-	}
-	else if (!parnode.perm) {
-		return `${use_fname}: permission denied`;
-	}
-
-	let rv = await node.write(val);
-	if (!(rv && Number.isFinite(rv.size))) {
-		poperr("Could not save the file");
-		return;
-	}
-	return rv.size;
-}//»
-async saveFile(ext){//«
-
-//const {app} = this;
-let app = this.#app;
-let val = await await app.getValue();
-
-if (this.#node) return this._doSaveFile(val);
-
-let {parNode, name} = await save_as(this, ext);
-if (!parNode) return; // Cancelled
-
-let path = parNode.fullpath;
-let fullname = name;
-if (ext) fullname += `.${ext}`;
-
-let fullpath = `${path}/${fullname}`;
-//if (ext) fullpath += `.${ext}`;
-
-if (!parNode.writeable){
-	popup("Read only!");
-	return;
-}
-if (!parNode.perm) {
-	poperr(`${path}: permission denied`);
-	return;
-}
-
-await parNode.loadKids();
-if (!parNode.loadKidsDone){
-	poperr(`${path}: could not populate the parent folder`);
-	return;
-}
-if (parNode.getKid(fullname)) {
-//if (await fullpath.toNode()) {
-	poperr(`${fullpath}: already exists`);
-	return 
-}
-//BDSVFHSK
-
-let node = await parNode.mkNewFile(fullname);
-if (!node) {
-	poperr(`${fullpath}: could not create the new file`);
-	return 
-}
-
-this.#node = node;
-this.title = name;
-this.#childWinThatStaysInFocus = undefined;
-let rv = await this._doSaveFile(val);
-if (Number.isFinite(rv)) node.lockFile();
-return rv;
-
-}//»
-
 //»
 
 //«Properties
@@ -6657,6 +6657,7 @@ const open_window_of_media_app = (node, use_app) =>{//«
 	if (!ext) return false;
 	if (use_app && !MEDIA_APPS.includes(use_app)) return false;
 	if (MEDIA_EXTENSIONS.includes(ext.toLowerCase())) {
+cwarn("MEDIA APP", node.fullpath);
 		let url = fsUrl(`/blobs/${node.blobId}`);
 		return open_window_by_app_name(use_app || MEDIA_APP, {appArgs:{url, node}});
 	}

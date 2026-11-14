@@ -1420,7 +1420,7 @@ log(tohex(b.slice(c, c+20)));
 	return {sizes: sizes, times: times, data:b};
 };//»
 const get_section_pos_of_webm_file=(id, bytes)=>{//«
-
+log(12345);
 	let a = bytes;
 	if (!(a[0]==0x1a&&a[1]==0x45&&a[2]==0xdf&&a[3]==0xa3)) return "EBML header not found";
 

@@ -414,7 +414,7 @@ const NEXT_NODE_ID = async() => {//«
 	return GET(REF(`LOTW/user/${cur_user.uid}/${PUB_DIR_NAME}/nextNodeId`));
 };//»
 
-// These functions do all of the "basic" operations that are expected of the
+// These functions do all of the primitive operations that are needed by the
 // LOTW filesystem
 const mk_dir = async (parnode, name, opts)=>{//«
 if (!cur_user) return;
@@ -649,7 +649,6 @@ log("WHAT IS RV?", rv);
 return rv;
 
 };//»
-
 
 const try_get_fbase_user_grp_kid = async (par, name) => {//«
 

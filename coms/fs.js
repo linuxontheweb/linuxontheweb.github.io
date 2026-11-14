@@ -1617,13 +1617,34 @@ const com_mv = class extends Com{//«
 //NDMTKYI
 		const done_cb = async (src_node, dest_node) =>{//«
 			if (!Desk) return;
+/*«
+if (isStr(src_node)){
+cwarn("WHY IS DONE_CB BEING CALLED WITH STRINGS INSTEAD OF NODES?");
+return;
+}
 //HFJGKTMS
+if (src_node.delIcons){
+	src_node.delIcons();
+}
+else{
+cwarn("NO src_node.delIcons!");
+log(src_node);
+}
+»*/
+//log("IS THIS OKAY W/ 2 NODE ARGS?", !!src_node, !!dest_node);
+if (!src_node.delIcons){
+cerr("WHY NO src_node.delIcons?");
+cerr(src_node);
+}
 			src_node.delIcons();
 			await Desk.update_win_paths(src_node.fullpath, dest_node.fullpath);
 			Desk.make_all_icons(dest_node);
+//log("YES!");
+
 		};//»
+
 		const no_move_cb = path =>{//«
-cwarn(`NOMV: ${path}`);
+cwarn(`comMv: no_move_cb: ${path}`);
 		};//»
 
 		await fsapi.comMv(args, {

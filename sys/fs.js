@@ -61,6 +61,11 @@ _dir_update(1, par, my_node);
 /*
 @BNSDAUIU: Convert this way to the new way
 */
+/*11/14/26: The done_cb of comMv @EURIPLFJM is being called with strings 
+instead of nodes!?!? This is happening when src_node.isDir == true
+Also @MIEHDJKOJ Need to do the generic case of backend node delete instead
+of handling separate cases.
+*/
 /*11/11/26: Granular file-level perm's and String.toByteSlice«
 Need to do permissions at the granular file level, rather than only at
 the directory level. I think the checking is done in shell.js (Stdout.write) and
@@ -2075,6 +2080,7 @@ const do_rename = async (src_node, dest_name){
 
 const do_move = async(src_node, dest_name, dest_par)=>{//«
 	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
+
 	let src_id = src_node.id;
 	let src_blob_id = src_node.blobId;
 	let src_par = src_node.par;
@@ -2082,14 +2088,12 @@ const do_move = async(src_node, dest_name, dest_par)=>{//«
 	let dest_par_id = dest_par.id;
 	let use_dest_name;
 	if (dest_name && (dest_name !== src_node.name)) use_dest_name = dest_name;
-	let save_blob = null;
+//	let save_blob = null;
 
 if (src_node.type === dest_par.type) {//«
-cwarn("INTRA-TYPE MOVE");
 	let typ = src_node.type;
 
 	if (typ === OP_FS_TYPE || typ == FBASE_USER_GRP_FS_TYPE){
-
 		if (!await src_node.backendUpdateFullPath(src_id, src_par_id, dest_par_id, use_dest_name)) {
 cerr("backendUpdateFullPath: FAIL");
 			return;
@@ -2101,21 +2105,30 @@ cwarn("No backend uodate needed");
 	}
 }//»
 else if (src_node.isFile){//«
-	save_blob = await src_node.blob;
+//	save_blob = await src_node.blob;
+
+	if (!await do_copy(src_node, dest_name, dest_par)){
+cerr(`In com_mv: could not copy!`);
+		return;
+	}
+
 	if (!await src_node.backendDelNode()){
 cerr("backendDelNode: FAIL");
 		return;
 	}
 }//»
-
+else{
+cwarn("Can not 'mv' directories of different types");
+return;
+}
 	_dir_update(DIR_UPDATE_DEL, src_par, src_node); // Delete src_node from src_par
 
 	let dest_node;
 	if (src_node.isFile) {
 		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
-		if (save_blob) {
-			await dest_node.setValue(save_blob);
-		}
+//		if (save_blob) {
+//			await dest_node.setValue(save_blob);
+//		}
 	}
 	else {
 		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
@@ -2133,6 +2146,7 @@ cerr("backendDelNode: FAIL");
 
 };//»
 
+/*
 const OLD_do_move = async(src_node, dest_name, dest_par)=>{//«
 cwarn("HELLO do_move");
 	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
@@ -2140,16 +2154,14 @@ cwarn("HELLO do_move");
 //within the same directory type
 	let src_id = src_node.id;
 	let src_blob_id = src_node.blobId;
-/*
-if (!src_id){
-
-//MXFBNRHOL
-
-cerr("NO ID IN THE src_node");
-log(src_node);
-return;
-}
-*/
+//if (!src_id){
+//
+////MXFBNRHOL
+//
+//cerr("NO ID IN THE src_node");
+//log(src_node);
+//return;
+//}
 	let src_par = src_node.par;
 	let src_par_id = src_par.id;
 	let dest_par_id = dest_par.id;
@@ -2164,15 +2176,15 @@ return;
 
 // OIKFBJKB: NEEDS TO BE FULLY GENERIC
 
-/*« Like this:
-if (src_node.type === dest_par.type && src_node.canDoSimpleMove) {
-// Just need the id of the new parent dir, and the new node name
-	await src_node.simpleMove(dest_par_id, use_dest_name);
-}
-else {
-//Get blob if isFile and do remove
-}
-»*/
+//« Like this:
+//if (src_node.type === dest_par.type && src_node.canDoSimpleMove) {
+//// Just need the id of the new parent dir, and the new node name
+//	await src_node.simpleMove(dest_par_id, use_dest_name);
+//}
+//else {
+////Get blob if isFile and do remove
+//}
+//»
 
 	if (src_node.type == OP_FS_TYPE) {
 		if (dest_par.type == OP_FS_TYPE) {
@@ -2203,24 +2215,24 @@ log("src_node.blob", save_blob);
 
 
 // Just changed this logic below on 11/10/26
-/*
-	let dest_node;
-	if (src_node.isFile) {
-//	if (save_blob === null) {
-		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
-		if (save_blob) {
-log("dest_node.setValue");
-//SJEKLROKJR
-			await dest_node.setValue(save_blob);
-		}
-	}
-	else {
-		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
-//		dest_node = src_node;
-		_node_update(NODE_UPDATE_NAME, dest_node, dest_name); // Set: dest_node.#name
-		_node_update(NODE_UPDATE_PAR, dest_node, dest_par); // Set: dest_node.#par
-	}
-*/
+
+//	let dest_node;
+//	if (src_node.isFile) {
+////	if (save_blob === null) {
+//		dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
+//		if (save_blob) {
+//log("dest_node.setValue");
+////SJEKLROKJR
+//			await dest_node.setValue(save_blob);
+//		}
+//	}
+//	else {
+//		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
+////		dest_node = src_node;
+//		_node_update(NODE_UPDATE_NAME, dest_node, dest_name); // Set: dest_node.#name
+//		_node_update(NODE_UPDATE_PAR, dest_node, dest_par); // Set: dest_node.#par
+//	}
+
 
 	let dest_node = mk_dir_kid(dest_par, dest_name, {isFile: true});
 	_node_update(NODE_UPDATE_NAME, dest_node, dest_name); // Set: dest_node.#name
@@ -2241,6 +2253,7 @@ if (src_node.isFile && save_blob){
 	return dest_node;
 
 };//»
+*/
 
 const do_copy = async(from_node, newName, toDir) => {//«
 //	let node = this;
@@ -2622,10 +2635,12 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `${src_path}: move-locked`);
 	}//»
+/*
 	else if (!if_cp && src_node.type !== dest_par_node.type){//«
 		if (no_move_cb) no_move_cb(src_path);
-		werr(`refusing to 'mv' between different fs types (${src_node.type} => ${dest_par_node.type})`);
+		werr(`refusing to 'mv' between different fs types (${src_node.type} -> ${dest_par_node.type})`);
 	}//»
+*/
 	else if (if_cp && src_node.isDir){//«
 		if (if_recur) {
 			mvarr.push([src_path, src_node]);
@@ -2639,8 +2654,9 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr(`not modifying the active desktop path: ${src_path}`);
 	}//»
-	else mvarr.push([src_path, src_node]);
-
+	else {
+		mvarr.push([src_path, src_node]);
+	}
 }//»
 
 // Check for overwrites
@@ -2786,11 +2802,19 @@ for (let arr of mvarr) {//«
 cerr("UKFHJKD");
 				}
 			}
+			else if (src_node.type === FBASE_USER_GRP_FS_TYPE){
+//MIEHDJKOJ
+cwarn("NEED TO DO A BACKEND NODE DEL IN THE RECURSIVE CASE");
+			}
 			_dir_update(DIR_UPDATE_DEL, src_node.par, src_node);
 		}
 
-		if (done_cb) done_cb(src_path, real_dest_path);
+		if (done_cb) {
+//EURIPLFJM
 
+//			done_cb(src_path, real_dest_path);
+			done_cb(src_node, await real_dest_path.toNode());
+		}
 		continue;
 	}//»
 
@@ -2825,12 +2849,13 @@ cwarn(`Simple rename from ${src_node.name} => ${dest_name} !!!`);
 */
 
 //WYRHTIYK
-		if (new_move) {
-	 		dest_node_rv = await new_do_move(src_node, dest_name, dest_par_node);
-		}
-		else{
-	 		dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
-		}
+
+//		if (new_move) {
+//	 		dest_node_rv = await new_do_move(src_node, dest_name, dest_par_node);
+//		}
+//		else{
+		dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
+//		}
 		if (!dest_node_rv){
 			if (no_move_cb) no_move_cb(src_path);
 			werr(`could not move from ${src_path} to ${dest_path}`);
