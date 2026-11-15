@@ -1,5 +1,7 @@
 (()=>{"use strict";const LIBNAME="fs";
 
+/* When mv'ing a symlink to another name, it shows up as a directory
+*/
 /* 9/4/26: A little buggy«
 When mv'ing by only changing the name of a desktop icon, the old icon
 gets deleted and a new one (usually) gets put at a different grid location,
@@ -1616,7 +1618,7 @@ const com_mv = class extends Com{//«
 		let have_error = false;
 //NDMTKYI
 		const done_cb = async (src_node, dest_node) =>{//«
-			if (!Desk) return;
+			if (!(Desk && Desk.make_all_icons)) return;
 /*«
 if (isStr(src_node)){
 cwarn("WHY IS DONE_CB BEING CALLED WITH STRINGS INSTEAD OF NODES?");
@@ -1837,9 +1839,12 @@ cerr("No mess in the err cb!?!?!");
 		let okargs=[];
 		let cwd = this.env.cwd.cwd
 		for (let path of args){
+			let have_end_slash = path.match(/\/$/);
 			let fullpath = normPath(path, cwd);
 //			let node = await fsapi.pathToNode(fullpath, true);
-			let node = await fullpath.toNode({getLink: true});
+//			let node = await fullpath.toNode({getLink: true});
+//log(if_get_link);
+			let node = await fullpath.toNode({getLink: !have_end_slash});
 			if (!node) {
 				err(`${path}: no such file or directory`);
 				continue;
@@ -1852,7 +1857,7 @@ cerr("No mess in the err cb!?!?!");
 			okargs.push(node.fullpath);
 		}
 //		await fsapi.doFsRm(okargs, err, {
-
+//log(okargs);
 		await fsapi.doFsRm(okargs, {
 			no_rm_cb: err,
 			done_cb,
@@ -1866,7 +1871,18 @@ cerr("No mess in the err cb!?!?!");
 
 }//»
 const com_ln = class extends Com{//«
-
+static getOpts(){
+	return {
+		s: {
+			s:1,
+		}
+	};
+}
+init(){
+if (this.opts.s){
+this.no(`Please use the 'symln' command to create symbolic links`);
+}
+}
 async run(){
 	let{args,term}=this;
 	const err=(mess)=>{

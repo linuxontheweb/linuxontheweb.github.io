@@ -58,9 +58,35 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
+
+/*11/15/26: When mv'ing symlinks, they show up as directories, but when we reload
+the system (reloading the page), it shows back up as a symlink.
+Where do we go to find this behavior?
+
+symln ./good/path/ LINK
+mv LINK BLAH
+
+ls #Before reloading, BLAH shows up as a directory (colored as a directory)
+
+If we try to move a symlink to a dir with the slash showing, it never works.
+
+If the user applies a slash to an entry that is not a folder, then we need
+to complain: 
+
+mv: cannot stat 'some_file.txt/': Not a directory
+
+Otherwise if it doesn't exist:
+
+mv: cannot stat 'some_file.txt/': No such file or directory
+
+
+
+*/
 /*
 @BNSDAUIU: Convert this way to the new way
 */
+//@SNJOEJKF: IS IT OKAY TO COMMENT THIS OUT NOW?
+
 /*11/14/26: The done_cb of comMv @EURIPLFJM is being called with strings 
 instead of nodes!?!? This is happening when src_node.isDir == true
 Also @MIEHDJKOJ Need to do the generic case of backend node delete instead
@@ -1436,7 +1462,9 @@ return THROW("WHAT IS THIS NAME????");
 	this._backendUpdateFullPath = opts.backendUpdateFullPath;
 
 }//»
-mkIcons(){if (NS.Desk) NS.Desk.make_all_icons(this);}
+mkIcons(){
+	if (NS.Desk && NS.Desk.make_all_icons) NS.Desk.make_all_icons(this);
+}
 delIcons(keepIcn){//«
 	if (keepIcn) {
 		for (let icn of this.icons) {
@@ -2394,12 +2422,12 @@ const doFsRm = async(args, opts={})=>{//«
 		};
 	}
 	for (let path of args){
-		let node = await path.toNode({cwd});
+		let node = await path.toNode({cwd, getLink: true});
 		if (!node) {
 			no_rm_cb(`could not stat: ${path}`);
 			continue;
 		}
-
+//log(node);
 //OLNDTKJG
 // How about node.checkAnyKids (instead of waiting to load *all* kids) ?
 		let is_empty;
@@ -2488,8 +2516,6 @@ const no_move_all = () => {//«
 
 // Var «
 
-//							  BAD IDEA ---->vvvvvvvvvvv
-//let { exports, if_recur, if_cp, if_force, dom_objects } = opts;
 let { exports, if_recur, if_cp, if_force } = opts;
 if (!exports) exports = {};
 
@@ -2506,17 +2532,18 @@ let {
 if (!winf) winf=s=>{log("INF",s);};
 if (!werr) werr = s => {log("ERR",s);};
 
-//let icon_obj;
-
-//if (dom_objects) icon_obj = dom_objects.icons;
-//else icon_obj = {};
-
 //»
 
 let nargs = args.length;
+
 let dest_arg = args.pop();
 let dest_arg_fullpath = getFullPath(dest_arg, cwd);
+
+/*
+Always dereference the destarg if it is a symlink
+*/
 let dest_arg_node = await path_to_node(dest_arg_fullpath);
+
 
 let dest_par_path;
 let dest_par_node;
@@ -2532,7 +2559,6 @@ if (dest_arg_node) {//«
 		dest_par_path = dest_par_node.fullpath;
 	}
 }//»
-
 else {//«
 	let arr = dest_arg_fullpath.split("/");
 	use_dest_name = arr.pop();
@@ -2551,6 +2577,7 @@ else {//«
 	if (!dest_par_node.perm) {
 		no_move_all();
 		werr(`${dest_par_path}: permission denied`);
+
 		return;
 	}
 }//»
@@ -2571,46 +2598,92 @@ if (globals.read_only) {//«
 	werr("Read only");
 	return 
 }//»
-if (nargs < 2) {//«
-	no_move_all();
-	werr(`invalid call to comMv: need at least 2 args, but got ${nargs}`);
+
+//The shell checks for the number of args and the Desktop always calls with
+//the correct number of args. There are no other callers in LOTW.
+if (nargs==0) {//«
+	werr(`missing operand`);
 	return;
 }//»
+if (nargs==1){//«
+	werr(`missing destination file operand after '${dest_arg}'`);
+	return;
+}//»
+// If more than 2 args, the final arg must exist and it must be a folder.
 if ((nargs > 2) && (!dest_arg_node || (dest_arg_node.appName != FOLDER_APP))) {//«
 // We can only create the dest_arg_node with 2 total args
 // With 3+ args, the final arg *must* be a folder
 	no_move_all();
-	werr(`target '${dest_arg}' is not a directory`);
+	werr(`target '${dest_arg}' Not a directory`);
 	return;
 }//»
+
+/*Don't know if this statement is actually true
+??? If the final arg is not a node, this must be a 2 arg copy or rename operation ???
+Everything before any final slashes must be an existing folder.
+*/
+
+/*
+Not sure if the following is correct.
+The question is how do I even check this?
+*/
 if (dest_arg_node) {//«
+//cwarn("Checking dest_arg_node.writeable");
+//log(dest_arg_node.writeable);
 	if (!dest_arg_node.writeable) {
 		no_move_all();
 		return werr(`${dest_arg_fullpath}: read-only`);
 	}
+//cwarn("Checking dest_arg_node.perm");
+//log(dest_arg_node.perm);
+/*
 	if (!dest_arg_node.perm) {
 		no_move_all();
+log(dest_arg_node);
 		return werr(`${dest_arg_fullpath}: permission denied`);
 	}
+*/
 }//»
 
 //»
 
 // Create the array of valid sources
 for (let arg of args){//«
-
+	let have_end_slash = !!arg.match(/\/$/);
 	let src_path = getFullPath(arg, cwd);//«
 	if (!src_path) {
 		werr( `getFullPath: returned null for: ${arg}!!!`);
 		continue;
 	}//»
-	let src_node = await path_to_node(src_path, true);//«
+
+/*
+*/
+//	let src_node = await path_to_node(src_path, !have_end_slash);//«
+	let src_node = await path_to_node(src_path, true);
 	if (!src_node) {
 		if (no_move_cb) no_move_cb(src_path);
-		werr( `no such entry: ${src_path}`);
+//		werr( `cannot stat: ${src_path}: No such file or directory`);
+		werr( `cannot stat: '${arg}': No such file or directory`);
 		continue;
 	}//»
+//log(src_node, dest_arg_node);
+	if(src_node === dest_arg_node){
+		if (no_move_cb) no_move_cb(src_path);
+		if (src_node.isDir){
+			let no_slash_arg = arg.replace(/\/+$/, "");
+			werr(`cannot move '${no_slash_arg}' to a subdirectory of itself, '${no_slash_arg}/${no_slash_arg}'`);
+		}
+		else werr(`'${arg}' and '${dest_arg}' are the same file`);
+		continue;
+	}
 
+	if (have_end_slash && !src_node.isDir){
+		if (no_move_cb) no_move_cb(src_path);
+//		werr( `cannot stat: ${src_path}: Not a directory`);
+		werr( `cannot stat: '${arg}': Not a directory`);
+		continue;
+	}
+//log(src_node);
 
 	if (!if_cp && src_node.isRoot) {//«
 		if (no_move_cb) no_move_cb(src_path);
@@ -2635,7 +2708,7 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `${src_path}: move-locked`);
 	}//»
-/*
+/*SNJOEJKF
 	else if (!if_cp && src_node.type !== dest_par_node.type){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr(`refusing to 'mv' between different fs types (${src_node.type} -> ${dest_par_node.type})`);
@@ -2643,7 +2716,7 @@ for (let arg of args){//«
 */
 	else if (if_cp && src_node.isDir){//«
 		if (if_recur) {
-			mvarr.push([src_path, src_node]);
+			mvarr.push([src_path, src_node, have_end_slash]);
 		}
 		else {
 			if (no_move_cb) no_move_cb(src_path);
@@ -2655,7 +2728,7 @@ for (let arg of args){//«
 		werr(`not modifying the active desktop path: ${src_path}`);
 	}//»
 	else {
-		mvarr.push([src_path, src_node]);
+		mvarr.push([src_path, src_node, have_end_slash]);
 	}
 }//»
 
@@ -2710,6 +2783,8 @@ for (let arr of mvarr) {//«
 
 	let src_path = arr[0];
 	let src_node = arr[1];
+	let have_end_slash = arr[2];
+//log(`END_SLASH`, have_end_slash);
 //	let src_icon = icon_obj[src_path];
 	let src_type = src_node.type;
 
@@ -2718,7 +2793,6 @@ for (let arr of mvarr) {//«
 	let real_dest_path;
 
 	let dest_node_rv;
-
 
 	let is_rename = src_node.par === dest_par_node;
 
@@ -2854,6 +2928,8 @@ cwarn(`Simple rename from ${src_node.name} => ${dest_name} !!!`);
 //	 		dest_node_rv = await new_do_move(src_node, dest_name, dest_par_node);
 //		}
 //		else{
+//cwarn("HI DO_MOVE");
+//log(src_node);
 		dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
 //		}
 		if (!dest_node_rv){
@@ -2875,7 +2951,7 @@ if (NS.Desk && !dom_objects){
 		done_cb(src_node, dest_node_rv);
 //		done_cb(src_path, real_dest_path);
 	}
-	if (test_icons) await util.sleep(1000);
+//	if (test_icons) await util.sleep(1000);
 
 //»
 

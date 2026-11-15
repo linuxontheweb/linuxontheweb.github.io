@@ -2038,7 +2038,7 @@ class SimpleCommand extends BaseCommand{//«
 		else{
 			node = await f.toNode(this.env.cwd);
 			if (node) return node;
-			e = `${f}: not found`;
+			e = `${f}: No such file or directory`;
 		}
 		if (!noErr) {
 			this.err(e);
@@ -3978,12 +3978,12 @@ async run(){//«
 		if (recur) recur_dirs = [];
 		if (!node) {
 			dir_was_last = false;
-			this.err(`${regpath}: no such file or directory`);
+			this.err(`cannot access '${regpath}': No such file or directory`);
 			return;
 		}
 		if (node.appName !== FOLDER_APP) {
 			if (wants_dir) {
-				this.err(`${regpath}: not a directory`);
+				this.err(`cannot access ${regpath}/: Not a directory`);
 				return;
 			}
 			if (dir_was_last) this.out("");
