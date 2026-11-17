@@ -1606,7 +1606,7 @@ const com_mv = class extends Com{//«
 	}
 	init(){
 		if (!this.args.length) {
-			this.no(`missing operand`);
+			this.no(`missing file operand`);
 		}
 		else if (this.args.length === 1){
 			this.no(`missing destination file operand after '${this.args[0]}'`);
@@ -1679,7 +1679,7 @@ const com_cp = class extends Com{//«
 	}
 	init(){
 		if (!this.args.length) {
-			this.no(`missing operand`);
+			this.no(`missing file operand`);
 		}
 		else if (this.args.length === 1){
 			this.no(`missing destination file operand after '${this.args[0]}'`);
@@ -1692,7 +1692,9 @@ const com_cp = class extends Com{//«
 //WJTLDUTJ
 
 		const done_cb = async (src_node, dest_node) =>{//«
-			Desk && Desk.make_all_icons(dest_node);
+			if (Desk && Desk.make_all_icons) {
+				Desk.make_all_icons(dest_node);
+			}
 		};//»
 
 		const no_move_cb = path =>{//«

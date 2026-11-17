@@ -7726,7 +7726,7 @@ const open_window_by_node = async(node, opts={}) => {//«
 //	return open_file(node, useapp);
 
 }//»
-
+Desk.api.openWindowByNode = open_window_by_node;
 /*
 const open_file = async (node, useapp) => {//«
 	let win = await open_new_window(node, {altApp: useapp});

@@ -58,8 +58,9 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
-
-/*11/15/26: When mv'ing symlinks, they show up as directories, but when we reload
+/*11/17/26: Copying symlinks: always deref them
+*/
+/*11/15/26: When mv'ing symlinks, they show up as directories, but when we reload«
 the system (reloading the page), it shows back up as a symlink.
 Where do we go to find this behavior?
 
@@ -79,9 +80,7 @@ Otherwise if it doesn't exist:
 
 mv: cannot stat 'some_file.txt/': No such file or directory
 
-
-
-*/
+»*/
 /*
 @BNSDAUIU: Convert this way to the new way
 */
@@ -2391,7 +2390,6 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 	if (!node) {
 		node = curpar.getKid(fname);
 	}
-//log(`222 ${curpar.fullpath}  ${fname}: ${!!node}`);
 	if (!node) return null;
 	_dir_update(DIR_UPDATE_ADD, curpar, node);
 	return maybe_done();
@@ -2534,6 +2532,7 @@ if (!werr) werr = s => {log("ERR",s);};
 
 //»
 
+let verb = if_cp ? "cp" : "mv";
 let nargs = args.length;
 
 let dest_arg = args.pop();
@@ -2652,37 +2651,49 @@ for (let arg of args){//«
 	let have_end_slash = !!arg.match(/\/$/);
 	let src_path = getFullPath(arg, cwd);//«
 	if (!src_path) {
+		if (no_move_cb) no_move_cb(src_path);
 		werr( `getFullPath: returned null for: ${arg}!!!`);
 		continue;
 	}//»
 
-/*
-*/
-//	let src_node = await path_to_node(src_path, !have_end_slash);//«
-	let src_node = await path_to_node(src_path, true);
+	let src_node = await path_to_node(src_path, true);//«
 	if (!src_node) {
 		if (no_move_cb) no_move_cb(src_path);
-//		werr( `cannot stat: ${src_path}: No such file or directory`);
 		werr( `cannot stat: '${arg}': No such file or directory`);
 		continue;
 	}//»
-//log(src_node, dest_arg_node);
-	if(src_node === dest_arg_node){
+
+	if (have_end_slash && !src_node.isDir){//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr( `cannot stat: '${arg}': Not a directory`);
+		continue;
+	}//»
+
+	if (!(src_node.isFile || src_node.isDir)){//«
+		if (no_move_cb) no_move_cb(src_path);
+		if (src_node.isLink){
+			werr(`${arg}: Not allowing ${verb}'ing of links`);
+		}
+		else {
+			werr(`${arg}: Only (currently) allowing ${verb}'ing of files or dirs`);
+		}
+		continue;
+	}//»
+	if(src_node === dest_arg_node){//«
 		if (no_move_cb) no_move_cb(src_path);
 		if (src_node.isDir){
 			let no_slash_arg = arg.replace(/\/+$/, "");
 			werr(`cannot move '${no_slash_arg}' to a subdirectory of itself, '${no_slash_arg}/${no_slash_arg}'`);
 		}
-		else werr(`'${arg}' and '${dest_arg}' are the same file`);
+		else if (src_node.isFile){
+			werr(`'${arg}' and '${dest_arg}' are the same file`);
+		}
+		else{
+			werr(`'${arg}' and '${dest_arg}' are the same`);
+		}
 		continue;
-	}
+	}//»
 
-	if (have_end_slash && !src_node.isDir){
-		if (no_move_cb) no_move_cb(src_path);
-//		werr( `cannot stat: ${src_path}: Not a directory`);
-		werr( `cannot stat: '${arg}': Not a directory`);
-		continue;
-	}
 //log(src_node);
 
 	if (!if_cp && src_node.isRoot) {//«
@@ -3303,6 +3314,8 @@ const init = async () => { //«
 		throw new Error("Could not initialize the filesystem database");
 	}
 	rootId = root.id;
+
+
 	for (let name of root_dirs){
 		let opts={type: OP_FS_TYPE};
 		if (name == "tmp") opts.perm = true;
@@ -3318,10 +3331,7 @@ const init = async () => { //«
 //ESHFKNOI
 
 	let mnt = mount_tree("mnt", MNT_FS_TYPE);
-
-//	_dir_update(3, mnt, true);
 	mnt.loadKidsDone = true;
-
 	if (mnt_fbase){//«
 //		if (globals.dev_mode && mnt_fbase){
 		await util.loadMod("fs.fbase");

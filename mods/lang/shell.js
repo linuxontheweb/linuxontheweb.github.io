@@ -3423,8 +3423,20 @@ run(){
 
 const Com = SimpleCommand;
 
+const com_openwin = class extends Com{//«
+	async run(){
+		if (!Desk.api) return this.no("Need the gui to open windows!");
+		let path = this.args.shift();
+		if (!path) return this.no("Need path to open");
+		let node = await path.toNode(this.env.cwd);
+		if (!node) return this.no(`${path}: file not found`);
+		Desk.api.openWindowByNode(node);
+		this.ok();
+	}
+};//»
+
 const com_randname = class extends Com{//«
-static getOpts(){/* « */
+static getOpts(){//«
 return {
 s:{
 c: 3
@@ -3433,8 +3445,8 @@ l: {
 count: 3
 }
 }
-}/* » */
-async run(){/* « */
+}//»
+async run(){//«
 //const {}
 let def_cnt = 4;
 let max_cnt = 16;
@@ -3454,7 +3466,7 @@ else cnt = def_cnt;
 
 let pararg = this.args.shift();
 if (!pararg) pararg = this.env.cwd.cwd;
-let parnode = await pararg.toNode({cwd: this.env.cwd.cwd});
+let parnode = await pararg.toNode(this.env.cwd);
 if (!(parnode && parnode.isDir)){
 	return this.no(`${pararg}: not a directory`);
 }
@@ -3481,7 +3493,7 @@ this.out(name_str);
 this.ok();
 //this.ok(`${name_str}`);
 
-}/* » */
+}//»
 };//»
 
 //CBNCMDJF
@@ -4392,6 +4404,7 @@ let win = await Desk.open_file_by_path(node.fullpath);//COMMENTED OUT IN COM_OPE
 */
 
 this.builtins={//«
+openwin: com_openwin,
 opttest: com_opttest,
 randname: com_randname,
 gh: com_gh,

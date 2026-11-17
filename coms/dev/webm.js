@@ -1654,7 +1654,6 @@ return { ebml, tracks, CUESHASH };
 
 //»
 
-
 //Commands«
 /*
 const com_webmdev = class extends Com {//«
@@ -1991,6 +1990,9 @@ return;
 let ebml = rv.ebml;
 let tracks = rv.tracks;
 let cues = rv.CUESHASH;
+
+cwarn("ebml");
+dump_hex_lines(ebml);
 /*
 cwarn("ebml");
 dump_hex_lines(ebml);

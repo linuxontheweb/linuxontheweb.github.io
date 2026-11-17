@@ -802,21 +802,22 @@ tryLoadKid(name):
 	for (let k in prof) {//«
 // These are stored as "files" in user_dir
 //		let node = new FileNode(k, user_dir, {
+//log(user_dir.name);
 		let node = new FileNode(`${k}.txt`, user_dir, {
 			perm: true,
 			type: FBASE_USER_MAIN_FS_TYPE,
 			data: {
 				fbaseUid: uid,
 			},
-			getBlob: async (node)=>{ 
-cwarn(`CALL getBlob for ${k}`);
+			getBlob: async (node)=>{//«
 				let ref = fbase_db_mod.ref(fbase_db, `LOTW/prof/${uid}/${k}`);
 				let snap = await GET(ref);
 				let val = VAL(snap);
-				if (isStr(val)) return new Blob([val]);
-				return new Blob([""]);
-//				return new Blob([prof[k]]); 
-			},
+				if (isStr(val)) {
+					return new Blob([val]);
+				}
+				return new Blob([`[could not retrieve the value for '${user_dir.name}/${k}']`]);
+			},//»
 			setBlob: async (node, blob, opts)=>{//«
 				if (cur_user && cur_user.uid === uid) {
 					if (k === "status" || k === "bio" ) {//«
@@ -941,9 +942,11 @@ for (let uid in old_obj) {
 		while (users_dir.getKid(`${use_name}${iter}`)) iter++;
 		use_name = `${use_name}${iter}`;
 	}
-// YFKMYOGJT
 	let user_dir = new DirNode(use_name, users_dir, {//«
 //		perm: true, // UOIONWEJR
+/*
+
+*/
 		perm: false, // Cannot update status and bio unless this is true
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
@@ -953,10 +956,7 @@ Since the names of the dirs are currently arbitrarily given, then it makes no
 sense to have a literal system of looking up users based on predetermined
 dirnames.
 */
-//cwarn(`TRY LOAD KID:`);
-//log(arg2)
 			await user_dir.loadKids();
-//			return user_dir.getKid(name);
 		},//»
 		data: {
 			fbaseUid: uid,
