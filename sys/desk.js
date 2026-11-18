@@ -2008,6 +2008,7 @@ globals.api.wdg = api;
   new  (function(){"use strict";
 
 	const Desk = this;
+	Desk.isGUI = true;
 	NS.Desk = this;
 	Object.freeze(NS);
 	this.globals = globals;

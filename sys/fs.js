@@ -2512,6 +2512,7 @@ const no_move_all = () => {//«
 	}
 }//»
 
+
 // Var «
 
 let { exports, if_recur, if_cp, if_force } = opts;
@@ -2529,8 +2530,13 @@ let {
 } = exports;
 if (!winf) winf=s=>{log("INF",s);};
 if (!werr) werr = s => {log("ERR",s);};
-
 //»
+
+if (globals.read_only) {//«
+	no_move_all();
+	werr("The system is in 'read-only' mode");
+	return 
+}//»
 
 let verb = if_cp ? "cp" : "mv";
 let nargs = args.length;
@@ -2543,22 +2549,25 @@ Always dereference the destarg if it is a symlink
 */
 let dest_arg_node = await path_to_node(dest_arg_fullpath);
 
-
 let dest_par_path;
 let dest_par_node;
 let use_dest_name;
 
 if (dest_arg_node) {//«
+// mv arg1 arg2 arg3 my_existing_dir
 	if (dest_arg_node.isDir) {
 		dest_par_node = dest_arg_node;
 		dest_par_path = dest_par_node.fullpath;
 	}
 	else {
+// This won't typically work because we typically don't allow overwriting
+// mv arg1 overwrite_existing_file
 		dest_par_node = dest_arg_node.par;
 		dest_par_path = dest_par_node.fullpath;
 	}
 }//»
 else {//«
+// mv arg1 path/to/non_existing_name
 	let arr = dest_arg_fullpath.split("/");
 	use_dest_name = arr.pop();
 	dest_par_path = arr.join("/")
@@ -2576,15 +2585,14 @@ else {//«
 	if (!dest_par_node.perm) {
 		no_move_all();
 		werr(`${dest_par_path}: permission denied`);
-
 		return;
 	}
 }//»
 
-
+// Putting the good source nodes here (filter out the bad ones)
 let mvarr = [];
 
-// Use this to lock the src & dest par nodes.
+// Use this to lock the src & dest par nodes during this operation
 
 const move_lock = {};
 
@@ -2592,49 +2600,40 @@ const move_lock = {};
 
 // Immediate failure conditions «
 
-if (globals.read_only) {//«
-	no_move_all();
-	werr("Read only");
-	return 
-}//»
-
 //The shell checks for the number of args and the Desktop always calls with
 //the correct number of args. There are no other callers in LOTW.
 if (nargs==0) {//«
-	werr(`missing operand`);
+	werr(`missing file operand`);
 	return;
 }//»
 if (nargs==1){//«
 	werr(`missing destination file operand after '${dest_arg}'`);
 	return;
 }//»
+
+/*Don't know if this statement is actually true
+??? If the final arg is not a node, this must be a 2 arg copy or move operation ???
+Everything before the final slash must be an existing folder.
+*/
 // If more than 2 args, the final arg must exist and it must be a folder.
-if ((nargs > 2) && (!dest_arg_node || (dest_arg_node.appName != FOLDER_APP))) {//«
+if ((nargs > 2) && (!dest_arg_node || !dest_arg_node.isDir)) {//«
+//if ((nargs > 2) && (!dest_arg_node || (dest_arg_node.appName != FOLDER_APP))) {
 // We can only create the dest_arg_node with 2 total args
 // With 3+ args, the final arg *must* be a folder
 	no_move_all();
-	werr(`target '${dest_arg}' Not a directory`);
+	werr(`target '${dest_arg}': Not a directory`);
 	return;
 }//»
-
-/*Don't know if this statement is actually true
-??? If the final arg is not a node, this must be a 2 arg copy or rename operation ???
-Everything before any final slashes must be an existing folder.
-*/
 
 /*
 Not sure if the following is correct.
 The question is how do I even check this?
 */
 if (dest_arg_node) {//«
-//cwarn("Checking dest_arg_node.writeable");
-//log(dest_arg_node.writeable);
 	if (!dest_arg_node.writeable) {
 		no_move_all();
 		return werr(`${dest_arg_fullpath}: read-only`);
 	}
-//cwarn("Checking dest_arg_node.perm");
-//log(dest_arg_node.perm);
 /*
 	if (!dest_arg_node.perm) {
 		no_move_all();
@@ -2652,23 +2651,20 @@ for (let arg of args){//«
 	let src_path = getFullPath(arg, cwd);//«
 	if (!src_path) {
 		if (no_move_cb) no_move_cb(src_path);
-		werr( `getFullPath: returned null for: ${arg}!!!`);
+		werr( `${arg}: could not construct a full path from the arg (have cwd: '${cwd}')`);
 		continue;
 	}//»
-
 	let src_node = await path_to_node(src_path, true);//«
 	if (!src_node) {
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `cannot stat: '${arg}': No such file or directory`);
 		continue;
 	}//»
-
 	if (have_end_slash && !src_node.isDir){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `cannot stat: '${arg}': Not a directory`);
 		continue;
 	}//»
-
 	if (!(src_node.isFile || src_node.isDir)){//«
 		if (no_move_cb) no_move_cb(src_path);
 		if (src_node.isLink){
@@ -2682,7 +2678,7 @@ for (let arg of args){//«
 	if(src_node === dest_arg_node){//«
 		if (no_move_cb) no_move_cb(src_path);
 		if (src_node.isDir){
-			let no_slash_arg = arg.replace(/\/+$/, "");
+			let no_slash_arg = arg.replace(/\/+$/g, "");
 			werr(`cannot move '${no_slash_arg}' to a subdirectory of itself, '${no_slash_arg}/${no_slash_arg}'`);
 		}
 		else if (src_node.isFile){
@@ -2694,11 +2690,9 @@ for (let arg of args){//«
 		continue;
 	}//»
 
-//log(src_node);
-
 	if (!if_cp && src_node.isRoot) {//«
 		if (no_move_cb) no_move_cb(src_path);
-		werr( `skipping root directory`);
+		werr( `cannot ${verb} the root directory`);
 	}//»
 	else if (!if_cp && !src_node.par.writeable) {//«
 		if (no_move_cb) no_move_cb(src_path);
@@ -2719,12 +2713,6 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `${src_path}: move-locked`);
 	}//»
-/*SNJOEJKF
-	else if (!if_cp && src_node.type !== dest_par_node.type){//«
-		if (no_move_cb) no_move_cb(src_path);
-		werr(`refusing to 'mv' between different fs types (${src_node.type} -> ${dest_par_node.type})`);
-	}//»
-*/
 	else if (if_cp && src_node.isDir){//«
 		if (if_recur) {
 			mvarr.push([src_path, src_node, have_end_slash]);
@@ -2734,14 +2722,25 @@ for (let arg of args){//«
 			werr( `-r not specified; omitting directory '${arg}'`);
 		}
 	}//»
-	else if (src_node.isDir && NS.Desk && src_path == globals.user.desk_path){//«
+	else if (src_node.isDir && NS.Desk && NS.Desk.isGUI && src_path == globals.user.desk_path){//«
 		if (no_move_cb) no_move_cb(src_path);
-		werr(`not modifying the active desktop path: ${src_path}`);
+		werr(`${src_path}: refusing to modify the working desktop path`);
 	}//»
+/*SNJOEJKF
+	else if (!if_cp && src_node.type !== dest_par_node.type){//«
+		if (no_move_cb) no_move_cb(src_path);
+		werr(`refusing to 'mv' between different fs types (${src_node.type} -> ${dest_par_node.type})`);
+	}//»
+*/
 	else {
 		mvarr.push([src_path, src_node, have_end_slash]);
 	}
 }//»
+
+if (!mvarr.length) {
+// Don't want 2 error messages printed out
+return false;
+}
 
 // Check for overwrites
 if (dest_arg_node){//«
@@ -2762,7 +2761,7 @@ if (dest_arg_node){//«
 // Must NEVER overwrite a directory
 				if (gotkid.isDir) {
 					if (no_move_cb) no_move_cb(elm[0]);
-					werr( `${dest_arg_node.fullpath}: there is already a folder named '${name}'`);
+					werr( `${dest_arg_node.fullpath}: there is already a folder named '${name}'123`);
 				}
 				else if (!if_force){
 					if (no_move_cb) no_move_cb(elm[0]);
