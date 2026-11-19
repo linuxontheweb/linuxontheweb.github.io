@@ -58,6 +58,10 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
+/*11/19/26: How to begin allowing mv/cp operations of symlinks?
+@NSANMEIOF
+writable
+*/
 /*11/17/26: Copying symlinks: always deref them
 */
 /*11/15/26: When mv'ing symlinks, they show up as directories, but when we reload«
@@ -1765,7 +1769,11 @@ log(this);
 	return ent;
 }//»
 get perm(){ return this.#perm; }
-get writeable(){ return this.par.writeable; }
+get writeable(){ 
+cwarn("Please change .writeable to .writable");
+	return this.par.writable; 
+}
+get writable(){ return this.par.writable; }
 get isFile(){return true;}
 get entry(){return this._getEntry();}
 get useMemBlob(){return this.type === SHM_FS_TYPE;}
@@ -1870,9 +1878,7 @@ class DirNode extends FSNode {//«
 #moveLocks;
 #loadKids;
 #tryLoadKid;
-#done;
-//#getBlob;
-//#setBlob;
+//#done;
 //»
 constructor(name, par, opts = {}) {//«
 
@@ -1955,26 +1961,23 @@ get perm(){//«
 	}
 	return false;
 }//»
-get writeable(){//«
+get writable(){//«
 	if (this.type === SITE_FS_TYPE) return false;
 	return true;
 }//»
+get writeable(){//«
+cerr("Please change .writeable to .writable!");
+return this.writable;
+}//»
 get readonly(){return this.#readOnly;}
 get readOnly(){return this.#readOnly;}
-get kidsCopy(){//«
-cwarn("YOU CALLED kidsCopy, BUT THAT IS A ***HACK***!!!");
-	let o = {};
-	let kids = this.#kids;
-	for (let nm in kids) o[nm] = kids[nm];
-	return o;
-}//»
 get kids(){throw new Error("YOU TRIED TO GET KIDS");}
 set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
 get isEmpty(){ return db.checkEmpty(this.id); }
 getKid(name){return this.#kids[name];}
 mkHardLink(name, blobid){return make_hard_link(this, name, blobid);}
 mkSymLink(name, target, fullpath){return make_sym_link(this, name, target, fullpath);}
-get done(){return this.#done;}
+//get done(){return this.#done;}
 
 /*
 
@@ -2039,7 +2042,7 @@ get isLink(){return true;}
 get ref(){return path_to_node(this.link);}
 get appName(){return this.#appName;};
 get symLink(){return this.#symLink;}
-get writeable(){return this.par.writeable;}
+get writable(){return this.par.writable;}
 static{
 _set_sym_link = (node, val) => {node.#symLink = val;};
 }
@@ -2581,7 +2584,7 @@ else {//«
 		werr(`${dest_par_path}: no such directory`);
 		return;
 	}
-	if (!dest_par_node.writeable) {
+	if (!dest_par_node.writable) {
 		no_move_all();
 		werr(`${dest_par_path}: read-only`);
 		return;
@@ -2634,10 +2637,10 @@ Not sure if the following is correct.
 The question is how do I even check this?
 */
 if (dest_arg_node) {//«
-	if (!dest_arg_node.writeable) {
+	if (!dest_arg_node.writable) {
 		no_move_all();
 //		return werr(`${dest_arg_fullpath}: read-only`);
-		return werr(`${dest_arg}: read-only`);
+		return werr(`${dest_arg}: read-only ???`);
 	}
 ///*
 	if (!dest_arg_node.perm) {
@@ -2673,7 +2676,9 @@ for (let arg of args){//«
 	if (!(src_node.isFile || src_node.isDir)){//«
 		if (no_move_cb) no_move_cb(src_path);
 		if (src_node.isLink){
-			werr(`${arg}: Not allowing ${verb}'ing of links`);
+//NSANMEIOF
+//			mvarr.push([src_path, src_node, have_end_slash]);
+			werr(`${arg}: Not (yet) allowing ${verb}'ing of links`);
 		}
 		else {
 			werr(`${arg}: Only (currently) allowing ${verb}'ing of files or dirs`);
@@ -2699,7 +2704,7 @@ for (let arg of args){//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `cannot ${verb} the root directory`);
 	}//»
-	else if (!if_cp && !src_node.par.writeable) {//«
+	else if (!if_cp && !src_node.par.writable) {//«
 		if (no_move_cb) no_move_cb(src_path);
 		werr( `${src_path}: read-only`);
 	}//»

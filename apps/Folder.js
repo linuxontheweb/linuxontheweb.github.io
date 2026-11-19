@@ -511,7 +511,6 @@ this.onappinit=(opts={})=>{//«
 	init();
 };//»
 this.update=()=>{//«
-//	kids = dir.kidsCopy;
 	_stat_num(`${dir.length} entries`);
 };//»
 this.add_icon=(icn)=>{Main.scrollTop=0;};

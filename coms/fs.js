@@ -946,10 +946,8 @@ cerr(e);
 	}
 	else {//«
 		fullpath = normPath(path, this.env.cwd.cwd);
-//		node = await fsapi.pathToNode(fullpath);
 		node = await fullpath.toNode();
 		if (!node){//«
-//			let badlink = await fsapi.pathToNode(fullpath, true);
 			let badlink = await fullpath.toNode({getLink: true});
 			if (badlink){
 /*« While it might seem strange to allow the editing of a "bad link", 
@@ -977,6 +975,7 @@ screen never shows.
 
 »*/
 				fullpath = badlink.link;
+//cwarn("EDITABLE BAD LINK?", fullpath);
 			}
 			let arr = fullpath.split("/");
 			let nm = arr.pop();
@@ -1581,7 +1580,7 @@ async run(){
 			err(`${parpath}: Not a directory`);
 			continue; 
 		}
-		if (!parnode.writeable) {
+		if (!parnode.writable) {
  			err(`${path}: Read only`);
 			continue;
 		}
@@ -1755,7 +1754,7 @@ async run(){
 			err(`${parpath}: not a directory`);
 			continue; 
 		}
-		if (!parnode.writeable) {
+		if (!parnode.writable) {
 			err(`${fullpath}: read only`);
 			continue;
 		}
@@ -1978,7 +1977,9 @@ async run(){
 	if (!(parnode && parnode.isDir)) return err(`${parpath}: not a directory`);
 //	if (!(parnode && parnode.appName === FOLDER_APP)) return err(`${parpath}: not a directory`);
 	if (parnode.type !== OP_FS_TYPE) return err(`${fullpath}: the parent directory is not of type '${OP_FS_TYPE}'`);
-	if (!parnode.writable) return err(`${path}: read-only`);
+	if (!parnode.writable) {//writable
+		return err(`${path}: read-only`);
+	}
 	if (!parnode.perm) return err(`${path}: permission denied`);
 	
 	let newnode = await parnode.mkSymLink(fname, target, normPath(target, this.env.cwd.cwd));

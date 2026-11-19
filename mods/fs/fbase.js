@@ -195,9 +195,9 @@ let uid = node.mntPar.getData("fbaseUid")
 /*11/10/26: Concept simplification«
 
 Let's just get rid of the complexity by making all files children of 
-world readable 'pub/'.
+world readable 'www/' (was pub/).
 
-Just switched the id for 'pub/' to 1, and for 'prv/' to 2.
+Just switched the id for 'www/' to 1, (NO! and for 'prv/' to 2).
 Need to get rid of the complex '.read' conditions that look like:
 
 ".read": "auth != null && (//«

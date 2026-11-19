@@ -1974,7 +1974,7 @@ const try_revert = ()=>{//«
 
 const try_save = (if_saveas)=>{//«
 	if (no_save_mode) return stat_warn("no_save_mode is on!");
-	if (edit_fobj && !edit_fobj.writeable) return stat_warn("Read only!");
+	if (edit_fobj && !edit_fobj.writable) return stat_warn("Read only!");
 	if (is_saving) {
 		return stat_warn(`is_saving: ${is_saving}`);
 	}
@@ -2130,7 +2130,7 @@ real hold_x value? There is no hold_x! It just works without it.
 	render({},82);
 };//»
 const checkok = () =>{//«
-	if (!parobj.writeable) return `${parobj.fullpath}: read only`;
+	if (!parobj.writable) return `${parobj.fullpath}: read only`;
 	if (!parobj.perm) {
 		return `${parobj.fullpath}: permission denied`;
 	}

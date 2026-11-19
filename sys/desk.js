@@ -275,7 +275,7 @@ comMv.
 
 »*/
 /* 8/3/26: Issues w/ save_icon_editing @UEOHTHKH. «
-1) Need to do the simple check of parobj.writeable and parobj.perm, rather
+1) Need to do the simple check of parobj.writable and parobj.perm, rather
 than (cumbersomely) testing for fs types. But this check should probably
 be done in make_new_icon, by testing for the winarg's fullpath.
 2) Need to put the file and dir operations in the same place (I think).
@@ -323,7 +323,7 @@ property set.
 1) Get parent node, and populate the dir
 2) If !par.done
 	- Error: cannot populate the parent dir
-3) If !(par.writeable && par.perm)
+3) If !(par.writable && par.perm)
 	- Error: cannot write
 4) node = par.makeNewFile(filename) // Creates icons by default
 5) If !node
@@ -4688,13 +4688,13 @@ cwarn(`No script found for app: ${appName}`);
 async _doSaveFile(val){//«
 	let node = this.#node;
 /*
-	if (!node.writeable){
+	if (!node.writable){
 		popup("Read only!");
 		return;
 	}
 */
 	let parnode = node.par;
-	if (!parnode.writeable) {
+	if (!parnode.writable) {
 		return `${use_fname}: read only`;
 	}
 	if (node.perm === true){
@@ -4729,7 +4729,7 @@ if (ext) fullname += `.${ext}`;
 let fullpath = `${path}/${fullname}`;
 //if (ext) fullpath += `.${ext}`;
 
-if (!parNode.writeable){
+if (!parNode.writable){
 	popup("Read only!");
 	return;
 }
@@ -6941,7 +6941,7 @@ cerr("toNode(): parpath not found:" + parpath);
 
 //UEOHTHKH
 // This needs to be updated to the "standard" way by checking:
-// parobj.writeable and parobj.perm.
+// parobj.writable and parobj.perm.
 		if (!(rtype==OP_FS_TYPE||rtype==SHM_TYPE)){
 			doend();
 cerr("Unsupported type:" + rtype);
@@ -7176,7 +7176,7 @@ const make_new_icon = async(winarg, type) => {//«
 	let node = await path.toNode();
 	let err;
 	if (!node) err = `${path}: directory not found`;
-	if (!node.writeable) err = `${path}: read only`;
+	if (!node.writable) err = `${path}: read only`;
 	if (!node.perm) `${path}: permission denied`;
 	if (err) return poperr(err);
 

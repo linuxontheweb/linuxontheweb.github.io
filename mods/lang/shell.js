@@ -1794,7 +1794,7 @@ if (!parnode){
 //	return `${use_fname}: invalid or unsupported path`;
 //}»
 
-if (!parnode.writeable) {
+if (!parnode.writable) {
 	return `${use_fname}: read only`;
 }
 if (node && node.perm === true){
