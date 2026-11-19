@@ -197,14 +197,19 @@ const get_file_lines_from_args = async(args, cur_dir, errcb)=>{//«
 	let line_num = 0;
 	while (files.length) {
 		file_num++;
-		fullpath = normPath(files.pop(), cur_dir);
+		let raw_file_arg = files.pop();
+		fullpath = normPath(raw_file_arg, cur_dir);
 		let node = await fullpath.toNode();
 		if (!node) {
-			fullterr(`no such file or directory`);
+			fullterr(`No such file or directory`);
+			continue;
+		}
+		if (raw_file_arg.endsWithSlash()){
+			fullterr("Not a directory");
 			continue;
 		}
 		if (!node.isFile) {
-			fullterr(`not a regular file`);
+			fullterr(`Not a regular file`);
 			continue;
 		}
 		let val = await node.text;
@@ -1973,6 +1978,7 @@ async run(){
 	if (!(parnode && parnode.isDir)) return err(`${parpath}: not a directory`);
 //	if (!(parnode && parnode.appName === FOLDER_APP)) return err(`${parpath}: not a directory`);
 	if (parnode.type !== OP_FS_TYPE) return err(`${fullpath}: the parent directory is not of type '${OP_FS_TYPE}'`);
+	if (!parnode.writable) return err(`${path}: read-only`);
 	if (!parnode.perm) return err(`${path}: permission denied`);
 	
 	let newnode = await parnode.mkSymLink(fname, target, normPath(target, this.env.cwd.cwd));

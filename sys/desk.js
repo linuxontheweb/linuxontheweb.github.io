@@ -19,11 +19,15 @@ experts only.
 in the code.)
 
 »*/
-
-/*9/4/26: Change the boundWins hotkey to Alt+Shift+<num>
+/*11/19/26: @VBOWKFIEM: Just implemented a GENERIC_EXTENSIONS that includes extentions«
+that use a single image for multiple extensions, like text (txt, js), image (jpg, png), 
+media (webm, mp4), and arcade (nes, gb). These put their extensions in the upper-left
+corners of their icons.
+»*/
+/*9/4/26: Change the boundWins hotkey to Alt+Shift+<num>«
 @UUIRNFJM
 
-*/
+»*/
 /* 9/2/26: Why does onkeydown pass stuff like:«
 _C _A _S???
 Does this really work: @DBNRURKT ??
@@ -730,11 +734,14 @@ const{
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
+	ARCADE_EXTENSIONS,
+	GENERIC_EXTENSIONS,
 	MIME_TO_EXT,
 	ALL_EXTENSIONS,
 	ALL_EXTENSIONS_RE,
 	EXT_TO_APP_MAP,
 }= globals.app;
+//console.log(ADD_TO_ICON_EXTENSIONS);
 const{
 	BACKGROUND_IMAGE_URL,
 	BACKGROUND_GRADIENT,
@@ -5794,8 +5801,9 @@ async setLinkedApp(){//«
 		this.ref = ref;
 		this.useNode = ref;
 		this.isFolder = ref.isDir;
-		this.setImg();
+		this.setImg(ref.ext);
 		if (this.app === APPLICATION_APP) this.setAppIconApp();
+//log(ref.ext);
 	}
 	this.addLink();
 	this.isLink = true
@@ -5836,13 +5844,16 @@ setApp(){//«
 	if (app === APPLICATION_APP) this.setAppIconApp();
 	
 }//»
-setImg(){//«
+setImg(ref_ext){//«
 	let{wrapper, ext}=this;
 	let ext_div="";
-	if (TEXT_EXTENSIONS.includes(ext)) {
-		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;">${ext}</div>`;
+	let use_ext = ref_ext || ext;
+//	if (ADD_TO_ICON_EXTENSIONS.includes(use_ext)) {
+//VBOWKFIEM
+	if (GENERIC_EXTENSIONS.includes(use_ext)) {
+		ext_div = `<div class="iconext" style="color:#fff;font-size:12px;padding:2px;position:absolute;background-color:#000;z-index:2;opacity:0.75;">${use_ext}</div>`;
 	}
-	let ch = getAppIcon(this.useAppName||this.appName,{html:true});
+	let ch = getAppIcon(this.useAppName||this.appName||DEF_BIN_APP,{html:true});
 	wrapper.innerHTML = `${ext_div}<span class="iconi" style="min-width:48px;text-align:center;font-size:38px;position:relative;">${ch}</span>`;
 	this.imgDiv = wrapper.childNodes[wrapper.children.length-1];
 	this.imgDiv.iconElem = this.iconElem;

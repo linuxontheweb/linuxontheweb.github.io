@@ -1612,7 +1612,6 @@ if (typ === OP_FS_TYPE) return db.moveNode(src_id, src_par_id, dest_par_id, use_
 
 if (this._backendUpdateFullPath) {
 	return this._backendUpdateFullPath(this, src_id, src_par_id, dest_par_id, use_dest_name);
-
 }
 if (this.mntPar._backendUpdateFullPath) {
 	return this.mntPar._backendUpdateFullPath(this, src_id, src_par_id, dest_par_id, use_dest_name);
@@ -1917,7 +1916,7 @@ tryLoadKid(nm){ //«
 	if (this.mntPar._tryLoadKid) {
 		return this.mntPar._tryLoadKid(this, nm);
 	}
-	return try_get_fs_kid(this, nm)
+	return try_load_op_fs_kid(this, nm)
 }//»
 loadKids(opts={}) {//«
 	if (this.loadKidsDone && !opts.force) return;
@@ -2300,7 +2299,7 @@ const getNodesByBlobId = async (blobId) =>{//«
 	return rv.rows;
 };//»
 
-const try_get_fs_kid=async(curpar, nm)=>{//«
+const try_load_op_fs_kid=async(curpar, nm)=>{//«
 	if (curpar.type !== OP_FS_TYPE){
 cwarn(`IN try_get_fs_kid, got TYPE==${curpar.type}!`);
 		await curpar.loadKids();
@@ -2324,8 +2323,9 @@ cwarn(`IN try_get_fs_kid, got TYPE==${curpar.type}!`);
 		isDir,
 		isLink,
 		isFile,
-		path: curpar.fullpath,
+//		path: curpar.fullpath,
 	});
+//log(kid);
 	if (isLink) {
 		_set_sym_link(kid, gotrow.data);
 	}
@@ -2361,10 +2361,13 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 		else {//«
 			if (!curpar.loadKidsDone) {
 				let kid = await curpar.tryLoadKid(nm); //SHMYILYHG
+				if (!kid) return null;
+/*«
 				if (!kid) {
 					kid = curpar.getKid(nm);
 					if (!kid) return null;
 				}
+»*/
 				_dir_update(DIR_UPDATE_ADD, curpar, kid);
 				curpar = kid;
 			}
@@ -2387,9 +2390,11 @@ const path_to_node = async(patharg, if_get_link, iter = 0) =>{//«
 	node = curpar.getKid(fname);
 	if (node||curpar.loadKidsDone) return maybe_done();
 	node = await curpar.tryLoadKid(fname);//BSGDUGTJK
+/*«
 	if (!node) {
 		node = curpar.getKid(fname);
 	}
+»*/
 	if (!node) return null;
 	_dir_update(DIR_UPDATE_ADD, curpar, node);
 	return maybe_done();
@@ -2512,7 +2517,6 @@ const no_move_all = () => {//«
 	}
 }//»
 
-
 // Var «
 
 let { exports, if_recur, if_cp, if_force } = opts;
@@ -2554,20 +2558,20 @@ let dest_par_node;
 let use_dest_name;
 
 if (dest_arg_node) {//«
-// mv arg1 arg2 arg3 my_existing_dir
+// $ mv arg1 arg2 arg3 my_existing_dir
 	if (dest_arg_node.isDir) {
 		dest_par_node = dest_arg_node;
 		dest_par_path = dest_par_node.fullpath;
 	}
 	else {
 // This won't typically work because we typically don't allow overwriting
-// mv arg1 overwrite_existing_file
+// $ mv arg1 overwrite_existing_file
 		dest_par_node = dest_arg_node.par;
 		dest_par_path = dest_par_node.fullpath;
 	}
 }//»
 else {//«
-// mv arg1 path/to/non_existing_name
+// $ mv arg1 path/to/non_existing_name
 	let arr = dest_arg_fullpath.split("/");
 	use_dest_name = arr.pop();
 	dest_par_path = arr.join("/")
@@ -2632,15 +2636,16 @@ The question is how do I even check this?
 if (dest_arg_node) {//«
 	if (!dest_arg_node.writeable) {
 		no_move_all();
-		return werr(`${dest_arg_fullpath}: read-only`);
+//		return werr(`${dest_arg_fullpath}: read-only`);
+		return werr(`${dest_arg}: read-only`);
 	}
-/*
+///*
 	if (!dest_arg_node.perm) {
 		no_move_all();
-log(dest_arg_node);
-		return werr(`${dest_arg_fullpath}: permission denied`);
+//		return werr(`${dest_arg_fullpath}: permission denied`);
+		return werr(`${dest_arg}: permission denied`);
 	}
-*/
+//*/
 }//»
 
 //»
@@ -2794,8 +2799,6 @@ for (let arr of mvarr) {//«
 	let src_path = arr[0];
 	let src_node = arr[1];
 	let have_end_slash = arr[2];
-//log(`END_SLASH`, have_end_slash);
-//	let src_icon = icon_obj[src_path];
 	let src_type = src_node.type;
 
 	let dest_name;
@@ -2828,7 +2831,7 @@ for (let arr of mvarr) {//«
 //	if (app === FOLDER_APP && (if_cp || src_type !== dest_par_node.type)){
 
 // Just because the fs types are the same, it doesn't mean that the 
-// move operation is *necessarily* "simple": NEED PREDICATE --------------vvvvvvvvvvvvv
+// move operation is *necessarily* "simple": NEED PREDICATE ------------------------------vvvvvvvvvvvvv
 //	if (app === FOLDER_APP && (if_cp || src_type !== dest_par_node.type || !dest_par_node.hasSimpleMove)){
 
 // EHGJGKYE
@@ -2847,20 +2850,12 @@ for (let arr of mvarr) {//«
 		}
 
 		let newpath = `${dest_par_node.fullpath}/${nm}`;
-//		if (!await mkDir(dest_par_node.fullpath, nm, {root: is_root, noMakeIcon: !!dom_objects})){
-//		if (!await mkDir(dest_par_node.fullpath, nm, {noMakeIcon: !!dom_objects})){
-
-//		if (!await mkDir(dest_par_node, nm, {noMakeIcon: !!dom_objects})){
 		if (!await mkDir(dest_par_node, nm, {noMakeIcon: true})){
-// BETTER???
-//		if (!await dest_par_node.mkDir(nm, {noMakeIcon: !!dom_objects})){
-
 			if (no_move_cb) no_move_cb(src_path);
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
 
-//		if (NS.Desk && !dom_objects) NS.Desk.make_icon_if_new(await path_to_node(newpath));
 		winf(`Created: ${newpath}`);
 		if (!src_node.loadKidsDone) await loadKids(src_node);
 		let arr = [];	
@@ -3445,6 +3440,7 @@ parobj.loadKidsDone = true;
 return true;
 }//»
 const populate_site_dir = async(par, opts={}) => {//«
+//cwarn("POP SITE DIR", par);
 const domount=(list, par)=>{//«
 	for (let i=0; i < list.length; i++){
 		let arr = list[i].split("/");
@@ -3459,6 +3455,7 @@ const domount=(list, par)=>{//«
 			domount(list[i+1], dir);
 			_dir_update(DIR_UPDATE_ADD, par, dir);
 			i++;
+			dir.loadKidsDone = true;
 		}
 	}
 };//»
@@ -3469,7 +3466,7 @@ domount(list, par);
 
 //_dir_update(3, par, true);
 par.loadKidsDone = true;
-
+//log(par);
 };//»
 
 //»
@@ -3882,7 +3879,7 @@ await shell.execute(this, {
 });
 return sub_lines;
 }//»
-
+_.endsWithSlash=function(){ return this.match(/\/$/); }
 }
 
 //»

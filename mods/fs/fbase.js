@@ -950,13 +950,15 @@ for (let uid in old_obj) {
 		perm: false, // Cannot update status and bio unless this is true
 		type: FBASE_USER_MAIN_FS_TYPE,
 		loadKids: populate_fbase_user_dir,
-		tryLoadKid: async (arg1, arg2)=>{//«
+		tryLoadKid: async (dir_arg, name)=>{//«
+//cwarn("TLK", arg1 === user_dir, arg2);
 /*
 Since the names of the dirs are currently arbitrarily given, then it makes no
 sense to have a literal system of looking up users based on predetermined
 dirnames.
 */
 			await user_dir.loadKids();
+			return user_dir.getKid(name);
 		},//»
 		data: {
 			fbaseUid: uid,
@@ -1094,7 +1096,8 @@ fbase_auth_mod.onAuthStateChanged(fbase_auth, val=>{this.#authChangeCb(val);});
 let users_dir = new DirNode("fbase", par_node, {
 	type: FBASE_USERS_FS_TYPE,
 	loadKids: populate_fbase_users,
-	tryLoadKid: async (name)=>{
+	tryLoadKid: async (dir_arg, name)=>{
+//cwarn("TLK", name);
 		await users_dir.loadKids(); // The dir.loadKidsDone flag is checked in loadKids()
 //		await populate_fbase_users(users_dir);
 		return users_dir.getKid(name);

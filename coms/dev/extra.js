@@ -183,7 +183,7 @@ return {s:{d:3},l:{desc: 3}};
 		globals.boundWins[use_key] = {win, desc, app: win.appName};
 		win.bindNum = use_key;
 //		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
-		this.ok(`Alt+${use_key} -> win_${numstr}`);
+		this.ok(`Alt+Shift+${use_key} -> win_${numstr}`);
 	}
 }//»
 

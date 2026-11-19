@@ -2028,6 +2028,13 @@ class SimpleCommand extends BaseCommand{//«
 		});//»
 	}//»
 	async nextArgAsNode(opts={}){//«
+/*
+This is the terminator of the progression:
+	nextArgAsText -> nextArgAsFile -> nextArgAsNode
+
+The returned node should be a File Node. We need to check there if is a final slash,
+and return the error that
+*/
 		let {noErr, noneIsErr} = opts;
 		let e, f, node;
 		f = this.args.shift();
@@ -2037,8 +2044,17 @@ class SimpleCommand extends BaseCommand{//«
 		}
 		else{
 			node = await f.toNode(this.env.cwd);
-			if (node) return node;
-			e = `${f}: No such file or directory`;
+			if (node) {
+				if (f.endsWithSlash()) {
+					if (node.isDir) e = `${f}: Is a directory`
+					else if (node.isFile) e = `${f}: Not a directory`
+					else e = `${f}: Unknown error condition`
+				}
+				else {
+					return node;
+				}			
+			}		
+			else e = `${f}: No such file or directory`;
 		}
 		if (!noErr) {
 			this.err(e);
@@ -2056,6 +2072,7 @@ class SimpleCommand extends BaseCommand{//«
 		}
 		return new Error(e);
 	}//»
+/*mUnused
 	async nextArgAsDir(opts={}){//«
 		let dir = await this.nextArgAsNode(opts);
 		if (!isNode(dir) || dir.isDir) return dir;
@@ -2066,21 +2083,25 @@ class SimpleCommand extends BaseCommand{//«
 		}
 		return new Error(e);
 	}//»
+*/
 	async nextArgAsText(opts={}){//«
 		let {noErr, noneIsErr, asStr} = opts;
 		let f = await this.nextArgAsFile(opts);
-		if (!isFile(f)) return f;
+		if (!isFile(f)) {
+			return f;
+		}
 		let str = await f.text;
 		if (!isStr(str)) {
 			let e = `${f.name}: unknown value returned from 'node.text'`;
 			if (!noErr) {
+//log(123);
 				this.err(e);
 				this.numErrors++;
 			}
 			return e;
 		}
 		if (asStr) return str;
-		return str.split("\n");;
+		return str.split("\n");
 	}//»
 	get noStdin(){return(!(this.pipeFrom || this.stdin));}
 	get useStdin(){ return this.argsLen === 0 && (this.pipeFrom || this.haveRedirIn); }
@@ -2717,17 +2738,18 @@ const Newlines = class extends Sequence{//«
 		else return "\n"; 
 	}
 }//»
-class Spaces extends Sequence{
+class Spaces extends Sequence{//«
 //	get isSpaces(){ return true; }
 	toString(){
 		return this.val.join("");
 	}
-}
-class HeredocOPChars extends Sequence{
+}//»
+class HeredocOpChars extends Sequence{//«
+//Operator characters that are treated as regular text
 	toString(){
 		return this.val.join("");
 	}
-}
+}//»
 const Word = class extends Sequence{//«
 async expandSubs(shell, opts={}){//«
 /*«
@@ -2919,6 +2941,7 @@ get isSimple(){//«
 
 }//»
 const SQuote = class extends Sequence{//«
+//Single quote
 	expand(){
 		return this.toString();
 	}
@@ -2930,6 +2953,7 @@ const SQuote = class extends Sequence{//«
 	}
 }//»
 const DSQuote = class extends Sequence{//«
+//Dollar Single Quote
 expand(){
 let wrd = this.val;
 if (!wrd){
@@ -3043,7 +3067,7 @@ return this.val.join("");
 }//»
 
 const DQuote = class extends Sequence{//«
-
+//Double Quote
 dup(){//«
 	let dq = new DQuote(this.start, this.par, this.env);
 	let arr = dq.val;
@@ -3086,6 +3110,7 @@ toString(){
 }//»
 
 const BQuote = class extends Sequence{//«
+//Backquote
 //Collect everything in a string...
 expand(shell, opts){
 //log(`CWD ${opts.env.cwd.cwd}`);
@@ -4016,10 +4041,10 @@ async run(){//«
 //		let list = await node.list;
 		await node.loadKids();
 
-if (!node.loadKidsDone){
-	this.err(`${node.fullpath}: could not populate the directory`);
-	return;
-}
+		if (!node.loadKidsDone){
+			this.err(`${node.fullpath}: could not populate the directory`);
+			return;
+		}
 
 		let list = node.kidList;
 		dir_was_last = true;
@@ -5463,7 +5488,7 @@ scanHeredocOpChars(){//«
 		out.push(this.source[start+iter]);
 	}
 	this.index+=iter;
-	let chars = new HeredocOPChars(start);
+	let chars = new HeredocOpChars(start);
 	chars.val = out;
 	return chars;
 }//»

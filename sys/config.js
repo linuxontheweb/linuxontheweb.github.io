@@ -246,7 +246,13 @@ const ALL_EXTENSIONS=[];
 const TEXT_EXTENSIONS=[ "txt","js","json","css","sh","app"];
 const MEDIA_EXTENSIONS=["webm","mp4","m4a","ogg","mp3"];
 const IMAGE_EXTENSIONS=["jpg","gif","png","webp"];
-
+const ARCADE_EXTENSIONS = ["nes", "gb"];
+const GENERIC_EXTENSIONS = [
+	...TEXT_EXTENSIONS, 
+	...MEDIA_EXTENSIONS, 
+	...IMAGE_EXTENSIONS, 
+	...ARCADE_EXTENSIONS
+];
 const TERMINAL_APP = "Terminal";
 const IMAGE_APP = "util.ImageView";
 //const MEDIA_APP = "util.MediaPlayer";
@@ -613,6 +619,8 @@ app: {
 	TEXT_EXTENSIONS,
 	MEDIA_EXTENSIONS,
 	IMAGE_EXTENSIONS,
+	ARCADE_EXTENSIONS,
+	GENERIC_EXTENSIONS,
 	MIME_TO_EXT,
 	ALL_EXTENSIONS,
 	ALL_EXTENSIONS_RE,
