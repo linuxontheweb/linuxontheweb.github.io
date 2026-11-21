@@ -58,12 +58,14 @@ _dir_update(1, par, my_node);
 »*/
 
 //»
-/*11/19/26: How to begin allowing mv/cp operations of symlinks?
-@NSANMEIOF
-writable
-*/
-/*11/17/26: Copying symlinks: always deref them
-*/
+
+/*11/21/26: The main problem w/ mv'ing links:«
+The major issue looked like calling toNode without the getLink: true option
+set. I think this was especially a problem in the Desktop->move_icons.
+
+Currently, need to set test_links=1 in the URL in order to do mv'ing
+and cp'ing of links @NSANMEIOF.
+»*/
 /*11/15/26: When mv'ing symlinks, they show up as directories, but when we reload«
 the system (reloading the page), it shows back up as a symlink.
 Where do we go to find this behavior?
@@ -85,16 +87,15 @@ Otherwise if it doesn't exist:
 mv: cannot stat 'some_file.txt/': No such file or directory
 
 »*/
-/*
+/*«
 @BNSDAUIU: Convert this way to the new way
-*/
 //@SNJOEJKF: IS IT OKAY TO COMMENT THIS OUT NOW?
-
-/*11/14/26: The done_cb of comMv @EURIPLFJM is being called with strings 
+»*/
+/*11/14/26: The done_cb of comMv @EURIPLFJM is being called with strings «
 instead of nodes!?!? This is happening when src_node.isDir == true
 Also @MIEHDJKOJ Need to do the generic case of backend node delete instead
 of handling separate cases.
-*/
+»*/
 /*11/11/26: Granular file-level perm's and String.toByteSlice«
 Need to do permissions at the granular file level, rather than only at
 the directory level. I think the checking is done in shell.js (Stdout.write) and
