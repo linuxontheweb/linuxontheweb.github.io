@@ -1026,6 +1026,7 @@ const {
 	new_move,
 	test_icons,
 	mnt_fbase,
+	test_links
 } = globals.qObj;
 
 //»
@@ -2109,7 +2110,12 @@ const do_rename = async (src_node, dest_name){
 
 const do_move = async(src_node, dest_name, dest_par)=>{//«
 	if (util.newPathIsBad(src_node.fullpath, `${dest_par.fullpath}/${dest_name}`)) return;
-
+/*
+if (src_node.isLink){
+cerr("Not moving links");
+return;
+}
+*/
 	let src_id = src_node.id;
 	let src_blob_id = src_node.blobId;
 	let src_par = src_node.par;
@@ -2147,7 +2153,7 @@ cerr("backendDelNode: FAIL");
 	}
 }//»
 else{
-cwarn("Can not 'mv' directories of different types");
+cerr("Can not 'mv' directories or links of different types");
 return;
 }
 	_dir_update(DIR_UPDATE_DEL, src_par, src_node); // Delete src_node from src_par
@@ -2158,6 +2164,12 @@ return;
 //		if (save_blob) {
 //			await dest_node.setValue(save_blob);
 //		}
+		_node_update(NODE_UPDATE_BLOB_ID, dest_node, src_blob_id); // Set: dest_node.#blobId on dest_node (copy)
+	}
+
+	else if (src_node.isLink) {
+		dest_node = mk_dir_kid(dest_par, dest_name, {isLink: true});
+		_set_sym_link(dest_node, src_node.symLink);
 	}
 	else {
 		dest_node = mk_dir_kid(dest_par, dest_name, {isDir: true});
@@ -2167,9 +2179,8 @@ return;
 
 	_dir_update(DIR_UPDATE_ADD, dest_par, dest_node); // Add dest_node to dest_par
 
-// XRUIOPKGH
 	_node_update(NODE_UPDATE_ID, dest_node, src_id); // Set: dest_node.#id on dest_node (copy)
-	_node_update(NODE_UPDATE_BLOB_ID, dest_node, src_blob_id); // Set: dest_node.#blobId on dest_node (copy)
+// XRUIOPKGH
 
 	return dest_node;
 
@@ -2285,7 +2296,13 @@ if (src_node.isFile && save_blob){
 */
 
 const do_copy = async(from_node, newName, toDir) => {//«
-//	let node = this;
+	if (from_node.isLink){
+		from_node = await from_node.ref;
+		if (!(from_node && from_node.isFile)){
+cerr("Not copying non-file link");
+			return;
+		}
+	}
 	let newpath = `${toDir.fullpath}/${newName}`;
 	if (util.newPathIsBad(from_node.fullpath, newpath)) return;
 //EYTKFHSC
@@ -2516,7 +2533,7 @@ const no_move_all = () => {//«
 	if (!no_move_cb) return;
 	for (let arg of args) {
 //		no_move_cb(icon_obj[getFullPath(arg, cwd)]);
-		no_move_cb(getFullPath(arg, cwd));
+		no_move_cb(getFullPath(arg, cwd, 1));
 	}
 }//»
 
@@ -2658,35 +2675,38 @@ for (let arg of args){//«
 	let have_end_slash = !!arg.match(/\/$/);
 	let src_path = getFullPath(arg, cwd);//«
 	if (!src_path) {
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 2);
 		werr( `${arg}: could not construct a full path from the arg (have cwd: '${cwd}')`);
 		continue;
 	}//»
 	let src_node = await path_to_node(src_path, true);//«
 	if (!src_node) {
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 3);
 		werr( `cannot stat: '${arg}': No such file or directory`);
 		continue;
 	}//»
 	if (have_end_slash && !src_node.isDir){//«
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 4);
 		werr( `cannot stat: '${arg}': Not a directory`);
 		continue;
 	}//»
 	if (!(src_node.isFile || src_node.isDir)){//«
-		if (no_move_cb) no_move_cb(src_path);
 		if (src_node.isLink){
 //NSANMEIOF
-//			mvarr.push([src_path, src_node, have_end_slash]);
-			werr(`${arg}: Not (yet) allowing ${verb}'ing of links`);
+			if (test_links) mvarr.push([src_path, src_node, have_end_slash]);
+			else {
+				if (no_move_cb) no_move_cb(src_path, 5);
+				werr(`${arg}: Not (yet) allowing ${verb}'ing of links`);
+			}
 		}
 		else {
+			if (no_move_cb) no_move_cb(src_path, 5);
 			werr(`${arg}: Only (currently) allowing ${verb}'ing of files or dirs`);
 		}
 		continue;
 	}//»
 	if(src_node === dest_arg_node){//«
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 6);
 		if (src_node.isDir){
 			let no_slash_arg = arg.replace(/\/+$/g, "");
 			werr(`cannot move '${no_slash_arg}' to a subdirectory of itself, '${no_slash_arg}/${no_slash_arg}'`);
@@ -2701,26 +2721,26 @@ for (let arg of args){//«
 	}//»
 
 	if (!if_cp && src_node.isRoot) {//«
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 7);
 		werr( `cannot ${verb} the root directory`);
 	}//»
 	else if (!if_cp && !src_node.par.writable) {//«
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 8);
 		werr( `${src_path}: read-only`);
 	}//»
 	else if (!if_cp && !src_node.par.perm) {//«
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 9);
 		werr( `${src_path}: permission denied`);
 	}//»
 	else if (!if_cp && src_node.isWriteLocked) {//«
 //No moving of files that are actively being edited
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 10);
 		werr( `${src_path}: write-locked`);
 	}//»
 	else if (!if_cp && src_node.isMoveLocked){//«
 //	else if (!if_cp && src_node.isDir && src_node.isMoveLocked){
 //No moving of folders that contain files that are actively being edited
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 11);
 		werr( `${src_path}: move-locked`);
 	}//»
 	else if (if_cp && src_node.isDir){//«
@@ -2728,12 +2748,12 @@ for (let arg of args){//«
 			mvarr.push([src_path, src_node, have_end_slash]);
 		}
 		else {
-			if (no_move_cb) no_move_cb(src_path);
+			if (no_move_cb) no_move_cb(src_path, 12);
 			werr( `-r not specified; omitting directory '${arg}'`);
 		}
 	}//»
 	else if (src_node.isDir && NS.Desk && NS.Desk.isGUI && src_path == globals.user.desk_path){//«
-		if (no_move_cb) no_move_cb(src_path);
+		if (no_move_cb) no_move_cb(src_path, 13);
 		werr(`${src_path}: refusing to modify the working desktop path`);
 	}//»
 /*SNJOEJKF
@@ -2770,11 +2790,11 @@ if (dest_arg_node){//«
 			if (gotkid){
 // Must NEVER overwrite a directory
 				if (gotkid.isDir) {
-					if (no_move_cb) no_move_cb(elm[0]);
+					if (no_move_cb) no_move_cb(elm[0], 14);
 					werr( `${dest_arg_node.fullpath}: there is already a folder named '${name}'123`);
 				}
 				else if (!if_force){
-					if (no_move_cb) no_move_cb(elm[0]);
+					if (no_move_cb) no_move_cb(elm[0], 15);
 					werr( `${dest_arg_node.fullpath}/${name}: not clobbering the destination (use -f to override)`);
 				}
 				else {
@@ -2849,14 +2869,14 @@ for (let arr of mvarr) {//«
 
 		let nm = dest_name;
 		if (dest_par_node.getKid(nm)){
-			if (no_move_cb) no_move_cb(src_path);
+			if (no_move_cb) no_move_cb(src_path, 16);
 			werr(`refusing to clobber: ${nm}`);
 			continue;
 		}
 
 		let newpath = `${dest_par_node.fullpath}/${nm}`;
 		if (!await mkDir(dest_par_node, nm, {noMakeIcon: true})){
-			if (no_move_cb) no_move_cb(src_path);
+			if (no_move_cb) no_move_cb(src_path, 17);
 			werr(`${newpath}: there was a problem creating the folder`);
 			continue;
 		}
@@ -2909,7 +2929,7 @@ cwarn("NEED TO DO A BACKEND NODE DEL IN THE RECURSIVE CASE");
 
 		dest_node_rv = await do_copy(src_node, dest_name, dest_par_node);
 		if (!dest_node_rv){
-			if (no_move_cb) no_move_cb(src_path);
+			if (no_move_cb) no_move_cb(src_path, 18);
 			werr(`could not copy from ${src_path} to ${dest_path}`);
 			continue;
 		}
@@ -2943,7 +2963,7 @@ cwarn(`Simple rename from ${src_node.name} => ${dest_name} !!!`);
 		dest_node_rv = await do_move(src_node, dest_name, dest_par_node);
 //		}
 		if (!dest_node_rv){
-			if (no_move_cb) no_move_cb(src_path);
+			if (no_move_cb) no_move_cb(src_path, 19);
 			werr(`could not move from ${src_path} to ${dest_path}`);
 			continue;
 		}

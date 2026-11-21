@@ -19,6 +19,9 @@ experts only.
 in the code.)
 
 »*/
+/*BUG BUG BUG: When doing rename operations on icons, the GUI is not being updated!
+
+*/
 /*11/19/26: @VBOWKFIEM: Just implemented a GENERIC_EXTENSIONS that includes extentions«
 that use a single image for multiple extensions, like text (txt, js), image (jpg, png), 
 media (webm, mp4), and arcade (nes, gb). These put their extensions in the upper-left
@@ -5518,6 +5521,8 @@ constructor(node, opts={}){//«
 
 setLabelName(){//«
 	let s = this.node.baseName;
+//log(`BASENAME: <${s}>`);
+//log(this.node);
 	this.nameSpan._dis="";
 	this.nameSpan.innerHTML="";
 	if (s.length > MAX_ICON_NAME_LEN) s = s.slice(0, MAX_ICON_NAME_LEN)+"...";
@@ -6168,6 +6173,7 @@ let icon_obj = {};
 
 const done_cb = async (src_node, dest_node) => {//«
 
+//log("DONE", src_node);
 
 /* 
 
@@ -6196,7 +6202,7 @@ For every icon that we need to move/copy, this is the callback the shell
 uses upon success, which triggers the move animations.
 */
 		let icn = icon_obj[oldpath];
-
+//log(icn);
 		if (icn.unobserve) icn.unobserve(); //IRURMNFH: IS THIS IT???
 
 		let scrl = desk.scrollLeft;
@@ -6237,7 +6243,7 @@ uses upon success, which triggers the move animations.
 Since the only moved icon has been removed, we are free to call
 Desk.make_all_icons() with the new node
 */
-Desk.make_all_icons(await newpath.toNode());
+Desk.make_all_icons(await newpath.toNode({getLink: true}));
 if (!do_copy) {
 // EHTJTMYIH
 //	rm_icons_and_update_wins(oldpath, newpath);
@@ -6361,14 +6367,14 @@ if (!do_copy) {
 		}//»
 
 	};//»
-	const no_move_cb = path => {//«
-	let icn = icon_obj[path];
-	if (!icn) return;
-	icn.iconElem._op=1;
-	delete icn.disabled;
-	icn.shake();
-	rm_from_icons(icn);
-};//»
+	const no_move_cb = (path, which) => {//«
+		let icn = icon_obj[path];
+		if (!icn) return;
+		icn.iconElem._op=1;
+		delete icn.disabled;
+		icn.shake();
+		rm_from_icons(icn);
+	};//»
 const rm_from_icons = icn => {//«
 	if (!do_copy && icn.unobserve) icn.unobserve();
 	let idx = _ICONS.indexOf(icn);
@@ -6425,7 +6431,7 @@ return;
 }
 let paths = [];
 let good = [];
-let dest_node = await dest_path.toNode();
+let dest_node = await dest_path.toNode({getLink: true});
 let dest_type = dest_node.type;
 let from_type = from_node.type;
 
@@ -6441,7 +6447,7 @@ for (let icn of _ICONS) {//Sanity check«
 	let use_name = icn.name;
 	if (icn.ext) use_name += `.${icn.ext}`;
 	let final_path = `${dest_path}/${use_name}`;
-	if (await final_path.toNode()) {
+	if (await final_path.toNode({getLink: true})) {
 		icn.shake();
 		continue;
 	}
@@ -6877,7 +6883,8 @@ const save_icon_editing = async() => {//«
 			delete CEDICN._savetext;
 		}
 		if (newname){
-			CEDICN.node = await newpath.toNode();
+//log(newpath);
+			CEDICN.node = await newpath.toNode({getLink: true});
 			CEDICN.setWindowName();
 			CEDICN.updateDOMElement();
 			update_all_paths(oldpath, newpath);
@@ -6968,6 +6975,16 @@ cerr("Unsupported type:" + rtype);
 
 	}//»
 //	let srcnode = await pathToNode(srcpath);
+//cwarn("CEDICN");
+//log(CEDICN);
+//ireturn;
+/*
+if (CEDICN.isLink === true){
+cwarn("Not renaming the icon");
+doend();
+return;
+}
+*/
 	let srcnode = await srcpath.toNode();
 	let srctype = srcnode.type;
 	if (srctype!==OP_FS_TYPE) return doend();
@@ -7187,8 +7204,12 @@ this.make_new_icon = make_new_icon;
 //»
 
 const make_all_icons = node => {//«
-	if (node.path === DESK_PATH) place_icon_in_desk_slot(new Icon(node, {parApp: Desk}), {create: true});
-	for (let win of get_wins_by_path(node.path)) add_icon_to_folder_win(new Icon(node, {parApp: win.app}), win);
+	if (node.path === DESK_PATH) {
+		place_icon_in_desk_slot(new Icon(node, {parApp: Desk}), {create: true});
+	}
+	for (let win of get_wins_by_path(node.path)) {
+		add_icon_to_folder_win(new Icon(node, {parApp: win.app}), win);
+	}
 }
 this.make_all_icons = make_all_icons;
 //»
@@ -8461,7 +8482,7 @@ this.rm_icons_and_update_wins = rm_icons_and_update_wins;
 */
 const update_win_paths = async (oldpath, newpath) => {//«
 
-let node = await newpath.toNode();
+let node = await newpath.toNode({getLink: true});
 if (!node){
 cerr(`NO NODE FOUND FOR PATH: <${newpath}>!?!?!?`);
 return;

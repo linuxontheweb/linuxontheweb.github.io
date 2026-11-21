@@ -1641,6 +1641,7 @@ log(src_node);
 if (!src_node.delIcons){
 cerr("WHY NO src_node.delIcons?");
 cerr(src_node);
+return;
 }
 			src_node.delIcons();
 			await Desk.update_win_paths(src_node.fullpath, dest_node.fullpath);
