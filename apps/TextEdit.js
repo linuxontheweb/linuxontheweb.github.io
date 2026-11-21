@@ -90,9 +90,10 @@ if (view_only) return poperr("The file is in 'read only' mode");
 if (globals.read_only) return poperr("Cannot save in 'read only' mode");
 
 let rv = await Win.saveFile(EXTENSIONS[USE_EXT]);
+log("RV", rv);
 if (Number.isFinite(rv)) {
 	statbar.innerText = `${rv} bytes written`;
-	Win.saveFlash();
+//	Win.saveFlash();
 }
 
 }//»

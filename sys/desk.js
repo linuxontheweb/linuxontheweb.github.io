@@ -3425,24 +3425,28 @@ constructor(arg){//«
 	this.#childWins = [];
 	this.#ownedBy = undefined;
 
+	this._isSaving = false;
+
 	windows.push(this);
 
 }//»
 
 //Methods«
-saveFlash(){
-cwarn("FLASH THE BACKGROUND HERE");
-
-
-//if (!this.noShadow) this.winElem.style.boxShadow = window_boxshadow;
+saveFlash(){//«
+cwarn("FLASH THE BACKGROUND");
+return new Promise((Y,N)=>{
 this._boxShadowHold = this.winElem.style.boxShadow;
-
-this.winElem.style.boxShadow = "6px 6px 40px rgba(127,255,127,0.75)";
+this._bgColorHold = this.winElem.style.backgroundColor;
+this.winElem.style.boxShadow = "6px 6px 40px rgba(64,192,64,1)";
+this.winElem.style.backgroundColor = "#006600";
 setTimeout(()=>{
 	this.winElem.style.boxShadow = this._boxShadowHold;
+	this.winElem.style.backgroundColor = this._bgColorHold;
+	Y();
 }, 500);
+});
 
-}
+}//»
 resize(){//«
 	this.sbcr();
 	this.statusBar.resize();
@@ -3517,6 +3521,7 @@ makeDOMElem(arg){//«
 		useh = defwinargs.HGT;
 		if (botpad) useh -= botpad;
 	}
+
 	let win = make("div");//The top level window«
 	win.id = winid;
 	no_select(win);
@@ -3742,14 +3747,14 @@ cwarn("this!==CWIN ????");
 //layout.
 //»
 	let bottom_div = make('div');
-	if (botpad){
+	if (botpad){//«
 		bottom_div._bgcol="#373747";
 		bottom_div._tcol="#ddd";
 		bottom_div.style.borderTop="1px solid #556";
 		bottom_div.style.borderBottom="1px solid #556";
 		bottom_div._h=botpad-2;
 		footer_wrap._add(bottom_div);
-	}
+	}//»
 	footer._dis="flex";
 	footer.style.justifyContent="space-between";
 	footer._h=18;
@@ -4716,15 +4721,27 @@ async _doSaveFile(val){//«
 }//»
 async saveFile(ext){//«
 
+if (this._isSaving) {
+cwarn("Win._isSaving == true");
+	return;
+}
+this._isSaving = true;
 //const {app} = this;
 let app = this.#app;
 let val = await await app.getValue();
 
-if (this.#node) return this._doSaveFile(val);
+if (this.#node) {
+	let rv = await this._doSaveFile(val);
+	this._isSaving = false;
+	await this.saveFlash();
+	return rv;
+}
 
 let {parNode, name} = await save_as(this, ext);
-if (!parNode) return; // Cancelled
-
+if (!parNode) {
+	this._isSaving = false;
+	return; // Cancelled
+}
 let path = parNode.fullpath;
 let fullname = name;
 if (ext) fullname += `.${ext}`;
@@ -4734,28 +4751,33 @@ let fullpath = `${path}/${fullname}`;
 
 if (!parNode.writable){
 	popup("Read only!");
+	this._isSaving = false;
 	return;
 }
 if (!parNode.perm) {
 	poperr(`${path}: permission denied`);
+	this._isSaving = false;
 	return;
 }
 
 await parNode.loadKids();
 if (!parNode.loadKidsDone){
 	poperr(`${path}: could not populate the parent folder`);
+	this._isSaving = false;
 	return;
 }
 if (parNode.getKid(fullname)) {
 //if (await fullpath.toNode()) {
 	poperr(`${fullpath}: already exists`);
-	return 
+	this._isSaving = false;
+	return;
 }
 //BDSVFHSK
 
 let node = await parNode.mkNewFile(fullname);
 if (!node) {
 	poperr(`${fullpath}: could not create the new file`);
+	this._isSaving = false;
 	return 
 }
 
@@ -4764,6 +4786,9 @@ this.title = name;
 this.#childWinThatStaysInFocus = undefined;
 let rv = await this._doSaveFile(val);
 if (Number.isFinite(rv)) node.lockFile();
+make_all_icons(node);
+await this.saveFlash();
+this._isSaving = false;
 return rv;
 
 }//»
