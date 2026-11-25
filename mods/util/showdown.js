@@ -1,5 +1,6 @@
-export const mod = function() {
-
+//export const mod = function() {
+//const mod = function() {
+(()=>{"use strict";const MODNAME="util.showdown";
 function getDefaultOpts (simple) {
 	'use strict';
 
@@ -70,7 +71,7 @@ function getDefaultOpts (simple) {
 			type: 'boolean'
 		},
 		tables: {
-			defaultValue: false,
+			defaultValue: true,
 			describe: 'Turn on/off tables support',
 			type: 'boolean'
 		},
@@ -2982,9 +2983,9 @@ showdown.subParser('makeMarkdown.txt', function (node) {
 	txt = txt.replace(/^ {0,3}\[([\S \t]*?)]:/gm, '\\[$1]:');
 	return txt;
 });
-
-this.getmod = () => {
-		return showdown;
-}
-}
-
+LOTW.mods[MODNAME]=showdown;
+//this.getmod = () => {
+//		return showdown;
+//}
+//}
+})();

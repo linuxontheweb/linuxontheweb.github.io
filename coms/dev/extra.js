@@ -70,6 +70,34 @@ const validate_out_path = async(outpath)=>{//«
 	return true;
 };//»
 //»
+
+const com_showdown = class extends Com{
+async run(){
+if (!await util.loadMod("util.showdown")){
+this.no("Could not load the module");
+return;
+}
+let mod = LOTW.mods["util.showdown"];
+//log(mod);
+let conv = new mod.Converter();
+log(conv);
+let which = this.args.shift();
+if (!which) return this.no("Need a file to convert");
+let node = await which.toNode(this.env.cwd);
+if (!node) return this.no(`${which}: not found`);
+let text = await node.text;
+if (!text) return this.no(`${which}: could not get the file text`);
+let md = conv.makeHtml(text);
+this.out(md);
+//log(md);
+//log(text);
+//log(node);
+//log(conv.makeHtml);
+//log(conv);
+this.ok();
+}
+};
+
 const com_record = class extends Com{//«
 //«Priv
 #promCb;
@@ -766,6 +794,7 @@ return write_to_redir(term, blob, redir)
 };//»
 */
 const coms = {//«
+	showdown: com_showdown,
 	bindwin: com_bindwin,
 	record: com_record,
 

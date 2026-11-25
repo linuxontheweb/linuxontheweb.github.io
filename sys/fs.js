@@ -122,6 +122,9 @@ Issue in do_move:
 @SJEKLROKJR We are calling setValue on the dest_node that we just created, but
 we haven't set the blob_id yet.
 »*/
+
+// Notes«
+
 /*10/20/26: Proper updating an empty ("touched") file to a real blobId«
 
 Normally, we are checking for NULL_BLOB_NODE_TYPE in set_local_blob.
@@ -272,9 +275,6 @@ I think we can say that this is all about accountancy for the purpose of icon
 *deletion*. But there is one problem: when moving an icon.
 
 »*/
-
-// Notes«
-
 /* 8/6/26: Stop passing icons through comMv! «
 
 For the 2 callbacks @WURBTMYJ (done_cb and no_move_cb), just call them with the
@@ -1377,6 +1377,7 @@ constructor(){//«
 	this.#appName = FOLDER_APP;
 	this.#kids = {};
 //	this.#done = true;
+	this.loadKidsDone = true;
 }//»
 loadKids(){}
 get id(){return this.#id;}
@@ -1467,9 +1468,7 @@ return THROW("WHAT IS THIS NAME????");
 	this._backendUpdateFullPath = opts.backendUpdateFullPath;
 
 }//»
-mkIcons(){
-	if (NS.Desk && NS.Desk.make_all_icons) NS.Desk.make_all_icons(this);
-}
+mkIcons(){	if (NS.Desk && NS.Desk.make_all_icons) NS.Desk.make_all_icons(this); }
 delIcons(keepIcn){//«
 	if (keepIcn) {
 		for (let icn of this.icons) {
@@ -1875,7 +1874,7 @@ class DirNode extends FSNode {//«
 #kids;
 #sys;
 #perm;
-#readOnly;
+//#readOnly;
 #appName;
 #moveLocks;
 #loadKids;
@@ -1887,7 +1886,7 @@ constructor(name, par, opts = {}) {//«
 	super(name, par, opts);
 	this.#appName = FOLDER_APP;
 	if (isBool(opts.perm) || isStr(opts.perm)) this.#perm = opts.perm;
-	this.#readOnly = opts.readOnly;
+//	this.#readOnly = opts.readOnly;
 	this.#sys = opts.sys;
 
 //BNSDAUIU
@@ -1971,8 +1970,8 @@ get writeable(){//«
 cerr("Please change .writeable to .writable!");
 return this.writable;
 }//»
-get readonly(){return this.#readOnly;}
-get readOnly(){return this.#readOnly;}
+//get readonly(){return this.#readOnly;}
+//get readOnly(){return this.#readOnly;}
 get kids(){throw new Error("YOU TRIED TO GET KIDS");}
 set kids(arg){throw new Error("YOU TRIED TO SET KIDS");}
 get isEmpty(){ return db.checkEmpty(this.id); }
@@ -3248,7 +3247,7 @@ const mount_tree = (name, type) => { //«
 
 /*
 
-This is only called for /dev (from make_dev_tree) and /site (from init)
+This is only called for /mnt, /dev (from make_dev_tree) and /site (from init)
 
 */
 
@@ -3330,12 +3329,17 @@ const init = async () => { //«
 		_node_update(NODE_UPDATE_ID, tree, rv);
 		return tree;
 	};//»
+
+/*FS_PREF is taken from config.js, which looks to the `branch=XYZ` value in
+the URL (kept in globals.qObj), and defaults to the "def" branch.
+*/
 	if (!await db.init(root, FS_PREF)) {
 		throw new Error("Could not initialize the filesystem database");
 	}
 	rootId = root.id;
-
-
+/*
+The top-level OPFS folders: tmp, var, and home
+*/
 	for (let name of root_dirs){
 		let opts={type: OP_FS_TYPE};
 		if (name == "tmp") opts.perm = true;
@@ -3344,10 +3348,15 @@ const init = async () => { //«
 		if (!ret) return;
 		_add_root_kid(ret);
 	}
+
+// Create /home/me and /home/me/Desktop
 	await mk_user_dirs();
 	await mkDir("/var","appdata");
+// /dev/log, /dev/null, dev/shm
 	await make_dev_tree();
+// The read-only backend
 	mount_tree("site", SITE_FS_TYPE);
+
 //ESHFKNOI
 
 	let mnt = mount_tree("mnt", MNT_FS_TYPE);
@@ -3375,7 +3384,7 @@ const mk_dir_kid = (par, name, opts={}) => {//«
 	else if (isDir) {
 		if (par.par.isRoot == true) {
 			if (par.name == "home") opts.perm = name;
-			else if (par.name == "var" && name == "cache") opts.readOnly = true;
+//			else if (par.name == "var" && name == "cache") opts.readOnly = true;
 		}
 		kid = new DirNode(name, par, opts);
 	}

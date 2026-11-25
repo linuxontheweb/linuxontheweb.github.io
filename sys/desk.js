@@ -3437,7 +3437,7 @@ cwarn("FLASH THE BACKGROUND");
 return new Promise((Y,N)=>{
 this._boxShadowHold = this.winElem.style.boxShadow;
 this._bgColorHold = this.winElem.style.backgroundColor;
-this.winElem.style.boxShadow = "6px 6px 40px rgba(64,192,64,1)";
+this.winElem.style.boxShadow = "6px 6px 40px rgba(48,176,48,1)";
 this.winElem.style.backgroundColor = "#006600";
 setTimeout(()=>{
 	this.winElem.style.boxShadow = this._boxShadowHold;

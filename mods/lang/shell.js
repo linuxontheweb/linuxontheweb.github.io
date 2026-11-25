@@ -3449,13 +3449,20 @@ run(){
 const Com = SimpleCommand;
 
 const com_openwin = class extends Com{//«
+	static getOpts(){
+		return {
+			l:{
+				app: 3
+			}
+		}
+	}
 	async run(){
 		if (!Desk.api) return this.no("Need the gui to open windows!");
 		let path = this.args.shift();
 		if (!path) return this.no("Need path to open");
 		let node = await path.toNode(this.env.cwd);
 		if (!node) return this.no(`${path}: file not found`);
-		Desk.api.openWindowByNode(node);
+		Desk.api.openWindowByNode(node, {altApp: this.opts.app});
 		this.ok();
 	}
 };//»
@@ -4177,6 +4184,8 @@ async run(){
 	let have_error=false;
 	for (let appname of args){
 		let win = await Desk.api.openApp(appname);
+
+
 		if (!win) this.err(`${appname}: not found`);
 	}
 	have_error?this.no():this.ok();

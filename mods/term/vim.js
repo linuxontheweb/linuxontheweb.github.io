@@ -2022,6 +2022,8 @@ log("Saved",node.size);
 if (com_opts.doQuit){
 quit();
 }
+cwarn("CALLING mkIcons...");
+node.mkIcons();
 		}
 		else {
 			stat_message = "The file could not be saved";
