@@ -350,7 +350,7 @@ canbut.onclick=()=>{
 
 botdiv._add(sp);
 botdiv._add(inp);
-botdiv._add(ext);
+if (ext) botdiv._add(ext);
 inp.style.outline="none";
 inp.focus();
 botdiv._add(canbut);

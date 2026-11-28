@@ -4725,18 +4725,19 @@ if (this._isSaving) {
 cwarn("Win._isSaving == true");
 	return;
 }
+//cwarn("Start saving");
 this._isSaving = true;
 //const {app} = this;
 let app = this.#app;
 let val = await await app.getValue();
-
+//log(`Have node? ${!!this.#node}`);
 if (this.#node) {
 	let rv = await this._doSaveFile(val);
 	this._isSaving = false;
 	await this.saveFlash();
 	return rv;
 }
-
+//log("Start save_as workflow...");
 let {parNode, name} = await save_as(this, ext);
 if (!parNode) {
 	this._isSaving = false;
